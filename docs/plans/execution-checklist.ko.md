@@ -1,5 +1,5 @@
 <!-- doc-id: execution-checklist -->
-<!-- source-sha256: 390774508acb17b1baf43435cbece06afe8ebb87c8f8e32c7a1635f60c20f156 -->
+<!-- source-sha256: 57eaf507fafdbf27be1896a8656c5da951db989c000b9c59e2444d2ff5d3e1ef -->
 # 실행 체크리스트
 
 ## T1a 설계 session
@@ -21,7 +21,7 @@
   - 완료 기준: 모든 판정이 근거를 동반한 명제로 나타난다; T1.4.1부터 T1.4.7까지 완료되면 완료된다.
 - [~] T1.4.1 docs/spec/00-overview.md(.ko)를 쓴다
 - [o] T1.4.2 docs/spec/10-canonical-format.md(.ko)를 쓴다
-- [ ] T1.4.3 docs/spec/20-document-model.md(.ko)를 쓴다
+- [o] T1.4.3 docs/spec/20-document-model.md(.ko)를 쓴다
 - [ ] T1.4.4 docs/spec/30-schema.md(.ko)를 쓴다
 - [ ] T1.4.5 docs/spec/40-ops.md(.ko)를 쓴다
 - [ ] T1.4.6 docs/spec/50-constraints.md(.ko)를 쓴다

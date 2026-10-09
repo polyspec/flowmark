@@ -20,7 +20,7 @@
   - Completion criteria: every ruling appears as a proposition with its grounding; it completes when T1.4.1 through T1.4.7 complete.
 - [~] T1.4.1 Write docs/spec/00-overview.md(.ko)
 - [o] T1.4.2 Write docs/spec/10-canonical-format.md(.ko)
-- [ ] T1.4.3 Write docs/spec/20-document-model.md(.ko)
+- [o] T1.4.3 Write docs/spec/20-document-model.md(.ko)
 - [ ] T1.4.4 Write docs/spec/30-schema.md(.ko)
 - [ ] T1.4.5 Write docs/spec/40-ops.md(.ko)
 - [ ] T1.4.6 Write docs/spec/50-constraints.md(.ko)
