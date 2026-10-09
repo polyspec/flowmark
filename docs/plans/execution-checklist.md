@@ -28,7 +28,7 @@
 - [ ] T1.5 Write the remaining specifications (requires T1.4)
   - Completion criteria: the capability table in full, three scoped skeletons, and 100-checklist and 110-open-questions in full; it completes when T1.5.1 through T1.5.6 complete.
 - [o] T1.5.1 Write docs/spec/60-dialect.md(.ko) with the capability table in full
-- [ ] T1.5.2 Write docs/spec/70-sync.md(.ko) as a scoped skeleton
+- [o] T1.5.2 Write docs/spec/70-sync.md(.ko) as a scoped skeleton
 - [ ] T1.5.3 Write docs/spec/80-migration.md(.ko) as a scoped skeleton
 - [ ] T1.5.4 Write docs/spec/90-conformance.md(.ko) as a scoped skeleton
 - [ ] T1.5.5 Write docs/spec/100-checklist.md(.ko) in full

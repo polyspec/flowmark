@@ -1,5 +1,5 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 8c3e28d5f214490196962a8283783177f3e3f9591796c49447f2d2e617ab8019 -->
+<!-- source-sha256: b03acc43f60cd29dff5307cdb780602133bb938978427261abb235e6a320cd20 -->
 # Changelog
 
 ## Unreleased
@@ -27,3 +27,4 @@
 - T1.4.5: 40-ops가 열기 시 복구, 작업 단위 portable lock, prepare record를 가진 규범적 commit protocol, corpus revision token, 비용 모델을 서술한다.
 - T1.4.6: 50-constraints가 strict parse, type, key와 참조, state-machine setting, 사람 write 판정, key 필수 codec 검증을 서술한다.
 - T1.5.1: 60-dialect이 capability table을 전체로 쓴다 — IR 표면, 강화된 update, on_duplicate 판정, 거부 표면, Go-only 표시.
+- T1.5.2: 70-sync가 adapter 계약 범위와 확정 판정 — truth ownership, provenance, git 인식 drift 처리, 재구축 가능 projection — 을 서술한다.
