@@ -30,7 +30,7 @@
 - [o] T1.5.1 Write docs/spec/60-dialect.md(.ko) with the capability table in full
 - [o] T1.5.2 Write docs/spec/70-sync.md(.ko) as a scoped skeleton
 - [o] T1.5.3 Write docs/spec/80-migration.md(.ko) as a scoped skeleton
-- [ ] T1.5.4 Write docs/spec/90-conformance.md(.ko) as a scoped skeleton
+- [o] T1.5.4 Write docs/spec/90-conformance.md(.ko) as a scoped skeleton
 - [ ] T1.5.5 Write docs/spec/100-checklist.md(.ko) in full
 - [ ] T1.5.6 Write docs/spec/110-open-questions.md(.ko) in full
 

@@ -1,5 +1,5 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 0d7d15a8848462f00102baf495dbe76cc8f00d6ac2f699ccc0ea94864ab28d82 -->
+<!-- source-sha256: 6534602a83a1d07b26e737b02fac98ee04efaa4f5fdf8d99de8decb2dc084405 -->
 # Changelog
 
 ## Unreleased
@@ -29,3 +29,4 @@
 - T1.5.1: 60-dialect이 capability table을 전체로 쓴다 — IR 표면, 강화된 update, on_duplicate 판정, 거부 표면, Go-only 표시.
 - T1.5.2: 70-sync가 adapter 계약 범위와 확정 판정 — truth ownership, provenance, git 인식 drift 처리, 재구축 가능 projection — 을 서술한다.
 - T1.5.3: 80-migration이 additive-first 범위, codemod transaction, 참조 재작성 예외, checklist cutover을 서술한다.
+- T1.5.4: 90-conformance가 corpus vector 계약, 필수 round-trip·멱등성 속성, Go-first runner를 서술한다.
