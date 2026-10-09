@@ -197,3 +197,82 @@ func splitTaskID(id string) ([]int, bool) {
 	}
 	return numbers, true
 }
+
+// Sum returns the sum of the integer values of a column over the selected rows.
+func (corpus *Corpus) Sum(table, column string, query Query) (int, error) {
+	rows, _, err := corpus.table(table)
+	if err != nil {
+		return 0, err
+	}
+	total := 0
+	for _, row := range selectRows(rows, query) {
+		number, err := intValue(row[column])
+		if err != nil {
+			return 0, fmt.Errorf("the column %q of %v is not an integer: %w", column, row, err)
+		}
+		total += number
+	}
+	return total, nil
+}
+
+// Avg returns the integer average of a column over the selected rows.
+func (corpus *Corpus) Avg(table, column string, query Query) (int, error) {
+	rows, _, err := corpus.table(table)
+	if err != nil {
+		return 0, err
+	}
+	selected := selectRows(rows, query)
+	if len(selected) == 0 {
+		return 0, nil
+	}
+	total := 0
+	for _, row := range selected {
+		number, err := intValue(row[column])
+		if err != nil {
+			return 0, fmt.Errorf("the column %q of %v is not an integer: %w", column, row, err)
+		}
+		total += number
+	}
+	return total / len(selected), nil
+}
+
+// GroupCount returns the row count per distinct value of a column.
+func (corpus *Corpus) GroupCount(table, column string, query Query) (map[string]int, error) {
+	rows, _, err := corpus.table(table)
+	if err != nil {
+		return nil, err
+	}
+	groups := map[string]int{}
+	for _, row := range selectRows(rows, query) {
+		groups[row[column]]++
+	}
+	return groups, nil
+}
+
+// Paginate returns one page of rows — Limit is the page size — with the total row count.
+func (corpus *Corpus) Paginate(table string, query Query) ([]Row, int, error) {
+	rows, _, err := corpus.table(table)
+	if err != nil {
+		return nil, 0, err
+	}
+	selected := selectRows(rows, Query{Where: query.Where, Order: query.Order})
+	if query.Limit > 0 && len(selected) > query.Limit {
+		selected = selected[:query.Limit]
+	}
+	return selected, len(selectRows(rows, Query{Where: query.Where})), nil
+}
+
+// intValue parses an integer column value.
+func intValue(value string) (int, error) {
+	number := 0
+	if value == "" {
+		return 0, fmt.Errorf("the value is empty")
+	}
+	for _, r := range value {
+		if r < '0' || r > '9' {
+			return 0, fmt.Errorf("the value %q holds a non-digit", value)
+		}
+		number = number*10 + int(r-'0')
+	}
+	return number, nil
+}

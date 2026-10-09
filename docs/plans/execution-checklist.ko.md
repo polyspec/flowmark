@@ -1,5 +1,5 @@
 <!-- doc-id: execution-checklist -->
-<!-- source-sha256: 299f18bed691a6ff87a907b236f576fc36c15a10998ae5bd03d8f214cb42a90c -->
+<!-- source-sha256: f8a75c2ede2ffe12c2c9768fdc5e84317e2dc7615f5c2b0d54cf5deea1ea9d31 -->
 # 실행 체크리스트
 
 ## T1a 설계 session
@@ -46,9 +46,9 @@
 - [o] T3 Validator: corpus-global 제약 (T2 선행)
 - [o] T3.1 corpus의 key와 참조를 검증한다: doc-id와 item ID의 유일성, 산문의 모든 task-ID token 해석 (T2 선행)
 - [o] T3.2 config/documents.json의 선택으로 corpus directory를 검사하는 flowmark validate를 소유 명령으로 연결한다 (T3.1 선행)
-- [ ] T4 Executor: parse된 corpus 위의 IR kind (T3 선행)
+- [o] T4 Executor: parse된 corpus 위의 IR kind (T3 선행)
 - [o] T4.1 corpus row 위에서 one·all·count를 where·order·limit와 함께 실행한다 (T3 선행)
-- [ ] T4.2 sum·avg·paginate·group_count를 type-directed ordering으로 실행한다 (T4.1 선행)
+- [o] T4.2 sum·avg·paginate·group_count를 type-directed ordering으로 실행한다 (T4.1 선행)
 - [ ] T5 orm markdown-executor 통합: manifest setting과 state-machine sub-grammar (T4 선행)
 - [ ] T6 Sync adapter: 계약과 database adapter (T5 선행)
 - [ ] T7 세 개의 face — CLI·MCP server·soksak sidecar — orm model API 위의 thin adapter (T5 선행)
