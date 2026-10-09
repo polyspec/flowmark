@@ -57,6 +57,7 @@
 - [o] T7.1 The CLI face: validate, items and transition over the corpus (requires T3)
 - [o] T7.2 The MCP server face: initialize, tools/list and tools/call over stdio (requires T7.1)
 - [o] T7.3 The soksak sidecar face: the protocol v1 message loop over stdio (requires T7.1)
+- [o] T7.3-1 Flush each sidecar and MCP message on its own. Cause: Serve held the bufio flush until the input ended, so a host that keeps the session open — the example Wails host, an MCP client — received no answer until the process stopped; the protocol and the JSON-RPC session both deliver each message while the session runs. Acceptance: every answer flushes on write, before the input ends, with a regression test that reads one answer while the pipe stays open.
 - [o] T8 Checklist application: the local issue model (requires T3)
 - [o] T8.1 Encode the transition table: terminals, required fields and the superseded spawn (requires T3)
 - [o] T8.2 Apply a transition to the corpus: rewrite the state, append the revision line and hold the WIP gate (requires T8.1)

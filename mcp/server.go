@@ -137,6 +137,8 @@ func reply(writer *bufio.Writer, id json.RawMessage, result any, err error) {
 	}
 	writer.Write(text)
 	writer.WriteByte('\n')
+	// A client reads each response while the session runs; a message flushes on its own.
+	writer.Flush()
 }
 
 // writeFile is the test probe that places one document.

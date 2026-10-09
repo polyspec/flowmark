@@ -110,4 +110,6 @@ func write(writer *bufio.Writer, message map[string]any) {
 	}
 	writer.Write(text)
 	writer.WriteByte('\n')
+	// The host reads each answer while the process runs; a message flushes on its own.
+	writer.Flush()
 }
