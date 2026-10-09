@@ -190,3 +190,55 @@ func NextID(root, relativePath string) string {
 	}
 	return fmt.Sprintf("T%d", highest+1)
 }
+
+// MoveItem repositions one item (with its continuation lines) after another item, or to the
+// end of the item list when afterID is empty. The state does not change.
+func MoveItem(root, relativePath, id, afterID string) error {
+	path := filepath.Join(root, filepath.FromSlash(relativePath))
+	text, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	document, diagnostics := codec.Parse(string(text))
+	if len(diagnostics) > 0 {
+		return fmt.Errorf("%s holds %d parse findings; fix them first", relativePath, len(diagnostics))
+	}
+	var moving, anchor *codec.ChecklistItem
+	for i := range document.Items {
+		if document.Items[i].ID == id {
+			moving = &document.Items[i]
+		}
+		if afterID != "" && document.Items[i].ID == afterID {
+			anchor = &document.Items[i]
+		}
+	}
+	if moving == nil {
+		return fmt.Errorf("the item %q is not in %s", id, relativePath)
+	}
+	if afterID != "" && anchor == nil {
+		return fmt.Errorf("the anchor %q is not in %s", afterID, relativePath)
+	}
+
+	lines := strings.Split(string(text), "\n")
+	block := moving.Line - 1
+	blockEnd := block + 1 + len(moving.Continuations)
+	itemLines := append(append([]string{}, lines[block:blockEnd]...))
+	rest := append(append([]string{}, lines[:block]...), lines[blockEnd:]...)
+
+	var insert int
+	if anchor == nil {
+		insert = len(rest)
+		// trim trailing empty lines to land before them
+		for insert > 0 && strings.TrimSpace(rest[insert-1]) == "" {
+			insert--
+		}
+	} else {
+		anchorBlock := anchor.Line - 1
+		if anchorBlock >= block {
+			anchorBlock -= blockEnd - block
+		}
+		insert = anchorBlock + 1 + len(anchor.Continuations)
+	}
+	out := append(append(append([]string{}, rest[:insert]...), itemLines...), rest[insert:]...)
+	return os.WriteFile(path, []byte(strings.Join(out, "\n")), 0o644)
+}

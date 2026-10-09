@@ -143,3 +143,35 @@ func TestAddItemAutoID(t *testing.T) {
 		t.Fatalf("text holds no auto T4")
 	}
 }
+
+func TestMoveItem(t *testing.T) {
+	root := rootWith(t, board) // T1.1, T2.1(with continuation), T3.1
+	if err := MoveItem(root, "docs/plans/list.md", "T3.1", "T1.1"); err != nil {
+		t.Fatal(err)
+	}
+	text, err := os.ReadFile(filepath.Join(root, "docs", "plans", "list.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(string(text), "\n")
+	// T3.1 should now be right after T1.1 (before T2.1)
+	if !strings.Contains(lines[5], "T1.1") || !strings.Contains(lines[6], "T3.1") || !strings.Contains(lines[7], "T2.1") {
+		t.Fatalf("order:\n%s", string(text))
+	}
+	// T2.1's continuation moved with it
+	if !strings.Contains(string(text), "Criteria: it prints.") {
+		t.Fatal("the continuation was dropped")
+	}
+}
+
+func TestMoveToEnd(t *testing.T) {
+	root := rootWith(t, board)
+	if err := MoveItem(root, "docs/plans/list.md", "T1.1", ""); err != nil {
+		t.Fatal(err)
+	}
+	text, _ := os.ReadFile(filepath.Join(root, "docs", "plans", "list.md"))
+	lines := strings.Split(string(text), "\n")
+	if !strings.Contains(lines[len(lines)-2], "T1.1") {
+		t.Fatalf("T1.1 is not last:\n%s", string(text))
+	}
+}
