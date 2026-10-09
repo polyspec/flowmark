@@ -40,11 +40,24 @@ func main() {
 	case "items":
 		os.Exit(items(root))
 	case "add":
-		if len(os.Args) < 7 {
+		if len(os.Args) < 5 {
 			usage()
 		}
-		path, id := os.Args[3], os.Args[4]
-		title := strings.Join(os.Args[5:], " ")
+		path := os.Args[3]
+		id := "-"
+		title := ""
+		if os.Args[4] != "-" && len(os.Args) >= 6 && !strings.HasPrefix(os.Args[4], "-") && len(os.Args) > 5 && false {
+		}
+		// add <root> <path> [- | <id>] <title...> — "-" allocates the next ID.
+		if len(os.Args) >= 6 {
+			id = os.Args[4]
+			title = strings.Join(os.Args[5:], " ")
+		} else {
+			title = strings.Join(os.Args[4:], " ")
+		}
+		if id == "-" {
+			id = ""
+		}
 		if err := app.AddItem(root, path, id, title); err != nil {
 			fmt.Fprintf(os.Stderr, "flowmark add: %v\n", err)
 			os.Exit(1)

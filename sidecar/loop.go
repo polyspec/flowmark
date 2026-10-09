@@ -81,13 +81,22 @@ func run(root string, operation *operation) (string, error) {
 		if err != nil {
 			return "", err
 		}
+		documents, err := opened.All("documents", executor.Query{})
+		if err != nil {
+			return "", err
+		}
+		pathOf := map[string]string{}
+		for _, row := range documents {
+			pathOf[row["doc_id"]] = row["path"]
+		}
 		rows, err := opened.All("items", executor.Query{})
 		if err != nil {
 			return "", err
 		}
+		// state, id, title, path — the page addresses its operations by the path.
 		lines := make([]string, 0, len(rows))
 		for _, row := range rows {
-			lines = append(lines, fmt.Sprintf("%s\t%s\t%s", row["state"], row["id"], row["title"]))
+			lines = append(lines, fmt.Sprintf("%s\t%s\t%s\t%s", row["state"], row["id"], row["title"], pathOf[row["doc_id"]]))
 		}
 		return strings.Join(lines, "\n"), nil
 	case "validate":
