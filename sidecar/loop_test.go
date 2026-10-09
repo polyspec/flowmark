@@ -41,7 +41,7 @@ func lines(t *testing.T, out string) []map[string]any {
 
 func TestItemsRequest(t *testing.T) {
 	root := corpusDir(t)
-	input := `{"surface":1,"root":"` + root + `","body":{"op":"items"}}` + "\n"
+	input := `{"surface":1,"root":"` + root + `","body":{"operation":"items"}}` + "\n"
 	var out bytes.Buffer
 	Serve(strings.NewReader(input), &out)
 	messages := lines(t, out.String())
