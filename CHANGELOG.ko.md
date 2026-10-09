@@ -1,5 +1,5 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 3ae29feb1d42a59abc9d02fdd0cabcbdd86b52c36323435c9d71183a70d94c6b -->
+<!-- source-sha256: 05e7468fabac68f14a9b8d217720940488f4e2d200cc044594cbbd9ece870785 -->
 # Changelog
 
 ## Unreleased
@@ -49,3 +49,4 @@
 - T8.3: `flowmark items`가 corpus 항목을 나열하고 `flowmark transition`이 state machine으로
   하나를 적용한다. walk가 dot root에 들어가고, Korean twin은 두 번째 key를 등록하지
   않으며, changelog 예시의 ID는 code span에 담는다. T8이 완료된다.
+- T1.4.8: 20-document-model이 aggregate와 분할 shape — 단일 파일, 1:n 연결 파일, 1:n:1 — 을 명시한다. 모두 file-as-row·child block·foreign-key column primitive로 구성되고 key는 restrict뿐이다.

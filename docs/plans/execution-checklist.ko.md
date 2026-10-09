@@ -1,5 +1,5 @@
 <!-- doc-id: execution-checklist -->
-<!-- source-sha256: e089e6a3abde42d893a50c293a46960bc50e920ee86a5794e14cab5b7eababc8 -->
+<!-- source-sha256: fd091adcdecd868aa6e49cb118012e8f0a4a6e94457d856faf765f1c913d5f8c -->
 # 실행 체크리스트
 
 ## T1a 설계 session
@@ -26,6 +26,7 @@
 - [o] T1.4.5 docs/spec/40-ops.md(.ko)를 쓴다
 - [o] T1.4.6 docs/spec/50-constraints.md(.ko)를 쓴다
 - [o] T1.4.7 한국어 문서를 dry 문체로 다시 쓴다 — 비유 제거, 동작 동사 사용, 기술 용어 영문 유지 (T1.4.6 선행)
+- [o] T1.4.8 문서 모델에 aggregate와 분할 shape를 명시한다: 단일 파일, 1:n 연결 파일, 1:n:1 (T1.4.7 후속)
 - [ ] T1.5 나머지 명세를 쓴다 (T1.4 선행)
   - 완료 기준: capability table 전체, 범위를 정한 skeleton 3종, 그리고 100-checklist와 110-open-questions 전체; T1.5.1부터 T1.5.6까지 완료되면 완료된다.
 - [o] T1.5.1 capability table을 전체로 담은 docs/spec/60-dialect.md(.ko)를 쓴다
