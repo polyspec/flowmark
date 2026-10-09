@@ -20,7 +20,7 @@ Revision 2 — 3개 lane의 적대 감사 결과(engine core, orm 통합, 운영
 6. Sync projection 파일: 실제 markdown 파일이 disk에 존재. `readonly`(기본) / `writable` 옵션 (상세 §7).
 7. Repository는 **github.com/polyspec/flowmark** — polyspec organization 안의 독립 repository.
 8. **Multi-platform은 hard requirement. 편법 금지.** 현재 요구사항을 완전히 충족하는 가장 단순한 구현을 선택한다 (kit 자신의 규칙을 여기에 적용): flock 없음, POSIX 전용 durability 가정 없음 — lock은 kit의 `holder-lock` 선례(lock file + holder 신원 + stale 판정, 순수 runtime primitive)를 따르고, crash 안전성은 OS별 directory fsync가 아니라 journal replay로 얻는다.
-9. **GUI는 자기 repo의 soksak plugin으로 출시되고, flowmark는 soksak의 sidecar로 서비스한다.** 하나의 Go binary가 세 개의 thin 얼굴을 갖는다 — CLI, MCP server, soksak sidecar(soksak core 명세의 protocol v1: 표준 입출력 위의 JSON lines, surface·root routing, host 소유 lifecycle). 저장소는 단일 언어 Go에 `package.json`과 `sidecar.json` manifest를 얹은 형태이고, 언어별 package는 요구사항이 이름을 붙일 때 만든다.
+9. **GUI는 자기 repo의 soksak plugin으로 출시되고, flowmark는 soksak의 sidecar로 서비스한다.** 하나의 Go binary가 세 개의 thin face을 갖는다 — CLI, MCP server, soksak sidecar(soksak core 명세의 protocol v1: 표준 입출력 위의 JSON lines, surface·root routing, host 소유 lifecycle). 저장소는 단일 언어 Go에 `package.json`과 `sidecar.json` manifest를 얹은 형태이고, 언어별 package는 요구사항이 이름을 붙일 때 만든다.
 
 ## 검증된 근거 (polyspec checkout에서 직접 확인)
 
@@ -53,13 +53,13 @@ sync engine: md→db export / db→md materialize (§7)
 **Seam 판정 (layering 순환 해소)**: markdown은 SQL executor들 옆에 등록되는 네 번째 **executor**이며 DSN scheme `markdown://<path>`로 선택된다. shared planner는 SQL backend와 똑같이 IR을 검증하고, markdown executor는 **IR request**를 직접 소비하며 SQL plan을 render하지 않는다 — `getQuery()`, statement event, `subscribe()`, `force_index`는 `CAPABILITY_UNSUPPORTED`를 반환한다 (지원 불가 능력에 대한 orm의 기존 선례). executor 구현은 **orm 저장소**에 귀속된다 (flowmark가 T5에서 기여한다). 다른 client가 port하기 전까지 capability table은 markdown 지원을 **Go-only**로 표시한다. flowmark 저장소는 spec, kit tooling, checklist application, sync engine을 담는다.
 
 - SQLite mirror는 부정한다: mirror↔corpus 동등성이 영구적인 bug class가 된다. mirror를 인정하더라도 conformance 조건은 (a) full-rebuild equivalence (b) write path 부재다.
-- IR boundedness 주장은 request layer만 덮는다. **API 동등성은 주장하지 않는다** — capability table(§6)이 계약이며, orm의 `CAPABILITY_UNSUPPORTED`/`OPERATOR_NOT_ALLOWED` 전통을 따른다.
+- IR boundedness 주장은 request layer만 대상으로 한다. **API 동등성은 주장하지 않는다** — capability table(§6)이 계약이며, orm의 `CAPABILITY_UNSUPPORTED`/`OPERATOR_NOT_ALLOWED` 전통을 따른다.
 
 ### 2. Canonical format (`10-canonical-format.md`)
 
 - **멱등성은 dbspec의 2절 명제다** — 단일 byte-identity 주장이 아니라: canonical 입력 `s`에 대해 `emit(parse(s)) == s`, 임의의 valid 입력 `d`에 대해 `emit(parse(emit(d))) == emit(d)`. renderer는 **구조 skeleton** — frontmatter block, heading line, 정렬 대상인 item/table line, renderer가 쓰는 marker — 만 소유하고, 보존 구간의 payload bytes(prose, fenced 내용, 소유하지 않는 HTML comment)는 결코 다시 쓰지 않는다. 비-canonical 입력은 `format.noncanonical` diagnostic과 별도의 일회성 `flowmark canon` migration transaction으로 처리하며, 논리적 write의 부수 효과로 정규화하지 않는다.
 - 문서 preamble(첫 H2 이전의 제목과 text)는 예약된 long-text column이다. H2 section은 선언된 long-text column에 mapping되고, 없는 section = NULL, 있으나 비어 있음 = 빈 text다.
-- **Ordering은 type-directed**: ID-typed key는 segment별 숫자 비교(`T8.0.9 < T8.0.10`), text는 codepoint, 복합 key는 component type별 사전식. SQL collation 결정은 text 비교에만 적용되며 typed key의 ordering으로 수입하지 않는다. `group_count`는 NULL을 함께 묶는다 (SQL 동등성).
+- **Ordering은 type-directed**: ID-typed key는 segment별 숫자 비교(`T8.0.9 < T8.0.10`), text는 codepoint, 복합 key는 component type별 사전식. SQL collation 결정은 text 비교에만 적용되며 typed key의 ordering으로 수입하지 않는다. `group_count`는 NULL을 같은 group으로 처리한다 (SQL 동등성).
 - ID grammar: `T<n>(.<n>)*(-<n>)?` — leading zero와 suffix `-0` 금지; 동등성은 canonical 형식의 문자열 동등성; suffix는 항목 신원의 일부로 **renumber 때 base와 함께 이동**한다. suffix 항목의 하위(`T8.0.14-1.3`)는 허용하며 suffix는 마지막 path segment에 결합한다. 참조는 구조적으로 읽는다(parse된 위치, code span 제외); 참조를 다시 쓰는 codemod가 payload 보존의 명시적 예외다. `flowmark next-id`가 다음 형제 ID를 계산한다 — 사람이 도구 없이 ID를 계산한다고 기대하지 않는다.
 - **Frontmatter profile**: YAML 1.2 core schema, 값 영역은 block style, anchor·tag 금지. v1에서 frontmatter comment는 located diagnostic으로 거부한다 (comment를 보존하는 round-trip emitter는 요구사항이 명명하기 전까지 명시된 비목표). dbspec type별 값 문법: decimal·datetime·uuid literal은 dbspec의 canonical 형식, `bytes`는 base64, 줄바꿈을 가질 수 있는 text column은 markdown-table child cell에 둘 수 없다.
 - 번역 쌍은 **하나의 row**다: `doc_id`가 primary key이고 Korean twin 파일은 row의 projection이지 두 번째 row가 아니다. `source-sha256` = English 파일 raw bytes의 sha256 (kit 호환).
@@ -81,7 +81,7 @@ sync engine: md→db export / db→md materialize (§7)
 ### 5. Ops와 transaction (`40-ops.md`)
 
 - **Commit protocol** (순서가 규범적): post-image 파일을 `.flowmark/tx/<id>/`에 content-addressed로 쓰고 fsync; 모든 대상의 pre-image를 stage로 복사하고 fsync; 모든 rename과 pre/post hash를 적은 **prepare record**를 쓰고 fsync; runtime의 atomic rename으로 rename; commit record를 쓰고 fsync; stage 정리. **복구는 corpus를 열 때마다 실행한다**: prepare record가 있으면 완료, 없으면 stage 폐기, 대상의 현재 hash가 기록된 어느 쪽과도 다르면 거부하고 보고한다(crash 사이에 사람 편집이 들어왔다는 뜻 — 결코 조용히 덮어쓰지 않는다). 정전 이후의 durability는 OS별 directory fsync가 아니라 journal replay에 의존한다.
-- **하나의 portable lock, 작업 단위** (multi-platform 판정): 모든 작업 — 읽기와 쓰기, CLI와 MCP — 는 같은 lock file을 작업 기간 동안 holder 신원·stale 판정과 함께 잡는다(kit `holder-lock` 선례) — timeout은 holder를 보고한다. 장기 lock도 reader/writer 구분도 없다: reader가 torn commit을 볼 수 없고, MCP server가 CLI를 잠그지 않으며, 멈춘 holder는 deadlock이 아니라 timeout 보고다. commit 시 충돌(읽은 뒤 대상이 바뀜)은 file과 line과 함께 실패하고 정의된 재독기-재시도-1회 계약을 따른다 — silent merge 없음.
+- **하나의 portable lock, 작업 단위** (multi-platform 판정): 모든 작업 — 읽기와 쓰기, CLI와 MCP — 는 같은 lock file을 작업 기간 동안 holder 신원·stale 판정과 함께 획득한다(kit `holder-lock` 선례) — timeout은 holder를 보고한다. 장기 lock도 reader/writer 구분도 없다: reader가 torn commit을 볼 수 없고, MCP server가 CLI를 잠그지 않으며, 멈춘 holder는 deadlock이 아니라 timeout 보고다. commit 시 충돌(읽은 뒤 대상이 바뀜)은 file과 line과 함께 실패하고 정의된 재독기-재시도-1회 계약을 따른다 — silent merge 없음.
 - **검증은 commit 시점에 lock 아래에서 corpus를 새로 읽어 수행한다** — BEGIN snapshot도 예측된 touch file 집합도 아니다(cascade 탐색이 그 집합을 계산 불가능하게 만든다). read-hash는 실제로 읽은 것에서 계산한다.
 - **Corpus revision**: `.flowmark/`의 단조 증가 counter이며 모든 commit이 올린다. 다중 호출 read session(paginate)은 이것을 가지고 다니며 불일치 시 `CORPUS_CHANGED`로 실패한다(또는 keyset pagination으로 강등). `orderByRandom`은 revision별 seed.
 - **비용 모델**: 40-ops가 per-command p95 latency 목표를 선언한다(corpus envelope 기준 수백 ms 단위); file content hash를 key로 하는 `.flowmark/cache/`의 parsed row cache가 변하지 않은 file의 재parse를 피한다; 기본 per-transaction 검증은 post-image의 FK/UK closure이고, 전체 `flowmark validate`는 on demand와 schema 변경 시에 실행한다.
@@ -110,7 +110,7 @@ sync engine: md→db export / db→md materialize (§7)
 
 - tables: `checklists`, `checklist_items`(self-FK parent, 상태 5종, supersedes FK), `item_dependencies`(선행/후속), `item_revisions`(append-only: from/to, reason, evidence), `changelogs`(item_revisions의 projection).
 - **View는 또 하나의 thin consumer일 뿐**: 칸반 보드(column = 상태 5종, card = checklist 항목, 의존은 edge)는 같은 orm query로 읽고 같은 orm model API로 transition을 쓴다 — 불법 drag는 불법 CLI transition과 똑같이 validator가 거부하고 WIP gate는 column limit이 된다. view 전용 write path는 존재해선 안 된다 (후속 phase 항목으로 등록, 같은 원칙은 향후 어떤 UI에도 적용).
-- kit→flowmark checklist cutover(app 출시 시)는 하나의 transaction이다: `config/checklist.json`에서 tracker를 빼고, 문서를 corpus 형식으로 codemod하고, 같은 commit에서 `flowmark validate`를 통과시킨다. 그 전까지는 stopgap reference checker(docs/의 모든 `T<n>…` token이 checklist 항목으로 해석되는지)가 kit가 검사할 수 없는 dangling-reference 계열을 덮는다.
+- kit→flowmark checklist cutover(app 출시 시)는 하나의 transaction이다: `config/checklist.json`에서 tracker를 빼고, 문서를 corpus 형식으로 codemod하고, 같은 commit에서 `flowmark validate`를 통과시킨다. 그 전까지는 stopgap reference checker(docs/의 모든 `T<n>…` token이 checklist 항목으로 해석되는지)가 kit가 검사할 수 없는 dangling-reference 계열을 검사한다.
 
 ## Session 계획 (이번 session은 T1a, 다음 session은 T1b)
 
@@ -126,7 +126,7 @@ sync engine: md→db export / db→md materialize (§7)
 
 **T9 conformance 계약 (지금 확정)**: markdown vector는 corpus-before + IR request + 기대 corpus-after / 기대 rows이며 Go executor에 대해 실행한다. SQL/binds 비교는 적용되지 않는다(SQL이 없으므로). 다른 client가 executor를 port할 때 교차 비교가 시작된다.
 
-**이후 phase (checklist `[ ]` 항목으로만 등록)**: T2 codec(Go), T3 validator, T4 executor, T5 orm markdown-executor 통합(manifest setting, state-machine sub-grammar — orm 저장소 변경), T6 sync(adapter 계약과 database adapter; GitHub·Jira adapter는 그 아래에 등록), T7 세 개의 얼굴 — CLI·MCP server·soksak sidecar(protocol v1: stdio JSON lines, surface routing, host 소유 lifecycle; MCP tool 목록 mini-spec 먼저, 작업 단위 lock은 이미 core 판정), T8 checklist app(local issue model), T9 conformance vectors, T10 자기 repo의 soksak plugin — local 칸반 보드와 issue tracker, 또 하나의 thin consumer로서 view 전용 write path 없음.
+**이후 phase (checklist `[ ]` 항목으로만 등록)**: T2 codec(Go), T3 validator, T4 executor, T5 orm markdown-executor 통합(manifest setting, state-machine sub-grammar — orm 저장소 변경), T6 sync(adapter 계약과 database adapter; GitHub·Jira adapter는 그 아래에 등록), T7 세 개의 face — CLI·MCP server·soksak sidecar(protocol v1: stdio JSON lines, surface routing, host 소유 lifecycle; MCP tool 목록 mini-spec 먼저, 작업 단위 lock은 이미 core 판정), T8 checklist app(local issue model), T9 conformance vectors, T10 자기 repo의 soksak plugin — local 칸반 보드와 issue tracker, 또 하나의 thin consumer로서 view 전용 write path 없음.
 
 ## 감사가 부수지 못한 것
 

@@ -32,3 +32,4 @@
 - T1.5.5: 100-checklist writes the application in full — the tables, the five-state machine with terminals and required fields, the WIP gate, the board as one more consumer, and the cutover.
 - T1.5.6: 110-open-questions registers the seven open decisions with recommendations and deciding conditions.
 - T1.4.1: 00-overview writes the scope, the enforcement summary, the glossary, the non-goals, and the document map.
+- T1.4.7: the Korean documents follow the dry style — action verbs, no metaphor, English technical terms; T1.4 completes with its seven sub-items.

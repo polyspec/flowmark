@@ -16,7 +16,7 @@
 
 ## T1b Specifications
 
-- [~] T1.4 Write the six core specifications as full document pairs (requires T1.2)
+- [o] T1.4 Write the six core specifications as full document pairs (requires T1.2)
   - Completion criteria: every ruling appears as a proposition with its grounding; it completes when T1.4.1 through T1.4.7 complete.
 - [o] T1.4.1 Write docs/spec/00-overview.md(.ko)
 - [o] T1.4.2 Write docs/spec/10-canonical-format.md(.ko)
@@ -24,7 +24,7 @@
 - [o] T1.4.4 Write docs/spec/30-schema.md(.ko)
 - [o] T1.4.5 Write docs/spec/40-ops.md(.ko)
 - [o] T1.4.6 Write docs/spec/50-constraints.md(.ko)
-- [ ] T1.4.7 Rewrite the Korean documents in the dry style — no metaphor, action verbs, English technical terms (requires T1.4.6)
+- [o] T1.4.7 Rewrite the Korean documents in the dry style — no metaphor, action verbs, English technical terms (requires T1.4.6)
 - [ ] T1.5 Write the remaining specifications (requires T1.4)
   - Completion criteria: the capability table in full, three scoped skeletons, and 100-checklist and 110-open-questions in full; it completes when T1.5.1 through T1.5.6 complete.
 - [o] T1.5.1 Write docs/spec/60-dialect.md(.ko) with the capability table in full
