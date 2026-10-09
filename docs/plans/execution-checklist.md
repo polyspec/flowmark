@@ -1,13 +1,11 @@
 <!-- doc-id: execution-checklist -->
 # Execution checklist
 
-A task is `[ ]` waiting, `[~]` in progress, `[o]` done, `[!]` bypassed with its cause and retry condition, or `[-]` impossible with its cause. A task becomes `[o]` in the commit that completes it, after its owning command passes.
-
 ## T1a Design session
 
 - [o] T1.0 Bootstrap the repository with the document pairs and this checklist
   - Completion criteria: README, AGENTS, CHANGELOG and this checklist exist in English and Korean, `.flowmark/` is ignored, and `git log` holds the bootstrap commit.
-- [~] T1.1 Fold the adversarial audit into the design plan (requires T1.0)
+- [o] T1.1 Fold the adversarial audit into the design plan (requires T1.0)
   - Completion criteria: every audit blocker appears as a ruling in docs/plans/design-plan.md, the Korean twin holds the English source-sha256, and the plan revision commits.
 - [ ] T1.2 Vendor polyspec/kit and configure the trackers (requires T1.0)
   - Completion criteria: `make kit-check` and `make documents-check` pass on the vendored tree with config/checklist.json and config/documents.json authored.
