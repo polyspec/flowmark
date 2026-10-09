@@ -1,5 +1,5 @@
 <!-- doc-id: execution-checklist -->
-<!-- source-sha256: dc50cbe7665ae3f5cf33c0dd1f4b710900f45adb6b68608628c437abb184b7e7 -->
+<!-- source-sha256: a111b2361bf2a94f13d9363f26063c0f141afeb9ec0c06790eedab1d2d15bae4 -->
 # 실행 체크리스트
 
 ## T1a 설계 session
@@ -43,7 +43,7 @@
 - [o] T2.3 child block — checklist 항목과 markdown table — 을 row로 parse한다 (T2.2 선행)
 - [o] T2.4 모든 parse 규칙을 고정 rule 이름의 located diagnostic으로 보고한다 (T2.1 선행)
 - [o] T2.5 이 저장소의 corpus에서 P1과 P2를 golden set으로 증명한다 (T2.1 선행)
-- [ ] T3 Validator: corpus-global 제약 (T2 선행)
+- [~] T3 Validator: corpus-global 제약 (T2 선행)
 - [ ] T4 Executor: parse된 corpus 위의 IR kind (T3 선행)
 - [ ] T5 orm markdown-executor 통합: manifest setting과 state-machine sub-grammar (T4 선행)
 - [ ] T6 Sync adapter: 계약과 database adapter (T5 선행)
