@@ -1,5 +1,5 @@
 <!-- doc-id: execution-checklist -->
-<!-- source-sha256: 75a44035c975feeb4f7b4e6d3bb95617abc435380c679bb1862d8f62b3a7e2c9 -->
+<!-- source-sha256: 264ed0408295270f27f25fbd5f662b989e3e6113b3c879e80d6acbbdff147d2e -->
 # 실행 체크리스트
 
 ## T1a 설계 session
@@ -32,7 +32,7 @@
 - [o] T1.5.2 범위 skeleton으로 docs/spec/70-sync.md(.ko)를 쓴다
 - [o] T1.5.3 범위 skeleton으로 docs/spec/80-migration.md(.ko)를 쓴다
 - [o] T1.5.4 범위 skeleton으로 docs/spec/90-conformance.md(.ko)를 쓴다
-- [ ] T1.5.5 docs/spec/100-checklist.md(.ko)를 전체로 쓴다
+- [o] T1.5.5 docs/spec/100-checklist.md(.ko)를 전체로 쓴다
 - [ ] T1.5.6 docs/spec/110-open-questions.md(.ko)를 전체로 쓴다
 
 ## 이후 phase

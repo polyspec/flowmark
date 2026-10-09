@@ -1,5 +1,5 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 6534602a83a1d07b26e737b02fac98ee04efaa4f5fdf8d99de8decb2dc084405 -->
+<!-- source-sha256: 610d9786d314440e0a51cd8414002acca28d6e6af20fac8c495584fbe0fc0a8c -->
 # Changelog
 
 ## Unreleased
@@ -30,3 +30,4 @@
 - T1.5.2: 70-sync가 adapter 계약 범위와 확정 판정 — truth ownership, provenance, git 인식 drift 처리, 재구축 가능 projection — 을 서술한다.
 - T1.5.3: 80-migration이 additive-first 범위, codemod transaction, 참조 재작성 예외, checklist cutover을 서술한다.
 - T1.5.4: 90-conformance가 corpus vector 계약, 필수 round-trip·멱등성 속성, Go-first runner를 서술한다.
+- T1.5.5: 100-checklist가 application을 전체로 쓴다 — table, terminal과 필수 field를 가진 5상태 machine, WIP gate, 또 하나의 consumer인 board, cutover.
