@@ -23,11 +23,11 @@ type message struct {
 }
 
 type operation struct {
-	Op       string `json:"op"`
-	Path     string `json:"path"`
-	ID       string `json:"id"`
-	State    string `json:"state"`
-	Evidence string `json:"evidence"`
+	Operation string `json:"operation"`
+	Path      string `json:"path"`
+	ID        string `json:"id"`
+	State     string `json:"state"`
+	Evidence  string `json:"evidence"`
 }
 
 // Serve reads the host messages and answers each: a closed handshake answers closed, a page
@@ -66,7 +66,7 @@ func Serve(in io.Reader, out io.Writer) {
 }
 
 func run(root string, operation *operation) (string, error) {
-	switch operation.Op {
+	switch operation.Operation {
 	case "items":
 		opened, err := executor.Open(root)
 		if err != nil {
@@ -100,7 +100,7 @@ func run(root string, operation *operation) (string, error) {
 		}
 		return fmt.Sprintf("%s is %s", operation.ID, operation.State), nil
 	}
-	return "", fmt.Errorf("the operation %q is unknown", operation.Op)
+	return "", fmt.Errorf("the operation %q is unknown", operation.Operation)
 }
 
 func write(writer *bufio.Writer, message map[string]any) {

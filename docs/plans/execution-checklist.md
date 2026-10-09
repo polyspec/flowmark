@@ -49,7 +49,7 @@
 - [o] T4 Executor: the IR kinds over the parsed corpus (requires T3)
 - [o] T4.1 Run one, all and count over the corpus rows with where, order and limit (requires T3)
 - [o] T4.2 Run sum, avg, paginate and group_count with the type-directed ordering (requires T4.1)
-- [ ] T5 orm markdown-executor integration: manifest settings and the state-machine sub-grammar (requires T4)
+- [o] T5 orm markdown-executor integration: manifest settings and the state-machine sub-grammar (requires T4)
 - [o] T6 Sync adapters: the contract and the database adapter (requires T5)
 - [o] T6.1 Export the corpus to SQL: a derived, deterministic INSERT dump of the rows (requires T4)
 - [o] T6.2 Materialize a rowset into markdown with the provenance header and the readonly drift rules (requires T6.1)
