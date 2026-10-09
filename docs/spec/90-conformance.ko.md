@@ -1,5 +1,5 @@
 <!-- doc-id: spec-conformance -->
-<!-- source-sha256: e7aedb6fbfd2256ba9bb7e2b1b364fbb24b27e5a67c2ceef7187beb12c16fc08 -->
+<!-- source-sha256: e07eb2914dbc3332a62e0fd3c9a71e106d07b228589c6132a140cd48291fbdcb -->
 # Conformance (범위 skeleton)
 
 [English](90-conformance.md)
@@ -25,6 +25,9 @@
 - **결정성**: ordering은 type-directed 규칙을 따른다. `orderByRandom` vector는 revision seed를
   고정한다.
 
-## T9에서 확정할 것
+## vector 형식
 
-vector JSON 형식, runner의 보고 형식, orm `tests/dbspec` 양식을 따르는 공유 vector 집합.
+vector는 `tests/conformance/vectors/` 아래의 JSON 파일 하나다: `name`, `corpus` (경로→문서
+text), `call` (kind, table, query), `expect` (key projection인 rows, count, 또는 page와 total).
+runner가 임시 directory에 corpus를 만들고 열고 call을 실행해 기대값과 비교한다. 기대 rows가
+column을 지정하므로 row 비교는 projection이지 전체 row 동등성이 아니다.

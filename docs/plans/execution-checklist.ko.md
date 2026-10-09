@@ -1,5 +1,5 @@
 <!-- doc-id: execution-checklist -->
-<!-- source-sha256: fd091adcdecd868aa6e49cb118012e8f0a4a6e94457d856faf765f1c913d5f8c -->
+<!-- source-sha256: 4ca46e087148cc53e28a8489c19d68397e550cb7d0e09c7ccbcb17124af66027 -->
 # 실행 체크리스트
 
 ## T1a 설계 session
@@ -57,5 +57,6 @@
 - [o] T8.1 전환 table을 인코딩한다: terminal, 필수 field, superseded 항목 생성 (T3 선행)
 - [o] T8.2 corpus에 전환을 적용한다: 상태 재작성, revision 줄 추가, WIP gate 유지 (T8.1 선행)
 - [o] T8.3 `flowmark items`와 `flowmark transition`을 소유 명령으로 연결한다 (T8.2 선행)
-- [ ] T9 Conformance vector: corpus before, request, 기대 corpus after (T4 선행)
+- [o] T9 Conformance vector: corpus before, request, 기대 corpus after (T4 선행)
+- [o] T9.1 vector 형식을 정의하고 첫 vector를 executor로 실행한다 (T4 선행)
 - [ ] T10 자기 repo의 soksak plugin: 칸반 보드와 issue tracker — 또 하나의 thin consumer (T8 선행)

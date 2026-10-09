@@ -26,7 +26,10 @@ first vectors at T9.
 - **Determinism**: ordering follows the type-directed rules; `orderByRandom` vectors pin the
   revision seed.
 
-## Open for T9
+## The vector shape
 
-The vector JSON shape, the runner's report format, and the shared vector set with the orm
-`tests/dbspec` style.
+A vector is one JSON file under `tests/conformance/vectors/`: `name`, `corpus` (path to
+document text), `call` (kind, table, query) and `expect` (rows as key projections, count, or
+page and total). The runner builds the corpus in a temporary directory, opens it, runs the
+call and compares the expectation; the expected rows name their columns, so a row comparison
+is a projection, not a whole-row equality.

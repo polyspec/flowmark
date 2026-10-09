@@ -1,0 +1,8 @@
+{
+  "name": "paginate-total",
+  "corpus": {
+    "docs/list.md": "<!-- doc-id: list -->\n# List\n\n## G\n\n- [ ] T1 One\n- [ ] T2 Two\n- [ ] T3 Three\n"
+  },
+  "call": { "kind": "paginate", "table": "items", "query": { "limit": 2 } },
+  "expect": { "page": [ { "id": "T1" }, { "id": "T2" } ], "total": 3 }
+}
