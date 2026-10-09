@@ -1,5 +1,5 @@
 <!-- doc-id: execution-checklist -->
-<!-- source-sha256: 4ca46e087148cc53e28a8489c19d68397e550cb7d0e09c7ccbcb17124af66027 -->
+<!-- source-sha256: 229fc9be4b1c455f6468c6edcc9939ed872e2838bc2d08b748b9450086f88104 -->
 # 실행 체크리스트
 
 ## T1a 설계 session
@@ -52,7 +52,10 @@
 - [o] T4.2 sum·avg·paginate·group_count를 type-directed ordering으로 실행한다 (T4.1 선행)
 - [ ] T5 orm markdown-executor 통합: manifest setting과 state-machine sub-grammar (T4 선행)
 - [ ] T6 Sync adapter: 계약과 database adapter (T5 선행)
-- [ ] T7 세 개의 face — CLI·MCP server·soksak sidecar — orm model API 위의 thin adapter (T5 선행)
+- [o] T7 세 개의 face — CLI·MCP server·soksak sidecar — orm model API 위의 thin adapter (T5 선행)
+- [o] T7.1 CLI face: corpus 위의 validate·items·transition (T3 선행)
+- [o] T7.2 MCP server face: stdio 위의 initialize·tools/list·tools/call (T7.1 선행)
+- [o] T7.3 soksak sidecar face: stdio 위의 protocol v1 message loop (T7.1 선행)
 - [o] T8 Checklist application: local issue model (T3 선행)
 - [o] T8.1 전환 table을 인코딩한다: terminal, 필수 field, superseded 항목 생성 (T3 선행)
 - [o] T8.2 corpus에 전환을 적용한다: 상태 재작성, revision 줄 추가, WIP gate 유지 (T8.1 선행)

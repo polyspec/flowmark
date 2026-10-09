@@ -11,6 +11,8 @@ import (
 	"github.com/polyspec/flowmark/app"
 	"github.com/polyspec/flowmark/corpus"
 	"github.com/polyspec/flowmark/executor"
+	"github.com/polyspec/flowmark/mcp"
+	"github.com/polyspec/flowmark/sidecar"
 )
 
 type documentsConfig struct {
@@ -19,6 +21,14 @@ type documentsConfig struct {
 }
 
 func main() {
+	if len(os.Args) == 2 && os.Args[1] == "mcp" {
+		mcp.Serve(os.Stdin, os.Stdout)
+		os.Exit(0)
+	}
+	if len(os.Args) == 2 && os.Args[1] == "sidecar" {
+		sidecar.Serve(os.Stdin, os.Stdout)
+		os.Exit(0)
+	}
 	if len(os.Args) < 3 {
 		usage()
 	}
@@ -48,7 +58,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: flowmark validate <root> | items <root> | transition <root> <path> <id> <state> [evidence]")
+	fmt.Fprintln(os.Stderr, "usage: flowmark mcp | sidecar | validate <root> | items <root> | transition <root> <path> <id> <state> [evidence]")
 	os.Exit(2)
 }
 
