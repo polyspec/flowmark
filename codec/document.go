@@ -12,8 +12,9 @@ type Document struct {
 	Sections    []Section
 }
 
-// Section is one H2 heading with the payload lines under it.
+// Section is one H2 or H3 heading with the payload lines under it.
 type Section struct {
+	Level   int // 2 or 3
 	Heading string
 	Lines   []string
 }

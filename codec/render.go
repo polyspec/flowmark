@@ -14,10 +14,10 @@ func Render(document *Document) string {
 	if document.Owner != "" {
 		header.WriteString("\n<!-- owner: " + document.Owner + " -->")
 	}
-	blocks := []string{header.String()}
 	if document.Title != "" {
-		blocks = append(blocks, "# "+document.Title)
+		header.WriteString("\n# " + document.Title)
 	}
+	blocks := []string{header.String()}
 	if len(document.Preamble) > 0 {
 		blocks = append(blocks, strings.Join(document.Preamble, "\n"))
 	}
@@ -25,7 +25,11 @@ func Render(document *Document) string {
 		blocks = append(blocks, "---\n"+strings.Join(document.Frontmatter, "\n")+"\n---")
 	}
 	for _, section := range document.Sections {
-		block := "## " + section.Heading
+		marker := "## "
+		if section.Level == 3 {
+			marker = "### "
+		}
+		block := marker + section.Heading
 		if len(section.Lines) > 0 {
 			block += "\n\n" + strings.Join(section.Lines, "\n")
 		}

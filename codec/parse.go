@@ -57,8 +57,8 @@ func Parse(text string) (*Document, []Diagnostic) {
 	if document.DocID == "" {
 		report(1, RuleHeader, "the document names no doc-id; the header comment is required")
 	}
-	if at > 0 && lines[at] != "" {
-		report(at+1, RuleHeader, "a blank line separates the header comments from the title")
+	if at > 0 && at < len(lines) && lines[at] == "" {
+		report(at+1, RuleHeader, "the title follows the header comments without a blank line")
 	}
 	for at < len(lines) && lines[at] == "" {
 		at++
@@ -99,22 +99,24 @@ func Parse(text string) (*Document, []Diagnostic) {
 		}
 	}
 
-	// The H2 sections: each heading with the payload under it. A blank line inside a section
-	// is payload when content follows it; the blank run before the next heading is skeleton.
+	// The sections: each H2 or H3 heading with the payload under it. A blank line inside a
+	// section is payload when content follows it; the blank run before the next heading is
+	// skeleton.
 	for at < len(lines) {
-		if !strings.HasPrefix(lines[at], "## ") {
-			report(at+1, RuleSection, fmt.Sprintf("the section heading %q is a level-2 ATX heading", lines[at]))
+		level, heading, ok := sectionHeading(lines[at])
+		if !ok {
+			report(at+1, RuleSection, fmt.Sprintf("the section heading %q is a level-2 or level-3 ATX heading", lines[at]))
 			at++
 			continue
 		}
-		section := Section{Heading: lines[at][3:]}
+		section := Section{Level: level, Heading: heading}
 		at++
 		for at < len(lines) {
-			for at < len(lines) && lines[at] != "" && !strings.HasPrefix(lines[at], "#") {
+			for at < len(lines) && lines[at] != "" && !isHeadingLine(lines[at]) {
 				section.Lines = append(section.Lines, lines[at])
 				at++
 			}
-			if at >= len(lines) || strings.HasPrefix(lines[at], "#") {
+			if at >= len(lines) || isHeadingLine(lines[at]) {
 				break
 			}
 			// A blank line: skeleton when a heading or the end follows it, payload otherwise.
@@ -122,7 +124,7 @@ func Parse(text string) (*Document, []Diagnostic) {
 			for next < len(lines) && lines[next] == "" {
 				next++
 			}
-			if next >= len(lines) || strings.HasPrefix(lines[next], "#") {
+			if next >= len(lines) || isHeadingLine(lines[next]) {
 				at = next
 				break
 			}
@@ -135,9 +137,26 @@ func Parse(text string) (*Document, []Diagnostic) {
 	return document, diagnostics
 }
 
-// isBoundary names where the preamble ends: the frontmatter fence or an H2 heading.
+// isBoundary names where the preamble ends: the frontmatter fence or a section heading.
 func isBoundary(line string) bool {
-	return line == "---" || strings.HasPrefix(line, "## ")
+	_, _, ok := sectionHeading(line)
+	return line == "---" || ok
+}
+
+// sectionHeading reads a level-2 or level-3 ATX heading.
+func sectionHeading(line string) (level int, heading string, ok bool) {
+	if strings.HasPrefix(line, "## ") {
+		return 2, line[3:], true
+	}
+	if strings.HasPrefix(line, "### ") {
+		return 3, line[4:], true
+	}
+	return 0, "", false
+}
+
+// isHeadingLine names any line the section content stops at.
+func isHeadingLine(line string) bool {
+	return strings.HasPrefix(line, "#")
 }
 
 // trimBlank drops the leading and trailing blank lines and keeps the inner ones.
