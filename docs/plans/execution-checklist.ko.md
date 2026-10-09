@@ -1,5 +1,5 @@
 <!-- doc-id: execution-checklist -->
-<!-- source-sha256: 57eaf507fafdbf27be1896a8656c5da951db989c000b9c59e2444d2ff5d3e1ef -->
+<!-- source-sha256: fa52bc481beac5bb1ec250552bf08436dbbcfe1fd3e1aba3408ae5b949de3ade -->
 # 실행 체크리스트
 
 ## T1a 설계 session
@@ -22,7 +22,7 @@
 - [~] T1.4.1 docs/spec/00-overview.md(.ko)를 쓴다
 - [o] T1.4.2 docs/spec/10-canonical-format.md(.ko)를 쓴다
 - [o] T1.4.3 docs/spec/20-document-model.md(.ko)를 쓴다
-- [ ] T1.4.4 docs/spec/30-schema.md(.ko)를 쓴다
+- [o] T1.4.4 docs/spec/30-schema.md(.ko)를 쓴다
 - [ ] T1.4.5 docs/spec/40-ops.md(.ko)를 쓴다
 - [ ] T1.4.6 docs/spec/50-constraints.md(.ko)를 쓴다
 - [ ] T1.4.7 한국어 문서를 dry 문체로 다시 쓴다 — 비유 제거, 동작 동사 사용, 기술 용어 영문 유지 (T1.4.6 선행)
