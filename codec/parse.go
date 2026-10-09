@@ -106,6 +106,7 @@ func Parse(text string) (*Document, []Diagnostic) {
 		} else {
 			at++
 		}
+
 		var found []Diagnostic
 		document.FM, found = ParseFrontmatter(inside, open+2)
 		diagnostics = append(diagnostics, found...)
@@ -149,6 +150,11 @@ func Parse(text string) (*Document, []Diagnostic) {
 		section.Lines = trimBlank(section.Lines)
 		document.Sections = append(document.Sections, section)
 	}
+
+	// The child blocks: the checklist items and the markdown tables of the payload lines.
+	var blockDiagnostics []Diagnostic
+	document.Items, document.Tables, blockDiagnostics = scanBlocks(lines, fenced)
+	diagnostics = append(diagnostics, blockDiagnostics...)
 	return document, diagnostics
 }
 
