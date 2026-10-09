@@ -1,5 +1,5 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 4dce96c9476b743e5de9dfedb291428932ee0d7f0da2ae4a072cc5020cc69040 -->
+<!-- source-sha256: bd8299b3890ad23bfa0f0c5260376d6149c4373d86136f9c83ac4206c75f6368 -->
 # Changelog
 
 ## Unreleased
@@ -51,3 +51,4 @@
   않으며, changelog 예시의 ID는 code span에 담는다. T8이 완료된다.
 - T1.4.8: 20-document-model이 aggregate와 분할 shape — 단일 파일, 1:n 연결 파일, 1:n:1 — 을 명시한다. 모두 file-as-row·child block·foreign-key column primitive로 구성되고 key는 restrict뿐이다.
 - T9.1: conformance vector가 실행된다 — corpus before, request, projection인 기대 rows — 네 vector가 문서 순서·where count·type-directed 항목 순서·paginate total을 고정하고 spec 90이 vector 형식을 서술한다. T9가 첫 단계를 완료한다.
+- T7: 세 face가 하나의 binary에서 실행된다 — CLI (validate·items·transition), MCP server (stdio 위 initialize·tools/list·tools/call, 줄당 JSON-RPC message 하나), soksak sidecar (surface routing과 closed handshake를 가진 protocol v1 loop). T7이 완료된다.
