@@ -52,5 +52,8 @@
 - [ ] T6 Sync adapters: the contract and the database adapter (requires T5)
 - [ ] T7 The three faces — CLI, MCP server and soksak sidecar — as thin adapters over the orm model API (requires T5)
 - [ ] T8 Checklist application: the local issue model (requires T3)
+- [o] T8.1 Encode the transition table: terminals, required fields and the superseded spawn (requires T3)
+- [ ] T8.2 Apply a transition to the corpus: rewrite the state, append the revision line and hold the WIP gate (requires T8.1)
+- [ ] T8.3 Wire `flowmark items` and `flowmark transition` as the owning commands (requires T8.2)
 - [ ] T9 Conformance vectors: corpus before, request, expected corpus after (requires T4)
 - [ ] T10 The soksak plugin in its own repository: the kanban board and issue tracker as one more thin consumer (requires T8)

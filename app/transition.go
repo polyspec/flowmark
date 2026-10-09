@@ -1,0 +1,78 @@
+// Package app is the checklist application: the local issue model of spec 100-checklist —
+// the state machine, the transition over a corpus and the commands.
+package app
+
+import (
+	"fmt"
+	"strconv"
+	"strings"
+)
+
+// The five states and their kit glyphs.
+var glyphs = map[string]string{
+	"waiting":    "[ ]",
+	"doing":      "[~]",
+	"done":       "[o]",
+	"bypassed":   "[!]",
+	"impossible": "[-]",
+}
+
+var states = map[string]string{
+	"[ ]": "waiting",
+	"[~]": "doing",
+	"[o]": "done",
+	"[!]": "bypassed",
+	"[-]": "impossible",
+}
+
+// StateOf maps a kit glyph to its state name; an unknown glyph maps to none.
+func StateOf(glyph string) (string, bool) {
+	state, ok := states[glyph]
+	return state, ok
+}
+
+// GlyphOf maps a state name to its kit glyph.
+func GlyphOf(state string) string {
+	return glyphs[state]
+}
+
+// Transition is one allowed transition with the fields it requires on the item.
+type Transition struct {
+	From, To string
+	Requires []string
+}
+
+// The transition table: done is terminal — a related issue spawns a superseded item instead
+// (spec 100-checklist).
+var transitions = []Transition{
+	{From: "waiting", To: "doing"},
+	{From: "doing", To: "done", Requires: []string{"evidence"}},
+	{From: "doing", To: "bypassed", Requires: []string{"cause", "retry"}},
+	{From: "bypassed", To: "doing"},
+	{From: "waiting", To: "impossible", Requires: []string{"cause"}},
+}
+
+// CanTransition names the transition between two states, or none when the table refuses it.
+func CanTransition(from, to string) (Transition, bool) {
+	for _, transition := range transitions {
+		if transition.From == from && transition.To == to {
+			return transition, true
+		}
+	}
+	return Transition{}, false
+}
+
+// SupersededID returns the next suffixed ID of a base for a related issue of a done item:
+// T8.0.14 spawns T8.0.14-1, then T8.0.14-2.
+func SupersededID(base string, existing []string) string {
+	highest := 0
+	prefix := base + "-"
+	for _, id := range existing {
+		if strings.HasPrefix(id, prefix) {
+			if number, err := strconv.Atoi(strings.TrimPrefix(id, prefix)); err == nil && number > highest {
+				highest = number
+			}
+		}
+	}
+	return fmt.Sprintf("%s-%d", base, highest+1)
+}
