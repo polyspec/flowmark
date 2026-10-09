@@ -1,5 +1,5 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 44d0e03918664ab6fc92da4cf97d6d83135a386453dcc5fa57ca275712084bdc -->
+<!-- source-sha256: e4301232ee24487253631b10f7fb40fd627fab318adb273f4067e89c5ce9f007 -->
 # Changelog
 
 ## Unreleased
@@ -56,3 +56,5 @@
 - T5: orm 저장소가 manifest setting과 state-machine sub-grammar를 dbspec의 state_machine·markdown setting으로 착륙시켰다(orm `T59` b74d8890, `T60` fb218c7c). parse·검증·canonical 출력·settings model과 engine suite가 green이다. orm engine의 executor 등록은 engine 로드맵으로 남고 능력 계약은 spec 60-dialect에 있다.
 - T10: plugin이 자기 저장소(soksak/plugins/flowmark, commit ae07ec9)에서 시작한다: flowmark sidecar 위의 칸반 보드 — 다섯 상태 칸럼, 항목마다 카드, board.refresh 명령, 자기 write path는 없어 보드가 state machine을 깨뜨릴 수 없다.
 - T7.3-1: sidecar와 MCP의 모든 message가 자기 write에서 flush된다. 원인: 지연 flush가 응답을 입력이 끝날 때까지 붙잡아 session을 열어 둔 host가 실행 중 아무것도 받지 못했다 — plugin 저장소의 예제 Wails host가 실제 왕복에서 발견했다. pipe가 열려 있는 상태에서 응답 한 건을 읽는 회귀 시험이 이를 덮는다.
+- T8.4: 이슈가 write path로 들어온다 — `flowmark add`가 유일 ID 검사와 함께 대기 항목을 추가하고 `flowmark rm`이 하나를 지우되 하위를 가진 부모는 거부한다. MCP tool flowmark_add·flowmark_remove와 sidecar operation add·remove가 같은 표면을 가진다.
+- T7.3-2: sidecar가 corpus를 감시한다 — 열린 surface root의 fingerprint를 poll하고 changed event를 push해 page가 session 동안 스스로 갱신된다.

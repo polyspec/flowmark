@@ -4,6 +4,7 @@ package sidecar
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -131,6 +132,7 @@ func (b *lockedBuffer) waitForLine(t *testing.T, timeout time.Duration) string {
 		b.mu.Lock()
 		if len(b.lines) > 0 {
 			line := b.lines[0]
+			b.lines = b.lines[1:]
 			b.mu.Unlock()
 			return line
 		}
@@ -141,4 +143,28 @@ func (b *lockedBuffer) waitForLine(t *testing.T, timeout time.Duration) string {
 		case <-time.After(10 * time.Millisecond):
 		}
 	}
+}
+
+// The sidecar pushes a changed event when a corpus file changes under an open surface.
+func TestWatchPushesChange(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "list.md")
+	if err := os.WriteFile(path, []byte("<!-- doc-id: list -->\n# L\n\n## G\n\n- [ ] T1 One\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	requests, requestWriter := io.Pipe()
+	responses := &lockedBuffer{}
+	go Serve(requests, responses)
+	requestWriter.Write([]byte(fmt.Sprintf(`{"surface":1,"root":%q,"body":{"operation":"items"}}`+"\n", root)))
+	if answer := responses.waitForLine(t, 5*time.Second); !strings.Contains(answer, "T1") {
+		t.Fatalf("first answer: %s", answer)
+	}
+	if err := os.WriteFile(path, []byte("<!-- doc-id: list -->\n# L\n\n## G\n\n- [ ] T1 One\n- [ ] T2 Two\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	changed := responses.waitForLine(t, 5*time.Second)
+	if !strings.Contains(changed, `"event":"changed"`) {
+		t.Fatalf("push: %s", changed)
+	}
+	requestWriter.Close()
 }

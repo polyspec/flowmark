@@ -26,6 +26,7 @@ type request struct {
 			Root     string `json:"root"`
 			Path     string `json:"path"`
 			ID       string `json:"id"`
+			Title    string `json:"title"`
 			State    string `json:"state"`
 			Evidence string `json:"evidence"`
 		} `json:"arguments"`
@@ -66,6 +67,8 @@ func handle(message *request) (any, error) {
 	case "tools/list":
 		return map[string]any{"tools": []map[string]any{
 			tool("flowmark_items", "List the checklist items of a corpus", `{"type":"object","properties":{"root":{"type":"string"}},"required":["root"]}`),
+			tool("flowmark_add", "Append one waiting item to a document", `{"type":"object","properties":{"root":{"type":"string"},"path":{"type":"string"},"id":{"type":"string"},"title":{"type":"string"}},"required":["root","path","id","title"]}`),
+			tool("flowmark_remove", "Remove one item with its children rule", `{"type":"object","properties":{"root":{"type":"string"},"path":{"type":"string"},"id":{"type":"string"}},"required":["root","path","id"]}`),
 			tool("flowmark_transition", "Apply one state transition to an item", `{"type":"object","properties":{"root":{"type":"string"},"path":{"type":"string"},"id":{"type":"string"},"state":{"type":"string"},"evidence":{"type":"string"}},"required":["root","path","id","state"]}`),
 			tool("flowmark_validate", "Validate a corpus: keys, references and the strict parse", `{"type":"object","properties":{"root":{"type":"string"}},"required":["root"]}`),
 		}}, nil
@@ -98,6 +101,16 @@ func callTool(message *request) (any, error) {
 			lines = append(lines, fmt.Sprintf("%s\t%s\t%s", row["state"], row["id"], row["title"]))
 		}
 		return content(strings.Join(lines, "\n")), nil
+	case "flowmark_add":
+		if err := app.AddItem(arguments.Root, arguments.Path, arguments.ID, arguments.Title); err != nil {
+			return nil, err
+		}
+		return content(fmt.Sprintf("%s added", arguments.ID)), nil
+	case "flowmark_remove":
+		if err := app.RemoveItem(arguments.Root, arguments.Path, arguments.ID); err != nil {
+			return nil, err
+		}
+		return content(fmt.Sprintf("%s removed", arguments.ID)), nil
 	case "flowmark_transition":
 		if err := app.Transition(arguments.Root, arguments.Path, arguments.ID, arguments.State, arguments.Evidence); err != nil {
 			return nil, err
