@@ -39,3 +39,5 @@
 - T2.2: the frontmatter parses as the YAML 1.2 core subset — scalars, quoted scalars, sequences and literal blocks — and re-emits canonically; comments, the flow style, anchors, tab indents and duplicate keys are located rejections.
 - T2.3: the child blocks extract as rows — the checklist items of the kit grammar with their states, IDs, titles and continuation lines, and the markdown tables with headers and cells — from the unfenced payload only; a malformed item is a located rejection. T2 completes.
 - T3.1: the corpus validator walks a directory of documents — the strict parse findings, the unique doc-ids and item IDs across the corpus, and every task-ID token in prose (fenced blocks and inline code excluded) resolving to an item.
+- T3.2: `make validate` runs `flowmark validate` over the corpus directory with the selection
+  of config/documents.json, and the corpus of this repository passes. T3 completes.

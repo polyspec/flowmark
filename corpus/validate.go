@@ -4,11 +4,7 @@ package corpus
 
 import (
 	"fmt"
-	"io/fs"
-	"os"
-	"path/filepath"
 	"regexp"
-	"strings"
 
 	"github.com/polyspec/flowmark/codec"
 )
@@ -26,47 +22,22 @@ type Finding struct {
 // token in prose, not inside a word, not before a digit after a dot.
 var token = regexp.MustCompile(`T[0-9]+(?:[.-][0-9]+)*`)
 
-// Validate walks the markdown documents of `root` (skipping hidden entries and .flowmark)
-// and returns the findings of the strict parse, the key uniqueness and the references.
+// Validate walks every markdown document of `root` (skipping hidden entries) and returns
+// the findings of the strict parse, the key uniqueness and the references.
 func Validate(root string) ([]Finding, error) {
+	documents, err := selectedDocuments(root, []string{"**/*.md"}, nil)
+	if err != nil {
+		return nil, err
+	}
+	return validateDocuments(documents)
+}
+
+// validateDocuments runs the two passes over the selected documents.
+func validateDocuments(documents []documentText) ([]Finding, error) {
 	findings := []Finding{}
 	docIDs := map[string]string{}
 	itemIDs := map[string]string{}
 	itemAt := map[string]string{}
-	type document struct {
-		path string
-		text string
-	}
-	documents := []document{}
-
-	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		name := entry.Name()
-		if entry.IsDir() {
-			if strings.HasPrefix(name, ".") {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if !strings.HasSuffix(name, ".md") {
-			return nil
-		}
-		relative, err := filepath.Rel(root, path)
-		if err != nil {
-			return err
-		}
-		text, err := os.ReadFile(path)
-		if err != nil {
-			return err
-		}
-		documents = append(documents, document{path: filepath.ToSlash(relative), text: string(text)})
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
 
 	// Pass 1: the strict parse and the keys.
 	for _, doc := range documents {
