@@ -1,5 +1,5 @@
 <!-- doc-id: execution-checklist -->
-<!-- source-sha256: 229fc9be4b1c455f6468c6edcc9939ed872e2838bc2d08b748b9450086f88104 -->
+<!-- source-sha256: aa1449748675b94b5a62b5bf8d4b83ba94faebbed6d548e5bc13c052d1fe238a -->
 # 실행 체크리스트
 
 ## T1a 설계 session
@@ -51,7 +51,9 @@
 - [o] T4.1 corpus row 위에서 one·all·count를 where·order·limit와 함께 실행한다 (T3 선행)
 - [o] T4.2 sum·avg·paginate·group_count를 type-directed ordering으로 실행한다 (T4.1 선행)
 - [ ] T5 orm markdown-executor 통합: manifest setting과 state-machine sub-grammar (T4 선행)
-- [ ] T6 Sync adapter: 계약과 database adapter (T5 선행)
+- [o] T6 Sync adapter: 계약과 database adapter (T5 선행)
+- [o] T6.1 corpus를 SQL로 export한다: row의 derived·deterministic INSERT dump (T4 선행)
+- [o] T6.2 rowset을 provenance header와 readonly drift 규칙으로 markdown에 materialize한다 (T6.1 선행)
 - [o] T7 세 개의 face — CLI·MCP server·soksak sidecar — orm model API 위의 thin adapter (T5 선행)
 - [o] T7.1 CLI face: corpus 위의 validate·items·transition (T3 선행)
 - [o] T7.2 MCP server face: stdio 위의 initialize·tools/list·tools/call (T7.1 선행)
