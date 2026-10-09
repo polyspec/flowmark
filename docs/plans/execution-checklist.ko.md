@@ -1,5 +1,5 @@
 <!-- doc-id: execution-checklist -->
-<!-- source-sha256: 61194fec6179e3a055c3d8ee05bfc56cd8762dff96e0cfffbc3e716413427e76 -->
+<!-- source-sha256: 3034821db469e26054f0a98dc1490020cd00f6a50939a1102f3151342f6d7d5b -->
 # 실행 체크리스트
 
 ## T1a 설계 session
@@ -29,7 +29,7 @@
 - [ ] T1.5 나머지 명세를 쓴다 (T1.4 선행)
   - 완료 기준: capability table 전체, 범위를 정한 skeleton 3종, 그리고 100-checklist와 110-open-questions 전체; T1.5.1부터 T1.5.6까지 완료되면 완료된다.
 - [o] T1.5.1 capability table을 전체로 담은 docs/spec/60-dialect.md(.ko)를 쓴다
-- [ ] T1.5.2 범위 skeleton으로 docs/spec/70-sync.md(.ko)를 쓴다
+- [o] T1.5.2 범위 skeleton으로 docs/spec/70-sync.md(.ko)를 쓴다
 - [ ] T1.5.3 범위 skeleton으로 docs/spec/80-migration.md(.ko)를 쓴다
 - [ ] T1.5.4 범위 skeleton으로 docs/spec/90-conformance.md(.ko)를 쓴다
 - [ ] T1.5.5 docs/spec/100-checklist.md(.ko)를 전체로 쓴다
