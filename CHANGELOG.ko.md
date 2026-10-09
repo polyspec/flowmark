@@ -1,5 +1,5 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 037fbb7c107b0ff4858c3fec18f8a73d8201870c9953c53a0e67fcbbd29ce592 -->
+<!-- source-sha256: ca35a50c8df49c05d8e61c347af79359c06f758019f5493d6e766ad819c4287c -->
 # Changelog
 
 ## Unreleased
@@ -53,4 +53,5 @@
 - T9.1: conformance vector가 실행된다 — corpus before, request, projection인 기대 rows — 네 vector가 문서 순서·where count·type-directed 항목 순서·paginate total을 고정하고 spec 90이 vector 형식을 서술한다. T9가 첫 단계를 완료한다.
 - T7: 세 face가 하나의 binary에서 실행된다 — CLI (validate·items·transition), MCP server (stdio 위 initialize·tools/list·tools/call, 줄당 JSON-RPC message 하나), soksak sidecar (surface routing과 closed handshake를 가진 protocol v1 loop). T7이 완료된다.
 - T6: sync engine의 v1이 자리한다 — row의 derived·deterministic SQL dump인 md-to-db export와, provenance header가 body의 hash를 기록하는 adapter 소유 문서로의 rowset materialization. drift 검사가 자기 검증되고 clone에 안전하다. T6이 완료된다.
-- T5: orm 저장소가 manifest setting과 state-machine sub-grammar를 dbspec의 state_machine·markdown setting으로 착륙시켰다(orm T59 b74d8890, T60 fb218c7c). parse·검증·canonical 출력·settings model과 engine suite가 green이다. orm engine의 executor 등록은 engine 로드맵으로 남고 능력 계약은 spec 60-dialect에 있다.
+- T5: orm 저장소가 manifest setting과 state-machine sub-grammar를 dbspec의 state_machine·markdown setting으로 착륙시켰다(orm `T59` b74d8890, `T60` fb218c7c). parse·검증·canonical 출력·settings model과 engine suite가 green이다. orm engine의 executor 등록은 engine 로드맵으로 남고 능력 계약은 spec 60-dialect에 있다.
+- T10: plugin이 자기 저장소(soksak/plugins/flowmark, commit ae07ec9)에서 시작한다: flowmark sidecar 위의 칸반 보드 — 다섯 상태 칸럼, 항목마다 카드, board.refresh 명령, 자기 write path는 없어 보드가 state machine을 깨뜨릴 수 없다.
