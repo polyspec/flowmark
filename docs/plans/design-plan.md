@@ -1,5 +1,5 @@
 <!-- doc-id: plans-design-plan -->
-# flowmark Design Plan (T1)
+# flowmark Design Plan
 
 Revision 2 — folds the findings of the three-lane adversarial audit (engine core, orm integration, operations) and the multi-platform directive into the rulings below. Every audit blocker became a ruling; the audit's unbroken claims are listed at the end.
 

@@ -1,6 +1,6 @@
 <!-- doc-id: plans-design-plan -->
-<!-- source-sha256: 5086d423968a3fa4600ea00fd8ca5ae1dc5ce0263d8d741a4081f1643ec02fbf -->
-# flowmark 설계 계획 (T1)
+<!-- source-sha256: 01b9fe5b2a05778c6c9e10a7a0fb1c389387bfb8b281e2ff0a6dda08abc58ba2 -->
+# flowmark 설계 계획
 
 Revision 2 — 3개 lane의 적대 감사 결과(engine core, orm 통합, 운영)와 multi-platform 지시를 아래 판정에 접는다. 감사의 blocker는 전부 판정이 되었고, 부수지 못한 주장은 문서 끝에 남긴다.
 
