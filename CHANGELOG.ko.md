@@ -1,5 +1,5 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 1c5e7d3e6f626261a6fbf351ebd0c1f3197d18b7bf0ee1a059c895ce80efeedc -->
+<!-- source-sha256: 863cf38100d12f640b2a7ca3681aaa80c27c688bc4140992fd28f03e043d5eb6 -->
 # Changelog
 
 ## Unreleased
@@ -38,3 +38,4 @@
 - T2.5: codec가 저장소 corpus에서 P1과 P2를 증명한다 — 선택된 모든 문서가 diagnostic 없이 parse되고 byte 단위로 재출력되며, CRLF 복사본이 안정적으로 재출력된다. grammar는 실제 문서의 H2·H3 heading과 header-title 인접을 받아들인다.
 - T2.4: 모든 parse 규칙이 located diagnostic을 보고한다 — 고정 rule 이름과 line·column. fenced block은 payload가 되어 구조 규칙은 unfenced 줄만 읽고, 닫히지 않은 frontmatter fence는 여는 줄을 지정한다.
 - T2.2: frontmatter가 YAML 1.2 core subset으로 parse된다 — scalar·quoted scalar·sequence·literal block — 그리고 canonical로 재출력된다. comment·flow style·anchor·tab indent·중복 key는 located 거부다.
+- T2.3: child block이 row로 추출된다 — kit grammar의 checklist 항목(상태·ID·제목·연속 줄)과 markdown table(header·cell) — unfenced payload에서만. malformed 항목은 located 거부다. T2가 완료된다.

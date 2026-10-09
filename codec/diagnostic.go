@@ -17,4 +17,5 @@ const (
 	RuleHeader       = "format.header"       // a missing or duplicate doc-id, a wrong header order
 	RuleFrontmatter  = "format.frontmatter"  // a malformed frontmatter fence
 	RuleSection      = "format.section"      // a malformed heading or a second H1
+	RuleBlock        = "format.block"        // a malformed checklist item or table block
 )

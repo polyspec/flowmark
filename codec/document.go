@@ -8,7 +8,9 @@ type Document struct {
 	Owner    string // the provenance comment (`owner: …`), present on adapter-owned documents only
 	Title    string
 	Preamble []string
-	FM       []Entry // the frontmatter entries — the YAML 1.2 core subset (T2.2)
+	FM       []Entry         // the frontmatter entries — the YAML 1.2 core subset (T2.2)
+	Items    []ChecklistItem // the checklist blocks, extracted as rows (T2.3)
+	Tables   []Table         // the markdown tables, extracted as rows (T2.3)
 	Sections []Section
 }
 
