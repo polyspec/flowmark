@@ -8,7 +8,6 @@ import (
 
 // Canonical input: P1 — emit(parse(s)) == s.
 const canonical = "<!-- doc-id: plans-design-plan -->\n" +
-	"\n" +
 	"# Design Plan\n" +
 	"\n" +
 	"[Korean](design-plan.ko.md)\n" +

@@ -1,5 +1,5 @@
 <!-- doc-id: execution-checklist -->
-<!-- source-sha256: c82db4309a7c93212f0c8be4950df50e2a839e2215c4039ecba7c275e1153671 -->
+<!-- source-sha256: 6c40fd13bf33cfd88851aa55394a5e472212e149bcff254aacfaf77b75fd5b9b -->
 # 실행 체크리스트
 
 ## T1a 설계 session
@@ -42,7 +42,7 @@
 - [ ] T2.2 frontmatter를 YAML 1.2 core subset으로 parse하고 canonical로 재출력한다 (T2.1 선행)
 - [ ] T2.3 child block — checklist 항목과 markdown table — 을 row로 parse한다 (T2.2 선행)
 - [ ] T2.4 모든 parse 규칙을 고정 rule 이름의 located diagnostic으로 보고한다 (T2.1 선행)
-- [ ] T2.5 이 저장소의 corpus에서 P1과 P2를 golden set으로 증명한다 (T2.1 선행)
+- [o] T2.5 이 저장소의 corpus에서 P1과 P2를 golden set으로 증명한다 (T2.1 선행)
 - [ ] T3 Validator: corpus-global 제약 (T2 선행)
 - [ ] T4 Executor: parse된 corpus 위의 IR kind (T3 선행)
 - [ ] T5 orm markdown-executor 통합: manifest setting과 state-machine sub-grammar (T4 선행)
