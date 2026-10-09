@@ -16,3 +16,7 @@
 - T1.3: `make refs-check` reads the checklists of config/checklist.json and the prose of every
   selected document (fenced blocks and inline code excluded) and reports each task ID that
   resolves to no item as a finding with its file, line and column; `make test` covers it.
+- T1.1-1: one Go binary carries three thin faces — the CLI, the MCP server and the soksak sidecar
+  (protocol v1 of the soksak core specification) — and the GUI ships as a soksak plugin in its own
+  repository; the repository stays single-language Go with a `package.json` and a `sidecar.json`
+  manifest, and per-language packages appear only when a requirement names them.

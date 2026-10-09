@@ -19,6 +19,7 @@ The user manages engineering specs as markdown and runs development through chec
 6. Sync projection files: real markdown files exist on disk. `readonly` (default) or `writable` option (detail in §7).
 7. The repository lives at **github.com/polyspec/flowmark** — a standalone repository inside the polyspec organization.
 8. **Multi-platform is a hard requirement. No platform tricks.** The simplest implementation that fully satisfies the current requirements wins (kit's own rule, applied here): no flock, no POSIX-only durability assumptions — locks follow kit's `holder-lock` precedent (lock file + holder identity + stale detection, pure runtime primitives), and crash safety comes from the journal replay, not from OS-specific directory fsync semantics.
+9. **The GUI ships as a soksak plugin in its own repository; flowmark serves soksak as a sidecar.** One Go binary carries three thin faces — the CLI, the MCP server, and the soksak sidecar (protocol v1 of the soksak core specification: JSON lines over standard input and output, surface and root routing, a host-owned lifecycle). The repository is single-language Go with a `package.json` and a `sidecar.json` manifest; per-language packages appear only when a requirement names them.
 
 ## Verified grounding (checked directly in the polyspec checkouts)
 
@@ -34,7 +35,7 @@ The user manages engineering specs as markdown and runs development through chec
 ### 1. Architecture and the seam
 
 ```
-CLI / MCP (thin adapters — the orm model API is the orthodox path)
+CLI / MCP / soksak sidecar (thin adapters — the orm model API is the orthodox path)
    ↓
 polyspec/orm (.dbs → generated models → IR request)
    ↓ shared planner validates the IR (IR_INVALID rules unchanged)
@@ -124,7 +125,7 @@ sync engine: md→db export / db→md materialize (§7)
 
 **T9 conformance contract (stated now)**: markdown vectors are corpus-before + IR request + expected corpus-after / expected rows, run against the Go executor; SQL/binds comparison does not apply (there is no SQL). Cross-client comparison begins when other clients port the executor.
 
-**Later phases (registered as `[ ]` checklist items only)**: T2 codec (Go), T3 validator, T4 executor, T5 orm markdown-executor integration (manifest settings, state-machine sub-grammar — orm-repo changes), T6 sync (the adapter contract and the database adapter; GitHub and Jira adapters register under it), T7 CLI/MCP (an MCP tool-list mini-spec first; per-operation locking is already the core ruling), T8 checklist app (the local issue model), T9 conformance vectors, T10 GUI (the local kanban board and issue tracker as one more thin consumer — no view-specific write path).
+**Later phases (registered as `[ ]` checklist items only)**: T2 codec (Go), T3 validator, T4 executor, T5 orm markdown-executor integration (manifest settings, state-machine sub-grammar — orm-repo changes), T6 sync (the adapter contract and the database adapter; GitHub and Jira adapters register under it), T7 the three faces — CLI, MCP server and soksak sidecar (protocol v1: JSON lines over stdio, surface routing, host-owned lifecycle; the MCP tool list gets its mini-spec first, and per-operation locking is already the core ruling), T8 checklist app (the local issue model), T9 conformance vectors, T10 the soksak plugin in its own repository — the local kanban board and issue tracker as one more thin consumer, with no view-specific write path.
 
 ## What the audit could not break
 
