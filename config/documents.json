@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "include": [
+    "**/*.md"
+  ],
+  "exclude": [
+    "**/node_modules/**",
+    "**/vendor/**",
+    "tests/kit/**"
+  ],
+  "changelogs": [
+    "CHANGELOG.md"
+  ]
+}

@@ -1,5 +1,5 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 59c3cc607caee145c78066ad70cbb0db23b426e63af53bd4f2b228cfe2713df0 -->
+<!-- source-sha256: 7300e4f2f3778789aa2da908c5a3cecd5e9ff295fc042f3c53b7ed3ec5aecbc4 -->
 # Changelog
 
 ## Unreleased
@@ -10,3 +10,7 @@
   dbspec 기반 frontmatter embedding, 하나의 portable 작업 단위 lock을 가진 prepare-record commit
   protocol, restrict-only foreign key, 거부된 identity column, type-directed ordering, adapter 기반
   sync.
+- T1.2: 저장소가 polyspec/kit을 lock과 함께 디렉터리 단위로 vendor하고(`make kit-sync`,
+  `make kit-check`) tracker를 구성한다: config/checklist.json이 실행 checklist 쌍을 상태
+  5종으로 읽고 config/documents.json이 문서 쌍과 changelog를 선택한다. `make documents-check`가
+  통과한다.
