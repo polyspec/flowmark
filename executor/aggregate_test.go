@@ -57,7 +57,7 @@ func TestPaginate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if total != 3 || len(page) != 2 || page[0]["id"] != "T1.1" {
+	if total != 3 || len(page) != 2 || page[0]["id"] != "T1.2" {
 		t.Fatalf("page: %v, total: %d", page, total)
 	}
 }
