@@ -1,5 +1,5 @@
 <!-- doc-id: plans-design-plan -->
-<!-- source-sha256: 01b9fe5b2a05778c6c9e10a7a0fb1c389387bfb8b281e2ff0a6dda08abc58ba2 -->
+<!-- source-sha256: 34779daad8d89a8a23afb00bf5f68a69807e30d3a96981eb1b91c2fdc76bb0e6 -->
 # flowmark 설계 계획
 
 Revision 2 — 3개 lane의 적대 감사 결과(engine core, orm 통합, 운영)와 multi-platform 지시를 아래 판정에 접는다. 감사의 blocker는 전부 판정이 되었고, 부수지 못한 주장은 문서 끝에 남긴다.
@@ -20,6 +20,7 @@ Revision 2 — 3개 lane의 적대 감사 결과(engine core, orm 통합, 운영
 6. Sync projection 파일: 실제 markdown 파일이 disk에 존재. `readonly`(기본) / `writable` 옵션 (상세 §7).
 7. Repository는 **github.com/polyspec/flowmark** — polyspec organization 안의 독립 repository.
 8. **Multi-platform은 hard requirement. 편법 금지.** 현재 요구사항을 완전히 충족하는 가장 단순한 구현을 선택한다 (kit 자신의 규칙을 여기에 적용): flock 없음, POSIX 전용 durability 가정 없음 — lock은 kit의 `holder-lock` 선례(lock file + holder 신원 + stale 판정, 순수 runtime primitive)를 따르고, crash 안전성은 OS별 directory fsync가 아니라 journal replay로 얻는다.
+9. **GUI는 자기 repo의 soksak plugin으로 출시되고, flowmark는 soksak의 sidecar로 서비스한다.** 하나의 Go binary가 세 개의 thin 얼굴을 갖는다 — CLI, MCP server, soksak sidecar(soksak core 명세의 protocol v1: 표준 입출력 위의 JSON lines, surface·root routing, host 소유 lifecycle). 저장소는 단일 언어 Go에 `package.json`과 `sidecar.json` manifest를 얹은 형태이고, 언어별 package는 요구사항이 이름을 붙일 때 만든다.
 
 ## 검증된 근거 (polyspec checkout에서 직접 확인)
 
@@ -35,7 +36,7 @@ Revision 2 — 3개 lane의 적대 감사 결과(engine core, orm 통합, 운영
 ### 1. Architecture와 seam
 
 ```
-CLI / MCP (thin adapters — the orm model API is the orthodox path)
+CLI / MCP / soksak sidecar (thin adapters — the orm model API is the orthodox path)
    ↓
 polyspec/orm (.dbs → generated models → IR request)
    ↓ shared planner validates the IR (IR_INVALID rules unchanged)
@@ -125,7 +126,7 @@ sync engine: md→db export / db→md materialize (§7)
 
 **T9 conformance 계약 (지금 확정)**: markdown vector는 corpus-before + IR request + 기대 corpus-after / 기대 rows이며 Go executor에 대해 실행한다. SQL/binds 비교는 적용되지 않는다(SQL이 없으므로). 다른 client가 executor를 port할 때 교차 비교가 시작된다.
 
-**이후 phase (checklist `[ ]` 항목으로만 등록)**: T2 codec(Go), T3 validator, T4 executor, T5 orm markdown-executor 통합(manifest setting, state-machine sub-grammar — orm 저장소 변경), T6 sync(adapter 계약과 database adapter; GitHub·Jira adapter는 그 아래에 등록), T7 CLI/MCP(MCP tool 목록 mini-spec 먼저; 작업 단위 lock은 이미 core 판정), T8 checklist app(local issue model), T9 conformance vectors, T10 GUI(local 칸반 보드와 issue tracker — 또 하나의 thin consumer, view 전용 write path 없음).
+**이후 phase (checklist `[ ]` 항목으로만 등록)**: T2 codec(Go), T3 validator, T4 executor, T5 orm markdown-executor 통합(manifest setting, state-machine sub-grammar — orm 저장소 변경), T6 sync(adapter 계약과 database adapter; GitHub·Jira adapter는 그 아래에 등록), T7 세 개의 얼굴 — CLI·MCP server·soksak sidecar(protocol v1: stdio JSON lines, surface routing, host 소유 lifecycle; MCP tool 목록 mini-spec 먼저, 작업 단위 lock은 이미 core 판정), T8 checklist app(local issue model), T9 conformance vectors, T10 자기 repo의 soksak plugin — local 칸반 보드와 issue tracker, 또 하나의 thin consumer로서 view 전용 write path 없음.
 
 ## 감사가 부수지 못한 것
 

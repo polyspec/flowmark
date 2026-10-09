@@ -7,6 +7,8 @@
   - Completion criteria: README, AGENTS, CHANGELOG and this checklist exist in English and Korean, `.flowmark/` is ignored, and `git log` holds the bootstrap commit.
 - [o] T1.1 Fold the adversarial audit into the design plan (requires T1.0)
   - Completion criteria: every audit blocker appears as a ruling in docs/plans/design-plan.md, the Korean twin holds the English source-sha256, and the plan revision commits.
+- [o] T1.1-1 State the three faces and the soksak sidecar ruling (follow-up of T1.1)
+  - Completion criteria: the plan names one Go binary with the CLI, the MCP server and the soksak sidecar (protocol v1) as its three thin faces, and the GUI as a soksak plugin in its own repository.
 - [o] T1.2 Vendor polyspec/kit and configure the trackers (requires T1.0)
   - Completion criteria: `make kit-check` and `make documents-check` pass on the vendored tree with config/checklist.json and config/documents.json authored.
 - [o] T1.3 Register the stopgap ID reference checker (requires T1.2)
@@ -25,7 +27,7 @@
 - [ ] T4 Executor: the IR kinds over the parsed corpus (requires T3)
 - [ ] T5 orm markdown-executor integration: manifest settings and the state-machine sub-grammar (requires T4)
 - [ ] T6 Sync adapters: the contract and the database adapter (requires T5)
-- [ ] T7 CLI and MCP: thin adapters over the orm model API (requires T5)
+- [ ] T7 The three faces — CLI, MCP server and soksak sidecar — as thin adapters over the orm model API (requires T5)
 - [ ] T8 Checklist application: the local issue model (requires T3)
 - [ ] T9 Conformance vectors: corpus before, request, expected corpus after (requires T4)
-- [ ] T10 Local GUI: the kanban board and issue tracker as one more thin consumer (requires T8)
+- [ ] T10 The soksak plugin in its own repository: the kanban board and issue tracker as one more thin consumer (requires T8)

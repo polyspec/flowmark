@@ -1,5 +1,5 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: b3fd2ae883e70f4bf6e76701d33720f4eeba67924c787c20a1287c17874c8d20 -->
+<!-- source-sha256: f6545e08ebbe17219b94206d997fa8169304de3dbd5c685c69c460a5a23ad448 -->
 # Changelog
 
 ## Unreleased
@@ -17,3 +17,7 @@
 - T1.3: `make refs-check`가 config/checklist.json의 checklist와 선택된 문서의 prose(fenced block과
   inline code 제외)를 읽고, 어떤 항목으로도 해석되지 않는 task ID를 file·line·column을 붙인 finding으로
   보고한다. `make test`가 이것을 덮는다.
+- T1.1-1: 하나의 Go binary가 세 개의 thin 얼굴 — CLI, MCP server, soksak sidecar(soksak core
+  명세의 protocol v1) — 를 가지고, GUI는 자기 repo의 soksak plugin으로 출시된다. 저장소는
+  `package.json`과 `sidecar.json` manifest를 얹은 단일 언어 Go로 유지하고, 언어별 package는
+  요구사항이 이름을 붙일 때 만든다.
