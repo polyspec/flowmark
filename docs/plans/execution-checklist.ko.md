@@ -1,5 +1,5 @@
 <!-- doc-id: execution-checklist -->
-<!-- source-sha256: 49c2130ee8dc93b19c9d593a4f6295c8f04d04aeeb705d16415b781c9636cc92 -->
+<!-- source-sha256: e089e6a3abde42d893a50c293a46960bc50e920ee86a5794e14cab5b7eababc8 -->
 # 실행 체크리스트
 
 ## T1a 설계 session
@@ -52,9 +52,9 @@
 - [ ] T5 orm markdown-executor 통합: manifest setting과 state-machine sub-grammar (T4 선행)
 - [ ] T6 Sync adapter: 계약과 database adapter (T5 선행)
 - [ ] T7 세 개의 face — CLI·MCP server·soksak sidecar — orm model API 위의 thin adapter (T5 선행)
-- [ ] T8 Checklist application: local issue model (T3 선행)
+- [o] T8 Checklist application: local issue model (T3 선행)
 - [o] T8.1 전환 table을 인코딩한다: terminal, 필수 field, superseded 항목 생성 (T3 선행)
 - [o] T8.2 corpus에 전환을 적용한다: 상태 재작성, revision 줄 추가, WIP gate 유지 (T8.1 선행)
-- [ ] T8.3 `flowmark items`와 `flowmark transition`을 소유 명령으로 연결한다 (T8.2 선행)
+- [o] T8.3 `flowmark items`와 `flowmark transition`을 소유 명령으로 연결한다 (T8.2 선행)
 - [ ] T9 Conformance vector: corpus before, request, 기대 corpus after (T4 선행)
 - [ ] T10 자기 repo의 soksak plugin: 칸반 보드와 issue tracker — 또 하나의 thin consumer (T8 선행)

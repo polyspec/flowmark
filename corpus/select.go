@@ -21,11 +21,15 @@ func ValidateSelected(root string, include, exclude []string) ([]Finding, error)
 // selectedDocuments reads the selected markdown files as path-text pairs.
 func selectedDocuments(root string, include, exclude []string) ([]documentText, error) {
 	var documents []documentText
+	walkedLast = false
 	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 		name := entry.Name()
+		if path == root {
+			return nil
+		}
 		if entry.IsDir() {
 			if strings.HasPrefix(name, ".") {
 				return filepath.SkipDir
@@ -47,6 +51,7 @@ func selectedDocuments(root string, include, exclude []string) ([]documentText, 
 		if err != nil {
 			return err
 		}
+		walkedLast = true
 		documents = append(documents, documentText{path: relative, text: text})
 		return nil
 	})
@@ -100,3 +105,9 @@ func readFile(path string) (string, error) {
 	}
 	return string(text), nil
 }
+
+// walkedLast records whether the last selection saw at least one document; a test probe.
+var walkedLast = false
+
+// sawDocuments reports whether the last selection found a document.
+func sawDocuments() bool { return walkedLast }
