@@ -1,5 +1,5 @@
 <!-- doc-id: execution-checklist -->
-<!-- source-sha256: 1fb4b34973fdd8a91fc149e8605b02b23091fe670c053bc874063187522dd7a8 -->
+<!-- source-sha256: 390774508acb17b1baf43435cbece06afe8ebb87c8f8e32c7a1635f60c20f156 -->
 # 실행 체크리스트
 
 ## T1a 설계 session
@@ -17,9 +17,23 @@
 
 ## T1b 명세
 
-- [ ] T1.4 00-overview, 10-canonical-format, 20-document-model, 30-schema, 40-ops, 50-constraints를 전체 문서 쌍으로 쓴다 (T1.2 선행)
-  - 완료 기준: 모든 판정이 근거를 동반한 명제로 나타난다.
-- [ ] T1.5 60-dialect capability table과 70-sync, 80-migration, 90-conformance skeleton, 그리고 100-checklist와 110-open-questions를 전체로 쓴다 (T1.4 선행)
+- [~] T1.4 여섯 개의 core 명세를 전체 문서 쌍으로 쓴다 (T1.2 선행)
+  - 완료 기준: 모든 판정이 근거를 동반한 명제로 나타난다; T1.4.1부터 T1.4.7까지 완료되면 완료된다.
+- [~] T1.4.1 docs/spec/00-overview.md(.ko)를 쓴다
+- [o] T1.4.2 docs/spec/10-canonical-format.md(.ko)를 쓴다
+- [ ] T1.4.3 docs/spec/20-document-model.md(.ko)를 쓴다
+- [ ] T1.4.4 docs/spec/30-schema.md(.ko)를 쓴다
+- [ ] T1.4.5 docs/spec/40-ops.md(.ko)를 쓴다
+- [ ] T1.4.6 docs/spec/50-constraints.md(.ko)를 쓴다
+- [ ] T1.4.7 한국어 문서를 dry 문체로 다시 쓴다 — 비유 제거, 동작 동사 사용, 기술 용어 영문 유지 (T1.4.6 선행)
+- [ ] T1.5 나머지 명세를 쓴다 (T1.4 선행)
+  - 완료 기준: capability table 전체, 범위를 정한 skeleton 3종, 그리고 100-checklist와 110-open-questions 전체; T1.5.1부터 T1.5.6까지 완료되면 완료된다.
+- [ ] T1.5.1 capability table을 전체로 담은 docs/spec/60-dialect.md(.ko)를 쓴다
+- [ ] T1.5.2 범위 skeleton으로 docs/spec/70-sync.md(.ko)를 쓴다
+- [ ] T1.5.3 범위 skeleton으로 docs/spec/80-migration.md(.ko)를 쓴다
+- [ ] T1.5.4 범위 skeleton으로 docs/spec/90-conformance.md(.ko)를 쓴다
+- [ ] T1.5.5 docs/spec/100-checklist.md(.ko)를 전체로 쓴다
+- [ ] T1.5.6 docs/spec/110-open-questions.md(.ko)를 전체로 쓴다
 
 ## 이후 phase
 

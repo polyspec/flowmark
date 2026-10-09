@@ -16,9 +16,23 @@
 
 ## T1b Specifications
 
-- [ ] T1.4 Write 00-overview, 10-canonical-format, 20-document-model, 30-schema, 40-ops and 50-constraints as full document pairs (requires T1.2)
-  - Completion criteria: every ruling appears as a proposition with its grounding.
-- [ ] T1.5 Write the 60-dialect capability table and the 70-sync, 80-migration, 90-conformance skeletons, and 100-checklist and 110-open-questions in full (requires T1.4)
+- [~] T1.4 Write the six core specifications as full document pairs (requires T1.2)
+  - Completion criteria: every ruling appears as a proposition with its grounding; it completes when T1.4.1 through T1.4.7 complete.
+- [~] T1.4.1 Write docs/spec/00-overview.md(.ko)
+- [o] T1.4.2 Write docs/spec/10-canonical-format.md(.ko)
+- [ ] T1.4.3 Write docs/spec/20-document-model.md(.ko)
+- [ ] T1.4.4 Write docs/spec/30-schema.md(.ko)
+- [ ] T1.4.5 Write docs/spec/40-ops.md(.ko)
+- [ ] T1.4.6 Write docs/spec/50-constraints.md(.ko)
+- [ ] T1.4.7 Rewrite the Korean documents in the dry style — no metaphor, action verbs, English technical terms (requires T1.4.6)
+- [ ] T1.5 Write the remaining specifications (requires T1.4)
+  - Completion criteria: the capability table in full, three scoped skeletons, and 100-checklist and 110-open-questions in full; it completes when T1.5.1 through T1.5.6 complete.
+- [ ] T1.5.1 Write docs/spec/60-dialect.md(.ko) with the capability table in full
+- [ ] T1.5.2 Write docs/spec/70-sync.md(.ko) as a scoped skeleton
+- [ ] T1.5.3 Write docs/spec/80-migration.md(.ko) as a scoped skeleton
+- [ ] T1.5.4 Write docs/spec/90-conformance.md(.ko) as a scoped skeleton
+- [ ] T1.5.5 Write docs/spec/100-checklist.md(.ko) in full
+- [ ] T1.5.6 Write docs/spec/110-open-questions.md(.ko) in full
 
 ## Later phases
 
