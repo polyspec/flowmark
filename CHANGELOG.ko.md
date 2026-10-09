@@ -1,5 +1,5 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: e991a27269f139bd0b374b940301a71268f197880e228ff482f874c32fb3955e -->
+<!-- source-sha256: 3ae29feb1d42a59abc9d02fdd0cabcbdd86b52c36323435c9d71183a70d94c6b -->
 # Changelog
 
 ## Unreleased
@@ -42,7 +42,10 @@
 - T3.1: corpus validator가 문서 directory를 검사한다 — strict parse finding, corpus 전체의 doc-id·item ID 유일성, 산문의 모든 task-ID token(fenced block·inline code 제외)의 item 해석.
 - T3.2: go run ./cmd/flowmark validate .
 [validate] the corpus passes이 config/documents.json의 선택으로 corpus directory 위에서 를 실행하고 이 저장소의 corpus가 통과한다. T3가 완료된다.
-- T4.1: executor가 corpus row 위에서 one·all·count를 실행한다 — 첫 table로 documents와 checklist items — where predicate·ordering·limit와 함께. task-ID ordering은 segment별 숫자라 T8.0.9가 T8.0.10 앞에 오고 suffix는 base를 따른다.
+- T4.1: executor가 corpus row 위에서 one·all·count를 실행한다 — 첫 table로 documents와 checklist items — where predicate·ordering·limit와 함께. task-ID ordering은 segment별 숫자라 `T8.0.9`가 `T8.0.10` 앞에 오고 suffix는 base를 따른다.
 - T4.2: executor가 sum·avg·group_count·paginate를 실행한다 — 숫자 아닌 값 거부와 함께 정수 aggregate, 값별 count, total을 동반한 page. T4가 완료된다.
-- T8.1: application이 전환 table을 인코딩한다 — done은 terminal, 우회는 원인과 재시도 조건을, 불가는 원인을 요구 — 다섯 상태는 kit glyph에 대응하고 superseded 생성은 T8.0.14-1, T8.0.14-2로 번호를 매긴다.
+- T8.1: application이 전환 table을 인코딩한다 — done은 terminal, 우회는 원인과 재시도 조건을, 불가는 원인을 요구 — 다섯 상태는 kit glyph에 대응하고 superseded 생성은 `T8.0.14-1`, `T8.0.14-2`로 번호를 매긴다.
 - T8.2: 전환 적용이 table과 필수 field와 WIP gate — done 수를 넘는 doing 항목은 최대 두 개 — 를 유지하고 item 줄의 상태 glyph만 그 자리에서 바꾸고 문서의 나머지 byte는 그대로 둔다.
+- T8.3: `flowmark items`가 corpus 항목을 나열하고 `flowmark transition`이 state machine으로
+  하나를 적용한다. walk가 dot root에 들어가고, Korean twin은 두 번째 key를 등록하지
+  않으며, changelog 예시의 ID는 code span에 담는다. T8이 완료된다.

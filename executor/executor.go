@@ -44,6 +44,9 @@ func Open(root string) (*Corpus, error) {
 		if err != nil {
 			return err
 		}
+		if path == root {
+			return nil
+		}
 		if entry.IsDir() {
 			if strings.HasPrefix(entry.Name(), ".") {
 				return filepath.SkipDir

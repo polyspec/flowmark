@@ -87,3 +87,33 @@ func TestSelectionExcludes(t *testing.T) {
 		t.Fatalf("findings: %v", found)
 	}
 }
+
+func TestDotRootWalks(t *testing.T) {
+	root := write(t, map[string]string{"docs/a.md": clean, "docs/list.md": checklist})
+	old, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chdir(old) })
+	found, err := Validate(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(found) != 0 {
+		t.Fatalf("findings: %v", found)
+	}
+	if !sawDocuments() {
+		t.Fatal("the dot root walked no document")
+	}
+}
+
+func TestTwinIsOneRow(t *testing.T) {
+	korean := "<!-- doc-id: list -->\n# 목록\n\n## Group\n\n- [o] T1.1 완료\n"
+	root := write(t, map[string]string{"list.md": checklist, "list.ko.md": korean})
+	if found := findingsOf(t, root); len(found) != 0 {
+		t.Fatalf("findings: %v", found)
+	}
+}

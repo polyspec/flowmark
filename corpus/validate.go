@@ -5,6 +5,7 @@ package corpus
 import (
 	"fmt"
 	"regexp"
+	"strings"
 
 	"github.com/polyspec/flowmark/codec"
 )
@@ -39,11 +40,16 @@ func validateDocuments(documents []documentText) ([]Finding, error) {
 	itemIDs := map[string]string{}
 	itemAt := map[string]string{}
 
-	// Pass 1: the strict parse and the keys.
+	// Pass 1: the strict parse and the keys. A Korean twin (.ko.md) is a projection of the
+	// English row, not a second row (spec 20-document-model): its keys register nowhere and
+	// its references resolve against the English registry.
 	for _, doc := range documents {
 		parsed, diagnostics := codec.Parse(doc.text)
 		for _, diagnostic := range diagnostics {
 			findings = append(findings, Finding{File: doc.path, Line: diagnostic.Line, Column: diagnostic.Column, Rule: diagnostic.Rule, Message: diagnostic.Message})
+		}
+		if strings.HasSuffix(doc.path, ".ko.md") {
+			continue
 		}
 		if parsed.DocID != "" {
 			if first, ok := docIDs[parsed.DocID]; ok {
