@@ -32,7 +32,7 @@
 - [o] T1.5.3 Write docs/spec/80-migration.md(.ko) as a scoped skeleton
 - [o] T1.5.4 Write docs/spec/90-conformance.md(.ko) as a scoped skeleton
 - [o] T1.5.5 Write docs/spec/100-checklist.md(.ko) in full
-- [ ] T1.5.6 Write docs/spec/110-open-questions.md(.ko) in full
+- [o] T1.5.6 Write docs/spec/110-open-questions.md(.ko) in full
 
 ## Later phases
 
