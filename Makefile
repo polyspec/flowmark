@@ -8,5 +8,6 @@ refs-check: ## Check that every task ID a document names resolves to a checklist
 	node scripts/check-refs.mjs
 
 .PHONY: test
-test: ## Run the tests of the repository's own scripts; offline
+test: ## Run the tests of the repository's own code and scripts; offline
 	node --test tests/*.test.mjs
+	go test ./...

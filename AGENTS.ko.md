@@ -1,5 +1,5 @@
 <!-- doc-id: agents -->
-<!-- source-sha256: 33c0eb33bb5ce047089afe77a5a4f0e973f884b9bca99673953cbabebad0f620 -->
+<!-- source-sha256: 3d8fbc0fcabd6c66fd943ea6e02be550c484be023c5126c73f33ba3af7c0907f -->
 # 개발 규칙
 
 [English](AGENTS.md)
@@ -39,4 +39,5 @@ GitHub, Jira), checklist·changelog engine, local board. 판정은 `docs/plans/d
   `make kit-check`가 검증한다. kit에 없거나 잘못된 도구는 kit에 보고하고 여기서 고치지 않는다.
 - Multi-platform은 hard requirement다. 편법 금지: lock은 kit의 holder-lock 선례를 따르고 crash
   안전성은 journal replay에서 오며, 현재 요구사항을 완전히 충족하는 가장 단순한 구현을 선택한다.
-- 한국어 문서는 기술 용어를 영어로 쓰고 문맥만 한국어로 쓴다.
+- 한국어 문서는 기술 용어를 영어로 쓰고 문맥만 한국어로 쓴다. code comment와 commit
+  message는 영어로 작성한다.

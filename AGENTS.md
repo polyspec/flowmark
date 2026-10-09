@@ -44,4 +44,5 @@ and the local board. The rulings live in `docs/plans/design-plan.md`; the execut
 - Multi-platform is a hard requirement. No platform tricks: locks follow kit's holder-lock
   precedent, crash safety comes from journal replay, and the simplest implementation that fully
   satisfies the current requirements wins.
-- Korean documents write technical terms in English; the context alone is Korean.
+- Korean documents write technical terms in English; the context alone is Korean. Code
+  comments and commit messages are written in English.

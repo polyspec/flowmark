@@ -33,3 +33,4 @@
 - T1.5.6: 110-open-questions registers the seven open decisions with recommendations and deciding conditions.
 - T1.4.1: 00-overview writes the scope, the enforcement summary, the glossary, the non-goals, and the document map.
 - T1.4.7: the Korean documents follow the dry style — action verbs, no metaphor, English technical terms; T1.4 completes with its seven sub-items.
+- T2.1: the Go module starts with the document skeleton — the strict parse and the canonical render of the header comments, the title, the preamble, the frontmatter block and the H2 sections — with the P1 and P2 round-trip tests and the header diagnostics.
