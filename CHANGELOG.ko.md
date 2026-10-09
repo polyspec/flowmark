@@ -1,5 +1,5 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 9d7830bede280f21fe50b0518e04c37523994151ccf9e2478f5e4dd7d6078def -->
+<!-- source-sha256: f2ccd3d512e213fc00927b7774c81fe317adc3c1ebdf3e84c4f1eda6b3a28429 -->
 # Changelog
 
 ## Unreleased
@@ -23,3 +23,4 @@
   요구사항이 이름을 붙일 때 만든다.
 - T1.4.2: 10-canonical-format이 멱등성 명제 2개, 보존 boundary를 가진 skeleton, 문서 grammar, frontmatter profile, type-directed ordering을 가진 task-ID grammar, encoding 규칙을 서술한다.
 - T1.4.3: 20-document-model이 folder=table, file=row, column mapping, child table, 하나의 row인 번역 쌍, frontmatter binding을 서술한다.
+- T1.4.4: 30-schema가 dbspec authority 파생, literal block embedding, standalone 임시 authority, schema stamp, 사람 write 판정을 서술한다.
