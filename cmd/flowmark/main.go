@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/polyspec/flowmark/app"
 	"github.com/polyspec/flowmark/corpus"
@@ -38,6 +39,29 @@ func main() {
 		os.Exit(validate(root))
 	case "items":
 		os.Exit(items(root))
+	case "add":
+		if len(os.Args) < 7 {
+			usage()
+		}
+		path, id := os.Args[3], os.Args[4]
+		title := strings.Join(os.Args[5:], " ")
+		if err := app.AddItem(root, path, id, title); err != nil {
+			fmt.Fprintf(os.Stderr, "flowmark add: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("[add] %s %s\n", id, title)
+		os.Exit(0)
+	case "rm":
+		if len(os.Args) != 5 {
+			usage()
+		}
+		path, id := os.Args[3], os.Args[4]
+		if err := app.RemoveItem(root, path, id); err != nil {
+			fmt.Fprintf(os.Stderr, "flowmark rm: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("[rm] %s\n", id)
+		os.Exit(0)
 	case "transition":
 		if len(os.Args) < 6 {
 			usage()
@@ -58,7 +82,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: flowmark mcp | sidecar | validate <root> | items <root> | transition <root> <path> <id> <state> [evidence]")
+	fmt.Fprintln(os.Stderr, "usage: flowmark mcp | sidecar | validate <root> | items <root> | add <root> <path> <id> <title> | rm <root> <path> <id> | transition <root> <path> <id> <state> [evidence]")
 	os.Exit(2)
 }
 

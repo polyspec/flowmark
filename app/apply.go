@@ -98,3 +98,62 @@ func countState(document *codec.Document, state string) int {
 	}
 	return count
 }
+
+// AddItem appends one waiting item to a document through the write path: the ID is unique
+// in the document, the line lands after the last item's continuations, or at the end when
+// the document holds no item yet.
+func AddItem(root, relativePath, id, title string) error {
+	path := filepath.Join(root, filepath.FromSlash(relativePath))
+	text, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	document, diagnostics := codec.Parse(string(text))
+	if len(diagnostics) > 0 {
+		return fmt.Errorf("%s holds %d parse findings; fix them first", relativePath, len(diagnostics))
+	}
+	for _, item := range document.Items {
+		if item.ID == id {
+			return fmt.Errorf("the item %q is already in %s", id, relativePath)
+		}
+	}
+	lines := strings.Split(string(text), "\n")
+	insert := len(lines)
+	if len(document.Items) > 0 {
+		last := document.Items[len(document.Items)-1]
+		insert = last.Line + len(last.Continuations)
+	}
+	newItem := "- " + GlyphOf("waiting") + " " + id + " " + title
+	lines = append(lines[:insert], append([]string{newItem}, lines[insert:]...)...)
+	return os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o644)
+}
+
+// RemoveItem deletes one item with its continuation lines. A parent whose ID carries
+// children (a dotted or suffixed child) is refused — a delete may not orphan rows.
+func RemoveItem(root, relativePath, id string) error {
+	path := filepath.Join(root, filepath.FromSlash(relativePath))
+	text, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	document, diagnostics := codec.Parse(string(text))
+	if len(diagnostics) > 0 {
+		return fmt.Errorf("%s holds %d parse findings; fix them first", relativePath, len(diagnostics))
+	}
+	var found *codec.ChecklistItem
+	for i := range document.Items {
+		if document.Items[i].ID == id {
+			found = &document.Items[i]
+		}
+		if strings.HasPrefix(document.Items[i].ID, id+".") || strings.HasPrefix(document.Items[i].ID, id+"-") {
+			return fmt.Errorf("the item %q carries the child %q; remove the children first", id, document.Items[i].ID)
+		}
+	}
+	if found == nil {
+		return fmt.Errorf("the item %q is not in %s", id, relativePath)
+	}
+	lines := strings.Split(string(text), "\n")
+	block := len(found.Continuations) + 1
+	rest := append(append([]string{}, lines[:found.Line-1]...), lines[found.Line-1+block:]...)
+	return os.WriteFile(path, []byte(strings.Join(rest, "\n")), 0o644)
+}

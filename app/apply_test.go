@@ -4,6 +4,7 @@ package app
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -69,5 +70,50 @@ func TestWIPGate(t *testing.T) {
 	}
 	if err := Transition(root, "docs/plans/list.md", "T3.1", "doing", ""); err == nil {
 		t.Fatal("the WIP gate opens a third doing item")
+	}
+}
+
+func TestAddItem(t *testing.T) {
+	root := rootWith(t, board)
+	if err := AddItem(root, "docs/plans/list.md", "T4.1", "A new issue arrives"); err != nil {
+		t.Fatal(err)
+	}
+	text, err := os.ReadFile(filepath.Join(root, "docs", "plans", "list.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasSuffix(string(text), "- [ ] T4.1 A new issue arrives\n") {
+		t.Fatalf("text ends with %q", string(text)[len(string(text))-60:])
+	}
+	if err := AddItem(root, "docs/plans/list.md", "T1.1", "A duplicate arrives"); err == nil {
+		t.Fatal("a duplicate ID passes")
+	}
+}
+
+func TestRemoveItem(t *testing.T) {
+	root := rootWith(t, board)
+	if err := RemoveItem(root, "docs/plans/list.md", "T1.1"); err != nil {
+		t.Fatal(err)
+	}
+	text, err := os.ReadFile(filepath.Join(root, "docs", "plans", "list.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(text), "T1.1") {
+		t.Fatalf("text still holds T1.1")
+	}
+	if err := RemoveItem(root, "docs/plans/list.md", "T9.9"); err == nil {
+		t.Fatal("an unknown ID passes")
+	}
+}
+
+func TestRemoveItemKeepsChildrenRule(t *testing.T) {
+	nested := "<!-- doc-id: plans-execution-checklist -->\n# Checklist\n\n## Work\n\n- [ ] T1 Parent\n- [ ] T1.1 Child\n"
+	root := rootWith(t, nested)
+	if err := RemoveItem(root, "docs/plans/list.md", "T1"); err == nil {
+		t.Fatal("a parent with a child passes")
+	}
+	if err := RemoveItem(root, "docs/plans/list.md", "T1.1"); err != nil {
+		t.Fatal(err)
 	}
 }
