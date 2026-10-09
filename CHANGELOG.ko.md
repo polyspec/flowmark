@@ -1,5 +1,5 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: f2ccd3d512e213fc00927b7774c81fe317adc3c1ebdf3e84c4f1eda6b3a28429 -->
+<!-- source-sha256: 41001b74cedf23f3e2c04fc82400d1f62cf945c13bcbfc327a444c10f7e70525 -->
 # Changelog
 
 ## Unreleased
@@ -24,3 +24,4 @@
 - T1.4.2: 10-canonical-format이 멱등성 명제 2개, 보존 boundary를 가진 skeleton, 문서 grammar, frontmatter profile, type-directed ordering을 가진 task-ID grammar, encoding 규칙을 서술한다.
 - T1.4.3: 20-document-model이 folder=table, file=row, column mapping, child table, 하나의 row인 번역 쌍, frontmatter binding을 서술한다.
 - T1.4.4: 30-schema가 dbspec authority 파생, literal block embedding, standalone 임시 authority, schema stamp, 사람 write 판정을 서술한다.
+- T1.4.5: 40-ops가 열기 시 복구, 작업 단위 portable lock, prepare record를 가진 규범적 commit protocol, corpus revision token, 비용 모델을 서술한다.

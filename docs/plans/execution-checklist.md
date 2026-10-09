@@ -22,7 +22,7 @@
 - [o] T1.4.2 Write docs/spec/10-canonical-format.md(.ko)
 - [o] T1.4.3 Write docs/spec/20-document-model.md(.ko)
 - [o] T1.4.4 Write docs/spec/30-schema.md(.ko)
-- [ ] T1.4.5 Write docs/spec/40-ops.md(.ko)
+- [o] T1.4.5 Write docs/spec/40-ops.md(.ko)
 - [ ] T1.4.6 Write docs/spec/50-constraints.md(.ko)
 - [ ] T1.4.7 Rewrite the Korean documents in the dry style — no metaphor, action verbs, English technical terms (requires T1.4.6)
 - [ ] T1.5 Write the remaining specifications (requires T1.4)
