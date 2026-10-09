@@ -1,5 +1,5 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 677af3d3c681fa104a13ef1bf705aa4d023ac16c29a13f5c568f6feaf78b0b15 -->
+<!-- source-sha256: 3641a574f40990cbf4764ee280a5e6e0f4fc3fa8cf8ac04eac5c8d9649b4b24b -->
 # Changelog
 
 ## Unreleased
@@ -32,3 +32,4 @@
 - T1.5.4: 90-conformance가 corpus vector 계약, 필수 round-trip·멱등성 속성, Go-first runner를 서술한다.
 - T1.5.5: 100-checklist가 application을 전체로 쓴다 — table, terminal과 필수 field를 가진 5상태 machine, WIP gate, 또 하나의 consumer인 board, cutover.
 - T1.5.6: 110-open-questions가 열린 결정 7건을 권고와 결정 조건으로 등록한다.
+- T1.4.1: 00-overview가 범위, 강제력 요약, 용어, 비목표, 문서 지도를 쓴다.
