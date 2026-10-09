@@ -21,8 +21,8 @@ func Render(document *Document) string {
 	if len(document.Preamble) > 0 {
 		blocks = append(blocks, strings.Join(document.Preamble, "\n"))
 	}
-	if len(document.Frontmatter) > 0 {
-		blocks = append(blocks, "---\n"+strings.Join(document.Frontmatter, "\n")+"\n---")
+	if len(document.FM) > 0 {
+		blocks = append(blocks, "---\n"+RenderFrontmatter(document.FM)+"---")
 	}
 	for _, section := range document.Sections {
 		marker := "## "

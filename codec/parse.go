@@ -91,13 +91,14 @@ func Parse(text string) (*Document, []Diagnostic) {
 	}
 	document.Preamble = trimBlank(document.Preamble)
 
-	// The frontmatter block (optional): one pair of `---` fences. An unclosed fence reports
-	// the line of its opening.
+	// The frontmatter block (optional): one pair of `---` fences. The inside lines parse as
+	// the YAML 1.2 core subset; an unclosed fence reports the line of its opening.
 	if at < len(lines) && lines[at] == "---" {
 		open := at
 		at++
+		inside := []string{}
 		for at < len(lines) && lines[at] != "---" {
-			document.Frontmatter = append(document.Frontmatter, lines[at])
+			inside = append(inside, lines[at])
 			at++
 		}
 		if at >= len(lines) {
@@ -105,6 +106,9 @@ func Parse(text string) (*Document, []Diagnostic) {
 		} else {
 			at++
 		}
+		var found []Diagnostic
+		document.FM, found = ParseFrontmatter(inside, open+2)
+		diagnostics = append(diagnostics, found...)
 		for at < len(lines) && lines[at] == "" {
 			at++
 		}
