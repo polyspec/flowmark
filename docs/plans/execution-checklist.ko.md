@@ -1,5 +1,5 @@
 <!-- doc-id: execution-checklist -->
-<!-- source-sha256: 4b21cb3d4dd3e28eded4f28e98b2a190ce1d13f57eb88e0aba921fcf4029bf0a -->
+<!-- source-sha256: f6f9fd6c86da0afe168942a3d0d9d36f9102dc93ceb33e3aedf96519a16f5dce -->
 # 실행 체크리스트
 
 ## T1a 설계 session
@@ -58,6 +58,7 @@
 - [o] T7.1 CLI face: corpus 위의 validate·items·transition (T3 선행)
 - [o] T7.2 MCP server face: stdio 위의 initialize·tools/list·tools/call (T7.1 선행)
 - [o] T7.3 soksak sidecar face: stdio 위의 protocol v1 message loop (T7.1 선행)
+- [o] T7.3-1 sidecar와 MCP의 각 message를 즉시 flush한다. 원인: Serve가 bufio flush를 입력이 끝날 때까지 미뤄서, session을 열어 두는 host — 예제 Wails host, MCP client — 가 process가 멈출 때까지 응답을 받지 못했다. protocol과 JSON-RPC session 모두 session이 진행되는 동안 각 message를 전달한다. 완료 기준: 모든 응답이 write 시점에, 입력이 끝나기 전에 flush되고 pipe가 열려 있는 상태에서 응답 한 건을 읽는 회귀 시험이 이를 덮는다.
 - [o] T8 Checklist application: local issue model (T3 선행)
 - [o] T8.1 전환 table을 인코딩한다: terminal, 필수 field, superseded 항목 생성 (T3 선행)
 - [o] T8.2 corpus에 전환을 적용한다: 상태 재작성, revision 줄 추가, WIP gate 유지 (T8.1 선행)
