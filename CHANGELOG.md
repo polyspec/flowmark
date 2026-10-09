@@ -41,3 +41,4 @@
 - T3.1: the corpus validator walks a directory of documents — the strict parse findings, the unique doc-ids and item IDs across the corpus, and every task-ID token in prose (fenced blocks and inline code excluded) resolving to an item.
 - T3.2: `make validate` runs `flowmark validate` over the corpus directory with the selection
   of config/documents.json, and the corpus of this repository passes. T3 completes.
+- T4.1: the executor runs one, all and count over the corpus rows — documents and checklist items as the first tables — with where predicates, ordering and limit; the task-ID ordering is segment-wise numeric, so T8.0.9 sorts before T8.0.10 and the suffix follows its base.

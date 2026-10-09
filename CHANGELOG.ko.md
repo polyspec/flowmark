@@ -1,5 +1,5 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 72ec35fd892c5d1494caa4647ce5f916d0e9785645d8e8c368dbbde2e2ceac94 -->
+<!-- source-sha256: 0dcac2b47402d05828a67bc8a307269b6133da6fa611f6a50514f208d3fca285 -->
 # Changelog
 
 ## Unreleased
@@ -42,3 +42,4 @@
 - T3.1: corpus validator가 문서 directory를 검사한다 — strict parse finding, corpus 전체의 doc-id·item ID 유일성, 산문의 모든 task-ID token(fenced block·inline code 제외)의 item 해석.
 - T3.2: go run ./cmd/flowmark validate .
 [validate] the corpus passes이 config/documents.json의 선택으로 corpus directory 위에서 를 실행하고 이 저장소의 corpus가 통과한다. T3가 완료된다.
+- T4.1: executor가 corpus row 위에서 one·all·count를 실행한다 — 첫 table로 documents와 checklist items — where predicate·ordering·limit와 함께. task-ID ordering은 segment별 숫자라 T8.0.9가 T8.0.10 앞에 오고 suffix는 base를 따른다.
