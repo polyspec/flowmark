@@ -1,5 +1,5 @@
 <!-- doc-id: execution-checklist -->
-<!-- source-sha256: a0406fa7dafc08143b43f2ea42851b0a53f5f4fdefb2c4a9197cfaab7757ad83 -->
+<!-- source-sha256: 4b21cb3d4dd3e28eded4f28e98b2a190ce1d13f57eb88e0aba921fcf4029bf0a -->
 # 실행 체크리스트
 
 ## T1a 설계 session
@@ -64,4 +64,4 @@
 - [o] T8.3 `flowmark items`와 `flowmark transition`을 소유 명령으로 연결한다 (T8.2 선행)
 - [o] T9 Conformance vector: corpus before, request, 기대 corpus after (T4 선행)
 - [o] T9.1 vector 형식을 정의하고 첫 vector를 executor로 실행한다 (T4 선행)
-- [ ] T10 자기 repo의 soksak plugin: 칸반 보드와 issue tracker — 또 하나의 thin consumer (T8 선행)
+- [o] T10 자기 repo의 soksak plugin: 칸반 보드와 issue tracker — 또 하나의 thin consumer (T8 선행)
