@@ -1,5 +1,5 @@
 <!-- doc-id: execution-checklist -->
-<!-- source-sha256: 6c08ef34e01dd96a5a6794d73351c65fe435815c7faa84548a5bbe5b5fe9f837 -->
+<!-- source-sha256: 61194fec6179e3a055c3d8ee05bfc56cd8762dff96e0cfffbc3e716413427e76 -->
 # 실행 체크리스트
 
 ## T1a 설계 session
@@ -28,7 +28,7 @@
 - [ ] T1.4.7 한국어 문서를 dry 문체로 다시 쓴다 — 비유 제거, 동작 동사 사용, 기술 용어 영문 유지 (T1.4.6 선행)
 - [ ] T1.5 나머지 명세를 쓴다 (T1.4 선행)
   - 완료 기준: capability table 전체, 범위를 정한 skeleton 3종, 그리고 100-checklist와 110-open-questions 전체; T1.5.1부터 T1.5.6까지 완료되면 완료된다.
-- [ ] T1.5.1 capability table을 전체로 담은 docs/spec/60-dialect.md(.ko)를 쓴다
+- [o] T1.5.1 capability table을 전체로 담은 docs/spec/60-dialect.md(.ko)를 쓴다
 - [ ] T1.5.2 범위 skeleton으로 docs/spec/70-sync.md(.ko)를 쓴다
 - [ ] T1.5.3 범위 skeleton으로 docs/spec/80-migration.md(.ko)를 쓴다
 - [ ] T1.5.4 범위 skeleton으로 docs/spec/90-conformance.md(.ko)를 쓴다

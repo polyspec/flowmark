@@ -1,5 +1,5 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: e4c797c0708f7d01652ec8a2e12fad8434dea5a5ce06ff5c947f6bb5d9051c9c -->
+<!-- source-sha256: 8c3e28d5f214490196962a8283783177f3e3f9591796c49447f2d2e617ab8019 -->
 # Changelog
 
 ## Unreleased
@@ -26,3 +26,4 @@
 - T1.4.4: 30-schema가 dbspec authority 파생, literal block embedding, standalone 임시 authority, schema stamp, 사람 write 판정을 서술한다.
 - T1.4.5: 40-ops가 열기 시 복구, 작업 단위 portable lock, prepare record를 가진 규범적 commit protocol, corpus revision token, 비용 모델을 서술한다.
 - T1.4.6: 50-constraints가 strict parse, type, key와 참조, state-machine setting, 사람 write 판정, key 필수 codec 검증을 서술한다.
+- T1.5.1: 60-dialect이 capability table을 전체로 쓴다 — IR 표면, 강화된 update, on_duplicate 판정, 거부 표면, Go-only 표시.
