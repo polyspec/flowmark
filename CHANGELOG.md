@@ -35,3 +35,4 @@
 - T1.4.7: the Korean documents follow the dry style — action verbs, no metaphor, English technical terms; T1.4 completes with its seven sub-items.
 - T2.1: the Go module starts with the document skeleton — the strict parse and the canonical render of the header comments, the title, the preamble, the frontmatter block and the H2 sections — with the P1 and P2 round-trip tests and the header diagnostics.
 - T2.5: the codec proves P1 and P2 over the repository corpus — every selected document parses without a diagnostic and re-renders byte for byte, and a CRLF copy re-renders stably; the grammar takes the H2 and H3 headings and the header-title adjacency of the real documents.
+- T2.4: every parse rule reports a located diagnostic — the fixed rule names with line and column — and a fenced block is payload: the structural rules read unfenced lines only, and an unclosed frontmatter fence names its opening line.

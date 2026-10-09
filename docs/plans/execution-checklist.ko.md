@@ -1,5 +1,5 @@
 <!-- doc-id: execution-checklist -->
-<!-- source-sha256: 6c40fd13bf33cfd88851aa55394a5e472212e149bcff254aacfaf77b75fd5b9b -->
+<!-- source-sha256: 750717ff9663ee7bcd1e5a89fd18f3f659e75691a8f250c984e589d5d29509bb -->
 # 실행 체크리스트
 
 ## T1a 설계 session
@@ -41,7 +41,7 @@
 - [o] T2.1 Go module을 document skeleton으로 시작한다: header, 제목, preamble, frontmatter block, H2 section을 canonical round-trip으로 parse하고 render한다 (T1.4 선행)
 - [ ] T2.2 frontmatter를 YAML 1.2 core subset으로 parse하고 canonical로 재출력한다 (T2.1 선행)
 - [ ] T2.3 child block — checklist 항목과 markdown table — 을 row로 parse한다 (T2.2 선행)
-- [ ] T2.4 모든 parse 규칙을 고정 rule 이름의 located diagnostic으로 보고한다 (T2.1 선행)
+- [o] T2.4 모든 parse 규칙을 고정 rule 이름의 located diagnostic으로 보고한다 (T2.1 선행)
 - [o] T2.5 이 저장소의 corpus에서 P1과 P2를 golden set으로 증명한다 (T2.1 선행)
 - [ ] T3 Validator: corpus-global 제약 (T2 선행)
 - [ ] T4 Executor: parse된 corpus 위의 IR kind (T3 선행)

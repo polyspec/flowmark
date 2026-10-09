@@ -40,7 +40,7 @@
 - [o] T2.1 Bootstrap the Go module with the document skeleton: parse and render the header, the title, the preamble, the frontmatter block and the H2 sections with a canonical round-trip (requires T1.4)
 - [ ] T2.2 Parse the frontmatter as the YAML 1.2 core subset and re-emit it canonically (requires T2.1)
 - [ ] T2.3 Parse the child blocks — checklist items and markdown tables — into rows (requires T2.2)
-- [ ] T2.4 Report every parse rule as a located diagnostic with the fixed rule names (requires T2.1)
+- [o] T2.4 Report every parse rule as a located diagnostic with the fixed rule names (requires T2.1)
 - [o] T2.5 Prove P1 and P2 over the corpus of this repository with a fuzz-free golden set (requires T2.1)
 - [ ] T3 Validator: corpus-global constraints (requires T2)
 - [ ] T4 Executor: the IR kinds over the parsed corpus (requires T3)
