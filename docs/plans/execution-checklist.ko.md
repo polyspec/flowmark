@@ -1,5 +1,5 @@
 <!-- doc-id: execution-checklist -->
-<!-- source-sha256: 0288aa6f2c51fb8604117bf52ec7476699905b94416e218c01d2fb3880146b51 -->
+<!-- source-sha256: bcddd324fda1060f0f0d44c292211e17a15e8479aa697a2d559ce17db92b8b0c -->
 # 실행 체크리스트
 
 ## T1a 설계 session
@@ -19,7 +19,7 @@
 
 - [~] T1.4 여섯 개의 core 명세를 전체 문서 쌍으로 쓴다 (T1.2 선행)
   - 완료 기준: 모든 판정이 근거를 동반한 명제로 나타난다; T1.4.1부터 T1.4.7까지 완료되면 완료된다.
-- [~] T1.4.1 docs/spec/00-overview.md(.ko)를 쓴다
+- [o] T1.4.1 docs/spec/00-overview.md(.ko)를 쓴다
 - [o] T1.4.2 docs/spec/10-canonical-format.md(.ko)를 쓴다
 - [o] T1.4.3 docs/spec/20-document-model.md(.ko)를 쓴다
 - [o] T1.4.4 docs/spec/30-schema.md(.ko)를 쓴다
