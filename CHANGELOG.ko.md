@@ -1,5 +1,5 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 05e7468fabac68f14a9b8d217720940488f4e2d200cc044594cbbd9ece870785 -->
+<!-- source-sha256: 4dce96c9476b743e5de9dfedb291428932ee0d7f0da2ae4a072cc5020cc69040 -->
 # Changelog
 
 ## Unreleased
@@ -50,3 +50,4 @@
   하나를 적용한다. walk가 dot root에 들어가고, Korean twin은 두 번째 key를 등록하지
   않으며, changelog 예시의 ID는 code span에 담는다. T8이 완료된다.
 - T1.4.8: 20-document-model이 aggregate와 분할 shape — 단일 파일, 1:n 연결 파일, 1:n:1 — 을 명시한다. 모두 file-as-row·child block·foreign-key column primitive로 구성되고 key는 restrict뿐이다.
+- T9.1: conformance vector가 실행된다 — corpus before, request, projection인 기대 rows — 네 vector가 문서 순서·where count·type-directed 항목 순서·paginate total을 고정하고 spec 90이 vector 형식을 서술한다. T9가 첫 단계를 완료한다.

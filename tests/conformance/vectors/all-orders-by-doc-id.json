@@ -1,0 +1,9 @@
+{
+  "name": "all-orders-by-doc-id",
+  "corpus": {
+    "docs/b.md": "<!-- doc-id: b-doc -->\n# B\n",
+    "docs/a.md": "<!-- doc-id: a-doc -->\n# A\n"
+  },
+  "call": { "kind": "all", "table": "documents", "query": {} },
+  "expect": { "rows": [ { "doc_id": "a-doc" }, { "doc_id": "b-doc" } ] }
+}
