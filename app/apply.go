@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/polyspec/flowmark/codec"
@@ -103,6 +104,9 @@ func countState(document *codec.Document, state string) int {
 // in the document, the line lands after the last item's continuations, or at the end when
 // the document holds no item yet.
 func AddItem(root, relativePath, id, title string) error {
+	if id == "" {
+		id = NextID(root, relativePath)
+	}
 	path := filepath.Join(root, filepath.FromSlash(relativePath))
 	text, err := os.ReadFile(path)
 	if err != nil {
@@ -156,4 +160,33 @@ func RemoveItem(root, relativePath, id string) error {
 	block := len(found.Continuations) + 1
 	rest := append(append([]string{}, lines[:found.Line-1]...), lines[found.Line-1+block:]...)
 	return os.WriteFile(path, []byte(strings.Join(rest, "\n")), 0o644)
+}
+
+// NextID names the next top-level item ID of a document: one past the highest T<number>.
+func NextID(root, relativePath string) string {
+	path := filepath.Join(root, filepath.FromSlash(relativePath))
+	text, err := os.ReadFile(path)
+	if err != nil {
+		return "T1"
+	}
+	document, _ := codec.Parse(string(text))
+	highest := 0
+	for _, item := range document.Items {
+		id := item.ID
+		if !strings.HasPrefix(id, "T") {
+			continue
+		}
+		segment := id[1:]
+		if at := strings.IndexAny(segment, ".-"); at >= 0 {
+			segment = segment[:at] // a child raises the top level of its first segment
+		}
+		number, err := strconv.Atoi(segment)
+		if err != nil {
+			continue
+		}
+		if number > highest {
+			highest = number
+		}
+	}
+	return fmt.Sprintf("T%d", highest+1)
 }

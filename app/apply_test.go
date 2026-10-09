@@ -117,3 +117,29 @@ func TestRemoveItemKeepsChildrenRule(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestNextID(t *testing.T) {
+	root := rootWith(t, board) // T1.1, T2.1, T3.1 — the next top level is T4
+	if id := NextID(root, "docs/plans/list.md"); id != "T4" {
+		t.Fatalf("next: %q", id)
+	}
+	empty := "<!-- doc-id: plans-execution-checklist -->\n# Checklist\n\n## Work\n\n"
+	root = rootWith(t, empty)
+	if id := NextID(root, "docs/plans/list.md"); id != "T1" {
+		t.Fatalf("first: %q", id)
+	}
+}
+
+func TestAddItemAutoID(t *testing.T) {
+	root := rootWith(t, board)
+	if err := AddItem(root, "docs/plans/list.md", "", "An issue without an ID"); err != nil {
+		t.Fatal(err)
+	}
+	text, err := os.ReadFile(filepath.Join(root, "docs", "plans", "list.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(text), "- [ ] T4 An issue without an ID") {
+		t.Fatalf("text holds no auto T4")
+	}
+}
