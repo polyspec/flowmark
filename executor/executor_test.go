@@ -92,7 +92,7 @@ func TestTypeDirectedOrdering(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rows, err := corpus.All("items", Query{})
+	rows, err := corpus.All("items", Query{Order: "id"})
 	if err != nil {
 		t.Fatal(err)
 	}

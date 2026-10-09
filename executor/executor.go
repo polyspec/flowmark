@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/polyspec/flowmark/codec"
@@ -66,12 +67,13 @@ func Open(root string) (*Corpus, error) {
 			relative = filepath.ToSlash(path)
 		}
 		corpus.documents = append(corpus.documents, Row{"doc_id": document.DocID, "title": document.Title, "path": filepath.ToSlash(relative)})
-		for _, item := range document.Items {
+		for position, item := range document.Items {
 			corpus.items = append(corpus.items, Row{
 				"id":     item.ID,
 				"state":  item.State,
 				"title":  item.Title,
 				"doc_id": document.DocID,
+				"order":  strconv.Itoa(position + 1),
 			})
 		}
 		return nil
@@ -80,7 +82,8 @@ func Open(root string) (*Corpus, error) {
 		return nil, err
 	}
 	sort.Slice(corpus.documents, func(i, j int) bool { return taskIDLess(corpus.documents[i]["doc_id"], corpus.documents[j]["doc_id"]) })
-	sort.Slice(corpus.items, func(i, j int) bool { return taskIDLess(corpus.items[i]["id"], corpus.items[j]["id"]) })
+	// The items stay in file order — the physical arrangement in the markdown is the ordering,
+	// the way a database table orders by a column. An explicit query Order sorts on demand.
 	return corpus, nil
 }
 
