@@ -61,7 +61,11 @@ func Open(root string) (*Corpus, error) {
 			return err
 		}
 		document, _ := codec.Parse(string(text))
-		corpus.documents = append(corpus.documents, Row{"doc_id": document.DocID, "title": document.Title, "path": filepath.ToSlash(path)})
+		relative, err := filepath.Rel(root, path)
+		if err != nil {
+			relative = filepath.ToSlash(path)
+		}
+		corpus.documents = append(corpus.documents, Row{"doc_id": document.DocID, "title": document.Title, "path": filepath.ToSlash(relative)})
 		for _, item := range document.Items {
 			corpus.items = append(corpus.items, Row{
 				"id":     item.ID,
