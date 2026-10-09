@@ -1,5 +1,5 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 3641a574f40990cbf4764ee280a5e6e0f4fc3fa8cf8ac04eac5c8d9649b4b24b -->
+<!-- source-sha256: 32847cb2eebc6075aa29b53f08574483188859fd9b0b704ee1d474fa6819414f -->
 # Changelog
 
 ## Unreleased
@@ -16,8 +16,8 @@
   통과한다.
 - T1.3: `make refs-check`가 config/checklist.json의 checklist와 선택된 문서의 prose(fenced block과
   inline code 제외)를 읽고, 어떤 항목으로도 해석되지 않는 task ID를 file·line·column을 붙인 finding으로
-  보고한다. `make test`가 이것을 덮는다.
-- T1.1-1: 하나의 Go binary가 세 개의 thin 얼굴 — CLI, MCP server, soksak sidecar(soksak core
+  보고한다. `make test`가 이것을 검증한다.
+- T1.1-1: 하나의 Go binary가 세 개의 thin face — CLI, MCP server, soksak sidecar(soksak core
   명세의 protocol v1) — 를 가지고, GUI는 자기 repo의 soksak plugin으로 출시된다. 저장소는
   `package.json`과 `sidecar.json` manifest를 얹은 단일 언어 Go로 유지하고, 언어별 package는
   요구사항이 이름을 붙일 때 만든다.
@@ -33,3 +33,4 @@
 - T1.5.5: 100-checklist가 application을 전체로 쓴다 — table, terminal과 필수 field를 가진 5상태 machine, WIP gate, 또 하나의 consumer인 board, cutover.
 - T1.5.6: 110-open-questions가 열린 결정 7건을 권고와 결정 조건으로 등록한다.
 - T1.4.1: 00-overview가 범위, 강제력 요약, 용어, 비목표, 문서 지도를 쓴다.
+- T1.4.7: 한국어 문서가 dry 문체를 따른다 — 동작 동사, 비유 없음, 영문 기술 용어. T1.4가 7개 하위 항목과 함께 완료된다.

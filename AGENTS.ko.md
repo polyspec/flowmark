@@ -23,7 +23,7 @@ GitHub, Jira), checklist·changelog engine, local board. 판정은 `docs/plans/d
   `[-]` 불가(`Cause:` 필수). `[o]`는 terminal이다: 완료된 항목에 연관된 새 이슈는 되돌리지 않고
   suffix 항목(`T8.0.14-1`)을 만든다. 병렬 작업은 허용하되 `[~]` 수가 완료 없이 늘어나지 않게 한다.
 - 항목은 그것을 끝내는 commit에서, 소유 명령이 통과한 뒤 `[o]`가 된다. 그 commit은 CHANGELOG.md와
-  CHANGELOG.ko.md의 `## Unreleased`에 entry도 함께 쓴다. 미커밋 변경은 항목 하나만 덮는다.
+  CHANGELOG.ko.md의 `## Unreleased`에 entry도 함께 쓴다. 미커밋 변경은 항목 하나로 제한한다.
 - 결함은 그것을 재현하는 RED test(또는 재현할 deterministic case)로 시작하고, 의도한 이유로
   실패함을 확인한 뒤 원인을 고치고 같은 case를 GREEN으로 통과시킨다. checklist 항목은 관측 가능한
   올바름의 기준을 남긴다.
