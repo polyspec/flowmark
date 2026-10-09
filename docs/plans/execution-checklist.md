@@ -23,7 +23,7 @@
 - [o] T1.4.3 Write docs/spec/20-document-model.md(.ko)
 - [o] T1.4.4 Write docs/spec/30-schema.md(.ko)
 - [o] T1.4.5 Write docs/spec/40-ops.md(.ko)
-- [ ] T1.4.6 Write docs/spec/50-constraints.md(.ko)
+- [o] T1.4.6 Write docs/spec/50-constraints.md(.ko)
 - [ ] T1.4.7 Rewrite the Korean documents in the dry style — no metaphor, action verbs, English technical terms (requires T1.4.6)
 - [ ] T1.5 Write the remaining specifications (requires T1.4)
   - Completion criteria: the capability table in full, three scoped skeletons, and 100-checklist and 110-open-questions in full; it completes when T1.5.1 through T1.5.6 complete.
