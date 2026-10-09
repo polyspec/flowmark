@@ -77,3 +77,54 @@ func TestHeaderRules(t *testing.T) {
 		t.Fatalf("twin round-trip failed:\n%q\n%q", twin, rendered)
 	}
 }
+
+// A fenced block is payload: heading-shaped lines inside fences change nothing.
+func TestFencedPayload(t *testing.T) {
+	const fenced = "<!-- doc-id: plans-design-plan -->\n" +
+		"# Design Plan\n" +
+		"\n" +
+		"## Scope\n" +
+		"\n" +
+		"```\n" +
+		"## not a section\n" +
+		"# not a title\n" +
+		"```\n" +
+		"\n" +
+		"Prose after the fence.\n"
+	document, diagnostics := Parse(fenced)
+	if len(diagnostics) != 0 {
+		t.Fatalf("diagnostics: %v", diagnostics)
+	}
+	if len(document.Sections) != 1 || len(document.Sections[0].Lines) != 6 {
+		t.Fatalf("sections: %+v", document.Sections)
+	}
+	if rendered := Render(document); rendered != fenced {
+		t.Fatalf("round-trip failed:\n%q\n%q", fenced, rendered)
+	}
+}
+
+func TestRuleDiagnostics(t *testing.T) {
+	cases := []struct {
+		name   string
+		text   string
+		rule   string
+		line   int
+		column int
+	}{
+		{"duplicate doc-id", "<!-- doc-id: a -->\n<!-- doc-id: b -->\n# T\n", RuleHeader, 2, 1},
+		{"blank after header", "<!-- doc-id: a -->\n\n# T\n", RuleHeader, 2, 1},
+		{"unclosed frontmatter", "<!-- doc-id: a -->\n# T\n\n---\nkey: value\n", RuleFrontmatter, 4, 1},
+		{"body level-1 heading", "<!-- doc-id: a -->\n# T\n\n# Second\n", RuleSection, 4, 1},
+	}
+	for _, testCase := range cases {
+		_, diagnostics := Parse(testCase.text)
+		if len(diagnostics) != 1 {
+			t.Errorf("%s: diagnostics: %v", testCase.name, diagnostics)
+			continue
+		}
+		found := diagnostics[0]
+		if found.Rule != testCase.rule || found.Line != testCase.line || found.Column != testCase.column {
+			t.Errorf("%s: got {%d %d %s}, want {%d %d %s}", testCase.name, found.Line, found.Column, found.Rule, testCase.line, testCase.column, testCase.rule)
+		}
+	}
+}

@@ -1,5 +1,5 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 0466cfdea6cd7e3fbd73ad6a5ae06a4bf69955485783699384091dd0da1c120b -->
+<!-- source-sha256: 99fe4766f4c60895cca07237b824a99ff742c102f2135c90a5540dcabaed1f6c -->
 # Changelog
 
 ## Unreleased
@@ -36,3 +36,4 @@
 - T1.4.7: 한국어 문서가 dry 문체를 따른다 — 동작 동사, 비유 없음, 영문 기술 용어. T1.4가 7개 하위 항목과 함께 완료된다.
 - T2.1: Go module이 document skeleton으로 시작한다 — header comment, 제목, preamble, frontmatter block, H2 section의 strict parse와 canonical render, P1·P2 round-trip test와 header diagnostic.
 - T2.5: codec가 저장소 corpus에서 P1과 P2를 증명한다 — 선택된 모든 문서가 diagnostic 없이 parse되고 byte 단위로 재출력되며, CRLF 복사본이 안정적으로 재출력된다. grammar는 실제 문서의 H2·H3 heading과 header-title 인접을 받아들인다.
+- T2.4: 모든 parse 규칙이 located diagnostic을 보고한다 — 고정 rule 이름과 line·column. fenced block은 payload가 되어 구조 규칙은 unfenced 줄만 읽고, 닫히지 않은 frontmatter fence는 여는 줄을 지정한다.
