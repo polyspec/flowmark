@@ -1,0 +1,73 @@
+// Tests of applying a transition to a corpus document.
+package app
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+const board = "<!-- doc-id: plans-execution-checklist -->\n# Checklist\n\n## Work\n\n- [ ] T1.1 Write the parser\n- [~] T2.1 Print the union\n  - Criteria: it prints.\n- [ ] T3.1 Keep the gate\n"
+
+func rootWith(t *testing.T, text string) string {
+	t.Helper()
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "docs", "plans"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "docs", "plans", "list.md"), []byte(text), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return root
+}
+
+func TestApplyWaitingToDoing(t *testing.T) {
+	root := rootWith(t, board)
+	if err := Transition(root, "docs/plans/list.md", "T1.1", "doing", ""); err != nil {
+		t.Fatal(err)
+	}
+	text, err := os.ReadFile(filepath.Join(root, "docs", "plans", "list.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "<!-- doc-id: plans-execution-checklist -->\n# Checklist\n\n## Work\n\n- [~] T1.1 Write the parser\n- [~] T2.1 Print the union\n  - Criteria: it prints.\n- [ ] T3.1 Keep the gate\n"
+	if string(text) != want {
+		t.Fatalf("text:\n%q\nwant:\n%q", string(text), want)
+	}
+}
+
+func TestApplyRequiresEvidence(t *testing.T) {
+	root := rootWith(t, board)
+	if err := Transition(root, "docs/plans/list.md", "T2.1", "done", ""); err == nil {
+		t.Fatal("done without evidence passes")
+	}
+	if err := Transition(root, "docs/plans/list.md", "T2.1", "done", "make test passes"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestTerminalIsRefused(t *testing.T) {
+	root := rootWith(t, board)
+	if err := Transition(root, "docs/plans/list.md", "T1.1", "done", "evidence"); err == nil {
+		t.Fatal("waiting -> done passes the table")
+	}
+	if err := Transition(root, "docs/plans/list.md", "T1.1", "doing", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := Transition(root, "docs/plans/list.md", "T1.1", "done", "make test passes"); err != nil {
+		t.Fatal(err)
+	}
+	if err := Transition(root, "docs/plans/list.md", "T1.1", "waiting", ""); err == nil {
+		t.Fatal("done -> waiting passes")
+	}
+}
+
+func TestWIPGate(t *testing.T) {
+	root := rootWith(t, board)
+	if err := Transition(root, "docs/plans/list.md", "T1.1", "doing", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := Transition(root, "docs/plans/list.md", "T3.1", "doing", ""); err == nil {
+		t.Fatal("the WIP gate opens a third doing item")
+	}
+}

@@ -44,3 +44,4 @@
 - T4.1: the executor runs one, all and count over the corpus rows — documents and checklist items as the first tables — with where predicates, ordering and limit; the task-ID ordering is segment-wise numeric, so T8.0.9 sorts before T8.0.10 and the suffix follows its base.
 - T4.2: the executor runs sum, avg, group_count and paginate — integer aggregates with a non-digit rejection, per-value counts, and a page with its total. T4 completes.
 - T8.1: the application encodes the transition table — done is terminal, a bypass carries its cause and retry condition, an impossible item its cause — with the five states mapped to the kit glyphs and the superseded spawn numbering T8.0.14-1, T8.0.14-2.
+- T8.2: applying a transition holds the table, the required fields and the WIP gate — at most two doing items beyond the done count — and rewrites the state glyph of the item line in place, leaving every other byte of the document alone.

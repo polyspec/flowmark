@@ -36,15 +36,15 @@ func GlyphOf(state string) string {
 	return glyphs[state]
 }
 
-// Transition is one allowed transition with the fields it requires on the item.
-type Transition struct {
+// Rule is one allowed transition with the fields it requires on the item.
+type Rule struct {
 	From, To string
 	Requires []string
 }
 
 // The transition table: done is terminal — a related issue spawns a superseded item instead
 // (spec 100-checklist).
-var transitions = []Transition{
+var transitions = []Rule{
 	{From: "waiting", To: "doing"},
 	{From: "doing", To: "done", Requires: []string{"evidence"}},
 	{From: "doing", To: "bypassed", Requires: []string{"cause", "retry"}},
@@ -53,13 +53,13 @@ var transitions = []Transition{
 }
 
 // CanTransition names the transition between two states, or none when the table refuses it.
-func CanTransition(from, to string) (Transition, bool) {
+func CanTransition(from, to string) (Rule, bool) {
 	for _, transition := range transitions {
 		if transition.From == from && transition.To == to {
 			return transition, true
 		}
 	}
-	return Transition{}, false
+	return Rule{}, false
 }
 
 // SupersededID returns the next suffixed ID of a base for a related issue of a done item:
