@@ -42,3 +42,4 @@
 - T3.2: `make validate` runs `flowmark validate` over the corpus directory with the selection
   of config/documents.json, and the corpus of this repository passes. T3 completes.
 - T4.1: the executor runs one, all and count over the corpus rows — documents and checklist items as the first tables — with where predicates, ordering and limit; the task-ID ordering is segment-wise numeric, so T8.0.9 sorts before T8.0.10 and the suffix follows its base.
+- T4.2: the executor runs sum, avg, group_count and paginate — integer aggregates with a non-digit rejection, per-value counts, and a page with its total. T4 completes.

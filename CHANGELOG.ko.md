@@ -1,5 +1,5 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 0dcac2b47402d05828a67bc8a307269b6133da6fa611f6a50514f208d3fca285 -->
+<!-- source-sha256: 18269b44ed5cebce1852528eb8f47bc946c949424d45ee9aa83f03fa0b5d14a9 -->
 # Changelog
 
 ## Unreleased
@@ -43,3 +43,4 @@
 - T3.2: go run ./cmd/flowmark validate .
 [validate] the corpus passes이 config/documents.json의 선택으로 corpus directory 위에서 를 실행하고 이 저장소의 corpus가 통과한다. T3가 완료된다.
 - T4.1: executor가 corpus row 위에서 one·all·count를 실행한다 — 첫 table로 documents와 checklist items — where predicate·ordering·limit와 함께. task-ID ordering은 segment별 숫자라 T8.0.9가 T8.0.10 앞에 오고 suffix는 base를 따른다.
+- T4.2: executor가 sum·avg·group_count·paginate를 실행한다 — 숫자 아닌 값 거부와 함께 정수 aggregate, 값별 count, total을 동반한 page. T4가 완료된다.
