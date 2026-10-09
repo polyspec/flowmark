@@ -1,5 +1,5 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 88ab08357130b8beeb3e752875ab3a673804b78a6546e9c55e798bd87f7d9d49 -->
+<!-- source-sha256: 9d7830bede280f21fe50b0518e04c37523994151ccf9e2478f5e4dd7d6078def -->
 # Changelog
 
 ## Unreleased
@@ -22,3 +22,4 @@
   `package.json`과 `sidecar.json` manifest를 얹은 단일 언어 Go로 유지하고, 언어별 package는
   요구사항이 이름을 붙일 때 만든다.
 - T1.4.2: 10-canonical-format이 멱등성 명제 2개, 보존 boundary를 가진 skeleton, 문서 grammar, frontmatter profile, type-directed ordering을 가진 task-ID grammar, encoding 규칙을 서술한다.
+- T1.4.3: 20-document-model이 folder=table, file=row, column mapping, child table, 하나의 row인 번역 쌍, frontmatter binding을 서술한다.
