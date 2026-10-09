@@ -11,3 +11,7 @@ refs-check: ## Check that every task ID a document names resolves to a checklist
 test: ## Run the tests of the repository's own code and scripts; offline
 	node --test tests/*.test.mjs
 	go test ./...
+
+.PHONY: validate
+validate: ## Validate the corpus: keys, references and the strict parse; offline
+	go run ./cmd/flowmark validate .

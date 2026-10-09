@@ -1,5 +1,5 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 5331459ec0d2fc64b66f1e9b3d39a2ca73868aac7a419a575e8b72427beea2a8 -->
+<!-- source-sha256: 72ec35fd892c5d1494caa4647ce5f916d0e9785645d8e8c368dbbde2e2ceac94 -->
 # Changelog
 
 ## Unreleased
@@ -40,3 +40,5 @@
 - T2.2: frontmatter가 YAML 1.2 core subset으로 parse된다 — scalar·quoted scalar·sequence·literal block — 그리고 canonical로 재출력된다. comment·flow style·anchor·tab indent·중복 key는 located 거부다.
 - T2.3: child block이 row로 추출된다 — kit grammar의 checklist 항목(상태·ID·제목·연속 줄)과 markdown table(header·cell) — unfenced payload에서만. malformed 항목은 located 거부다. T2가 완료된다.
 - T3.1: corpus validator가 문서 directory를 검사한다 — strict parse finding, corpus 전체의 doc-id·item ID 유일성, 산문의 모든 task-ID token(fenced block·inline code 제외)의 item 해석.
+- T3.2: go run ./cmd/flowmark validate .
+[validate] the corpus passes이 config/documents.json의 선택으로 corpus directory 위에서 를 실행하고 이 저장소의 corpus가 통과한다. T3가 완료된다.

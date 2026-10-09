@@ -74,3 +74,16 @@ func TestFencedAndInlineExcluded(t *testing.T) {
 		t.Fatalf("findings: %v", found)
 	}
 }
+
+func TestSelectionExcludes(t *testing.T) {
+	vendored := "<!-- doc-id: vendored -->\n# V\n\n## Group\n\n- [o] K1 Fixture item\n"
+	root := t.TempDir()
+	write(t, map[string]string{"docs/a.md": clean, "docs/list.md": checklist, "tests/kit/fixture.md": vendored})
+	found, err := ValidateSelected(root, []string{"**/*.md"}, []string{"tests/kit/**"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(found) != 0 {
+		t.Fatalf("findings: %v", found)
+	}
+}
