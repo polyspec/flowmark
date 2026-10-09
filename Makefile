@@ -2,3 +2,11 @@
 include scripts/kit/kit.mk
 
 .DEFAULT_GOAL := kit-test
+
+.PHONY: refs-check
+refs-check: ## Check that every task ID a document names resolves to a checklist item; offline
+	node scripts/check-refs.mjs
+
+.PHONY: test
+test: ## Run the tests of the repository's own scripts; offline
+	node --test tests/*.test.mjs

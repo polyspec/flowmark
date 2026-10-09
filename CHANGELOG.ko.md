@@ -1,5 +1,5 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 7300e4f2f3778789aa2da908c5a3cecd5e9ff295fc042f3c53b7ed3ec5aecbc4 -->
+<!-- source-sha256: b3fd2ae883e70f4bf6e76701d33720f4eeba67924c787c20a1287c17874c8d20 -->
 # Changelog
 
 ## Unreleased
@@ -14,3 +14,6 @@
   `make kit-check`) tracker를 구성한다: config/checklist.json이 실행 checklist 쌍을 상태
   5종으로 읽고 config/documents.json이 문서 쌍과 changelog를 선택한다. `make documents-check`가
   통과한다.
+- T1.3: `make refs-check`가 config/checklist.json의 checklist와 선택된 문서의 prose(fenced block과
+  inline code 제외)를 읽고, 어떤 항목으로도 해석되지 않는 task ID를 file·line·column을 붙인 finding으로
+  보고한다. `make test`가 이것을 덮는다.

@@ -9,7 +9,7 @@
   - Completion criteria: every audit blocker appears as a ruling in docs/plans/design-plan.md, the Korean twin holds the English source-sha256, and the plan revision commits.
 - [o] T1.2 Vendor polyspec/kit and configure the trackers (requires T1.0)
   - Completion criteria: `make kit-check` and `make documents-check` pass on the vendored tree with config/checklist.json and config/documents.json authored.
-- [ ] T1.3 Register the stopgap ID reference checker (requires T1.2)
+- [o] T1.3 Register the stopgap ID reference checker (requires T1.2)
   - Completion criteria: every task ID token in docs/ resolves to a checklist item and the check is part of the document tooling.
 
 ## T1b Specifications

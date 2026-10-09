@@ -13,3 +13,6 @@
   `make kit-check`) and configures the trackers: config/checklist.json reads the
   execution-checklist pair with the five states and config/documents.json selects the document
   pairs and the changelog; `make documents-check` passes.
+- T1.3: `make refs-check` reads the checklists of config/checklist.json and the prose of every
+  selected document (fenced blocks and inline code excluded) and reports each task ID that
+  resolves to no item as a finding with its file, line and column; `make test` covers it.
