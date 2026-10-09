@@ -25,6 +25,7 @@
 - [o] T1.4.5 Write docs/spec/40-ops.md(.ko)
 - [o] T1.4.6 Write docs/spec/50-constraints.md(.ko)
 - [o] T1.4.7 Rewrite the Korean documents in the dry style — no metaphor, action verbs, English technical terms (requires T1.4.6)
+- [o] T1.4.8 State the aggregate and split shapes in the document model: one file, one-to-many linked files, and one-to-many-to-one (follow-up of T1.4.7)
 - [ ] T1.5 Write the remaining specifications (requires T1.4)
   - Completion criteria: the capability table in full, three scoped skeletons, and 100-checklist and 110-open-questions in full; it completes when T1.5.1 through T1.5.6 complete.
 - [o] T1.5.1 Write docs/spec/60-dialect.md(.ko) with the capability table in full

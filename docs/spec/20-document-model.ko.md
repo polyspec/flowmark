@@ -1,5 +1,5 @@
 <!-- doc-id: spec-document-model -->
-<!-- source-sha256: 3c28262843b01a45a147e6ce95fec0bd8b576550fa5755a4fbfc4b3196c8a9e3 -->
+<!-- source-sha256: 45685199034e440f5728633facaee4acf3d59f4c1a8f6923ea798a04c5f26604 -->
 # 문서 모델
 
 [English](20-document-model.md)
@@ -38,6 +38,22 @@
   action은 restrict뿐이다 ([제약](50-constraints.ko.md)).
 - **markdown-table cell은 줄바꿈을 가질 수 있는 값을 담을 수 없다**; schema는 그런 column을
   checklist나 section 배치에 둔다.
+
+## Aggregate와 분할
+
+세 shape가 checklist와 그 내용이 파일에 놓이는 방식을 포괄한다. 모두 같은 primitive — file
+as row, child block, foreign-key column — 로 구성된다:
+
+- **단일 파일 (aggregate).** checklist와 내용과 checkbox가 하나의 문서다: item이 그 안의
+  child row다.
+- **1:n (분할).** 부모 문서가 제목·index·checkbox를 가지고, 각 상세는 자기 table의 문서로서
+  foreign-key column(item ID 또는 doc-id)으로 부모 항목에 묶인다. 각 상세는 자기 table의
+  schema를 따른다.
+- **1:n:1 (두 홉).** 중간 문서가 foreign-key column으로 정확히 하나의 부모 항목에 묶이고 그
+  자신이 child checklist block을 가진다.
+
+foreign-key column은 restrict뿐이다: 없는 부모나 없는 상세는 located dangling finding이지
+cascade가 아니다.
 
 ## Binding
 

@@ -48,3 +48,4 @@
 - T8.3: `flowmark items` lists the corpus items and `flowmark transition` applies one through
   the state machine; the walk now enters a dot root, a Korean twin registers no second
   keys, and the changelog examples carry their IDs in code spans. T8 completes.
+- T1.4.8: 20-document-model states the aggregate and the split shapes — one file, one-to-many linked files, one-to-many-to-one — all built from the file-as-row, child-block and foreign-key-column primitives, with restrict-only keys.

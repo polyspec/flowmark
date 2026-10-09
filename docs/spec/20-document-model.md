@@ -40,6 +40,22 @@ every byte of a document belongs to exactly one modeled place, or the parser rep
 - **A markdown-table cell cannot hold a value that may contain a newline**; the schema places
   such columns in checklist or section layouts instead.
 
+## Aggregates and splits
+
+Three shapes cover how a checklist and its content sit in files, all built from the same
+primitives — file as row, child block, foreign-key column:
+
+- **One file (aggregate).** The checklist, its content and its checkboxes are one document:
+  the items are child rows inside it.
+- **One-to-many (split).** The parent document holds the titles, the index and the checkboxes;
+  each detail is a document of its own table, bound to the parent item by a foreign-key
+  column (an item ID or a doc-id). Every detail belongs to the schema of its table.
+- **One-to-many-to-one (two hops).** An intermediate document binds to exactly one parent
+  item by a foreign-key column and itself carries a child checklist block.
+
+A foreign-key column is restrict-only: a missing parent or a missing detail is a located
+dangling finding, never a cascade.
+
 ## Bindings
 
 The frontmatter carries the row's data plus the bindings: `table` names the owning table,
