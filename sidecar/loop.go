@@ -33,6 +33,7 @@ type operation struct {
 	Title     string `json:"title"`
 	State     string `json:"state"`
 	Evidence  string `json:"evidence"`
+	After     string `json:"after"`
 }
 
 // Serve reads the host messages and answers each: a closed handshake answers closed, a page
@@ -117,6 +118,11 @@ func run(root string, operation *operation) (string, error) {
 			return "", err
 		}
 		return fmt.Sprintf("%s added", operation.ID), nil
+	case "move":
+		if err := app.MoveItem(root, operation.Path, operation.ID, operation.After); err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("%s moved", operation.ID), nil
 	case "remove":
 		if err := app.RemoveItem(root, operation.Path, operation.ID); err != nil {
 			return "", err
