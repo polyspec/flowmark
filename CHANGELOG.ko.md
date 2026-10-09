@@ -1,5 +1,5 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 32847cb2eebc6075aa29b53f08574483188859fd9b0b704ee1d474fa6819414f -->
+<!-- source-sha256: d3ffaa843613e9e7b5c54db48de4519b10193cdff1ae734a95382f99a6e1a986 -->
 # Changelog
 
 ## Unreleased
@@ -34,3 +34,4 @@
 - T1.5.6: 110-open-questions가 열린 결정 7건을 권고와 결정 조건으로 등록한다.
 - T1.4.1: 00-overview가 범위, 강제력 요약, 용어, 비목표, 문서 지도를 쓴다.
 - T1.4.7: 한국어 문서가 dry 문체를 따른다 — 동작 동사, 비유 없음, 영문 기술 용어. T1.4가 7개 하위 항목과 함께 완료된다.
+- T2.1: Go module이 document skeleton으로 시작한다 — header comment, 제목, preamble, frontmatter block, H2 section의 strict parse와 canonical render, P1·P2 round-trip test와 header diagnostic.
