@@ -1,5 +1,5 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: f6545e08ebbe17219b94206d997fa8169304de3dbd5c685c69c460a5a23ad448 -->
+<!-- source-sha256: 88ab08357130b8beeb3e752875ab3a673804b78a6546e9c55e798bd87f7d9d49 -->
 # Changelog
 
 ## Unreleased
@@ -21,3 +21,4 @@
   명세의 protocol v1) — 를 가지고, GUI는 자기 repo의 soksak plugin으로 출시된다. 저장소는
   `package.json`과 `sidecar.json` manifest를 얹은 단일 언어 Go로 유지하고, 언어별 package는
   요구사항이 이름을 붙일 때 만든다.
+- T1.4.2: 10-canonical-format이 멱등성 명제 2개, 보존 boundary를 가진 skeleton, 문서 grammar, frontmatter profile, type-directed ordering을 가진 task-ID grammar, encoding 규칙을 서술한다.

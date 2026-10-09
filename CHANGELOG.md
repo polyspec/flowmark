@@ -20,3 +20,4 @@
   (protocol v1 of the soksak core specification) — and the GUI ships as a soksak plugin in its own
   repository; the repository stays single-language Go with a `package.json` and a `sidecar.json`
   manifest, and per-language packages appear only when a requirement names them.
+- T1.4.2: 10-canonical-format states the two idempotency propositions, the skeleton with the preservation boundary, the document grammar, the frontmatter profile, the task-ID grammar with type-directed ordering, and the encoding rules.
