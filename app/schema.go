@@ -1,36 +1,11 @@
 package app
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
-
-	"github.com/polyspec/flowmark/codec"
 )
-
-// SchemaFromDocument reads the state machine that the checklist document declares in its
-// frontmatter — the literal block under the state_machine key holds the JSON. A document
-// without a declaration gives the default five-state machine.
-func SchemaFromDocument(root, relativePath string) (StateSchema, error) {
-	path := filepath.Join(root, filepath.FromSlash(relativePath))
-	text, err := os.ReadFile(path)
-	if err != nil {
-		return StateSchema{}, err
-	}
-	document, _ := codec.Parse(string(text))
-	for _, entry := range document.FM {
-		if entry.Key != "state_machine" || len(entry.Literal) == 0 {
-			continue
-		}
-		var schema StateSchema
-		if err := json.Unmarshal([]byte(strings.Join(entry.Literal, "\n")), &schema); err == nil && len(schema.States) > 0 {
-			return schema, nil
-		}
-	}
-	return StateSchema{}, fmt.Errorf("the document holds no Mermaid stateDiagram-v2 block")
-}
 
 // SchemaMermaid writes the state machine as a Mermaid stateDiagram-v2 with a left-to-right
 // direction: the states as nodes, the transitions as edges, the requires as edge labels,
@@ -46,13 +21,18 @@ func SchemaMermaid(schema StateSchema) string {
 	}
 	// state descriptions: the name is the identifier, the glyph+label is the description
 	for _, s := range schema.States {
-		fmt.Fprintf(&out, "    %s : %s\n", s.Name, s.Label)
-	}
-	for i, s := range schema.States {
-		if i == 0 || !hasIncoming[s.Name] {
-			fmt.Fprintf(&out, "    [*] --> %s\n", s.Name)
+		if s.Glyph != "" {
+			fmt.Fprintf(&out, "    %s : %s %s\n", s.Name, s.Glyph, s.Label)
+		} else {
+			fmt.Fprintf(&out, "    %s : %s\n", s.Name, s.Label)
 		}
 	}
+	// the initial state comes first; a schema without one falls back to the first state
+	initial := schema.Initial
+	if initial == "" && len(schema.States) > 0 {
+		initial = schema.States[0].Name
+	}
+	fmt.Fprintf(&out, "    [*] --> %s\n", initial)
 	for _, t := range schema.Transitions {
 		if len(t.Requires) > 0 {
 			fmt.Fprintf(&out, "    %s --> %s: %s\n", t.From, t.To, strings.Join(t.Requires, ", "))
@@ -61,26 +41,18 @@ func SchemaMermaid(schema StateSchema) string {
 		}
 	}
 	for _, s := range schema.States {
-		if !hasOutgoing[s.Name] {
+		if !hasOutgoing[s.Name] && s.Name != initial {
 			fmt.Fprintf(&out, "    %s --> [*]\n", s.Name)
 		}
 	}
 	return out.String()
 }
 
-func labelOf(schema StateSchema, name string) string {
-	for _, s := range schema.States {
-		if s.Name == name {
-			return s.Label
-		}
-	}
-	return name
-}
-
 // ApplySchema rewrites the checklist after a schema change and cascades the effects on
 // the items: a renamed glyph rewrites every item that carries it, a removed state removes
 // every item in it (with its children), and a new state or a transition change touches
-// nothing — it only governs the future.
+// nothing — it only governs the future. The new schema lands in the Mermaid block, the
+// only place a document declares its state machine.
 func ApplySchema(root, relativePath string, old, new StateSchema) error {
 	path := filepath.Join(root, filepath.FromSlash(relativePath))
 	text, err := os.ReadFile(path)
@@ -146,7 +118,7 @@ func ApplySchema(root, relativePath string, old, new StateSchema) error {
 		}
 		lines = kept
 	}
-	// Pass 3: write the new schema into the frontmatter literal block.
+	// Pass 3: write the new schema into the Mermaid block.
 	newText, err := writeSchema(strings.Join(lines, "\n"), new)
 	if err != nil {
 		return err
@@ -154,67 +126,57 @@ func ApplySchema(root, relativePath string, old, new StateSchema) error {
 	return os.WriteFile(path, []byte(newText), 0o644)
 }
 
-// writeSchema replaces the state_machine literal block in the frontmatter with the new
-// JSON, or inserts one when the document declares none.
+// writeSchema replaces the diagram of the first Mermaid block with the new schema, or
+// inserts one after the H1 title when the document declares none.
 func writeSchema(text string, schema StateSchema) (string, error) {
-	jsonText, err := json.MarshalIndent(schema, "", "  ")
-	if err != nil {
-		return "", err
-	}
-	document, _ := codec.Parse(text)
-	hasBlock := false
-	for _, entry := range document.FM {
-		if entry.Key == "state_machine" {
-			hasBlock = true
-			break
-		}
-	}
-	if !hasBlock {
-		// insert a frontmatter block after the header comments and title
-		lines := strings.Split(text, "\n")
-		insert := 0
-		for i, line := range lines {
-			if strings.HasPrefix(line, "# ") {
-				insert = i + 1
-				break
-			}
-		}
-		block := []string{"---", "state_machine: |"}
-		for _, line := range strings.Split(string(jsonText), "\n") {
-			block = append(block, "  "+line)
-		}
-		block = append(block, "---", "")
-		lines = append(lines[:insert], append(block, lines[insert:]...)...)
-		return strings.Join(lines, "\n"), nil
-	}
-	// replace the existing literal block
+	diagram := SchemaMermaid(schema)
 	lines := strings.Split(text, "\n")
 	inBlock := false
 	replaced := false
 	var out []string
-	for i := 0; i < len(lines); i++ {
-		line := lines[i]
-		if strings.HasPrefix(line, "state_machine: |") {
-			inBlock = true
-			out = append(out, line)
-			for _, jl := range strings.Split(string(jsonText), "\n") {
-				out = append(out, "  "+jl)
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if !inBlock {
+			if trimmed == "```mermaid" {
+				inBlock = true
 			}
+			out = append(out, line)
+			continue
+		}
+		// inside the first mermaid block: stop at the fence, drop the old diagram
+		if trimmed == "```" {
+			for _, diagramLine := range strings.Split(strings.TrimRight(diagram, "\n"), "\n") {
+				out = append(out, "    "+diagramLine)
+			}
+			out = append(out, "```")
+			inBlock = false
 			replaced = true
 			continue
 		}
-		if inBlock {
-			if strings.HasPrefix(line, "  ") {
-				continue // skip the old block content
-			}
-			inBlock = false
+	}
+	if replaced {
+		return strings.Join(out, "\n"), nil
+	}
+	if inBlock {
+		// an unterminated block: refuse rather than guess
+		return "", fmt.Errorf("the Mermaid block of the document is unterminated")
+	}
+	// no block: insert one after the H1 title
+	fenced := []string{"", "## State machine", "", "```mermaid"}
+	for _, diagramLine := range strings.Split(strings.TrimRight(diagram, "\n"), "\n") {
+		fenced = append(fenced, "    "+diagramLine)
+	}
+	fenced = append(fenced, "```", "")
+	insert := 0
+	for i, line := range lines {
+		if strings.HasPrefix(line, "# ") {
+			insert = i + 1
+			break
 		}
-		out = append(out, line)
 	}
-	if !replaced {
-		return "", fmt.Errorf("the state_machine block was not found for replacement")
-	}
-	return strings.Join(out, "\n"), nil
+	joined := append(append([]string{}, lines[:insert]...), fenced...)
+	joined = append(joined, lines[insert:]...)
+	return strings.Join(joined, "\n"), nil
 }
 
 // ParseMermaid reads a Mermaid stateDiagram-v2 text into a schema: `[*] --> X` names the
@@ -226,6 +188,7 @@ func ParseMermaid(text string) (StateSchema, error) {
 	var transitions []TransitionDef
 	stateOrder := []string{}
 	seen := map[string]bool{}
+	initial := ""
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "stateDiagram-v2") || strings.HasPrefix(line, "direction") {
@@ -264,7 +227,10 @@ func ParseMermaid(text string) (StateSchema, error) {
 				requires = strings.TrimSpace(rest[colon+1:])
 			}
 			if from == "[*]" {
-				// initial state — record the order
+				// initial state — the first one wins
+				if initial == "" {
+					initial = to
+				}
 				if !seen[to] {
 					seen[to] = true
 					stateOrder = append(stateOrder, to)
@@ -304,11 +270,12 @@ func ParseMermaid(text string) (StateSchema, error) {
 			}
 		}
 	}
-	return StateSchema{States: ordered, Transitions: transitions}, nil
+	return StateSchema{States: ordered, Transitions: transitions, Initial: initial}, nil
 }
 
 // SchemaFromMermaidBlock reads the schema from the first fenced mermaid block of the
-// document that holds a stateDiagram-v2.
+// document that holds a stateDiagram-v2. A document without one holds no state machine —
+// there is no default.
 func SchemaFromMermaidBlock(root, relativePath string) (StateSchema, error) {
 	path := filepath.Join(root, filepath.FromSlash(relativePath))
 	text, err := os.ReadFile(path)
@@ -338,61 +305,4 @@ func SchemaFromMermaidBlock(root, relativePath string) (StateSchema, error) {
 		}
 	}
 	return StateSchema{}, fmt.Errorf("the document holds no Mermaid stateDiagram-v2 block")
-}
-
-// TransitionRule is one allowed transition from the document's Mermaid block.
-type TransitionRule struct {
-	From, To string
-	Requires []string
-}
-
-// RulesFromDocument reads the transition rules from the document's Mermaid block.
-// No Mermaid block: no transitions are allowed — the markdown is the only authority.
-func RulesFromDocument(root, relativePath string) (map[string]map[string][]string, error) {
-	schema, err := SchemaFromMermaidBlock(root, relativePath)
-	if err != nil {
-		return nil, err
-	}
-	rules := map[string]map[string][]string{}
-	for _, t := range schema.Transitions {
-		if rules[t.From] == nil {
-			rules[t.From] = map[string][]string{}
-		}
-		rules[t.From][t.To] = t.Requires
-	}
-	return rules, nil
-}
-
-// GlyphForState reads the glyph for a state name from the document's Mermaid block.
-func GlyphForState(root, relativePath, stateName string) (string, error) {
-	schema, err := SchemaFromMermaidBlock(root, relativePath)
-	if err != nil {
-		return "", err
-	}
-	for _, s := range schema.States {
-		if s.Name == stateName {
-			return s.Glyph, nil
-		}
-	}
-	// also check by glyph (the caller may pass a glyph)
-	for _, s := range schema.States {
-		if s.Glyph == stateName {
-			return s.Glyph, nil
-		}
-	}
-	return "", fmt.Errorf("the state %q is not in the state machine of %s", stateName, relativePath)
-}
-
-// StateNameForGlyph reads the state name for a glyph from the document's Mermaid block.
-func StateNameForGlyph(root, relativePath, glyph string) (string, error) {
-	schema, err := SchemaFromMermaidBlock(root, relativePath)
-	if err != nil {
-		return "", err
-	}
-	for _, s := range schema.States {
-		if s.Glyph == glyph {
-			return s.Name, nil
-		}
-	}
-	return glyph, nil // not declared: the glyph is its own name
 }

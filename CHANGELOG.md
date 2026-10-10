@@ -3,6 +3,13 @@
 
 ## Unreleased
 
+- T8.5: the Mermaid block of the document is the only transition authority. Transition reads the
+  edges, the required evidence and the glyphs from the document's own state machine — an
+  undeclared edge is refused — AddItem lands a new item in the state the `[*]` line names, the
+  WIP gate counts the kit glyphs `[~]` against `[o]` regardless of the state names, ApplySchema
+  rewrites the Mermaid block itself, and the built-in five-state table, the frontmatter schema
+  reader, the unused document-driven wrappers and the dead corpus mermaid walker are gone.
+
 - T1.0: the repository bootstraps with its document pairs (README, AGENTS, CHANGELOG), the
   `.flowmark/` ignore rule and this execution checklist pair.
 - T1.1: the design plan folds the three-lane adversarial audit into rulings — the executor seam

@@ -1,8 +1,14 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: e4301232ee24487253631b10f7fb40fd627fab318adb273f4067e89c5ce9f007 -->
+<!-- source-sha256: e43c1b38e58f1ab1c7d54652a9847b34260dcc24480534d228ed679667470eeb -->
 # Changelog
 
 ## Unreleased
+
+- T8.5: 문서의 Mermaid block이 유일한 transition 권위다. Transition이 edge·필수 evidence·glyph를
+  문서 자신의 state machine에서 읽고 — 선언되지 않은 edge는 거부된다 — AddItem이 `[*]` 줄이 가리키는
+  상태에 새 항목을 놓으며, WIP gate가 상태 이름과 무관하게 kit glyph `[~]`를 `[o]`에 대해 세고,
+  ApplySchema가 Mermaid block 자체를 다시 쓰고, 내장 5상태 table·frontmatter schema reader·쓰이지
+  않는 문서 기반 wrapper·죽은 corpus mermaid walker는 사라진다.
 
 - T1.0: 저장소가 문서 쌍(README, AGENTS, CHANGELOG), `.flowmark/` ignore 규칙, 이 실행 checklist
   쌍과 함께 bootstrap된다.
