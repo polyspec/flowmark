@@ -62,13 +62,10 @@ func TestSchemaFromDocument(t *testing.T) {
 func TestSchemaFromDocumentDefault(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "plain.md")
-	os.WriteFile(path, []byte("<!-- doc-id: p -->\n# P\n\n## G\n\n- [ ] T1 One\n"), 0o644)
-	schema, err := SchemaFromDocument(root, "plain.md")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(schema.States) != 5 {
-		t.Fatalf("default states: %+v", schema.States)
+	os.WriteFile(path, []byte("# P\n\n## G\n\n- [ ] T1 One\n"), 0o644)
+	_, err := SchemaFromMermaidBlock(root, "plain.md")
+	if err == nil {
+		t.Fatal("a document without a Mermaid block holds no state machine")
 	}
 }
 
