@@ -78,6 +78,12 @@ func Serve(in io.Reader, out io.Writer) {
 
 func run(root string, operation *operation) (string, error) {
 	switch operation.Operation {
+	case "schema.mermaid":
+		schema := app.Schema()
+		if declared := declaredFromMermaid(root); declared != nil {
+			schema = *declared
+		}
+		return app.SchemaMermaid(schema), nil
 	case "schema":
 		schema := app.Schema()
 		// the checklist document declares its state machine in the frontmatter;
