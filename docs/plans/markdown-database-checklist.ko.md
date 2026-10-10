@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database-checklist -->
-<!-- source-sha256: f0a00246480a8e37be17a107e3b94081f824db3ba00a89231655ffd49283d231 -->
+<!-- source-sha256: 2a36c3d8ca2820802cb7ade6b50008a004d0664838b53084418e85f4322b336c -->
 # markdown database checklist
 
 ## T12 markdown database
@@ -11,6 +11,8 @@
   - 완료 기준: spec 10, 20, 30, 50, 70, 100, 110이 계획의 "읽을 수 있는 문서"와 저장 문법의 모든 규칙을 근거를 갖춘 명제로 적고, `make documents-check`와 `make refs-check`가 통과한다.
 - [o] T12.1-2 다른 heading이 가져갈 수 없는 상세 heading: 상세 heading은 `<h> <table> row <key>`이고 anchor는 `<table>-row-<소문자 key>`다. key는 `--`를 담지 않고 `-`로 끝나지 않는다. 상세 anchor는 GitHub의 두 slug 중복 처리(github.com의 counter와 github-slugger의 건너뛰기) 모두에서 비어 있어야 한다. anchor를 가져갈 수 있는 것은 payload heading과 `files` 행의 H1 제목뿐이며, 그렇게 만드는 쓰기는 `CONSTRAINT`다. link는 GitHub식 heading slug를 쓰는 viewer에서 이어진다고 명시한다. 같은 file의 table과 같은 이름의 markdown column 또는 block table에 관한 spec 30 규칙은 그 catalog 검사와 함께 철회한다. 원인: 여러 부모 행 아래 반복되는 block heading이 slug `<table>-1`, `<table>-2`를 가져가는데 이는 상세 heading `<table> 1`, `<table> 2`의 anchor이므로, 정수 key의 block table이 두 부모 행 아래 있는 모든 corpus가 깨진다 (T12.1-1, T12.2.1-1 후속)
   - 완료 기준: spec 10, 20, 30, 50, 100과 계획, 그 twin이 새 heading, anchor, key 규칙을 적고, catalog에 same-file 이름 규칙이 없으며 그 테스트도 함께 제거되고, `go test ./catalog/...`, `make documents-check`, `make refs-check`가 통과한다.
+- [ ] T12.1-4 상세 anchor는 이름을 든 모든 viewer에서 지켜지고 key는 그 모양을 지킨다: 충돌 검사는 heading의 보수적인 fold 하나(GitHub slug에서 `-`의 연속을 `-` 하나로, 첫 글자 앞의 문자를 없애고, 끝의 `-`를 없앤 것)를 다른 모든 heading의 fold와, 끝의 `-<숫자>`가 있을 때와 없을 때 모두 비교하며, payload의 `{#<anchor>}` 속성 묶음과 `id`나 `name`이 anchor인 payload HTML도 거절한다. 충돌을 들여오는 모든 쓰기(제목 갱신, payload 쓰기, 행 삽입, key 갱신, 이동, 상세 section 생성)는 `CONSTRAINT`다. link는 GitHub, GitLab, VS Code에서 이어진다고 적고 Pandoc은 같은 anchor를 만든다고 적는다. key는 `-_`를 담지 않는다. markdown table의 기본 key column은 정수, `bool`, `varchar`, `uuid`, `date` column이며 다른 type은 catalog 오류이고, 음수 정수 key는 `CONSTRAINT`이며, key는 key 모양에 따라 ASCII다. 원인: T12.1-2의 적대 검증이 GitLab, VS Code, Pandoc이 GitHub slug로는 갈리는 payload heading을 상세 anchor로 접는다는 것, `-_`가 강조를 연다는 것, `time`, `datetime`, `decimal`, `f64`, `bytes`와 음수 key는 key 모양을 결코 맞출 수 없다는 것, 충돌하는 쓰기 목록이 불완전하다는 것을 찾았다 (T12.1-2 후속)
+  - 완료 기준: spec 10, 20, 30과 그 twin이 각 규칙을 근거와 함께 적고, catalog가 그 key type을 허용과 거절 사례와 함께 거절하며, `go test ./catalog/...`, `make documents-check`, `make refs-check`가 통과한다.
 - [ ] T12.1-3 spec이 `files` codec에 필요했던 판정을 적는다: 읽을 때 column type이 아닌 값, 한 줄 규칙 위반, 없는 non-null field 또는 section, `-` list 항목으로 시작하는 본문, 가리키는 행이 없는 외래 key, 대소문자를 무시하고 겹치는 key는 `format.block`이며 같은 결함은 쓰기에서 `CONSTRAINT`다. 본문이 아닌 non-null `markdown` column은 언제나 있는 section이다. `#`뿐인 제목, 또는 끝의 `#` 연속이 공백이나 tab 뒤에 오는 제목은 마지막 `#`을 `\#`로 쓰고, ` \#`로 끝나는 제목은 `CONSTRAINT`다. field list 뒤의 빈 줄은 본문이나 section이 뒤따를 때만 서고, 문서는 LF 하나로 끝난다. table folder가 없으면 빈 table이다. 쓰기는 canonical이 아닌 값을 정규화하지 않고 `CONSTRAINT`로 거절한다 (T12.2.2 후속)
   - 완료 기준: spec 10, 20과 그 twin이 각 판정을 근거와 함께 적고, `files` codec 테스트가 사례마다 고정하는 spec 규칙을 밝히며, `make documents-check`와 `make refs-check`가 통과한다.
 - [ ] T12.2 저장 codec: `files`, `document`, `block` 저장을 list와 table 형식으로 parse·render하고 모든 저장의 P1/P2를 갖는다. orm `T62` 선행 (T12.1 선행)
