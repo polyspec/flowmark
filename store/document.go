@@ -279,8 +279,8 @@ func newDocParser(s *sink, rel string, lk Linker) *docParser {
 func (p *docParser) run(lay *docLayout, lines []string) []*docRec {
 	i := 0
 	if len(lines) > 0 {
-		if level, text, ok := headingOf(lines[0]); ok && level == 1 && trimWhite(text) == lay.table {
-			if text != lay.table {
+		if level, text, tab, ok := headingOf(lines[0]); ok && level == 1 && trimWhite(text) == lay.table {
+			if text != lay.table || tab {
 				p.warn(1, 3, RuleNoncanonical, "the H1 is written `# "+lay.table+"`")
 			}
 			i = 1
@@ -912,7 +912,7 @@ func (p *docParser) readDetail(lines []string, h heading, sub []heading, end int
 		return
 	}
 	key := parts[2]
-	if h.last != h.at || h.text != lay.table+" row "+key {
+	if h.last != h.at || h.tab || h.text != lay.table+" row "+key {
 		p.warn(h.at+1, 4, RuleNoncanonical, "the detail heading is written `"+marks+" "+lay.table+" row "+key+"`")
 	}
 	// Two detail sections of one file under one heading text collide, whatever block
@@ -979,16 +979,16 @@ func (p *docParser) readSection(lines []string, s heading, sEnd int, rec *docRec
 			return
 		}
 		rec.seen[name] = true
-		if s.text != name {
-			p.warn(s.at+1, 5, RuleNoncanonical, "the block heading has extra spaces")
+		if s.text != name || s.tab {
+			p.warn(s.at+1, 5, RuleNoncanonical, "the block heading is not written with one space after its hashes")
 		}
 		if rows := p.readChildBlock(lines, s, sEnd, child); len(rows) > 0 {
 			setBlock(rec.row, child.table, rows)
 		}
 		return
 	}
-	if s.text != name {
-		p.warn(s.at+1, 5, RuleNoncanonical, "the section heading has extra spaces")
+	if s.text != name || s.tab {
+		p.warn(s.at+1, 5, RuleNoncanonical, "the section heading is not written with one space after its hashes")
 	}
 	if _, ok := lay.sectionOf(name); !ok {
 		p.fail(s.at+1, 5, RuleSection, marks+" "+name+" is not a section of "+lay.table)

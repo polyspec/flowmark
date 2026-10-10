@@ -200,7 +200,7 @@ func (p *parser) readTitle(lines []string, row *Row) bool {
 		p.fail(1, 1, RuleBlock, "the file has no H1 title")
 		return false
 	}
-	level, text, ok := headingOf(lines[0])
+	level, text, _, ok := headingOf(lines[0])
 	if !ok || level != 1 {
 		p.fail(1, 1, RuleBlock, "the first line is not the H1 title `# <title>`")
 		return false
@@ -272,7 +272,7 @@ func (p *parser) readFields(lines []string, row *Row) int {
 
 // isATXHeading reports whether line is an ATX heading of any level.
 func isATXHeading(line string) bool {
-	_, _, ok := headingOf(line)
+	_, _, _, ok := headingOf(line)
 	return ok
 }
 
@@ -377,8 +377,8 @@ func (p *parser) readSections(lines []string, b int, row *Row, dp *docParser) {
 				continue
 			}
 			seen[name] = true
-			if h.text != name {
-				p.warn(headLine, 1, RuleNoncanonical, "the block heading has extra spaces")
+			if h.text != name || h.tab {
+				p.warn(headLine, 1, RuleNoncanonical, "the block heading is not written with one space after its hashes")
 			}
 			if rows := dp.readChildBlock(lines, h, end, child); len(rows) > 0 {
 				setBlock(row, child.table, rows)
@@ -395,8 +395,8 @@ func (p *parser) readSections(lines []string, b int, row *Row, dp *docParser) {
 			p.fail(headLine, 1, RuleSection, "the section "+name+" is written twice")
 		default:
 			seen[name] = true
-			if h.text != name {
-				p.warn(headLine, 1, RuleNoncanonical, "the section heading has extra spaces")
+			if h.text != name || h.tab {
+				p.warn(headLine, 1, RuleNoncanonical, "the section heading is not written with one space after its hashes")
 			}
 			region, _ := p.valueLines(lines, h.last+1, end, true)
 			v := joinLines(region)

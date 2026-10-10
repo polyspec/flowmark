@@ -156,6 +156,11 @@ func parseCases() []parseCase {
 		accept("10#single-line-places: title that is only two hashes", doc(`# #\#`, "- position: 1", "- done: true", "")),
 		noncanonical("10#single-line-places: title with an unescaped closing hash", 1, doc("# a #", "- position: 1", "- done: true", "")),
 		noncanonical("10#single-line-places: title with a tab before the closing hash", 1, doc("# a\t#", "- position: 1", "- done: true", "")),
+		noncanonical("10#single-line-places: title with a tab after its hash", 1, doc("#\tTitle", "- position: 1", "- done: true", "")),
+		accept("10#single-line-places: a hash run without a space is text", doc("# Title", "- position: 1", "- done: true", "", "##x", "")),
+		accept("10#single-line-places: seven hashes are text", doc("# Title", "- position: 1", "- done: true", "", "#######", "")),
+		reject("10#sections-and-their-values: hashes alone at the end of a line are an empty section heading", RuleSection, 8, doc("# Title", "- position: 1", "- done: true", "", "## evidence", "", "x", "##", "")),
+		noncanonical("10#sections-and-their-values: section heading with a tab after its hashes", 5, doc("# Title", "- position: 1", "- done: true", "", "##\tevidence", "", "x", "")),
 		noncanonical("10#single-line-places: escaped hash the write rule would not produce", 1, doc(`# C\#`, "- position: 1", "- done: true", "")),
 
 		// The field list: the stored scalar columns in column order.

@@ -1,8 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: e274976b57e278329b81e5851f363edb7d95be371c11be0a9cef0674a1dd7ec6 -->
+<!-- source-sha256: 9e9aac096245bb6f15bea645d0b3a6bc5a4db889fd3b6c0f24a6b68188e30d32 -->
 # Changelog
 
 ## Unreleased
+
+- T12.2.2-5: heading scanner가 CommonMark 0.31.2처럼 `#` 연속 뒤에 tab이 오는 ATX heading을 읽는다(줄 끝은 이미 읽었다). hash 뒤의 tab은 제목, section, block, 상세 heading의 비정규 철자(`format.noncanonical`)이며, scanner, section 경계, 상세 heading 파싱이 같은 읽기를 따른다. `##x`와 `#` 일곱 개는 여전히 텍스트다. spec 10은 상세 heading 규칙에 tab을 적는다.
 
 - T12.2.4: `block` storage codec이 부모 row의 scope 안의 child block을 parse하고 쓴다. block은 부모 section과 같은 level의 section이다: `files` row는 markdown section 뒤에 table 이름 순서로 level 2에 block을 두고, `document`와 block row는 detail section 안에서 그 section level에 둔다. block은 list 또는 table이며, 그 행들의 detail section이 뒤따르고, 재귀적이다. 행이 없는 block은 쓰지 않으며, 빈 block heading은 `format.noncanonical`이다. block 행은 중첩이 뜻하는 placement foreign key를 값으로 갖지 않고, `Row.Blocks`가 block마다 행을 저장 순서로 담는다. 쓰기는 선언되지 않은 block, 다른 table의 행, block 행에 준 placement key를 거절한다. T12.2.3의 쓰기 guard와 읽기 거절은 제거했고, production codec이 쓰는 `sp`를 test 파일에서 `store/row.go`로 옮겼다.
 

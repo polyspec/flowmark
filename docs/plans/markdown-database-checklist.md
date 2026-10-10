@@ -32,7 +32,7 @@
   - Completion criteria: specifications 10 and 20 and their twins state each ruling with its grounding and no longer disagree, verified by an adversarial review whose scope is this item's text; the codec tests name the rule each case pins; `make documents-check` and `make refs-check` pass.
 - [ ] T12.2.4-1 A block of `list` storage whose table has a state machine is covered: a fixture block with checkbox glyphs, states and nested rows, with accepting and rejecting cases and P1/P2 goldens (follow-up of T12.2.4)
   - Completion criteria: the fixture and its cases exist, the fuzz targets are seeded with the golden, and `go test -count=1 ./store/` passes.
-- [ ] T12.2.2-5 The codec reads an ATX heading whose `#` run is followed by a tab, as CommonMark does: `store/markdown.go` requires a space today (follow-up of T12.2.2-3)
+- [o] T12.2.2-5 The codec reads an ATX heading whose `#` run is followed by a tab, as CommonMark does: `store/markdown.go` requires a space today (follow-up of T12.2.2-3)
   - Completion criteria: accepting and rejecting cases pinned to commonmark.js 0.31.2, and `go test -count=1 ./store/` passes.
 - [ ] T12.2.2-6 The codecs apply the detail-anchor collision rule of T12.1-4: a heading other than a detail heading whose folds (F_G or F_M) equal a detail anchor's once a final digit run is removed, an attribute list setting an id equal to an anchor, and HTML `id` or `name` equal to an anchor are `CONSTRAINT` on write and `format.block` on read; no codec checks it today (follow-up of T12.1-4 and T12.2.3)
   - Completion criteria: accepting and rejecting cases for each fold, the digit-run removal, each attribute-list form and HTML, in files and document storage, and `go test -count=1 ./...` passes.

@@ -184,6 +184,8 @@ func documentParseCases() []docCase {
 		docReject("10#sections-and-their-values: a section written twice", RuleSection, 10, itemsOf("- [ ] T1 Plan done:false", "", "## items row T1", "", "### evidence", "", "a", "", "### evidence", "", "b")),
 		noncanonicalDoc("10#detail-sections: a detail heading with a wrong case of row", 4, itemsOf("- [ ] T1 Plan done:false", "", "## items Row T1", "", "A.")),
 		noncanonicalDoc("10#detail-sections: a detail heading with extra spaces", 4, itemsOf("- [ ] T1 Plan done:false", "", "## items  row T1", "", "A.")),
+		noncanonicalDoc("10#detail-sections: a detail heading with a tab after its hashes", 4, itemsOf("- [ ] T1 Plan done:false", "", "##\titems row T1", "", "A.")),
+		noncanonicalDoc("10#sections-and-their-values: a section heading with a tab after its hashes", 6, itemsOf("- [ ] T1 Plan done:false", "", "## items row T1", "", "###\tevidence", "", "a")),
 		noncanonicalDoc("10#detail-sections: a detail section without content", 4, itemsOf("- [ ] T1 Plan done:false", "", "## items row T1")),
 		noncanonicalDoc("10#detail-sections: a detail section directly after the list", 3, itemsOf("- [ ] T1 Plan done:false", "## items row T1", "", "A.")),
 
