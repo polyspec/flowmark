@@ -1,5 +1,5 @@
 <!-- doc-id: spec-overview -->
-<!-- source-sha256: d4b1c1e09d0b2b6492d42d0c58f44f49fd9dd3017c3c9ff416963a3c3cff5e3c -->
+<!-- source-sha256: 8bb22176e8cfe2086d41434a84d371d69a943b1fc67c3b4f282df069f05336fb -->
 # 개요
 
 [English](00-overview.md)
@@ -10,56 +10,67 @@ flowmark는 markdown 문법을 가진 텍스트 DB다. 파일이 database이고,
 
 ## 범위
 
-- **orm이 core다.** [polyspec/orm](https://github.com/polyspec/orm)이 markdown corpus를
-  MySQL·PostgreSQL·SQLite에 이은 네 번째 backend로 실행한다. shared planner가 IR request를
-  검증하고, markdown executor는 request를 직접 소비하며 SQL을 render하지 않는다.
-- **flowmark는 통합·응용 layer다.** 하나의 Go binary가 세 개의 thin face — CLI, MCP server,
-  soksak sidecar(soksak core 명세의 protocol v1) — 을 가지고, 저장소는 sync adapter(database,
-  GitHub, Jira)와 checklist application을 담는다. GUI는 자기 repo의 soksak plugin으로 출시되고,
-  모든 view는 자기 write path 없이 또 하나의 thin consumer다.
-- **corpus가 truth다.** corpus는 dbspec schema가 기술하는 markdown 문서의 directory tree다.
-  모든 write는 transaction 안에서 codec과 validator를 지나고, 모든 읽기는 같은 model API를
-  지난다. 외부 database는, 있다하더라도 sync adapter의 derived 또는 owning 쪽일 뿐 감춰진
-  mirror가 아니다.
+- **flowmark가 엔진이다.** Go binary 하나가 markdown database 엔진 — codec, validator, IR executor,
+  lock과 journal을 갖는 write path, 이력 — 과 그 얇은 face를 담는다: server, CLI, MCP server, soksak
+  sidecar(soksak core specification의 protocol v1). 모든 face는 같은 엔진을 돌리며 어느 것도 자기
+  write path를 갖지 않는다.
+- **orm은 flowmark에 IR executor로 접속한다.** [polyspec/orm](https://github.com/polyspec/orm)은
+  query layer다: client는 자기 process 안에서 validate와 plan을 하고 DSN scheme이 고른 driver로
+  database에 접속한다. scheme `markdown://`은 IR executor를 고른다 — client는 IR 요청을 검증하고 plan하지
+  않으며 flowmark server로 보내고, server는 행이나 orm 오류 하나로 답한다. orm은 markdown 엔진을 담지
+  않는다. 근거: orm 안의 엔진은 다섯 client가 각자 가져야 하고, 별도 엔진은 구현이 하나다.
+- **catalog가 schema다.** corpus root는 모든 table과 그 저장과 setting을 선언하는 dbspec 문서 set
+  `dbspec/*.dbs`를 담는다([schema](30-schema.md)). database가 schema를 행마다가 아니라 한 번만 두듯
+  문서는 schema 사본을 갖지 않는다. flowmark는 orm의 Go `engine/dbspec` package로 catalog를 읽고 다시
+  구현하지 않는다.
+- **corpus가 진실이다.** corpus는 catalog가 기술하는 markdown 문서의 directory tree다. 모든 쓰기는
+  transaction 안에서 codec과 validator를 지나고, 모든 읽기는 같은 executor를 지난다. 외부 database가
+  있다면 sync adapter의 파생 쪽이거나 소유 쪽이며, 숨은 mirror가 아니다.
+- **view는 소비자다.** GUI는 자기 repository의 soksak plugin으로 나간다. 칸반, 목록, 간트는 같은 행
+  위의 view이고 그 자체도 행으로 저장되며, 자기 write path를 갖지 않는다.
 
-## 강제력
+## 강제력의 약속
 
-DB 수준의 강제력을 가진 문서 형식: grammar 밖의 key, dangling 참조, type error, 불법 상태 전환은
-모두 located diagnostic `{file, line, column, rule, message}`가 된다 — 도구의 write에도, 사람의
-편집에도 똑같이. 멱등성은 관례가 아니라 명제다: parse된 canonical 문서를 emit하면 원본이
-재현되고, 같은 입력의 반복은 같은 결과와 상태를 낳는다.
+database 수준의 강제력을 가진 문서 형식: type을 벗어난 값, dangling 참조, 깨진 key, 불법 상태 전이,
+엔진을 우회한 상태 변경은 위치가 있는 진단 `{file, line, column, rule, message}`이다 — 엔진 자신의
+쓰기에도 사람의 편집에도 똑같이. idempotency는 관례가 아니라 명시한 명제다: parse한 canonical 문서를
+emit하면 그대로 재현되고, 같은 입력으로 operation을 반복하면 같은 결과와 상태를 낸다.
 
 ## 용어
 
 | 용어 | 뜻 |
 | --- | --- |
 | corpus | database인 markdown 문서의 directory tree |
-| codec | 하나의 문서에 대한 strict parser와 canonical renderer |
-| canonical form | renderer가 소유하는 byte 형식; [canonical format](10-canonical-format.ko.md) 참조 |
-| skeleton | renderer가 다시 쓸 수 있는 문서의 구조 부분 |
-| post-image | transaction commit 후의 corpus 상태 |
-| prepare record | rename 앞에 써서 commit을 복구 가능하게 만드는 journal 기록 |
-| truth ownership | sync 쌍의 어느 쪽이 table의 authority를 갖는지 |
-| adapter | 하나의 sync 계약에 연결된 외부 system(database, tracker) |
-| face | binary의 진입점 하나: CLI, MCP server, soksak sidecar |
-| twin | 영어 문서의 Korean projection, `source-sha256`으로 묶임 |
-| doc-id | header comment가 담는 고유한 문서 신원 |
+| corpus root | command나 server에 준 directory. `dbspec/`과 `.flowmark/`를 담는다 |
+| catalog | corpus root의 `dbspec/*.dbs` 문서 set |
+| storage | table의 행이 file에 놓이는 방식: `files`, `document`, `block` |
+| row scope | 행 하나에 속하는 문서의 부분: 그 file, 또는 그 상세 섹션 |
+| codec | 저장 방식들의 strict parser와 canonical renderer |
+| canonical form | renderer가 소유하는 byte 형식. [canonical format](10-canonical-format.md) 참조 |
+| post-image | transaction이 commit된 뒤 읽힐 corpus |
+| prepare record | rename 전에 쓰여 commit을 복구 가능하게 하는 journal 기록 |
+| IR executor | 렌더된 SQL 대신 검증된 IR 요청을 받는 orm DSN 대상 |
+| truth ownership | sync 쌍에서 table의 authority를 가진 쪽 |
+| adapter | 하나의 sync 계약에 묶인 외부 시스템(database, tracker) |
+| face | binary의 진입점 하나: server, CLI, MCP server, soksak sidecar |
+| twin | `source-sha256`으로 묶인 행 문서의 번역 file |
+| doc-id | 문서 header comment의 식별자. `files` 행의 key |
 
-## 비목표
+## 하지 않는 것
 
-- SQL text를 만들지도 받지도 않는다; plan layer는 markdown을 위해 아무것도 render하지 않는다.
-- derived query mirror가 없다: mirror를 인정하더라도 full-rebuild equivalence를 증명하고 write
-  path가 없어야 한다. in-memory index와 parsed-row cache는 mirror가 아니라 가속기다.
-- flowmark 자신의 상주 daemon이 없다; face는 host(shell, MCP host, soksak host)의 생명주기 안에서
-  돌고 작업 사이에 lock을 잡지 않는다.
-- 범용 wiki engine이 아니다: grammar는 schema를 가진 문서를 위해 존재하고, 자유 산문은 schema가
-  정한 곳에만 위치한다.
+- SQL 텍스트를 만들거나 받지 않는다. executor는 IR 요청을 소비한다.
+- 파생 query mirror는 없다: mirror를 들인다면 전체 재구축 동등성을 증명하고 write path가 없어야 한다.
+  memory index와 parse된 행 cache는 가속기이지 mirror가 아니다.
+- v1에는 원격 접속이 없다: server는 loopback에만 bind하고 token으로 인증한다.
+- 일반 wiki 엔진이 아니다: 문법은 catalog가 기술하는 문서를 위한 것이고, 자유 prose는 catalog가 정한
+  자리에 산다.
 
 ## 문서 지도
 
-판정은 [설계 계획](../plans/design-plan.ko.md)에 있고, 이 명세 집이 그것을 확정한다:
-[canonical format](10-canonical-format.ko.md), [문서 모델](20-document-model.ko.md),
-[schema](30-schema.ko.md), [운영](40-ops.ko.md), [제약](50-constraints.ko.md),
-[capability table](60-dialect.ko.md), [sync](70-sync.ko.md), [migration](80-migration.ko.md),
-[conformance](90-conformance.ko.md), [checklist application](100-checklist.ko.md),
-[open questions](110-open-questions.ko.md).
+판정은 [design plan](../plans/design-plan.ko.md)과
+[markdown database 계획](../plans/markdown-database-plan.ko.md)에 있고, 이 spec 묶음이 그것을 고정한다:
+[canonical format](10-canonical-format.md), [document model](20-document-model.md),
+[schema](30-schema.md), [operations](40-ops.md), [constraints](50-constraints.md),
+[capability table](60-dialect.md), [sync](70-sync.md), [migration](80-migration.md),
+[conformance](90-conformance.md), [응용 schema](100-checklist.md),
+[open questions](110-open-questions.md).
