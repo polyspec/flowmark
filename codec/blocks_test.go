@@ -87,3 +87,20 @@ func TestItemMeta(t *testing.T) {
 		t.Fatalf("third: %+v", document.Items[2])
 	}
 }
+
+func TestItemDueDatetime(t *testing.T) {
+	document, diagnostics := Parse("# T\n\n## Work\n\n- [ ] T1 시간 있는 일 @max 2026-10-15T18:00\n- [ ] T2 존 있는 일 2026-10-15T18:00:30Z\n- [ ] T3 안내는 시간이 아니다 2026-10-15T99\n")
+	if len(diagnostics) > 0 {
+		t.Fatalf("diagnostics: %v", diagnostics)
+	}
+	if document.Items[0].Due != "2026-10-15T18:00" {
+		t.Fatalf("first: %+v", document.Items[0])
+	}
+	if document.Items[1].Due != "2026-10-15T18:00:30Z" {
+		t.Fatalf("second: %+v", document.Items[1])
+	}
+	// 2026-10-15T99 is not a datetime — it stays in the title
+	if document.Items[2].Due != "" || document.Items[2].Title != "안내는 시간이 아니다 2026-10-15T99" {
+		t.Fatalf("third: %+v", document.Items[2])
+	}
+}

@@ -144,7 +144,7 @@ func run(root string, operation *operation) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		// id, name — the first row is the owner: an item without an assignee is the owner's.
+		// id, name — the registry of the declared people; a blank assignee is self.
 		lines := make([]string, 0, len(rows))
 		for _, row := range rows {
 			lines = append(lines, fmt.Sprintf("%s\t%s", row["id"], row["name"]))

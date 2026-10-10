@@ -8,8 +8,8 @@ import (
 
 // ChecklistItem is one row of a checklist block: the kit grammar `- [state] ID text` with its
 // indented continuation lines, and the metadata tokens the title may close with — `@assignee`
-// and a `YYYY-MM-DD` due date. An item without an assignee belongs to the owner: the first
-// row of the document's people table.
+// and a due date or datetime, `YYYY-MM-DD` or `YYYY-MM-DDTHH:MM[:SS]` with an optional zone.
+// A blank assignee is self — no name is ever guessed for it.
 type ChecklistItem struct {
 	State         string
 	ID            string
@@ -21,7 +21,7 @@ type ChecklistItem struct {
 	Continuations []string
 }
 
-var dueToken = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
+var dueToken = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2})?(Z|[+-]\d{2}:?\d{2})?)?$`)
 
 // splitMeta closes an item title with its metadata tokens: a trailing date is the due date,
 // an `@id` before it is the assignee. The title keeps everything else verbatim.

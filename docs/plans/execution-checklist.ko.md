@@ -1,5 +1,5 @@
 <!-- doc-id: execution-checklist -->
-<!-- source-sha256: b717f22e25258788b0a22876222750d614c22d458b6bdc78defa69537f503ad4 -->
+<!-- source-sha256: 011364e484928572817e9ab8174c6fbadc0bfd273fe5b107db8a3536986f0297 -->
 # 실행 체크리스트
 
 ## T1a 설계 session
@@ -76,5 +76,5 @@
 - [o] T9 Conformance vector: corpus before, request, 기대 corpus after (T4 선행)
 - [o] T9.1 vector 형식을 정의하고 첫 vector를 executor로 실행한다 (T4 선행)
 - [o] T10 자기 repo의 soksak plugin: 칸반 보드와 issue tracker — 또 하나의 thin consumer (T8 선행)
-- [o] T11 항목에 사람과 날짜: 항목 title이 `@assignee`와 `YYYY-MM-DD` 마감으로 끝날 수 있고 문서가 사람 table(`id`/`name` header)을 가지며 첫 행이 owner다 — 담당자 없는 항목은 owner의 것이다 — items·people surface가 이들을 노출한다 (T4.3 선행)
-  - 완료 기준: codec이 끝 token들을 title에서 분리하고 `All("items")`이 list·table 항목 모두에 assignee·due를 실으며 `All("people")`이 사람 행을 반환하고 sidecar의 items answer가 assignee·due column을 얻고 `people` answer를 가진다.
+- [o] T11 항목에 사람과 날짜: 항목 title이 `@assignee`와 마감 date·datetime(`YYYY-MM-DD`, `YYYY-MM-DDTHH:MM[:SS]`, zone 선택)으로 끝날 수 있고 문서가 사람 table(`id`/`name` header)을 선언된 사람의 registry로 가지며 빈 담당자는 self다 — 이름을 추측하지 않는다 — items·people surface가 이들을 노출한다 (T4.3 선행)
+  - 완료 기준: codec이 끝 token들을 title에서 분리하고 시간이 붙은 마감도 받으며 `All("items")`이 list·table 항목 모두에 assignee·due를 실고 `All("people")`이 사람 행을 반환하며 sidecar의 items answer가 assignee·due column을 얻고 `people` answer를 가진다.
