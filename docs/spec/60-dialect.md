@@ -57,7 +57,7 @@ Go client implements it first and every other client is its own orm item.
 | `fulltext`, the `Lb` operator | `OPERATOR_NOT_ALLOWED` |
 | lock, local-setting, privilege and AES-rotation utilities | `CAPABILITY_UNSUPPORTED` |
 | schema install, dbplan chains | `CAPABILITY_UNSUPPORTED`; `flowmark install` creates a corpus ([schema](30-schema.md)), and evolution follows [migration](80-migration.md) |
-| an unavailable table (a file with `format.block`, `format.section` or `format.encoding`, two rows with byte-for-byte equal keys, or a `corpus.walk` entry at its place) | every request that needs its rows, read or write, fails `CONSTRAINT`, naming the file and the diagnostic; no answer comes from the other files' rows alone ([canonical format](10-canonical-format.md#diagnostics)) |
+| an unavailable table (a file with `format.block`, `format.section`, `format.encoding` or a `parent.cycle` among its rows, two rows with byte-for-byte equal keys, or a `corpus.walk` entry at its place) | every request that needs its rows, read or write, fails `CONSTRAINT`, naming the file and the diagnostic; no answer comes from the other files' rows alone ([canonical format](10-canonical-format.md#diagnostics)) |
 
 The conformance contract for this table is [conformance](90-conformance.md): corpus before,
 request, expected corpus after or rows.

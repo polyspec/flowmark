@@ -73,7 +73,12 @@ and the column sections — are payload: the renderer moves them with their row 
   has a child block row. A detail section without any of these is `format.noncanonical`. A row without
   a detail section has the empty text as its body. Grounding: a non-null section is always written, so
   its row always has a detail section; a row with nothing to write has none.
-- A detail section whose key names no row of its block is `format.block`.
+- A detail section whose key names no row of its block is `format.block`, and so is a second detail
+  section of the same row, whatever its spelling: its body and sections cannot be assigned.
+- **Storage order.** The codec computes a file's storage order from its row set, as the
+  [document model](20-document-model.md#order) defines it, and never refuses an unsorted row set. A
+  cycle among a file's rows is `parent.cycle` on read, and the file is unreadable, since its rows have
+  no storage order. Grounding: the storage order is a function of the rows, so a row set has one form.
 - A layout that needs a heading past H6 is a schema error, decided when the catalog loads.
 
 ## Detail headings and anchors
@@ -136,6 +141,11 @@ and the column sections — are payload: the renderer moves them with their row 
   that began or ended with a line feed would read back with its framing changed, and a line of only
   white space at either end would be read as a framing line.
 - The framing blank lines are skeleton: on read, a further blank line or line of only white space at either end of a value is not part of the value and is `format.noncanonical`, and so is a missing framing blank line where the element still reads back, except a body line directly after the last field-list item, which is `format.block`; `flowmark canon` repairs both.
+- A value holds no setext heading: a line of only `=` or only `-`, of at most three spaces of indent and any trailing spaces or tabs,
+  directly after a non-blank line outside a fence, is `CONSTRAINT` on write; on read, a setext heading is a heading where CommonMark reads one. A value
+  that leaves a fence or an HTML block of CommonMark types 1–5 open is `CONSTRAINT` when an element
+  follows it. Grounding: a setext underline turns the value's last line into a heading, and an open fence
+  or HTML block takes in the element that follows, so either changes what the value reads back as.
 - A child block section is written only when the block holds at least one row — an empty block and an
   absent block both mean zero rows, so only one form can be canonical (P1); a parent row with no child
   rows has no block heading, and an empty block heading is `format.noncanonical`.
@@ -145,7 +155,8 @@ and the column sections — are payload: the renderer moves them with their row 
 
 The stored scalar columns of a table are its columns minus the key, the `title` of a `list` or `files` storage, the `body`, the
 `markdown` columns, the state column of a `list`, the placement foreign key, the `parent` of a
-`list`, and the `order` column of a `block` or `document` storage. The key, the title, the state
+`list`, and the `order` column of a `block` or `document` storage, which is a logical column and is never
+written ([document model](20-document-model.md#order)). The key, the title, the state
 and the hierarchy have their own places. A stored scalar column is a field-list item of a `files`
 row, a field of a list row or a cell of a table. Every non-null stored scalar column is written; the
 engine writes a default explicitly on insert.
@@ -164,8 +175,12 @@ catalog.
 - The engine reads a number, `true` or `false` with orm's `dbspec.CanonicalLiteral(t, v)`, and a date,
   time, datetime or uuid with `CanonicalLiteral(t, "'" + v + "'")`, with the quotes removed from the
   result.
-- `now` is refused as a value. Text is checked against its column's length, and in a single-line place
-  against the rules of [Single-line places](#single-line-places).
+- `now` is dbspec's keyword for the current time in a `datetime` default and is never a stored value:
+  the engine writes the time it denotes on insert. A temporal value written `now` is not of its type
+  (`type` on read, `CONSTRAINT` on write); a text value `now` is text. Grounding: `now` names the time of
+  the write, so a stored `now` would name another time on every read. Text is checked against its
+  column's length, and in a single-line place against the rules of
+  [Single-line places](#single-line-places).
 - On read, a value whose written form differs from its canonical form is `format.noncanonical`. A value not of its column type is the validator's `type`; it never makes the file unreadable, and a request that evaluates that value — returns it, or uses it in a predicate, join, sort, group or aggregate — fails as `CONSTRAINT`, naming the diagnostic. A write that assigns a value not of its column type is `CONSTRAINT`; a `type` diagnostic on a value the write does not assign, in its own row or another, fails the commit only when a constraint check of the commit must evaluate that value (a unique key, a `check`, a `limit`), as `CONSTRAINT` naming the diagnostic, and every rewrite of the file, `flowmark canon` included, keeps that value's written text byte for byte. A key is not a value under this rule: a key not of its type, or not in its canonical text, is `format.block` ([document model](20-document-model.md#keys)). Grounding: a value the engine cannot read as its type has no answer and no comparison, so a request or a check that needs it cannot be answered, while one that does not need it is unaffected.
 
 - On write, a number, `true`/`false`, a date, a time, a datetime or a uuid is written as `CanonicalLiteral` gives it (`1.5` into `decimal(4,2)` is `1.50`; a float in fixed notation with the fewest digits that round-trip, zero as `0`), and a value `CanonicalLiteral` refuses is `CONSTRAINT` — for example a decimal with more fraction digits than its scale (zeros included) or more integer digits than precision − scale, or a time or datetime with more fraction digits than its precision. Bytes are written as padded standard base64 (RFC 4648 §4); on read, any other text in a bytes column is `type`. Grounding: orm parity.
@@ -184,8 +199,10 @@ catalog.
   sigil. Only stored scalar columns are fields.
 - An absent field is NULL; `col:""` is the empty text. Every non-null column is written; a row
   missing a non-null field is `format.block`.
-- A title token matching `<declared column>:` is written `<column>\:`. The title is the text between
-  the key and the first field.
+- A title token matching `<declared column>:` is written `<column>\:`, and a title token matching `<declared column>\:` reads as `<column>:`; no other `\:` is decoded. A
+  title token matching `<declared column>\:` is `CONSTRAINT` on write, since it would read back as
+  `<column>:`: `<column>\:` and `<column>:` would be written alike. The title is the text between the key
+  and the first field.
 - A child row is indented two spaces deeper (the CommonMark list-item content indent) than its parent. The indentation is the `parent` column;
   nothing else writes it.
 - The placement foreign key and `parent` are never written as fields of a block list row; writing one is
@@ -196,11 +213,15 @@ catalog.
 - The header row names the stored scalar columns. Every stored scalar column has a header; a missing header, or a header that names no column, is `format.block`. The key is the first cell, under a header named by the key
   column; the stored scalar columns follow in column order.
 - A declared title is a cell under its column's header, in column order.
-- In a block table the placement foreign key is never a cell; `parent` is a cell.
+- In a block table the placement foreign key is never a cell; `parent` is a cell. A `parent` cell that
+  names a key two rows of the file share is `format.block`: the parent cannot be assigned.
 - A cell holds text as it is. An empty cell is NULL, and the empty text is written `""`. Every
   non-null stored scalar column has a value.
-- A cell value that begins with `"` is written `"…"` with `\"` and `\\` as its escapes. A `|` is
-  written `\|`, and a `\` before `|` is written `\\`.
+- A cell value that begins with `"` is written `"…"` with `\"` and `\\` as its escapes. In a table cell
+  each `|` of the value is written `\|`, and no other backslash is added. On read, a `|` directly after a
+  `\` is never a cell boundary, whatever precedes the `\`, and that one `\` is removed. The quoted form is
+  applied first and the pipe escape last, so a read removes the pipe escape first. Grounding: GFM reads
+  any `|` after a `\` as cell text and removes that `\` before inline parsing.
 
 ## Single-line places
 
@@ -246,8 +267,12 @@ this section states.
     row has no anchor.
 - A write that adds or removes a row's detail section rewrites every link to that row in the same
   transaction.
-- A target that differs from the derived one is `format.noncanonical`. A key that names no row is a dangling reference: the validator reports it as `reference.dangling`, a write that introduces it is `FOREIGN_KEY`, and it never makes the file unreadable. A key update of a referenced
-  row is `FOREIGN_KEY` (restrict-only), so a target never moves under a link.
+- A target that differs from the derived one is `format.noncanonical`. A key that names no row is a dangling reference: the validator reports it as `reference.dangling`, a write that introduces it is `FOREIGN_KEY`, and it never makes the file unreadable. A dangling reference
+  keeps its written target: it has no derived target, so it is read without a target check and written as
+  read; the one exception is a `parent` of a block or document row that names no row of its file, which is
+  `format.block`. Grounding: a missing row has no target to derive, and a target a write did not change
+  must keep its bytes; a hierarchy within one file must be complete to have a storage order. A key update of
+  a referenced row is `FOREIGN_KEY` (restrict-only), so a target never moves under a link.
 - A `parent` written in a `files` row is a link too. The placement foreign key of a block row is
   never written.
 - Examples: a `files` row `comments/C5.flowmark.md` links its post as
@@ -267,17 +292,20 @@ this section states.
 - A document ends with exactly one LF. A document without a final LF, or with a trailing blank line, is
   `format.noncanonical`. Grounding: the grammar has no element after the last line, so a further line
   feed is not part of any element and would be lost on emit.
-- A logical write that rewrites a file with a `format.*` diagnostic is `CONSTRAINT` apart from the exemptions below. A validator diagnostic on another row (`type`, `key.duplicate`, `reference.dangling`, `check`, `order`, `state.limit`, `history.gap`, `history.chain`) never fails the commit, except that a `type` diagnostic fails it when a constraint check of the commit must evaluate that value ([canonical format](#readable-values)), and two rows with byte-for-byte equal keys make their table unavailable ([Unavailable table](#diagnostics)); a `format.*` diagnostic fails it only as the rewrite refusal and the unavailable table state ([Unavailable table](#diagnostics)). A commit that must rewrite a file — the row's own file, a file holding a link to a row whose detail section appears or disappears, an `order` sibling — is refused when that file has a `format.*` diagnostic: `CONSTRAINT`, naming the file and the diagnostic, and naming `flowmark canon` when it is `format.noncanonical`. Three commits are exempt: `flowmark canon` for its targets ([operations](40-ops.md#the-canon-operation)); the add-column migration, for the diagnostics the added column causes, which do not make its table unavailable to that migration ([migration](80-migration.md)); and a delete that removes a `files` row's whole file from the rewrite refusal only — its restrict check still needs the rows of every table that may reference the row (its own table through `parent`, its child and history blocks, and every table with a foreign key to it), so such a delete is `CONSTRAINT` when any of them is unavailable. Without the `.gitattributes` that install writes, a Windows `autocrlf` checkout reads every value but refuses every write that rewrites an existing document, apart from the exemptions above, until `flowmark canon`. Grounding: a write must not change bytes the user did not write; a migration is a separate, explicit transaction.
+- A logical write that rewrites a file with a `format.*` diagnostic is `CONSTRAINT` apart from the exemptions below. A validator diagnostic on another row (`type`, `key.duplicate`, `reference.dangling`, `check`, `order`, `state.limit`, `history.gap`, `history.chain`, and the validator's `parent.cycle` across several `files` files) never fails the commit, except that a `type` diagnostic fails it when a constraint check of the commit must evaluate that value ([canonical format](#readable-values)), and two rows with byte-for-byte equal keys make their table unavailable ([Unavailable table](#diagnostics)); a `format.*` diagnostic fails it only as the rewrite refusal and the unavailable table state ([Unavailable table](#diagnostics)). A commit that must rewrite a file — the row's own file, a file holding a link to a row whose detail section appears or disappears, an `order` sibling — is refused when that file has a `format.*` diagnostic: `CONSTRAINT`, naming the file and the diagnostic, and naming `flowmark canon` when it is `format.noncanonical`. Three commits are exempt: `flowmark canon` for its targets ([operations](40-ops.md#the-canon-operation)); the add-column migration, for the diagnostics the added column causes, which do not make its table unavailable to that migration ([migration](80-migration.md)); and a delete that removes a `files` row's whole file from the rewrite refusal only — its restrict check still needs the rows of every table that may reference the row (its own table through `parent`, its child and history blocks, and every table with a foreign key to it), so such a delete is `CONSTRAINT` when any of them is unavailable. Without the `.gitattributes` that install writes, a Windows `autocrlf` checkout reads every value but refuses every write that rewrites an existing document, apart from the exemptions above, until `flowmark canon`. Grounding: a write must not change bytes the user did not write; a migration is a separate, explicit transaction.
 - `flowmark install` adds the line `*.flowmark.md text eol=lf` to `<corpus>/.gitattributes`, creating the file when it is missing and keeping its other lines, so a git checkout keeps LF on every platform ([schema](30-schema.md#install)).
 
 ## Diagnostics
 
-Every rule above reports `{file, line, column, rule, message}` with the rule names `format.noncanonical`, `format.section`, `format.block` and `format.encoding`, and the walk's rule `corpus.walk` of the
-[document model](20-document-model.md).
+Every rule above reports `{file, line, column, rule, message}`, where `column` is the 1-based column, in code
+points, of the first character of the element the rule names (the glyph, the key, the title, the field
+token, the cell content or the heading text); a fault of a whole line is column 1. The read rules are
+`format.noncanonical`, `format.section`, `format.block`, `format.encoding` and `parent.cycle`, and the
+walk's rule is `corpus.walk` of the [document model](20-document-model.md).
 
 - **Read and write faults.** On read, these are `format.block`: a missing non-null field or section; a
   single-line value that renders differently from its text beyond its inline markdown (see [Single-line places](#single-line-places));
   a `files` body whose first line is a `-` list item; a `files` body whose first line is indented by two or more columns (spaces, or a tab) after a field list. The same faults are `CONSTRAINT` on write. White space that rendering drops around a single-line place is `format.noncanonical` on read. Grounding: a
   read reports what the document holds, and a write refuses to produce what could not be read back.
-- **Validator rules.** A value not of its column type is `type`, a dangling foreign key is `reference.dangling`, and a key equal to another key of its table without regard to case is `key.duplicate`. The validator reports them over the corpus. They never make a file unreadable. Grounding: a file's readability must not depend on other files, or deleting a parent file would make its children unreadable and unrepairable. A value not of its column type is `CONSTRAINT` on write; a write that introduces a dangling foreign key or a duplicate key is `FOREIGN_KEY` or `DUPLICATE_KEY`. The commit refusal is stated under [Encoding and line structure](#encoding-and-line-structure). Opening a corpus, introspection, `flowmark validate` and `flowmark canon` are not requests over rows: they never fail on an unavailable table, apart from canon's link-derivation refusal ([operations](40-ops.md#the-canon-operation)). The validator reports every file's `format.*` diagnostics, and the validator rules of every row it can read in a file without `format.block`, `format.section` or `format.encoding`; a rule that needs the complete rows of a table that holds a file with `format.block`, `format.section` or `format.encoding` — `reference.dangling` into it, `key.duplicate`, `order` and `state.limit` within it — is not reported for that table, and the file's own diagnostic stands for it; a table unavailable only through byte-for-byte equal keys has every rule reported.
-- **Unavailable table.** A table is unavailable when it holds a file with `format.block`, `format.section` or `format.encoding`, or when two of its rows have byte-for-byte equal keys; the request then names the second row's file and `key.duplicate`. A table holds every corpus document at a place its storage names: a `files` table every `<table>/<name>.flowmark.md`, a `document` table `<table>.flowmark.md`, and a block table every file its placement parent's table holds, recursively, so a history block is unavailable with its state table. A table is also unavailable while a `corpus.walk` entry stands at such a place, or at a name equal to one without regard to case — an entry that cannot be read, a symlink, a symlinked table folder, or a suffix, folder or document name in another case. A file whose name does not end with `.flowmark.md`, compared without regard to case, is outside the database and never makes a table unavailable. Every request that needs any of its rows — a read of it, a point lookup by key included, an insert, update or delete in it, a join, relation or subquery over it, the rewrite of the links to a row whose detail section appears or disappears when a link may lie in it, and every constraint check over it (a primary or unique key, a reference, a link target, a `limit` count, an `order` sibling set, a `check`) — fails as `CONSTRAINT`, naming the file and the diagnostic. A request never answers from the other files' rows alone. A `files` file whose name is not the canonical text of a key is `format.block`, so its table is unavailable too. Grounding: an answer or a check over rows the engine cannot read would be wrong without saying so, and a request cannot name one of two rows with byte-for-byte equal keys. The engine writes nothing in an unavailable table apart from `flowmark canon` on its files ([operations](40-ops.md#the-canon-operation)): a human repairs, renames or removes the row or file that makes it unavailable by editing the corpus, and the table is available again on the next read. Grounding: a request cannot name one of two byte-equal rows, and a row the engine cannot read cannot be deleted through it.
+- **Validator rules.** A value not of its column type is `type`, a dangling foreign key is `reference.dangling`, and a key equal to another key of its table without regard to case is `key.duplicate`. The validator reports them over the corpus. They never make a file unreadable, except a `parent` of a block or document row that names no row of its file, which is `format.block` ([canonical format](#foreign-keys-as-links)), and a `parent` cell that names a key two rows of its file share, which is `format.block` too ([Table rows](#table-rows)). Grounding: a file's readability must not depend on other files, or deleting a parent file would make its children unreadable and unrepairable. A value not of its column type is `CONSTRAINT` on write; a write that introduces a dangling foreign key or a duplicate key is `FOREIGN_KEY` or `DUPLICATE_KEY`. The commit refusal is stated under [Encoding and line structure](#encoding-and-line-structure). Opening a corpus, introspection, `flowmark validate` and `flowmark canon` are not requests over rows: they never fail on an unavailable table, apart from canon's link-derivation refusal ([operations](40-ops.md#the-canon-operation)). The validator reports every file's `format.*` and `parent.cycle` diagnostics, and the validator rules of every row it can read in a file without `format.block`, `format.section`, `format.encoding` or `parent.cycle`; a rule that needs the complete rows of a table that holds such a file — `reference.dangling` into it, `key.duplicate`, `order` and `state.limit` within it — is not reported for that table, and the file's own diagnostic stands for it; a table unavailable only through byte-for-byte equal keys has every rule reported.
+- **Unavailable table.** A table is unavailable when it holds a file with `format.block`, `format.section`, `format.encoding` or a `parent.cycle` among its rows, or when two of its rows have byte-for-byte equal keys; the request then names the second row's file and `key.duplicate`. A table holds every corpus document at a place its storage names: a `files` table every `<table>/<name>.flowmark.md`, a `document` table `<table>.flowmark.md`, and a block table every file its placement parent's table holds, recursively, so a history block is unavailable with its state table. A table is also unavailable while a `corpus.walk` entry stands at such a place, or at a name equal to one without regard to case — an entry that cannot be read, a symlink, a symlinked table folder, or a suffix, folder or document name in another case. A file whose name does not end with `.flowmark.md`, compared without regard to case, is outside the database and never makes a table unavailable. Every request that needs any of its rows — a read of it, a point lookup by key included, an insert, update or delete in it, a join, relation or subquery over it, the rewrite of the links to a row whose detail section appears or disappears when a link may lie in it, and every constraint check over it (a primary or unique key, a reference, a link target, a `limit` count, an `order` sibling set, a `check`) — fails as `CONSTRAINT`, naming the file and the diagnostic. A request never answers from the other files' rows alone. A `files` file whose name is not the canonical text of a key is `format.block`, so its table is unavailable too. Grounding: an answer or a check over rows the engine cannot read would be wrong without saying so, and a request cannot name one of two rows with byte-for-byte equal keys. The engine writes nothing in an unavailable table apart from `flowmark canon` on its files ([operations](40-ops.md#the-canon-operation)): a human repairs, renames or removes the row or file that makes it unavailable by editing the corpus, and the table is available again on the next read. Grounding: a request cannot name one of two byte-equal rows, and a row the engine cannot read cannot be deleted through it.

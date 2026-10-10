@@ -68,7 +68,7 @@ so the same rows can be stored either way.
   key holds no `--` and no `-_`: the MkDocs viewer collapses hyphen runs and would otherwise alter the anchor, and a `_` after punctuation, as in `-_`, can open emphasis.
 - A key is unique within its table without regard to case, because case-insensitive file systems
   and lowercased anchors would otherwise collide. A key equal to another key of its table without regard to case is `DUPLICATE_KEY` on a write that
-  introduces it and `key.duplicate` in the validator; it never makes a file unreadable, except that two rows of one file whose keys are byte for byte equal and that both have detail sections are `format.block`, since the two sections share one heading text ([canonical format](10-canonical-format.md#detail-headings-and-anchors)); two rows with byte-for-byte equal keys make their table unavailable ([canonical format](10-canonical-format.md#diagnostics)).
+  introduces it and `key.duplicate` in the validator; it never makes a file unreadable, except that two rows of one file whose keys are byte for byte equal are `format.block` when both have detail sections, since the two sections share one heading text ([canonical format](10-canonical-format.md#detail-headings-and-anchors)), or when a `parent` cell of the file names their key, since the parent cannot be assigned ([canonical format](10-canonical-format.md#table-rows)); two rows with byte-for-byte equal keys make their table unavailable ([canonical format](10-canonical-format.md#diagnostics)).
 - A foreign key matches the referenced key byte for byte. A link text that differs from the key
   only in case is a dangling reference.
 - A key or a table name equal, without regard to case, to `CON`, `PRN`, `AUX`, `NUL`, `COM0`–`COM9`
@@ -115,17 +115,20 @@ so the same rows can be stored either way.
 
 - Hierarchy is a self foreign key `parent`. In a list the indentation is the parent and no column
   is written; a table or a file writes the column.
-- No parent is guessed; a cycle is refused; a `parent` outside the row's block is `CONSTRAINT` on
-  write and `format.block` on read.
+- No parent is guessed; a cycle is refused: `CONSTRAINT` on write. On read, a cycle among one file's rows is `parent.cycle` and leaves that file unreadable, since its rows have no storage order; a cycle through the rows of several `files` files is the validator's `parent.cycle` and never makes a file unreadable. A `parent`
+  outside the row's block is `CONSTRAINT` on write and `format.block` on read.
 
 ## Order
 
 - `order <column>` names a non-null `i32` or `i64` column with no default, in no key, index or
   check. Its value is the row's 1-based position among the rows with the same placement parent
   and the same `parent`.
-- In block and document storages it is never written: it is derived from line order on read, and
-  writing it is `format.block`. In `files` storage it is a field-list item whose sibling values are
-  exactly 1..n; a gap or a duplicate is a validate diagnostic.
+- In block and document storages it is a logical column and is never written: a read fills it with the
+  row's 1-based position among its siblings, a file holding an `order` value there is `format.block`, and
+  a write takes each sibling group's values as exactly 1..m, m being the group's size after the write, anything else being `CONSTRAINT`. Grounding: the
+  line order of the siblings is their order, so the position is the value, and a value written in the file
+  would be a second order. In `files` storage it is a field-list item whose sibling values are exactly 1..n;
+  a gap or a duplicate is a validate diagnostic.
 - An insert may omit it and the row appends; with k it places the row at k. An update to k moves
   the row and the siblings follow in the same transaction; k < 1 or k > n + 1 is `CONSTRAINT`,
   never clamped. n is the number of rows among the destination siblings excluding the row itself,
@@ -134,7 +137,9 @@ so the same rows can be stored either way.
   Changing `parent` without `order` appends to the new siblings, and the old siblings close the
   gap. Moving a row moves its subtree.
 - Without an `order` column, siblings stand in key order (numeric for integer keys, codepoint for
-  text) and each child follows its parent; any other line order is `format.noncanonical`.
+  text) and each child follows its parent; any other line order is `format.noncanonical`. With an
+  `order` column, the siblings stand in the order of their values, which a read takes from the line
+  order, so no sibling order is noncanonical.
 - **Storage order** is the pre-order of the tree: each row, then its children in sibling order;
   rows of different placement parents follow their parents' storage order. A read without an IR
   `order` returns storage order; an IR `order` on the order column sorts by its value with ties
@@ -146,7 +151,7 @@ so the same rows can be stored either way.
   are rejected at catalog load ([schema](30-schema.md)).
 - A foreign key value is a link. Its text is the referenced key and its target is derived from the
   referenced row, as the [canonical format](10-canonical-format.md) states. A dangling foreign key is the validator's `reference.dangling`; a write that introduces one is
-  `FOREIGN_KEY`, and it never makes a file unreadable. Every relation is a link whose `#<anchor>` is the anchor that GitHub, GitLab, VS Code and MkDocs generate for the heading it names, as the [canonical format](10-canonical-format.md#detail-headings-and-anchors) states. Pandoc is not a viewer the claim is made for: its default does not rewrite relative link targets, so a link between corpus files is not claimed to be followed in its output.
+  `FOREIGN_KEY`, and it never makes a file unreadable, except a `parent` of a block or document row that names no row of its file, which is `format.block` ([canonical format](10-canonical-format.md#foreign-keys-as-links)). Every relation is a link whose `#<anchor>` is the anchor that GitHub, GitLab, VS Code and MkDocs generate for the heading it names, as the [canonical format](10-canonical-format.md#detail-headings-and-anchors) states. Pandoc is not a viewer the claim is made for: its default does not rewrite relative link targets, so a link between corpus files is not claimed to be followed in its output.
 - A one-to-many across files stores the child table with `store files` and writes the foreign key
   in its field list. A one-to-many inside a file stores the child table with `store block`.
 - Many-to-many is a link table with an `identity` key.

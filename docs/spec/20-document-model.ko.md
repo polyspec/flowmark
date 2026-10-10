@@ -1,5 +1,5 @@
 <!-- doc-id: spec-document-model -->
-<!-- source-sha256: c6113605671dae2d93027f14c009e7a2f229a2f426fdac4421782b8ffe2740ec -->
+<!-- source-sha256: c7533b499717eeb380863f7996065003e728f3cc6b28ef4a90fff4a37a4a4004 -->
 # 문서 모델
 
 [English](20-document-model.md)
@@ -61,7 +61,7 @@ aggregate냐 split이냐는 저장 선언이다. 논리 관계는 모든 저장�
   소문자 anchor가 이 글자들에 대해서만 정의되기 때문이다. key는 `--`나 `-_`를 담지 않는다:
   연속 hyphen을 접는 MkDocs viewer가 anchor를 바꾸며, `-_`처럼 구두점 뒤의 `_`는 강조를 열 수 있기 때문이다.
 - key는 대소문자를 무시하고 table 안에서 유일하다. 대소문자를 구분하지 않는 file system과 소문자로 된
-  anchor가 그렇지 않으면 충돌하기 때문이다. 대소문자를 무시하고 같은 table의 다른 key와 겹치는 key는 그것을 새로 만드는 쓰기에서 `DUPLICATE_KEY`이고, validator의 `key.duplicate`다. file을 읽을 수 없게 하지 않는다. 다만 같은 file 안에서 바이트 단위로 같은 key를 가지고 둘 다 상세 섹션을 가진 두 행은 두 섹션이 같은 heading 텍스트를 가지므로 `format.block`이다([canonical format](10-canonical-format.md#detail-headings-and-anchors)); 바이트 단위로 같은 key를 가진 두 행은 그 table을 사용할 수 없게 한다([canonical format](10-canonical-format.md#diagnostics)).
+  anchor가 그렇지 않으면 충돌하기 때문이다. 대소문자를 무시하고 같은 table의 다른 key와 겹치는 key는 그것을 새로 만드는 쓰기에서 `DUPLICATE_KEY`이고, validator의 `key.duplicate`다. file을 읽을 수 없게 하지 않는다. 다만 같은 file 안에서 바이트 단위로 같은 key를 가진 두 행은, 둘 다 상세 섹션을 가지면 두 섹션이 같은 heading 텍스트를 가지므로([canonical format](10-canonical-format.md#detail-headings-and-anchors)), 또는 그 file의 `parent` cell이 그 key를 가리키면 부모를 배정할 수 없으므로([canonical format](10-canonical-format.md#table-rows)) `format.block`이다; 바이트 단위로 같은 key를 가진 두 행은 그 table을 사용할 수 없게 한다([canonical format](10-canonical-format.md#diagnostics)).
 - 외래 key는 참조된 key와 byte 단위로 맞는다. key와 대소문자만 다른 link 텍스트는 dangling 참조다.
 - 대소문자를 무시하고 `CON`, `PRN`, `AUX`, `NUL`, `COM0`–`COM9`, `LPT0`–`LPT9`와 같은 key나 table 이름은
   거절한다: table 이름은 schema 오류이고, key는 `CONSTRAINT`다. Windows의 예약된 file 이름이기 때문이다.
@@ -101,14 +101,14 @@ aggregate냐 split이냐는 저장 선언이다. 논리 관계는 모든 저장�
 
 - 계층은 self foreign key `parent`다. list에서는 들여쓰기가 parent이고 column을 쓰지 않으며, table과
   file은 column을 쓴다.
-- parent를 추측하지 않고 순환은 거절하며, 행의 블록 밖 `parent`는 쓰기에서 `CONSTRAINT`, 읽기에서
+- parent를 추측하지 않고 순환은 거절한다: 쓰기에서 `CONSTRAINT`다. 읽을 때 한 file의 행 사이의 순환은 `parent.cycle`이며 그 file은 저장 순서를 갖지 못하므로 읽을 수 없다. 여러 `files` file의 행에 걸친 순환은 validator의 `parent.cycle`이며 어떤 file도 읽을 수 없게 하지 않는다. 행의 블록 밖 `parent`는 쓰기에서 `CONSTRAINT`, 읽기에서
   `format.block`이다.
 
 ## 순서
 
 - `order <column>`은 default 없고 key, index, check에 들지 않는 non-null `i32`나 `i64` column을
   가리킨다. 값은 같은 배치 부모와 같은 `parent`를 가진 행 사이에서 1부터 센 위치다.
-- block과 document 저장에서는 쓰지 않는다: 읽을 때 줄 순서에서 유도되고, 쓰면 `format.block`이다.
+- block과 document 저장에서는 논리적 column이며 쓰지 않는다: 읽을 때 형제 사이의 1부터 센 위치로 채우고, 파일에 `order` 값이 있으면 `format.block`이며, 쓰기는 형제 묶음의 값을 정확히 1..m(m은 쓰기 뒤의 묶음 크기)으로 받고 그 밖의 값은 `CONSTRAINT`다. 근거: 파일의 줄 순서가 곧 순서이므로 논리적 값은 줄 위치이며, 파일에 쓴 값은 두 번째 순서가 된다.
   `files` 저장에서는 field list 항목이며 형제 값은 정확히 1..n이다. 빈틈이나 중복은 validate 진단이다.
 - insert는 이를 생략할 수 있고 행은 뒤에 붙는다. k를 주면 k에 놓는다. k로의 update는 행을 옮기고
   형제가 같은 transaction에서 따라간다. k < 1이나 k > n + 1은 `CONSTRAINT`이며 잘라 맞추지 않는다.
@@ -117,7 +117,7 @@ aggregate냐 split이냐는 저장 선언이다. 논리 관계는 모든 저장�
   `order`를 할당하는 update는 정확히 한 행과 맞아야 하며 아니면 `CONSTRAINT`다. `order` 없이
   `parent`를 바꾸면 새 형제 뒤에 붙고 옛 형제는 빈틈을 닫는다. 행을 옮기면 subtree가 함께 옮겨진다.
 - `order` column이 없으면 형제는 key 순서(정수 key는 숫자, 문자는 codepoint)로 서며 각 자식은 부모를
-  따른다. 다른 줄 순서는 `format.noncanonical`이다.
+  따른다. 다른 줄 순서는 `format.noncanonical`이다. `order` column이 있으면 형제는 그 값의 순서로 서며, 읽기가 그 값을 줄 순서에서 채우므로 형제 순서는 `format.noncanonical`이 아니다.
 - **저장 순서**는 tree의 전위 순회다: 각 행, 그다음 형제 순서의 자식. 다른 배치 부모의 행은 부모의
   저장 순서를 따른다. IR `order` 없는 읽기는 저장 순서를 돌려주고, order column에 대한 IR `order`는
   그 값으로 정렬하며 동률은 저장 순서다.
@@ -127,7 +127,7 @@ aggregate냐 split이냐는 저장 선언이다. 논리 관계는 모든 저장�
 - 모든 foreign key는 restrict-only다([constraints](50-constraints.md)). `cascade`와 `set_null`은 catalog를
   읽을 때 거절한다([schema](30-schema.md)).
 - 외래 key 값은 link다. link의 텍스트는 참조된 key이고, target은 참조된 행에서 유도된다. 정식 형식은
-  [canonical format](10-canonical-format.md)이 정한다. 참조된 key가 없는 dangling 외래 key는 validator의 `reference.dangling`이며, 그것을 새로 만드는 쓰기는 `FOREIGN_KEY`다. file을 읽을 수 없게 하지 않는다. 모든 관계는 `#<anchor>`가 GitHub, GitLab, VS Code, MkDocs가 그 heading에 대해 만드는 anchor인 link다([canonical format](10-canonical-format.md#detail-headings-and-anchors)가 정한다). Pandoc은 주장 대상이 아니다: 기본 설정은 상대 경로 link target을 다시 쓰지 않으므로, corpus file 사이의 link가 그 출력에서 따라가진다고 주장하지 않는다.
+  [canonical format](10-canonical-format.md)이 정한다. 참조된 key가 없는 dangling 외래 key는 validator의 `reference.dangling`이며, 그것을 새로 만드는 쓰기는 `FOREIGN_KEY`다. file을 읽을 수 없게 하지 않는다. 다만 block이나 document 행의 `parent`가 그 file의 어떤 행도 가리키지 않으면 `format.block`이다([canonical format](10-canonical-format.md#foreign-keys-as-links)). 모든 관계는 `#<anchor>`가 GitHub, GitLab, VS Code, MkDocs가 그 heading에 대해 만드는 anchor인 link다([canonical format](10-canonical-format.md#detail-headings-and-anchors)가 정한다). Pandoc은 주장 대상이 아니다: 기본 설정은 상대 경로 link target을 다시 쓰지 않으므로, corpus file 사이의 link가 그 출력에서 따라가진다고 주장하지 않는다.
 - file 간 one-to-many는 자식 table을 `store files`로 두고 foreign key를 그 field list에 쓴다. file 안의
   one-to-many는 자식 table을 `store block`으로 둔다.
 - 다대다는 `identity` key를 가진 link table이다.

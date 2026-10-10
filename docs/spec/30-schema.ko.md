@@ -1,5 +1,5 @@
 <!-- doc-id: spec-schema -->
-<!-- source-sha256: 8e016b397cd99cc56531034195017e3aef771c0ef1d53395c6a15a8f7e30dae6 -->
+<!-- source-sha256: 8fd8f1a44f0937de4f1337e1f9f2a6e98a5bf88a9c92ae9a4c9c3a7d17f1ee8c -->
 # Schema
 
 [English](30-schema.md)
@@ -47,7 +47,7 @@ column을 이름 붙인다 — column 이름이 동작을 고르지 않는다.
   setting 없는 table.
 - **허용**: markdown table의 `i64` primary key column에만 `identity`를 쓴다. lock 아래 `max+1`로 할당한다. dbspec은 그 밖의 type에 대한 `identity`를 거절하므로(`an identity column has type i64`), `i16`이나 `i32` key도 쓸 수 없다. 근거: `max+1`은 정수 순열이며, `bool`, `varchar`, `uuid`, `date` key에는 더할 최댓값이 없다.
 - **요구**: `state_machine`을 가진 table은 `history`와 적어도 하나의 `initial` 상태를 선언한다. `list`나
-  `files` 저장은 `title`을 선언한다. 상태 column을 가진 `list` 저장은 모든 상태에 `checkbox`를 선언한다.
+  `files` 저장은 `title`을 선언한다. state machine을 가진 `list` 저장은 `checkbox`를 적어도 하나 선언하며, dbspec이 그 뒤로 모든 상태를 덮도록 요구한다. dbspec은 checkbox가 하나도 없는 state machine을 받아들이므로 이 규칙은 flowmark의 것이다.
 - **key 타입.** markdown table의 단일 column primary key는 integer type(`i16`, `i32`, `i64`), `bool`, `varchar`,
   `uuid`, `date` 중 하나다. 다른 type은 schema 오류이며 table 이름에 위치한다. 근거: key는 file 이름이자 anchor이므로
   그 텍스트는 key 모양의 문자만 가져야 한다([document model](20-document-model.md#keys)). `date`는 연도가 0001부터
@@ -66,11 +66,11 @@ column을 이름 붙인다 — column 이름이 동작을 고르지 않는다.
 
 ## 상태 집합
 
-- 기계의 상태는 `initial`, 전이, `terminal` 줄이 이름 붙인 상태들이다. `checkbox`는 서로 다른 glyph로 그
+- 기계의 상태는 `initial`, 전이, `terminal` 줄이 이름 붙인 상태들이다. table이 `checkbox`를 선언하면 `checkbox`는 서로 다른 glyph로 그
   집합을 정확히 덮는다. 다른 상태를 이름 붙인 `checkbox`, `limit`, `initial`은 setting 오류다.
 - 상태 column의 `default`는 초기 상태여야 하며 아니면 setting 오류다. 종료 상태이기도 한 초기 상태는
   setting 오류다.
-- table의 상태 column은 `state_machine` setting이 이름 붙이는 column이다.
+- table의 상태 column은 `state_machine` setting이 이름 붙이는 column이다. 모든 storage에서 non-null이며, dbspec이 state machine의 nullable 상태 column을 거절한다. 근거: 행의 상태는 기계 안의 자리이며 NULL은 자리를 가리키지 않는다.
 
 ## 이력 table
 

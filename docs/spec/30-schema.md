@@ -54,8 +54,9 @@ behaviour.
   `i16` or `i32` key cannot take it either. Grounding: `max+1` is an integer sequence, and a `bool`,
   `varchar`, `uuid` or `date` key has no maximum to add one to.
 - **Required**: a table with a `state_machine` declares its `history` and at least one `initial`
-  state; a `list` or `files` storage declares `title`; a `list` storage with a state column
-  declares a `checkbox` for every state.
+  state; a `list` or `files` storage declares `title`; a `list` storage of a state machine
+  declares at least one `checkbox`, and dbspec then requires one for every state; the catalog rule is
+  stated here because dbspec accepts a state machine with no checkbox at all.
 - **Key types.** The one-column primary key of a markdown table is an integer type (`i16`, `i32`,
   `i64`), `bool`, `varchar`, `uuid` or `date`; any other type is a schema error, located at the table
   name. Grounding: a key is a file name and an anchor, so its text must hold only the key shape
@@ -77,11 +78,13 @@ behaviour.
 ## The state set
 
 - A machine's states are the states its `initial`, transition and `terminal` lines name.
-  `checkbox` covers that set exactly with distinct glyphs; `checkbox`, `limit` or `initial` naming
+  When a table declares a `checkbox`, `checkbox` covers that set exactly with distinct glyphs; `checkbox`, `limit` or `initial` naming
   another state is a setting error.
 - A `default` of the state column is an initial state, otherwise a setting error. An initial state
   that is also terminal is a setting error.
-- The state column of a table is the column its `state_machine` setting names.
+- The state column of a table is the column its `state_machine` setting names. It is non-null, in every
+  storage: dbspec refuses a nullable state column of a state machine. Grounding: a row's state is its place in
+  the machine, and NULL names no place; dbspec refuses it.
 
 ## The history table
 

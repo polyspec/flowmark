@@ -3,6 +3,19 @@
 
 ## Unreleased
 
+- T12.1-5: the specifications state the rulings the `document` codec needed. `now` is dbspec's keyword for the
+  current time in a `datetime` default and is never stored: a temporal value written `now` is not of its type, and a
+  text `now` is text. A table row out of storage order is `format.noncanonical`; a `parent` cycle among a file's rows
+  is `parent.cycle` on read and leaves the file unreadable; a second detail section of a row is `format.block`. A
+  title token `<column>\:` is `CONSTRAINT` on write. In a table cell each `|` is written `\|` and nothing more, and
+  on read a `|` after a `\` is never a cell boundary. `order` is a logical column that a read fills with the sibling
+  position, and a write takes each sibling group's values as exactly 1..m, m being the group's size after the write. The codec computes the storage order from the rows and
+  never refuses an unsorted set. A diagnostic's column is the 1-based code-point column of the element its rule names.
+  A dangling reference keeps its written target, and a `parent` cell naming a key that two rows share is
+  `format.block`. A value holds no setext heading, and a value that leaves a fence or an HTML block open is
+  `CONSTRAINT` when an element follows. The catalog rejects a list storage of a state machine without a checkbox;
+  dbspec already rejects a nullable state column.
+
 - T12.1-4: the specifications state the detail-anchor, key and identity rulings. A detail heading's
   anchor is checked against the headings of its file under two folds of the heading's rendered inline
   text. F_G, for GitHub, GitLab and VS Code, removes every character that is not a letter or a decimal
