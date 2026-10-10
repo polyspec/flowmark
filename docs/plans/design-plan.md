@@ -3,16 +3,26 @@
 
 Revision 2 — folds the findings of the three-lane adversarial audit (engine core, orm integration, operations) and the multi-platform directive into the rulings below. Every audit blocker became a ruling; the audit's unbroken claims are listed at the end.
 
+Revision 3 — corrects the rulings that the [markdown database plan](markdown-database-plan.md) withdrew, with the facts that withdrew them:
+
+- **The seam.** This plan placed the markdown executor inside orm. orm is the query layer: its clients plan in their own process and reach every database through a driver (orm `docs/protocol.md`, `docs/config.md`), so an executor inside it would exist once per client — the "Go-only" caveat below was the symptom. The code never followed the ruling either: orm received two dbspec settings and flowmark imported nothing of orm. flowmark is the engine, and orm reaches it as an IR executor by DSN.
+- **The schema stamp and standalone fragments.** A stamp in every document copies the schema once per row; the `dbspec/` catalog of a corpus root is the only schema.
+- **The task-ID grammar.** Keys are opaque; hierarchy is a `parent` column and supersede a link, so the ID grammar, its ordering and the renumber codemod are gone.
+- **`identity` rejection, advisory `audit`, the WIP gate as a column limit, the per-operation-only lock and the corpus revision** are replaced as the plan states.
+- **T8.5** — a Mermaid block inside a document as the transition authority — was never this plan's ruling and is withdrawn with it.
+
+The sections below carry the corrected rulings; the specifications hold them in full.
+
 ## Context
 
 The user manages engineering specs as markdown and runs development through checklists (five states `[ ]` `[~]` `[o]` `[!]` `[-]`, dotted hierarchical IDs, prerequisite/follow-up dependencies), changelogs, and commit discipline. The problem: document-based operation has **no idempotent, database-level enforcement** — format violations, dangling foreign keys, and illegal status transitions stop no one.
 
-**flowmark's identity (user-confirmed)**: a **text database whose grammar is markdown**. The files themselves are the database and it runs fully standalone without an external database. **orm is the core** (the markdown executor); **flowmark is the integration and application layer** — bidirectional sync with databases, GitHub, Jira and other trackers, and on top of it a local kanban board and issue tracker (GUI as one more thin consumer): GitHub and Jira have their own boards, but here the data is managed locally, in git, offline. Core value: the storage format is a document humans read, and git provides audit, branching, and rollback for free.
+**flowmark's identity (user-confirmed)**: a **text database whose grammar is markdown**. The files themselves are the database and it runs fully standalone without an external database. **flowmark is the engine** (Revision 3 — orm is the query layer that reaches it as an IR executor) **and the integration and application layer** — bidirectional sync with databases, GitHub, Jira and other trackers, and on top of it a local kanban board and issue tracker (GUI as one more thin consumer): GitHub and Jira have their own boards, but here the data is managed locally, in git, offline. Core value: the storage format is a document humans read, and git provides audit, branching, and rollback for free.
 
 **User decisions**:
 
-1. polyspec/orm gains markdown as its **fourth backend** (mysql/pgsql/sqlite/markdown). The orm model API is the **orthodox path** for CLI and MCP (thin adapters with no write logic of their own).
-2. Schema derivation direction: **dbspec ⇒ frontmatter** — dbspec is the root grammar and authority; frontmatter DDL is an embedding of dbspec (detail in §4).
+1. polyspec/orm reaches markdown as a **fourth database** beside mysql/pgsql/sqlite — through the DSN `markdown://`, which selects an IR executor served by flowmark (Revision 3). The faces are thin adapters with no write logic of their own.
+2. Schema direction: **dbspec is the root grammar and the only authority** — the `dbspec/` catalog of a corpus root declares every table and its storage; documents carry no schema copy (detail in §4, Revision 3).
 3. Documents are **EN/KO pairs from day one** (orm house style, kit-compatible).
 4. **Vendor polyspec/kit now** — the fifth state `[-]` is **upstreamed in the polyspec/kit repository** (orm's `scripts/kit` is a hash-locked vendor copy that must never be edited in orm; it reaches orm only through `make kit-sync KIT_TAG=<tag>`). The user delegated authority over kit.
 5. This session's deliverable = **design documents + repository bootstrap** (implementation is tracked as later phases on the checklist). Per the audit's scope finding, the spec documents themselves split into a second session (T1b); this session closes T1a.
@@ -24,7 +34,7 @@ The user manages engineering specs as markdown and runs development through chec
 ## Verified grounding (checked directly in the polyspec checkouts)
 
 - `orm/docs/protocol.md:12,96` — IR kinds are bounded: `one|all|count|group_count|sum|avg|paginate|insert|update|delete|restore`. The request carries no SQL text → a **native markdown executor consuming the IR request is a bounded problem**. The audit confirmed expressiveness: every kind plus the Order/Pred/Func surface is computable over an in-memory corpus; the open questions were specification, not expressiveness.
-- `orm/docs/dialects.md:184` — the three databases unify collation to binary codepoint order. This is the rule for **text comparison**; it does not transfer to typed keys (see the ordering ruling in §2).
+- `orm/docs/dialects.md:184` — the three databases unify collation to binary codepoint order. This is the rule for **text comparison**, which the engine follows (see the ordering ruling in §2).
 - `kit/scripts/kit/documents-stamp.mjs`, `check-documents.mjs` — `source-sha256` is an **EN→KO translation sync marker** (the Korean twin holds the sha256 of the raw English file bytes). Data drift detection is therefore designed on `.flowmark/` sidecar state, and flowmark adopts **raw-file-bytes hashing** for the same marker (kit-compatible; canonicalization belongs in the check, not the hash).
 - `kit` is its own repository (`polyspec/kit`); consumers hold a hash-locked vendor copy of `scripts/kit` + `tests/kit` written by `make kit-sync KIT_TAG=<tag>` and verified by `make kit-check`. A vendored file is changed in kit, never in the consumer.
 - `kit/scripts/kit/checklist.mjs` — states are per-tracker data; the `[-]` impossible state is now read at both levels (upstreamed as kit K13, branch `feat/fifth-state-K13` pending merge).
@@ -35,21 +45,19 @@ The user manages engineering specs as markdown and runs development through chec
 ### 1. Architecture and the seam
 
 ```
-CLI / MCP / soksak sidecar (thin adapters — the orm model API is the orthodox path)
-   ↓
-polyspec/orm (.dbs → generated models → IR request)
-   ↓ shared planner validates the IR (IR_INVALID rules unchanged)
-markdown executor = the text database engine (standalone, consumes the IR request)
-   ├─ codec: strict parser + canonical renderer (two-clause idempotency, §2)
-   ├─ validator: corpus-global constraints (type/PK/UNIQUE/FK/CHECK/state machine)
-   ├─ in-memory indexes derived from the parsed corpus (rebuilt on open, cached by content hash)
-   ├─ transaction: stage → re-read validate → prepare record → renames → commit record
-   └─ .flowmark/ sidecar: lock, tx journal, corpus revision, parsed-row cache
-   ↓ optional
-sync engine: md→db export / db→md materialize (§7)
+application code ── orm client (Go/PHP/Python/Rust/TS) ── IR executor ── DSN markdown:// ──┐
+                                                                                          ▼
+flowmark = the markdown database engine (one Go binary)
+   ├─ codec: strict parser + canonical renderer of the storages (two-clause idempotency, §2)
+   ├─ validator: catalog constraints (type/PK/UNIQUE/FK/CHECK/state machine and history)
+   ├─ IR executor over in-memory indexes derived from the parsed corpus
+   ├─ write path: lock → stage → conflict check → validate → prepare record → renames → commit
+   ├─ .flowmark/: lock, tx journal, server token, parsed-row cache
+   ├─ faces: server · CLI · MCP · soksak sidecar
+   └─ sync engine: md→db export / db→md materialize (§7)
 ```
 
-**The seam ruling (resolves the layering circularity)**: markdown is a fourth **executor** registered beside the SQL executors, selected by the DSN scheme `markdown://<path>`. The shared planner validates the IR exactly as for SQL backends; the markdown executor consumes the **IR request** directly and does not render SQL plans — `getQuery()`, statement events, `subscribe()` and `force_index` return `CAPABILITY_UNSUPPORTED` (orm's existing precedent for unsupported capability). The executor implementation lives in the **orm repository** (flowmark contributes it at T5); until the other clients port it, the capability table marks markdown support **Go-only**. flowmark-the-repository then holds: the specs, the kit tooling, the checklist application, and the sync engine.
+**The seam ruling (Revision 3)**: orm is the query layer; its clients plan in their own process and reach each database through the driver their DSN scheme selects. The scheme `markdown://` selects an **IR executor**: the client validates the IR request, does not plan, and sends it to the flowmark server, which answers rows or one orm error — `getQuery()`, statement events, `subscribe()` and `force_index` are `CAPABILITY_UNSUPPORTED` (orm's precedent for unsupported capability). The engine lives in flowmark, once; each orm client carries a thin executor client, the Go client first. flowmark uses orm's `engine/dbspec` and `engine/ir` packages as libraries. Revision 2 placed the executor in orm, which would have put an engine in each of the five clients.
 
 - A SQLite mirror is rejected: mirror↔corpus equivalence becomes a permanent bug class. If a mirror is ever admitted, its conformance conditions are (a) full-rebuild equivalence and (b) no write path.
 - The IR-boundedness claim covers the request layer. **API parity is not claimed** — the capability table (§6) is the contract, in orm's `CAPABILITY_UNSUPPORTED`/`OPERATOR_NOT_ALLOWED` tradition.
@@ -57,41 +65,39 @@ sync engine: md→db export / db→md materialize (§7)
 ### 2. Canonical format (`10-canonical-format.md`)
 
 - **Idempotency is the dbspec two-clause proposition**, not a single byte-identity claim: `emit(parse(s)) == s` for canonical input `s`, and `emit(parse(emit(d))) == emit(d)` for any valid input `d`. The renderer owns exactly the **structural skeleton** — the frontmatter block, heading lines, the item and table lines it re-sorts, and the markers it writes — and never rewrites payload bytes in preserved runs (prose, fenced content, HTML comments other than owned markers). Non-canonical input is a `format.noncanonical` diagnostic plus a separate one-shot `flowmark canon` migration transaction, never a side effect of a logical write.
-- The document preamble (title and text before the first H2) is a reserved long-text column; an H2 section maps to its declared long-text column; absent section = NULL, present-but-empty = empty text.
-- **Ordering is type-directed**: ID-typed keys compare segment-wise numeric (`T8.0.9 < T8.0.10`), text compares by codepoint, composite keys lexicographically by component type. The SQL collation decision governs text comparison only; it is not imported as the ordering of typed keys. `group_count` groups NULLs together (SQL parity).
-- ID grammar: `T<n>(.<n>)*(-<n>)?` with no leading zeros and no suffix `-0`; equality is string equality on the canonical form; the suffix is part of the item's identity and **travels with its base under renumber**. Children of suffixed items (`T8.0.14-1.3`) are allowed; the suffix binds to the last path segment. References are read structurally (parsed positions, code spans excluded); codemods that rewrite references are the explicit exception to payload preservation. `flowmark next-id` computes the next sibling ID — humans are not expected to compute IDs unaided.
-- **Frontmatter profile**: YAML 1.2 core schema, block style in the value region, no anchors or tags. Frontmatter comments are rejected in v1 with a located diagnostic (a comment-preserving round-trip emitter is a stated non-goal until a requirement names it). Value syntax per dbspec type: decimal, datetime and uuid literals use dbspec's canonical forms; `bytes` is base64; a text column that may hold newlines cannot live in a markdown-table child cell.
-- A translation pair is **one row**: `doc_id` is the primary key; the Korean twin file is a projection of the row, not a second row. `source-sha256` = sha256 of the raw English file bytes (kit-compatible).
+- The body and every `markdown` column value are sections of the row scope, bounded by heading level outside fenced blocks; an absent section is NULL, a present empty one the empty text (Revision 3).
+- **Ordering**: an IR `order` sorts by the column's type, text by codepoint; a read without one returns storage order — the pre-order of the tree with siblings in their order column or key order. `group_count` groups NULLs together (SQL parity). Keys are opaque: the task-ID grammar, its segment-wise ordering, the suffix rule and `flowmark next-id` are withdrawn (Revision 3); `identity` and `key_prefix` allocate keys.
+- **List rows** carry the state glyph, the key, the title and trailing `column:value` fields parsed from the right; a `markdown` column is never a field or a cell, and a value with a line feed in a single-line place is refused.
+- **Frontmatter profile**: YAML 1.2 core schema, block style in the value region, no anchors or tags. Frontmatter comments are rejected in v1 with a located diagnostic (a comment-preserving round-trip emitter is a stated non-goal until a requirement names it). Value syntax per dbspec type: every value uses dbspec's canonical literal form; `bytes` is base64.
+- A twin shares its row's doc-id and is not a row; `source-sha256` = sha256 of the raw English file bytes (kit-compatible).
 
 ### 3. Document-table model (`20-document-model.md`)
 
-- Folder = table, file = row, H2 section = long-text column, structured body blocks (checklist items, markdown tables) = child tables (FK).
-- Frontmatter = row data + `table` binding + `schema_version` stamp (+ the embedded DDL when standalone).
+- Each table declares one storage (Revision 3): `store files` (one file per row in the table's folder), `store document list|table` (every row in `<table>.md`) or `store block <fk> list|table` (the rows inside the parent row). Aggregate or split is a storage declaration; the logical relations are the same.
+- Frontmatter of a `files` row = its scalar columns; the doc-id is its key; hierarchy is a `parent` column, written by indentation in a list.
 
-### 4. Schema (`30-schema.md`) — derivation ruling: dbspec ⇒ frontmatter
+### 4. Schema (`30-schema.md`) — the catalog is the schema
 
-- **dbspec is the root grammar and authority.** Frontmatter DDL is not an independent language but a frontmatter embedding of the dbspec grammar: the fragment is always a **YAML literal block scalar** (`|`), which settles YAML-hostile tokens (`yes`/`on`/`null` as names, datetime colons, `#` inside the fragment) and keeps one grammar, one parser, one type system. dbspec diagnostics are offset-mapped into file coordinates. The fragment is canonicalized (LF, final newline) at embed time; the stamp carries the **canonical** fragment — there is no second, minified emission form.
-- Rationale for the direction: (1) schema is law, data is rows — a per-document DDL is a copy of the law, and copies diverging is itself the drift bug class; (2) orm's engine/IR/conformance are bound to the dbspec manifest hash, so a second grammar doubles the parts; (3) dbspec's parser and type system are reused; (4) the reverse direction would compose the corpus-global schema by merging per-document declarations, creating a new conflict class — DDL reconciliation across branches.
-- **Standalone documents** (single files outside a repository): the embedded fragment is that document's provisional authority, compiled to the same IR over a one-document set (no `use` declarations). On import into a corpus, the repository's .dbs becomes the authority and the fragment becomes a consistency check target.
-- **Self-description is satisfied by projection**: the schema stamp (canonical fragment + manifest hash + `schema_version`) is rendered into frontmatter from the .dbs — a verified cache, not data; mismatch is a located `schema.drift` diagnostic, never a silent reparse.
-- **Markdown-specific schema surface is manifest-level settings, never rendered types** (introspection coherence, the `updated`/`soft_delete` precedent): `markdown`-flavored column traits and checklist child-table sugar are settings; a real database introspects them back as plain `text`. The state machine is likewise a manifest-level setting with its own sub-grammar (as `audit` has), which the SQL backends ignore as they ignore `navigation`; the markdown validator enforces it.
-- **`identity` columns are rejected on markdown corpora.** Keys are human-assigned (the ID grammar); an insert that omits the primary key is an error, and `flowmark next-id` is the allocation helper. Key non-reuse under git rewind is abandoned by design — git history, not a sequence, is the allocator of record.
+- **dbspec is the root grammar and the only authority.** The `dbspec/*.dbs` set of a corpus root is the catalog (Revision 3). Documents carry no schema copy and no stamp, and standalone documents with embedded fragments are withdrawn: schema is law and data is rows, and a copy of the law per document makes the drift of the copies a bug class of its own. orm's engine, IR and conformance are bound to the dbspec manifest hash, and dbspec's parser and type system are reused as a library.
+- **Markdown-specific schema surface is manifest-level settings, never rendered types** (introspection coherence, the `updated`/`soft_delete` precedent): `store`, `key_prefix`, `title`, `body`, `order`, `checkbox`, `markdown` and the state machine's `initial`, `history` and `limit` are settings that the SQL backends ignore; a real database introspects them back as plain columns.
+- **`identity` is allowed** on every markdown table, allocated `max+1` under the lock (Revision 3); key reuse under git rewind is accepted — git history, not a sequence, is the allocator of record.
 
 ### 5. Ops and transactions (`40-ops.md`)
 
 - **Commit protocol** (order is normative): write post-image files into `.flowmark/tx/<id>/` content-addressed and fsync them; copy the pre-image of every target into the stage and fsync; write and fsync a **prepare record** listing every rename with its pre- and post-hashes; perform the renames through the runtime's atomic rename; write and fsync the commit record; collect the stage. **Recovery runs on every corpus open**: a prepare record completes, its absence discards the stage, and a target whose current hash matches neither recorded hash is refused and reported (a human edit landed mid-crash — never silently overwritten). Durability across power loss relies on the journal replay, not on OS-specific directory fsync.
-- **One portable lock, per operation** (multi-platform ruling): every operation — read or write, CLI or MCP — takes the same lock file with holder identity and stale detection (kit `holder-lock` precedent) for the duration of the operation, with a timeout that reports the holder. There is no long-lived lock and no reader/writer split: readers cannot observe torn commits, an MCP server cannot lock the CLI out, and a hung holder is a timeout report, not a deadlock. Conflicts on commit (a target changed since read) fail with the file and line and a defined re-read-and-retry-once contract — no silent merge.
-- **Validation runs at commit against the corpus freshly re-read under the lock** — not against a BEGIN snapshot, and not against a predicted touched-file set (cascade discovery makes that set unknowable). The read-hash/check is computed from what was actually read.
-- **Corpus revision**: a monotonically increasing counter in `.flowmark/`, bumped by every commit. A multi-call read session (paginate) carries it and fails with `CORPUS_CHANGED` on mismatch (or degrades to keyset pagination). `orderByRandom` is seeded per revision.
+- **One portable lock** (multi-platform ruling): every operation — read or write, from any face — takes the same lock file with holder identity and stale detection (kit `holder-lock` precedent), with a timeout that reports the holder. The lock is held for one operation, or for one server transaction from `begin` to `commit` or `rollback` (Revision 3); a closed connection or an idle transaction rolls back and releases it. Conflicts on commit (a target changed since read) fail with the file and line — a face re-reads and retries once, an orm client receives `WRITE_CONFLICT` — never a silent merge.
+- **The server** (Revision 3) is a resident face bound to loopback with a kept token; the DSN is `markdown://127.0.0.1:<port>/<corpus>?token=<token>`.
+- **Validation runs at commit against the corpus freshly re-read under the lock**, after the conflict check — not against a BEGIN snapshot, and not against a predicted touched-file set.
+- The corpus revision and `CORPUS_CHANGED` are withdrawn (Revision 3): `paginate` is one request, and no face reads across calls.
 - **Cost model**: a per-command p95 latency target is declared in 40-ops (order: hundreds of milliseconds at the corpus envelope); a `.flowmark/cache/` of parsed rows keyed by per-file content hash avoids re-parsing unchanged files; default per-transaction validation is the FK/UK closure of the post-image with full `flowmark validate` on demand and on schema change.
 - Walk rules: skip `.flowmark/` and hidden entries; a symlink or hardlink inside the corpus is a located diagnostic; a nested corpus root is an error.
 
 ### 6. Constraints and the capability table (`50-constraints.md`, `60-dialect.md`)
 
-- Strict parse, type/PK/UNIQUE/FK (dangling prerequisites rejected; NFC then exact match), CHECK. Soft-deleted rows still occupy unique keys and still satisfy FKs (SQL parity — stated so a soft delete never trips a spurious ruling). Validation of a corpus whose schema declares AES codec columns requires the key; a keyless run fails rather than approximates.
-- The **state machine is a dbspec-level manifest setting** (transition table + terminals + required fields); the checklist app encodes `[o]`-terminal→supersede (`T8.0.14-1`), the WIP gate, and the `[!]` cause/retry and `[-]` cause requirements on top of it. The diagnostic shape matches kit: `{line, column, rule, message}`.
-- **Human writes void the database's writer-monopoly premise; each feature rules on it**: FK actions are **restrict-only** on markdown corpora (`cascade`/`set_null` are rejected at schema parse — they are unimplementable for a writer that bypasses the executor); `audit` and `immutable` are advisory (validate-time rejection, no trigger-time prevention for human edits); a human-authored file missing a non-null defaulted column is rejected by validate, and `flowmark ingest` stamps defaults explicitly.
-- **The capability table is written in T1b as full content** (it is the integration contract): reject the four `lock` modes (or accept `update|share` as documented no-ops and reject `*_nowait`); reject `isolation`/`timeoutMs`, `fulltext`/`Lb`; define the `on_duplicate` conflict target explicitly (the rule is written, and the divergence from sibling backends on multi-unique-key tables is documented); state that plain `update` is strengthened to optimistic semantics on markdown (every commit re-reads); rule `getQuery`, statement events, `subscribe`, `force_index` as `CAPABILITY_UNSUPPORTED`; savepoints map to nested staging.
+- Strict parse, type/PK/UNIQUE/FK (NFC then exact match), CHECK. Soft-deleted rows still occupy unique keys and still satisfy FKs (SQL parity — stated so a soft delete never trips a spurious ruling). `aes`, `aes_version` and `blind_index` are schema errors on a corpus: the key never leaves the orm client (Revision 3).
+- The **state machine is a dbspec-level manifest setting** (transitions, terminals, required columns, and — Revision 3 — `initial`, `history` and `limit`). Every engine transition writes a history row; a state changed outside the engine is reported as a history gap or a broken chain, with a repair command. The application schema supersedes a done item with a `supersedes` link; the engine enforces no WIP rule — the relative gate is removed, and the owner's rule stays a working rule.
+- **Human writes void the database's writer-monopoly premise; each feature rules on it**: FK actions are **restrict-only** (`cascade`/`set_null` are rejected at catalog load — they are unimplementable for a writer that bypasses the engine); `audit` and `immutable` are schema errors on a corpus, replaced by the state history (Revision 3); every non-null column is written, the engine writing defaults on insert.
+- **The capability table** (`60-dialect.md`) is the integration contract under the IR-executor wire: `update|share` locks are documented no-ops and `*_nowait` is rejected; `isolation`/`timeoutMs` are `CAPABILITY_UNSUPPORTED` and `fulltext`/`Lb` `OPERATOR_NOT_ALLOWED`; the `on_duplicate` conflict target is written with its divergence; a changed target fails `WRITE_CONFLICT`; `getQuery`, statement events, `subscribe` and `force_index` are `CAPABILITY_UNSUPPORTED`; savepoints are nested stages.
 - The markdown plan lifecycle (orm's dbplan/apply/recover machinery) is **scoped out of v1**: v1 supports corpus creation and additive column addition; dbplan chains on markdown corpora are rejected (80-migration states the scope and the reason).
 
 ### 7. Sync and adapters (optional, `70-sync.md`)
@@ -99,17 +105,17 @@ sync engine: md→db export / db→md materialize (§7)
 - The sync engine is an **adapter architecture with one contract**; the database is the first adapter, GitHub (issues/projects) and Jira follow: per-table truth ownership, a provenance header naming the owning system (`<!-- owner: <adapter>:<table>@<sha256-of-own-bytes> -->`), git-aware drift handling, a recorded materialized-from revision as the merge base, and explicit one-shot commands (no live daemon). An external tracker's items materialize as corpus rows — the checklist app's item model is the local issue model, so the local board and the remote tracker are two projections of the same rows.
 - md→db: derived export (rebuildable). db→md (and every adapter→md): materialize — the hash is of the materialized file's own bytes, so the check is self-verifying and clone-safe, and its scope is stated honestly: accidents, not adversaries. The validator rejects edits to adapter-owned documents (readonly default); `writable` re-ingests after validation.
 - **Readonly drift is git-aware**: the working tree differing from HEAD restores to HEAD and reports; a clean tree whose HEAD differs from the last ingested version accepts and re-baselines. Merge conflicts on adapter-owned paths are resolved by discarding both sides and re-materializing — a hand merge there is a diagnostic.
-- The changelog projection derives from `item_revisions` — on-file data — never from the gitignored sidecar journal (a fresh clone must be able to rebuild every projection).
+- The export renders through orm's SQL dialect renderer from the catalog (Revision 3). A changelog projection derives from the history rows — on-file data — never from the gitignored journal (a fresh clone must be able to rebuild every projection).
 
 ### 8. Migration (`80-migration.md`)
 
-- v1 scope: corpus creation from the .dbs, additive column additions, and explicit transactional codemods (`flowmark renumber` rewrites the item and every structural reference in one transaction — the suffix travels with its base — and is rejected if any dangling reference or collision results). Additive-first; renames are explicit steps; dbplan chains are rejected (see §6).
+- v1 scope: corpus creation by `flowmark install` from the catalog and additive column additions; a storage move is one transaction. The renumber codemod is withdrawn with the ID grammar (Revision 3). Additive-first; renames are explicit steps; dbplan chains are `CAPABILITY_UNSUPPORTED` (see §6).
 
-### 9. Checklist app (`100-checklist.md`)
+### 9. The application schema (`100-checklist.md`)
 
-- Tables: `checklists`, `checklist_items` (self-FK parent, five states, supersedes FK), `item_dependencies` (prerequisite/follow-up), `item_revisions` (append-only: from/to, reason, evidence), `changelogs` (a projection of item_revisions).
-- **Views are just another thin consumer**: a kanban board (columns = the five states, cards = checklist items, dependencies as edges) reads through the same orm queries and writes transitions through the same orm model API — an illegal drag is rejected by the validator exactly like an illegal CLI transition, and the WIP gate becomes a column limit. No view-specific write path may exist (registered as a later-phase item; the same principle covers any future UI).
-- The kit→flowmark checklist cutover (when the app ships) is one transaction: drop the tracker from `config/checklist.json`, codemod the document to corpus format, and pass `flowmark validate` in the same commit. Until then a stopgap reference checker (every `T<n>…` token in docs/ resolves to a checklist item) covers the dangling-reference class that kit cannot check.
+- `flowmark.dbs` (Revision 3): `items` (parent, the five-state machine with its history, title, body, assignee, start and due as date/datetime pairs, priority, position), `people`, `item_links` (blocks, relates, duplicates, supersedes), `item_history` and `views`.
+- **Views are data and thin consumers**: a kanban, list or gantt view is a row of `views`; a board reads through the engine and writes through the same operations — an illegal drag fails exactly like an illegal CLI write. No view-specific write path exists, and no WIP limit is invented.
+- This repository is not a corpus (Revision 3): its checklists stay kit documents managed by hand, so the cutover is withdrawn; `make refs-check` keeps resolving task IDs in documents.
 
 ## Session plan (T1a this session; T1b next session)
 
@@ -123,24 +129,19 @@ sync engine: md→db export / db→md materialize (§7)
 
 **T1b — spec documents** (next session; EN/KO pairs, one commit per document, twins stamped): `00-overview`, `10-canonical-format` (§2), `20-document-model` (§3), `30-schema` (§4), `40-ops` (§5), `50-constraints` (§6), then skeletons `60-dialect` (the capability table as full content), `70-sync`, `80-migration`, `90-conformance`, full `100-checklist`, `110-open-questions`. Acceptance criterion per document: every ruling appears as a proposition with its grounding (decision count, not prose volume).
 
-**T9 conformance contract (stated now)**: markdown vectors are corpus-before + IR request + expected corpus-after / expected rows, run against the Go executor; SQL/binds comparison does not apply (there is no SQL). Cross-client comparison begins when other clients port the executor.
+**T9 conformance contract (stated now)**: markdown vectors are corpus-before + IR request + expected corpus-after / expected rows, run against the Go executor; SQL/binds comparison does not apply (there is no SQL). Cross-client comparison begins when other clients port the executor. (Revision 3: vectors run against the flowmark engine; orm's executor conformance pins a flowmark build.)
 
 **Later phases (registered as `[ ]` checklist items only)**: T2 codec (Go), T3 validator, T4 executor, T5 orm markdown-executor integration (manifest settings, state-machine sub-grammar — orm-repo changes), T6 sync (the adapter contract and the database adapter; GitHub and Jira adapters register under it), T7 the three faces — CLI, MCP server and soksak sidecar (protocol v1: JSON lines over stdio, surface routing, host-owned lifecycle; the MCP tool list gets its mini-spec first, and per-operation locking is already the core ruling), T8 checklist app (the local issue model), T9 conformance vectors, T10 the soksak plugin in its own repository — the local kanban board and issue tracker as one more thin consumer, with no view-specific write path.
 
 ## What the audit could not break
 
 - Between two conforming flowmark writers, per-operation locking + stage/prepare/commit loses no update (the real holes were readers, humans, and crash windows — now ruled above).
-- The dbspec ⇒ frontmatter derivation direction: the standalone-fragment provisional authority covers offline documents, and the reverse direction genuinely creates the DDL-reconciliation conflict class this plan rejects.
+- The dbspec-first derivation direction: the reverse direction genuinely creates the DDL-reconciliation conflict class this plan rejects. (Revision 3 keeps the direction and withdraws the standalone fragments: the catalog is the only schema.)
 - IR expressiveness over a corpus: all kinds, relations (limit_per_parent, if_parent, flatten, key_by, composite keys), tuple_in with subqueries, group_count, restore and optimistic map to unambiguous in-memory definitions given type-directed ordering and PK-sorted determinism.
 
-## Open questions (kept in `110-open-questions.md`; promoted into a spec when decided)
+## Open questions
 
-- flowmark's own license — recommendation: Apache-2.0 (patent grant; a schema-language derivative next to an AGPL neighbor); decide before the first public push.
-- The corpus scale envelope (e.g. ≤10k documents / ≤100k child rows) and the latency budget numbers that 40-ops declares.
-- Confirming the `T8.0.14-1.3` suffix-children ruling (recommendation: allow — restated as a proposition in 10-canonical-format).
-- Frontmatter comment support (rejected in v1; revisit when a requirement names it).
-- The MCP tool list and its per-call surface (T7 mini-spec).
-- The orm-side ordering of the manifest-setting extensions (T5).
+The open questions live in `110-open-questions.md` and are promoted into a specification when decided.
 
 ## Verification (T1a)
 
