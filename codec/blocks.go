@@ -7,14 +7,41 @@ import (
 )
 
 // ChecklistItem is one row of a checklist block: the kit grammar `- [state] ID text` with its
-// indented continuation lines (spec 20-document-model).
+// indented continuation lines, and the metadata tokens the title may close with — `@assignee`
+// and a `YYYY-MM-DD` due date. An item without an assignee belongs to the owner: the first
+// row of the document's people table.
 type ChecklistItem struct {
 	State         string
 	ID            string
 	Title         string
+	Assignee      string
+	Due           string
 	Line          int
 	Indent        int
 	Continuations []string
+}
+
+var dueToken = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
+
+// splitMeta closes an item title with its metadata tokens: a trailing date is the due date,
+// an `@id` before it is the assignee. The title keeps everything else verbatim.
+func splitMeta(title string) (text, assignee, due string) {
+	fields := strings.Split(title, " ")
+	for len(fields) > 0 {
+		last := fields[len(fields)-1]
+		if due == "" && dueToken.MatchString(last) {
+			due = last
+			fields = fields[:len(fields)-1]
+			continue
+		}
+		if assignee == "" && strings.HasPrefix(last, "@") && len(last) > 1 {
+			assignee = last[1:]
+			fields = fields[:len(fields)-1]
+			continue
+		}
+		break
+	}
+	return strings.TrimRight(strings.Join(fields, " "), " "), assignee, due
 }
 
 // Table is one markdown table block: a header row, a separator and data rows. The header
@@ -62,12 +89,15 @@ func scanBlocks(lines []string, fenced []bool) (items []ChecklistItem, tables []
 			continue
 		}
 		if match := itemLine.FindStringSubmatch(lines[at]); match != nil {
+			title, assignee, due := splitMeta(match[4])
 			item := ChecklistItem{
-				Indent: len(match[1]),
-				State:  match[2],
-				ID:     match[3],
-				Title:  match[4],
-				Line:   at + 1,
+				Indent:   len(match[1]),
+				State:    match[2],
+				ID:       match[3],
+				Title:    title,
+				Assignee: assignee,
+				Due:      due,
+				Line:     at + 1,
 			}
 			items = append(items, item)
 			lastItem = len(items) - 1

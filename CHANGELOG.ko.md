@@ -1,8 +1,14 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 5a632cc236894e1b0adeab327d280af5c39abdefb8a4f02d1ca5274bfea8f8b7 -->
+<!-- source-sha256: 76722263476db8fd04692f9dca6911f2381e01b8e59c9041921ae151561bde82 -->
 # Changelog
 
 ## Unreleased
+
+- T11: 항목이 사람과 날짜를 가진다. 항목 title은 `@assignee`와 `YYYY-MM-DD` 마감으로 끝날 수
+  있고 — codec이 끝 token을 title에서 분리한다 — 문서는 `id`와 `name` column을 정의하는 사람
+  table을 가진다. 첫 행이 owner다: 담당자 없는 항목은 owner의 것이다. `All("items")`이
+  list·table 항목 모두에 assignee·due를 얻고 `All("people")`이 사람 행을 반환하며 sidecar의
+  items answer가 두 column을 실고 `people` answer를 가진다.
 
 - T4.3: 항목은 table 형태로도 존재한다. header row가 state·id·title column을 정의하는 markdown table이
   그 문서의 항목 목록이다 — 문서가 쓴 header가 정의다 — 그리고 `All("items")`이 행 순서대로 행을

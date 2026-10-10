@@ -123,3 +123,36 @@ func TestAllReadsTableItems(t *testing.T) {
 		t.Fatalf("last row: %+v", rows[2])
 	}
 }
+
+const people = "# T\n\n## People\n\n| id | name |\n| --- | --- |\n| max | Min-soo Kim |\n| jy | Ji-yeon Park |\n\n## Work\n\n- [~] T1 API 목록 @max 2026-10-12\n- [ ] T2 혼자 하는 일\n"
+
+func TestItemsCarryAssigneeAndDue(t *testing.T) {
+	corpus, err := Open(write(t, map[string]string{"t.md": people}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, err := corpus.All("items", Query{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rows[0]["assignee"] != "max" || rows[0]["due"] != "2026-10-12" {
+		t.Fatalf("first: %+v", rows[0])
+	}
+	if rows[1]["assignee"] != "" || rows[1]["due"] != "" {
+		t.Fatalf("second: %+v", rows[1])
+	}
+}
+
+func TestPeopleTable(t *testing.T) {
+	corpus, err := Open(write(t, map[string]string{"t.md": people}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, err := corpus.All("people", Query{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 2 || rows[0]["id"] != "max" || rows[0]["name"] != "Min-soo Kim" {
+		t.Fatalf("people: %+v", rows)
+	}
+}
