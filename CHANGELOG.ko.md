@@ -1,8 +1,11 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 5a49ff4a476402dcb3f99e936e5c1d4b67875b6c3bf80e413ea8741e0d18e5c7 -->
+<!-- source-sha256: 87167f5610833bc95d088feddb01f80f0e555aa87b5584b6f087ea4d0b12e55b -->
 # Changelog
 
 ## Unreleased
+
+- T10-2: 새 이슈 row는 column의 마지막 카드 바로 아래에 따라오고 column 전체가 drop을 받는다.
+  카드 목록이 column을 채우지 않아 늘어난 column에도 틈이 없다. 변경은 plugin repository에 있다.
 
 - T10-1: 보드는 문서가 갖지 않은 상태를 보여주지 않는다. 거절된 drop(done → doing, 또는
   evidence가 필요한 edge)이 카드를 drop한 column에 남기고 markdown은 상태를 지켰다. plugin은 이제
