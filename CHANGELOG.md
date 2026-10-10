@@ -3,6 +3,10 @@
 
 ## Unreleased
 
+- T10-2: the new-issue row follows the last card of its column and the whole column takes a
+  drop; the card list no longer fills the column, so a stretched column leaves no gap. The
+  change lives in the plugin repository.
+
 - T10-1: the board never shows a state the document does not hold. A refused drop (done →
   doing, or an edge that needs evidence) left the card in the column it was dropped on while
   the markdown kept its state; the plugin now judges a drop before moving anything and redraws
