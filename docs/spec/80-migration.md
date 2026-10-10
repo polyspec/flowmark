@@ -4,30 +4,29 @@
 [한국어](80-migration.ko.md)
 
 This document states the scope and the settled rulings of schema evolution; the detailed
-specification is written when schema evolution beyond the v1 scope starts.
+specification is written when evolution beyond the v1 scope starts.
 
 ## Scope
 
-- **v1 supports corpus creation, additive column additions, and explicit transactional
-  codemods.** dbplan chains (the orm `plans.md` lifecycle) are rejected on markdown corpora:
-  the server-session, hold-table and introspection machinery has no markdown equivalent in v1,
-  and additive-only evolution covers the design phase.
-- A codemod is a transaction: `flowmark renumber` rewrites an item and every structural
-  reference in one transaction — the suffix changes with its base — and the transaction is
-  rejected when a dangling reference or a key collision would result.
+- **v1 supports corpus creation and additive column additions.** `flowmark install` creates the
+  storage skeleton from the catalog ([schema](30-schema.md)). dbplan chains (the orm `plans.md`
+  lifecycle) are `CAPABILITY_UNSUPPORTED` over `markdown://`: their server-session, hold-table and
+  introspection machinery has no markdown equivalent in v1.
+- An added nullable column needs no rewrite: an absent field, cell, key or section is NULL. An
+  added non-null column is added with a default, and a one-shot transaction writes the default
+  into every existing row, because every non-null column is written
+  ([canonical format](10-canonical-format.md)).
 
 ## Settled rulings
 
-- **Additive-first**: a new column is optional until a migration stamps it; a rename is an
-  explicit step, never "add new and drop old".
-- **Reference rewriting is the stated exception to payload preservation** (canonical format):
-  the codemod rewrites reference tokens in prose and never rewrites inside fenced blocks or
-  inline code spans.
-- **The checklist cutover** — when the checklist application reads its own corpus — is one
-  transaction: the tracker leaves `config/checklist.json`, the document converts to corpus
-  format, and `flowmark validate` passes in the same commit.
+- **Additive-first**: a rename is an explicit step, never "add new and drop old".
+- **A storage change is a transaction**: moving a table from one storage to another rewrites every
+  row in one transaction, and the rows read the same before and after.
+- **Keys are opaque**, so no key codemod rewrites references in prose; a key change is an update of
+  the key and of every foreign key that references it, refused while a restrict-only reference
+  would dangle.
 
 ## Open for later
 
-The markdown plan dialect (or its permanent rejection), effect vocabulary for file-level steps,
-and collision handling for range renumbers.
+The evolution of a declared storage beyond a whole-table move, the effect vocabulary for
+file-level steps, and the rejection or design of a markdown plan dialect.
