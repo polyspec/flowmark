@@ -1,22 +1,23 @@
 <!-- doc-id: spec-open-questions -->
-<!-- source-sha256: 3e42becc2859074fd14b78fcf3cc7420b704ac8ceb47f43f3f268ea1bb72ffb1 -->
+<!-- source-sha256: 0ed71d6ef31e581dea6a728811a42eacaffee266441cb41c693fab0389d8a90d -->
 # Open questions
 
 [English](110-open-questions.md)
 
-각 항목은 질문, 현재 권고, 결정 조건을 서술한다. 결정이 나면 해당 항목은 소유 명세로 이동하고
-여기에서 제거한다.
+각 항목은 질문, 현재의 권고, 그것을 결정하는 조건을 적는다. 결정되면 항목은 소유 spec으로 옮겨지고
+여기서 지운다.
 
-| # | 질문 | 권고 | 결정 주체 |
+| # | 질문 | 권고 | 결정 조건 |
 | --- | --- | --- | --- |
-| 1 | 이 저장소의 license | Apache-2.0 (patent grant — schema-language 파생물에 대해) | 첫 공개 push 이전 |
-| 2 | corpus 규모 envelope (문서 수, child row 수)과 40-ops의 p95 latency 예산 | 문서 ≤10k / child row ≤100k; command당 수백 ms | T2의 첫 codec benchmark |
-| 3 | suffix 항목의 하위 항목 (`T8.0.14-1.3`) | 허용 — canonical format에 명제로 서술됨. 사용으로 확정 | 첫 renumber codemod |
-| 4 | frontmatter comment 지원 | v1 거부 유지. 요구사항이 이름을 붙일 때만 재검토 | 그 요구사항 |
-| 5 | 세 face의 MCP tool 목록과 호출별 표면 | model 연산당 tool 하나 + board 구독. portable lock 아래 호출당 하나의 연산 | T7 mini-spec |
-| 6 | manifest setting 확장(markdown trait, checklist sugar, state-machine sub-grammar)의 orm 반영 순서 | state machine 먼저 — checklist application이 T8에서 필요로 한다 | orm과의 T5 계획 |
-| 7 | 사용자가 다음 kit release에 tag를 붙인 뒤 재vendor | `make kit-sync KIT_TAG=<tag>`가 local path lock 기록을 교체한다 | kit release tag |
+| 1 | 이 repository의 license | Apache-2.0 (schema 언어 파생물을 위한 특허 허여) | 첫 공개 push 전 |
+| 2 | corpus 규모(문서, 행)와 40-ops의 p95 지연 예산 | 문서 ≤10k / 행 ≤100k, command당 수백 millisecond | T12.4의 첫 엔진 benchmark |
+| 3 | frontmatter comment 지원 | v1에서는 계속 거절. 요구가 이름 붙일 때만 다시 본다 | 그것을 이름 붙이는 요구 |
+| 4 | T12가 요구하는 orm 항목의 순서 | protocol의 IR executor와 `WRITE_CONFLICT`가 먼저, 그다음 markdown setting — setting 항목은 protocol 항목이 정의하는 executor 할당 column을 필요로 한다 | orm checklist의 등재 |
+| 5 | 사용자가 다음 kit release에 tag를 붙인 뒤 kit 재vendor | `make kit-sync KIT_TAG=<tag>`가 local path lock 기록을 대체한다 | kit release tag |
 
-상시 note 두 개. 설계 계획은 각 명세가 자기 부분을 흡수할 때까지 ruling 기록으로 남는다. 둘이
-어긋나면 명세가 이기고 계획이 수정을 받는다. 그리고 open-question 목록 자체를 모든 phase 종료
-시 검토한다 — 결정 조건이 사라진 항목은 결정하거나 제거한다. 방치하지 않는다.
+markdown database 계획으로 철회한 것: suffix 항목의 자식(key는 불투명하고 suffix 문법은 제거됨), MCP tool
+목록(face는 모든 table 위에서 동작한다, T12.10).
+
+두 가지 상시 원칙. design plan과 markdown database 계획은 각 spec이 자기 몫을 흡수할 때까지 판정 기록으로
+남으며, 둘이 다르면 spec이 이기고 계획을 정정한다. 그리고 open question 목록 자체는 매 phase를 닫을 때
+검토한다 — 더 이상 결정 조건이 없는 항목은 결정하거나 버리며 썩게 두지 않는다.
