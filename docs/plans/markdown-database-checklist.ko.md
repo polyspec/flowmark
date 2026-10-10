@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database-checklist -->
-<!-- source-sha256: bb0ba8255fbcc4d35672891b50e2f79fbde6b2c543d5e9b768f9928870541dac -->
+<!-- source-sha256: 09a2856896afbc6ced9a25498c2e82965bc3b4997a0ec07c0c7bb0dcce92fdce -->
 # markdown database checklist
 
 ## T12 markdown database
@@ -27,7 +27,7 @@
   - 완료 기준: spec 10과 그 twin이 규칙을 근거와 함께 적고, 더 좁은 T12.1-6과 T12.1-8의 문장이 그것으로 바뀌며, 이 항목의 문구를 범위로 한 적대 검증을 거치고, `make documents-check`와 `make refs-check`가 통과한다.
 - [ ] T12.2.2-4 `files` codec이 T12.1-9의 보이지 않는 문자 규칙을 적용한다: 끝의 거절, 읽기 분류(CommonMark나 GFM이 떼어내는 자리의 space나 tab은 `format.noncanonical`, 끝의 그 밖의 보이지 않는 문자는 `format.block`), 따옴표 쓰기를 동반한 bare token의 제외와 그 읽기 규칙, U+1680과 prepended concatenation mark의 제외. 원인: T12.1-9가 codec이 검사하는 공백을 바꾸었고, Go의 `unicode` 패키지에는 Default_Ignorable_Code_Point 속성이 없으므로 codec은 Unicode 17.0.0 data에서 생성한 table로 그것을 읽으며, 그 table의 최신성은 테스트가 확인한다 (T12.1-9 후속; T12.2.2-2 필요)
   - 완료 기준: 문자 부류마다, 자리마다(H1 제목, field list 값, list 제목과 field, table cell) 허용과 거절 사례가 있고, 생성된 table의 Unicode 17.0.0 data 대비 최신성 테스트가 있으며, fuzz target이 새 사례로 seed되고, `go test -count=1 ./...`, `make documents-check`, `make refs-check`가 통과한다.
-- [ ] T12.2.2-3 `files` codec이 T12.1-8의 읽기 규칙을 적용한다: CommonMark type 1–5의 HTML block을 요소 앞에서 열어 둔 값은 읽기에서 `format.block`이다(`htmlOpen`은 지금 쓰기에서만 적용된다) (T12.1-8 후속; T12.2.2-2와 T12.1-10 필요. T12.1-10의 더 넓은 규칙, 즉 모든 HTML block type과 뒤따르는 요소를 흡수할 때만 거절되는 열린 block을 적용한다)
+- [o] T12.2.2-3 `files` codec이 T12.1-8과 T12.1-10의 열린 block 규칙을 적용한다: block scanner가 모든 CommonMark type의 HTML block을 읽고, 흡수할 뒤따르는 요소 앞에서 fence나 HTML block을 열어 두는 쓰기는 `CONSTRAINT`다. 읽기에서 그런 block이 흡수한 줄은 CommonMark block 구조에서 경계가 아니므로 값의 텍스트이며, 읽기 쪽에는 보고할 결함이 없다(T12.1-11이 spec 10에 이를 적는다) (T12.1-8 후속; T12.2.2-2와 T12.1-10 필요. T12.1-10의 더 넓은 규칙, 즉 모든 HTML block type과 뒤따르는 요소를 흡수할 때만 거절되는 열린 block을 적용한다)
   - 완료 기준: 읽기 사례의 RED 테스트가 의도한 이유로 실패함을 확인한 뒤 GREEN이 되고, `go test -count=1 ./store/ ./catalog/`, `make documents-check`와 `make refs-check`가 통과한다.
 - [o] T12.2.2-2 codec은 heading을 CommonMark block 구조로 찾는다: list 항목이나 block quote 안의 heading은 섹션 경계가 아니므로, `store/markdown.go`는 list 항목 안의 들여쓴 `##` 줄을 경계로 보지 않는다 (T12.1-6 후속; T12.2.2-1 필요)
   - 완료 기준: `go test ./store/...`에 list 항목 안의 body `##` 줄은 섹션이 아니라는 수용 사례와 최상위 줄은 경계라는 거부 사례가 있고, `make documents-check`와 `make refs-check`가 통과한다.

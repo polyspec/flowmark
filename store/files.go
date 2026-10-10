@@ -387,10 +387,11 @@ func (p *parser) valueLines(lines []string, from, to int, framed bool) ([]string
 }
 
 // readBody reads the body, which runs from line i to the next heading of level 2
-// or less outside a fence, and returns the index of that heading. A body begins
-// with neither a list item nor, after a field list, an indented line.
+// or less outside a fence or an HTML block, and returns the index of that
+// heading. A body begins with neither a list item nor, after a field list, an
+// indented line.
 func (p *parser) readBody(lines []string, i int, row *Row) int {
-	b, _ := boundary(lines, i)
+	b := boundary(lines, i)
 	region, start := p.valueLines(lines, i, b, false)
 	if len(region) > 0 {
 		switch {
@@ -407,9 +408,8 @@ func (p *parser) readBody(lines []string, i int, row *Row) int {
 // readSections reads the sections of the row from line b, each a level-2
 // heading that names a declared markdown column.
 func (p *parser) readSections(lines []string, b int, row *Row) {
-	hs, _ := scanHeadings(lines, b)
 	var bounds []heading
-	for _, h := range hs {
+	for _, h := range scanHeadings(lines, b).heads {
 		if h.level <= 2 {
 			bounds = append(bounds, h)
 		}
@@ -633,9 +633,9 @@ func (w *writer) fieldText(lay *filesLayout, row *Row, c dbspec.Column, v string
 // with a line feed and begins and ends with a line that is not blank; it holds
 // no CR, no U+0000 and no heading of level 2 or less outside a fence, setext
 // headings included. A body begins with neither a list item nor, after a field
-// list, an indented line. A value that leaves an open fence or an open HTML
-// block is refused when an element follows it, since that element would be
-// read inside it.
+// list, an indented line. A value that leaves a fence or an HTML block open at
+// the top level is refused when the element that follows it would be taken into
+// that block.
 func (w *writer) value(name, v string, line int, followed, body, afterFields bool) {
 	if v == "" {
 		return
@@ -667,8 +667,14 @@ func (w *writer) value(name, v string, line int, followed, body, afterFields boo
 	if body && afterFields && indented(lines[0]) {
 		w.refuse(line, 1, "the body begins with an indented line after the field list")
 	}
-	hs, open := scanHeadings(lines, 0)
-	for _, h := range hs {
+	// The element that follows is set off by one blank line, which closes an HTML
+	// block of type 6 or 7 and nothing else; the value is read with that line.
+	framed := lines
+	if followed {
+		framed = append(append([]string(nil), lines...), "")
+	}
+	sc := scanHeadings(framed, 0)
+	for _, h := range sc.heads {
 		if h.level <= 2 {
 			if h.last != h.at {
 				w.refuse(line+h.last, 1, name+" holds a setext heading")
@@ -678,11 +684,8 @@ func (w *writer) value(name, v string, line int, followed, body, afterFields boo
 			break
 		}
 	}
-	if followed && htmlOpen(lines) {
-		w.refuse(line, 1, name+" leaves an HTML block open before the next element")
-	}
-	if open && followed {
-		w.refuse(line, 1, name+" opens a fence that would hide the next heading")
+	if sc.open && followed {
+		w.refuse(line, 1, name+" leaves a fence or an HTML block open before the next element")
 	}
 }
 

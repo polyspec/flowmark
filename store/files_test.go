@@ -217,7 +217,9 @@ func parseCases() []parseCase {
 		// The body: payload, never a list item first and never a heading of level 2 or less.
 		accept("10#sections-and-their-values: body with a deeper heading", withBase("Body text.", "", "### Deeper", "", "Last.")),
 		accept("10#sections-and-their-values: body with a heading inside a fence", withBase("```", "## x", "```")),
-		accept("10#sections-and-their-values: body with an open fence that hides a section heading", withBase("```", "## evidence", "x")),
+		accept("10#sections-and-their-values: body with an open fence that holds a heading of level 2 as body text", withBase("```", "## evidence", "x")),
+		accept("10#sections-and-their-values: open fence at the end of a body", withBase("```", "x")),
+		noncanonical("10#sections-and-their-values: fence open in a list item before a top-level section", 8, withBase("Body.", "", "- ```", "## evidence", "", "x")),
 		noncanonical("10#sections-and-their-values: body that is one blank line", 5, raw("# Title", "- position: 1", "- done: true", "", "")),
 		noncanonical("10#sections-and-their-values: trailing blank line after the fields", 4, raw("# Title", "- position: 1", "- done: true", "")),
 		accept("10#sections-and-their-values: fields with no body and no section", doc("# Title", "- position: 1", "- done: true")),
@@ -244,6 +246,11 @@ func parseCases() []parseCase {
 		accept("10#sections-and-their-values: heading inside a block quote", withBase("Body.", "", "> ## x")),
 		accept("10#sections-and-their-values: heading inside a fence in a list item", withBase("Body.", "", "- ```", "  ## x", "  ```")),
 		accept("10#sections-and-their-values: heading inside an HTML comment", withBase("<!--", "## evidence", "-->")),
+		accept("10#sections-and-their-values: open HTML comment that holds a section heading line as body text", withBase("<!--", "", "## evidence", "", "x")),
+		accept("10#sections-and-their-values: HTML block of type 6 that holds a section heading line without a blank line", withBase("<div>", "## evidence", "x")),
+		accept("10#sections-and-their-values: HTML block of type 6 followed by a blank line before a section", withBase("<div>", "", "## evidence", "", "x")),
+		accept("10#sections-and-their-values: HTML block of type 7 that holds a section heading line as body text", withBase("<span>", "## evidence", "x")),
+		noncanonical("10#sections-and-their-values: HTML block of type 7 that is a line of a paragraph", 7, withBase("Body.", "<span>", "## evidence", "", "x")),
 		accept("10#sections-and-their-values: indented code is not a heading", withBase("Body.", "", "    ## x")),
 		accept("10#sections-and-their-values: indented line that continues a paragraph is not a heading", withBase("Body.", "    ## x")),
 		accept("10#sections-and-their-values: setext underline inside a list item is not a section", withBase("Body.", "", "- a", "  ===")),
@@ -597,6 +604,30 @@ func TestRenderRules(t *testing.T) {
 			r.Sections["evidence"] = sp("x\n")
 		}, out: withBase("<!-- c -->", "", "## evidence", "", "x")},
 		{name: "10#sections-and-their-values: body with an open HTML comment at the end", mut: func(r *Row) { r.Body = "<!--\nx\n" }, out: withBase("<!--", "x")},
+		{name: "10#sections-and-their-values: body with an open HTML block of type 6 that holds a heading as body text", mut: func(r *Row) { r.Body = "<div>\n## y\n" }, out: withBase("<div>", "## y")},
+		{name: "10#sections-and-their-values: body with a heading taken into an HTML block of type 6 closed by a blank line", mut: func(r *Row) { r.Body = "<div>\n## y\n\nx\n" }, out: withBase("<div>", "## y", "", "x")},
+		{name: "10#sections-and-their-values: body with an open HTML block of type 6 before a section after a blank line", mut: func(r *Row) {
+			r.Body = "<div>\n"
+			r.Sections["evidence"] = sp("x\n")
+		}, out: withBase("<div>", "", "## evidence", "", "x")},
+		{name: "10#sections-and-their-values: body with an open HTML block of type 7 before a section after a blank line", mut: func(r *Row) {
+			r.Body = "<span>\n"
+			r.Sections["evidence"] = sp("x\n")
+		}, out: withBase("<span>", "", "## evidence", "", "x")},
+		{name: "10#sections-and-their-values: body with a type 7 line of a paragraph before a section", mut: func(r *Row) {
+			r.Body = "Body.\n<span>\n"
+			r.Sections["evidence"] = sp("x\n")
+		}, out: withBase("Body.", "<span>", "", "## evidence", "", "x")},
+		{name: "10#sections-and-their-values: body with an open fence that holds a heading as body text", mut: func(r *Row) { r.Body = "```\n## y\n" }, out: withBase("```", "## y")},
+		{name: "10#sections-and-their-values: body with an open fence at the end", mut: func(r *Row) { r.Body = "```\nx\n" }, out: withBase("```", "x")},
+		{name: "10#sections-and-their-values: body with an open fence in a list item before a section", mut: func(r *Row) {
+			r.Body = "Body.\n\n- ```\n"
+			r.Sections["evidence"] = sp("x\n")
+		}, out: withBase("Body.", "", "- ```", "", "## evidence", "", "x")},
+		{name: "10#sections-and-their-values: section with an open HTML comment before the next section", mut: func(r *Row) {
+			r.Sections["evidence"] = sp("<!--\n")
+			r.Sections["cause"] = sp("c\n")
+		}, rule: RuleConstraint, line: 7},
 		{name: "10#encoding-and-line-structure: body with a bare CR", mut: func(r *Row) { r.Body = "a\rb\n" }, rule: RuleConstraint, line: 5},
 		{name: "10#encoding-and-line-structure: body with CRLF", mut: func(r *Row) { r.Body = "a\r\nb\n" }, rule: RuleConstraint, line: 5},
 		{name: "10#encoding-and-line-structure: body with a U+0000", mut: func(r *Row) { r.Body = "a\x00b\n" }, rule: RuleConstraint, line: 5},

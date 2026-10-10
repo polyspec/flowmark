@@ -1,8 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: aed821fa41ad61fa4d32d6f67f5686460c29b04e04c31c737dddf0f15af997d0 -->
+<!-- source-sha256: 395febc370dc6b5b4b71f5571ea96f7a78a38ac029c8569513360823e27a2352 -->
 # Changelog
 
 ## Unreleased
+
+- T12.2.2-3: `files` codec이 spec 10의 열린 block 규칙을 쓰기에 적용한다. 열어 둔 fence나 HTML block이 뒤따르는 요소를 흡수하면 값은 `CONSTRAINT`로 거절된다. block scanner는 CommonMark 0.31.2대로 type 6과 7의 HTML block을 읽으며, type 7 block은 문단을 중단하지 않는다. list 항목 안에 열린 block이 최상위 heading으로 닫히면 잘못이 아니다.
 
 - T12.1-9: spec과 plan이 단일 줄 값의 양 끝에 있는 보이지 않는 문자를 거절한다: U+1680을 뺀 Unicode White_Space 속성의 문자, 제어 문자(Cc), Prepended_Concatenation_Mark를 뺀 형식 문자(Cf, U+FEFF 포함), Default_Ignorable_Code_Point다(Unicode 17.0.0 기준). 그런 문자는 글리프 없이 그려지므로 독자는 볼 수 없고(U+1680과 prepended concatenation mark는 글리프가 있어 텍스트다) viewer들이 끝에서 떼어내는 문자 집합이 서로 다르므로, 모두 거절하면 viewer의 버전과 무관하게 각 viewer가 값의 텍스트를 보여 준다. 구분자의 정식 공백은 여전히 space다. 읽기에서 끝의 space나 tab은 CommonMark가 떼어내므로 `format.noncanonical`이며(list 제목의 끝에서 뒤따르는 토큰 앞의 tab은 `format.block`), 끝의 그 밖의 보이지 않는 문자는 쓰기 규칙이 다시 만들 수 없으므로 `format.block`이다. T12.1-8의 space와 tab 정의를 대체하며, framing 빈 줄을 space와 tab만 있는 줄로 명시한다.
 
