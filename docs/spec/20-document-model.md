@@ -18,15 +18,18 @@ are in the [canonical format](10-canonical-format.md); the declarations are in t
 
 - A corpus document is a file whose name ends with `.flowmark.md`, under the corpus root and outside
   `dbspec/`, `.flowmark/` and hidden entries. The name is the only criterion that makes a file part
-  of the database; every other file is outside it and draws no diagnostic, except a name whose suffix is `.flowmark.md` without regard to case, which is `corpus.walk`.
+  of the database; every other file is outside it and draws no diagnostic, except a name whose suffix is `.flowmark.md` without regard to case, which is `corpus.walk`, and an entry at a `files` table's place that is not a folder (the symlink rule below).
 - The walk reads every `*.flowmark.md` file. A file whose place matches no table — neither
   `<table>.flowmark.md` of a `document` table nor `<table>/<key>.flowmark.md` of a `files`
   table — is a `corpus.walk` diagnostic, and so is a `.flowmark.md` entry that cannot be read.
 - Names are compared byte for byte. A `.flowmark.md` suffix, a table folder or a document file name
   in another case is `corpus.walk`.
 - A file name whose key breaks the key shape is `format.block` on read.
-- The walk never follows a symlink. A symlink whose name ends with `.flowmark.md`, or a symlinked
-  folder named like a `files` table, is `corpus.walk`; any other symlink is outside the database.
+- The walk never follows a symlink. A symlink whose name ends with `.flowmark.md`, and an entry named
+  like a `files` table that is not a folder (a regular file, or a symlink to whatever it points to), is
+  `corpus.walk`; any other symlink is outside the database. Grounding: a place of a table is its name,
+  so a file that takes that name is in the table's place, not outside it, and the table is unavailable
+  ([canonical format](10-canonical-format.md#diagnostics)).
 - A hard link cannot be told from a file portably, so it is not a rule (the multi-platform
   requirement). The engine writes a document by a temp file and a rename, so a hard-linked document
   is unlinked by its first write.
@@ -96,7 +99,7 @@ so the same rows can be stored either way.
   `files` storage require `title` — the line text, the H1; a `table` storage may declare it as a
   cell. A declared title is non-null and refuses the empty text.
 - `body` is a `markdown` column and never NULL. It is the text of a `files` row after its H1 and
-  field list, or the text of a detail section before its first heading at level h + 1; a row without a detail
+  field list, or the text of a detail section before its first top-level heading (outside any container) of level ≤ h + 1; a row without a detail
   section has the empty text as its body.
 - A view of kind kanban, list or gantt requires its entity table to declare both.
 

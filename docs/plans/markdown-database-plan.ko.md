@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database -->
-<!-- source-sha256: cbf8a56fa1ca0697f5695e216997a0414d24a585669ab0fe90ccd077548a2536 -->
+<!-- source-sha256: 0a34c2e7fa067d48c41f2f9d222ee27c32bd7caf53f6cccbddfb407c1c1a7810 -->
 # markdown database 계획
 
 [English](markdown-database-plan.md)
@@ -98,7 +98,7 @@ NULL이 아니며 비어 있을 수 있고, view의 entity table은 둘 다 선�
 
 - **corpus 문서는 이름이 `.flowmark.md`로 끝나는 file이다.** corpus root 아래에 있고 `dbspec/`,
   `.flowmark/`와 숨김 항목 밖에 있는 file이다. 이름만이 file을 database의 일부로 만드는 기준이며,
-  그 밖의 모든 file은 database 밖이고 진단을 내지 않는다.
+  그 밖의 모든 file은 database 밖이고 진단을 내지 않는다. 다만 대소문자를 무시하고 suffix가 `.flowmark.md`인 이름은 `corpus.walk`이며, `files` table의 자리에 있는 폴더가 아닌 항목도 그렇다.
 - **모든 corpus 문서는 완전한 markdown 문서다.** flowmark를 모르는 독자도 그대로 읽으며, 주석,
   표지, 숨은 field가 없다. 구조는 평범한 markdown(heading, list, table, field list)이고 모든 관계는
   GitHub, GitLab, VS Code, MkDocs가 heading에 대해 만드는 anchor인 link다. Pandoc은 주장 대상이 아니다: 기본 설정은 상대 경로 link target을 다시 쓰지 않는다.
@@ -161,11 +161,12 @@ markdown 전용 선언은 모두 dbspec **manifest setting**이며 `markdown <co
   `title`을 요구하고(줄 텍스트, H1), `table` 저장은 cell로 선언할 수 있다. 제목은 non-null이며 빈
   텍스트를 거절한다. H1의 제목에서 마지막 `#` 연속이 공백이나 tab 뒤에 오거나 `#` 문자뿐이면 마지막 `#`을 `\#`로 쓴다. CommonMark가 그 연속을 닫는 sequence로 읽기 때문이다. 읽을 때 마지막 `\#`은 제목의 `#`이며, H1의 닫는 열은 `format.noncanonical`이다. `\#`로 끝나는 제목은 `#`으로 다시 읽히므로 쓰기에서 `CONSTRAINT`다.
 - `body`는 `markdown` column이며 NULL이 아니다. 모든 저장에서 행 scope에 놓인다: file의 H1 뒤 텍스트,
-  또는 행 상세 섹션의 첫 level h + 1 heading 앞 텍스트. 상세 섹션이 없는 행의 body는 빈 텍스트다.
+  또는 행 상세 섹션의 첫 최상위(컨테이너 밖) level ≤ h + 1 heading 앞 텍스트. 상세 섹션이 없는 행의 body는 빈 텍스트다.
 - `files` 행은 차례로 H1 제목, 저장되는 scalar column의 field list, body, level-2 섹션이다(spec 10의 문서
-  순서를 개정한다). body와 모든 `markdown` 섹션 값은 fenced block 밖에서만 세는(CommonMark block
-  구조) 다음 level ≤ L heading에서 끝난다. 그런 값은 L보다 깊은 heading만 담으며, fence 밖에 level ≤ L
-  heading 줄을 가진 값의 쓰기는 `CONSTRAINT`다. 값은 setext heading을 담지 않는다: fence 밖의 비어 있지 않은 줄 바로 뒤에서 `=`만 또는 `-`만 있는 줄(들여쓰기 최대 세 칸, 뒤의 공백이나 tab은 있어도 된다)은 쓰기에서 `CONSTRAINT`이며, 읽기에서는 CommonMark가 setext heading으로 읽는 곳이 heading이다. 값이 CommonMark type 1–5의 fence나 HTML block을 열린 채로 남기면, 뒤따르는 요소가 있을 때 `CONSTRAINT`다.
+  순서를 개정한다). body와 모든 `markdown` 섹션 값은 fenced block 밖이고 컨테이너(block quote나 list 항목) 밖에서만 세는
+  (CommonMark block 구조) 다음 최상위 level ≤ L heading에서 끝난다. 그런 값은 L보다 깊은 최상위 heading만
+  담으며, fence 밖이고 컨테이너 밖에 최상위 level ≤ L heading 줄을 가진 값의 쓰기는 `CONSTRAINT`다. 값은 최상위
+  setext heading을 담지 않는다: fence 밖이고 컨테이너 밖에서, 최상위 문단의 줄 바로 뒤에 `=`만 또는 `-`만 있는 줄(들여쓰기 최대 세 칸, 뒤의 공백이나 tab은 있어도 된다)은 쓰기에서 `CONSTRAINT`이며, 읽기에서는 CommonMark가 setext heading으로 읽는 곳이 heading이다. 컨테이너 안의 setext heading은 이 규칙 밖이다. 값이 CommonMark type 1–5의 fence나 HTML block을 열린 채로 남기면, 뒤따르는 요소가 있을 때 — 그 요소를 어느 쓰기가 놓든 — `CONSTRAINT`다.
 - 칸반, 목록, 간트 view는 entity table이 둘 다 선언할 것을 요구한다. `flowmark.dbs`는 `items`에 둘 다
   선언한다.
 
@@ -199,7 +200,7 @@ markdown 전용 선언은 모두 dbspec **manifest setting**이며 `markdown <co
 - 행 scope의 섹션은 고정된 순서를 따른다: body가 아닌 `markdown` column(nullable이든 non-null이든)은 column 순서대로, 그다음 자식 block은
   table 이름 순서대로(dbspec의 정준 순서). 상세 섹션은 행의 저장 순서를 따른다.
 - block이나 document의 list나 table 뒤의 내용은, 그 행들의 상세 섹션을 제외하고 모두 `format.block`이다.
-  이 내용은 block 섹션에서는 level b 이하의 다음 heading까지, document 파일에서는 파일 끝까지다.
+  이 내용은 block 섹션에서는 level b 이하의 다음 최상위 heading까지, document 파일에서는 파일 끝까지다.
 
 ### Scalar columns
 
@@ -317,7 +318,7 @@ markdown 전용 선언은 모두 dbspec **manifest setting**이며 `markdown <co
   `<table>.flowmark.md`도, files table의 `<table>/<key>.flowmark.md`도 아닌 것 — 이나 읽을 수 없는
   `.flowmark.md` 항목은 `corpus.walk` 진단이다. 이름은 byte 단위로 비교한다: `.flowmark.md` 접미사, table
   폴더, document file 이름의 대소문자가 다르면 `corpus.walk`다. walk는 symlink를 따라가지 않는다. 이름이
-  `.flowmark.md`로 끝나는 symlink나 `files` table과 이름이 같은 symlink 폴더는 `corpus.walk`이며, 그 밖의
+  `.flowmark.md`로 끝나는 symlink나 `files` table과 이름이 같은, 폴더가 아닌 항목(일반 file이나 가리키는 곳이 무엇이든 symlink)은 `corpus.walk`이며, 그 밖의
   symlink는 database 밖이다. hard link는 이식성 있게 file과 구별할 수 없으므로 규칙이 아니다(다중 플랫폼
   규칙). 엔진은 문서를 임시 file과 rename으로 쓰므로, hard link된 문서는 첫 쓰기에서 link가 끊어진다.
   `dbspec/`에는 `.dbs` set만 있으며, 그곳의 다른 file은 catalog 진단이다.

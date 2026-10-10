@@ -107,7 +107,7 @@ compatibility, no fallback, no hidden error, no trick; rules first.
 
 - **A corpus document is a file whose name ends with `.flowmark.md`**, under the corpus root and
   outside `dbspec/`, `.flowmark/` and hidden entries. The name is the only criterion that makes a
-  file part of the database; every other file is outside it and draws no diagnostic.
+  file part of the database; every other file is outside it and draws no diagnostic, except a name whose suffix is `.flowmark.md` without regard to case, which is `corpus.walk`, and an entry at a `files` table's place that is not a folder.
 - **Every corpus document is a complete markdown document** that a reader who does not know
   flowmark reads as it is: no comment, no marker, no hidden field. Its structure is ordinary
   markdown — headings, lists, tables, a field list — and every relation is a link the reader can
@@ -183,12 +183,19 @@ reimplements them.
   `files` storage require `title` (the line text, the H1); a `table` storage may declare it as a
   cell. The title is non-null and refuses the empty text. A title in an H1 whose final run of `#` follows a space or a tab, or that consists only of `#`, is written with its last `#` as `\#`; on read a final `\#` is the title's `#`, and an H1 closing sequence is `format.noncanonical`; a title ending in `\#` is `CONSTRAINT` on write, since it would read back as `#`.
 - `body` is a `markdown` column and never NULL. It lives in the row scope in every storage: the
-  text after the H1 of a file, or the text of the row's detail section before its first heading at level h + 1; a row without a detail section has the empty text as its body.
+  text after the H1 of a file, or the text of the row's detail section before its first top-level heading (outside any container) of level ≤ h + 1; a row without a detail section has the empty text as its body.
 - A `files` row is, in order: the H1 title, the field list of its stored scalar columns when it has
   one, the body, then the level-2 sections (spec 10's document order is amended). The body and every `markdown`
-  section value end at the next heading of level ≤ L, counted only outside fenced blocks
-  (CommonMark block structure); such a value contains only headings deeper than L, and a write of
-  a value with a heading line of level ≤ L outside a fence is `CONSTRAINT`. A value holds no setext heading: a line of only `=` or only `-`, of at most three spaces of indent and any trailing spaces or tabs, directly after a non-blank line outside a fence, is `CONSTRAINT` on write; on read, a setext heading is a heading where CommonMark reads one; a value that leaves a fence or an HTML block of CommonMark types 1–5 open is `CONSTRAINT` when an element follows it.
+  column value of a row scope at level L end at the next top-level heading of level ≤ L, counted only
+  outside fenced blocks and outside any container, a block quote or a list item (CommonMark block
+  structure). A value holds only top-level headings deeper than L; a write of a value with a top-level
+  heading line of level ≤ L outside a fence is `CONSTRAINT`. A value holds no top-level setext heading:
+  a line of only `=` or only `-`, of at most three spaces of indent and any trailing spaces or tabs,
+  outside a fence and outside any container, directly after a line of a top-level paragraph, is
+  `CONSTRAINT` on write; on read, a setext heading is a heading where CommonMark reads one. A setext
+  heading inside a container is not within this rule. A value that leaves a fence or an HTML block of
+  CommonMark types 1–5 open is `CONSTRAINT` when an element follows it, whichever write places that
+  element.
 - A view of kind kanban, list or gantt requires its entity table to declare both; `flowmark.dbs`
   declares them on `items`.
 
@@ -233,7 +240,7 @@ reimplements them.
   then the child blocks in table name order (dbspec's canonical order). Detail sections stand in
   the storage order of their rows.
 - Any content after a block's or document's list or table other than its rows' detail sections
-  — up to the next heading of level ≤ b in a block section, or to the end of a document file — is
+  — up to the next top-level heading of level ≤ b in a block section, or to the end of a document file — is
   `format.block`.
 
 ### Scalar columns
@@ -371,7 +378,7 @@ reimplements them.
   `.flowmark.md` entry that cannot be read is a `corpus.walk` diagnostic. Names are compared byte
   for byte: a `.flowmark.md` suffix, a table folder or a document file name in another case is
   `corpus.walk`. The walk never follows a symlink; a symlink whose name ends with `.flowmark.md`, or
-  a symlinked folder named like a `files` table, is `corpus.walk`, and any other symlink is outside
+  an entry named like a `files` table that is not a folder (a regular file, or a symlink to whatever it points to), is `corpus.walk`, and any other symlink is outside
   the database. A hard link cannot be told from a file portably, so it is not a rule (the
   multi-platform rule); the engine writes a document by a temp file and a rename, so a hard-linked
   document is unlinked by its first write. `dbspec/` holds only the `.dbs` set; another file there

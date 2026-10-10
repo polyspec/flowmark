@@ -56,7 +56,7 @@ On write, each of the following is `CONSTRAINT`; the rule that states it is name
 - an H1 title (of a `files` row) whose text ends in `\#` ([canonical format](10-canonical-format.md));
 - a text or `markdown` value that cannot be written byte for byte, and a typed value that `CanonicalLiteral` refuses (a decimal with more fraction digits than its scale, zeros included, or more integer digits than precision − scale; a time or datetime with more fraction digits than its precision) ([canonical format](10-canonical-format.md));
 - a logical write that rewrites a file with a `format.*` diagnostic, naming the file and the diagnostic, and naming `flowmark canon` when it is `format.noncanonical`, apart from the exemptions of the commit ([canonical format](10-canonical-format.md)); a write never normalizes document bytes;
-- a `markdown` value holding a heading line of level ≤ L outside a fence
+- a `markdown` value holding a top-level heading line of level ≤ L, outside a fence and outside any container
   ([canonical format](10-canonical-format.md));
 - a write that introduces a collision of a heading with a detail anchor, naming the other heading: a
   title update, a payload write, a row insert, a key update, a move or the creation of a detail section, other than a duplicate key, which is `DUPLICATE_KEY`
@@ -64,8 +64,8 @@ On write, each of the following is `CONSTRAINT`; the rule that states it is name
 - a date, time or datetime value written `now`, and a text longer than its column
   ([canonical format](10-canonical-format.md));
 - a list title token `<declared column>\:` ([canonical format](10-canonical-format.md#list-rows));
-- a `markdown` value holding a setext underline, or leaving a fence or an HTML block open before a following
-  element ([canonical format](10-canonical-format.md#sections-and-their-values)).
+- a `markdown` value holding a top-level setext underline, or leaving a fence or an HTML block open before a following
+  element, whichever write places that element ([canonical format](10-canonical-format.md#sections-and-their-values)).
 
 On read, the walk reports `corpus.walk` and the format rules report `format.*`, as stated in the
 [document model](20-document-model.md) and the [canonical format](10-canonical-format.md).

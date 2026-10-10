@@ -14,6 +14,15 @@
   end with `-` and holds no `-_`. White space that rendering drops around a single-line place is
   `format.noncanonical`. A body line directly after the field list is `format.block`.
 
+- T12.1-6: the specifications answer the questions of T12.1-3. A regular file or a symlink at a `files` table's
+  place is `corpus.walk`, and the table is unavailable; a missing folder stays an empty table. The first body or
+  section of a `files` row without a field list follows the H1 after exactly one blank line. A value that leaves a
+  fence or an HTML block open is `CONSTRAINT` whichever write places the element after it. The setext rule covers
+  top-level headings only, as section boundaries do. A `format.encoding` fault at an invalid UTF-8 byte is at that
+  byte, a whole-file or `corpus.walk` fault is at line 1, column 1, and `catalog` columns count code points, as
+  orm's dbspec does. A whole-file delete is exempt from the rewrite refusal, since removing a file rewrites none of
+  its bytes.
+
 - T12.1-5: the specifications state the rulings the `document` codec needed. `now` is dbspec's keyword for the
   current time in a `datetime` default and is never stored: a temporal value written `now` is not of its type, and a
   text `now` is text. A table row out of storage order is `format.noncanonical`; a `parent` cycle among a file's rows
