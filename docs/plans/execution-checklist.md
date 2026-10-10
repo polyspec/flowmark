@@ -49,6 +49,8 @@
 - [o] T4 Executor: the IR kinds over the parsed corpus (requires T3)
 - [o] T4.1 Run one, all and count over the corpus rows with where, order and limit (requires T3)
 - [o] T4.2 Run sum, avg, paginate and group_count with the type-directed ordering (requires T4.1)
+- [o] T4.3 Read items from a markdown table: a table whose header row names the state, id and title columns is a document's item list in table form, its rows items in row order (requires T4.2)
+  - Completion criteria: `All("items")` returns the rows of such a table with their state glyphs, IDs, titles and per-document order, and the codec records the absolute line of every data row.
 - [o] T5 orm markdown-executor integration: manifest settings and the state-machine sub-grammar (requires T4)
 - [o] T6 Sync adapters: the contract and the database adapter (requires T5)
 - [o] T6.1 Export the corpus to SQL: a derived, deterministic INSERT dump of the rows (requires T4)

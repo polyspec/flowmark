@@ -101,3 +101,25 @@ func TestTypeDirectedOrdering(t *testing.T) {
 		t.Fatalf("order: %v", order)
 	}
 }
+
+const tabular = "# T\n\n## State machine\n\n```mermaid\nstateDiagram-v2\n    direction LR\n    [*] --> waiting\n    waiting : [ ] waiting\n    waiting --> doing\n    doing : [~] doing\n    doing --> done: evidence\n    done : [o] done\n    done --> [*]\n```\n\n## Work\n\n| state | id | title |\n| --- | --- | --- |\n| [ ] | T1 | First |\n| [~] | T2 | Second |\n| [o] | T3 | Third |\n"
+
+func TestAllReadsTableItems(t *testing.T) {
+	corpus, err := Open(write(t, map[string]string{"t.md": tabular}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, err := corpus.All("items", Query{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 3 {
+		t.Fatalf("rows: %+v", rows)
+	}
+	if rows[0]["id"] != "T1" || rows[0]["state"] != "[ ]" || rows[0]["title"] != "First" {
+		t.Fatalf("first row: %+v", rows[0])
+	}
+	if rows[2]["id"] != "T3" || rows[2]["state"] != "[o]" {
+		t.Fatalf("last row: %+v", rows[2])
+	}
+}

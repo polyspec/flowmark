@@ -1,5 +1,5 @@
 <!-- doc-id: execution-checklist -->
-<!-- source-sha256: 05ba3481991a79dacf0dc538ef3fefd0ffa44bbc98ba49f5f2123cfd43eecdb1 -->
+<!-- source-sha256: 0f98ebc203e117af5c445f0d3aab31690f1a9fd1bf9a5b725e64b331ee4de9dc -->
 # 실행 체크리스트
 
 ## T1a 설계 session
@@ -50,6 +50,8 @@
 - [o] T4 Executor: parse된 corpus 위의 IR kind (T3 선행)
 - [o] T4.1 corpus row 위에서 one·all·count를 where·order·limit와 함께 실행한다 (T3 선행)
 - [o] T4.2 sum·avg·paginate·group_count를 type-directed ordering으로 실행한다 (T4.1 선행)
+- [o] T4.3 markdown table에서 항목을 읽는다: header row가 state·id·title column을 정의하는 table이 그 문서의 항목 목록의 table 형태이며 행 순서대로 항목이다 (T4.2 선행)
+  - 완료 기준: `All("items")`이 그런 table의 행을 state glyph·ID·title·문서별 order와 함께 반환하고 codec이 모든 data row의 절대 줄을 기록한다.
 - [o] T5 orm markdown-executor 통합: manifest setting과 state-machine sub-grammar (T4 선행)
 - [o] T6 Sync adapter: 계약과 database adapter (T5 선행)
 - [o] T6.1 corpus를 SQL로 export한다: row의 derived·deterministic INSERT dump (T4 선행)

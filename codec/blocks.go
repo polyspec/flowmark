@@ -17,11 +17,35 @@ type ChecklistItem struct {
 	Continuations []string
 }
 
-// Table is one markdown table block: a header row, a separator and data rows.
+// Table is one markdown table block: a header row, a separator and data rows. The header
+// row the document writes is the definition of the columns.
 type Table struct {
-	Line    int
-	Headers []string
-	Rows    [][]string
+	Line     int
+	Headers  []string
+	Rows     [][]string
+	RowLines []int // the absolute line of each data row
+}
+
+// Column finds a column by header name, case-insensitive; -1 when the header holds none.
+func (t *Table) Column(name string) int {
+	for i, header := range t.Headers {
+		if strings.EqualFold(header, name) {
+			return i
+		}
+	}
+	return -1
+}
+
+// ItemsTable finds the items table of a document: a markdown table whose header row names
+// the state, id and title columns — the table form of the checklist.
+func ItemsTable(document *Document) *Table {
+	for i := range document.Tables {
+		table := &document.Tables[i]
+		if table.Column("state") >= 0 && table.Column("id") >= 0 && table.Column("title") >= 0 {
+			return table
+		}
+	}
+	return nil
 }
 
 var itemLine = regexp.MustCompile(`^( *)- (\[[^]]+\]) (\S+)\s*(.*)$`)
@@ -97,6 +121,7 @@ func scanTable(lines []string, at int) (Table, int) {
 			table.Headers = cells
 		} else {
 			table.Rows = append(table.Rows, cells)
+			table.RowLines = append(table.RowLines, at+1)
 		}
 		at++
 	}
