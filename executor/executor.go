@@ -32,10 +32,11 @@ type Query struct {
 	Limit int
 }
 
-// Corpus is the parsed corpus: the documents and the checklist items as rows.
+// Corpus is the parsed corpus: the documents, the checklist items and the people as rows.
 type Corpus struct {
 	documents []Row
 	items     []Row
+	people    []Row
 }
 
 // Open walks the markdown documents of `root` (skipping hidden entries) and builds the rows.
@@ -69,26 +70,51 @@ func Open(root string) (*Corpus, error) {
 		corpus.documents = append(corpus.documents, Row{"doc_id": document.DocID, "title": document.Title, "path": filepath.ToSlash(relative)})
 		for position, item := range document.Items {
 			corpus.items = append(corpus.items, Row{
-				"id":     item.ID,
-				"state":  item.State,
-				"title":  item.Title,
-				"doc_id": document.DocID,
-				"order":  strconv.Itoa(position + 1),
+				"id":       item.ID,
+				"state":    item.State,
+				"title":    item.Title,
+				"assignee": item.Assignee,
+				"due":      item.Due,
+				"doc_id":   document.DocID,
+				"order":    strconv.Itoa(position + 1),
 			})
 		}
 		// A table whose header names the state, id and title columns is the document's item
 		// list in table form: its rows are items in row order, the table grammar the document
-		// itself declares.
+		// itself declares. The header may also name the assignee and due columns.
 		if table := codec.ItemsTable(document); table != nil {
 			state, id, title := table.Column("state"), table.Column("id"), table.Column("title")
+			assignee, due := table.Column("assignee"), table.Column("due")
 			for position, row := range table.Rows {
-				corpus.items = append(corpus.items, Row{
+				item := Row{
 					"id":     row[id],
 					"state":  row[state],
 					"title":  row[title],
 					"doc_id": document.DocID,
 					"order":  strconv.Itoa(position + 1),
-				})
+				}
+				if assignee >= 0 {
+					item["assignee"] = row[assignee]
+				}
+				if due >= 0 {
+					item["due"] = row[due]
+				}
+				corpus.items = append(corpus.items, item)
+			}
+		}
+		// A table whose header names the id and name columns is the document's people table:
+		// the first row is the owner — an item without an assignee belongs to the owner.
+		for i := range document.Tables {
+			table := &document.Tables[i]
+			if table.Column("id") >= 0 && table.Column("name") >= 0 && codec.ItemsTable(document) != table {
+				id, name := table.Column("id"), table.Column("name")
+				for _, row := range table.Rows {
+					corpus.people = append(corpus.people, Row{
+						"id":     row[id],
+						"name":   row[name],
+						"doc_id": document.DocID,
+					})
+				}
 			}
 		}
 		return nil
@@ -108,6 +134,8 @@ func (corpus *Corpus) table(name string) ([]Row, string, error) {
 		return corpus.documents, "doc_id", nil
 	case "items":
 		return corpus.items, "id", nil
+	case "people":
+		return corpus.people, "id", nil
 	}
 	return nil, "", fmt.Errorf("the table %q is not in the corpus", name)
 }

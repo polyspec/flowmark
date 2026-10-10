@@ -3,6 +3,13 @@
 
 ## Unreleased
 
+- T11: items carry people and dates. An item title may close with `@assignee` and a
+  `YYYY-MM-DD` due date — the codec splits the closing tokens from the title — and a document
+  holds a people table by naming `id` and `name` columns. The first row is the owner: an item
+  without an assignee is the owner's. `All("items")` gains assignee and due for list and table
+  items alike, `All("people")` returns the people rows, and the sidecar items answer carries
+  the two new columns with a `people` answer of its own.
+
 - T4.3: items also live in table form. A markdown table whose header row names the state, id and
   title columns is the document's item list — the header the document writes is the definition —
   and `All("items")` returns its rows in row order; the codec records the absolute line of every

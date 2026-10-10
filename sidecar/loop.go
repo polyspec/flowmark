@@ -129,10 +129,25 @@ func run(root string, operation *operation) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		// state, id, title, path — the page addresses its operations by the path.
+		// state, id, title, path, assignee, due — the page addresses its operations by the path.
 		lines := make([]string, 0, len(rows))
 		for _, row := range rows {
-			lines = append(lines, fmt.Sprintf("%s\t%s\t%s\t%s", row["state"], row["id"], row["title"], pathOf[row["doc_id"]]))
+			lines = append(lines, fmt.Sprintf("%s\t%s\t%s\t%s\t%s\t%s", row["state"], row["id"], row["title"], pathOf[row["doc_id"]], row["assignee"], row["due"]))
+		}
+		return strings.Join(lines, "\n"), nil
+	case "people":
+		opened, err := executor.Open(root)
+		if err != nil {
+			return "", err
+		}
+		rows, err := opened.All("people", executor.Query{})
+		if err != nil {
+			return "", err
+		}
+		// id, name — the first row is the owner: an item without an assignee is the owner's.
+		lines := make([]string, 0, len(rows))
+		for _, row := range rows {
+			lines = append(lines, fmt.Sprintf("%s\t%s", row["id"], row["name"]))
 		}
 		return strings.Join(lines, "\n"), nil
 	case "validate":

@@ -67,3 +67,23 @@ func TestMalformedItem(t *testing.T) {
 		t.Fatalf("diagnostics: %v", diagnostics)
 	}
 }
+
+func TestItemMeta(t *testing.T) {
+	document, diagnostics := Parse("# T\n\n## Work\n\n- [~] T2 API 목록 작성 @max 2026-10-12\n- [ ] T3 혼자 하는 일\n- [o] T4 마감만 있는 일 2026-10-15\n")
+	if len(diagnostics) > 0 {
+		t.Fatalf("diagnostics: %v", diagnostics)
+	}
+	if len(document.Items) != 3 {
+		t.Fatalf("items: %+v", document.Items)
+	}
+	first := document.Items[0]
+	if first.Assignee != "max" || first.Due != "2026-10-12" || first.Title != "API 목록 작성" {
+		t.Fatalf("first: %+v", first)
+	}
+	if document.Items[1].Assignee != "" || document.Items[1].Due != "" {
+		t.Fatalf("second: %+v", document.Items[1])
+	}
+	if document.Items[2].Due != "2026-10-15" || document.Items[2].Assignee != "" || document.Items[2].Title != "마감만 있는 일" {
+		t.Fatalf("third: %+v", document.Items[2])
+	}
+}

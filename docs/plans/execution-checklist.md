@@ -71,3 +71,5 @@
 - [o] T9 Conformance vectors: corpus before, request, expected corpus after (requires T4)
 - [o] T9.1 Define the vector shape and run the first vectors through the executor (requires T4)
 - [o] T10 The soksak plugin in its own repository: the kanban board and issue tracker as one more thin consumer (requires T8)
+- [o] T11 People and dates on the items: an item title may close with `@assignee` and a `YYYY-MM-DD` due date, a document holds a people table (an `id`/`name` header), the first row is the owner — an item without an assignee is the owner's — and the items and people surfaces expose them (requires T4.3)
+  - Completion criteria: the codec splits the closing tokens from the title, `All("items")` carries assignee and due for list and table items alike, `All("people")` returns the people rows, and the sidecar items answer gains the assignee and due columns with a `people` answer of its own.
