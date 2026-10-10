@@ -176,3 +176,37 @@ func TestMoveToTop(t *testing.T) {
 		t.Fatalf("T3.1 is not first:\n%s", string(text))
 	}
 }
+
+func TestEditTitle(t *testing.T) {
+	root := rootWith(t, board)
+	if err := EditTitle(root, "docs/plans/list.md", "T1.1", "A renamed parser"); err != nil {
+		t.Fatal(err)
+	}
+	text, _ := os.ReadFile(filepath.Join(root, "docs", "plans", "list.md"))
+	if !strings.Contains(string(text), "T1.1 A renamed parser") {
+		t.Fatal("the title was not rewritten")
+	}
+	if strings.Contains(string(text), "Write the parser") {
+		t.Fatal("the old title is still there")
+	}
+}
+
+func TestHistoryRecorded(t *testing.T) {
+	root := rootWith(t, board)
+	// add: 기록이 남는다
+	if err := AddItem(root, "docs/plans/list.md", "", "A new issue"); err != nil {
+		t.Fatal(err)
+	}
+	text, _ := os.ReadFile(filepath.Join(root, "docs", "plans", "list.md"))
+	if !strings.Contains(string(text), "at ") || !strings.Contains(string(text), " added") {
+		t.Fatalf("add history missing:\n%s", string(text)[len(string(text))-200:])
+	}
+	// transition: from → to 기록이 남는다
+	if err := Transition(root, "docs/plans/list.md", "T2.1", "done", "make test passes"); err != nil {
+		t.Fatal(err)
+	}
+	text, _ = os.ReadFile(filepath.Join(root, "docs", "plans", "list.md"))
+	if !strings.Contains(string(text), "→ done") || !strings.Contains(string(text), "make test passes") {
+		t.Fatalf("transition history missing:\n%s", string(text))
+	}
+}

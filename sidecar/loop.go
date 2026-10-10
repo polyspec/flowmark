@@ -80,6 +80,11 @@ func run(root string, operation *operation) (string, error) {
 	switch operation.Operation {
 	case "schema":
 		schema := app.Schema()
+		// the checklist document declares its state machine in the frontmatter;
+		// the literal block holds the JSON
+		if declared := declaredFromMermaid(root); declared != nil {
+			schema = *declared
+		}
 		text, err := json.Marshal(schema)
 		if err != nil {
 			return "", err
@@ -131,6 +136,11 @@ func run(root string, operation *operation) (string, error) {
 			return "", err
 		}
 		return fmt.Sprintf("%s moved", operation.ID), nil
+	case "edit":
+		if err := app.EditTitle(root, operation.Path, operation.ID, operation.Title); err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("%s renamed", operation.ID), nil
 	case "remove":
 		if err := app.RemoveItem(root, operation.Path, operation.ID); err != nil {
 			return "", err
@@ -265,4 +275,29 @@ func fingerprint(root string) (string, error) {
 		return nil
 	})
 	return strings.Join(parts, "|"), err
+}
+
+// declaredFromMermaid walks the corpus for the first mermaid stateDiagram-v2 block.
+func declaredFromMermaid(root string) *app.StateSchema {
+	var found *app.StateSchema
+	filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+		if err != nil || found != nil {
+			return nil
+		}
+		if entry.IsDir() {
+			if strings.HasPrefix(entry.Name(), ".") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(entry.Name(), ".md") {
+			return nil
+		}
+		schema, err := app.SchemaFromMermaidBlock(filepath.Dir(path), filepath.Base(path))
+		if err == nil && len(schema.States) > 0 && len(schema.States) != 5 {
+			found = &schema
+		}
+		return nil
+	})
+	return found
 }
