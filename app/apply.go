@@ -391,7 +391,7 @@ func MoveItem(root, relativePath, id, afterID string) error {
 	lines := strings.Split(string(text), "\n")
 	block := moving.Line - 1
 	blockEnd := block + 1 + len(moving.Continuations)
-	itemLines := append(append([]string{}, lines[block:blockEnd]...))
+	itemLines := append([]string{}, lines[block:blockEnd]...)
 	rest := append(append([]string{}, lines[:block]...), lines[blockEnd:]...)
 
 	var insert int
