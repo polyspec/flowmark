@@ -40,9 +40,12 @@ Every foreign key has its leading index. The checks are `start_on is null or sta
 | bypassed → doing | — (resume when the retry condition holds; no approval wait) |
 | waiting → impossible | `require (cause)` |
 | terminal | `done`, `impossible` |
-| checkbox | `waiting '[ ]'`, `doing '[~]'`, `done '[o]'`, `bypassed '[!]'`, `impossible '[-]'` |
+| checkbox | `waiting ' '`, `doing '~'`, `done 'o'`, `bypassed '!'`, `impossible '-'` |
 | history | `history item_history row item from from_state to to_state at at` |
 
+- A checkbox glyph is exactly one character, written between the brackets of a list row: a list
+  row writes the glyph between brackets, so `waiting` reads `- [ ] T1 …`, `doing` reads `- [~] T1 …`
+  and `done` reads `- [o] T1 …`.
 - A done item is never reopened: a new issue related to it is a new item with an `item_links` row
   of kind `supersedes`.
 - **No WIP limit is declared.** The owner's rule — completion before starting, with independent

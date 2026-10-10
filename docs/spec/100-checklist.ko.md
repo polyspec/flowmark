@@ -1,5 +1,5 @@
 <!-- doc-id: spec-checklist -->
-<!-- source-sha256: b9b88be50654752b27e9aefdc35e4f918e99b61b4a0c446917212c891173bd51 -->
+<!-- source-sha256: 01ed594097561cd4fb7f01923baf1f63f133723f83c32c04441845f379652f74 -->
 # 응용 schema
 
 [English](100-checklist.md)
@@ -40,9 +40,11 @@
 | bypassed → doing | — (재시도 조건이 성립하면 재개. 승인 대기 없음) |
 | waiting → impossible | `require (cause)` |
 | 종료 | `done`, `impossible` |
-| checkbox | `waiting '[ ]'`, `doing '[~]'`, `done '[o]'`, `bypassed '[!]'`, `impossible '[-]'` |
+| checkbox | `waiting ' '`, `doing '~'`, `done 'o'`, `bypassed '!'`, `impossible '-'` |
 | history | `history item_history row item from from_state to to_state at at` |
 
+- checkbox glyph는 정확히 한 글자이며 list 행의 대괄호 사이에 쓴다: list 행은 대괄호 사이에 glyph를 쓰므로
+  `waiting`은 `- [ ] T1 …`, `doing`은 `- [~] T1 …`, `done`은 `- [o] T1 …`로 읽힌다.
 - 완료된 항목은 다시 열지 않는다: 그와 관련된 새 이슈는 kind `supersedes`의 `item_links` 행을 가진 새
   항목이다.
 - **WIP limit는 선언하지 않는다.** 사용자의 규칙 — 시작보다 완료, 독립 항목은 병렬 허용 — 은 어떤 개수로도

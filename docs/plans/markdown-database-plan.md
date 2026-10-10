@@ -315,8 +315,9 @@ reimplements them.
 - The `items` machine is declared whole: `state varchar(16)`; `state_machine state initial
   waiting`; the transitions, terminal and `require` lines of spec 100 (waiting → doing; doing →
   done require evidence; doing → bypassed require cause, retry; bypassed → doing; waiting →
-  impossible require cause; done and impossible terminal); `checkbox state waiting '[ ]'`,
-  `doing '[~]'`, `done '[o]'`, `bypassed '[!]'`, `impossible '[-]'`; `history item_history row
+  impossible require cause; done and impossible terminal); `checkbox state waiting ' '`,
+  `doing '~'`, `done 'o'`, `bypassed '!'`, `impossible '-'` (one character each, written between
+  the brackets of a list row); `history item_history row
   item from from_state to to_state at at`. `item_history(id i64 identity, item varchar(32),
   from_state, to_state, at, evidence, cause, retry)` declares the same three `markdown` columns
   and has `foreign key fk_history_item (item) references items (id)` with its index. A

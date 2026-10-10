@@ -1,5 +1,5 @@
 <!-- doc-id: spec-schema -->
-<!-- source-sha256: 60685caa0463784de5f8013b9ff5d1adb77bc54bd0fa3bfdb2e4451446f041d8 -->
+<!-- source-sha256: 1e908ac046f00394928e0bf0967811ee4ee76adfa6bc7ff87295ad4b90395ada -->
 # Schema
 
 [English](30-schema.md)
@@ -30,7 +30,7 @@ column을 이름 붙인다 — column 이름이 동작을 고르지 않는다.
 | `title <column>` | 행의 제목: non-null, 비지 않음 |
 | `body <column>` | 행의 body: `markdown` column, NULL이 아님 |
 | `order <column>` | 형제 사이에서 행의 위치. orm은 이 column을 executor가 할당하는 것으로 다룬다 |
-| `checkbox <column> <state> '<glyph>'` | 상태의 list glyph |
+| `checkbox <column> <state> '<glyph>'` | 상태의 list glyph: 정확히 한 글자이며 list 행의 대괄호 사이(`- [<glyph>] …`)에 쓴다 |
 | `markdown <column>` | column이 markdown prose를 담고 섹션으로 저장된다 |
 | `state_machine <column> initial <state>` | 초기 상태. 반복할 수 있다 |
 | `state_machine <column> <from> -> <to> [require (…)]`, `state_machine <column> terminal <state> [require (…)]` | dbspec이 정의하는 전이와 종료 상태 |

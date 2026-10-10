@@ -3,6 +3,17 @@
 
 ## Unreleased
 
+- T12.2.1: the `catalog` package loads the catalog of a corpus root. It reads the `dbspec/*.dbs`
+  set with orm's `engine/dbspec` and the `dbspec/flowmark.json` translations, and rejects each
+  case the spec names as a located diagnostic: a missing catalog, a table without `store`, a
+  composite key, `aes`/`aes_version`/`blind_index`, `audit`/`immutable`, `cascade`/`set_null`, an
+  external `use`, a state machine without `history` or `initial`, a list or files storage without
+  `title`, a heading past H6, and a block cycle. The loaded catalog holds, per table, the storage,
+  key, title, body, order, markdown columns and state machine. The glyph notation is corrected:
+  spec 100, spec 30 and the markdown database plan write each checkbox glyph as the one character
+  between the brackets (`waiting ' '`, `doing '~'`, `done 'o'`, `bypassed '!'`, `impossible '-'`)
+  instead of `'[ ]'` and its siblings, since orm's `checkbox` setting takes exactly one character.
+
 - T12.1: the rulings and specifications are rewritten on the markdown database plan. flowmark is
   the engine and orm reaches it as an IR executor by `markdown://`; the `dbspec/` catalog is the
   only schema; each table declares a `files`, `document` or `block` storage; keys are opaque; the
