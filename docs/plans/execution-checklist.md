@@ -67,6 +67,8 @@
 - [o] T8.4 Enter issues through the write path: add appends one waiting item with a unique ID, rm removes one and refuses a parent that carries children — on the CLI, the MCP tools and the sidecar operations (follow-up of T8.3)
 - [o] T8.5 The Mermaid block is the only transition authority: Transition reads the edges, the required fields and the glyphs from the document's own state machine, AddItem takes the initial state from the `[*]` line, ApplySchema rewrites the Mermaid block, and no built-in table remains (follow-up of T8.4)
   - Completion criteria: a document with custom state names transitions by its own declared edges — an undeclared edge is refused, an edge label names the required evidence, a new item lands in the declared initial state — and `grep` finds no hardcoded state map in the Go sources.
+- [o] T8.6 The write path serves the table form: transition, edit, add, remove and move rewrite the row cells of an items table — one grammar per document, a mix of lines and a table is refused (follow-up of T8.5, requires T4.3)
+  - Completion criteria: on a table-format document a transition rewrites the state cell by the document's own edges, an add appends a row with the auto ID, an edit rewrites the title cell, a move reorders the rows and a remove deletes the row.
 - [o] T7.3-2 Watch the corpus and push a changed event: the sidecar polls the fingerprints of the open surface roots and pushes, the page refreshes while the session runs (follow-up of T7.3-1)
 - [o] T9 Conformance vectors: corpus before, request, expected corpus after (requires T4)
 - [o] T9.1 Define the vector shape and run the first vectors through the executor (requires T4)

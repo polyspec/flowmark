@@ -1,8 +1,14 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 76722263476db8fd04692f9dca6911f2381e01b8e59c9041921ae151561bde82 -->
+<!-- source-sha256: 6a42d05298c784a033940c7ec4393027104f8bad3dc2f79df2279b58aa43601d -->
 # Changelog
 
 ## Unreleased
+
+- T8.6: write path가 table 형식을 섬긴다. 항목이 table에 사는 문서가 list 형식과 같은
+  명령을 받는다: transition이 문서 자신의 edge대로 state cell을 다시 쓰고 add가 자동
+  ID로 행을 더하며(NextID가 table 행을 읽는다) edit이 title cell을 고치고 move가 행
+  순서를 바꾸고 remove가 행을 지운다. 문서당 하나의 문법 — checklist 행과 items
+  table의 혼재는 거부한다.
 
 - T11: 항목이 사람과 날짜를 가진다. 항목 title은 `@assignee`와 `YYYY-MM-DD` 마감으로 끝날 수
   있고 — codec이 끝 token을 title에서 분리한다 — 문서는 `id`와 `name` column을 정의하는 사람

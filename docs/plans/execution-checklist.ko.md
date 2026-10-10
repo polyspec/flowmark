@@ -1,5 +1,5 @@
 <!-- doc-id: execution-checklist -->
-<!-- source-sha256: 0cbfc7466411ac645f0fe43823c9c10c69a6ee52ba2a24ee873ed834f6a1ceb9 -->
+<!-- source-sha256: 3f6d9e69164cbb6aa7167774464e3e36271be478d2fb4c0d61c38aa8ba73238b -->
 # 실행 체크리스트
 
 ## T1a 설계 session
@@ -68,6 +68,8 @@
 - [o] T8.4 이슈를 write path로 입력한다: add가 유일한 ID의 대기 항목을 추가하고 rm이 하나를 지우며 하위를 가진 부모는 거부한다 — CLI·MCP tool·sidecar operation 모두 (T8.3 후속)
 - [o] T8.5 Mermaid block이 유일한 transition 권위다: Transition이 edge·필수 필드·glyph를 문서 자신의 state machine에서 읽고 AddItem이 `[*]` 줄에서 초기 상태를 취하며 ApplySchema가 Mermaid block을 다시 쓰고 — 내장 table은 남지 않는다 (T8.4 후속)
   - 완료 기준: 사용자 정의 상태 이름을 가진 문서가 자신이 선언한 edge대로 전이한다 — 선언 안 된 edge는 거부, edge label이 필수 evidence를 정하고 새 항목은 선언된 초기 상태에 놓인다 — 그리고 Go source에서 hardcoded state map을 `grep`으로 찾을 수 없다.
+- [o] T8.6 write path가 table 형식을 섬긴다: transition·edit·add·remove·move가 items table의 행 cell을 다시 쓴다 — 문서당 하나의 문법, 행과 table의 혼재는 거부한다 (T8.5 후속, T4.3 선행)
+  - 완료 기준: table 형식 문서에서 transition이 문서 자신의 edge대로 state cell을 다시 쓰고 add가 자동 ID로 행을 추가하며 edit이 title cell을 고치고 move가 행 순서를 바꾸고 remove가 행을 지운다.
 - [o] T7.3-2 corpus를 감시해 changed event를 push한다: sidecar가 열린 surface root의 fingerprint를 poll하고 push하며 page가 session 동안 갱신된다 (T7.3-1 후속)
 - [o] T9 Conformance vector: corpus before, request, 기대 corpus after (T4 선행)
 - [o] T9.1 vector 형식을 정의하고 첫 vector를 executor로 실행한다 (T4 선행)

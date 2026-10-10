@@ -14,9 +14,88 @@ import (
 // welcome, an endless growth of unfinished items is not (spec 100-checklist).
 const WIPHeadroom = 2
 
+// resolveTransition holds the document's own state machine against one move: the state the
+// item carries, the requested target, the edge between them and the required evidence.
+func resolveTransition(schema StateSchema, relativePath, id, fromGlyph, target, evidence string, document *codec.Document) (StateDef, TransitionDef, error) {
+	fromState := schema.StateByGlyph(fromGlyph)
+	if fromState == nil {
+		return StateDef{}, TransitionDef{}, fmt.Errorf("the item %q carries the state %q, which the state machine of %s does not declare", id, fromGlyph, relativePath)
+	}
+	// the caller may pass the glyph ([~]) or the name (doing)
+	targetState := schema.StateByName(target)
+	if targetState == nil {
+		targetState = schema.StateByGlyph(target)
+	}
+	if targetState == nil {
+		return StateDef{}, TransitionDef{}, fmt.Errorf("the state %q is not in the state machine of %s", target, relativePath)
+	}
+	edge := schema.Edge(fromState.Name, targetState.Name)
+	if edge == nil {
+		return StateDef{}, TransitionDef{}, fmt.Errorf("the state machine of %s holds no transition %s -> %s", relativePath, fromState.Name, targetState.Name)
+	}
+	if !requiredMet(edge.Requires, evidence) {
+		return StateDef{}, TransitionDef{}, fmt.Errorf("the transition %s -> %s requires %s on the item", fromState.Name, targetState.Name, strings.Join(edge.Requires, ", "))
+	}
+	// the WIP gate holds the kit glyph [~] count within the headroom over the [o] count
+	if targetState.Glyph == "[~]" && !wipHolds(document) {
+		return StateDef{}, TransitionDef{}, fmt.Errorf("the WIP gate refuses another [~] item: %d in progress against %d done", countGlyph(document, "[~]"), countGlyph(document, "[o]"))
+	}
+	return *targetState, *edge, nil
+}
+
+// writeDocument writes the lines back to the document file.
+func writeDocument(path string, lines []string) error {
+	return os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o644)
+}
+
+// itemForm names how a document lists its items: as checklist lines or as a table. A
+// document that holds both refuses writes — one grammar per document.
+func itemForm(document *codec.Document) (*codec.Table, error) {
+	table := codec.ItemsTable(document)
+	if table != nil && len(document.Items) > 0 {
+		return nil, fmt.Errorf("the document mixes checklist lines and an items table")
+	}
+	return table, nil
+}
+
+// findRow finds a row of an items table by ID; -1 when the table holds none.
+func findRow(table *codec.Table, id string) int {
+	column := table.Column("id")
+	if column < 0 {
+		return -1
+	}
+	for i, row := range table.Rows {
+		if row[column] == id {
+			return i
+		}
+	}
+	return -1
+}
+
+// replaceCell rewrites one cell of a table line, keeping the column layout.
+func replaceCell(line string, column int, value string) string {
+	parts := strings.Split(line, "|")
+	if column+1 >= len(parts)-1 {
+		return line
+	}
+	parts[column+1] = " " + value + " "
+	return strings.Join(parts, "|")
+}
+
+// rowLine builds one table row line for the values of an item, in the column order the
+// header declares.
+func rowLine(table *codec.Table, values map[string]string) string {
+	cells := make([]string, len(table.Headers))
+	for i, header := range table.Headers {
+		cells[i] = values[header]
+	}
+	return "| " + strings.Join(cells, " | ") + " |"
+}
+
 // Transition applies one state transition to an item of a document: the state machine the
 // document declares in its Mermaid block holds the edges, the required fields and the glyphs —
-// no built-in table exists. The evidence carries the fields the edge label names.
+// no built-in table exists. The evidence carries the fields the edge label names. The item
+// lives in the checklist lines or in the items table — both carry the same grammar.
 func Transition(root, relativePath, id, target, evidence string) error {
 	path := filepath.Join(root, filepath.FromSlash(relativePath))
 	text, err := os.ReadFile(path)
@@ -31,6 +110,25 @@ func Transition(root, relativePath, id, target, evidence string) error {
 	if err != nil {
 		return fmt.Errorf("the document declares no state machine: %v", err)
 	}
+	table, err := itemForm(document)
+	if err != nil {
+		return err
+	}
+	lines := strings.Split(string(text), "\n")
+	if table != nil {
+		row := findRow(table, id)
+		if row < 0 {
+			return fmt.Errorf("the item %q is not in %s", id, relativePath)
+		}
+		stateColumn := table.Column("state")
+		targetState, _, err := resolveTransition(schema, relativePath, id, table.Rows[row][stateColumn], target, evidence, document)
+		if err != nil {
+			return err
+		}
+		at := table.RowLines[row] - 1
+		lines[at] = replaceCell(lines[at], stateColumn, targetState.Glyph)
+		return writeDocument(path, lines)
+	}
 	var item *codec.ChecklistItem
 	for i := range document.Items {
 		if document.Items[i].ID == id {
@@ -41,38 +139,17 @@ func Transition(root, relativePath, id, target, evidence string) error {
 	if item == nil {
 		return fmt.Errorf("the item %q is not in %s", id, relativePath)
 	}
-	fromState := schema.StateByGlyph(item.State)
-	if fromState == nil {
-		return fmt.Errorf("the item %q carries the state %q, which the state machine of %s does not declare", id, item.State, relativePath)
+	targetState, _, err := resolveTransition(schema, relativePath, id, item.State, target, evidence, document)
+	if err != nil {
+		return err
 	}
-	// the caller may pass the glyph ([~]) or the name (doing)
-	targetState := schema.StateByName(target)
-	if targetState == nil {
-		targetState = schema.StateByGlyph(target)
-	}
-	if targetState == nil {
-		return fmt.Errorf("the state %q is not in the state machine of %s", target, relativePath)
-	}
-	edge := schema.Edge(fromState.Name, targetState.Name)
-	if edge == nil {
-		return fmt.Errorf("the state machine of %s holds no transition %s -> %s", relativePath, fromState.Name, targetState.Name)
-	}
-	if !requiredMet(edge.Requires, evidence) {
-		return fmt.Errorf("the transition %s -> %s requires %s on the item", fromState.Name, targetState.Name, strings.Join(edge.Requires, ", "))
-	}
-	// the WIP gate holds the kit glyph [~] count within the headroom over the [o] count
-	if targetState.Glyph == "[~]" && !wipHolds(document) {
-		return fmt.Errorf("the WIP gate refuses another [~] item: %d in progress against %d done", countGlyph(document, "[~]"), countGlyph(document, "[o]"))
-	}
-
-	lines := strings.Split(string(text), "\n")
 	at := item.Line - 1
 	replace := strings.Replace(lines[at], item.State, targetState.Glyph, 1)
 	if replace == lines[at] {
 		return fmt.Errorf("the state %q is not on line %d", item.State, item.Line)
 	}
 	lines[at] = replace
-	return os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o644)
+	return writeDocument(path, lines)
 }
 
 // requiredMet holds the required-field rules of a transition against the evidence text.
@@ -136,12 +213,28 @@ func AddItem(root, relativePath, id, title string) error {
 	if len(diagnostics) > 0 {
 		return fmt.Errorf("%s holds %d parse findings; fix them first", relativePath, len(diagnostics))
 	}
+	table, err := itemForm(document)
+	if err != nil {
+		return err
+	}
+	lines := strings.Split(string(text), "\n")
+	if table != nil {
+		if findRow(table, id) >= 0 {
+			return fmt.Errorf("the item %q is already in %s", id, relativePath)
+		}
+		newRow := rowLine(table, map[string]string{"state": glyph, "id": id, "title": title})
+		insert := len(lines)
+		if len(table.RowLines) > 0 {
+			insert = table.RowLines[len(table.RowLines)-1] // after the last data row
+		}
+		lines = append(lines[:insert], append([]string{newRow}, lines[insert:]...)...)
+		return writeDocument(path, lines)
+	}
 	for _, item := range document.Items {
 		if item.ID == id {
 			return fmt.Errorf("the item %q is already in %s", id, relativePath)
 		}
 	}
-	lines := strings.Split(string(text), "\n")
 	insert := len(lines)
 	if len(document.Items) > 0 {
 		last := document.Items[len(document.Items)-1]
@@ -149,7 +242,7 @@ func AddItem(root, relativePath, id, title string) error {
 	}
 	newItem := "- " + glyph + " " + id + " " + title
 	lines = append(lines[:insert], append([]string{newItem}, lines[insert:]...)...)
-	return os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o644)
+	return writeDocument(path, lines)
 }
 
 // RemoveItem deletes one item with its continuation lines. A parent whose ID carries
@@ -163,6 +256,20 @@ func RemoveItem(root, relativePath, id string) error {
 	document, diagnostics := codec.Parse(string(text))
 	if len(diagnostics) > 0 {
 		return fmt.Errorf("%s holds %d parse findings; fix them first", relativePath, len(diagnostics))
+	}
+	table, err := itemForm(document)
+	if err != nil {
+		return err
+	}
+	if table != nil {
+		row := findRow(table, id)
+		if row < 0 {
+			return fmt.Errorf("the item %q is not in %s", id, relativePath)
+		}
+		lines := strings.Split(string(text), "\n")
+		at := table.RowLines[row] - 1
+		rest := append(append([]string{}, lines[:at]...), lines[at+1:]...)
+		return writeDocument(path, rest)
 	}
 	var found *codec.ChecklistItem
 	for i := range document.Items {
@@ -190,9 +297,21 @@ func NextID(root, relativePath string) string {
 		return "T1"
 	}
 	document, _ := codec.Parse(string(text))
-	highest := 0
+	ids := make([]string, 0, len(document.Items))
 	for _, item := range document.Items {
-		id := item.ID
+		ids = append(ids, item.ID)
+	}
+	if table := codec.ItemsTable(document); table != nil {
+		column := table.Column("id")
+		if column >= 0 {
+			for _, row := range table.Rows {
+				ids = append(ids, row[column])
+			}
+		}
+	}
+	highest := 0
+	for _, item := range ids {
+		id := item
 		if !strings.HasPrefix(id, "T") {
 			continue
 		}
@@ -222,6 +341,36 @@ func MoveItem(root, relativePath, id, afterID string) error {
 	document, diagnostics := codec.Parse(string(text))
 	if len(diagnostics) > 0 {
 		return fmt.Errorf("%s holds %d parse findings; fix them first", relativePath, len(diagnostics))
+	}
+	table, err := itemForm(document)
+	if err != nil {
+		return err
+	}
+	if table != nil {
+		moving := findRow(table, id)
+		if moving < 0 {
+			return fmt.Errorf("the item %q is not in %s", id, relativePath)
+		}
+		anchor := -1
+		if afterID != "" {
+			anchor = findRow(table, afterID)
+			if anchor < 0 {
+				return fmt.Errorf("the anchor %q is not in %s", afterID, relativePath)
+			}
+		}
+		lines := strings.Split(string(text), "\n")
+		rowText := lines[table.RowLines[moving]-1]
+		without := append(append([]string{}, lines[:table.RowLines[moving]-1]...), lines[table.RowLines[moving]:]...)
+		insert := table.RowLines[len(table.RowLines)-1] - 1 // after the last row by default
+		if anchor >= 0 {
+			insert = table.RowLines[anchor] - 1
+			if anchor > moving {
+				insert-- // the cut row shifts the anchor up
+			}
+		}
+		out := append(append([]string{}, without[:insert]...), rowText)
+		out = append(out, without[insert:]...)
+		return writeDocument(path, out)
 	}
 	var moving, anchor *codec.ChecklistItem
 	for i := range document.Items {
@@ -279,6 +428,20 @@ func EditTitle(root, relativePath, id, title string) error {
 	if len(diagnostics) > 0 {
 		return fmt.Errorf("%s holds %d parse findings; fix them first", relativePath, len(diagnostics))
 	}
+	table, err := itemForm(document)
+	if err != nil {
+		return err
+	}
+	if table != nil {
+		row := findRow(table, id)
+		if row < 0 {
+			return fmt.Errorf("the item %q is not in %s", id, relativePath)
+		}
+		lines := strings.Split(string(text), "\n")
+		at := table.RowLines[row] - 1
+		lines[at] = replaceCell(lines[at], table.Column("title"), title)
+		return writeDocument(path, lines)
+	}
 	for _, item := range document.Items {
 		if item.ID == id {
 			lines := strings.Split(string(text), "\n")
@@ -286,7 +449,7 @@ func EditTitle(root, relativePath, id, title string) error {
 			prefix := "- " + item.State + " " + id + " "
 			if strings.HasPrefix(lines[at], prefix) {
 				lines[at] = prefix + title
-				return os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o644)
+				return writeDocument(path, lines)
 			}
 		}
 	}
