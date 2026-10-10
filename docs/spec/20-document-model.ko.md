@@ -1,5 +1,5 @@
 <!-- doc-id: spec-document-model -->
-<!-- source-sha256: f3ffff1cc0505d24f549af6fe76e1adf7483ac7e16f65dc7c99102d79592af2d -->
+<!-- source-sha256: c6113605671dae2d93027f14c009e7a2f229a2f426fdac4421782b8ffe2740ec -->
 # 문서 모델
 
 [English](20-document-model.md)
@@ -51,12 +51,15 @@ aggregate냐 split이냐는 저장 선언이다. 논리 관계는 모든 저장�
 
 ## Key
 
-- markdown table은 단일 column primary key를 갖는다. composite primary key는 schema 오류다.
+- markdown table은 단일 column primary key를 갖는다. composite primary key는 schema 오류다. 음수 integer key는
+  거절된다: 그 `-`가 key를 시작하여 아래 모양에 어긋난다. 쓰기에서는 `CONSTRAINT`이고 읽기에서는 `format.block`이다.
+  모든 저장에서 모양을 깨는 key가 그렇듯이 말이다.
 - `files` 행의 key는 file 이름에서 `.flowmark.md`를 뺀 것이다.
 - 모든 key는 동시에 file 이름, URL path 조각, heading anchor의 일부다. key는 `A`–`Z`, `a`–`z`, `0`–`9`,
   `_`, `-`로 이루어지며 문자나 숫자로 시작한다: 선행 `_`는 강조로 렌더되어 보이는 key와 그 anchor를
-  모두 바꾸기 때문이다. key는 `--`를 담지 않고 `-`로 끝나지 않는다: 연속 hyphen을 접는 viewer(GitLab, MkDocs)가
-  anchor를 바꾸기 때문이다.
+  모두 바꾸기 때문이다. key의 모양은 ASCII다: 이 문자들이 key의 알파벳 전부이며 다른 문자는 key 문자가 아니다. 대소문자 비교와
+  소문자 anchor가 이 글자들에 대해서만 정의되기 때문이다. key는 `--`나 `-_`를 담지 않는다:
+  연속 hyphen을 접는 MkDocs viewer가 anchor를 바꾸며, `-_`처럼 구두점 뒤의 `_`는 강조를 열 수 있기 때문이다.
 - key는 대소문자를 무시하고 table 안에서 유일하다. 대소문자를 구분하지 않는 file system과 소문자로 된
   anchor가 그렇지 않으면 충돌하기 때문이다. 대소문자를 무시하고 같은 table의 다른 key와 겹치는 key는 그것을 새로 만드는 쓰기에서 `DUPLICATE_KEY`이고, validator의 `key.duplicate`다. file을 읽을 수 없게 하지 않는다. 다만 같은 file 안에서 바이트 단위로 같은 key를 가지고 둘 다 상세 섹션을 가진 두 행은 두 섹션이 같은 heading 텍스트를 가지므로 `format.block`이다([canonical format](10-canonical-format.md#detail-headings-and-anchors)); 바이트 단위로 같은 key를 가진 두 행은 그 table을 사용할 수 없게 한다([canonical format](10-canonical-format.md#diagnostics)).
 - 외래 key는 참조된 key와 byte 단위로 맞는다. key와 대소문자만 다른 link 텍스트는 dangling 참조다.
@@ -66,7 +69,7 @@ aggregate냐 split이냐는 저장 선언이다. 논리 관계는 모든 저장�
 - key 타입의 정식 텍스트가 아닌 file 이름은 `format.block`이다: 정수 key 7의 정식 file 이름은
   `7.flowmark.md`이고 `007.flowmark.md`는 아니다.
 - 대소문자만 다른 key 변경은 journal에 기록되는 transaction 안에서 중간 이름을 거쳐 file 이름을 바꾼다.
-- `identity`는 모든 markdown table에 허용된다: key를 생략한 insert는 lock 아래 할당된 `max+1`을 받는다.
+- `identity`는 `i64` primary key column에만 허용된다([schema](30-schema.md)): key를 생략한 insert는 lock 아래 할당된 `max+1`을 받는다.
   git을 되감은 뒤의 재사용은 받아들인다 — 할당의 기록은 sequence가 아니라 git history다.
 - `key_prefix <p>`를 가진 key는 `<p><n + 1>`로 할당되며, n은 `<p><n>` 꼴 key 가운데 선행 0 없는 가장 큰
   10진 접미사다. orm은 이 column을 `identity`와 같이 executor가 할당하는 것으로 다루므로 insert는 이를
@@ -124,8 +127,7 @@ aggregate냐 split이냐는 저장 선언이다. 논리 관계는 모든 저장�
 - 모든 foreign key는 restrict-only다([constraints](50-constraints.md)). `cascade`와 `set_null`은 catalog를
   읽을 때 거절한다([schema](30-schema.md)).
 - 외래 key 값은 link다. link의 텍스트는 참조된 key이고, target은 참조된 행에서 유도된다. 정식 형식은
-  [canonical format](10-canonical-format.md)이 정한다. 참조된 key가 없는 dangling 외래 key는 validator의 `reference.dangling`이며, 그것을 새로 만드는 쓰기는 `FOREIGN_KEY`다. file을 읽을 수 없게 하지 않는다. 모든 관계는 GitHub식 heading slug를 쓰는 markdown viewer(GitHub, GitLab, VS Code, Pandoc)에서 따라갈 수
-  있는 link다.
+  [canonical format](10-canonical-format.md)이 정한다. 참조된 key가 없는 dangling 외래 key는 validator의 `reference.dangling`이며, 그것을 새로 만드는 쓰기는 `FOREIGN_KEY`다. file을 읽을 수 없게 하지 않는다. 모든 관계는 `#<anchor>`가 GitHub, GitLab, VS Code, MkDocs가 그 heading에 대해 만드는 anchor인 link다([canonical format](10-canonical-format.md#detail-headings-and-anchors)가 정한다). Pandoc은 주장 대상이 아니다: 기본 설정은 상대 경로 link target을 다시 쓰지 않으므로, corpus file 사이의 link가 그 출력에서 따라가진다고 주장하지 않는다.
 - file 간 one-to-many는 자식 table을 `store files`로 두고 foreign key를 그 field list에 쓴다. file 안의
   one-to-many는 자식 table을 `store block`으로 둔다.
 - 다대다는 `identity` key를 가진 link table이다.

@@ -25,8 +25,10 @@ payload.
 - A corpus document is a complete markdown document. A reader who does not know flowmark reads it
   as it is: it carries no comment, no marker, no frontmatter and no hidden field.
 - Its structure is ordinary markdown: headings, lists, tables and a field list. Every relation is a
-  link that a reader can follow in a markdown viewer with GitHub-style heading slugs (GitHub, GitLab,
-  VS Code, Pandoc).
+  link whose `#<anchor>` is the anchor that GitHub, GitLab, VS Code and MkDocs generate for the heading
+  it names, by the rules of [detail headings and anchors](#detail-headings-and-anchors). Pandoc is not
+  a viewer the claim is made for: its default does not rewrite relative link targets, so a link between
+  corpus files is not claimed to be followed in its output.
 - Grounding: the documents are the database's only storage, so they must stay readable documents.
   What only the machine needs belongs to the catalog (`dbspec/`) or to `.flowmark/`.
 
@@ -79,18 +81,39 @@ and the column sections — are payload: the renderer moves them with their row 
 - The anchor of a detail heading is `<table>-row-<lowercased key>`: the heading `## items row T2`
   has the anchor `items-row-t2`. The table is the anchor text before its first `-`, since a table
   name contains no `-`.
-- The slug is GitHub's: the heading's rendered inline text, lowercased, with every character other
-  than a letter, a digit, a space, `-` or `_` removed and each space written as `-`. The engine
-  computes the slug of every heading in a file, skeleton and payload alike, in document order.
-- A detail anchor must be free under both de-duplications of GitHub slugs: (a) github-slugger, where
-  a repeated slug takes the first suffix `-1`, `-2`, … not yet taken; and (b) github.com, which
-  suffixes a repeated base slug with a counter without checking. A block or markdown-column section
-  heading, repeated or not, slugs to `<name>` or `<name>-<digits>` and can never equal a
-  `<table>-row-<key>` anchor, so only a payload heading or the H1 title of a `files` row can take a
-  detail anchor.
-- A detail heading whose anchor another heading takes, or whose slug differs from its anchor, is
-  `CONSTRAINT` on write, naming the other heading, and refuses whichever write introduces the
-  collision: a title update, a payload write or a row insert. On read it is `format.block`, except between the detail headings of two rows whose keys differ only in case, which is `key.duplicate` alone; two detail sections of one file under the same heading text are `format.block`, since neither can be assigned to a row.
+- **The folds.** Two folds of a heading's rendered inline text decide a collision: the text as GitHub
+  slugs it (the text of a link without its target, emphasis markers removed, code span content kept,
+  entities decoded, raw HTML tags not text). F_G removes every character whose Unicode general
+  category is not a letter (L) or a decimal digit (Nd), lowercases the rest, decomposes it by Unicode
+  compatibility (NFKD), drops the combining marks, and keeps only the ASCII letters and digits that
+  remain. F_M lowercases the text, decomposes it by NFKD, drops the combining marks, and keeps only the
+  ASCII letters and digits that remain. Grounding: the anchors of GitHub, GitLab and VS Code keep
+  letters, digits, hyphens, underscores and spaces and remove other characters, superscript and
+  circled digits (category No) among them, which F_G removes. MkDocs keeps the ASCII letters and digits
+  of the NFKD form of the text, which F_M keeps; F_G does not, so both folds are used. `café` folds to
+  `cafe` under both.
+- **The collision rule.** A heading is every ATX heading, also after a block-quote or list-item marker,
+  and every paragraph followed by a setext underline, the whole paragraph being the heading, outside
+  fenced blocks; a detail heading is one too. A heading H other than a detail heading takes the anchor
+  A of a detail heading when, under F = F_G or under F = F_M, F(H) and F(A) are equal once a final run
+  of decimal digits is removed from each. The fold of an anchor is the same under both folds, since its
+  letters and digits are ASCII. Two detail headings collide only when their anchors are equal.
+  Grounding: every named viewer numbers a repeated or taken id only by appending a number or by
+  replacing a final number (GitHub, GitLab and VS Code append `-<n>`; MkDocs appends `_<n>` or raises a
+  final `_<n>`, and it counts ids that attribute lists set as taken), so comparing the folds without
+  their final digits covers every numbering, whichever heading or id came first. The cost is that a
+  payload heading that differs from a detail heading only in its final number is refused too.
+  Accepted: keys `T1` and `T10` in one file never collide, since both are detail headings and only equal
+  anchors collide between them. Refused: a payload heading `items row T` beside the detail heading
+  `items row T_1`; a payload heading `Notes` beside it is not refused. The check applies to every
+  heading of a file, skeleton and payload alike. It also refuses, in the payload of a file, an attribute
+  list `{…}`, with or without a leading `:`, that sets the id A by `#A` or by `id=` followed by A bare or in single or double quotes, and an
+  HTML `id` or `name` whose value is A, all compared without regard to case. Grounding:
+  Python-Markdown's attr_list extension, which MkDocs can enable, reads such a list at the end of a
+  heading or block as its id, and an HTML viewer reads `id` and `name` as anchors, whatever the text of
+  the heading.
+- A write that introduces a collision is `CONSTRAINT`, naming the other heading: a title update, a payload write, a row insert that creates a detail section, a key update, a move, or the creation of a detail section; except that a write giving a row a key equal, with or without regard to case, to another key of its table is `DUPLICATE_KEY`, the key rule of the [document model](20-document-model.md#keys). A row without a detail section has no anchor, so it collides with nothing. On read a collision is `format.block`, except between two detail headings whose keys differ only in case, which is `key.duplicate` alone. Two detail sections of one file under the same
+  heading text collide, so they are `format.block`, since neither can be assigned to a row.
 - A detail heading in a non-canonical spelling (extra spaces, a wrong case of `row`) is
   `format.noncanonical`, so `flowmark canon` repairs it.
 
