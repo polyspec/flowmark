@@ -1,5 +1,5 @@
 <!-- doc-id: execution-checklist -->
-<!-- source-sha256: 4bd1553da41ae6f1d0d381a378f57e9e5aae2ce94c9d959163b43c5e3898e7bc -->
+<!-- source-sha256: 89299142d5c76453f4f9ee32b2240c644d47f14ff0294840a2911210de4ed0b1 -->
 # 실행 체크리스트
 
 ## T1a 설계 session
@@ -80,7 +80,7 @@
 - [o] T9 Conformance vector: corpus before, request, 기대 corpus after (T4 선행)
 - [o] T9.1 vector 형식을 정의하고 첫 vector를 executor로 실행한다 (T4 선행)
 - [o] T10 자기 repo의 soksak plugin: 칸반 보드와 issue tracker — 또 하나의 thin consumer (T8 선행)
-- [~] T10-1 보드는 문서가 갖지 않은 상태를 보여주지 않는다. 원인: drop이 전이를 판정하기 전에 카드를 옮겼고, 거절(done → doing처럼 선언되지 않은 edge, 또는 evidence가 필요한 edge)은 되돌림 없이 return해서 markdown은 상태를 지키는데 카드는 틀린 column에 남았다. 빈 items 답(마지막 item 삭제)은 toast로만 보이고 옛 카드를 남겼고, changed event는 items만 새로 읽고 state machine은 읽지 않아 Mermaid block을 고치면 column이 낡았다 (T10 후속)
+- [o] T10-1 보드는 문서가 갖지 않은 상태를 보여주지 않는다. 원인: drop이 전이를 판정하기 전에 카드를 옮겼고, 거절(done → doing처럼 선언되지 않은 edge, 또는 evidence가 필요한 edge)은 되돌림 없이 return해서 markdown은 상태를 지키는데 카드는 틀린 column에 남았다. 빈 items 답(마지막 item 삭제)은 toast로만 보이고 옛 카드를 남겼고, changed event는 items만 새로 읽고 state machine은 읽지 않아 Mermaid block을 고치면 column이 낡았다 (T10 후속)
   - 완료 기준: 순수 함수 `planDrop`이 DOM을 옮기기 전에 모든 drop을 판정하고(거절은 아무것도 옮기지 않고 보드를 새로 읽는다), 모든 operation은 수락이든 거절이든 items 새로고침으로 끝나며, 빈 답은 column을 비우고, changed event는 schema를 다시 읽어 달라졌을 때만 column을 다시 만든다. plugin의 `node --test`가 각 경우를 덮는다.
 - [o] T11 항목에 사람과 날짜: 항목 title이 `@assignee`와 마감 date·datetime(`YYYY-MM-DD`, `YYYY-MM-DDTHH:MM[:SS]`, zone 선택)으로 끝날 수 있고 문서가 사람 table(`id`/`name` header)을 선언된 사람의 registry로 가지며 빈 담당자는 self다 — 이름을 추측하지 않는다 — items·people surface가 이들을 노출한다 (T4.3 선행)
   - 완료 기준: codec이 끝 token들을 title에서 분리하고 시간이 붙은 마감도 받으며 `All("items")`이 list·table 항목 모두에 assignee·due를 실고 `All("people")`이 사람 행을 반환하며 sidecar의 items answer가 assignee·due column을 얻고 `people` answer를 가진다.
