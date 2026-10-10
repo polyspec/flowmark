@@ -243,6 +243,9 @@ func ParseMermaid(text string) (StateSchema, error) {
 					label = strings.TrimSpace(rest[end+1:])
 				}
 			}
+			if label == "" {
+				label = name // no explicit label: the name is the label
+			}
 			if !seen[name] {
 				seen[name] = true
 				stateOrder = append(stateOrder, name)
