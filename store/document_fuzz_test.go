@@ -5,21 +5,45 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/polyspec/flowmark/catalog"
 	"github.com/polyspec/orm/engine/dbspec"
 )
 
-// documentTables are the fuzzed tables, one per seed golden: a list, a table with
-// a parent link and sections, and a table with an order column.
-var documentTables = []string{"items", "people", "milestones"}
+// documentTarget is one document table the document fuzzer reads: its catalog, its
+// table and the linker of its corpus.
+type documentTarget struct {
+	cat   *catalog.Catalog
+	table string
+	lk    Linker
+}
+
+// documentTargets are the tables the document fuzzer reads, selected by a byte: the
+// fixture's items, people and milestones (a list, a table with a parent link and
+// sections, and a table with an order column), then the entries of the equivalence
+// corpora as a document list (target 3) and as a document table (target 4).
+func documentTargets(f testing.TB) []documentTarget {
+	fixture := loadDocumentFixture(f)
+	return []documentTarget{
+		{fixture, "items", documentLinker()},
+		{fixture, "people", documentLinker()},
+		{fixture, "milestones", documentLinker()},
+		{equivCatalog(f, equivDocument), "entries", equivDocLinker("entries.flowmark.md")},
+		{equivCatalog(f, equivDocumentTable), "entries", equivDocLinker("entries.flowmark.md")},
+	}
+}
 
 // fuzzDocumentSeeds are the golden documents and their noncanonical spellings.
 func fuzzDocumentSeeds(f *testing.F) {
-	for i, table := range documentTables {
-		b := readDocumentGolden(f, table)
-		f.Add(uint8(i), b)
-		f.Add(uint8(i), bytes.ReplaceAll(b, []byte("\n"), []byte("\r\n")))
-		f.Add(uint8(i), bytes.TrimSuffix(b, []byte("\n")))
+	seed := func(i uint8, b []byte) {
+		f.Add(i, b)
+		f.Add(i, bytes.ReplaceAll(b, []byte("\n"), []byte("\r\n")))
+		f.Add(i, bytes.TrimSuffix(b, []byte("\n")))
 	}
+	for i, table := range []string{"items", "people", "milestones"} {
+		seed(uint8(i), readDocumentGolden(f, table))
+	}
+	seed(3, readEquiv(f, equivDocument, "entries.flowmark.md"))
+	seed(4, readEquiv(f, equivDocumentTable, "entries.flowmark.md"))
 	f.Add(uint8(0), []byte(itemsOf()))
 	f.Add(uint8(0), []byte(itemsOf("- [ ] T1 Plan done:false note:\"a b\"", "  - [~] T2 Child done:false", "", "## items row T2", "", "Body.")))
 	f.Add(uint8(0), []byte(itemsOf("- [ ] T1 Set owner\\: review done:false", "- [x] T2 Plan done:true", "", "## items row T2", "", "### evidence", "", "a|b")))
@@ -51,10 +75,10 @@ func fuzzDocumentSeeds(f *testing.F) {
 // bytes that parse back without a diagnostic and write the same bytes again (P2).
 func FuzzParseDocument(f *testing.F) {
 	fuzzDocumentSeeds(f)
-	cat := loadDocumentFixture(f)
-	lk := documentLinker()
+	targets := documentTargets(f)
 	f.Fuzz(func(t *testing.T, sel uint8, data []byte) {
-		table := documentTables[int(sel)%len(documentTables)]
+		target := targets[int(sel)%len(targets)]
+		cat, table, lk := target.cat, target.table, target.lk
 		rel := table + ".flowmark.md"
 		lay, err := docLayoutOf(cat, table)
 		if err != nil {

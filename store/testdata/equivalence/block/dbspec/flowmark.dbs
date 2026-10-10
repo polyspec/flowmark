@@ -1,0 +1,42 @@
+dbspec 1 flowmark
+
+table plans {
+  id varchar(16)
+  title varchar(255)
+  body text
+  primary key (id)
+  settings {
+    store files
+    title title
+    body body
+    markdown body
+  }
+}
+
+table entries {
+  id varchar(16)
+  plan varchar(16)
+  parent varchar(16) null
+  title varchar(255)
+  body text
+  position i32
+  kind varchar(16)
+  label varchar(32) null
+  count i32
+  done bool
+  due date null
+  summary text null
+  primary key (id)
+  index ix_entries_plan (plan)
+  index ix_entries_parent (parent)
+  foreign key fk_entry_plan (plan) references plans (id) on delete restrict on update restrict
+  foreign key fk_entries_parent (parent) references entries (id) on delete restrict on update restrict
+  settings {
+    store block fk_entry_plan list
+    title title
+    body body
+    order position
+    markdown body
+    markdown summary
+  }
+}

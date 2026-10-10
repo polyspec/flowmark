@@ -62,7 +62,7 @@
   - Completion criteria: as T12.2.2. Every rule has accepting and rejecting cases, and parse and emit are fuzzed with the golden seeds.
 - [o] T12.2.4 The `block` storage: child blocks inside a parent row scope at the next level, recursively, written only when non-empty, with detail sections and their sections (requires T12.2.2, T12.2.3)
   - Completion criteria: as T12.2.2, including a block inside a block row's detail section. Every rule has accepting and rejecting cases, and parse and emit are fuzzed with the golden seeds.
-- [ ] T12.2.5 One dataset in three storages: the same rows stored as files, document and block parse to equal rows, and P1/P2 hold for each (requires T12.2.4)
+- [o] T12.2.5 One dataset in three storages: the same rows stored as files, document and block parse to equal rows, and P1/P2 hold for each (requires T12.2.4)
   - Completion criteria: a storage-equivalence test. Every rule has accepting and rejecting cases, and parse and emit are fuzzed with the golden seeds.
 - [ ] T12.3 The validator: keys, foreign keys, cycles, titles, block shape, order, limits, the history gap and chain, and the views, including the reports of `type`, `reference.dangling` and `key.duplicate` over the raw values, written targets and duplicate rows the codec carries, and the cross-file `parent.cycle` (requires T12.2)
   - Completion criteria: Every rule has accepting and rejecting cases, and parse and emit are fuzzed with the golden seeds.
