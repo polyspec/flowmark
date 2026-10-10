@@ -1,5 +1,5 @@
 <!-- doc-id: spec-schema -->
-<!-- source-sha256: 563575d60192fd03bd9a466289bd4c350aabad367494cbee3888451000454e8d -->
+<!-- source-sha256: f6ae83b6fc864783d75d45bcb718dfbc75b667f2025bcce8ca349b47c5e4cfd2 -->
 # Schema
 
 [English](30-schema.md)
@@ -79,7 +79,7 @@ column이 없고 `title`이나 `body`를 선언하지 않는다. 어긋나면 �
 
 `flowmark install <corpus>`는 catalog에서 저장 뼈대 — 각 `files` table의 폴더와 각 `document` table의
 file `<table>.flowmark.md`이며, 빈 블록은 쓰이지 않으므로 블록 섹션은 없다 — 를 `CREATE TABLE`이 저장소를
-만들듯 만든다. `markdown://`에 대한 orm의 schema install은 `CAPABILITY_UNSUPPORTED`다.
+만들듯 만든다. 또한 `<corpus>/.gitattributes`에 `*.flowmark.md text eol=lf` 줄을 더하며, 파일이 없으면 만들고 다른 줄은 유지한다. 그래서 git checkout은 모든 플랫폼에서 LF를 유지한다([canonical format](10-canonical-format.ko.md#encoding과-줄-구조)). `markdown://`에 대한 orm의 schema install은 `CAPABILITY_UNSUPPORTED`다.
 
 ## Introspection
 

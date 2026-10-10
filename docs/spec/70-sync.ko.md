@@ -1,5 +1,5 @@
 <!-- doc-id: spec-sync -->
-<!-- source-sha256: 322105b6295ff0766981f45ee7c0a8ed67d46cd78cd3dafee2ac39d66b9c2f05 -->
+<!-- source-sha256: bbb39694cde709dc06dda3153804ad47d5e60cc7dadb1ba475e78ed091e7a8e1 -->
 # Sync (범위를 정한 뼈대)
 
 [English](70-sync.md)
@@ -13,7 +13,8 @@
   Jira가 같은 계약 아래 뒤따른다.
 - md→db는 파생 export다: database는 corpus에서 다시 만들 수 있다. export는 엔진으로 행을 읽고 catalog의
   runtime model에서 orm의 SQL dialect renderer로 statement를 렌더한다 — SQL을 손으로 렌더하지 않고 자기
-  table 이름을 두지 않는다.
+  table 이름을 두지 않는다. 사용할 수 없는 table이 필요한 export는 file과 진단을 밝히며 `CONSTRAINT`로 실패하고 아무것도 쓰지 않으며, 다른 table만 export하지 않는다([canonical format](10-canonical-format.ko.md#진단)). `type` 진단이 있는 값을 읽는 export는 같은 방식으로 실패하고 아무것도 쓰지 않는다.
+
 - db→md(그리고 모든 adapter→md)는 materialization이다: adapter의 행을 엔진으로 선언된 저장에 쓰고
   sync provenance로 표시하며 commit이 이를 기록한다. provenance는 document 안에 있지 않으며, 그것이 어디에
   있는지는 open question 5([open questions](110-open-questions.md))다.

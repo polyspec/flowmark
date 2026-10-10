@@ -1,5 +1,5 @@
 <!-- doc-id: spec-document-model -->
-<!-- source-sha256: 7b3fd2128a7fb5afbc024397aaf7bc448d70e70463d8574abe478f9172893c58 -->
+<!-- source-sha256: f3ffff1cc0505d24f549af6fe76e1adf7483ac7e16f65dc7c99102d79592af2d -->
 # 문서 모델
 
 [English](20-document-model.md)
@@ -18,7 +18,7 @@
 
 - corpus 문서는 이름이 `.flowmark.md`로 끝나는 file이며, corpus root 아래에 있고 `dbspec/`, `.flowmark/`,
   숨은 항목 밖에 있다. 이름이 database의 일부가 되는 유일한 기준이다. 그 밖의 file은 corpus 밖이며
-  진단을 내지 않는다.
+  진단을 내지 않는다. 다만 대소문자를 무시하고 suffix가 `.flowmark.md`인 이름은 `corpus.walk`다.
 - walk는 모든 `*.flowmark.md` file을 읽는다. place가 table 어느 것과도 맞지 않는 file — `document` table의
   `<table>.flowmark.md`도 아니고 `files` table의 `<table>/<key>.flowmark.md`도 아닌 것 — 은 `corpus.walk`
   진단이며, 읽을 수 없는 `.flowmark.md` 항목도 그렇다.
@@ -42,6 +42,10 @@
 - **`store block <fk> list`, `store block <fk> table`** — 이름 붙은 foreign key가 가리키는 부모 행의
   scope 안의 행.
 
+- 없는 table 폴더(`files`)나 없는 document 파일(`document`)은 빈 table이다: 행이 0개이고 진단은 없다. H1 줄이 없는 document file은 `format.noncanonical`이다. 근거: git은 빈 폴더를 보존하지 않으므로 checkout에는 행이 없는 table의 폴더가 없을 수 있으며, 없는 폴더나 파일은 행이 없고 빈 폴더나 `# <table>`만 가진 document file과 같으므로 그 없음은 0행의 한 형식이지 corpus의 결함이 아니다.
+- table이 이름을 정하지 않은 자리의 `.flowmark.md` file은 `corpus.walk`다. 없는 table을 대신하지 않는다.
+- insert는 폴더나 파일을 만든다. `document` table의 마지막 행을 지우면 file은 H1 줄 `# <table>`과 LF 하나를 남긴다.
+
 aggregate냐 split이냐는 저장 선언이다. 논리 관계는 모든 저장에서 같으므로 같은 행을 어느 쪽으로든
 저장할 수 있다.
 
@@ -54,7 +58,7 @@ aggregate냐 split이냐는 저장 선언이다. 논리 관계는 모든 저장�
   모두 바꾸기 때문이다. key는 `--`를 담지 않고 `-`로 끝나지 않는다: 연속 hyphen을 접는 viewer(GitLab, MkDocs)가
   anchor를 바꾸기 때문이다.
 - key는 대소문자를 무시하고 table 안에서 유일하다. 대소문자를 구분하지 않는 file system과 소문자로 된
-  anchor가 그렇지 않으면 충돌하기 때문이다.
+  anchor가 그렇지 않으면 충돌하기 때문이다. 대소문자를 무시하고 같은 table의 다른 key와 겹치는 key는 그것을 새로 만드는 쓰기에서 `DUPLICATE_KEY`이고, validator의 `key.duplicate`다. file을 읽을 수 없게 하지 않는다. 다만 같은 file 안에서 바이트 단위로 같은 key를 가지고 둘 다 상세 섹션을 가진 두 행은 두 섹션이 같은 heading 텍스트를 가지므로 `format.block`이다([canonical format](10-canonical-format.md#detail-headings-and-anchors)); 바이트 단위로 같은 key를 가진 두 행은 그 table을 사용할 수 없게 한다([canonical format](10-canonical-format.md#diagnostics)).
 - 외래 key는 참조된 key와 byte 단위로 맞는다. key와 대소문자만 다른 link 텍스트는 dangling 참조다.
 - 대소문자를 무시하고 `CON`, `PRN`, `AUX`, `NUL`, `COM0`–`COM9`, `LPT0`–`LPT9`와 같은 key나 table 이름은
   거절한다: table 이름은 schema 오류이고, key는 `CONSTRAINT`다. Windows의 예약된 file 이름이기 때문이다.
@@ -76,7 +80,7 @@ aggregate냐 split이냐는 저장 선언이다. 논리 관계는 모든 저장�
   `title`을 요구하고 — 줄 텍스트, H1 — `table` 저장은 cell로 선언할 수 있다. 선언된 제목은 non-null이며
   빈 텍스트를 거절한다.
 - `body`는 `markdown` column이며 NULL이 아니다. `files` 행에서는 H1과 field list 뒤의 텍스트이고,
-  상세 섹션이 있는 행에서는 상세 섹션의 첫 하위 heading 앞 텍스트다. 상세 섹션이 없는 행의 body는
+  상세 섹션이 있는 행에서는 상세 섹션의 첫 level h + 1 heading 앞 텍스트다. 상세 섹션이 없는 행의 body는
   빈 텍스트다.
 - 칸반, 목록, 간트 view는 entity table이 둘 다 선언할 것을 요구한다.
 
@@ -85,8 +89,9 @@ aggregate냐 split이냐는 저장 선언이다. 논리 관계는 모든 저장�
 - `files` 행의 scope는 그 file이고, 섹션은 level 2다.
 - block이나 document 행의 scope는 상세 섹션 `<h> <table> row <key>`이고(level b 블록 섹션 아래에서 h = b + 1,
   document file에서 h = 2), 섹션은 level h + 1이다.
-- `markdown` column은 모든 저장에서 언제나 행 scope의 섹션이다 — field나 cell이 아니다. nullable
-  `markdown` column과 자식 블록은 각각 column이나 자식 table 이름을 가진 행 scope의 섹션이며, 부모의
+- `markdown` column은 모든 저장에서 언제나 행 scope의 섹션이다 — field나 cell이 아니다. body가 아닌
+  `markdown` column(non-null이면 언제나, nullable이면 NULL이 아닐 때)과 자식 블록은 각각 column이나 자식 table
+  이름을 가진 행 scope의 섹션이며, 부모의
   markdown column과 같은 이름의 자식 table은 schema 오류다.
 
 ## 계층
@@ -119,7 +124,7 @@ aggregate냐 split이냐는 저장 선언이다. 논리 관계는 모든 저장�
 - 모든 foreign key는 restrict-only다([constraints](50-constraints.md)). `cascade`와 `set_null`은 catalog를
   읽을 때 거절한다([schema](30-schema.md)).
 - 외래 key 값은 link다. link의 텍스트는 참조된 key이고, target은 참조된 행에서 유도된다. 정식 형식은
-  [canonical format](10-canonical-format.md)이 정한다. 모든 관계는 GitHub식 heading slug를 쓰는 markdown viewer(GitHub, GitLab, VS Code, Pandoc)에서 따라갈 수
+  [canonical format](10-canonical-format.md)이 정한다. 참조된 key가 없는 dangling 외래 key는 validator의 `reference.dangling`이며, 그것을 새로 만드는 쓰기는 `FOREIGN_KEY`다. file을 읽을 수 없게 하지 않는다. 모든 관계는 GitHub식 heading slug를 쓰는 markdown viewer(GitHub, GitLab, VS Code, Pandoc)에서 따라갈 수
   있는 link다.
 - file 간 one-to-many는 자식 table을 `store files`로 두고 foreign key를 그 field list에 쓴다. file 안의
   one-to-many는 자식 table을 `store block`으로 둔다.
