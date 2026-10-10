@@ -276,3 +276,20 @@ func EditTitle(root, relativePath, id, title string) error {
 	}
 	return fmt.Errorf("the item %q is not in %s", id, relativePath)
 }
+
+// RenameTitle rewrites the H1 title of a document.
+func RenameTitle(root, relativePath, title string) error {
+	path := filepath.Join(root, filepath.FromSlash(relativePath))
+	text, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	lines := strings.Split(string(text), "\n")
+	for i, line := range lines {
+		if strings.HasPrefix(line, "# ") {
+			lines[i] = "# " + title
+			return os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o644)
+		}
+	}
+	return fmt.Errorf("the document holds no H1 title")
+}

@@ -85,11 +85,9 @@ func run(root string, operation *operation) (string, error) {
 		}
 		return app.SchemaMermaid(schema), nil
 	case "schema":
-		schema := app.Schema()
-		// the checklist document declares its state machine in the frontmatter;
-		// the literal block holds the JSON
-		if declared := declaredFromMermaid(root); declared != nil {
-			schema = *declared
+		schema, err := app.SchemaFromMermaidBlock(root, firstFlowmarkFile(root))
+		if err != nil {
+			return "", fmt.Errorf("the corpus declares no state machine: %v", err)
 		}
 		text, err := json.Marshal(schema)
 		if err != nil {
@@ -157,6 +155,11 @@ func run(root string, operation *operation) (string, error) {
 			return "", err
 		}
 		return fmt.Sprintf("%s renamed", operation.ID), nil
+	case "rename":
+		if err := app.RenameTitle(root, operation.Path, operation.Title); err != nil {
+			return "", err
+		}
+		return "renamed", nil
 	case "remove":
 		if err := app.RemoveItem(root, operation.Path, operation.ID); err != nil {
 			return "", err
