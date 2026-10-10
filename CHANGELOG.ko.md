@@ -1,8 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 395febc370dc6b5b4b71f5571ea96f7a78a38ac029c8569513360823e27a2352 -->
+<!-- source-sha256: 368c2162080acab539603da21758ad9675c89e3c1e154c8cb4ef2f396d4cf519 -->
 # Changelog
 
 ## Unreleased
+
+- T12.1-11: spec과 plan이 열린 block의 읽기 쪽을 있는 그대로 적는다. 열린 채 남은 fence나 HTML block이 흡수한 줄은 CommonMark block 구조에서 경계가 아니고 viewer도 그 block 안에 보여 주므로 읽기에서 값의 텍스트다. 그런 block 뒤에 요소를 두는 쓰기만 `CONSTRAINT`다. 어떤 reader도 관찰할 수 없는 결함을 가리키는 열린 block의 읽기 `format.block` 구절은 철회하며, 최상위 열린 fence 문장은 이 규칙과 일관되게 고친다.
 
 - T12.2.2-3: `files` codec이 spec 10의 열린 block 규칙을 쓰기에 적용한다. 열어 둔 fence나 HTML block이 뒤따르는 요소를 흡수하면 값은 `CONSTRAINT`로 거절된다. block scanner는 CommonMark 0.31.2대로 type 6과 7의 HTML block을 읽으며, type 7 block은 문단을 중단하지 않는다. list 항목 안에 열린 block이 최상위 heading으로 닫히면 잘못이 아니다.
 

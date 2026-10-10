@@ -200,10 +200,12 @@ reimplements them.
   deeper than L: every top-level setext heading in a value is a section boundary, and the rule refuses every
   one of them. A value that leaves a fence or an HTML block open is
   refused only when the element that follows would be taken into it under the CommonMark block structure: `CONSTRAINT`
-  on write, whichever write places that element, and `format.block` on read. A block left open inside a
-  container that a following top-level element closes is no fault. An open top-level fence takes in everything to
-  the end of the file, so on read it cannot stand before a following element (a heading inside a fence is
-  no boundary).
+  on write, whichever write places that element. On read, the lines that such a block takes in are the value's text:
+  under the CommonMark block structure they are no boundary, and a viewer shows them inside the block, so no read
+  fault is reported for them. A block left open inside a container that a following top-level element closes is no
+  fault. A top-level fence that the value leaves open takes in every line up to its closing fence or to the end of
+  the file, so on read the value runs on past those lines to the next top-level heading of level ≤ L or to the end of
+  the file, and a heading inside the fence is no boundary.
 - A view of kind kanban, list or gantt requires its entity table to declare both; `flowmark.dbs`
   declares them on `items`.
 

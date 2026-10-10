@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database -->
-<!-- source-sha256: dfcf00ef49a37ff7c0c5ab02de8af787875eec5179ea8521d55bc98f58b939f0 -->
+<!-- source-sha256: 361fccc6973b3f2848362559f6954c4f1ac6352f9e26a8ae1120a069edc6a6e1 -->
 # markdown database 계획
 
 [English](markdown-database-plan.md)
@@ -164,7 +164,7 @@ markdown 전용 선언은 모두 dbspec **manifest setting**이며 `markdown <co
   또는 행 상세 섹션의 첫 최상위 level ≤ h + 1 heading 앞 텍스트(CommonMark block 구조). 상세 섹션이 없는 행의 body는 빈 텍스트다.
 - `files` 행은 차례로 H1 제목, 저장되는 scalar column의 field list, body, level-2 섹션이다(spec 10의 문서
   순서를 개정한다). body와 모든 `markdown` 섹션 값은
-  다음 최상위 level ≤ L heading에서 끝난다. CommonMark 0.31.2가 해석하는 block 구조가 기준이다: 최상위 heading은 최상위의 ATX heading이거나 최상위 문단을 닫는 setext heading이며, fence, 모든 type(1–7)의 HTML block, 컨테이너(block quote나 list 항목), 게으른 연속 줄, 문단을 끊을 수 있는 것에 관한 규칙은 CommonMark가 정한 그대로 센다. 그런 값은 L보다 깊은 최상위 heading만 담으며, 최상위 level ≤ L heading을 가진 값의 쓰기는 `CONSTRAINT`다. 값은 최상위 setext heading을 담지 않는다: 값의 최상위 문단의 줄 바로 뒤에 `=`만 또는 `-`만 있는 줄(들여쓰기 최대 세 칸, 뒤의 공백이나 tab은 있어도 된다)은 쓰기에서 `CONSTRAINT`이며, 읽기에서는 CommonMark가 setext heading으로 읽는 곳이 heading이다. 근거: 최상위 setext 밑줄은 값의 마지막 줄을 최상위 heading으로 바꾸며, setext heading은 level 1 또는 2이고 모든 행 scope의 level L은 2 이상(`files` 행은 2, level h의 상세 섹션 안에서는 h + 1 ≥ 3)이므로 L보다 깊은 setext heading은 없다: 값의 모든 최상위 setext heading이 섹션 경계이며, 이 규칙이 그 모두를 거절한다. 값이 fence나 HTML block을 열린 채로 남기는 것은, 그 block이 뒤따르는 요소를 CommonMark 구조에서 흡수할 때에만 거절한다: 쓰기에서는 `CONSTRAINT`, 읽기에서는 `format.block`이며, 그 요소를 어느 쓰기가 놓든 마찬가지다. 뒤따르는 최상위 요소가 닫는 컨테이너 안에 열린 채 남은 block은 결함이 아니다. 최상위에서 열린 fence는 끝까지 모든 것을 흡수하므로 읽을 때 뒤따르는 요소 앞에 설 수 없다(fence 안의 heading은 경계가 아니다).
+  다음 최상위 level ≤ L heading에서 끝난다. CommonMark 0.31.2가 해석하는 block 구조가 기준이다: 최상위 heading은 최상위의 ATX heading이거나 최상위 문단을 닫는 setext heading이며, fence, 모든 type(1–7)의 HTML block, 컨테이너(block quote나 list 항목), 게으른 연속 줄, 문단을 끊을 수 있는 것에 관한 규칙은 CommonMark가 정한 그대로 센다. 그런 값은 L보다 깊은 최상위 heading만 담으며, 최상위 level ≤ L heading을 가진 값의 쓰기는 `CONSTRAINT`다. 값은 최상위 setext heading을 담지 않는다: 값의 최상위 문단의 줄 바로 뒤에 `=`만 또는 `-`만 있는 줄(들여쓰기 최대 세 칸, 뒤의 공백이나 tab은 있어도 된다)은 쓰기에서 `CONSTRAINT`이며, 읽기에서는 CommonMark가 setext heading으로 읽는 곳이 heading이다. 근거: 최상위 setext 밑줄은 값의 마지막 줄을 최상위 heading으로 바꾸며, setext heading은 level 1 또는 2이고 모든 행 scope의 level L은 2 이상(`files` 행은 2, level h의 상세 섹션 안에서는 h + 1 ≥ 3)이므로 L보다 깊은 setext heading은 없다: 값의 모든 최상위 setext heading이 섹션 경계이며, 이 규칙이 그 모두를 거절한다. 값이 fence나 HTML block을 열린 채로 남기는 것은, 그 block이 뒤따르는 요소를 CommonMark 구조에서 흡수할 때에만 쓰기에서 `CONSTRAINT`로 거절하며, 그 요소를 어느 쓰기가 놓든 마찬가지다. 읽을 때 그런 block이 흡수한 줄은 CommonMark block 구조에서 경계가 아니고 viewer도 그 block 안에 보여 주므로 값의 텍스트이며, 그에 대해 보고할 읽기 결함은 없다. 뒤따르는 최상위 요소가 닫는 컨테이너 안에 열린 채 남은 block은 결함이 아니다. 값이 열어 둔 최상위 fence는 그 닫는 fence나 file 끝까지의 모든 줄을 흡수하므로, 읽을 때 값은 그 줄들을 지나 다음 최상위 level ≤ L heading이나 file 끝까지 이어진다(fence 안의 heading은 경계가 아니다).
 - 칸반, 목록, 간트 view는 entity table이 둘 다 선언할 것을 요구한다. `flowmark.dbs`는 `items`에 둘 다
   선언한다.
 

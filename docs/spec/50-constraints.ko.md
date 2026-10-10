@@ -54,7 +54,7 @@
   상세 섹션의 생성 — 는 다른 heading을 밝히며 `CONSTRAINT`다. 다만 중복 key는 `DUPLICATE_KEY`다([canonical format](10-canonical-format.md#detail-headings-and-anchors));
 - date, time 또는 datetime 값으로 쓴 `now`(그 type이 아니다), 그리고 column 길이를 넘는 text([canonical format](10-canonical-format.md));
 - list 제목 token `<declared column>\:`([canonical format](10-canonical-format.md#list-rows));
-- 최상위 setext heading을 담거나, 뒤따르는 요소가 그 안으로 흡수되는 fence나 HTML block을 열린 채로 둔 `markdown` 값([canonical format](10-canonical-format.md#sections-and-their-values)).
+- 최상위 setext heading을 담거나, 뒤따르는 요소가 그 안으로 흡수되는 fence나 HTML block을 열린 채로 둔 `markdown` 값. 그 요소를 어느 쓰기가 놓든 마찬가지다([canonical format](10-canonical-format.md#sections-and-their-values)).
 
 읽기에서는 walk가 `corpus.walk`를, 형식 규칙이 `format.*`를 보고한다. 그 내용은
 [document model](20-document-model.md)과 [canonical format](10-canonical-format.md)이 정한다.
