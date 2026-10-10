@@ -96,6 +96,16 @@ func run(root string, operation *operation) (string, error) {
 			return "", err
 		}
 		return string(text), nil
+	case "title":
+		opened, err := executor.Open(root)
+		if err != nil {
+			return "", err
+		}
+		rows, err := opened.All("documents", executor.Query{})
+		if err != nil || len(rows) == 0 {
+			return "", err
+		}
+		return rows[0]["title"], nil
 	case "items":
 		opened, err := executor.Open(root)
 		if err != nil {
