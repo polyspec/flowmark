@@ -1,5 +1,5 @@
 <!-- doc-id: agents -->
-<!-- source-sha256: d25b4d98e3651bbf025b13595793ddbc6fddc61b7d3b73c9903a97b2d19184c3 -->
+<!-- source-sha256: c3e0283991a84eef35f94eabe394a2be06697ef79f6995d532603ac6f599a3b4 -->
 # 개발 규칙
 
 [English](AGENTS.md)
@@ -35,6 +35,9 @@ GitHub, Jira), 응용 schema이고, [polyspec/orm](https://github.com/polyspec/o
   하는 질문, 무언가를 누락시키는 질문은 하지 않으며, 필요한 질문은 빠뜨리지 않는다. 새 이정표가 다시
   연 결정은 다시 묻는다.
 - 작업에는 문서, AGENTS, memory 갱신이 포함된다.
+- 확정된 판정은 최종안으로 문서에 남긴다: 판정을 확정하는 그 변경에서 계획과 spec이 근거와 함께 적는다.
+  대화, checklist 항목, commit message, agent 보고에만 있는 판정은 확정된 것이 아니며, 그에 의존하는
+  작업은 그것이 적힐 때까지 기다린다.
 
 ## 규칙
 

@@ -40,6 +40,10 @@ has its checklist in `docs/plans/`.
   never confusing, and never a way to drop something; a needed question is never left out. A
   decision that a new milestone reopens is asked again.
 - A task includes its documents, AGENTS and the memory.
+- A settled ruling is written down in its final form: the plan and the specifications state it,
+  with its grounding, in the change that settles it. A ruling that lives only in a conversation,
+  a checklist item, a commit message or an agent's report is not settled, and work that depends
+  on it waits until it is written.
 
 ## Rules
 
