@@ -38,6 +38,10 @@ func Transition(root, relativePath, id, target, evidence string) error {
 	if item == nil {
 		return fmt.Errorf("the item %q is not in %s", id, relativePath)
 	}
+	// the caller may pass the glyph ([~]) or the name (doing)
+	if state, ok := StateOf(target); ok {
+		target = state
+	}
 	from, ok := StateOf(item.State)
 	if !ok {
 		return fmt.Errorf("the item %q carries the unknown state %q", id, item.State)
@@ -227,10 +231,14 @@ func MoveItem(root, relativePath, id, afterID string) error {
 
 	var insert int
 	if anchor == nil {
-		insert = len(rest)
-		// trim trailing empty lines to land before them
-		for insert > 0 && strings.TrimSpace(rest[insert-1]) == "" {
-			insert--
+		// no anchor: the item lands before the first item of the list
+		if len(document.Items) > 0 {
+			insert = document.Items[0].Line - 1
+			if insert > block {
+				insert -= blockEnd - block
+			}
+		} else {
+			insert = 0
 		}
 	} else {
 		anchorBlock := anchor.Line - 1

@@ -76,3 +76,51 @@ func SupersededID(base string, existing []string) string {
 	}
 	return fmt.Sprintf("%s-%d", base, highest+1)
 }
+
+// StateSchema is the schema of a checklist: the states with their glyphs and labels, and
+// the transitions with their evidence rules — what a board needs to build itself.
+type StateSchema struct {
+	States      []StateDef      `json:"states"`
+	Transitions []TransitionDef `json:"transitions"`
+}
+
+// StateDef is one column of a board.
+type StateDef struct {
+	Glyph string `json:"glyph"`
+	Name  string `json:"name"`
+	Label string `json:"label"`
+}
+
+// TransitionDef is one allowed transition with its required evidence fields.
+type TransitionDef struct {
+	From     string   `json:"from"`
+	To       string   `json:"to"`
+	Requires []string `json:"requires,omitempty"`
+}
+
+// Schema returns the state machine as a board schema. The labels are the defaults; a
+// config/board.json in the corpus overrides them.
+func Schema() StateSchema {
+	labels := map[string]string{
+		"waiting":    "대기",
+		"doing":      "진행 중",
+		"done":       "완료",
+		"bypassed":   "우회",
+		"impossible": "불가",
+	}
+	states := make([]StateDef, 0, len(glyphs))
+	for _, name := range []string{"waiting", "doing", "done", "bypassed", "impossible"} {
+		states = append(states, StateDef{Glyph: glyphs[name], Name: name, Label: labels[name]})
+	}
+	seen := map[string]bool{}
+	transitionDefs := []TransitionDef{}
+	for _, t := range transitions {
+		key := t.From + "->" + t.To
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		transitionDefs = append(transitionDefs, TransitionDef{From: t.From, To: t.To, Requires: t.Requires})
+	}
+	return StateSchema{States: states, Transitions: transitionDefs}
+}

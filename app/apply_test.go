@@ -164,14 +164,15 @@ func TestMoveItem(t *testing.T) {
 	}
 }
 
-func TestMoveToEnd(t *testing.T) {
+func TestMoveToTop(t *testing.T) {
 	root := rootWith(t, board)
-	if err := MoveItem(root, "docs/plans/list.md", "T1.1", ""); err != nil {
+	if err := MoveItem(root, "docs/plans/list.md", "T3.1", ""); err != nil {
 		t.Fatal(err)
 	}
 	text, _ := os.ReadFile(filepath.Join(root, "docs", "plans", "list.md"))
 	lines := strings.Split(string(text), "\n")
-	if !strings.Contains(lines[len(lines)-2], "T1.1") {
-		t.Fatalf("T1.1 is not last:\n%s", string(text))
+	// T3.1 should be the first item (line 5 in this fixture, 0-indexed)
+	if !strings.Contains(lines[5], "T3.1") {
+		t.Fatalf("T3.1 is not first:\n%s", string(text))
 	}
 }
