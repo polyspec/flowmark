@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database -->
-<!-- source-sha256: 15cc5ac74f5b5661a531444a0579ada2ccbe4c596e48bc5b66943c685f28ae17 -->
+<!-- source-sha256: d09fa6852b5cc3ff2067425ebfbd7a0ec8cdfb3657be35fc739a3d7b45f70724 -->
 # markdown database 계획
 
 [English](markdown-database-plan.md)
@@ -337,7 +337,8 @@ repository마다 자기 checklist를 운영한다. orm과 plugin의 작업은 �
   - T12.9 server(`serve`, token, session control message. orm protocol 항목 선행).
   - T12.10 모든 table에 대한 CLI, MCP, sidecar operation과 `flowmark install`.
   - T12.11 하나의 dataset을 세 저장 방식으로 둔 demo와 0이 된 하드코딩 목록.
-  각 항목은 자신이 대체하는 옛 경로를 제거한다.
+  - T12.12 pseudo-version 대신 요구되는 orm release tag.
+  새 엔진은 옛 엔진 곁에 세워지며, 옛 엔진의 codec, executor, application 경로는 faces가 여전히 사용한다. T12.10이 faces를 새 엔진으로 전환하고 옛 경로를 호환 layer 없이 제거하며, T12.12는 released orm을 요구한다.
 - **orm**(자기 checklist): protocol의 IR executor와 capability table, dbspec setting `store`,
   `key_prefix`, `title`, `body`, `checkbox`, `order`, `state_machine … limit`,
   `state_machine … history`, `state_machine … initial`과 corpus 거절, corpus에서의 `history`와

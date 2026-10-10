@@ -379,7 +379,10 @@ named here.
   - T12.9 the server (`serve`, token, session control messages; requires the orm protocol item);
   - T12.10 the CLI, MCP and sidecar operations over any table, and `flowmark install`;
   - T12.11 the demos as one dataset in three storages, and the hardcoding inventory at zero.
-  Each item removes the old path it replaces.
+  - T12.12 the orm release tag required instead of the pseudo-version.
+  The new engine is built beside the old one, whose codec, executor and application paths the
+  faces still use; T12.10 switches the faces to the new engine and removes the old paths with no
+  compatibility layer, and T12.12 requires the released orm.
 - **orm** (its own checklist): the protocol's IR executors and capability table; the dbspec
   settings `store`, `key_prefix`, `title`, `body`, `checkbox`, `order`,
   `state_machine … limit`, `state_machine … history` and `state_machine … initial`, with the
