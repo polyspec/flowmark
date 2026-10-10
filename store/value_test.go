@@ -98,6 +98,7 @@ func TestSingleLineFaults(t *testing.T) {
 		{"a </b>", true},
 		{"a <b>", true},
 		{"a <!", true},
+		{"a\x00b", true},
 	}
 	for _, c := range cases {
 		if got := singleLineFault(c.in) != ""; got != c.want {
@@ -122,8 +123,13 @@ func TestKeyRules(t *testing.T) {
 		{"", false},
 		{"_a", false},
 		{"-a", false},
+		{"-7", false},
 		{"a--b", false},
-		{"a-", false},
+		{"a-_b", false},
+		{"a_-b", true},
+		{"a-", true},
+		{"a-b-", true},
+		{"7-", true},
 		{"a.b", false},
 		{"a b", false},
 		{"a/b", false},
@@ -191,9 +197,12 @@ func TestTitleEscape(t *testing.T) {
 		{"a#", "a#", true},
 		{"Count the #", `Count the \#`, true},
 		{"x ##", `x #\#`, true},
+		{"a\t#", "a\t\\#", true},
+		{"#", `\#`, true},
+		{"##", `#\#`, true},
 		{"x \\#", `x \#`, false},
-		{"x\\#", `x\#`, true},
-		{"#", "#", true},
+		{"x\\#", `x\#`, false},
+		{"#a", "#a", true},
 	}
 	for _, c := range cases {
 		got := escapeTitle(c.title)
@@ -208,6 +217,30 @@ func TestTitleEscape(t *testing.T) {
 	for _, text := range []string{`a \#`, `x #\#`, `Count the \#`, "plain"} {
 		if got := escapeTitle(unescapeTitle(text)); got != text {
 			t.Fatalf("H1 text %q reads as %q and writes back as %q", text, unescapeTitle(text), got)
+		}
+	}
+}
+
+// TestUnescapeTitle: every input pins 10#single-line-places (the H1 title read:
+// CommonMark's leading and trailing spaces and tabs and its closing sequence are
+// removed, and a final \# reads as #).
+func TestUnescapeTitle(t *testing.T) {
+	cases := []struct{ text, title string }{
+		{"a #", "a"},
+		{" a", "a"},
+		{"a\t#", "a"},
+		{"a ", "a"},
+		{"#", ""},
+		{`\#`, "#"},
+		{`C\#`, "C#"},
+		{`x #\#`, "x ##"},
+		{`a\\#`, `a\#`},
+		{"a#", "a#"},
+		{"a \\#b", "a \\#b"},
+	}
+	for _, c := range cases {
+		if got := unescapeTitle(c.text); got != c.title {
+			t.Fatalf("unescapeTitle(%q) = %q, want %q", c.text, got, c.title)
 		}
 	}
 }

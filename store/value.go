@@ -49,14 +49,20 @@ func readable(t dbspec.Type, v string) (string, bool) {
 	return "", false
 }
 
+// trimWhite removes the spaces and tabs at both ends of s: the white space that
+// CommonMark drops around a heading and a paragraph.
+func trimWhite(s string) string { return strings.Trim(s, " \t") }
+
 // singleLineFault names the single-line rule that v breaks, or "" when none: a
-// line break, leading or trailing white space, or raw HTML, which a viewer
-// would hide or alter.
+// line break, a U+0000, leading or trailing white space, or raw HTML, which a
+// viewer would hide or alter.
 func singleLineFault(v string) string {
 	switch {
 	case strings.ContainsAny(v, "\r\n"):
 		return "a line break"
-	case strings.TrimSpace(v) != v:
+	case strings.ContainsRune(v, 0):
+		return "a U+0000"
+	case trimWhite(v) != v:
 		return "leading or trailing white space"
 	case strings.Contains(v, "<!") || strings.Contains(v, "</"):
 		return "raw HTML"
@@ -71,7 +77,10 @@ func singleLineFault(v string) string {
 	return ""
 }
 
-// keyFault names the key rule that key breaks, or "" when none.
+// keyFault names the key rule that key breaks, or "" when none. A key holds no
+// "--" and no "-_", since the MkDocs viewer collapses hyphen runs and an
+// underscore after a dash can open emphasis; a trailing dash is accepted, as no
+// viewer strips it from an anchor.
 func keyFault(key string) string {
 	switch {
 	case key == "":
@@ -82,8 +91,8 @@ func keyFault(key string) string {
 		return "the key does not begin with a letter or a digit"
 	case strings.Contains(key, "--"):
 		return "the key holds a double dash"
-	case key[len(key)-1] == '-':
-		return "the key ends with a dash"
+	case strings.Contains(key, "-_"):
+		return "the key holds a dash before an underscore"
 	case reservedName(key):
 		return "the key is a reserved Windows file name"
 	}
@@ -126,34 +135,35 @@ func splitLink(raw string) (key, target string, ok bool) {
 	return key, raw[i+2 : len(raw)-1], true
 }
 
-// escapeTitle writes a title as its H1 text: when the title ends in a space and
-// one or more hashes, the last hash is written \# so that CommonMark does not
-// read it as a closing sequence.
+// escapeTitle writes the text of a title for its H1. A final run of hashes that
+// follows a space or a tab, or that is the whole title, has its last hash written
+// \#, since CommonMark would read the run as a closing sequence.
 func escapeTitle(title string) string {
 	n := len(title)
 	j := n
 	for j > 0 && title[j-1] == '#' {
 		j--
 	}
-	if j < n && j > 0 && title[j-1] == ' ' {
+	if j < n && (j == 0 || title[j-1] == ' ' || title[j-1] == '\t') {
 		return title[:n-1] + `\#`
 	}
 	return title
 }
 
-// unescapeTitle reads the title of an H1 text: a text that ends in \# after a
-// space and hashes reads its \# as a hash.
-func unescapeTitle(text string) string {
-	if !strings.HasSuffix(text, `\#`) {
-		return text
-	}
-	pre := text[:len(text)-2]
-	j := len(pre)
-	for j > 0 && pre[j-1] == '#' {
+// unescapeTitle reads the title of an H1 from the text after its "# " marker:
+// CommonMark's leading and trailing spaces and tabs and its closing sequence are
+// removed, and a final \# reads as #. No other escape is decoded.
+func unescapeTitle(content string) string {
+	s := trimWhite(content)
+	j := len(s)
+	for j > 0 && s[j-1] == '#' {
 		j--
 	}
-	if j > 0 && pre[j-1] == ' ' {
-		return pre + "#"
+	if j < len(s) && (j == 0 || s[j-1] == ' ' || s[j-1] == '\t') {
+		s = strings.TrimRight(s[:j], " \t")
 	}
-	return text
+	if strings.HasSuffix(s, `\#`) {
+		s = s[:len(s)-2] + "#"
+	}
+	return s
 }

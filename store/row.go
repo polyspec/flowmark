@@ -17,6 +17,7 @@ const (
 	RuleEncoding     = "format.encoding"
 	RuleWalk         = "corpus.walk"
 	RuleConstraint   = "CONSTRAINT"
+	RuleForeignKey   = "FOREIGN_KEY"
 )
 
 // Row is one row of a table in its readable form.
@@ -35,6 +36,20 @@ type Row struct {
 	Body     string
 	Scalars  map[string]*string
 	Sections map[string]*string
+	// Raw holds the text of each scalar that is not a value of its column type,
+	// as the file writes it. A scalar still holding its Raw text is written as
+	// it is; any other value is checked against its type.
+	Raw map[string]string
+	// Dangling holds the written target of each foreign key that names no row,
+	// keyed by its column.
+	Dangling map[string]DanglingLink
+}
+
+// DanglingLink is the link target a dangling foreign key is written with, and
+// the key its link text names.
+type DanglingLink struct {
+	Key    string
+	Target string
 }
 
 // Linker derives the link target of a foreign key: the relative path, with
