@@ -1,38 +1,58 @@
 <!-- doc-id: spec-dialect -->
-<!-- source-sha256: f777cd57df769aae9e8ae78b32b8c1e49c0be8124ac9e724921498d339170c79 -->
+<!-- source-sha256: 22bec596b0805cf3b0bfc4eea4a2860f3ea19d223e8d5d995cc1d6d138b55bab -->
 # Capability table
 
 [English](60-dialect.md)
 
-markdown backend는 DSN scheme `markdown://<path>`로 선택되는 네 번째 **executor**다. shared
-planner가 SQL backend와 똑같이 IR request를 검증하고, executor는 request를 소비하며 SQL을
-render하지 않는다. 이 table이 통합 계약이다: 각 표면이 무엇을 지원하고 무엇을
-`CAPABILITY_UNSUPPORTED`·`OPERATOR_NOT_ALLOWED`로 거부하는지 — orm 전통대로. 지원은 다른 client가
-executor를 port하기 전까지 **Go-only**다.
+orm은 DSN scheme `markdown://`으로 corpus에 접속하며, 이 scheme은 SQL dialect가 아니라 **IR executor**를
+고른다(server와 DSN은 [operations](40-ops.md)에 있다). 이 spec은 통합 계약이다: wire, 그리고 각 orm
+surface가 corpus에서 무엇을 하는지 또는 orm 전통에 따라 `CAPABILITY_UNSUPPORTED`나
+`OPERATOR_NOT_ALLOWED`로 거절하는지. 계약의 orm 쪽 — protocol 절, 오류 code `WRITE_CONFLICT`, executor가
+할당하는 column, orm `docs/dialects.md`의 capability table — 은 orm 자신의 작업이며 orm의 checklist에서
+추적한다. Go client가 먼저 구현하고, 다른 client는 각자 orm 항목이다.
 
-| 표면 | 판정 |
+## Wire
+
+- **요청**: 요청마다 `{ir_version, manifest_hash, request, params, now}`. client는 요청을
+  검증(`ir.Validate`)하고 plan하지 않는다. `params`는 runtime value model JSON을 쓴다 — decimal은
+  문자열, bytes는 base64, datetime은 UTC `YYYY-MM-DD HH:MM:SS.ffffff`. codec 단계는 SQL과 같이 client가
+  적용한다.
+- **읽기의 답**: 요청의 형태 — join, relation, `key_by`, `flatten` — 로 조립된 행.
+- **쓰기의 답**: `{affected, keys}`. `keys`는 insert된 각 행의 생성되거나 주어진 primary key를 insert
+  순서로 담는다.
+- **오류**: orm `errors.yaml`의 code 하나. hash 불일치는 `SCHEMA_HASH_MISMATCH`다.
+- **control message**: `{op: begin | commit | rollback | savepoint | release | rollback_to, name?}`.
+  각각 `{ok}`나 오류로 답한다. 연결은 session이다.
+
+## Surface
+
+| Surface | 판정 |
 | --- | --- |
-| `one`, `all`, `count`, `group_count`, `sum`, `avg` | in-memory corpus 위에서 지원; ordering은 type-directed, `group_count`는 NULL을 같은 group으로 처리한다 |
-| `paginate` | 지원; session이 corpus revision을 가지고 다니며 불일치 시 `CORPUS_CHANGED`로 실패하거나 keyset pagination으로 강등한다 |
-| `insert` (단일·다중 row) | 하나의 transaction 안에서 지원; primary key 생략은 error이다 (markdown corpus에 `identity` 없음) |
-| `update` | 지원되고 **강화된다**: 모든 commit이 lock 아래 재독기하므로, 동시의 사람 편집은 덮어써지는 대신 `CORPUS_CONFLICT`로 실패한다 |
-| `delete`, `restore` | 지원; `restore`는 SQL 형식을 유지한다 (soft-delete column 해제, 삭제 중에도 unique key 유지) |
-| `optimistic` | 지원 — 평범한 update도 위 강화로 이미 optimistic이고, 명시적 형식은 구분된다 (`OPTIMISTIC_LOCK` vs `NO_ROWS`) |
-| `on_duplicate` | 충돌 대상을 **임의의 unique key**로 지원 (MySQL 규칙); unique key가 여러 개인 table에서 PostgreSQL·SQLite의 대상 규칙과 갈라지며 그 차이를 여기에 문서화한다 |
-| `lock` (`update`, `share`, `update_nowait`, `share_nowait`) | `update`·`share`는 문서화된 no-op로 받는다 (하나의 작업 단위 lock이 이미 직렬화); `*_nowait`는 `CAPABILITY_UNSUPPORTED`로 거부 |
-| relation (`limit_per_parent`, `if_parent`, `flatten`, `key_by`, 복합 key, `no_cascade_delete`) | 지원 — 유도된 index로 corpus 위의 별도 statement |
-| subquery (`tuple_in`, `tuple_not_in`, scalar `Sub` aggregate) | 지원 |
-| `now`, `default now` | 지원; UTC client clock — orm clock 규칙 그대로 |
-| `soft_delete` setting | 지원; soft-delete된 row는 key를 차지하고 foreign key를 만족한다 |
-| `audit` setting | advisory — validate 시점 거부뿐 (사람 write에 대한 trigger 시점 예방 없음) |
-| codec column (AES, styled value, `blind_index`) | 지원; 검증과 codec 연산은 key를 요구한다 |
-| savepoint | 하나의 transaction 안의 nested staging |
-| `orderByRandom` | 지원, corpus revision별 seed |
-| `getQuery()`, statement event, `subscribe()` | `CAPABILITY_UNSUPPORTED` — 보고할 SQL text가 없다 |
-| `force_index` | `CAPABILITY_UNSUPPORTED` — index는 유도되지 명명되지 않는다 |
+| `one`, `all`, `count`, `group_count`, `sum`, `avg` | memory의 corpus 위에서 지원. `group_count`는 NULL을 함께 묶는다 |
+| 정렬 | IR `order`는 column의 type으로 정렬한다. 없는 읽기는 저장 순서를 돌려준다([document model](20-document-model.md)) |
+| `paginate` | 지원. 요청 하나가 일관된 corpus 하나를 읽는다 |
+| `insert`(단일, 다중 행) | 지원. `identity`, `key_prefix`, `order` column은 executor가 할당하며 생략할 수 있다. default는 명시적으로 쓴다 |
+| `update` | 지원. 읽은 뒤 바뀐 대상은 덮어쓰지 않고 `WRITE_CONFLICT`로 실패한다 |
+| `delete`, `restore` | 지원. `restore`는 SQL 형태를 지킨다(soft delete column을 비우고, 지운 동안 unique key를 유지). 참조되는 행의 delete는 `FOREIGN_KEY` |
+| `optimistic` | 지원. 일치가 없으면 `OPTIMISTIC_LOCK` |
+| `on_duplicate` | 충돌 대상 **모든 unique key**(MySQL 규칙)로 지원. unique key가 여럿인 table에서는 PostgreSQL과 SQLite의 대상 규칙과 다르며 그 차이를 여기 밝힌다 |
+| `lock` `update`, `share` | 문서화된 no-op으로 받는다: server transaction이 이미 corpus lock을 잡고 있다 |
+| `lock` `update_nowait`, `share_nowait` | `CAPABILITY_UNSUPPORTED` |
+| relation(`limit_per_parent`, `if_parent`, `flatten`, `key_by`, `no_cascade_delete`) | 지원. executor가 조립한다 |
+| subquery(`tuple_in`, `tuple_not_in`, scalar `Sub` aggregate) | 지원 |
+| `now`, `default now`, `updated`, `soft_delete` | orm 시계 규칙에 따른 요청의 `now` |
+| codec column | client가 적용한다. 저장 값은 encode된 값이다 |
+| `aes`, `aes_version`, `blind_index` | corpus에서 schema 오류 — key는 client를 떠나지 않는다 |
+| `audit`, `immutable` setting | corpus에서 schema 오류. 대신 `state_machine … history` |
+| transaction | session 위의 `begin`부터 `commit`/`rollback`까지. `readOnly`는 지키며 lock을 잡는다 |
+| savepoint | 중첩 stage |
+| `orderByRandom` | 지원. 순서에 seed를 두지 않는다 |
+| audit 값을 가진 transaction | `CAPABILITY_UNSUPPORTED` |
+| `isolation`, `timeoutMs` option | `CAPABILITY_UNSUPPORTED` |
+| `getQuery()`, statement event, `subscribe()` | `CAPABILITY_UNSUPPORTED` — SQL 텍스트가 없다 |
+| `force_index` | `CAPABILITY_UNSUPPORTED` — index는 이름 붙은 것이 아니라 유도된다 |
 | `fulltext`, `Lb` 연산자 | `OPERATOR_NOT_ALLOWED` |
-| `isolation`, `timeoutMs` connection option | `CAPABILITY_UNSUPPORTED` |
-| dbplan chain (`plans.md` lifecycle) | v1에서 거부 — [migration](80-migration.ko.md) 참조; corpus 생성과 additive column 추가뿐 |
+| lock, local setting, privilege, AES rotation utility | `CAPABILITY_UNSUPPORTED` |
+| schema install, dbplan chain | `CAPABILITY_UNSUPPORTED`. `flowmark install`이 corpus를 만들고([schema](30-schema.md)), 진화는 [migration](80-migration.md)을 따른다 |
 
-이 table의 conformance 계약은 [conformance](90-conformance.ko.md)다: corpus before, request, 기대
-corpus after — SQL도 binds도 없다.
+이 표의 conformance 계약은 [conformance](90-conformance.md)다: corpus 전, 요청, 기대하는 corpus 후나 행.
