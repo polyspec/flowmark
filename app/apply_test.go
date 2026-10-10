@@ -243,3 +243,52 @@ func TestEditTitle(t *testing.T) {
 		t.Fatal("the old title is still there")
 	}
 }
+
+const tableBoard = "# Checklist\n\n## State machine\n\n```mermaid\nstateDiagram-v2\n    direction LR\n    [*] --> waiting\n    waiting : [ ] waiting\n    waiting --> doing\n    doing : [~] doing\n    doing --> done: evidence\n    done : [o] done\n    done --> [*]\n```\n\n## Work\n\n| state | id | title |\n| --- | --- | --- |\n| [ ] | T1 | First |\n| [~] | T2 | Second |\n"
+
+func TestTransitionRewritesTheTableCell(t *testing.T) {
+	root := rootWith(t, tableBoard)
+	if err := Transition(root, "docs/plans/list.md", "T2", "done", "make test passes"); err != nil {
+		t.Fatal(err)
+	}
+	text, _ := os.ReadFile(filepath.Join(root, "docs", "plans", "list.md"))
+	if !strings.Contains(string(text), "| [o] | T2 | Second |") || strings.Contains(string(text), "| [~] | T2 |") {
+		t.Fatalf("text:\n%s", string(text))
+	}
+	// the document declares no waiting -> done edge
+	if err := Transition(root, "docs/plans/list.md", "T1", "done", "make test passes"); err == nil {
+		t.Fatal("an undeclared transition passes")
+	}
+}
+
+func TestTableWritePath(t *testing.T) {
+	root := rootWith(t, tableBoard)
+	if err := AddItem(root, "docs/plans/list.md", "T3", "A new row"); err != nil {
+		t.Fatal(err)
+	}
+	text, _ := os.ReadFile(filepath.Join(root, "docs", "plans", "list.md"))
+	if !strings.Contains(string(text), "| [ ] | T3 | A new row |") {
+		t.Fatalf("add:\n%s", string(text))
+	}
+	if err := EditTitle(root, "docs/plans/list.md", "T3", "A renamed row"); err != nil {
+		t.Fatal(err)
+	}
+	text, _ = os.ReadFile(filepath.Join(root, "docs", "plans", "list.md"))
+	if !strings.Contains(string(text), "| [ ] | T3 | A renamed row |") {
+		t.Fatalf("edit:\n%s", string(text))
+	}
+	if err := MoveItem(root, "docs/plans/list.md", "T1", "T2"); err != nil {
+		t.Fatal(err)
+	}
+	text, _ = os.ReadFile(filepath.Join(root, "docs", "plans", "list.md"))
+	if strings.Index(string(text), "| T2") < strings.Index(string(text), "| T1") {
+		t.Fatalf("move:\n%s", string(text))
+	}
+	if err := RemoveItem(root, "docs/plans/list.md", "T1"); err != nil {
+		t.Fatal(err)
+	}
+	text, _ = os.ReadFile(filepath.Join(root, "docs", "plans", "list.md"))
+	if strings.Contains(string(text), "T1 |") {
+		t.Fatalf("remove:\n%s", string(text))
+	}
+}

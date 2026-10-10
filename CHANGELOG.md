@@ -3,6 +3,12 @@
 
 ## Unreleased
 
+- T8.6: the write path serves the table form. A document whose items live in a table gets the
+  same commands as the list form: a transition rewrites the state cell by the document's own
+  edges, an add appends a row with the auto ID (NextID reads table rows), an edit rewrites the
+  title cell, a move reorders the row lines and a remove deletes the row. One grammar per
+  document — checklist lines and an items table together are refused.
+
 - T11: items carry people and dates. An item title may close with `@assignee` and a
   `YYYY-MM-DD` due date — the codec splits the closing tokens from the title — and a document
   holds a people table by naming `id` and `name` columns. The first row is the owner: an item
