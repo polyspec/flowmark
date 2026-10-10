@@ -1,15 +1,15 @@
 <!-- doc-id: agents -->
-<!-- source-sha256: 4ed2861d30997045bce4d5a98902d6b7d760ea410c544689ee59aa5cf7c0ae01 -->
+<!-- source-sha256: e34cd0a08c47ae7acdc2f455f91828e9d68240a44eb34efc6aaf8b100b1bb973 -->
 # 개발 규칙
 
 [English](AGENTS.md)
 
 ## 목적
 
-flowmark는 markdown 문법을 가진 텍스트 DB다: [polyspec/orm](https://github.com/polyspec/orm)이
-core(markdown executor, 네 번째 backend)이고 이 저장소는 통합·응용 layer — sync adapter(database,
-GitHub, Jira), checklist·changelog engine, local board. 판정은 `docs/plans/design-plan.ko.md`에,
-실행 추적은 `docs/plans/execution-checklist.ko.md`에 있다.
+flowmark는 markdown 문법을 가진 텍스트 DB다: 이 저장소는 엔진과 그 얇은 face, sync adapter(database,
+GitHub, Jira), 응용 schema이고, [polyspec/orm](https://github.com/polyspec/orm)은 DSN `markdown://`으로
+이것에 접속하는 query layer다. 판정은 `docs/plans/design-plan.ko.md`와 그 옆의 계획에 있고, 각 계획은
+`docs/plans/`에 자기 checklist를 갖는다.
 
 ## 원칙
 

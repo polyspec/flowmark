@@ -5,11 +5,11 @@
 
 ## Purpose
 
-flowmark is a text database whose grammar is markdown: [polyspec/orm](https://github.com/polyspec/orm)
-is the core (the markdown executor, its fourth backend) and this repository is the integration and
-application layer — the sync adapters (database, GitHub, Jira), the checklist and changelog engine,
-and the local board. The rulings live in `docs/plans/design-plan.md`; the execution tracker in
-`docs/plans/execution-checklist.md`.
+flowmark is a text database whose grammar is markdown: this repository is the engine and its thin
+faces, the sync adapters (database, GitHub, Jira) and the application schema;
+[polyspec/orm](https://github.com/polyspec/orm) is the query layer that reaches it by the DSN
+`markdown://`. The rulings live in `docs/plans/design-plan.md` and the plans beside it; each plan
+has its checklist in `docs/plans/`.
 
 ## Principles
 
