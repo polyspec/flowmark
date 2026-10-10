@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database-checklist -->
-<!-- source-sha256: f905c0038af7f45720a074e510692e7008e04e692af5e249718ff9c05ddbbf1d -->
+<!-- source-sha256: 9930a67b16a522c04ee6444b65871427ef09f1d744513a54afe68e1dce961e8f -->
 # markdown database checklist
 
 ## T12 markdown database
@@ -54,7 +54,7 @@
   - 완료 기준: 규칙마다 RED 테스트를 목적한 이유로 실패함을 확인한 뒤 GREEN으로 만든다. 사례는 고정하는 spec section을 밝힌다. `go test -count=1 ./store/ ./catalog/`, `make documents-check`, `make refs-check`가 통과한다.
 - [o] T12.2.3 `document` 저장: H1 아래의 list 또는 table과 H2의 detail section(`## <table> row <key>`)을 가진 `<table>.flowmark.md`를 다룬다. list field는 오른쪽에서부터 escape와 함께 parse하고, table cell은 escape와 함께 다루며, 들여쓰기는 `parent`로, `order`는 파생된 값으로 보며, 행이 없는 table은 `# <table>`과 LF 하나로 쓴다. T12.1-3에서 T12.1-6까지의 판정을 따른다 (T12.2.1 선행)
   - 완료 기준: T12.2.2와 같다. 모든 규칙마다 허용과 거절 사례가 있고, parse와 emit은 golden seed로 fuzz한다.
-- [ ] T12.2.4 `block` 저장: 부모 row의 scope 안의 child block을 다음 level에 재귀적으로 두며, 비어 있지 않을 때만 쓴다. detail section과 그 section을 포함한다 (T12.2.2, T12.2.3 선행)
+- [o] T12.2.4 `block` 저장: 부모 row의 scope 안의 child block을 다음 level에 재귀적으로 두며, 비어 있지 않을 때만 쓴다. detail section과 그 section을 포함한다 (T12.2.2, T12.2.3 선행)
   - 완료 기준: T12.2.2와 같으며, block row의 detail section 안의 block을 포함한다. 모든 규칙마다 허용과 거절 사례가 있고, parse와 emit은 golden seed로 fuzz한다.
 - [ ] T12.2.5 하나의 dataset을 세 저장 방식으로: 같은 행을 files, document, block으로 저장하면 같은 행으로 parse되고, 각 저장마다 P1/P2가 성립한다 (T12.2.4 선행)
   - 완료 기준: 저장 등가성 테스트. 모든 규칙마다 허용과 거절 사례가 있고, parse와 emit은 golden seed로 fuzz한다.

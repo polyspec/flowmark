@@ -1,8 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 060aeb5184400d4f5897ee3e0159f0188ab32d02a3384ae2faf372ce9e7f6f47 -->
+<!-- source-sha256: e274976b57e278329b81e5851f363edb7d95be371c11be0a9cef0674a1dd7ec6 -->
 # Changelog
 
 ## Unreleased
+
+- T12.2.4: `block` storage codec이 부모 row의 scope 안의 child block을 parse하고 쓴다. block은 부모 section과 같은 level의 section이다: `files` row는 markdown section 뒤에 table 이름 순서로 level 2에 block을 두고, `document`와 block row는 detail section 안에서 그 section level에 둔다. block은 list 또는 table이며, 그 행들의 detail section이 뒤따르고, 재귀적이다. 행이 없는 block은 쓰지 않으며, 빈 block heading은 `format.noncanonical`이다. block 행은 중첩이 뜻하는 placement foreign key를 값으로 갖지 않고, `Row.Blocks`가 block마다 행을 저장 순서로 담는다. 쓰기는 선언되지 않은 block, 다른 table의 행, block 행에 준 placement key를 거절한다. T12.2.3의 쓰기 guard와 읽기 거절은 제거했고, production codec이 쓰는 `sp`를 test 파일에서 `store/row.go`로 옮겼다.
 
 - T12.2.3: `document` storage codec이 list와 table 형식의 `<table>.flowmark.md`를 parse하고 쓴다. H1, 그 아래의 행(list 행은 glyph, key, 제목, 오른쪽에서 escape와 함께 parse하는 field, 들여쓰기는 `parent`; table 행은 key가 먼저이고, pipe escape를 가진 cell, NULL과 빈 텍스트), 저장 순서의 detail section `## <table> row <key>`(본문과 section 포함)를 다룬다. `order`는 읽을 때 1부터 세는 형제 위치로 채우고, 쓸 때는 형제 집합마다 정확히 1..m으로 취한다. 쓰는 쪽은 행의 순서를 스스로 맞추며 정렬되지 않은 입력을 거절하지 않는다. 외래 key는 linker를 거친 link이며 dangling link는 쓰인 target을 유지한다. T12.2.4까지 쓰기는 catalog가 child block을 선언한 table을 거절하며, 오류는 table, block과 T12.2.4를 이름으로 든다. 그래서 어떤 쓰기도 block의 행을 떨어뜨리지 않는다. 읽기는 child block section을 담은 detail section을 같은 이름으로 거절한다. 시간 값이 `now`로 쓰이면 그 type이 아니다. 읽을 때는 쓰인 대로 두고 쓸 때는 거절하며, 텍스트 값 `now`는 텍스트다. 규칙마다 허용과 거절 사례가 있고 세 golden은 P1·P2이며, parse와 render fuzz target은 그 golden으로 seed된다.
 

@@ -28,6 +28,18 @@ type filesLayout struct {
 	scalars  []dbspec.Column
 	sections []section
 	fks      map[string]string
+	scope    int          // the row scope level of the file: its sections are at this level
+	children []*docLayout // the block tables stored in the file, by table name
+}
+
+// childNamed returns the child block of the table whose name is name, or nil.
+func (l *filesLayout) childNamed(name string) *docLayout {
+	for _, c := range l.children {
+		if c.table == name {
+			return c
+		}
+	}
+	return nil
 }
 
 // section is a markdown column other than the body; a nullable one may be absent.
@@ -45,7 +57,7 @@ func layoutOf(cat *catalog.Catalog, table string) (*filesLayout, error) {
 	if tb.Storage.Kind != catalog.StorageFiles {
 		return nil, fmt.Errorf("table %s is not a files table", table)
 	}
-	lay := &filesLayout{table: table, fks: map[string]string{}}
+	lay := &filesLayout{table: table, fks: map[string]string{}, scope: tb.RowScope}
 	markdown := map[string]bool{}
 	for _, m := range tb.Markdown {
 		markdown[m] = true
@@ -70,6 +82,11 @@ func layoutOf(cat *catalog.Catalog, table string) (*filesLayout, error) {
 			lay.fks[fk.Columns[0]] = fk.Table
 		}
 	}
+	children, err := childLayouts(cat, table)
+	if err != nil {
+		return nil, err
+	}
+	lay.children = children
 	return lay, nil
 }
 
@@ -148,7 +165,9 @@ func ParseFile(cat *catalog.Catalog, table, rel string, data []byte, lk Linker) 
 	if p.readTitle(lines, row) {
 		i := p.readFields(lines, row)
 		b := p.readBody(lines, i, row)
-		p.readSections(lines, b, row)
+		dp := newDocParser(&p.sink, rel, lk)
+		p.readSections(lines, b, row, dp)
+		dp.resolveLinks()
 	}
 	if p.fatal {
 		return nil, p.diags
@@ -334,9 +353,10 @@ func (p *parser) readBody(lines []string, i int, row *Row) int {
 	return b
 }
 
-// readSections reads the sections of the row from line b, each a level-2
-// heading that names a declared markdown column.
-func (p *parser) readSections(lines []string, b int, row *Row) {
+// readSections reads the sections of the row from line b, each a level-2 heading
+// that names a declared markdown column or a child block. A child block is read
+// by dp, in its own scope, and its rows become the row's child rows.
+func (p *parser) readSections(lines []string, b int, row *Row, dp *docParser) {
 	var bounds []heading
 	for _, h := range scanHeadings(lines, b).heads {
 		if h.level <= 2 {
@@ -351,6 +371,20 @@ func (p *parser) readSections(lines []string, b int, row *Row) {
 		}
 		headLine := h.at + 1
 		name := trimWhite(h.text)
+		if child := p.lay.childNamed(name); child != nil && h.level == 2 {
+			if seen[name] {
+				p.fail(headLine, 1, RuleSection, "the block "+name+" is written twice")
+				continue
+			}
+			seen[name] = true
+			if h.text != name {
+				p.warn(headLine, 1, RuleNoncanonical, "the block heading has extra spaces")
+			}
+			if rows := dp.readChildBlock(lines, h, end, child); len(rows) > 0 {
+				setBlock(row, child.table, rows)
+			}
+			continue
+		}
 		_, declared := p.lay.section(name)
 		switch {
 		case h.level != 2:
@@ -386,12 +420,38 @@ func RenderFile(cat *catalog.Catalog, table string, row *Row, lk Linker) ([]byte
 	return renderRow(lay, row, lk)
 }
 
-// writer collects the file being written and the refusals of its values.
+// writer collects the file being written and the refusals of its values. An element
+// is a heading or a value; the framing of a value depends on the element that
+// follows it, so each value is checked once the file is complete.
 type writer struct {
-	rel   string
-	b     strings.Builder
-	lines int
-	diags []Diagnostic
+	rel    string
+	b      strings.Builder
+	lines  int
+	elems  int
+	values []pendingValue
+	diags  []Diagnostic
+}
+
+// pendingValue is a body or a section that the writer has written, to be checked
+// once the file is complete. k is the number of elements before it.
+type pendingValue struct {
+	name        string
+	v           string
+	line        int // the line the value starts at
+	level       int // the row scope level: a heading of this level or less ends the value
+	body        bool
+	afterFields bool
+	k           int
+}
+
+// elem counts a heading as an element of the file.
+func (w *writer) elem() { w.elems++ }
+
+// finish checks the values written, each followed by an element when one was written after it.
+func (w *writer) finish() {
+	for _, p := range w.values {
+		w.checkValue(p, w.elems > p.k+1)
+	}
 }
 
 func (w *writer) refuse(line, col int, msg string) {
@@ -456,41 +516,22 @@ func renderRow(lay *filesLayout, row *Row, lk Linker) ([]byte, []Diagnostic) {
 	for _, f := range fields {
 		w.put(f + "\n")
 	}
-
-	type item struct {
-		heading string
-		value   string
-		body    bool
-	}
-	var items []item
-	if row.Body != "" {
-		items = append(items, item{value: row.Body, body: true})
-	}
 	for _, s := range lay.sections {
-		v := row.Sections[s.name]
-		if v == nil {
-			if !s.nullable {
-				w.refuse(w.next(), 1, "the non-null section "+s.name+" has no value")
-			}
-			continue
-		}
-		items = append(items, item{heading: s.name, value: *v})
-	}
-	for k, it := range items {
-		w.put("\n")
-		followed := k < len(items)-1
-		if it.body {
-			w.value("the body", it.value, w.next(), followed, true, len(fields) > 0, 2)
-			w.put(it.value)
-			continue
-		}
-		w.put("## " + it.heading + "\n")
-		if it.value != "" {
-			w.put("\n")
-			w.value("the section "+it.heading, it.value, w.next(), followed, false, false, 2)
-			w.put(it.value)
+		if row.Sections[s.name] == nil && !s.nullable {
+			w.refuse(w.next(), 1, "the non-null section "+s.name+" has no value")
 		}
 	}
+	for _, name := range sortedBlocks(row) {
+		if lay.childNamed(name) == nil {
+			w.refuse(1, 1, name+" is not a block of "+lay.table)
+		}
+	}
+	dw := newDocWriter(w, lk, true)
+	for _, c := range lay.children {
+		dw.index(c, row.Blocks[c.table])
+	}
+	dw.contents(lay.scope, lay.sections, lay.children, row, true, len(fields) > 0)
+	w.finish()
 	if len(w.diags) > 0 {
 		return nil, w.diags
 	}
@@ -565,10 +606,8 @@ func (w *writer) fieldText(lay *filesLayout, row *Row, c dbspec.Column, v string
 // field list, an indented line. A value that leaves a fence or an HTML block open
 // at the top level is refused when the element that follows it would be taken
 // into that block.
-func (w *writer) value(name, v string, line int, followed, body, afterFields bool, level int) {
-	if v == "" {
-		return
-	}
+func (w *writer) checkValue(p pendingValue, followed bool) {
+	name, v, line, body, afterFields, level := p.name, p.v, p.line, p.body, p.afterFields, p.level
 	switch {
 	case !utf8.ValidString(v):
 		w.refuse(line, 1, name+" is not UTF-8")

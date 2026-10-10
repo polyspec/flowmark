@@ -53,7 +53,7 @@
   - Completion criteria: a RED test for each rule, confirmed failing for the intended reason, then GREEN; the cases name the spec section they pin; `go test -count=1 ./store/ ./catalog/`, `make documents-check` and `make refs-check` pass.
 - [o] T12.2.3 The `document` storage: `<table>.flowmark.md` with its list or table under the H1 and detail sections `## <table> row <key>` at H2, list fields parsed from the right with their escapes, table cells with their escapes, indentation as `parent`, derived `order`, and a table without rows written as `# <table>` and one LF; it follows the rulings of T12.1-3 to T12.1-6 (requires T12.2.1)
   - Completion criteria: as T12.2.2. Every rule has accepting and rejecting cases, and parse and emit are fuzzed with the golden seeds.
-- [ ] T12.2.4 The `block` storage: child blocks inside a parent row scope at the next level, recursively, written only when non-empty, with detail sections and their sections (requires T12.2.2, T12.2.3)
+- [o] T12.2.4 The `block` storage: child blocks inside a parent row scope at the next level, recursively, written only when non-empty, with detail sections and their sections (requires T12.2.2, T12.2.3)
   - Completion criteria: as T12.2.2, including a block inside a block row's detail section. Every rule has accepting and rejecting cases, and parse and emit are fuzzed with the golden seeds.
 - [ ] T12.2.5 One dataset in three storages: the same rows stored as files, document and block parse to equal rows, and P1/P2 hold for each (requires T12.2.4)
   - Completion criteria: a storage-equivalence test. Every rule has accepting and rejecting cases, and parse and emit are fuzzed with the golden seeds.

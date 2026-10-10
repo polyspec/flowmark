@@ -33,6 +33,9 @@ func fuzzDocumentSeeds(f *testing.F) {
 	f.Add(uint8(0), []byte(itemsOf("- [ ] T1 Plan done:false note:\" a\"")))
 	f.Add(uint8(0), []byte(itemsOf("- [ ] T1 Plan done:false", "", "## items row T1", "", "A.", "", "## items row T1", "", "B.")))
 	f.Add(uint8(0), []byte(itemsOf("- [ ] T1 Plan done:false", "", "## items row T1", "", "### item_history", "", "x")))
+	f.Add(uint8(0), []byte(itemsOf("- [ ] T1 Plan done:false", "", "## items row T1", "", "### item_history")))
+	f.Add(uint8(0), []byte(itemsOf("- [ ] T1 Plan done:false", "", "## items row T1", "", "### item_notes", "- N1 Spec item:T1 tag:x", "  - N2 Child", "", "#### item_notes row N1", "", "Body.")))
+	f.Add(uint8(0), []byte(itemsOf("- [ ] T1 Plan done:false", "", "## items row T1", "", "### item_history", "| id | from_state | to_state | at |", "| --- | --- | --- | --- |", "| 1 | waiting | doing | 2026-10-01 08:00:00.000000 |", "", "#### item_history row 1", "", "##### evidence", "", "a|b")))
 	f.Add(uint8(1), []byte(peopleOf(peopleHeader, peopleDelim, row("P1", "", "Ada", "", "true", "", "", "", "", "", "", "", "", ""), "", "## people row P1", "", "### bio", "", "Notes.")))
 	f.Add(uint8(1), []byte(peopleOf(peopleHeader, peopleDelim, row("P1", "", `"\q"`, "", "true", "", "", "", "", "", "", "", "", ""))))
 	f.Add(uint8(1), []byte(peopleOf(peopleHeader, peopleDelim, row("P1", "", "a \\| b", "", "true", "", "", "", "", "", "", "", "", ""), "", "## people row P1", "", "### bio", "", "x")))
@@ -55,10 +58,7 @@ func FuzzParseDocument(f *testing.F) {
 		}
 		rows, diags, err := ParseDocument(cat, table, rel, data, lk)
 		if err != nil {
-			if !strings.Contains(err.Error(), "T12.2.4") {
-				t.Fatalf("parse refused with an unexpected error: %v\ninput: %q", err, data)
-			}
-			return
+			t.Fatalf("parse of a document table refused: %v\ninput: %q", err, data)
 		}
 		if rows == nil {
 			if len(diags) == 0 {
@@ -68,7 +68,7 @@ func FuzzParseDocument(f *testing.F) {
 		}
 		// Two rows with byte-for-byte equal keys are readable, but their table is
 		// unavailable to a write (DUPLICATE_KEY), so the emission is the read-side one.
-		out, rd, err := writeDocument(cat, table, rows, lk)
+		out, rd, err := RenderDocument(cat, table, rows, lk)
 		if err != nil || len(rd) > 0 {
 			for _, d := range rd {
 				if d.Rule != RuleDuplicateKey {
@@ -118,7 +118,7 @@ func FuzzRenderDocument(f *testing.F) {
 			Table: "items", Key: "T1", Title: title, Body: body, Scalars: sc,
 			Sections: map[string]*string{"evidence": &evidence}, Raw: map[string]string{}, Dangling: map[string]DanglingLink{},
 		}
-		out, diags, err := writeDocument(cat, "items", []*Row{r}, lk)
+		out, diags, err := RenderDocument(cat, "items", []*Row{r}, lk)
 		if err != nil || len(diags) > 0 {
 			return
 		}
@@ -132,7 +132,7 @@ func FuzzRenderDocument(f *testing.F) {
 		if want, ok := readable(dbspec.Type{Kind: dbspec.TypeI32}, position); !ok || *back[0].Scalars["position"] != want {
 			t.Fatalf("position changed on the round trip: %q", position)
 		}
-		again, rd, err := writeDocument(cat, "items", back, lk)
+		again, rd, err := RenderDocument(cat, "items", back, lk)
 		if err != nil || len(rd) > 0 || !bytes.Equal(again, out) {
 			t.Fatalf("P2 failed: %q vs %q", again, out)
 		}

@@ -45,6 +45,10 @@ type Row struct {
 	// Dangling holds the written target of each foreign key that names no row,
 	// keyed by its column.
 	Dangling map[string]DanglingLink
+	// Blocks holds the child rows of each child block table of this row's table,
+	// keyed by the block's table name, each in storage order. A child row carries
+	// no value of its placement foreign key: its parent row is its placement.
+	Blocks map[string][]*Row
 }
 
 // DanglingLink is the link target a dangling foreign key is written with, and
@@ -53,6 +57,9 @@ type DanglingLink struct {
 	Key    string
 	Target string
 }
+
+// sp returns a pointer to a copy of v: the value of a non-NULL scalar.
+func sp(v string) *string { return &v }
 
 // Linker derives the link target of a foreign key: the relative path, with
 // "/" separators, from the corpus file fromFile to the file that holds the row

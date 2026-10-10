@@ -13,7 +13,7 @@ import (
 
 // fuzzSeeds are the golden tasks files and the noncanonical spellings of them.
 func fuzzSeeds(f *testing.F) {
-	for _, rel := range []string{"tasks/T1.flowmark.md", "tasks/T2.flowmark.md", "tasks/T3.flowmark.md"} {
+	for _, rel := range []string{"tasks/T1.flowmark.md", "tasks/T2.flowmark.md", "tasks/T3.flowmark.md", "tasks/T4.flowmark.md"} {
 		b, err := os.ReadFile(filepath.Join(fixtureRoot, rel))
 		if err != nil {
 			f.Fatal(err)
@@ -25,6 +25,9 @@ func fuzzSeeds(f *testing.F) {
 	f.Add([]byte(withBase()))
 	f.Add([]byte(withBase("## evidence", "", "a", "```", "## x", "```")))
 	f.Add([]byte(withBase("## cause", "", "## evidence", "")))
+	f.Add([]byte(withBase("## task_steps")))
+	f.Add([]byte(withBase("## task_steps", "- S1 Draft done:true", "", "### task_steps row S1", "", "#### step_refs", "| id | label |", "| --- | --- |", "| 1 | spec |", "", "##### step_refs row 1", "", "###### note", "", "Ref.")))
+	f.Add([]byte(withBase("## cause", "", "Cause.", "", "## task_steps", "- S1 Draft done:true", "  - S2 Child done:false")))
 	// Invisible characters at the ends of the single-line places, the text that is not one, and the interior.
 	f.Add([]byte(doc("#  Title", "- position: 1", "- done: true")))
 	f.Add([]byte(doc("# Title​", "- position: 1", "- done: true")))

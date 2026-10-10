@@ -126,3 +126,25 @@ table item_history {
     markdown evidence
   }
 }
+
+table item_notes {
+  id varchar(16)
+  item varchar(32)
+  parent varchar(16) null
+  title varchar(255)
+  body text
+  position i32
+  tag varchar(16) null
+  primary key (id)
+  index ix_item_notes_item (item)
+  index ix_item_notes_parent (parent)
+  foreign key fk_note_item (item) references items (id) on delete restrict on update restrict
+  foreign key fk_note_parent (parent) references item_notes (id) on delete restrict on update restrict
+  settings {
+    store block fk_note_item list
+    title title
+    body body
+    order position
+    markdown body
+  }
+}

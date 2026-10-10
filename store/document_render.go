@@ -1,7 +1,6 @@
 package store
 
 import (
-	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -12,79 +11,175 @@ import (
 )
 
 // RenderDocument writes the document file of the rows of a document table. The rows
-// may come in any order: the file takes their storage order. A row set the writer
-// refuses returns no bytes and diagnostics, located at the row's place in the given
-// order; two rows whose keys are equal without regard to case are DUPLICATE_KEY.
-// A table whose catalog declares a child block is refused with an error: the rows
-// of the block are not in the rows given, so writing would drop them, and the block
-// sections are the layout of T12.2.4.
+// may come in any order: the file takes their storage order. Each row carries its
+// child blocks, which the file writes in the row's detail section. A row set the
+// writer refuses returns no bytes and diagnostics, located at the line of the row;
+// two rows whose keys are equal without regard to case are DUPLICATE_KEY.
 func RenderDocument(cat *catalog.Catalog, table string, rows []*Row, lk Linker) ([]byte, []Diagnostic, error) {
 	lay, err := docLayoutOf(cat, table)
 	if err != nil {
 		return nil, nil, err
 	}
-	if len(lay.children) > 0 {
-		return nil, nil, fmt.Errorf("%s: table %s stores the child block %s, which a write refuses: the block sections are not implemented until T12.2.4", docFileName(lay), table, lay.children[0])
-	}
 	out, diags := renderDocument(lay, rows, lk, true)
 	return out, diags, nil
 }
 
-// renderDocument writes the document of rows in its canonical form. A write
-// refuses two rows whose keys are equal without regard to case; the read check of
+// renderDocument writes the document of rows in its canonical form. A write refuses
+// two rows whose keys are equal without regard to case; the read check of
 // ParseDocument does not, since the validator reports those keys.
 func renderDocument(lay *docLayout, rows []*Row, lk Linker, write bool) ([]byte, []Diagnostic) {
 	w := &writer{rel: docFileName(lay)}
-	rowLine := func(i int) int {
-		if lay.list {
-			return 2 + i
-		}
-		return 4 + i
+	dw := newDocWriter(w, lk, write)
+	dw.index(lay, rows)
+	w.put("# " + lay.table + "\n")
+	dw.rows(lay, rows)
+	w.finish()
+	if len(w.diags) > 0 {
+		return nil, w.diags
 	}
+	return []byte(w.b.String()), nil
+}
+
+// docWriter writes the lists and tables of a file with their detail sections and
+// child blocks. idx holds every row of the file by table and key, the rows that a
+// link may name; lower holds the table and key of each row written, without regard
+// to case, for the duplicate check of a write.
+type docWriter struct {
+	w     *writer
+	lk    Linker
+	write bool
+	idx   map[string]map[string]fileRow
+	lower map[string]bool
+}
+
+// fileRow is a row of the file with the layout that holds it.
+type fileRow struct {
+	lay *docLayout
+	row *Row
+}
+
+// newDocWriter returns a writer of the rows of a file that writes into w.
+func newDocWriter(w *writer, lk Linker, write bool) *docWriter {
+	return &docWriter{w: w, lk: lk, write: write, idx: map[string]map[string]fileRow{}, lower: map[string]bool{}}
+}
+
+// index adds the rows of lay and, recursively, their child rows to the rows of the file.
+func (dw *docWriter) index(lay *docLayout, rows []*Row) {
+	for _, r := range rows {
+		if dw.idx[lay.table] == nil {
+			dw.idx[lay.table] = map[string]fileRow{}
+		}
+		if _, dup := dw.idx[lay.table][r.Key]; !dup {
+			dw.idx[lay.table][r.Key] = fileRow{lay: lay, row: r}
+		}
+		for _, c := range lay.children {
+			dw.index(c, r.Blocks[c.table])
+		}
+	}
+}
+
+// rows writes the list or table of rows of lay in storage order, then the detail
+// section of each row that has one. Each row is checked at the line it is written
+// on; a parent cycle is refused where the first row of the cycle would be written.
+func (dw *docWriter) rows(lay *docLayout, rows []*Row) {
+	if len(rows) == 0 {
+		return
+	}
+	w := dw.w
+	order, depth, unreached := storageOrder(lay, rows)
+	pos := make([]int, len(rows))
+	for k, i := range order {
+		pos[i] = k
+	}
+	first := w.next()
+	if !lay.list {
+		first += 2 // the header row and the delimiter row
+	}
+	rowLine := func(i int) int { return first + pos[i] }
 	byKey := map[string]int{}
 	for i, r := range rows {
 		if _, dup := byKey[r.Key]; !dup {
 			byKey[r.Key] = i
 		}
 	}
-	lower := map[string]int{}
 	for i, r := range rows {
-		w.checkRow(lay, byKey, r, rowLine(i))
-		if !write {
+		line := rowLine(i)
+		w.checkRow(lay, byKey, r, line)
+		if !dw.write {
 			continue
 		}
-		k := strings.ToLower(r.Key)
-		if first, dup := lower[k]; dup {
-			w.refuseRule(RuleDuplicateKey, rowLine(i), 1, "the key "+r.Key+" equals the key of row "+strconv.Itoa(first+1)+" without regard to case")
-		} else {
-			lower[k] = i
+		k := lay.table + "/" + strings.ToLower(r.Key)
+		if dw.lower[k] {
+			w.refuseRule(RuleDuplicateKey, line, 1, "the key "+r.Key+" equals another key of "+lay.table+" without regard to case")
 		}
-	}
-	if len(w.diags) > 0 {
-		return nil, w.diags
+		dw.lower[k] = true
 	}
 	checkOrder(w, lay, rows, rowLine)
-	if len(w.diags) > 0 {
-		return nil, w.diags
-	}
-	order, depth, unreached := storageOrder(lay, rows)
 	if len(unreached) > 0 {
 		w.refuse(rowLine(unreached[0]), 1, "the parents of the rows form a cycle")
-		return nil, w.diags
+		return
 	}
-	w.put("# " + lay.table + "\n")
-	if len(rows) > 0 {
-		if lay.list {
-			w.writeList(lay, rows, order, depth, lk)
-		} else {
-			w.writeTable(lay, rows, order, lk)
+	if lay.list {
+		dw.writeList(lay, rows, order, depth)
+	} else {
+		dw.writeTable(lay, rows, order)
+	}
+	for _, i := range order {
+		if r := rows[i]; hasDetail(lay, r) {
+			dw.detail(lay, r)
 		}
-		w.writeDetails(lay, rows, order, lk)
 	}
-	if len(w.diags) > 0 {
-		return nil, w.diags
+}
+
+// detail writes the detail section of row r of lay: its heading at the level of
+// the detail (the row scope less one), then its contents.
+func (dw *docWriter) detail(lay *docLayout, r *Row) {
+	dw.w.put("\n" + strings.Repeat("#", lay.scope-1) + " " + lay.table + " row " + r.Key + "\n")
+	dw.w.elem()
+	dw.contents(lay.scope, lay.sections, lay.children, r, false, false)
+}
+
+// contents writes what a row scope of level scope holds after its heading or its
+// H1 and field list: the body, the markdown sections in column order, and the child
+// blocks in table name order, each a heading of the scope level with its rows. A
+// file row writes its body as a file body, which a field list precedes.
+func (dw *docWriter) contents(scope int, sections []section, children []*docLayout, r *Row, fileBody, afterFields bool) {
+	w := dw.w
+	marks := strings.Repeat("#", scope)
+	if r.Body != "" {
+		w.put("\n")
+		dw.value("the body", r.Body, scope, fileBody, afterFields)
 	}
-	return []byte(w.b.String()), nil
+	for _, s := range sections {
+		v := r.Sections[s.name]
+		if v == nil {
+			continue
+		}
+		w.put("\n" + marks + " " + s.name + "\n")
+		w.elem()
+		if *v != "" {
+			w.put("\n")
+			dw.value("the section "+s.name, *v, scope, false, false)
+		}
+	}
+	for _, c := range children {
+		rows := r.Blocks[c.table]
+		if len(rows) == 0 {
+			continue
+		}
+		w.put("\n" + marks + " " + c.table + "\n")
+		w.elem()
+		dw.rows(c, rows)
+	}
+}
+
+// value writes the text v of a body or a section, of the row scope level, and
+// records it for its framing check, which the writer runs once the file is complete.
+func (dw *docWriter) value(name, v string, level int, body, afterFields bool) {
+	w := dw.w
+	w.values = append(w.values, pendingValue{name: name, v: v, line: w.next(), level: level, body: body, afterFields: afterFields, k: w.elems})
+	w.elems++
+	w.put(v)
 }
 
 // checkRow refuses the values of row r that the document cannot hold: a row of
@@ -108,6 +203,11 @@ func (w *writer) checkRow(lay *docLayout, byKey map[string]int, r *Row, line int
 	for _, name := range sortedKeys(r.Sections) {
 		if _, ok := lay.sectionOf(name); !ok {
 			w.refuse(line, 1, name+" is not a markdown section of "+lay.table)
+		}
+	}
+	for _, name := range sortedBlocks(r) {
+		if lay.childNamed(name) == nil {
+			w.refuse(line, 1, name+" is not a block of "+lay.table)
 		}
 	}
 	if r.Body != "" && lay.body == "" {
@@ -224,7 +324,8 @@ func checkOrder(w *writer, lay *docLayout, rows []*Row, rowLine func(int) int) {
 }
 
 // writeList writes the list rows in storage order, each indented by two spaces per depth.
-func (w *writer) writeList(lay *docLayout, rows []*Row, order, depth []int, lk Linker) {
+func (dw *docWriter) writeList(lay *docLayout, rows []*Row, order, depth []int) {
+	w := dw.w
 	for _, i := range order {
 		r := rows[i]
 		line := w.next()
@@ -239,7 +340,7 @@ func (w *writer) writeList(lay *docLayout, rows []*Row, order, depth []int, lk L
 			if v == nil {
 				continue
 			}
-			if text, ok := w.valueText(lay, rows, r, c, *v, line, lk); ok {
+			if text, ok := dw.valueText(lay, r, c, *v, line); ok {
 				b.WriteString(" " + listToken(c.Name, text))
 			}
 		}
@@ -248,7 +349,8 @@ func (w *writer) writeList(lay *docLayout, rows []*Row, order, depth []int, lk L
 }
 
 // writeTable writes the header, the delimiter row and the rows, in storage order.
-func (w *writer) writeTable(lay *docLayout, rows []*Row, order []int, lk Linker) {
+func (dw *docWriter) writeTable(lay *docLayout, rows []*Row, order []int) {
+	w := dw.w
 	names := []string{lay.key.Name}
 	delims := []string{"---"}
 	for _, c := range lay.scalars {
@@ -269,7 +371,7 @@ func (w *writer) writeTable(lay *docLayout, rows []*Row, order []int, lk Linker)
 			case v == nil:
 				cells = append(cells, "")
 			default:
-				if text, ok := w.valueText(lay, rows, r, c, *v, line, lk); ok {
+				if text, ok := dw.valueText(lay, r, c, *v, line); ok {
 					cells = append(cells, cellText(text))
 				} else {
 					cells = append(cells, "")
@@ -280,58 +382,14 @@ func (w *writer) writeTable(lay *docLayout, rows []*Row, order []int, lk Linker)
 	}
 }
 
-// docPiece is one element after the list or table: a heading line, or a value
-// that follows one.
-type docPiece struct {
-	isValue bool
-	head    string // the heading line, with its line feed, when the piece is a heading
-	name    string // what the value is, for a diagnostic
-	value   string
-}
-
-// writeDetails writes the detail section of each row that has one, in storage
-// order: the heading, the body, then the sections in column order. Every element
-// is set off by one blank line from the element before it.
-func (w *writer) writeDetails(lay *docLayout, rows []*Row, order []int, lk Linker) {
-	var pieces []docPiece
-	for _, i := range order {
-		r := rows[i]
-		if !hasDetail(lay, r) {
-			continue
-		}
-		pieces = append(pieces, docPiece{head: "## " + lay.table + " row " + r.Key + "\n"})
-		if r.Body != "" {
-			pieces = append(pieces, docPiece{isValue: true, name: "the body", value: r.Body})
-		}
-		for _, s := range lay.sections {
-			v := r.Sections[s.name]
-			if v == nil {
-				continue
-			}
-			pieces = append(pieces, docPiece{head: "### " + s.name + "\n"})
-			if *v != "" {
-				pieces = append(pieces, docPiece{isValue: true, name: "the section " + s.name, value: *v})
-			}
-		}
-	}
-	for k, pc := range pieces {
-		w.put("\n")
-		if !pc.isValue {
-			w.put(pc.head)
-			continue
-		}
-		w.value(pc.name, pc.value, w.next(), k < len(pieces)-1, false, false, 3)
-		w.put(pc.value)
-	}
-}
-
 // valueText returns the text that a field or a cell writes for the value v of
 // column c of row r, found at line, and whether it can be written: a link for a
 // foreign key, the raw text the row was read with, or the readable form of the
 // column's type.
-func (w *writer) valueText(lay *docLayout, rows []*Row, r *Row, c dbspec.Column, v string, line int, lk Linker) (string, bool) {
+func (dw *docWriter) valueText(lay *docLayout, r *Row, c dbspec.Column, v string, line int) (string, bool) {
+	w := dw.w
 	if table, isFK := lay.fks[c.Name]; isFK {
-		return w.linkText(lay, rows, r, c, table, v, line, lk)
+		return dw.linkText(r, c, table, v, line)
 	}
 	switch {
 	case !utf8.ValidString(v):
@@ -355,12 +413,12 @@ func (w *writer) valueText(lay *docLayout, rows []*Row, r *Row, c dbspec.Column,
 // linkText writes the link of a foreign key value: its text is the referenced key
 // and its target is derived from the referenced row. A key that names no row keeps
 // the target it was read with, and any other is FOREIGN_KEY.
-func (w *writer) linkText(lay *docLayout, rows []*Row, r *Row, c dbspec.Column, table, key string, line int, lk Linker) (string, bool) {
-	target, err := w.linkTarget(lay, rows, table, key, lk)
+func (dw *docWriter) linkText(r *Row, c dbspec.Column, table, key string, line int) (string, bool) {
+	target, err := dw.linkTarget(table, key)
 	if err != nil {
 		d, kept := r.Dangling[c.Name]
 		if !kept || d.Key != key {
-			w.refuseRule(RuleForeignKey, line, 1, "the foreign key names no row: "+key)
+			dw.w.refuseRule(RuleForeignKey, line, 1, "the foreign key names no row: "+key)
 			return "", false
 		}
 		target = d.Target
@@ -369,17 +427,22 @@ func (w *writer) linkText(lay *docLayout, rows []*Row, r *Row, c dbspec.Column, 
 }
 
 // linkTarget derives the target of a link to the row key of table: from this file
-// for a row of the document's own table, else from the linker.
-func (w *writer) linkTarget(lay *docLayout, rows []*Row, table, key string, lk Linker) (string, error) {
-	if table == lay.table {
-		for _, r := range rows {
-			if r.Key == key {
-				return localLink(lay, docFileName(lay), r), nil
-			}
-		}
-		return "", fmt.Errorf("no row %s %s in %s", table, key, lay.table)
+// for a row the file holds, else from the linker.
+func (dw *docWriter) linkTarget(table, key string) (string, error) {
+	if fr, ok := dw.idx[table][key]; ok {
+		return localLink(fr.lay, dw.w.rel, fr.row), nil
 	}
-	return lk.Target(docFileName(lay), table, key)
+	return dw.lk.Target(dw.w.rel, table, key)
+}
+
+// sortedBlocks returns the names of the child blocks of row r, sorted.
+func sortedBlocks(r *Row) []string {
+	names := make([]string, 0, len(r.Blocks))
+	for name := range r.Blocks {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }
 
 // listTitle writes the title of a list row: a token that begins with a declared
