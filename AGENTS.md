@@ -11,11 +11,46 @@ application layer — the sync adapters (database, GitHub, Jira), the checklist 
 and the local board. The rulings live in `docs/plans/design-plan.md`; the execution tracker in
 `docs/plans/execution-checklist.md`.
 
+## Principles
+
+- Everything here is the responsibility of whoever works on it. A rule is followed because it is
+  right, never because it already exists: an existing rule, code path or document that is wrong
+  is reported and corrected, and an oddity found while reading or changing code is reported at
+  once with the question whether a rule must be made or corrected.
+- Rules first. Development proceeds by stating logical rules and keeping them; behaviour that
+  follows no stated rule is a defect. A criterion, once set, is never lowered to let a test pass
+  — that is a betrayal of the criterion. A criterion that is itself wrong is raised as a problem
+  and corrected explicitly.
+- No backward compatibility: an old path is removed, never kept behind a compatibility layer, a
+  fallback or a migration shim.
+- Errors are never hidden: no fallback that turns a wrong input into a plausible one, no silent
+  drop of an input or an output, no swallowed error.
+- No tricks, in any case. When a requirement cannot be met the orthodox way and only a trick
+  would meet it, that is stated exactly instead of done quietly.
+- The simplest implementation that fully satisfies the current requirements wins; no
+  abstraction, setting or indirection for an uncertain future. Components are modular with
+  their concerns clearly separated, and architecture is decided for the long term — a stopgap
+  that must be replaced later is not accepted. Correct first; fast only when it stays correct.
+  A problem is not solved by creating another problem.
+- A wrong change is judged by harm and by correctness, not by whether it matched the intent: a
+  harmful change is reverted at once; a harmless change that is wrong or unneeded is removed;
+  a correct change stays, and when it is unrelated to the task it is committed on its own with
+  its real reason — a record that presents an unrelated change as related is false.
+- A question to the user must be needed: not already decided or evident, not asked by habit,
+  never confusing, and never a way to drop something; a needed question is never left out. A
+  decision that a new milestone reopens is asked again.
+- A task includes its documents, AGENTS and the memory.
+
 ## Rules
 
 - The user's instructions take precedence. Develop on `main` directly; a branch is
   `{type}/{shortname}-{checklist ID}` and a worktree `{project}-{shortname}-{checklist ID}`, used
-  when agents or parallel work need one and removed immediately after their integration.
+  when agents or parallel work need one and deleted as soon as they merge into main — a merged
+  branch or worktree left behind takes space, fragments the folders and confuses which branches
+  are merged.
+- Test code that cannot merge into main is cherry-picked when it is worth keeping and otherwise
+  discarded, always before the commit. When it cannot be removed at once, a checklist sub-item
+  states the condition of its removal.
 - `docs/plans/execution-checklist.md` is the only task list; its Korean pair holds the same item
   IDs and states. Run `make documents-check` before changing an item state. One checklist per
   repository; split sub-items rather than growing one giant unit.
