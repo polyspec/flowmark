@@ -1,5 +1,5 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 6a42d05298c784a033940c7ec4393027104f8bad3dc2f79df2279b58aa43601d -->
+<!-- source-sha256: 4834caa4ecaa49ce9beb218518ad9ccc02e33264d178b2167e71dfe868f95670 -->
 # Changelog
 
 ## Unreleased
@@ -15,6 +15,9 @@
   table을 가진다. 첫 행이 owner다: 담당자 없는 항목은 owner의 것이다. `All("items")`이
   list·table 항목 모두에 assignee·due를 얻고 `All("people")`이 사람 행을 반환하며 sidecar의
   items answer가 두 column을 실고 `people` answer를 가진다.
+- T11 정정: 사람 table은 선언된 사람의 registry이지 owner 선언이 아니다 — 빈 담당자는
+  self로 읽히고 board는 이름을 추측하지 않는다. 담당자는 하나의 일관된 형태로 id(`@max`)를
+  보여주고 마감은 시간을 가질 수 있다(`YYYY-MM-DDTHH:MM[:SS]`, zone 선택).
 
 - T4.3: 항목은 table 형태로도 존재한다. header row가 state·id·title column을 정의하는 markdown table이
   그 문서의 항목 목록이다 — 문서가 쓴 header가 정의다 — 그리고 `All("items")`이 행 순서대로 행을

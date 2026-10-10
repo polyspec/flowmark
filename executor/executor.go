@@ -103,7 +103,8 @@ func Open(root string) (*Corpus, error) {
 			}
 		}
 		// A table whose header names the id and name columns is the document's people table:
-		// the first row is the owner — an item without an assignee belongs to the owner.
+		// the registry of the people the document declares — nobody is invented, and a blank
+		// assignee stays self.
 		for i := range document.Tables {
 			table := &document.Tables[i]
 			if table.Column("id") >= 0 && table.Column("name") >= 0 && codec.ItemsTable(document) != table {

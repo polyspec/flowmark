@@ -15,6 +15,10 @@
   without an assignee is the owner's. `All("items")` gains assignee and due for list and table
   items alike, `All("people")` returns the people rows, and the sidecar items answer carries
   the two new columns with a `people` answer of its own.
+- T11 correction: the people table is the registry of the declared people, not an owner
+  declaration — a blank assignee reads as self and the board never guesses a name; the
+  assignee shows as its id (`@max`) in one consistent form, and a due may carry a time
+  (`YYYY-MM-DDTHH:MM[:SS]` with an optional zone).
 
 - T4.3: items also live in table form. A markdown table whose header row names the state, id and
   title columns is the document's item list — the header the document writes is the definition —
