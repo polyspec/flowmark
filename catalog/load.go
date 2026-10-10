@@ -225,10 +225,40 @@ func (l *loader) resolveLayout() {
 		l.scopeOf(r)
 	}
 	for _, r := range l.order {
-		if r.ok && r.scope > maxHeading {
-			l.add(l.tableDiag(r.doc, r.table.Name, "the layout of table "+r.table.Name+" needs heading level "+strconv.Itoa(r.scope)+", past H6"))
+		if !r.ok {
+			continue
+		}
+		if level := l.deepestHeading(r); level > maxHeading {
+			l.add(l.tableDiag(r.doc, r.table.Name, "the layout of table "+r.table.Name+" needs heading level "+strconv.Itoa(level)+", past H6"))
 		}
 	}
+}
+
+// deepestHeading returns the deepest heading level that the rows of r write, 0
+// when they write none. The rows write their sections at their scope when they
+// can have a markdown column other than the body or a child block; they write
+// their detail heading one level above their scope when they can have a body.
+// A table with neither writes no heading below its block heading, so a scope of
+// 7 or more is no layout that needs a heading past H6.
+func (l *loader) deepestHeading(r *tableRef) int {
+	var s dbspec.Settings
+	if r.table.Settings != nil {
+		s = *r.table.Settings
+	}
+	for _, m := range s.Marks {
+		if s.Body == nil || m.Column != s.Body.Column {
+			return r.scope
+		}
+	}
+	for _, c := range l.order {
+		if c.storage.Kind == StorageBlock && c.storage.Parent == r.table.Name {
+			return r.scope
+		}
+	}
+	if s.Body != nil {
+		return r.scope - 1
+	}
+	return 0
 }
 
 // scopeOf returns the row scope level of r, or false when it has none: its

@@ -512,18 +512,18 @@ table views {`
 
 func TestLoadRejectsHeadingPastH6(t *testing.T) {
 	// items (document list, rows at level 3) > item_history (block, rows at 5)
-	// > item_note (block, rows at 7).
+	// > item_note (block, rows at 7). The markdown column note is a section of
+	// the rows at level 7.
 	note := `table item_note {
   id i64 identity
   history i64
-  body text
+  note text null
   primary key (id)
   index ix_item_note_history (history)
   foreign key fk_note_history (history) references item_history (id) on delete restrict on update restrict
   settings {
     store block fk_note_history table
-    body body
-    markdown body
+    markdown note
   }
 }
 
@@ -532,6 +532,112 @@ table views {`
 	cat, diags := catalog.Load(root)
 	expectRejected(t, cat, diags)
 	expectTableDiag(t, diags, text, "item_note", "level 7")
+}
+
+// TestLoadHeadingPastH6IsNeeded pins that the heading-depth rule refuses a layout
+// only when its rows write a heading past H6. A row writes its detail heading one
+// level above its scope when it can have a body, a markdown column or a child
+// block, and its sections at its scope when it can have a markdown column or a
+// child block. A block at level 7 with neither writes no heading past H6, but a
+// child block under it writes its section at level 7, so the parent is refused.
+const leafChild = "table item_leaf_child {\n  id i64 identity\n  leaf i64\n  primary key (id)\n  index ix_item_leaf_child_leaf (leaf)\n  foreign key fk_leaf_child_leaf (leaf) references item_leaf (id) on delete restrict on update restrict\n  settings {\n    store block fk_leaf_child_leaf table\n  }\n}\n\n"
+
+func TestLoadHeadingPastH6IsNeeded(t *testing.T) {
+	cases := []struct {
+		name     string
+		columns  string
+		settings string
+		child    string // a block table declared under item_leaf, or empty
+		refused  bool
+	}{
+		{"no body, markdown column or child block", "", "", "", false},
+		{"a body alone, whose detail heading is at level 6", "  body text\n", "    body body\n    markdown body\n", "", false},
+		{"a markdown column, whose section is at level 7", "  note text null\n", "    markdown note\n", "", true},
+		{"a child block alone, whose section is at level 7", "", "", leafChild, true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			leaf := "table item_leaf {\n  id i64 identity\n  history i64\n" + c.columns +
+				"  primary key (id)\n  index ix_item_leaf_history (history)\n" +
+				"  foreign key fk_leaf_history (history) references item_history (id) on delete restrict on update restrict\n" +
+				"  settings {\n    store block fk_leaf_history table\n" + c.settings + "  }\n}\n\n" + c.child + "table views {"
+			root, text := editedCorpus(t, [2]string{"table views {", leaf})
+			cat, diags := catalog.Load(root)
+			if !c.refused {
+				if cat == nil || len(diags) > 0 {
+					t.Fatalf("a layout that writes no heading past H6 is refused: %+v", diags)
+				}
+				return
+			}
+			expectRejected(t, cat, diags)
+			expectTableDiag(t, diags, text, "item_leaf", "level 7")
+			for _, d := range diags {
+				if strings.Contains(d.Message, "item_leaf_child") {
+					t.Fatalf("diagnostic %+v on the child block, want none", d)
+				}
+			}
+		})
+	}
+}
+
+// TestLoadRejectsBodyAtScopeEight pins that a block table at scope 8 with a body
+// is refused at level 7, its detail heading. The files root notes (scope 2) and
+// the block tables note_a (4) and note_b (6) put note_c at scope 8; each of the
+// three has a child block, so none writes a heading of its own past H6. The same
+// body shape at scope 7 is accepted, as the body-alone case above pins.
+func TestLoadRejectsBodyAtScopeEight(t *testing.T) {
+	chain := `table notes {
+  id varchar(32)
+  title varchar(255)
+  primary key (id)
+  settings {
+    key_prefix 'N'
+    store files
+    title title
+  }
+}
+
+table note_a {
+  id i64 identity
+  note varchar(32)
+  primary key (id)
+  index ix_note_a_note (note)
+  foreign key fk_note_a_note (note) references notes (id) on delete restrict on update restrict
+  settings {
+    store block fk_note_a_note table
+  }
+}
+
+table note_b {
+  id i64 identity
+  note_a i64
+  primary key (id)
+  index ix_note_b_note_a (note_a)
+  foreign key fk_note_b_note_a (note_a) references note_a (id) on delete restrict on update restrict
+  settings {
+    store block fk_note_b_note_a table
+  }
+}
+
+table note_c {
+  id i64 identity
+  note_b i64
+  body text
+  primary key (id)
+  index ix_note_c_note_b (note_b)
+  foreign key fk_note_c_note_b (note_b) references note_b (id) on delete restrict on update restrict
+  settings {
+    store block fk_note_c_note_b table
+    body body
+    markdown body
+  }
+}
+
+table views {`
+	root, text := editedCorpus(t, [2]string{"table views {", chain})
+	cat, diags := catalog.Load(root)
+	expectRejected(t, cat, diags)
+	expectTableDiag(t, diags, text, "note_c", "level 7")
 }
 
 func TestLoadRejectsBlockCycle(t *testing.T) {

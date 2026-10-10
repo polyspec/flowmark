@@ -73,7 +73,12 @@ behaviour.
   `NUL`, `COM0`–`COM9` or `LPT0`–`LPT9` is a schema error: these are reserved file names on Windows.
 - **A child table named like a markdown column** of its parent is a schema error.
 - **Heading depth.** A layout that needs a heading past H6 is a schema error, decided when the
-  catalog loads.
+  catalog loads. A table's rows write their sections at their row scope level when the table can
+  have a markdown column other than the body or a child block, and their detail heading one level
+  above that scope when it can have a body; a table with neither writes no heading below its block
+  heading, so its row scope may lie past H6. Grounding: a heading the layout never writes is not one
+  the layout needs; a state machine's history table without a markdown column, as when its machine
+  requires no column, has no detail section, and it stands at level 7 under a block row.
 
 ## The state set
 

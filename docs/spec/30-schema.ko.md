@@ -1,5 +1,5 @@
 <!-- doc-id: spec-schema -->
-<!-- source-sha256: 8fd8f1a44f0937de4f1337e1f9f2a6e98a5bf88a9c92ae9a4c9c3a7d17f1ee8c -->
+<!-- source-sha256: c6b833d255c7d95d9973c983eb1d18690b017759011eaea4cceecc1c678cafdc -->
 # Schema
 
 [English](30-schema.md)
@@ -62,7 +62,7 @@ column을 이름 붙인다 — column 이름이 동작을 고르지 않는다.
 - **예약된 table 이름.** 대소문자를 무시하고 `CON`, `PRN`, `AUX`, `NUL`, `COM0`–`COM9`, `LPT0`–`LPT9`와
   같은 table 이름은 schema 오류다: Windows의 예약된 file 이름이기 때문이다.
 - **부모의 markdown column과 같은 이름을 가진 자식 table**은 schema 오류다.
-- **heading 깊이.** layout이 H6를 넘는 heading을 필요로 하면 schema 오류이며, catalog를 읽을 때 정해진다.
+- **heading 깊이.** layout이 H6를 넘는 heading을 필요로 하면 schema 오류이며, catalog를 읽을 때 정해진다. table의 행은 body가 아닌 markdown column이나 child block을 가질 수 있으면 자기 row scope 수준에 section을 쓰고, body를 가질 수 있으면 그 한 단계 위에 detail heading을 쓴다. 둘 중 어느 것도 가질 수 없는 table은 block heading 아래에 heading을 쓰지 않으므로, row scope가 H6를 넘어도 된다. 근거: layout이 쓰지 않는 heading은 layout이 필요로 하는 heading이 아니다. markdown column이 없는 state machine의 history table은, 기계가 어떤 column도 require하지 않을 때처럼, detail section이 없으므로 block row 아래 level 7에 선다.
 
 ## 상태 집합
 
