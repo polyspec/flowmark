@@ -1,8 +1,18 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: b3fe79fefb6d229b2aff436b78e23ed84a5767433f5d657d8a8e3cc6c46ac42b -->
+<!-- source-sha256: 22c62a95103ba5a5be433eecc6ee23be7a3949645c3cc56b3d5945e34d748809 -->
 # Changelog
 
 ## Unreleased
+
+- T12.2.2: `files` 저장이 행마다 `<table>/<key>.flowmark.md` 파일 하나를 parse하고 render한다. H1
+  제목(`\#` escape 포함), 저장되는 scalar column의 field list(읽을 수 있는 값 형식), 본문, nullable
+  markdown column의 level-2 section, 외래 key의 link(목표는 `Linker`가 준다)를 다룬다. literal은 고정된
+  orm commit `72e2b535`의 `CanonicalLiteral`로 읽는다. 비정규 표기는 `format.noncanonical`이다. 행은
+  돌려주고, 그것을 emit하면 정규 file이 된다. BOM은 비정규 `format.noncanonical`이고, 잘못된 UTF-8은 치명적인
+  `format.encoding`이다. 제 자리에 없는 file, symbolic link, 문서 이름의 folder, 다른 대소문자의 suffix는
+  `corpus.walk`다. key 규칙을 깨는 key는 `format.block`이고, 규칙이 거절하는 쓰기는 `CONSTRAINT`다. child
+  block section은 T12.2.4가 읽기 전까지 `format.section`이다. golden fixture는 byte 단위로 round-trip하며,
+  parse와 emit은 fuzz한다.
 
 - T12.1-2: 상세 heading은 `<h> <table> row <key>`이고 anchor는 `<table>-row-<소문자 key>`다. 여러 부모 아래
   반복되는 block이나 markdown column heading은 더 이상 상세 anchor를 가져갈 수 없다(`items-1`은 `items row 1`이

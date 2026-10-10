@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database-checklist -->
-<!-- source-sha256: 1de1b37a77d8bcb8c18eb2fada44bbf368638c44b791e4a4ed3e2825dbd4a3df -->
+<!-- source-sha256: 0f2ef2df0c110ebb76862a38c49f7d637cc79a7ccc9c1c1be5e72733142a5bb8 -->
 # markdown database checklist
 
 ## T12 markdown database
@@ -16,9 +16,9 @@
   - 완료 기준: 거절마다 테스트 하나와 적재된 fixture catalog 하나.
 - [o] T12.2.1-1 catalog는 `.dbs` 집합만 읽는다: `dbspec/flowmark.json`과 그 번역은 제거하며, `dbspec/`의 다른 file은 모두 catalog 진단이다 (T12.2.1 후속; T12.1-1 선행)
   - 완료 기준: 사례마다 테스트 하나이며, catalog API에 translations 필드가 남지 않는다.
-- [~] T12.2.2 `files` 저장: 행마다 `<table>/<key>.flowmark.md` 파일 하나를 parse·render한다 — H1 제목, 저장되는 scalar column의 field list(읽을 수 있는 값 형식), 본문, level-2 section, 외래 key는 link — P1/P2를 갖는다. literal은 그것을 담은 고정된 orm commit의 `CanonicalLiteral`로 읽는다 (T12.1-1, T12.2.1-1 선행)
+- [o] T12.2.2 `files` 저장: 행마다 `<table>/<key>.flowmark.md` 파일 하나를 parse·render한다 — H1 제목, 저장되는 scalar column의 field list(읽을 수 있는 값 형식), 본문, level-2 section, 외래 key는 link — P1/P2를 갖는다. literal은 그것을 담은 고정된 orm commit의 `CanonicalLiteral`로 읽는다 (T12.1-1, T12.2.1-1 선행)
   - 완료 기준: golden fixture가 byte 단위로 round-trip하고, 모든 규칙마다 허용과 거절 사례가 있으며, parse와 emit은 golden seed로 fuzz한다. store/literal.go는 orm의 로직을 복사하지 않는다.
-- [ ] T12.2.3 `document` 저장: H1 아래의 list 또는 table과 H2의 detail section을 가진 `<table>.md`를 다룬다. list field는 오른쪽에서부터 escape와 함께 parse하고, table cell은 escape와 함께 다루며, 들여쓰기는 `parent`로, `order`는 파생된 값으로 본다 (T12.2.1 선행)
+- [ ] T12.2.3 `document` 저장: H1 아래의 list 또는 table과 H2의 detail section(`## <table> row <key>`)을 가진 `<table>.flowmark.md`를 다룬다. list field는 오른쪽에서부터 escape와 함께 parse하고, table cell은 escape와 함께 다루며, 들여쓰기는 `parent`로, `order`는 파생된 값으로 본다 (T12.2.1 선행)
   - 완료 기준: T12.2.2와 같다. 모든 규칙마다 허용과 거절 사례가 있고, parse와 emit은 golden seed로 fuzz한다.
 - [ ] T12.2.4 `block` 저장: 부모 row의 scope 안의 child block을 다음 level에 재귀적으로 두며, 비어 있지 않을 때만 쓴다. detail section과 그 section을 포함한다 (T12.2.2, T12.2.3 선행)
   - 완료 기준: T12.2.2와 같으며, block row의 detail section 안의 block을 포함한다. 모든 규칙마다 허용과 거절 사례가 있고, parse와 emit은 golden seed로 fuzz한다.
