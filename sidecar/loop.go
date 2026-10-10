@@ -149,10 +149,23 @@ func run(root string, operation *operation) (string, error) {
 		}
 		return strings.Join(lines, "\n"), nil
 	case "add":
-		if err := app.AddItem(root, operation.Path, operation.ID, operation.Title); err != nil {
+		path := operation.Path
+		if path == "" {
+			// an empty corpus holds no items answer to carry the path — the first document
+			// of the corpus is the target
+			path = firstFlowmarkFile(root)
+			if path == "" {
+				return "", fmt.Errorf("the corpus holds no markdown document")
+			}
+		}
+		id := operation.ID
+		if id == "" {
+			id = app.NextID(root, path) // the answer names the ID the document chose
+		}
+		if err := app.AddItem(root, path, id, operation.Title); err != nil {
 			return "", err
 		}
-		return fmt.Sprintf("%s added", operation.ID), nil
+		return fmt.Sprintf("%s added", id), nil
 	case "move":
 		if err := app.MoveItem(root, operation.Path, operation.ID, operation.After); err != nil {
 			return "", err

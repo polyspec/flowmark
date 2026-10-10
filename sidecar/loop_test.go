@@ -168,3 +168,31 @@ func TestWatchPushesChange(t *testing.T) {
 	}
 	requestWriter.Close()
 }
+
+func TestAddWithoutPathOnEmptyCorpus(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "docs", "plans", "list.md")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	document := "# L\n\n## State machine\n\n```mermaid\nstateDiagram-v2\n    direction LR\n    [*] --> waiting\n    waiting : [ ] waiting\n    waiting --> done: evidence\n    done : [o] done\n    done --> [*]\n```\n\n## Work\n"
+	if err := os.WriteFile(path, []byte(document), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// an empty corpus holds no items answer, so the request carries no path — the first
+	// document of the corpus is the target
+	input := `{"surface":1,"root":"` + root + `","body":{"operation":"add","id":"","title":"First issue"}}` + "\n"
+	var out bytes.Buffer
+	Serve(strings.NewReader(input), &out)
+	messages := lines(t, out.String())
+	if len(messages) != 1 || !strings.Contains(messages[0]["body"].(string), "T1 added") {
+		t.Fatalf("messages: %v", messages)
+	}
+	text, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(text), "- [ ] T1 First issue") {
+		t.Fatalf("text:\n%s", string(text))
+	}
+}
