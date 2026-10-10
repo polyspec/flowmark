@@ -97,30 +97,3 @@ type TransitionDef struct {
 	To       string   `json:"to"`
 	Requires []string `json:"requires,omitempty"`
 }
-
-// Schema returns the state machine as a board schema. The labels are the defaults; a
-// config/board.json in the corpus overrides them.
-func Schema() StateSchema {
-	labels := map[string]string{
-		"waiting":    "대기",
-		"doing":      "진행 중",
-		"done":       "완료",
-		"bypassed":   "우회",
-		"impossible": "불가",
-	}
-	states := make([]StateDef, 0, len(glyphs))
-	for _, name := range []string{"waiting", "doing", "done", "bypassed", "impossible"} {
-		states = append(states, StateDef{Glyph: glyphs[name], Name: name, Label: labels[name]})
-	}
-	seen := map[string]bool{}
-	transitionDefs := []TransitionDef{}
-	for _, t := range transitions {
-		key := t.From + "->" + t.To
-		if seen[key] {
-			continue
-		}
-		seen[key] = true
-		transitionDefs = append(transitionDefs, TransitionDef{From: t.From, To: t.To, Requires: t.Requires})
-	}
-	return StateSchema{States: states, Transitions: transitionDefs}
-}
