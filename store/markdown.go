@@ -16,6 +16,7 @@ type heading struct {
 	at, last, level int
 	text            string
 	tab             bool // the separator after the hashes is a tab, a noncanonical spelling
+	nested          bool // the heading is inside a block quote or a list item
 }
 
 // headingOf reads an ATX heading: up to three spaces, one to six '#', then a
@@ -157,19 +158,33 @@ const (
 
 // scanner reads the block structure of lines one at a time, as CommonMark's
 // container matching reads it: the open containers, outermost first, and the
-// leaf block open in the innermost one. Only a heading outside every container
-// is reported; a heading inside a container, a fence or an HTML block is content.
+// leaf block open in the innermost one. A heading is reported whether it is inside
+// a container or not, and a top-level heading is the one a section boundary is;
+// a fence holds no heading, and an HTML block holds no heading either.
 type scanner struct {
 	stack []block
 	leaf  leafKind
 	fence fenceMark // the open fence, when leaf is leafFence
 	html  int       // the kind of the open HTML block, when leaf is leafHTML
-	para  int       // the first line of the open paragraph, when leaf is leafPara
+	units []unit    // the paragraphs and HTML blocks read so far
+	cur   int       // the index in units of the open paragraph or HTML block
+}
+
+// unit is the text of a paragraph or of an HTML block: its lines without the markers
+// of the containers that hold them, and the index of its first line. A paragraph that
+// a setext underline closes is a heading, so it is marked and left out of the text.
+type unit struct {
+	at      int
+	html    bool
+	lines   []string
+	heading bool
 }
 
 // scan is the block structure of a run of lines from some index on.
 type scan struct {
-	heads []heading
+	heads []heading // the top-level headings
+	all   []heading // every heading, those inside a container too
+	units []unit    // the paragraphs and HTML blocks that are not headings
 	// open is whether a fence or an HTML block is open at the top level at the end:
 	// such a block takes in everything after it, so a value that leaves one open
 	// is followed by no element of its own.
@@ -184,11 +199,34 @@ func scanHeadings(lines []string, from int) scan {
 	var s scanner
 	for i := from; i < len(lines); i++ {
 		if h, ok := s.feed(lines, i); ok {
-			sc.heads = append(sc.heads, h)
+			sc.all = append(sc.all, h)
+			if !h.nested {
+				sc.heads = append(sc.heads, h)
+			}
+		}
+	}
+	for _, u := range s.units {
+		if !u.heading {
+			sc.units = append(sc.units, u)
 		}
 	}
 	sc.open = len(s.stack) == 0 && (s.leaf == leafFence || s.leaf == leafHTML)
 	return sc
+}
+
+// addLine adds the text of a line to the open paragraph or HTML block.
+func (s *scanner) addLine(text string) {
+	s.units[s.cur].lines = append(s.units[s.cur].lines, text)
+}
+
+// unitText is the text of a paragraph: its lines without the white space around them,
+// joined by line feeds, as a setext heading's text is.
+func unitText(u unit) string {
+	parts := make([]string, len(u.lines))
+	for i, l := range u.lines {
+		parts[i] = strings.TrimRight(strings.TrimLeft(l, " \t"), " \t")
+	}
+	return strings.Join(parts, "\n")
 }
 
 // feed reads line i of lines and returns the heading that it completes when the
@@ -211,6 +249,7 @@ func (s *scanner) feed(lines []string, i int) (heading, bool) {
 	if m < len(s.stack) {
 		// Only a paragraph continues lazily into a container that did not match.
 		if s.leaf == leafPara && lazyText(rest) {
+			s.addLine(rest)
 			return heading{}, false
 		}
 		s.stack = s.stack[:m]
@@ -223,6 +262,8 @@ func (s *scanner) feed(lines []string, i int) (heading, bool) {
 		}
 		return heading{}, false
 	case leafHTML:
+		// The block takes in every line up to its end condition, that line too.
+		s.addLine(rest)
 		if htmlEnds(s.html, rest) {
 			s.leaf = leafNone
 		}
@@ -248,23 +289,22 @@ func (s *scanner) start(lines []string, i int, rest string, col int) (heading, b
 		}
 		if indentOf(rest) >= 4 {
 			// Indented code, or the continuation of an open paragraph.
+			if s.leaf == leafPara {
+				s.addLine(rest)
+			}
 			return heading{}, false
 		}
 		if s.leaf == leafPara {
 			if level := setextLevel(rest); level > 0 {
+				u := &s.units[s.cur]
+				u.heading = true
 				s.leaf = leafNone
-				if top {
-					return heading{at: s.para, last: i, level: level, text: setextText(lines[s.para:i])}, true
-				}
-				return heading{}, false
+				return heading{at: u.at, last: i, level: level, text: unitText(*u), nested: !top}, true
 			}
 		}
 		if level, text, tab, ok := headingOf(rest); ok {
 			s.leaf = leafNone
-			if top {
-				return heading{at: i, last: i, level: level, text: text, tab: tab}, true
-			}
-			return heading{}, false
+			return heading{at: i, last: i, level: level, text: text, tab: tab, nested: !top}, true
 		}
 		if f, ok := fenceOpenAt(rest); ok {
 			s.leaf, s.fence = leafFence, f
@@ -272,6 +312,8 @@ func (s *scanner) start(lines []string, i int, rest string, col int) (heading, b
 		}
 		if k := htmlStart(rest); k != 0 && (k != 7 || s.leaf != leafPara) {
 			s.leaf = leafNone
+			s.cur = len(s.units)
+			s.units = append(s.units, unit{at: i, html: true, lines: []string{rest}})
 			if !htmlEnds(k, rest) {
 				s.leaf, s.html = leafHTML, k
 			}
@@ -297,7 +339,11 @@ func (s *scanner) start(lines []string, i int, rest string, col int) (heading, b
 			continue
 		}
 		if s.leaf == leafNone {
-			s.leaf, s.para = leafPara, i
+			s.cur = len(s.units)
+			s.units = append(s.units, unit{at: i, lines: []string{rest}})
+			s.leaf = leafPara
+		} else {
+			s.addLine(rest)
 		}
 		return heading{}, false
 	}
@@ -495,16 +541,6 @@ func expandLead(s string, col int) string {
 	return b.String()
 }
 
-// setextText is the text of a setext heading: its lines without their indent and
-// their trailing white space, joined by line feeds.
-func setextText(lines []string) string {
-	parts := make([]string, len(lines))
-	for i, l := range lines {
-		parts[i] = strings.TrimRight(strings.TrimLeft(l, " "), " \t")
-	}
-	return strings.Join(parts, "\n")
-}
-
 // boundary returns the index of the first heading of level 2 or less at or after
 // from, outside fenced blocks and HTML blocks, or len(lines) when there is none.
 func boundary(lines []string, from int) int { return boundaryLevel(lines, from, 2) }
@@ -597,51 +633,10 @@ func htmlTag7(s string) bool {
 }
 
 // htmlTagEnd returns the index just after the open or closing tag that starts s,
-// or -1 when s starts with none. An open tag is a name, then attributes that each
-// begin with white space, then white space, an optional '/' and '>'.
+// or -1 when s starts with none (see htmlTagAt).
 func htmlTagEnd(s string) int {
-	if strings.HasPrefix(s, "</") {
-		p := tagNameEnd(s, 2)
-		if p < 0 {
-			return -1
-		}
-		if p = skipSpace(s, p); p < len(s) && s[p] == '>' {
-			return p + 1
-		}
-		return -1
-	}
-	if !strings.HasPrefix(s, "<") {
-		return -1
-	}
-	p := tagNameEnd(s, 1)
-	if p < 0 {
-		return -1
-	}
-	for {
-		q := skipSpace(s, p)
-		if q == p {
-			break
-		}
-		n := attrNameEnd(s, q)
-		if n < 0 {
-			break
-		}
-		p = n
-		if e := attrSpecEnd(s, p); e >= 0 {
-			p = e
-		} else if q := skipSpace(s, p); q < len(s) && s[q] == '=' {
-			// A '=' that no value follows stays in the tag and ends it: no tag matches.
-			return -1
-		}
-	}
-	q := skipSpace(s, p)
-	if q < len(s) && s[q] == '/' {
-		q++
-	}
-	if q < len(s) && s[q] == '>' {
-		return q + 1
-	}
-	return -1
+	end, _ := htmlTagAt(s)
+	return end
 }
 
 // tagNameEnd returns the index after the tag name at s[p:], a letter then letters,
