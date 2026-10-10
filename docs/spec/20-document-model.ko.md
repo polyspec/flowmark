@@ -1,5 +1,5 @@
 <!-- doc-id: spec-document-model -->
-<!-- source-sha256: c7533b499717eeb380863f7996065003e728f3cc6b28ef4a90fff4a37a4a4004 -->
+<!-- source-sha256: b1d703674c5ce5b57aa91ba1fbff18a070c18b6ca79f32f95f7a67951a1f6438 -->
 # 문서 모델
 
 [English](20-document-model.md)
@@ -18,15 +18,17 @@
 
 - corpus 문서는 이름이 `.flowmark.md`로 끝나는 file이며, corpus root 아래에 있고 `dbspec/`, `.flowmark/`,
   숨은 항목 밖에 있다. 이름이 database의 일부가 되는 유일한 기준이다. 그 밖의 file은 corpus 밖이며
-  진단을 내지 않는다. 다만 대소문자를 무시하고 suffix가 `.flowmark.md`인 이름은 `corpus.walk`다.
+  진단을 내지 않는다. 다만 대소문자를 무시하고 suffix가 `.flowmark.md`인 이름은 `corpus.walk`이며, `files` table의 자리에 있는 폴더가 아닌 항목(아래의 symlink 규칙)도 그렇다.
 - walk는 모든 `*.flowmark.md` file을 읽는다. place가 table 어느 것과도 맞지 않는 file — `document` table의
   `<table>.flowmark.md`도 아니고 `files` table의 `<table>/<key>.flowmark.md`도 아닌 것 — 은 `corpus.walk`
   진단이며, 읽을 수 없는 `.flowmark.md` 항목도 그렇다.
 - 이름은 byte 단위로 비교한다. `.flowmark.md` 접미사, table 폴더, document file 이름이 다른 대소문자를
   가지면 `corpus.walk`다.
 - key 모양을 깨는 file 이름은 읽을 때 `format.block`이다.
-- walk는 symlink를 따라가지 않는다. 이름이 `.flowmark.md`로 끝나는 symlink나 `files` table 이름을 가진
-  symlink 폴더는 `corpus.walk`이며, 그 밖의 symlink는 database 밖이다.
+- walk는 symlink를 따라가지 않는다. 이름이 `.flowmark.md`로 끝나는 symlink와, `files` table 이름을 가진
+  폴더가 아닌 항목(일반 file이나 가리키는 곳이 무엇이든 symlink)은 `corpus.walk`이며, 그 밖의 symlink는
+  database 밖이다. 근거: table의 자리는 그 이름이므로, 그 이름을 가진 file은 database 밖이 아니라 table의 자리에 있으며
+  그 table은 사용할 수 없다([canonical format](10-canonical-format.ko.md#진단)).
 - hard link는 플랫폼에 관계없이 file과 구별할 수 없으므로 규칙이 아니다(multi-platform 요구). 엔진은
   document를 temp file과 rename으로 쓰므로, hard link된 document는 첫 쓰기에서 unlink된다.
 - `dbspec/`에는 `.dbs` 집합만 있다. 그 밖의 file은 catalog 진단이다([schema](30-schema.md)).
@@ -83,7 +85,7 @@ aggregate냐 split이냐는 저장 선언이다. 논리 관계는 모든 저장�
   `title`을 요구하고 — 줄 텍스트, H1 — `table` 저장은 cell로 선언할 수 있다. 선언된 제목은 non-null이며
   빈 텍스트를 거절한다.
 - `body`는 `markdown` column이며 NULL이 아니다. `files` 행에서는 H1과 field list 뒤의 텍스트이고,
-  상세 섹션이 있는 행에서는 상세 섹션의 첫 level h + 1 heading 앞 텍스트다. 상세 섹션이 없는 행의 body는
+  상세 섹션이 있는 행에서는 상세 섹션의 첫 최상위(컨테이너 밖) level ≤ h + 1 heading 앞 텍스트다. 상세 섹션이 없는 행의 body는
   빈 텍스트다.
 - 칸반, 목록, 간트 view는 entity table이 둘 다 선언할 것을 요구한다.
 

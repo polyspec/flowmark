@@ -1,5 +1,5 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 43a93502ed7859f96a4ee68ae78e319a8ca383033eb8ecff45dfe3c8af668277 -->
+<!-- source-sha256: b37db91923e0cd8960c9c96998ec425c67b5c9fd79f235698149504ff7bc18f1 -->
 # Changelog
 
 ## Unreleased
@@ -13,6 +13,13 @@
   기록된 target) 유지되어 validator의 `type`, `reference.dangling`, `key.duplicate`로 넘어간다. key는 `-`로 끝날 수
   있고 `-_`는 없다. 렌더링이 떨어뜨리는 한 줄 자리의 공백은 `format.noncanonical`이다. field list 바로 뒤의 body
   줄은 `format.block`이다.
+
+- T12.1-6: spec이 T12.1-3의 질문에 답한다. `files` table의 자리에 있는 일반 file이나 symlink는 `corpus.walk`이며
+  그 table은 사용할 수 없다. 자리의 폴더가 없으면 빈 table이다. field list가 없는 `files` 행의 첫 body나 섹션은
+  H1 뒤 빈 줄 정확히 하나 다음에 온다. 열린 fence나 HTML block을 남기는 값은 그 뒤의 요소를 어느 쓰기가 놓든
+  `CONSTRAINT`다. setext 규칙은 최상위 heading에만 적용되며, 섹션 경계도 그렇다. 잘못된 UTF-8 byte의
+  `format.encoding`은 그 byte에 있고, 문서 전체나 `corpus.walk`의 결함은 줄 1, 열 1이며, `catalog` 열은 orm의 dbspec처럼
+  code point를 센다. 파일 전체를 지우는 delete는 파일을 지우면 그 바이트를 다시 쓰지 않으므로 rewrite 거절에서 면제된다.
 
 - T12.1-5: spec이 `document` codec에 필요했던 판정을 적는다. `now`는 `datetime` 기본값에서 현재 시각을 뜻하는
   keyword이며 저장되지 않는다: `now`로 쓰인 시간 값은 그 type이 아니며, 텍스트 `now`는 text다. 저장 순서를 벗어난
