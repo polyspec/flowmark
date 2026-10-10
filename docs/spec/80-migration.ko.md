@@ -1,5 +1,5 @@
 <!-- doc-id: spec-migration -->
-<!-- source-sha256: e09ab9533cf3727ac28a3aaafc4e889ca06fe3e1cd7b6a6fa720c3638de85558 -->
+<!-- source-sha256: c82f44c7999268eba6aa2db10c306eb773bcbcc7d4a4a982330ec6642d1cea4a -->
 # Migration (범위를 정한 뼈대)
 
 [English](80-migration.md)
@@ -12,7 +12,7 @@
   만든다([schema](30-schema.md)). dbplan chain(orm `plans.md` lifecycle)은 `markdown://`에서
   `CAPABILITY_UNSUPPORTED`다: 그 server session, hold table, introspection 장치는 v1에서 markdown 대응이
   없다.
-- 추가된 nullable column은 다시 쓸 필요가 없다: 없는 field, cell, key, 섹션은 NULL이다. 추가된 non-null
+- 추가된 nullable column은 다시 쓸 필요가 없다: 없는 field-list 항목, list field, cell, 섹션은 NULL이다. 추가된 non-null
   column은 default와 함께 추가하며, 모든 non-null column은 쓰므로([canonical format](10-canonical-format.md))
   일회성 transaction이 기존의 모든 행에 default를 쓴다.
 

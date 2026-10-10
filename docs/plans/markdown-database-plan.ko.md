@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database -->
-<!-- source-sha256: 90afe2cc92d20cb7ed1eb3f81a78b2aa603c1dd0925aa217696864a9658e70e0 -->
+<!-- source-sha256: b1d63d2875b92123ae933113d19e4b2588f7c954e7cfc91f5315451e26514f42 -->
 # markdown database 계획
 
 [English](markdown-database-plan.md)
@@ -135,6 +135,7 @@ markdown 전용 선언은 모두 dbspec **manifest setting**이며 `markdown <co
   `LPT0`–`LPT9`와 같은 key나 table 이름은 거절한다 — table 이름은 schema 오류로, key는 `CONSTRAINT`로
   — Windows에서 이 이름들은 예약된 file 이름이기 때문이다. `files` key는 최대 243 byte이므로 file 이름이
   255 안에 든다. key의 정규 문자열이 아닌 file 이름(정수 key의 `007.flowmark.md`)은 `format.block`이다.
+  key 모양을 깨는 file 이름은 읽을 때 `format.block`이다.
   대소문자만 다른 key 변경은 journal된 transaction 안에서 중간 이름을 거쳐 이름을 바꾼다.
 - `identity`는 모든 markdown table에 허용된다: key를 생략한 insert는 lock 아래 할당된 `max+1`을
   받으며, git을 되감은 뒤의 재사용은 받아들이고 명시한다. `key_prefix <p>`를 가진 문자 key는
@@ -181,6 +182,10 @@ markdown 전용 선언은 모두 dbspec **manifest setting**이며 `markdown <co
   같은 이름의 자식 table은 schema 오류이며, 같은 file에 상세 섹션이 들어갈 수 있는 table 이름과 같은
   markdown column이나 block table도 그렇다(반복된 섹션 heading의 `-1`, `-2` slug가 그 table의 anchor를
   차지하기 때문이다). H6를 넘는 heading이 필요한 layout은 schema 오류다.
+- 행 scope의 섹션은 고정된 순서를 따른다: nullable `markdown` column은 column 순서대로, 그다음 자식 block은
+  table 이름 순서대로(dbspec의 정준 순서). 상세 섹션은 행의 저장 순서를 따른다.
+- block이나 document의 list나 table 뒤의 내용은, 그 행들의 상세 섹션을 제외하고 모두 `format.block`이다.
+  이 내용은 block 섹션에서는 level b 이하의 다음 heading까지, document 파일에서는 파일 끝까지다.
 
 ### Scalar columns
 
@@ -201,16 +206,18 @@ markdown 전용 선언은 모두 dbspec **manifest setting**이며 `markdown <co
   항목으로 시작하지 않는다 — 첫 줄이 그러한 body의 쓰기는 `CONSTRAINT`다(body는 `*`나 `+` list 또는 다른
   블록으로 시작할 수 있다). 따라서 읽을 때 H1 바로 뒤의 `-` 항목이 field list이며, column 순서대로의
   `- <저장되는 scalar column>: <value>` 꼴이 아닌 항목은 `format.block`이다. non-null column의 없는 항목은
-  `format.block`이다. 엔진은 insert에서 default를 명시적으로 쓴다.
+  `format.block`이다. 엔진은 insert에서 default를 명시적으로 쓴다. non-null scalar가 없는 `files` 행은
+  field list가 없으며, body는 H1 뒤 빈 줄 하나 다음에 온다.
 - `table`(block 또는 document): column 이름 header 아래의 cell. 저장되는 모든 column은 header를 갖는다.
+  key는 첫 cell이며 key column 이름의 header 아래에 있다. 저장되는 scalar column은 column 순서대로 그 뒤를 잇는다.
   text는 쓴 그대로 쓴다. 빈 cell은 NULL이고, 빈 텍스트는 `""`이다. `"`로 시작하는 값은 `\"`와 `\\`를 가진
-  `"…"`로 쓴다. `|`는 `\|`로 쓰며, `|` 앞의 `\`는 `\\`로 쓴다.
+  `"…"`로 쓴다. `|`는 `\|`로 쓰며, `|` 앞의 `\`는 `\\`로 쓴다. block table에서 배치 foreign key는 cell이 아니며, `parent`는 cell이다.
 - `list`(block 또는 document): `- [<glyph>] <key> <title>[ <field>…]`, 상태 column이 없으면 `- <key>
   <title>[ <field>…]`. field는 오른쪽부터 parse한다: token `<선언된 column>:<value>`이고, value는 공백, `"`, `\` 없는
   bare token이거나 `\"`와 `\\`를 escape로 갖는 `"…"`다. 없는 field는 NULL, `col:""`은 빈 텍스트이며, 모든 non-null
   column은 쓴다 — 엔진은 insert에서 default를 명시적으로 쓰고, non-null field가 빠진 행은 `format.block`이다. `<선언된
   column>:`과 맞는 제목 token은 `<column>\:`로 쓴다. `@`와 날짜 sigil은 제거한다.
-- 배치 foreign key와 `parent`는 block 행에 쓰지 않으며, 쓰면 `format.block`이다.
+- 배치 foreign key와 `parent`는 block list 행의 field로 쓰지 않으며, 쓰면 `format.block`이다.
 
 ### 상태, 계층, 순서
 
@@ -347,8 +354,8 @@ markdown 전용 선언은 모두 dbspec **manifest setting**이며 `markdown <co
   대괄호 사이에 쓴다), `history item_history row item from from_state to to_state at at`. `item_history(id
   i64 identity, item varchar(32), from_state, to_state, at, evidence, cause, retry)`는 같은 세
   `markdown` column을 선언하고 `foreign key fk_history_item (item) references items (id)`와 그 index를 갖는다.
-  여러 줄 evidence는 섹션이다(`items.md` H1, `## T1`, `### item_history`, `#### <id>`, `##### evidence` — H6
-  안).
+  여러 줄 evidence는 섹션이다(`items.flowmark.md` H1, `## items T1`, `### item_history`, `#### item_history <id>`,
+  `##### evidence` — H6 안).
 - `flowmark.dbs`는 `limit`를 선언하지 않는다: 사용자의 WIP 규칙 — 시작보다 완료, 독립 항목은 병렬
   허용 — 은 어떤 개수로도 표현되지 않는 작업 규칙이며 숫자는 지어낸 것이 된다. `limit` setting은 숫자를
   정하는 schema를 위해 남는다. 엔진은 WIP 규칙을 강제하지 않는다: 상대 gate(`app/apply.go:40,178`)는
@@ -366,12 +373,22 @@ markdown 전용 선언은 모두 dbspec **manifest setting**이며 `markdown <co
 - 칸반 drop은 view에 `sort`가 없고(저장 순서) 양쪽 이웃이 card의 parent를 공유할 때만 `order`를
   정한다. column을 넘는 drop은 상태를 바꾼다. 그 밖의 drop은 거절하고 보드가 이유를 말한다 — 저장하지
   않는 card는 옮기지 않는다. 받아들여진 drop 뒤 보드는 drop 위치가 아니라 operation이 돌려준 행으로
-  다시 그리며, column을 넘는 drop은 view의 정렬이 정하는 자리에 card를 놓는다.
+  다시 그린다. `order`는 저장 순서 안의 같은 parent drop에서만 정해진다. column을 넘는 drop은 상태
+  변경뿐이므로 card는 자기 `order`를 유지하고, view의 정렬 — 없으면 저장 순서 — 이 정하는 자리에
+  나타난다.
 - **board 예제**는 markdown에서 일대다 관계를 증명한다: `posts`(title, body, author → people, created)와
   `comments`(body, author → people, created, 답글을 위한 `parent`)가 있다. 한 변형에서는 post의 comment가 post 파일 안의
   `store block fk_comments_post list` 행으로, 다른 변형에서는 field list가 post를 link하는 `store files` 행으로 저장된다.
   두 변형은 같은 create, read, update, delete 연산을 엔진으로 실행하며 같은 행을 내고, 모든 문서는 어떤 markdown viewer에서든 평범한
   board 페이지 — post, 그 field들의 link, 그 comment들 — 로 읽힌다.
+- **board 앱**은 같은 board를 polyspec 스택으로 만든 것이다 — hyper가 list와 post-with-comments
+  페이지를 그리고, crudui가 post와 comment의 form, 목록, 검증을 정의하며, orm이 `markdown://`을 통해
+  corpus에 닿는다. hyper의 PHP, Node.js, Python server에서 각각 자기 orm client의 markdown IR
+  executor를 거쳐 돌아가며, 모든 server가 같은 행을 보이고 바꾼다.
+- **Wails 예제 host는 남는다**: plugin repository의 예제 창은 plugin page를 수정 없이 load하고 sidecar를
+  flowmark binary에 중계하므로, board 앱이 `markdown://`을 통한 orm을 증명하는 동안 이 창은 sidecar를
+  통한 view를 증명한다. table 범위 sidecar operation과 `*.flowmark.md` demo corpus로 옮겨 간다(plugin
+  자신의 checklist).
 
 ## 계층
 
@@ -408,6 +425,7 @@ repository마다 자기 checklist를 운영한다. orm과 plugin의 작업은 �
   - T12.10 모든 table에 대한 CLI, MCP, sidecar operation과 `flowmark install`.
   - T12.11 하나의 dataset을 세 저장 방식으로 둔 demo와 0이 된 하드코딩 목록;
   - T12.11.1 board 예제: comment와 답글을 가진 post를 block 변형과 files 변형에서 엔진으로 구동한다;
+  - T12.11.2 hyper, crudui, orm을 `markdown://` 위에서 쓰는 board 앱을 hyper의 세 server에서 (T12.9와 orm `T64`, `T65`, `T67` 선행);
   - T12.12 pseudo-version 대신 요구되는 orm release tag.
   새 엔진은 옛 엔진 곁에 세워지며, 옛 엔진의 codec, executor, application 경로는 faces가 여전히 사용한다. T12.10이 faces를 새 엔진으로
   전환하고 옛 경로를 호환 layer 없이 제거하며, T12.12는 released orm을 요구한다.
@@ -467,3 +485,4 @@ repository마다 자기 checklist를 운영한다. orm과 plugin의 작업은 �
 - 테스트 밀도: 모든 문법과 제약 규칙에는 허용되는 case와 거절되는 case가 있고, 저장마다 모든 column type과 NULL 및 빈 형태를 덮는 P1/P2 golden
   fixture가 있으며, parse와 emit은 golden seed로 fuzz된다.
 - board 예제: post를 만들고 comment와 답글을 추가하며, 편집과 삭제를 엔진으로 수행하면 두 변형 모두 같은 행을 다시 읽는다.
+- board 앱: hyper의 각 server에서 form을 통해 post를 만들고, 댓글을 달고, 답글을 달고, 고치고 지우며, 페이지를 screenshot으로 캡처한다.

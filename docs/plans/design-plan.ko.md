@@ -1,5 +1,5 @@
 <!-- doc-id: plans-design-plan -->
-<!-- source-sha256: 60cf838556025cbe1fcc5be0cc5f20862c5ab906c5930e286b802507b206db41 -->
+<!-- source-sha256: 3edf1a6a37b1a87ea8486abe3d802e5747f11c62f5ed54abaf1ba11a83b5c7b5 -->
 # flowmark 설계 계획
 
 Revision 2 — 3개 lane의 적대 감사 결과(engine core, orm 통합, 운영)와 multi-platform 지시를 아래 판정에 접는다. 감사의 blocker는 전부 판정이 되었고, 부수지 못한 주장은 문서 끝에 남긴다.
@@ -11,6 +11,7 @@ Revision 3 — [markdown database 계획](markdown-database-plan.ko.md)이 철�
 - **task-ID 문법.** key는 불투명하다. 계층은 `parent` column이고 대체는 link이므로 ID 문법, 그 정렬, renumber codemod는 사라진다.
 - **`identity` 거절, advisory `audit`, column limit으로서의 WIP gate, operation 단위만의 lock, corpus revision**은 계획이 적은 대로 대체한다.
 - **T8.5** — 문서 안 Mermaid 블록을 전이 authority로 쓰는 것 — 은 이 계획의 판정이 아니었으며 함께 철회한다.
+- **읽을 수 있는 문서.** corpus 문서는 일반 markdown 문서처럼 읽히는 `*.flowmark.md` file이다: doc-id header, 행 file의 frontmatter, provenance header, twin, `dbspec/flowmark.json`은 철회된다. `files` 행의 key는 file 이름이고 foreign key는 link다([markdown database 계획](markdown-database-plan.ko.md), "읽을 수 있는 문서").
 
 아래 절은 정정된 판정을 담고, spec이 그 전부를 담는다.
 
@@ -65,17 +66,17 @@ flowmark = the markdown database engine (one Go binary)
 
 ### 2. Canonical format (`10-canonical-format.md`)
 
-- **멱등성은 dbspec의 2절 명제다** — 단일 byte-identity 주장이 아니라: canonical 입력 `s`에 대해 `emit(parse(s)) == s`, 임의의 valid 입력 `d`에 대해 `emit(parse(emit(d))) == emit(d)`. renderer는 **구조 skeleton** — frontmatter block, heading line, 정렬 대상인 item/table line, renderer가 쓰는 marker — 만 소유하고, 보존 구간의 payload bytes(prose, fenced 내용, 소유하지 않는 HTML comment)는 결코 다시 쓰지 않는다. 비-canonical 입력은 `format.noncanonical` diagnostic과 별도의 일회성 `flowmark canon` migration transaction으로 처리하며, 논리적 write의 부수 효과로 정규화하지 않는다.
+- **멱등성은 dbspec의 2절 명제다** — 단일 byte-identity 주장이 아니라: canonical 입력 `s`에 대해 `emit(parse(s)) == s`, 임의의 valid 입력 `d`에 대해 `emit(parse(emit(d))) == emit(d)`. renderer는 **구조 skeleton** — `files` 행의 field list, heading line, 행들의 item/table line — 만 소유하고(Revision 3), 보존 구간의 payload bytes(prose, fenced 내용)는 결코 다시 쓰지 않는다. 비-canonical 입력은 `format.noncanonical` diagnostic과 별도의 일회성 `flowmark canon` migration transaction으로 처리하며, 논리적 write의 부수 효과로 정규화하지 않는다.
 - body와 모든 `markdown` column 값은 fenced block 밖의 heading level로 경계가 정해지는 행 scope의 섹션이다. 없는 섹션은 NULL, 비어 있는 섹션은 빈 text다 (Revision 3).
 - **Ordering**: IR `order`는 column의 type으로, text는 codepoint로 정렬한다. 없는 읽기는 저장 순서 — 형제를 order column이나 key 순서로 둔 tree의 전위 순회 — 를 돌려준다. `group_count`는 NULL을 같은 group으로 처리한다 (SQL 동등성). key는 불투명하다: task-ID 문법, 그 segment별 정렬, suffix 규칙, `flowmark next-id`는 철회한다(Revision 3). `identity`와 `key_prefix`가 key를 할당한다.
 - **List 행**은 상태 glyph, key, 제목, 오른쪽부터 parse하는 끝의 `column:value` field를 갖는다. `markdown` column은 field나 cell이 아니며, 한 줄 자리에 줄바꿈을 가진 값은 거절한다.
-- **Frontmatter profile**: YAML 1.2 core schema, 값 영역은 block style, anchor·tag 금지. v1에서 frontmatter comment는 located diagnostic으로 거부한다 (comment를 보존하는 round-trip emitter는 요구사항이 명명하기 전까지 명시된 비목표). dbspec type별 값 문법: 모든 값은 dbspec의 canonical literal 형식, `bytes`는 base64.
-- twin은 행의 doc-id를 공유하며 행이 아니다. `source-sha256` = English 파일 raw bytes의 sha256 (kit 호환).
+- **읽을 수 있는 값** (Revision 3): corpus 문서에는 frontmatter도 comment도 없다. 일반 markdown 문서처럼 읽힌다. `files` 행의 scalar는 H1 뒤의 field list이며, dbspec literal이 아니라 읽을 수 있는 형식(날짜, uuid, `bytes`는 padding 있는 base64)으로 쓴다. 모든 관계는 link다.
+- corpus 문서에는 twin이 없다 (Revision 3): 행 file은 doc-id도 `source-sha256`도 갖지 않는다. EN/KO 쌍과 `source-sha256`(English 파일 raw bytes의 sha256, kit 호환)은 이 repository 자신의 문서에 속한다.
 
 ### 3. Document-table model (`20-document-model.md`)
 
-- 각 table은 저장 하나를 선언한다(Revision 3): `store files`(table 폴더에 행마다 file 하나), `store document list|table`(모든 행이 `<table>.md`에), `store block <fk> list|table`(부모 행 안의 행). aggregate냐 split이냐는 저장 선언이며 논리 관계는 같다.
-- `files` 행의 frontmatter = 그 scalar column. doc-id가 key이고, 계층은 `parent` column이며 list에서는 들여쓰기로 쓴다.
+- 각 table은 저장 하나를 선언한다(Revision 3): `store files`(table 폴더에 행마다 file 하나), `store document list|table`(모든 행이 `<table>.flowmark.md`에), `store block <fk> list|table`(부모 행 안의 행). aggregate냐 split이냐는 저장 선언이며 논리 관계는 같다.
+- `files` 행은 file `<table>/<key>.flowmark.md`이며, H1이 제목이고 scalar column이 그 뒤의 field list다 (Revision 3). key는 file 이름이고, 계층은 `parent` column이며 list에서는 들여쓰기로 쓴다.
 
 ### 4. Schema (`30-schema.md`) — catalog가 schema다
 
@@ -91,11 +92,11 @@ flowmark = the markdown database engine (one Go binary)
 - **검증은 commit 시점에 충돌 검사 뒤 lock 아래에서 corpus를 새로 읽어 수행한다** — BEGIN snapshot도 예측된 touch file 집합도 아니다.
 - corpus revision과 `CORPUS_CHANGED`는 철회한다(Revision 3): `paginate`는 요청 하나이고, 호출을 넘어 읽는 face는 없다.
 - **비용 모델**: 40-ops가 per-command p95 latency 목표를 선언한다(corpus envelope 기준 수백 ms 단위); file content hash를 key로 하는 `.flowmark/cache/`의 parsed row cache가 변하지 않은 file의 재parse를 피한다; commit은 transaction이 바꿀 수 있는 모든 제약을 lock 아래 다시 읽은 corpus에서 검사하며, 전체 `flowmark validate`는 on demand와 catalog 변경 시에 실행한다.
-- Walk 규칙: `.flowmark/`와 숨김 항목 건너뛰기; corpus 안의 symlink·hardlink는 located diagnostic; nested corpus root는 error.
+- Walk 규칙: `dbspec/`, `.flowmark/`, 숨김 항목 밖의 `*.flowmark.md` 파일만 읽는다; symlink된 문서나 `files` 폴더는 `corpus.walk`이고, 그 밖의 symlink는 database 밖이다; hard link는 규칙이 아니다(document model).
 
 ### 6. Constraints와 capability table (`50-constraints.md`, `60-dialect.md`)
 
-- Strict parse, type/PK/UNIQUE/FK(NFC 후 exact match), CHECK. soft-delete된 row는 unique key를 계속 차지하고 FK를 계속 만족한다(SQL 동등성 — soft delete가 가짜 판정을 일으키지 않게 명시). `aes`, `aes_version`, `blind_index`는 corpus에서 schema 오류다: key는 orm client를 떠나지 않는다(Revision 3).
+- Strict parse, type/PK/UNIQUE/FK(exact byte match; 대소문자 무시 시 key 유일), CHECK. soft-delete된 row는 unique key를 계속 차지하고 FK를 계속 만족한다(SQL 동등성 — soft delete가 가짜 판정을 일으키지 않게 명시). `aes`, `aes_version`, `blind_index`는 corpus에서 schema 오류다: key는 orm client를 떠나지 않는다(Revision 3).
 - **state machine은 dbspec-level manifest setting**(전이, terminal, 필수 column, 그리고 — Revision 3 — `initial`, `history`, `limit`)이다. 모든 엔진 전이는 이력 행을 쓰고, 엔진 밖에서 바뀐 상태는 이력 빈틈이나 끊긴 사슬로 보고하며 repair command가 있다. 응용 schema는 완료된 항목을 `supersedes` link로 대체한다. 엔진은 WIP 규칙을 강제하지 않는다 — 상대 gate는 제거하고 사용자의 규칙은 작업 규칙으로 남는다.
 - **사람의 write는 DB의 writer 독점 전제를 무효화한다; 각 기능은 그에 대한 판정을 갖는다**: FK action은 **restrict만 허용**(`cascade`/`set_null`은 catalog를 읽을 때 거부 — 엔진을 우회하는 writer에게 구현 불가능하므로); `audit`와 `immutable`은 corpus에서 schema 오류이며 상태 이력이 대신한다(Revision 3); 모든 non-null column은 쓰며 엔진이 insert에서 기본값을 쓴다.
 - **Capability table**(`60-dialect.md`)은 IR executor wire 아래의 통합 계약이다: `update|share` lock은 문서화된 no-op, `*_nowait`는 거부; `isolation`/`timeoutMs`는 `CAPABILITY_UNSUPPORTED`, `fulltext`/`Lb`는 `OPERATOR_NOT_ALLOWED`; `on_duplicate` 충돌 대상은 그 갈라짐과 함께 적는다; 바뀐 대상은 `WRITE_CONFLICT`로 실패; `getQuery`, statement event, `subscribe`, `force_index`는 `CAPABILITY_UNSUPPORTED`; savepoint는 중첩 stage.
@@ -103,8 +104,8 @@ flowmark = the markdown database engine (one Go binary)
 
 ### 7. Sync와 adapter (옵션, `70-sync.md`)
 
-- sync engine은 **하나의 계약을 가진 adapter architecture**다; database가 첫 adapter이고 GitHub(issues/projects)과 Jira가 따른다: table별 truth ownership, 소유 system을 밝히는 provenance header(`<!-- owner: <adapter>:<table>@<자기 bytes의 sha256> -->`), git을 인식하는 drift 처리, merge base로 기록되는 materialized-from revision, 명시적 일회성 command(live daemon 없음). 외부 tracker의 항목은 corpus row로 materialize된다 — checklist app의 item model이 곧 local issue model이므로 local board와 remote tracker가 같은 row의 두 projection이다.
-- md→db: derived export (재구축 가능). db→md(그리고 모든 adapter→md): materialize — hash는 materialize된 파일 자체 bytes의 것이므로 검사가 자기 검증되고 clone에 안전하며, 그 범위를 정직하게 명시한다: 사고 방지이지 공격자 방지가 아니다. validator는 adapter-owned 문서의 편집을 거부한다(readonly 기본); `writable`은 검증 후 re-ingest한다.
+- sync engine은 **하나의 계약을 가진 adapter architecture**다; database가 첫 adapter이고 GitHub(issues/projects)과 Jira가 따른다: table별 truth ownership, 소유 system을 밝히는 문서 밖에 둔 sync provenance(그 위치와 형식은 open question 5(70-sync)가 정한다), git을 인식하는 drift 처리, merge base로 기록되는 materialized-from revision, 명시적 일회성 command(live daemon 없음). 외부 tracker의 항목은 corpus row로 materialize된다 — checklist app의 item model이 곧 local issue model이므로 local board와 remote tracker가 같은 row의 두 projection이다.
+- md→db: derived export (재구축 가능). db→md(그리고 모든 adapter→md): materialize. validator는 adapter-owned 문서의 편집을 거부한다(readonly 기본); `writable`은 검증 후 re-ingest한다.
 - **readonly drift는 git을 인식한다**: working tree가 HEAD와 다르면 HEAD로 복구하고 보고; tree가 깨끗한데 HEAD가 마지막 ingested version과 다르면 수용하고 re-baseline한다. adapter-owned path의 merge conflict는 양쪽을 버리고 re-materialize로 해결한다 — 그곳의 손 merge는 diagnostic이다.
 - export는 catalog에서 orm의 SQL dialect renderer로 렌더한다(Revision 3). changelog projection은 이력 행 — 파일 안의 data — 에서 유도하며 gitignore된 journal에서 절대 유도하지 않는다(fresh clone이 모든 projection을 재구축할 수 있어야 한다).
 

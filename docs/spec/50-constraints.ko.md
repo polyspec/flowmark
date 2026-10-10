@@ -1,5 +1,5 @@
 <!-- doc-id: spec-constraints -->
-<!-- source-sha256: f67b413c0e8b507c188a3d78a5b4d36531c2935d7170d56371ca22b46dcd02d7 -->
+<!-- source-sha256: 6e4ba02cc782e30c0c3f9c1702645cf0a1be0e30a1d62d2ed6314ae1ce1307fc -->
 # Constraints
 
 [English](50-constraints.md)
@@ -12,20 +12,49 @@
 
 - **Strict parse.** [문법](10-canonical-format.md)을 벗어난 줄, 블록, 섹션, key는 위치가 있는 진단이다.
   관대한 mode도, 보이지 않는 데이터도 없다.
-- **Type.** 모든 값은 canonical literal 형식으로 자기 dbspec type을 따른다. type을 어긴 값은 그 자리의
+- **Type.** 모든 값은 [canonical format](10-canonical-format.md)의 읽을 수 있는 형식으로 자기 dbspec type을 따른다. type을 어긴 값은 그 자리의
   진단이고 쓰기에서 `CONSTRAINT`다.
 
 ## Key와 참조
 
 - **primary key와 unique key**는 table 전체에서 강제한다. 중복은 쓰기에서 `DUPLICATE_KEY`이고, 두 번째
   자리에서 첫 자리를 가리키는 진단이다. unique key는 SQL처럼 NULL을 서로 다르게 본다.
-- **foreign key**는 NFC 정규화 뒤 정확히 일치로 풀린다. 어떤 행도 가리키지 않는 참조는 쓰기에서
-  `FOREIGN_KEY`이고 참조 자리의 진단이다.
+- **foreign key**는 참조된 key와 byte 단위로 정확히 일치해야 풀린다. 어떤 행도 가리키지 않는 참조는
+  dangling 참조다: 쓰기에서 `FOREIGN_KEY`이고 참조 자리의 진단이다.
+- **참조된 행의 key 갱신**은 `FOREIGN_KEY`(restrict-only)다. 그래서 link의 target은 link 아래에서
+  움직이지 않는다.
 - **참조 action은 restrict-only다.** `cascade`와 `set_null`은 catalog를 읽을 때 거절한다: 엔진을
   우회하는 작성자에게는 구현할 수 없다. 참조되는 행 — 이력 행을 가진 행 포함 — 의 삭제는
   `FOREIGN_KEY`다.
 - **soft delete된 행도 unique key를 차지하고 foreign key를 만족한다**(SQL과 같음). 그래서 soft delete가
   가짜 dangling 판정을 만들지 않고, 같은 key의 재insert는 여전히 중복으로 실패한다.
+
+## Key 규칙
+
+- **형태.** markdown table의 key는 `A`–`Z`, `a`–`z`, `0`–`9`, `_`, `-`로 이루어지고 문자나 숫자로
+  시작한다. 이 형태 밖의 key는 쓰기에서 `CONSTRAINT`다.
+- **예약 이름.** 대소문자를 무시하고 `CON`, `PRN`, `AUX`, `NUL`, `COM0`–`COM9`, `LPT0`–`LPT9`와 같은
+  key는 쓰기에서 `CONSTRAINT`다([schema](30-schema.md)는 table 이름을 거절한다).
+- **길이.** 243 byte를 넘는 `files` key는 쓰기에서 `CONSTRAINT`다.
+- **대소문자 무시 유일성.** 대소문자를 무시하고 table의 다른 key와 같은 key는 쓰기에서
+  `DUPLICATE_KEY`이며, 첫 key를 밝힌다 — 충돌은 key의 file 이름과 anchor가 중복된 것이다.
+- **정식 file 이름.** key 타입의 정식 텍스트가 아닌 `files` file 이름은 읽기에서 `format.block`이다
+  ([document model](20-document-model.md)).
+
+## 읽을 수 있는 문서의 거절
+
+쓰기에서 다음 각각은 `CONSTRAINT`다. 괄호 안은 그것을 정하는 규칙이다:
+
+- 줄바꿈, 앞이나 뒤의 공백, 또는 `<` 뒤에 `!`, `/`, 글자가 오는 한 줄 값 — list 제목, H1, cell, list
+  field, field list 값 안에서([canonical format](10-canonical-format.md));
+- 첫 줄이 `-` list 항목인 `files` body([canonical format](10-canonical-format.md));
+- fence 밖에 level ≤ L heading 줄을 가진 `markdown` 값([canonical format](10-canonical-format.md));
+- 앞선 heading이 차지해서 slug가 anchor와 다른 상세 heading — 앞선 heading을 밝힌다
+  ([canonical format](10-canonical-format.md));
+- 값으로서의 `now`, 그리고 column 길이를 넘는 text([canonical format](10-canonical-format.md)).
+
+읽기에서는 walk가 `corpus.walk`를, 형식 규칙이 `format.*`를 보고한다. 그 내용은
+[document model](20-document-model.md)과 [canonical format](10-canonical-format.md)이 정한다.
 
 ## Check
 
@@ -42,7 +71,7 @@ check는 commit에서 강제한다. 술어가 unknown(NULL)인 check는 SQL처�
 
 - **Insert.** insert에서 행의 상태는 초기 상태다. 기계의 상태 집합 밖의 상태는 `CONSTRAINT`다.
 - **전이.** 상태 column의 update는 선언된 전이를 따른다. 다른 변경은 행, 현재 상태, 거절된 목표를
-  밝히는 `CONSTRAINT`다. 종료 상태는 떠나지 않는다 — 대신 할 일은 응용이 정한다(응용 schema는 종료된
+  밝히는 `CONSTRAINT`다. 종료 상태는 떠나지 않는다(dbspec의 terminal 의미) — 대신 할 일은 응용이 정한다(응용 schema는 종료된
   항목을 다시 여는 대신 `supersedes` link와 함께 새 항목을 insert한다).
 - **필수 column.** 줄에 `require (c1, …)`를 가진 전이나 종료 상태 진입은 같은 update에서 나열된 모든
   column을 할당한다. 할당되지 않은 column, `null`, 빈 텍스트는 그 column을 밝히는 `CONSTRAINT`다.
@@ -61,6 +90,9 @@ check는 commit에서 강제한다. 술어가 unknown(NULL)인 check는 SQL처�
   선언된 전이가 아니면 validate는 `history.chain`을 보고한다.
 - 두 진단 모두 다른 쓰기를 막지 않는다. 그러므로 엔진 밖의 상태 변경은 사람이 일관된 이력을 위조하지
   않는 한 보고된다.
+- **Commit.** commit은 먼저 그 대상이 읽은 뒤 바뀌지 않았는지 검사한다: 바뀌었으면 `WRITE_CONFLICT`다.
+  이력 빈틈(`history.gap`)을 포함한 constraint 검사는 잠금 아래에서 다시 읽은 corpus 위에서 실행한다.
+  다른 행의 빈틈은 commit을 결코 실패시키지 않는다.
 - **Repair.** `flowmark history repair <table> <key> [--from <initial state>]`는 마지막 `to`에서 — 이력
   없는 행은 하나뿐인 초기 상태, 또는 초기 상태가 여럿이면 필수인 `--from`에서 — 현재 상태로 가는 이력
   행 하나를 insert한다. `at`은 엔진 시계이고 필수 column은 행에서 복사한다. 그 쌍이 선언된 전이가
@@ -82,5 +114,7 @@ database는 작성자 독점을 강제하지만 corpus에는 그것이 없다. �
 
 모든 규칙은 `{file, line, column, rule, message}`를 보고한다. 규칙 이름은 `catalog`, `type`,
 `key.duplicate`, `reference.dangling`, `check`, `parent.cycle`, `order`, `state.transition`,
-`state.required`, `state.limit`, `history.gap`, `history.chain`, 그리고 canonical format의 `format.*`
-규칙이다. 검증은 corpus 전체에 걸친다. 깨진 corpus 안의 깨끗한 file이 corpus를 유효하게 만들지 않는다.
+`state.required`, `state.limit`, `history.gap`, `history.chain`, `corpus.walk`
+([document model](20-document-model.md)의 walk 규칙), 그리고 canonical format의 `format.*` 규칙이다: `format.noncanonical`, `format.block`,
+`format.section`, `format.encoding`. 검증은 corpus 전체에 걸친다. 깨진 corpus 안의 깨끗한 file이 corpus를
+유효하게 만들지 않는다.

@@ -1,5 +1,5 @@
 <!-- doc-id: spec-overview -->
-<!-- source-sha256: 1e2b99d55284488be3cb9d0f8f2b6df70441398f03ba657931708ec35f24a9d7 -->
+<!-- source-sha256: ff02179d86b3ca7bd4db1e67b45ba78c8a0a686bf7e70ec09e2afde7502ffc21 -->
 # 개요
 
 [English](00-overview.md)
@@ -53,8 +53,7 @@ emit하면 그대로 재현되고, 같은 입력으로 operation을 반복하면
 | truth ownership | sync 쌍에서 table의 authority를 가진 쪽 |
 | adapter | 하나의 sync 계약에 묶인 외부 시스템(database, tracker) |
 | face | binary의 진입점 하나: server, CLI, MCP server, soksak sidecar |
-| twin | `source-sha256`으로 묶인 행 문서의 번역 file |
-| doc-id | 문서 header comment의 식별자. `files` 행의 key |
+| key | 행의 식별자. `files` 행의 file 이름(`<table>/<key>.flowmark.md`) |
 
 ## 하지 않는 것
 

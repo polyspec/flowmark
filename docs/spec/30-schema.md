@@ -4,7 +4,8 @@
 [한국어](30-schema.ko.md)
 
 This specification pins the schema of a corpus: the catalog, the markdown settings, the corpus
-rules on dbspec constructs, and the catalog's two operations — install and introspection.
+rules on dbspec constructs, the name rules, and the catalog's two operations — install and
+introspection.
 
 ## The catalog
 
@@ -15,8 +16,9 @@ rules on dbspec constructs, and the catalog's two operations — install and int
 - flowmark reads the catalog with orm's Go `engine/dbspec` package and uses its manifest hash; it
   never reimplements the grammar. `use` lines resolve within the `dbspec/` set; an external
   document is a schema error.
-- The corpus setting file `dbspec/flowmark.json` holds what is not a table declaration: the
-  `translations` language list.
+- `dbspec/` holds only the `.dbs` set. Another file in `dbspec/` is a `catalog` diagnostic.
+- The corpus setting file `dbspec/flowmark.json` and its `translations` language list are
+  withdrawn: the catalog holds every declaration, and no file outside the `.dbs` set is read.
 - Standalone documents with an embedded schema fragment do not exist: a corpus is a root with a
   catalog.
 
@@ -52,6 +54,17 @@ behaviour.
   state; a `list` or `files` storage declares `title`; a `list` storage with a state column
   declares a `checkbox` for every state.
 
+## Name rules
+
+- **Reserved table names.** A table whose name equals, without regard to case, `CON`, `PRN`, `AUX`,
+  `NUL`, `COM0`–`COM9` or `LPT0`–`LPT9` is a schema error: these are reserved file names on Windows.
+- **A child table named like a markdown column** of its parent is a schema error.
+- **A markdown column or a block table named like a table whose detail sections can stand in the
+  same file** is a schema error: the repeated section heading's `-1`, `-2` slugs would take that
+  table's anchors ([canonical format](10-canonical-format.md)).
+- **Heading depth.** A layout that needs a heading past H6 is a schema error, decided when the
+  catalog loads.
+
 ## The state set
 
 - A machine's states are the states its `initial`, transition and `terminal` lines name.
@@ -59,6 +72,7 @@ behaviour.
   another state is a setting error.
 - A `default` of the state column is an initial state, otherwise a setting error. An initial state
   that is also terminal is a setting error.
+- The state column of a table is the column its `state_machine` setting names.
 
 ## The history table
 
@@ -72,10 +86,9 @@ or `body`; any mismatch is a setting error at the history table's name. It is st
 ## Install
 
 `flowmark install <corpus>` generates the storage skeleton from the catalog — the folder of each
-`files` table and the document of each `document` table, and no block section, since an empty
-block is not written — as `CREATE TABLE` creates storage. Schema install through orm over
-`markdown://` is
-`CAPABILITY_UNSUPPORTED`.
+`files` table and the file `<table>.flowmark.md` of each `document` table, and no block section,
+since an empty block is not written — as `CREATE TABLE` creates storage. Schema install through orm
+over `markdown://` is `CAPABILITY_UNSUPPORTED`.
 
 ## Introspection
 

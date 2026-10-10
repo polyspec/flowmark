@@ -1,11 +1,11 @@
 <!-- doc-id: spec-schema -->
-<!-- source-sha256: 1e908ac046f00394928e0bf0967811ee4ee76adfa6bc7ff87295ad4b90395ada -->
+<!-- source-sha256: 9a359dd2ebbd99f215e8b59f45a11748661a244bcdbc3243bbcaefee15820f2f -->
 # Schema
 
 [English](30-schema.md)
 
-이 spec은 corpus의 schema를 고정한다: catalog, markdown setting, dbspec 구성에 대한 corpus 규칙, 그리고
-catalog의 두 operation — install과 introspection.
+이 spec은 corpus의 schema를 고정한다: catalog, markdown setting, dbspec 구성에 대한 corpus 규칙, 이름
+규칙, 그리고 catalog의 두 operation — install과 introspection.
 
 ## Catalog
 
@@ -14,7 +14,9 @@ catalog의 두 operation — install과 introspection.
   사본을 두면 사본의 이탈이 그 자체로 버그 부류가 된다.
 - flowmark는 orm의 Go `engine/dbspec` package로 catalog를 읽고 그 manifest hash를 쓴다. 문법을 다시
   구현하지 않는다. `use` 줄은 `dbspec/` set 안에서 풀리며 외부 문서는 schema 오류다.
-- corpus setting file `dbspec/flowmark.json`은 table 선언이 아닌 것을 담는다: `translations` 언어 목록.
+- `dbspec/`에는 `.dbs` 집합만 있다. `dbspec/`의 다른 file은 `catalog` 진단이다.
+- corpus setting file `dbspec/flowmark.json`과 그 `translations` 언어 목록은 철회된다: catalog가 모든
+  선언을 담으며, `.dbs` 집합 밖의 file은 읽지 않는다.
 - 내장 schema fragment를 가진 단독 문서는 없다: corpus는 catalog를 가진 root다.
 
 ## Markdown setting
@@ -47,12 +49,23 @@ column을 이름 붙인다 — column 이름이 동작을 고르지 않는다.
 - **요구**: `state_machine`을 가진 table은 `history`와 적어도 하나의 `initial` 상태를 선언한다. `list`나
   `files` 저장은 `title`을 선언한다. 상태 column을 가진 `list` 저장은 모든 상태에 `checkbox`를 선언한다.
 
+## 이름 규칙
+
+- **예약된 table 이름.** 대소문자를 무시하고 `CON`, `PRN`, `AUX`, `NUL`, `COM0`–`COM9`, `LPT0`–`LPT9`와
+  같은 table 이름은 schema 오류다: Windows의 예약된 file 이름이기 때문이다.
+- **부모의 markdown column과 같은 이름을 가진 자식 table**은 schema 오류다.
+- **상세 섹션이 같은 file에 들어설 수 있는 table과 같은 이름의 markdown column이나 block table**은
+  schema 오류다: 반복되는 섹션 heading의 `-1`, `-2` slug가 그 table의 anchor를 차지하기 때문이다
+  ([canonical format](10-canonical-format.md)).
+- **heading 깊이.** layout이 H6를 넘는 heading을 필요로 하면 schema 오류이며, catalog를 읽을 때 정해진다.
+
 ## 상태 집합
 
 - 기계의 상태는 `initial`, 전이, `terminal` 줄이 이름 붙인 상태들이다. `checkbox`는 서로 다른 glyph로 그
   집합을 정확히 덮는다. 다른 상태를 이름 붙인 `checkbox`, `limit`, `initial`은 setting 오류다.
 - 상태 column의 `default`는 초기 상태여야 하며 아니면 setting 오류다. 종료 상태이기도 한 초기 상태는
   setting 오류다.
+- table의 상태 column은 `state_machine` setting이 이름 붙이는 column이다.
 
 ## 이력 table
 
@@ -65,8 +78,8 @@ column이 없고 `title`이나 `body`를 선언하지 않는다. 어긋나면 �
 ## Install
 
 `flowmark install <corpus>`는 catalog에서 저장 뼈대 — 각 `files` table의 폴더와 각 `document` table의
-문서이며, 빈 블록은 쓰이지 않으므로 블록 섹션은 없다 — 를 `CREATE TABLE`이 저장소를 만들듯 만든다. `markdown://`에
-대한 orm의 schema install은 `CAPABILITY_UNSUPPORTED`다.
+file `<table>.flowmark.md`이며, 빈 블록은 쓰이지 않으므로 블록 섹션은 없다 — 를 `CREATE TABLE`이 저장소를
+만들듯 만든다. `markdown://`에 대한 orm의 schema install은 `CAPABILITY_UNSUPPORTED`다.
 
 ## Introspection
 
