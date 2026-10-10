@@ -1,8 +1,12 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 60a32101f58f2051b15e0099edc2e107f2939eb6a313202111b04d9ee3ffed42 -->
+<!-- source-sha256: baf51f306aa0cf962500214e109da20cb8df857752e7e6dec4847fc5926071ba -->
 # Changelog
 
 ## Unreleased
+
+- T10-5: plugin repository는 빌드된 실행 파일을 추적하지 않는다. 16 MB example host binary는
+  ignore하고 `go build -o example .`로 다시 만든다. 변경은
+  plugin repository에 있다.
 
 - T10-4: 새 이슈 row는 column 맨 아래에 고정된다. 카드 목록이 column을 채우고 자기 안에서 스크롤
   하므로 카드가 몇 개든 row가 계속 보인다. 변경은 plugin repository에 있다.

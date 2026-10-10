@@ -3,6 +3,9 @@
 
 ## Unreleased
 
+- T10-5: the plugin repository tracks no built executable. The 16 MB example host binary is
+  ignored; `go build -o example .` regenerates it. The change lives in the plugin repository.
+
 - T10-4: the new-issue row is pinned to the bottom of its column. The card list fills the
   column and scrolls inside itself, so the row stays visible however many cards the column
   holds. The change lives in the plugin repository.
