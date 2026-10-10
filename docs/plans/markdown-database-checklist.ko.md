@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database-checklist -->
-<!-- source-sha256: bcd1abecbe43244dd96ed40b9d2599b4925510e5460519fa166eed39229b87d5 -->
+<!-- source-sha256: f9ed90872acf9ccd7688e9f7a5ee6da1ebed54b44cce14acd3fad18e25e9190a -->
 # markdown database checklist
 
 ## T12 markdown database
@@ -33,7 +33,7 @@
   - 완료 기준: spec 10, 20과 그 twin이 각 판정을 근거와 함께 적고 더는 서로 다르지 않으며, 이 항목의 문구를 범위로 한 적대 검증을 거치고, codec 테스트가 사례마다 고정하는 규칙을 밝히며, `make documents-check`와 `make refs-check`가 통과한다.
 - [ ] T12.2.4-1 상태기계를 가진 table의 `list` 저장 block을 다룬다: checkbox glyph, 상태, 중첩 행을 가진 fixture block과 허용과 거절 사례, P1/P2 golden (T12.2.4 후속)
   - 완료 기준: fixture와 그 사례가 있고, fuzz target이 golden으로 seed되며, `go test -count=1 ./store/`가 통과한다.
-- [ ] T12.2.2-5 codec이 CommonMark처럼 `#` 연속 뒤에 tab이 오는 ATX heading을 읽는다: `store/markdown.go`는 지금 space를 요구한다 (T12.2.2-3 후속)
+- [o] T12.2.2-5 codec이 CommonMark처럼 `#` 연속 뒤에 tab이 오는 ATX heading을 읽는다: `store/markdown.go`는 지금 space를 요구한다 (T12.2.2-3 후속)
   - 완료 기준: commonmark.js 0.31.2에 고정한 허용과 거절 사례가 있고 `go test -count=1 ./store/`가 통과한다.
 - [ ] T12.2.2-6 codec이 T12.1-4의 상세 anchor 충돌 규칙을 적용한다: 끝 숫자 run을 뗀 fold(F_G나 F_M)가 상세 anchor와 같은 상세 heading 아닌 heading, anchor와 같은 id를 정하는 attribute list, anchor와 같은 HTML `id`나 `name`은 쓰기에서 `CONSTRAINT`, 읽기에서 `format.block`이다. 지금은 어느 codec도 이를 검사하지 않는다 (T12.1-4, T12.2.3 후속)
   - 완료 기준: fold마다, 끝 숫자 제거, attribute list 형식마다, HTML에 대해 files와 document 저장에서 허용과 거절 사례가 있고 `go test -count=1 ./...`가 통과한다.

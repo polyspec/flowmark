@@ -1,5 +1,5 @@
 <!-- doc-id: spec-canonical-format -->
-<!-- source-sha256: 4630c14b3fe8441c4e3bc4b44509a68347777c94f9f10a3c4ed7b6bbf2c3e917 -->
+<!-- source-sha256: ed4d388f57c49fcd0584361c5a4298ccf1f691cda693739be5cea86a58503677 -->
 # Canonical format
 
 [English](10-canonical-format.md)
@@ -84,7 +84,7 @@ column 섹션 — 은 payload다: renderer는 이를 행과 함께 옮기고 그
   없으므로 아무와도 충돌하지 않는다. 읽기에서 충돌은 `format.block`이다. 다만 key가 대소문자만 다른 두 상세 heading 사이는
   `key.duplicate`뿐이다. 같은 file 안에서 같은
   heading 텍스트를 가진 두 상세 섹션은 충돌하므로 `format.block`이며, 어느 행에도 배정할 수 없다.
-- 공백이 더 있거나 `row`의 대소문자가 다른 상세 heading은 `format.noncanonical`이며, `flowmark canon`이 고친다.
+- 공백이 더 있거나, hash 뒤에 tab이 있거나, `row`의 대소문자가 다른 상세 heading이나 section heading은 `format.noncanonical`이며, `flowmark canon`이 고친다. hash 뒤의 canonical 구분자는 공백 하나이며, tab은 쓰이지 않는다. 다만 CommonMark는 `##` 뒤에 tab이 와도 같은 heading으로 읽는다.
 
 ## 섹션과 그 값
 

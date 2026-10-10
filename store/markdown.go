@@ -15,14 +15,17 @@ import (
 type heading struct {
 	at, last, level int
 	text            string
+	tab             bool // the separator after the hashes is a tab, a noncanonical spelling
 }
 
 // headingOf reads an ATX heading: up to three spaces, one to six '#', then a
-// space and the text, or the end of the line. The text is the rest of the line.
-func headingOf(line string) (level int, text string, ok bool) {
+// space, a tab or the end of the line. The text is the rest of the line after that
+// one separator. tab reports whether the separator is a tab: the canonical
+// separator is one space, so a tab is a noncanonical spelling of the heading.
+func headingOf(line string) (level int, text string, tab, ok bool) {
 	s := indentOf(line)
 	if s > 3 {
-		return 0, "", false
+		return 0, "", false, false
 	}
 	h := s
 	for h < len(line) && line[h] == '#' {
@@ -30,15 +33,18 @@ func headingOf(line string) (level int, text string, ok bool) {
 	}
 	level = h - s
 	if level < 1 || level > 6 {
-		return 0, "", false
+		return 0, "", false, false
 	}
 	if h == len(line) {
-		return level, "", true
+		return level, "", false, true
 	}
-	if line[h] != ' ' {
-		return 0, "", false
+	switch line[h] {
+	case ' ':
+		return level, line[h+1:], false, true
+	case '\t':
+		return level, line[h+1:], true, true
 	}
-	return level, line[h+1:], true
+	return 0, "", false, false
 }
 
 // setextLevel reads a setext underline: up to three spaces, then only '=' (level 1)
@@ -253,10 +259,10 @@ func (s *scanner) start(lines []string, i int, rest string, col int) (heading, b
 				return heading{}, false
 			}
 		}
-		if level, text, ok := headingOf(rest); ok {
+		if level, text, tab, ok := headingOf(rest); ok {
 			s.leaf = leafNone
 			if top {
-				return heading{at: i, last: i, level: level, text: text}, true
+				return heading{at: i, last: i, level: level, text: text, tab: tab}, true
 			}
 			return heading{}, false
 		}
@@ -335,7 +341,7 @@ func opensInterrupt(line string) bool {
 	if indentOf(line) >= 4 {
 		return false
 	}
-	if _, _, ok := headingOf(line); ok {
+	if _, _, _, ok := headingOf(line); ok {
 		return true
 	}
 	if _, ok := fenceOpenAt(line); ok {

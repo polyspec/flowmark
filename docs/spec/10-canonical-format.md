@@ -119,8 +119,10 @@ and the column sections — are payload: the renderer moves them with their row 
   the heading.
 - A write that introduces a collision is `CONSTRAINT`, naming the other heading: a title update, a payload write, a row insert that creates a detail section, a key update, a move, or the creation of a detail section; except that a write giving a row a key equal, with or without regard to case, to another key of its table is `DUPLICATE_KEY`, the key rule of the [document model](20-document-model.md#keys). A row without a detail section has no anchor, so it collides with nothing. On read a collision is `format.block`, except between two detail headings whose keys differ only in case, which is `key.duplicate` alone. Two detail sections of one file under the same
   heading text collide, so they are `format.block`, since neither can be assigned to a row.
-- A detail heading in a non-canonical spelling (extra spaces, a wrong case of `row`) is
-  `format.noncanonical`, so `flowmark canon` repairs it.
+- A detail heading or section heading in a non-canonical spelling (extra spaces, a tab after its
+  hashes, a wrong case of `row`) is `format.noncanonical`, so `flowmark canon` repairs it. The
+  canonical separator after the hashes is one space; a tab is never written, though CommonMark reads
+  `##` followed by a tab as the same heading.
 
 ## Sections and their values
 

@@ -41,6 +41,63 @@ func TestHTMLStart(t *testing.T) {
 	}
 }
 
+// TestATXHeading pins the ATX heading start of CommonMark 0.31.2, as commonmark.js
+// reads it: one to six '#', then a space, a tab or the end of the line.
+func TestATXHeading(t *testing.T) {
+	cases := []struct {
+		line  string
+		level int
+		text  string
+		tab   bool
+		ok    bool
+	}{
+		{"## x", 2, "x", false, true},
+		{"##\tx", 2, "x", true, true},
+		{"#\tx", 1, "x", true, true},
+		{"##\t", 2, "", true, true},
+		{"##", 2, "", false, true},
+		{"#", 1, "", false, true},
+		{"###### x", 6, "x", false, true},
+		{"   ## x", 2, "x", false, true},
+		{"    ## x", 0, "", false, false},
+		{"##x", 0, "", false, false},
+		{"#######", 0, "", false, false},
+		{"#######\tx", 0, "", false, false},
+	}
+	for _, c := range cases {
+		t.Run(c.line, func(t *testing.T) {
+			level, text, tab, ok := headingOf(c.line)
+			if ok != c.ok || level != c.level || text != c.text || tab != c.tab {
+				t.Fatalf("headingOf(%q) = %d, %q, tab %v, %v; want %d, %q, tab %v, %v",
+					c.line, level, text, tab, ok, c.level, c.text, c.tab, c.ok)
+			}
+		})
+	}
+}
+
+// TestHeadingBoundary pins the section boundary of a run of lines: the first
+// level-2 heading, which a tab after its hashes makes and a letter after them does not.
+func TestHeadingBoundary(t *testing.T) {
+	cases := []struct {
+		name  string
+		lines []string
+		want  int
+	}{
+		{"tab after the hashes", []string{"x", "##\tNotes", "y"}, 1},
+		{"space after the hashes", []string{"x", "## Notes", "y"}, 1},
+		{"hashes at the end of the line", []string{"##"}, 0},
+		{"letter after the hashes", []string{"x", "##x", "y"}, 3},
+		{"seven hashes", []string{"x", "#######", "y"}, 3},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := boundary(c.lines, 0); got != c.want {
+				t.Fatalf("boundary(%q) = %d; want %d", c.lines, got, c.want)
+			}
+		})
+	}
+}
+
 // TestInterruptsParagraph pins the rule of CommonMark 0.31.2 that an HTML block
 // of types 1 to 6 may interrupt a paragraph and a type 7 block may not.
 func TestInterruptsParagraph(t *testing.T) {
