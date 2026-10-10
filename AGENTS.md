@@ -51,26 +51,45 @@ and the local board. The rulings live in `docs/plans/design-plan.md`; the execut
 - Test code that cannot merge into main is cherry-picked when it is worth keeping and otherwise
   discarded, always before the commit. When it cannot be removed at once, a checklist sub-item
   states the condition of its removal.
-- `docs/plans/execution-checklist.md` is the only task list; its Korean pair holds the same item
-  IDs and states. Run `make documents-check` before changing an item state. One checklist per
-  repository; split sub-items rather than growing one giant unit.
+- An instruction is first classified: a checklist item (work), the memory (what only the owner
+  and the agent need), AGENTS (a working guideline, kept here without duplication and never in
+  the checklist or the changelog), or a plain answer. Work is prioritized, the documents and the
+  checklist are updated, then the work runs. The current work is finished first; it is stopped
+  for a new instruction only on the owner's explicit request or a stated judgement that the new
+  work must come first — otherwise the instruction is added and taken in priority order.
+- A checklist is one file per plan: the work of one plan lives in one checklist file, and a
+  different plan gets its own file beside its plan in `docs/plans/` — `execution-checklist.md`
+  for the design plan, `<plan>-checklist.md` for any other. Every checklist file is a tracker of
+  `config/checklist.json`, its Korean pair holds the same item IDs and states, and item IDs are
+  unique across the files. Run `make documents-check` before changing an item state. Each
+  repository runs its own checklists: work in another repository is tracked there and referenced
+  here by its ID in a code span. Split sub-items rather than growing one giant unit.
+- A problem becomes a new checklist item; when it relates to an existing item it is that item's
+  sub-item by ID.
 - The states are `[ ]` waiting, `[~]` in progress, `[o]` done, `[!]` bypassed with `Cause:` and
   `Retry:` on the item, `[-]` impossible with `Cause:`. `[o]` is terminal: a new issue related to a
   done item spawns a suffixed item (`T8.0.14-1`) instead of reopening it. Parallel work is allowed;
-  keep the number of `[~]` items from growing without completed results.
+  keep the number of `[~]` items from growing without completed results: independent items may
+  run together, but starting new items while the started ones stay partial is refused —
+  completion comes before starting, so `[o]` keeps growing faster than `[~]`.
+- `[!]` is used only when the next item cannot proceed without it, with an explicit reason; a
+  bypass is not a completion. The item records its cause and its retry condition, and work
+  resumes without waiting for permission once the retry condition holds. An audit covers only
+  the `[!]` items, their causes and their retry conditions — never a rerun of unrelated tests.
 - An item becomes `[o]` in the commit that completes it, after its owning command passes. That
   commit also writes the changelog entry under `## Unreleased` in CHANGELOG.md and CHANGELOG.ko.md.
-  Uncommitted changes cover one item only.
+  Uncommitted changes cover one item only; an unfinished item is never a reason to widen them by
+  adding another. Each feature is reviewed, self-tested and recorded before its commit.
 - A defect starts as a RED test that reproduces it (or a deterministic case that would), confirmed
   failing for the intended reason; the fix follows; the same case runs to GREEN. The checklist item
   records the observable criterion of correctness.
 - English documents are canonical. Every document has a `.ko.md` twin with the same information;
   edit both in the same change, and a Korean-caught fix is ported to the English file before the
-  next `make documents-stamp`. No interactive history edits across document commits — corrections
-  are new commits with fresh stamps.
+  next `make documents-stamp`. A correction is a new commit with fresh stamps.
 - Commit messages are English `type(scope): Subject (#task)`: a subject of at most 50 characters,
   capitalized, imperative, no trailing period; a blank line; a body wrapped near 72 characters
-  explaining what changed and why; the types `feat`, `fix`, `docs`, `style`, `refactor`, `test`,
+  explaining what changed and why, not how; an optional footer after a blank line for references;
+  the types `feat`, `fix`, `docs`, `style`, `refactor`, `test`,
   `chore`. Commit as `min-median-max <max@blue.tools>` without additional author trailers.
 - The shared tools are the vendored copy of polyspec/kit: `scripts/kit`, `tests/kit`, `kit.json`
   and `.kit/kit.lock.json` change only in kit and reach this repository with

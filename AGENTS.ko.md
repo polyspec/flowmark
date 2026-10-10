@@ -1,5 +1,5 @@
 <!-- doc-id: agents -->
-<!-- source-sha256: b1af5e6923e485f0954988ca2ba68310b9feb9059b6ea71d03a7f4bfb300aa70 -->
+<!-- source-sha256: 4ed2861d30997045bce4d5a98902d6b7d760ea410c544689ee59aa5cf7c0ae01 -->
 # 개발 규칙
 
 [English](AGENTS.md)
@@ -44,22 +44,39 @@ GitHub, Jira), checklist·changelog engine, local board. 판정은 `docs/plans/d
   worktree는 용량을 차지하고 폴더를 파편화하며 병합 여부 확인에 혼란을 준다.
 - main에 병합될 수준이 아닌 test code는 의미가 있으면 cherry-pick하고 아니면 폐기하며, 반드시
   commit 전에 처리한다. 바로 제거할 수 없으면 checklist 하위 항목에 제거 조건을 명시한다.
-- `docs/plans/execution-checklist.md`가 유일한 task list이며 Korean pair가 같은 항목 ID와 상태를
-  가진다. 항목 상태를 바꾸기 전에 `make documents-check`를 실행한다. 저장소당 checklist 하나;
-  거대한 단위로 묶지 말고 세부항목을 쪼갠다.
+- 지시는 먼저 분류한다: checklist 항목(작업), memory(사용자와 agent만 알아야 하는 것), AGENTS(업무
+  지침 — 여기에 중복 없이 두고 checklist나 changelog에는 넣지 않는다), 또는 단순 답변. 작업은
+  우선순위를 정하고 문서와 checklist를 갱신한 뒤 진행한다. 지금 하는 작업을 먼저 마무리하며, 사용자의
+  명시적 요청이나 새 작업이 먼저여야 한다는 명시된 판단이 있을 때만 중단한다 — 그 밖에는 지시를
+  추가하고 우선순위대로 처리한다.
+- checklist는 plan마다 파일 하나다: 한 plan의 작업은 checklist 파일 하나에 두고, 다른 plan은
+  `docs/plans/`의 자기 plan 옆에 자기 파일을 갖는다 — design plan은 `execution-checklist.md`, 그 밖의
+  plan은 `<plan>-checklist.md`. 모든 checklist 파일은 `config/checklist.json`의 tracker이고, Korean
+  pair가 같은 항목 ID와 상태를 가지며, 항목 ID는 파일 사이에서도 유일하다. 항목 상태를 바꾸기 전에
+  `make documents-check`를 실행한다. 저장소마다 자기 checklist를 운영한다: 다른 저장소의 작업은 그
+  저장소에서 추적하고 여기서는 code span 안의 ID로 참조한다. 거대한 단위로 묶지 말고 세부항목을 쪼갠다.
+- 문제는 새 checklist 항목이 된다. 기존 항목과 연관되면 ID로 그 항목의 하위 항목이 된다.
 - 상태는 `[ ]` 대기, `[~]` 진행 중, `[o]` 완료, `[!]` 우회(항목에 `Cause:`와 `Retry:` 필수),
   `[-]` 불가(`Cause:` 필수). `[o]`는 terminal이다: 완료된 항목에 연관된 새 이슈는 되돌리지 않고
-  suffix 항목(`T8.0.14-1`)을 만든다. 병렬 작업은 허용하되 `[~]` 수가 완료 없이 늘어나지 않게 한다.
+  suffix 항목(`T8.0.14-1`)을 만든다. 병렬 작업은 허용하되 `[~]` 수가 완료 없이 늘어나지 않게 한다:
+  독립 항목은 함께 진행해도 되지만, 시작한 항목을 부분만 진행한 채 새 항목을 시작하는 것은 거절한다 —
+  시작보다 완료가 먼저이므로 `[o]`가 `[~]`보다 꾸준히 더 늘어난다.
+- `[!]`는 그것 없이는 다음 항목으로 넘어갈 수 없을 때만, 명시적 이유와 함께 쓴다. 우회는 완료가
+  아니다. 항목에 원인과 재시도 조건을 기록하고, 재시도 조건이 성립하면 허가를 기다리지 않고 재개한다.
+  감사는 `[!]` 항목과 그 원인·재시도 조건만 다루며, 무관한 test를 다시 돌리지 않는다.
 - 항목은 그것을 끝내는 commit에서, 소유 명령이 통과한 뒤 `[o]`가 된다. 그 commit은 CHANGELOG.md와
-  CHANGELOG.ko.md의 `## Unreleased`에 entry도 함께 쓴다. 미커밋 변경은 항목 하나로 제한한다.
+  CHANGELOG.ko.md의 `## Unreleased`에 entry도 함께 쓴다. 미커밋 변경은 항목 하나로 제한하며, 미완료
+  항목을 핑계로 다른 항목을 더해 그 범위를 넓히지 않는다. 기능마다 검토, 자기 test, 기록을 마친 뒤
+  commit한다.
 - 결함은 그것을 재현하는 RED test(또는 재현할 deterministic case)로 시작하고, 의도한 이유로
   실패함을 확인한 뒤 원인을 고치고 같은 case를 GREEN으로 통과시킨다. checklist 항목은 관측 가능한
   올바름의 기준을 남긴다.
 - English 문서가 canonical이다. 모든 문서는 같은 정보를 가진 `.ko.md` twin이 있고 같은 변경에서
   함께 편집한다. 한국어에서 발견한 수정은 다음 `make documents-stamp` 전에 English 파일로 이식한다.
-  문서 commit에 대한 interactive history 편집 금지 — 수정은 fresh stamp를 가진 새 commit이다.
+  정정은 fresh stamp를 가진 새 commit이다.
 - commit message는 영문 `type(scope): Subject (#task)`: subject 50자 이하, 대문자 시작, 명령조,
-  마침표 없음; 빈 줄; 72자 개행의 body(무엇을·왜); type은 `feat`, `fix`, `docs`, `style`,
+  마침표 없음; 빈 줄; 72자 개행의 body(어떻게가 아니라 무엇을·왜); 필요하면 빈 줄 뒤 참조용 footer;
+  type은 `feat`, `fix`, `docs`, `style`,
   `refactor`, `test`, `chore`. `min-median-max <max@blue.tools>`로 commit하고 추가 author
   trailer는 붙이지 않는다.
 - 공유 tool은 polyspec/kit의 vendored copy다: `scripts/kit`, `tests/kit`, `kit.json`,
