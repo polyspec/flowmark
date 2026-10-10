@@ -83,6 +83,7 @@ has its checklist in `docs/plans/`.
 - A defect starts as a RED test that reproduces it (or a deterministic case that would), confirmed
   failing for the intended reason; the fix follows; the same case runs to GREEN. The checklist item
   records the observable criterion of correctness.
+- The engine is a database, so its unit tests are dense: every grammar and constraint rule has at least one accepting and one rejecting case, table-driven, with its edge cases; every storage has P1/P2 golden fixtures covering every column type and both the NULL and the empty forms; parse and emit are fuzzed (`go test -fuzz`) with the golden fixtures as seeds, and a failing input the fuzzer finds stays as a regression case. An item that adds a rule is not done until these cases exist.
 - English documents are canonical. Every document has a `.ko.md` twin with the same information;
   edit both in the same change, and a Korean-caught fix is ported to the English file before the
   next `make documents-stamp`. A correction is a new commit with fresh stamps.
