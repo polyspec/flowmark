@@ -3,6 +3,10 @@
 
 ## Unreleased
 
+- T10-4: the new-issue row is pinned to the bottom of its column. The card list fills the
+  column and scrolls inside itself, so the row stays visible however many cards the column
+  holds. The change lives in the plugin repository.
+
 - T10-3: every board column takes the full height of the board instead of the height of the
   busiest column, and scrolls inside itself when its cards overflow. The change lives in the
   plugin repository.

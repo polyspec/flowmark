@@ -1,5 +1,5 @@
 <!-- doc-id: execution-checklist -->
-<!-- source-sha256: c25f8fbdb2055168aac4106f6d722bc5becbf40b1f95aad4b13e7953aa53943b -->
+<!-- source-sha256: 8fa2c70817ccec69ba3c2f22774b5ce99dcc48699dfdd826fa8e75a2b2d2c6d7 -->
 # 실행 체크리스트
 
 ## T1a 설계 session
@@ -86,7 +86,7 @@
   - 완료 기준: row가 짧은 column과 빈 column에서도 마지막 카드 바로 아래에 놓이고, column 안 어디에 drop해도 그 column의 목록에 들어가며, `node --test ui/`가 drop 대상을 덮는다.
 - [o] T10-3 모든 column은 보드의 전체 높이를 쓴다. 어떤 column도 이웃에서 높이를 받지 않는다. 원인: 보드 grid가 row를 가장 긴 column에 맞췄고(`align-content:start`) 짧은 column이 거기에 늘어나서, 높이가 가장 붐비는 column을 따랐다 — 독립도 전체도 아니었다 (T10-2 후속)
   - 완료 기준: 렌더된 창에서 카드가 어떻든 모든 column이 보드 위에서 아래까지 뻗고, 카드가 넘치는 column은 자기 안에서 스크롤하며, 렌더링을 screenshot으로 관측한다.
-- [~] T10-4 새 이슈 row는 column 맨 아래에 고정된다: 카드 목록이 column을 채우고 자기 안에서 스크롤하며, 카드가 몇 개든 row는 그 아래에 계속 보인다 (T10-3 후속 — T10-3이 모든 column에 보드 전체 높이를 주었다)
+- [o] T10-4 새 이슈 row는 column 맨 아래에 고정된다: 카드 목록이 column을 채우고 자기 안에서 스크롤하며, 카드가 몇 개든 row는 그 아래에 계속 보인다 (T10-3 후속 — T10-3이 모든 column에 보드 전체 높이를 주었다)
   - 완료 기준: 렌더된 창에서 row가 짧은 column, 빈 column, 넘치는 column 모두 column 바닥에 놓이고, 렌더링을 screenshot으로 관측한다.
 - [o] T11 항목에 사람과 날짜: 항목 title이 `@assignee`와 마감 date·datetime(`YYYY-MM-DD`, `YYYY-MM-DDTHH:MM[:SS]`, zone 선택)으로 끝날 수 있고 문서가 사람 table(`id`/`name` header)을 선언된 사람의 registry로 가지며 빈 담당자는 self다 — 이름을 추측하지 않는다 — items·people surface가 이들을 노출한다 (T4.3 선행)
   - 완료 기준: codec이 끝 token들을 title에서 분리하고 시간이 붙은 마감도 받으며 `All("items")`이 list·table 항목 모두에 assignee·due를 실고 `All("people")`이 사람 행을 반환하며 sidecar의 items answer가 assignee·due column을 얻고 `people` answer를 가진다.
