@@ -1,5 +1,5 @@
 <!-- doc-id: execution-checklist -->
-<!-- source-sha256: f9dcab565ac486acc847a90d3ded14c66233738f6b1968e38fcb902cbca1d8ba -->
+<!-- source-sha256: 73606bf47f2e6cb0dab026dade5cb57eff6574130d030cbe674d77a75a052c51 -->
 # 실행 체크리스트
 
 ## T1a 설계 session
@@ -14,6 +14,8 @@
   - 완료 기준: config/checklist.json과 config/documents.json을 작성한 상태에서 vendored tree에 `make kit-check`와 `make documents-check`가 통과한다.
 - [o] T1.3 stopgap ID 참조 검사기를 등록한다 (T1.2 선행)
   - 완료 기준: docs/의 모든 task ID token이 checklist 항목으로 해석되고 그 검사가 문서 tooling의 일부가 된다.
+- [o] T1.3-1 참조 검사는 kit 검사처럼 Git이 무시하지 않는 checkout의 file을 읽는다 (T1.3 후속). 원인: 검사가 directory tree 전체를 돌아, 무시되는 `.claude/worktrees/` 아래 agent worktree와 그 kit fixture 때문에 같은 checkout에서 `make documents-check`는 통과하고 `make refs-check`는 실패했다
+  - 완료 기준: 무시되는 directory 아래의 문서는 읽지 않고 Git이 무시하지 않는 새 문서는 읽으며, 검사가 kit의 `trackedFiles`를 쓰고, agent worktree가 있는 상태에서 `node --test tests/check-refs.test.mjs`와 `make refs-check`가 통과한다.
 
 ## T1b 명세
 

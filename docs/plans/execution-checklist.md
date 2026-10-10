@@ -13,6 +13,8 @@
   - Completion criteria: `make kit-check` and `make documents-check` pass on the vendored tree with config/checklist.json and config/documents.json authored.
 - [o] T1.3 Register the stopgap ID reference checker (requires T1.2)
   - Completion criteria: every task ID token in docs/ resolves to a checklist item and the check is part of the document tooling.
+- [o] T1.3-1 The reference check reads the files of the checkout that Git does not ignore, as the kit checks do (follow-up of T1.3). Cause: it walked the whole directory tree, so the ignored agent worktrees under `.claude/worktrees/` and their kit fixtures made `make refs-check` fail while `make documents-check` passed on the same checkout
+  - Completion criteria: a document under an ignored directory is not read and a new document that Git does not ignore is; the check uses kit's `trackedFiles`; `node --test tests/check-refs.test.mjs` and `make refs-check` pass with agent worktrees present.
 
 ## T1b Specifications
 

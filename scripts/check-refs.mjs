@@ -1,17 +1,16 @@
 // The reference check: every task ID that a document selected by config/documents.json names in its prose resolves to an
 // item of a checklist of config/checklist.json. Prose excludes fenced blocks and inline code spans, so a grammar example
-// is not a reference. A stopgap until the checklist application reads its own corpus; the findings carry
-// { file, line, column, rule, message } like the kit checks.
-import { readFileSync, readdirSync } from 'node:fs';
+// is not a reference. It reads the files of the checkout that Git does not ignore, as the kit checks do. A stopgap
+// until the checklist application reads its own corpus; the findings carry { file, line, column, rule, message } like
+// the kit checks.
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { loadConfig, readChecklist } from './kit/checklist.mjs';
 import { proseLines } from './kit/markdown.mjs';
 import { matchesAny } from './kit/glob.mjs';
 import { readJson } from './kit/files.mjs';
-
-const walk = (root, dir = '') => readdirSync(path.join(root, dir), { withFileTypes: true })
-  .flatMap(entry => (entry.isDirectory() ? walk(root, path.join(dir, entry.name)) : [path.join(dir, entry.name).replaceAll('\\', '/')]));
+import { trackedFiles } from './kit/tracked-files.mjs';
 
 /**
  * Reads the checklists of `root` and the prose of every selected document and returns
@@ -32,7 +31,7 @@ export function checkReferences(root) {
   const patterns = config.trackers.map(tracker => new RegExp(`(?<![\\w.])(?:${tracker.idPattern})(?![\\w-])(?!\\.\\d)`, 'g'));
   let files = 0;
   let references = 0;
-  for (const file of walk(root)) {
+  for (const file of trackedFiles(root)) {
     if (!file.endsWith('.md') || !matchesAny(documents.include, file) || matchesAny(documents.exclude ?? [], file)) continue;
     files += 1;
     for (const line of proseLines(readFileSync(path.join(root, file), 'utf8'))) {

@@ -1,6 +1,7 @@
 // Tests of the reference check (scripts/check-refs.mjs): every task ID that a selected document names in prose resolves
 // to an item of a checklist, and prose excludes fenced blocks and inline code.
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -26,6 +27,7 @@ function checkout(t, files) {
     mkdirSync(path.dirname(path.join(root, name)), { recursive: true });
     writeFileSync(path.join(root, name), text);
   }
+  execFileSync('git', ['init', '-q'], { cwd: root });
   return root;
 }
 
@@ -41,6 +43,20 @@ test('a task ID that names no checklist item is a finding with its place', (t) =
   const found = checkReferences(root);
   assert.deepEqual(references(found), [['docs/spec/a.md', 3, 14, 'refs-unresolved', 'the task T9.9 names no checklist item']]);
   assert.equal(found.references, 4);
+});
+
+test('a document that Git ignores is not read, and a new document that it does not ignore is', (t) => {
+  const root = checkout(t, {
+    'config/checklist.json': JSON.stringify(CHECKLIST),
+    'config/documents.json': JSON.stringify(DOCUMENTS),
+    '.gitignore': 'docs/copy/\n',
+    'docs/plans/list.md': '# List\n\n- [o] T1 Write the parser.\n',
+    'docs/copy/a.md': '# A\n\nT9.9 names no item.\n',
+    'docs/spec/b.md': '# B\n\nT8.8 names no item.\n',
+  });
+  const found = checkReferences(root);
+  assert.deepEqual(references(found), [['docs/spec/b.md', 3, 1, 'refs-unresolved', 'the task T8.8 names no checklist item']]);
+  assert.equal(found.files, 2);
 });
 
 test('a task ID inside inline code or a fenced block is not a reference', (t) => {
