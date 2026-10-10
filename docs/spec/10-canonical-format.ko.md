@@ -1,5 +1,5 @@
 <!-- doc-id: spec-canonical-format -->
-<!-- source-sha256: f065a147c01f2b13cca8aec2fc2959307e08488902f9896d8c51cf53193e5a16 -->
+<!-- source-sha256: cb3112def0f42ffe399667ae83cb4c7022e59420ab2a00d829beff222d1ce6f6 -->
 # Canonical format
 
 [English](10-canonical-format.md)
@@ -92,7 +92,7 @@ column 섹션 — 은 payload다: renderer는 이를 행과 함께 옮기고 그
 - body가 아닌 모든 `markdown` column은 level L 행 scope의 column 이름을 가진 섹션이다: non-null column의 섹션은 언제나 있고, nullable column의 섹션은 값이 NULL일 때에만 없다. 없는 non-null 섹션은 읽기에서 `format.block`, 쓰기에서 `CONSTRAINT`다. 비어 있는 섹션은 빈 텍스트다. body는 NULL이 아니며 섹션이 아니다. 자식 블록은 자식 table 이름을 가진 level L heading이다. 선언되지 않은 level L heading은 `format.section`이다. 근거: non-null 값은 언제나 쓰이므로 그 섹션이 없을 수 없고, NULL 값에는 쓸 텍스트가 없으므로 섹션이 없다.
 - 값은 file 안에서 framing된다: 값이 비어 있지 않을 때에만 heading 뒤에 빈 줄이 서고, 값의 줄들이 따르며, 뒤따르는 요소가 있으면 그 앞에 빈 줄이 선다. 값은 줄 바꿈으로 시작하거나 끝나지 않으며, 양 끝에 공백만 있는 줄을 담지 않는다. 그런 값의 쓰기는 `CONSTRAINT`다. 근거: framing 빈 줄은 요소를 가르므로, 줄 바꿈으로 시작하거나 끝나는 값은 framing이 바뀐 채 읽히고, 양 끝의 공백만 있는 줄은 framing 줄로 읽힌다.
 - framing 빈 줄은 skeleton이다: 읽을 때 값의 양 끝에 있는 추가 빈 줄이나 공백만 있는 줄은 값의 일부가 아니며 `format.noncanonical`이며, 요소가 여전히 다시 읽히는 framing 빈 줄의 누락도 `format.noncanonical`이다. 다만 field list의 마지막 항목 바로 뒤에 오는 body 줄은 `format.block`이다. `flowmark canon`이 둘 다 고친다.
-- 값은 최상위 setext heading을 담지 않는다: 값의 최상위 문단의 줄 바로 뒤에 `=`만 또는 `-`만 있는 줄(들여쓰기 최대 세 칸, 뒤의 공백이나 tab은 있어도 된다)은 쓰기에서 `CONSTRAINT`이며, 읽기에서는 CommonMark가 setext heading으로 읽는 곳이 heading이다. 근거: 최상위 setext 밑줄은 값의 마지막 줄을 최상위 heading으로 바꾼다.
+- 값은 최상위 setext heading을 담지 않는다: 값의 최상위 문단의 줄 바로 뒤에 `=`만 또는 `-`만 있는 줄(들여쓰기 최대 세 칸, 뒤의 공백이나 tab은 있어도 된다)은 쓰기에서 `CONSTRAINT`이며, 읽기에서는 CommonMark가 setext heading으로 읽는 곳이 heading이다. 근거: 최상위 setext 밑줄은 값의 마지막 줄을 최상위 heading으로 바꾸며, setext heading은 level 1 또는 2이고 모든 행 scope의 level L은 2 이상(`files` 행은 2, level h의 상세 섹션 안에서는 h + 1 ≥ 3)이므로 L보다 깊은 setext heading은 없다: 값의 모든 최상위 setext heading이 섹션 경계이며, 이 규칙이 그 모두를 거절한다.
 - 값이 fence나 HTML block을 열린 채로 남기는 것은, 그 block이 뒤따르는 요소를 CommonMark 구조에서 흡수할 때에만 거절한다: 쓰기에서는 `CONSTRAINT`, 읽기에서는 `format.block`이며, 그 요소를 어느 쓰기가 놓든 마찬가지이고 검사는 쓰기가 만드는 file 전체에 대해 돈다. 뒤따르는 최상위 요소가 닫는 컨테이너(block quote나 list 항목) 안에 열린 채 남은 block은 결함이 아니다. 최상위에서 열린 fence는 끝까지 모든 것을 흡수하므로 읽을 때 뒤따르는 요소 앞에 설 수 없다: fence 안의 heading은 경계가 아니므로, 값은 CommonMark가 읽는 대로 그 fence가 닫히는 곳이나 file 끝까지 이어진다. 근거: 뒤따르는 요소를 흡수하는 열린 fence나 HTML block은 값이 다시 읽히는 내용을 바꾸므로, file이 viewer가 보여 주는 것과 다르게 읽힌다.
 - 자식 블록 섹션은 블록이 행을 하나 이상 가질 때만 쓴다 — 빈 블록과 없는 블록은 모두 행이 0개라는 뜻이므로, 정식 형식은 하나뿐이다(P1). 자식 행이 없는 부모 행은 블록 heading을 갖지 않으며, 빈 블록 heading은 `format.noncanonical`이다.
 - `markdown` column은 모든 저장에서 언제나 행 scope의 섹션이다 — field나 cell이 아니다.

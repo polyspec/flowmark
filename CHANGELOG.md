@@ -3,6 +3,8 @@
 
 ## Unreleased
 
+- T12.1-7: the specifications ground the setext rule. A setext heading is of level 1 or 2 and every row scope's level L is at least 2, so no setext underline lies deeper than L; the setext refusal of spec 10 therefore covers every top-level setext heading in a value, and the plan states the same grounding.
+
 - T12.1-10: the specifications state one rule for section boundaries and value ends, the CommonMark 0.31.2 block structure. A top-level heading is an ATX heading or a setext heading closing a top-level paragraph; fences, HTML blocks of every type (1 to 7), containers, lazy continuation lines and the interruption rules count as CommonMark states them. A value that leaves a fence or an HTML block open is refused only when the following element would be taken into it, and a block left open inside a container that a following top-level element closes is no fault. This replaces the narrower sentences of T12.1-6 and T12.1-8.
 
 - T12.2.2-2: the block scanner reads CommonMark containers. A heading inside a list item (by the content indent of

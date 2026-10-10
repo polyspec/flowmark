@@ -151,7 +151,10 @@ and the column sections — are payload: the renderer moves them with their row 
 - A value holds no top-level setext heading: a line of only `=` or only `-`, of at most three spaces of
   indent and any trailing spaces or tabs, directly after a line of a top-level paragraph of the value, is
   `CONSTRAINT` on write; on read, a setext heading is a heading where CommonMark reads one. Grounding: a
-  top-level setext underline turns the value's last line into a top-level heading.
+  top-level setext underline turns the value's last line into a top-level heading, and a setext heading is of
+  level 1 or 2 while every row scope's level L is at least 2 (2 for a `files` row, h + 1 ≥ 3 inside a detail
+  section at level h), so no setext heading lies deeper than L: every top-level setext heading in a value is a
+  section boundary, and the rule refuses every one of them.
 - A value that leaves a fence or an HTML block open is refused only when the element that follows would be
   taken into it under the CommonMark block structure: `CONSTRAINT` on write, whichever write places that element (the check
   runs on the file the write produces), and `format.block` on read. A block left open inside a container
