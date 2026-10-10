@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database-checklist -->
-<!-- source-sha256: c282a7bdebb46512a7a4d823d3bac56ee5d3d5d9c5aa92551fd1c7abd833d122 -->
+<!-- source-sha256: f905c0038af7f45720a074e510692e7008e04e692af5e249718ff9c05ddbbf1d -->
 # markdown database checklist
 
 ## T12 markdown database
@@ -27,6 +27,12 @@
   - 완료 기준: spec 10과 그 twin이 규칙을 근거와 함께 적고, 더 좁은 T12.1-6과 T12.1-8의 문장이 그것으로 바뀌며, 이 항목의 문구를 범위로 한 적대 검증을 거치고, `make documents-check`와 `make refs-check`가 통과한다.
 - [o] T12.1-11 spec 10이 열린 block의 읽기 쪽을 있는 그대로 적는다: 열린 채 남은 fence나 HTML block이 흡수한 줄은 CommonMark block 구조에서 경계가 아니고 viewer도 그 block 안에 보여 주므로 읽기에서 값의 텍스트다. 그런 block 뒤에 요소를 두는 쓰기만 `CONSTRAINT`다. T12.1-8이 적고 T12.1-10이 남긴 읽기의 `format.block` 구절은 어떤 reader도 관찰할 수 없는 결함을 가리키므로 철회한다. 원인: T12.2.2-3 codec이 그 읽기 쪽이 비어 있음을 찾았다 (T12.1-10, T12.2.2-3 후속)
   - 완료 기준: spec 10, 50, plan과 그 twin이 규칙을 근거와 함께 적고, 이 항목의 문구를 범위로 한 적대 검증을 거치며, `make documents-check`와 `make refs-check`가 통과한다.
+- [ ] T12.1-12 spec이 `document` codec이 규칙 없이 내린 판단을 적는다: document file의 행은 H1 줄 바로 아래에 빈 줄 하나를 두고 서며 다른 개수는 `format.noncanonical`이다. table의 구분 행은 column마다 `---`이며 다른 정렬 형식은 `format.noncanonical`, 그 밖은 `format.block`이다. 다른 table을 가리키는 상세 heading은 `format.block`이고 `row`의 대소문자 차이는 `format.noncanonical`이다. 두 행이 함께 가진 key의 상세 섹션은 하나만 상세 섹션을 가져도 섹션을 배정할 수 없으므로 `format.block`이다. 제목 token은 접두가 아니라 token 전체로 `<선언된 column>:`과 맞춘다. field 앞에서 list 제목을 끝내는 tab은 `format.block`이고, token 사이의 그 밖의 여분 space나 tab은 `format.noncanonical`이다. 쓰기 거절의 위치는 저장 순서의 그 행이다. 원인: T12.2.3 codec이 spec 10이 말하지 않는 곳에서 이것들을 골랐다 (T12.2.3 후속)
+  - 완료 기준: spec 10과 그 twin이 각 판정을 근거와 함께 적고, 이 항목의 문구를 범위로 한 적대 검증을 거치며, document codec 테스트가 사례마다 고정하는 spec 규칙을 밝히고, `make documents-check`와 `make refs-check`가 통과한다.
+- [ ] T12.2.2-5 codec이 CommonMark처럼 `#` 연속 뒤에 tab이 오는 ATX heading을 읽는다: `store/markdown.go`는 지금 space를 요구한다 (T12.2.2-3 후속)
+  - 완료 기준: commonmark.js 0.31.2에 고정한 허용과 거절 사례가 있고 `go test -count=1 ./store/`가 통과한다.
+- [ ] T12.2.2-6 codec이 T12.1-4의 상세 anchor 충돌 규칙을 적용한다: 끝 숫자 run을 뗀 fold(F_G나 F_M)가 상세 anchor와 같은 상세 heading 아닌 heading, anchor와 같은 id를 정하는 attribute list, anchor와 같은 HTML `id`나 `name`은 쓰기에서 `CONSTRAINT`, 읽기에서 `format.block`이다. 지금은 어느 codec도 이를 검사하지 않는다 (T12.1-4, T12.2.3 후속)
+  - 완료 기준: fold마다, 끝 숫자 제거, attribute list 형식마다, HTML에 대해 files와 document 저장에서 허용과 거절 사례가 있고 `go test -count=1 ./...`가 통과한다.
 - [o] T12.2.2-4 `files` codec이 T12.1-9의 보이지 않는 문자 규칙을 `files` 행이 가진 두 한 줄 자리, 즉 H1 제목과 field list 값에 적용한다: 쓰기의 끝 거절, 읽기 분류(CommonMark가 떼어내는 자리의 space나 tab은 `format.noncanonical`, 끝의 그 밖의 보이지 않는 문자는 `format.block`), U+1680과 prepended concatenation mark의 제외. Default_Ignorable_Code_Point table은 `internal/unicodedcp/testdata`에 둔 Unicode 17.0.0 data 파일에서 생성하며 테스트가 최신성을 확인한다. 같은 규칙이 덮는 list 행과 table cell은 T12.2.3의 것이다. T12.2.3은 거기서 공유 helper `invisible`과 `invisibleAtEnd`를 적용하며, bare token의 제외, 따옴표 쓰기와 그 읽기 규칙을 함께 적용한다. 원인: T12.1-9가 codec이 검사하는 공백을 바꾸었고, Go의 `unicode` 패키지에는 Default_Ignorable_Code_Point 속성이 없으므로 codec은 Unicode 17.0.0 data에서 생성한 table로 그것을 읽으며, 그 table의 최신성은 테스트가 확인한다 (T12.1-9 후속; T12.2.2-2 필요)
   - 완료 기준: 문자 부류마다, 자리마다(H1 제목, field list 값, list 제목과 field, table cell) 허용과 거절 사례가 있고, 생성된 table의 Unicode 17.0.0 data 대비 최신성 테스트가 있으며, fuzz target이 새 사례로 seed되고, `go test -count=1 ./...`, `make documents-check`, `make refs-check`가 통과한다.
 - [o] T12.2.2-3 `files` codec이 T12.1-8과 T12.1-10의 열린 block 규칙을 적용한다: block scanner가 모든 CommonMark type의 HTML block을 읽고, 흡수할 뒤따르는 요소 앞에서 fence나 HTML block을 열어 두는 쓰기는 `CONSTRAINT`다. 읽기에서 그런 block이 흡수한 줄은 CommonMark block 구조에서 경계가 아니므로 값의 텍스트이며, 읽기 쪽에는 보고할 결함이 없다(T12.1-11이 spec 10에 이를 적는다) (T12.1-8 후속; T12.2.2-2와 T12.1-10 필요. T12.1-10의 더 넓은 규칙, 즉 모든 HTML block type과 뒤따르는 요소를 흡수할 때만 거절되는 열린 block을 적용한다)
