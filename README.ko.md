@@ -1,5 +1,5 @@
 <!-- doc-id: readme -->
-<!-- source-sha256: b764b63ae7797429505cfcb36114203e6a52ada4a00caa26fcc870a736f03f20 -->
+<!-- source-sha256: ca6efe0ec51684f40d4e70d1f4a77ac7bb8366b3ee394668f4692591ebb276f5 -->
 # flowmark
 
 [English](README.md)
@@ -8,15 +8,18 @@ markdown 문법을 가진 텍스트 DB. 파일 자체가 database다 — markdow
 canonical rendering, corpus-global 제약(type, key, foreign key, state machine)과 transaction을 제공하며
 외부 database는 필요 없다.
 
-- **orm이 core다**: [polyspec/orm](https://github.com/polyspec/orm)이 MySQL·PostgreSQL·SQLite에 이어
-  markdown을 네 번째 backend로 갖는다. 모든 읽기와 쓰기는 orm model API를 지나며, CLI와 MCP는
-  자체 write logic이 없는 thin adapter다.
-- **flowmark는 통합·응용 layer다**: database, GitHub, Jira 등 tracker와의 양방향 동기화(하나의 계약을 가진
-  adapter architecture), 그리고 그 위의 local 칸반 보드와 issue tracker — data를 로컬에서, git 안에서,
-  오프라인으로 관리한다.
-- 첫 application은 이 저장소가 스스로 운영하는 checklist·changelog engine이다.
+- **flowmark가 엔진이다**: Go binary 하나가 markdown database 엔진과 그 얇은 face — server, CLI, MCP
+  server, soksak sidecar — 를 담는다. corpus의 `dbspec/` catalog가 모든 table과 그 행이 저장되는 방식을
+  선언한다: 행마다 file 하나, 모든 행을 file 하나에, 또는 부모 행 안에.
+- **orm은 database로서 접속한다**: [polyspec/orm](https://github.com/polyspec/orm)은 query layer이고,
+  client는 MySQL, PostgreSQL, SQLite에 접속하듯 DSN `markdown://`으로 flowmark에 접속한다.
+- **엔진 위에**: database, GitHub, Jira 등 tracker와의 양방향 동기화(하나의 계약을 가진 adapter
+  architecture), 그리고 칸반·목록·간트 view가 soksak plugin에서 도는 issue 추적 응용 schema — data를
+  로컬에서, git 안에서, 오프라인으로 관리한다.
 
-상태: 설계 단계. 판정은 [docs/plans/design-plan.ko.md](docs/plans/design-plan.ko.md)에,
-실행 추적은 [docs/plans/execution-checklist.ko.md](docs/plans/execution-checklist.ko.md)에 있다.
+상태: 엔진을 저장 문법 위에 다시 짓는 중이다. 판정은 [docs/plans/design-plan.ko.md](docs/plans/design-plan.ko.md)와
+[docs/plans/markdown-database-plan.ko.md](docs/plans/markdown-database-plan.ko.md)에, 추적은
+[docs/plans/execution-checklist.ko.md](docs/plans/execution-checklist.ko.md)와
+[docs/plans/markdown-database-checklist.ko.md](docs/plans/markdown-database-checklist.ko.md)에 있다.
 공유 tooling은 [polyspec/kit](https://github.com/polyspec/kit)의 vendored copy다
 (`make kit-sync KIT_TAG=<tag>`가 갱신하고 `make kit-check`가 검증한다).
