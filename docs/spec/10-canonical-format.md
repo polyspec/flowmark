@@ -125,10 +125,15 @@ and the column sections — are payload: the renderer moves them with their row 
 ## Sections and their values
 
 - The body and every `markdown` column value of a row scope at level L end at the next top-level heading
-  of level ≤ L, counted only outside fenced blocks and outside any container, a block quote or a list
-  item (CommonMark block structure). A value holds only top-level headings deeper than L; a write of a value with
-  a top-level heading line of level ≤ L outside a fence is `CONSTRAINT`. Grounding: a heading inside a
-  container is content of that container, not a section of the row.
+  of level ≤ L. The block structure is the one CommonMark 0.31.2 parses: a top-level heading is an ATX
+  heading at top level, or a setext heading closing a top-level paragraph, and fences, HTML blocks of every type (1–7),
+  containers (block quotes and list items), lazy continuation lines and the rules on what may interrupt a
+  paragraph count exactly as CommonMark states them. A value holds only top-level headings deeper than L;
+  a write of a value with a top-level heading of level ≤ L is `CONSTRAINT`. Grounding: a file is read the
+  way a viewer reads it, so a value or a section can only be what CommonMark parses; a heading inside a
+  container is content of that container, not a section of the row; and a narrower list of constructs
+  either misses one (HTML types 6 and 7, lazy lines) or refuses a harmless one (a block open inside a
+  closed container).
 - Every `markdown` column other than the body is a section of the row scope at level L named by the
   column: a non-null column's section is always present, and a nullable column's section is absent
   exactly when its value is NULL. An absent non-null section is `format.block` on read and `CONSTRAINT`
@@ -144,19 +149,17 @@ and the column sections — are payload: the renderer moves them with their row 
   white space at either end would be read as a framing line.
 - The framing blank lines are skeleton: on read, a further blank line or line of only white space at either end of a value is not part of the value and is `format.noncanonical`, and so is a missing framing blank line where the element still reads back, except a body line directly after the last field-list item, which is `format.block`; `flowmark canon` repairs both.
 - A value holds no top-level setext heading: a line of only `=` or only `-`, of at most three spaces of
-  indent and any trailing spaces or tabs, outside a fence and outside any container, directly after a line
-  of a top-level paragraph, is `CONSTRAINT` on write; on read, a setext heading is a heading where CommonMark reads one.
-  A setext heading inside a container is not within this rule. A value that leaves a fence or an HTML
-  block of CommonMark types 1–5 open is `CONSTRAINT` when an element follows it, whichever write places
-  that element: the check runs on the file the write produces. On read, a file in which a value leaves
-  an HTML block of CommonMark types 1–5 open before a following element is `format.block`. An open
-  fence cannot stand before a following element on read: a heading inside a fence is no boundary, so
-  the value runs on to the fence's close or to the end of the file, as CommonMark reads it. Grounding:
-  a top-level setext underline turns the value's last line into a top-level heading, and an open fence
-  or HTML block takes in the element that follows, so either changes what the value reads back as; on
-  read a heading inside an open HTML block still ends the value, since only fences and containers hide
-  a heading, whereas CommonMark reads it as part of the block, so the file reads differently from what
-  a viewer shows. A heading inside a container changes no section boundary.
+  indent and any trailing spaces or tabs, directly after a line of a top-level paragraph of the value, is
+  `CONSTRAINT` on write; on read, a setext heading is a heading where CommonMark reads one. Grounding: a
+  top-level setext underline turns the value's last line into a top-level heading.
+- A value that leaves a fence or an HTML block open is refused only when the element that follows would be
+  taken into it under the CommonMark block structure: `CONSTRAINT` on write, whichever write places that element (the check
+  runs on the file the write produces), and `format.block` on read. A block left open inside a container
+  that a following top-level element closes is no fault. An open top-level fence takes in everything to the end of
+  the file, so on read it cannot stand before a following element: a heading inside a fence is no boundary,
+  and the value runs on to the fence's close or to the end of the file, as CommonMark reads it. Grounding:
+  an open fence or HTML block that takes in the element that follows changes what the value reads back as,
+  so the file reads differently from what a viewer shows.
 - A child block section is written only when the block holds at least one row — an empty block and an
   absent block both mean zero rows, so only one form can be canonical (P1); a parent row with no child
   rows has no block heading, and an empty block heading is `format.noncanonical`.

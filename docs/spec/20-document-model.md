@@ -99,7 +99,7 @@ so the same rows can be stored either way.
   `files` storage require `title` — the line text, the H1; a `table` storage may declare it as a
   cell. A declared title is non-null and refuses the empty text.
 - `body` is a `markdown` column and never NULL. It is the text of a `files` row after its H1 and
-  field list, or the text of a detail section before its first top-level heading (outside any container) of level ≤ h + 1; a row without a detail
+  field list, or the text of a detail section before its first top-level heading of level ≤ h + 1, by the CommonMark block structure of [canonical format](10-canonical-format.md#sections-and-their-values); a row without a detail
   section has the empty text as its body.
 - A view of kind kanban, list or gantt requires its entity table to declare both.
 
