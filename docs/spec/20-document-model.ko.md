@@ -1,5 +1,5 @@
 <!-- doc-id: spec-document-model -->
-<!-- source-sha256: b1d703674c5ce5b57aa91ba1fbff18a070c18b6ca79f32f95f7a67951a1f6438 -->
+<!-- source-sha256: 85cb6bcdf104d365ed853486f3f2d865ddca1030c987d3ce27f78c2d95c06e35 -->
 # 문서 모델
 
 [English](20-document-model.md)
@@ -85,7 +85,7 @@ aggregate냐 split이냐는 저장 선언이다. 논리 관계는 모든 저장�
   `title`을 요구하고 — 줄 텍스트, H1 — `table` 저장은 cell로 선언할 수 있다. 선언된 제목은 non-null이며
   빈 텍스트를 거절한다.
 - `body`는 `markdown` column이며 NULL이 아니다. `files` 행에서는 H1과 field list 뒤의 텍스트이고,
-  상세 섹션이 있는 행에서는 상세 섹션의 첫 최상위(컨테이너 밖) level ≤ h + 1 heading 앞 텍스트다. 상세 섹션이 없는 행의 body는
+  상세 섹션이 있는 행에서는 상세 섹션의 첫 최상위 level ≤ h + 1 heading 앞 텍스트다([canonical format](10-canonical-format.md#sections-and-their-values)의 CommonMark block 구조로). 상세 섹션이 없는 행의 body는
   빈 텍스트다.
 - 칸반, 목록, 간트 view는 entity table이 둘 다 선언할 것을 요구한다.
 

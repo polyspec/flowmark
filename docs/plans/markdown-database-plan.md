@@ -183,19 +183,23 @@ reimplements them.
   `files` storage require `title` (the line text, the H1); a `table` storage may declare it as a
   cell. The title is non-null and refuses the empty text. A title in an H1 whose final run of `#` follows a space or a tab, or that consists only of `#`, is written with its last `#` as `\#`; on read a final `\#` is the title's `#`, and an H1 closing sequence is `format.noncanonical`; a title whose decoded text is empty or ends in `\#` is `format.block` on read and `CONSTRAINT` on write, since the write rule cannot produce its H1 again.
 - `body` is a `markdown` column and never NULL. It lives in the row scope in every storage: the
-  text after the H1 of a file, or the text of the row's detail section before its first top-level heading (outside any container) of level ≤ h + 1; a row without a detail section has the empty text as its body.
+  text after the H1 of a file, or the text of the row's detail section before its first top-level heading of level ≤ h + 1 (CommonMark block structure); a row without a detail section has the empty text as its body.
 - A `files` row is, in order: the H1 title, the field list of its stored scalar columns when it has
   one, the body, then the level-2 sections (spec 10's document order is amended). The body and every `markdown`
-  column value of a row scope at level L end at the next top-level heading of level ≤ L, counted only
-  outside fenced blocks and outside any container, a block quote or a list item (CommonMark block
-  structure). A value holds only top-level headings deeper than L; a write of a value with a top-level
-  heading line of level ≤ L outside a fence is `CONSTRAINT`. A value holds no top-level setext heading:
+  column value of a row scope at level L end at the next top-level heading of level ≤ L. The block
+  structure is the one CommonMark 0.31.2 parses: a top-level heading is an ATX heading at top level, or a setext
+  heading closing a top-level paragraph, and fences, HTML blocks of every type (1–7), containers (block
+  quotes and list items), lazy continuation lines and the rules on what may interrupt a paragraph count
+  exactly as CommonMark states them. A value holds only top-level headings deeper than L; a write of a
+  value with a top-level heading of level ≤ L is `CONSTRAINT`. A value holds no top-level setext heading:
   a line of only `=` or only `-`, of at most three spaces of indent and any trailing spaces or tabs,
-  outside a fence and outside any container, directly after a line of a top-level paragraph, is
-  `CONSTRAINT` on write; on read, a setext heading is a heading where CommonMark reads one. A setext
-  heading inside a container is not within this rule. A value that leaves a fence or an HTML block of
-  CommonMark types 1–5 open is `CONSTRAINT` when an element follows it, whichever write places that
-  element; on read, a file in which a value leaves an HTML block of CommonMark types 1–5 open before a following element is `format.block` (a fence cannot: a heading inside it is no boundary).
+  directly after a line of a top-level paragraph of the value, is `CONSTRAINT` on write; on read, a setext
+  heading is a heading where CommonMark reads one. A value that leaves a fence or an HTML block open is
+  refused only when the element that follows would be taken into it under the CommonMark block structure: `CONSTRAINT`
+  on write, whichever write places that element, and `format.block` on read. A block left open inside a
+  container that a following top-level element closes is no fault. An open top-level fence takes in everything to
+  the end of the file, so on read it cannot stand before a following element (a heading inside a fence is
+  no boundary).
 - A view of kind kanban, list or gantt requires its entity table to declare both; `flowmark.dbs`
   declares them on `items`.
 

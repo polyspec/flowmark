@@ -1,8 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: bbe48d5c5ed7b545b33df1d1dba6004a40c841573c66bfe90a97af5e90905374 -->
+<!-- source-sha256: c6764a3ac2da0e0476e01d586da403d443adbad42ff383ca0c7dea038de3c488 -->
 # Changelog
 
 ## Unreleased
+
+- T12.1-10: 섹션 경계와 값의 끝에 대해 하나의 규칙, 즉 CommonMark 0.31.2 block 구조를 spec이 적는다. 최상위 heading은 ATX heading이거나 최상위 문단을 닫는 setext heading이며, fence, 모든 type(1~7)의 HTML block, 컨테이너, 게으른 연속 줄, 문단 중단 규칙은 CommonMark가 정한 그대로 센다. fence나 HTML block을 열어 둔 값은 뒤따르는 요소가 그 안으로 흡수될 때에만 거절하며, 뒤따르는 최상위 요소가 닫는 컨테이너 안에 열린 채 남은 block은 결함이 아니다. 이것은 T12.1-6과 T12.1-8의 좁은 문장을 대체한다.
 
 - T12.2.2-2: block scanner가 CommonMark container를 읽는다. list 항목(항목의 내용 들여쓰기 기준, 순서 있는 항목과
   tab 들여쓰기 항목 포함)이나 block quote 안의 heading, fence 안의 줄, type 1~5 HTML block 안의 줄은 섹션 경계가
