@@ -1,6 +1,7 @@
 package catalog_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -22,6 +23,12 @@ func writeCorpus(t *testing.T, files map[string]string) string {
 		t.Fatal(err)
 	}
 	for name, text := range files {
+		if strings.HasSuffix(name, "/") {
+			if err := os.MkdirAll(filepath.Join(dir, name), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			continue
+		}
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(text), 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -108,9 +115,6 @@ func TestLoadFixtureCatalog(t *testing.T) {
 	}
 	if !strings.HasPrefix(cat.ManifestHash, "sha256:") {
 		t.Fatalf("manifest hash = %q", cat.ManifestHash)
-	}
-	if want := []string{"ko"}; !reflect.DeepEqual(cat.Translations, want) {
-		t.Fatalf("translations = %v, want %v", cat.Translations, want)
 	}
 	var names []string
 	for _, tb := range cat.Tables {
@@ -278,12 +282,15 @@ func TestLoadRejectsMissingCatalogDirectory(t *testing.T) {
 }
 
 func TestLoadRejectsCorpusWithoutDocument(t *testing.T) {
-	root := writeCorpus(t, map[string]string{"flowmark.json": `{"translations": []}`})
+	root := writeCorpus(t, map[string]string{"notes.md": "# notes\n"})
 	cat, diags := catalog.Load(root)
 	expectRejected(t, cat, diags)
-	if !strings.Contains(diags[0].Message, "no .dbs document") {
-		t.Fatalf("diagnostics = %+v", diags)
+	for _, d := range diags {
+		if d.File == "dbspec" && strings.Contains(d.Message, "no .dbs document") {
+			return
+		}
 	}
+	t.Fatalf("no diagnostic for a corpus without a document: %+v", diags)
 }
 
 func TestLoadRejectsTableWithoutStore(t *testing.T) {
@@ -499,44 +506,250 @@ table views {`
 	expectTableDiag(t, diags, text, "node", "cycle")
 }
 
-func TestLoadTranslations(t *testing.T) {
-	app := fixtureText(t)
+func TestCatalogHasNoTranslations(t *testing.T) {
+	if _, ok := reflect.TypeOf(catalog.Catalog{}).FieldByName("Translations"); ok {
+		t.Fatal("Catalog still has a Translations field")
+	}
+}
+
+// TestLoadDbspecEntries pins what dbspec/ may hold: the .dbs set only; a
+// hidden entry is skipped; any other file or folder is a catalog diagnostic.
+func TestLoadDbspecEntries(t *testing.T) {
 	cases := []struct {
-		name    string
-		json    *string
-		want    []string
-		diagMsg string
+		name  string
+		extra map[string]string
+		diag  string // the file of the diagnostic, relative to the root; "" accepts
+		msg   string
 	}{
-		{name: "absent", want: nil},
-		{name: "two languages", json: ptr(`{"translations": ["ko", "ja"]}`), want: []string{"ko", "ja"}},
-		{name: "unknown key", json: ptr(`{"translations": ["ko"], "extra": 1}`), diagMsg: `unknown key "extra"`},
-		{name: "non-string entry", json: ptr(`{"translations": ["ko", 1]}`), diagMsg: "must be strings"},
-		{name: "not an array", json: ptr(`{"translations": "ko"}`), diagMsg: "must be an array"},
-		{name: "invalid JSON", json: ptr(`{"translations": [`), diagMsg: "invalid JSON"},
+		{name: "hidden file is skipped", extra: map[string]string{".DS_Store": "x"}},
+		{name: "hidden folder is skipped", extra: map[string]string{".cache/": ""}},
+		{name: "settings file is removed", extra: map[string]string{"flowmark.json": `{"translations": ["ko"]}`}, diag: "dbspec/flowmark.json", msg: "unexpected file in dbspec/: flowmark.json"},
+		{name: "text file is a diagnostic", extra: map[string]string{"notes.txt": "x"}, diag: "dbspec/notes.txt", msg: "unexpected file in dbspec/: notes.txt"},
+		{name: "upper suffix is a diagnostic", extra: map[string]string{"extra.DBS": "x"}, diag: "dbspec/extra.DBS", msg: "unexpected file in dbspec/: extra.DBS"},
+		{name: "folder is a diagnostic", extra: map[string]string{"sub/": ""}, diag: "dbspec/sub", msg: "unexpected directory in dbspec/"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			files := map[string]string{"flowmark.dbs": app}
-			if c.json != nil {
-				files["flowmark.json"] = *c.json
+			files := map[string]string{"flowmark.dbs": fixtureText(t)}
+			for k, v := range c.extra {
+				files[k] = v
 			}
 			root := writeCorpus(t, files)
 			cat, diags := catalog.Load(root)
-			if c.diagMsg != "" {
-				expectRejected(t, cat, diags)
-				if diags[0].File != "dbspec/flowmark.json" || diags[0].Rule != "catalog" || diags[0].Line < 1 || !strings.Contains(diags[0].Message, c.diagMsg) {
-					t.Fatalf("diagnostics = %+v, want a flowmark.json diagnostic containing %q", diags, c.diagMsg)
+			if c.diag == "" {
+				if len(diags) != 0 || cat == nil {
+					t.Fatalf("diagnostics = %+v, want an accepted catalog", diags)
 				}
 				return
 			}
-			if len(diags) != 0 {
-				t.Fatalf("diagnostics = %+v", diags)
+			expectRejected(t, cat, diags)
+			for _, d := range diags {
+				if d.File == c.diag && d.Rule == "catalog" && d.Line == 1 && d.Column == 1 && strings.Contains(d.Message, c.msg) {
+					return
+				}
 			}
-			if len(cat.Translations) != len(c.want) || (len(c.want) > 0 && !reflect.DeepEqual(cat.Translations, c.want)) {
-				t.Fatalf("translations = %v, want %v", cat.Translations, c.want)
+			t.Fatalf("no diagnostic %q at %s in %+v", c.msg, c.diag, diags)
+		})
+	}
+}
+
+// TestLoadRejectsReservedTableName pins the Windows device names as table
+// names. orm's name grammar admits lowercase names only, so the names are
+// lowercase; a name that only contains a device name is accepted.
+func TestLoadRejectsReservedTableName(t *testing.T) {
+	reject := []string{"con", "prn", "aux", "nul", "com0", "com9", "lpt0", "lpt9"}
+	accept := []string{"cons", "console", "com10", "lpt", "con_1", "prnt"}
+	for _, name := range reject {
+		t.Run("reject "+name, func(t *testing.T) {
+			root, text := editedCorpus(t, [2]string{"table views {", "table " + name + " {"})
+			cat, diags := catalog.Load(root)
+			expectRejected(t, cat, diags)
+			expectTableDiag(t, diags, text, name, "reserved file name")
+		})
+	}
+	for _, name := range accept {
+		t.Run("accept "+name, func(t *testing.T) {
+			root, _ := editedCorpus(t, [2]string{"table views {", "table " + name + " {"})
+			cat, diags := catalog.Load(root)
+			if len(diags) != 0 || cat == nil {
+				t.Fatalf("diagnostics = %+v, want an accepted catalog", diags)
 			}
 		})
 	}
 }
 
-func ptr(s string) *string { return &s }
+// childBlock is a block table under items, named name, with one row per item.
+func childBlock(name string) string {
+	return fmt.Sprintf(`table %[1]s {
+  id i64 identity
+  item varchar(32)
+  label varchar(64)
+  primary key (id)
+  index ix_%[1]s_item (item)
+  foreign key fk_%[1]s_item (item) references items (id) on delete restrict on update restrict
+  settings {
+    store block fk_%[1]s_item table
+  }
+}
+
+table views {`, name)
+}
+
+// TestLoadRejectsChildNamedLikeMarkdownColumn pins that a child block table
+// may not be named like a markdown column of its parent.
+func TestLoadRejectsChildNamedLikeMarkdownColumn(t *testing.T) {
+	cases := []struct {
+		name   string
+		table  string
+		accept bool
+	}{
+		{name: "child named like a column", table: "evidence"},
+		{name: "child named like another column", table: "cause"},
+		{name: "child named like no column", table: "notes", accept: true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			root, text := editedCorpus(t, [2]string{"table views {", childBlock(c.table)})
+			cat, diags := catalog.Load(root)
+			if c.accept {
+				if len(diags) != 0 || cat == nil {
+					t.Fatalf("diagnostics = %+v, want an accepted catalog", diags)
+				}
+				return
+			}
+			expectRejected(t, cat, diags)
+			expectTableDiag(t, diags, text, c.table, "named like markdown column")
+		})
+	}
+}
+
+// noteGroup is a files table note with a block tag and a grandchild block
+// review; its markdown column is named column.
+func noteGroup(column string) string {
+	return fmt.Sprintf(`table note {
+  id varchar(32)
+  title varchar(255)
+  body text
+  %[1]s text null
+  primary key (id)
+  settings {
+    key_prefix 'N'
+    store files
+    title title
+    body body
+    markdown body
+    markdown %[1]s
+  }
+}
+
+table tag {
+  id i64 identity
+  note varchar(32)
+  label varchar(64)
+  primary key (id)
+  index ix_tag_note (note)
+  foreign key fk_tag_note (note) references note (id) on delete restrict on update restrict
+  settings {
+    store block fk_tag_note table
+  }
+}
+
+table review {
+  id i64 identity
+  tag_id i64
+  primary key (id)
+  index ix_review_tag (tag_id)
+  foreign key fk_review_tag (tag_id) references tag (id) on delete restrict on update restrict
+  settings {
+    store block fk_review_tag table
+  }
+}
+
+table views {`, column)
+}
+
+// itemNotes is a block table under items with one nullable markdown column
+// named column.
+func itemNotes(column string) string {
+	return fmt.Sprintf(`table item_notes {
+  id i64 identity
+  item varchar(32)
+  body text
+  %[1]s text null
+  primary key (id)
+  index ix_item_notes_item (item)
+  foreign key fk_item_notes_item (item) references items (id) on delete restrict on update restrict
+  settings {
+    store block fk_item_notes_item table
+    body body
+    markdown body
+    markdown %[1]s
+  }
+}
+
+table views {`, column)
+}
+
+// notesDoc is a document table of its own file, named notes.
+const notesDoc = `table notes {
+  id varchar(32)
+  title varchar(255)
+  primary key (id)
+  settings {
+    key_prefix 'M'
+    store document table
+    title title
+  }
+}
+
+table views {`
+
+// TestLoadRejectsNameOfSameFileTable pins that a markdown column or a block
+// table may not be named like another table whose detail sections stand in
+// the same file: the document table with its block descendants, or the files
+// table's file with its block descendants. A table of another file is not.
+func TestLoadRejectsNameOfSameFileTable(t *testing.T) {
+	cases := []struct {
+		name  string
+		edits [][2]string
+		owner string // the table the diagnostic is located at; "" accepts
+		msg   string
+	}{
+		{
+			name:  "column of items named like a document of another file",
+			edits: [][2]string{{"  retry text null\n  primary key (id)\n  index ix_items_parent", "  retry text null\n  notes text null\n  primary key (id)\n  index ix_items_parent"}, {"    markdown retry\n    checkbox", "    markdown retry\n    markdown notes\n    checkbox"}, {"table views {", notesDoc}},
+		},
+		{
+			name:  "column of a block named like its document",
+			edits: [][2]string{{"table views {", itemNotes("items")}},
+			owner: "item_notes", msg: "named like table items",
+		},
+		{
+			name:  "column of a block named like no table of its file",
+			edits: [][2]string{{"table views {", itemNotes("people")}},
+		},
+		{
+			name:  "column of a files row named like its grandchild block",
+			edits: [][2]string{{"table views {", noteGroup("review")}},
+			owner: "note", msg: "named like table review",
+		},
+		{
+			name:  "column of a files row named like no table of its file",
+			edits: [][2]string{{"table views {", noteGroup("summary")}},
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			root, text := editedCorpus(t, c.edits...)
+			cat, diags := catalog.Load(root)
+			if c.owner == "" {
+				if len(diags) != 0 || cat == nil {
+					t.Fatalf("diagnostics = %+v, want an accepted catalog", diags)
+				}
+				return
+			}
+			expectRejected(t, cat, diags)
+			expectTableDiag(t, diags, text, c.owner, c.msg)
+		})
+	}
+}

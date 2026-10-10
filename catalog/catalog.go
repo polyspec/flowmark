@@ -17,7 +17,6 @@ type Diagnostic struct {
 type Catalog struct {
 	Documents    []*dbspec.Document
 	ManifestHash string
-	Translations []string
 	Tables       []*Table
 }
 

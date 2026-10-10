@@ -1,8 +1,17 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: b4d27200fcedff32f9af184cd74914b1d07a0d4f2344907c6c5167889db280da -->
+<!-- source-sha256: 683d49a88c52436a94676656ec03e1548e624e9ab9a2014dc0c6a37ce17018d8 -->
 # Changelog
 
 ## Unreleased
+
+- T12.2.1-1: catalog는 `.dbs` 집합만 읽는다. `dbspec/flowmark.json`과 그 `translations` 필드를
+  settings reader, Catalog API의 `Translations` 필드와 함께 제거한다. `dbspec/`의 다른 항목, 즉 다른
+  이름의 file이나 folder는 모두 `catalog` 진단이며, 숨김 항목은 건너뛴다. spec 30의 이름 규칙을
+  적용한다. Windows 장치 이름(`con`, `prn`, `aux`, `nul`, `com0`-`com9`, `lpt0`-`lpt9`)과 같은 table
+  이름은 schema 오류다. 부모의 markdown column과 같은 이름의 child block table은 schema 오류다.
+  같은 file에 상세 section이 올 수 있는 다른 table(document table과 그 block 후손, files table의
+  block 후손)과 같은 이름의 markdown column 또는 block table은 schema 오류다. 이름 비교는 대소문자를
+  무시한다. fixture catalog는 더 이상 `dbspec/flowmark.json`을 갖지 않는다.
 
 - T12.1-1: spec이 읽을 수 있는 문서 판정을 명시한다. corpus 문서는 평범한 markdown 문서로 읽히는
   `*.flowmark.md` file이며 comment, frontmatter, doc-id, provenance, twin marker가 없다. `files` 행은

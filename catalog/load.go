@@ -13,16 +13,14 @@ import (
 
 // The corpus layout: the catalog is the dbspec/ directory of the root.
 const (
-	dbspecDir    = "dbspec"
-	settingsFile = "flowmark.json"
-	dbsExt       = ".dbs"
-	rule         = "catalog"
+	dbspecDir = "dbspec"
+	dbsExt    = ".dbs"
+	rule      = "catalog"
 )
 
 // Load reads the catalog of the corpus root: every dbspec/*.dbs file as one
-// document set, the translations of dbspec/flowmark.json, and the corpus
-// rules. It returns a catalog only when there are no diagnostics; otherwise
-// it returns nil and every diagnostic found.
+// document set, and the corpus rules. It returns a catalog only when there
+// are no diagnostics; otherwise it returns nil and every diagnostic found.
 func Load(root string) (*Catalog, []Diagnostic) {
 	entries, err := os.ReadDir(filepath.Join(root, dbspecDir))
 	if err != nil {
@@ -34,7 +32,6 @@ func Load(root string) (*Catalog, []Diagnostic) {
 	}
 	l := &loader{}
 	docs := l.readDocuments(root, entries)
-	translations := l.loadTranslations(root)
 	allParsed := l.parseSet(docs)
 	var hash string
 	if allParsed {
@@ -42,10 +39,11 @@ func Load(root string) (*Catalog, []Diagnostic) {
 	}
 	l.collectTables(docs)
 	l.resolveLayout()
+	l.checkNames()
 	if len(l.diags) > 0 {
 		return nil, l.diags
 	}
-	cat := &Catalog{Translations: translations, ManifestHash: hash}
+	cat := &Catalog{ManifestHash: hash}
 	for _, d := range docs {
 		cat.Documents = append(cat.Documents, d.parsed)
 	}
@@ -69,8 +67,9 @@ type tableRef struct {
 	table   *dbspec.Table
 	storage Storage
 	scope   int
-	phase   int // phaseNew, phaseVisiting or phaseDone
-	ok      bool
+	phase   int  // phaseNew, phaseVisiting or phaseDone
+	ok      bool // the storage is valid
+	linked  bool // the row scope is resolved: the storage is valid and its block chain reaches a root
 }
 
 const (
@@ -97,8 +96,8 @@ func fileDiagnostic(file, msg string) Diagnostic {
 
 // readDocuments reads the .dbs files of the set in name order. A file that
 // cannot be read or fails the byte check is a diagnostic and leaves the set.
-// Hidden entries are skipped, as the corpus walk skips them; flowmark.json is
-// the settings file; any other entry is a diagnostic, never dropped.
+// Hidden entries are skipped, as the corpus walk skips them; any other entry
+// that is not a .dbs file is a diagnostic, never dropped.
 func (l *loader) readDocuments(root string, entries []fs.DirEntry) []*document {
 	var docs []*document
 	found := false
@@ -107,7 +106,6 @@ func (l *loader) readDocuments(root string, entries []fs.DirEntry) []*document {
 		file := dbspecDir + "/" + name
 		switch {
 		case strings.HasPrefix(name, "."):
-		case name == settingsFile:
 		case e.IsDir():
 			l.add(fileDiagnostic(file, "unexpected directory in dbspec/"))
 		case strings.HasSuffix(name, dbsExt):
@@ -246,13 +244,13 @@ func (l *loader) scopeOf(r *tableRef) (int, bool) {
 	r.phase = phaseVisiting
 	switch r.storage.Kind {
 	case StorageFiles:
-		r.scope, r.ok = 2, true
+		r.scope, r.ok, r.linked = 2, true, true
 	case StorageDocument:
-		r.scope, r.ok = 3, true
+		r.scope, r.ok, r.linked = 3, true, true
 	case StorageBlock:
 		if parent := l.parentOf(r); parent != nil {
 			if level, ok := l.scopeOf(parent); ok {
-				r.scope, r.ok = level+2, true
+				r.scope, r.ok, r.linked = level+2, true, true
 			}
 		}
 	}
