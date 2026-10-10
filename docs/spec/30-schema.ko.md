@@ -1,5 +1,5 @@
 <!-- doc-id: spec-schema -->
-<!-- source-sha256: 09ab7f2db7d8bd677edb80b2703797c8e600cafad1a3bbe7207871e1a3a4ed02 -->
+<!-- source-sha256: 563575d60192fd03bd9a466289bd4c350aabad367494cbee3888451000454e8d -->
 # Schema
 
 [English](30-schema.md)
@@ -48,6 +48,9 @@ column을 이름 붙인다 — column 이름이 동작을 고르지 않는다.
 - **허용**: 모든 markdown table의 `identity`. lock 아래 `max+1`로 할당한다.
 - **요구**: `state_machine`을 가진 table은 `history`와 적어도 하나의 `initial` 상태를 선언한다. `list`나
   `files` 저장은 `title`을 선언한다. 상태 column을 가진 `list` 저장은 모든 상태에 `checkbox`를 선언한다.
+- **외래 key.** table의 모든 외래 key는 하나의 column이며 어떤 table의 단일 column primary key를 가리킨다.
+  composite 외래 key, 또는 unique이지만 key가 아닌 column을 가리키는 외래 key는 그 외래 key의 위치에 놓인
+  schema 오류다. 근거: 외래 key는 가리키는 행으로의 link로 쓰이며, 행은 단일 column key를 통해서만 link를 가진다.
 
 ## 이름 규칙
 

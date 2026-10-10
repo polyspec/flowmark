@@ -744,3 +744,137 @@ func TestLoadAcceptsNameOfSameFileTable(t *testing.T) {
 		})
 	}
 }
+
+// tagTables is a document table tag with a unique non-key column code, and a
+// table tag_use whose foreign key references the columns refs of tag.
+func tagTables(refs string) string {
+	return fmt.Sprintf(`table tag {
+  id varchar(32)
+  code varchar(32)
+  primary key (id)
+  unique uq_tag_code (code)
+  settings {
+    key_prefix 'G'
+    store document table
+    title code
+  }
+}
+
+table tag_use {
+  id i64 identity
+  tag varchar(32)
+  primary key (id)
+  index ix_tag_use_tag (tag)
+  foreign key fk_tag_use_tag (tag) references tag (%[1]s) on delete restrict on update restrict
+  settings {
+    store document table
+  }
+}
+
+table views {`, refs)
+}
+
+// gridTables is a document table grid with a composite unique key on x and y,
+// and a table slot whose composite foreign key references that key.
+const gridTables = `table grid {
+  id varchar(32)
+  x varchar(32)
+  y varchar(32)
+  primary key (id)
+  unique uq_grid_xy (x, y)
+  settings {
+    key_prefix 'G'
+    store document table
+    title x
+  }
+}
+
+table slot {
+  id i64 identity
+  gx varchar(32)
+  gy varchar(32)
+  primary key (id)
+  index ix_slot_grid (gx, gy)
+  foreign key fk_slot_grid (gx, gy) references grid (x, y) on delete restrict on update restrict
+  settings {
+    store document table
+  }
+}
+
+table views {`
+
+// TestLoadAcceptsOneColumnPrimaryKeyForeignKey pins that a foreign key of a
+// table references the one-column primary key of a table, the self foreign
+// key parent of items included.
+func TestLoadAcceptsOneColumnPrimaryKeyForeignKey(t *testing.T) {
+	cases := []struct {
+		name  string
+		edits [][2]string
+	}{
+		{name: "self foreign key parent of items"},
+		{name: "foreign key to the primary key of another table", edits: [][2]string{{"table views {", tagTables("id")}}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			root, _ := editedCorpus(t, c.edits...)
+			cat, diags := catalog.Load(root)
+			if len(diags) != 0 || cat == nil {
+				t.Fatalf("diagnostics = %+v, want an accepted catalog", diags)
+			}
+		})
+	}
+}
+
+// expectForeignKeyDiag requires a catalog diagnostic located at the name of
+// the foreign key declaration in the schema text, whose message contains msg.
+func expectForeignKeyDiag(t *testing.T, diags []catalog.Diagnostic, text, fk, msg string) {
+	t.Helper()
+	idx := strings.Index(text, "foreign key "+fk+" (")
+	if idx < 0 {
+		t.Fatalf("foreign key %s is not declared in the test text", fk)
+	}
+	line := 1 + strings.Count(text[:idx], "\n")
+	column := idx - (strings.LastIndex(text[:idx], "\n") + 1) + len("foreign key ") + 1
+	for _, d := range diags {
+		if strings.Contains(d.Message, msg) {
+			if d.File != "dbspec/flowmark.dbs" || d.Rule != "catalog" || d.Line != line || d.Column != column {
+				t.Fatalf("diagnostic %+v: want file dbspec/flowmark.dbs, rule catalog, line %d, column %d", d, line, column)
+			}
+			return
+		}
+	}
+	t.Fatalf("no diagnostic containing %q in %+v", msg, diags)
+}
+
+// TestLoadRejectsForeignKeyNotToPrimaryKey pins that a composite foreign key,
+// or a foreign key to a column that is not the one-column primary key of its
+// referenced table, is a located catalog diagnostic at the foreign key.
+func TestLoadRejectsForeignKeyNotToPrimaryKey(t *testing.T) {
+	cases := []struct {
+		name  string
+		edits [][2]string
+		fk    string
+		msg   string
+	}{
+		{
+			name:  "composite foreign key",
+			edits: [][2]string{{"table views {", gridTables}},
+			fk:    "fk_slot_grid",
+			msg:   "is composite",
+		},
+		{
+			name:  "foreign key to a unique non-key column",
+			edits: [][2]string{{"table views {", tagTables("code")}},
+			fk:    "fk_tag_use_tag",
+			msg:   "not the one-column primary key",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			root, text := editedCorpus(t, c.edits...)
+			cat, diags := catalog.Load(root)
+			expectRejected(t, cat, diags)
+			expectForeignKeyDiag(t, diags, text, c.fk, c.msg)
+		})
+	}
+}
