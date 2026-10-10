@@ -1,11 +1,14 @@
 package store
 
-import "strings"
+import (
+	"strings"
+	"unicode/utf8"
+)
 
-// The block structure that the sections of a row depend on, as CommonMark reads
-// it at the top level: ATX and setext headings, fenced code blocks, paragraphs,
-// and the HTML blocks of types 1 to 5. A line of four or more spaces of indent is
-// code, never a heading or a fence.
+// The block structure that the sections of a row depend on, as CommonMark 0.31.2
+// reads it at the top level: ATX and setext headings, fenced code blocks,
+// paragraphs, the HTML blocks of types 1 to 7, and containers. A line of four or
+// more spaces of indent is code, never a heading or a fence.
 
 // heading is an ATX or a setext heading: the first line and the last line of it
 // (the underline of a setext heading), its level, and its text.
@@ -158,19 +161,28 @@ type scanner struct {
 	para  int       // the first line of the open paragraph, when leaf is leafPara
 }
 
-// scanHeadings returns the top-level headings of lines from index from on, and
-// whether a fenced block is still open at the end. A setext heading is the whole
-// paragraph before its underline; a fence or an HTML block of types 1 to 5 hides
-// the lines it holds.
-func scanHeadings(lines []string, from int) ([]heading, bool) {
-	var hs []heading
+// scan is the block structure of a run of lines from some index on.
+type scan struct {
+	heads []heading
+	// open is whether a fence or an HTML block is open at the top level at the end:
+	// such a block takes in everything after it, so a value that leaves one open
+	// is followed by no element of its own.
+	open bool
+}
+
+// scanHeadings reads the block structure of lines from index from on. A setext
+// heading is the whole paragraph before its underline; a fence or an HTML block
+// hides the lines it holds, headings included.
+func scanHeadings(lines []string, from int) scan {
+	var sc scan
 	var s scanner
 	for i := from; i < len(lines); i++ {
 		if h, ok := s.feed(lines, i); ok {
-			hs = append(hs, h)
+			sc.heads = append(sc.heads, h)
 		}
 	}
-	return hs, s.leaf == leafFence
+	sc.open = len(s.stack) == 0 && (s.leaf == leafFence || s.leaf == leafHTML)
+	return sc
 }
 
 // feed reads line i of lines and returns the heading that it completes when the
@@ -252,7 +264,7 @@ func (s *scanner) start(lines []string, i int, rest string, col int) (heading, b
 			s.leaf, s.fence = leafFence, f
 			return heading{}, false
 		}
-		if k := htmlStart(rest); k != 0 {
+		if k := htmlStart(rest); k != 0 && (k != 7 || s.leaf != leafPara) {
 			s.leaf = leafNone
 			if !htmlEnds(k, rest) {
 				s.leaf, s.html = leafHTML, k
@@ -317,8 +329,8 @@ func lazyText(rest string) bool {
 }
 
 // opensInterrupt reports whether line opens a block that interrupts a paragraph:
-// an ATX heading, a fence, an HTML block of types 1 to 5, a thematic break, a
-// block quote, or a list item.
+// an ATX heading, a fence, an HTML block of types 1 to 6, a thematic break, a
+// block quote, or a list item. An HTML block of type 7 does not.
 func opensInterrupt(line string) bool {
 	if indentOf(line) >= 4 {
 		return false
@@ -329,7 +341,7 @@ func opensInterrupt(line string) bool {
 	if _, ok := fenceOpenAt(line); ok {
 		return true
 	}
-	if htmlStart(line) != 0 || isThematicBreak(line) || isQuoteStart(line) {
+	if k := htmlStart(line); (k != 0 && k != 7) || isThematicBreak(line) || isQuoteStart(line) {
 		return true
 	}
 	_, ok := listStart(line, 0)
@@ -488,31 +500,30 @@ func setextText(lines []string) string {
 }
 
 // boundary returns the index of the first heading of level 2 or less at or after
-// from, outside fenced blocks, or len(lines) when there is none. When there is
-// none, it also reports whether a fenced block is still open at the end.
-func boundary(lines []string, from int) (int, bool) {
-	hs, open := scanHeadings(lines, from)
-	for _, h := range hs {
+// from, outside fenced blocks and HTML blocks, or len(lines) when there is none.
+func boundary(lines []string, from int) int {
+	for _, h := range scanHeadings(lines, from).heads {
 		if h.level <= 2 {
-			return h.at, false
+			return h.at
 		}
 	}
-	return len(lines), open
+	return len(lines)
 }
 
-// htmlStart reads the start of an HTML block of CommonMark types 1 to 5 and
-// returns its type, or 0 when line starts none.
+// htmlStart reads the start of an HTML block of CommonMark 0.31.2 and returns its
+// type, 1 to 7, or 0 when line starts none. A type 6 start is the name of a block
+// element; a type 7 start is one complete tag and nothing but white space after it.
 func htmlStart(line string) int {
 	s := indentOf(line)
 	if s > 3 || s >= len(line) || line[s] != '<' {
 		return 0
 	}
 	rest := line[s:]
-	lower := strings.ToLower(rest)
+	lower := asciiLower(rest)
 	for _, name := range []string{"script", "pre", "style", "textarea"} {
 		if strings.HasPrefix(lower, "<"+name) {
-			after := lower[len(name)+1:]
-			if after == "" || after[0] == ' ' || after[0] == '\t' || after[0] == '>' {
+			after := rest[len(name)+1:]
+			if after == "" || after[0] == '>' || jsSpaceAt(after) > 0 {
 				return 1
 			}
 		}
@@ -524,17 +535,214 @@ func htmlStart(line string) int {
 		return 3
 	case strings.HasPrefix(rest, "<![CDATA["):
 		return 5
-	case strings.HasPrefix(rest, "<!") && len(rest) > 2 && isAlnum(rest[2]):
+	case len(rest) > 2 && rest[1] == '!' && isASCIILetter(rest[2]):
 		return 4
+	}
+	if blockTag6(rest) {
+		return 6
+	}
+	if htmlTag7(rest) {
+		return 7
 	}
 	return 0
 }
 
-// htmlEnds reports whether line holds the end condition of an HTML block of type kind.
+// blockTag6 reports whether s starts with a block element's name, opened or
+// closed, that is followed by a space, a tab, the end of s, '>' or '/>'. The name
+// is compared without regard to ASCII case, as commonmark.js reads it.
+func blockTag6(s string) bool {
+	p := 1
+	if p < len(s) && s[p] == '/' {
+		p++
+	}
+	q := p
+	for q < len(s) && (isASCIILetter(s[q]) || ('0' <= s[q] && s[q] <= '9')) {
+		q++
+	}
+	if !blockTagNames[asciiLower(s[p:q])] {
+		return false
+	}
+	return q == len(s) || s[q] == '>' || jsSpaceAt(s[q:]) > 0 ||
+		(s[q] == '/' && q+1 < len(s) && s[q+1] == '>')
+}
+
+// blockTagNames are the element names of CommonMark 0.31.2's type 6 start condition.
+var blockTagNames = func() map[string]bool {
+	m := map[string]bool{}
+	for _, n := range strings.Fields(`address article aside base basefont blockquote body caption
+		center col colgroup dd details dialog dir div dl dt fieldset figcaption figure footer form
+		frame frameset h1 h2 h3 h4 h5 h6 head header hr html iframe legend li link main menu
+		menuitem nav noframes ol optgroup option p param section search summary table tbody td
+		tfoot th thead title tr track ul`) {
+		m[n] = true
+	}
+	return m
+}()
+
+// htmlTag7 reports whether s is one complete open tag or closing tag followed by
+// white space only: the type 7 start condition of CommonMark 0.31.2.
+func htmlTag7(s string) bool {
+	end := htmlTagEnd(s)
+	return end >= 0 && skipSpace(s, end) == len(s)
+}
+
+// htmlTagEnd returns the index just after the open or closing tag that starts s,
+// or -1 when s starts with none. An open tag is a name, then attributes that each
+// begin with white space, then white space, an optional '/' and '>'.
+func htmlTagEnd(s string) int {
+	if strings.HasPrefix(s, "</") {
+		p := tagNameEnd(s, 2)
+		if p < 0 {
+			return -1
+		}
+		if p = skipSpace(s, p); p < len(s) && s[p] == '>' {
+			return p + 1
+		}
+		return -1
+	}
+	if !strings.HasPrefix(s, "<") {
+		return -1
+	}
+	p := tagNameEnd(s, 1)
+	if p < 0 {
+		return -1
+	}
+	for {
+		q := skipSpace(s, p)
+		if q == p {
+			break
+		}
+		n := attrNameEnd(s, q)
+		if n < 0 {
+			break
+		}
+		p = n
+		if e := attrSpecEnd(s, p); e >= 0 {
+			p = e
+		} else if q := skipSpace(s, p); q < len(s) && s[q] == '=' {
+			// A '=' that no value follows stays in the tag and ends it: no tag matches.
+			return -1
+		}
+	}
+	q := skipSpace(s, p)
+	if q < len(s) && s[q] == '/' {
+		q++
+	}
+	if q < len(s) && s[q] == '>' {
+		return q + 1
+	}
+	return -1
+}
+
+// tagNameEnd returns the index after the tag name at s[p:], a letter then letters,
+// digits and dashes, or -1 when no letter starts it.
+func tagNameEnd(s string, p int) int {
+	if p >= len(s) || !isASCIILetter(s[p]) {
+		return -1
+	}
+	for p++; p < len(s) && (isASCIILetter(s[p]) || ('0' <= s[p] && s[p] <= '9') || s[p] == '-'); p++ {
+	}
+	return p
+}
+
+// attrNameEnd returns the index after the attribute name at s[p:], a letter,
+// underscore or colon, then letters, digits, colons, periods, underscores and
+// dashes; -1 when none starts there.
+func attrNameEnd(s string, p int) int {
+	if p >= len(s) || !(isASCIILetter(s[p]) || s[p] == '_' || s[p] == ':') {
+		return -1
+	}
+	for p++; p < len(s) && (isASCIILetter(s[p]) || ('0' <= s[p] && s[p] <= '9') || strings.IndexByte(":._-", s[p]) >= 0); p++ {
+	}
+	return p
+}
+
+// attrSpecEnd returns the index after an attribute value specification at s[p:],
+// optional white space, '=', optional white space and a value, or -1 when there
+// is none.
+func attrSpecEnd(s string, p int) int {
+	q := skipSpace(s, p)
+	if q >= len(s) || s[q] != '=' {
+		return -1
+	}
+	return attrValueEnd(s, skipSpace(s, q+1))
+}
+
+// attrValueEnd returns the index after the attribute value at s[p:]: an unquoted
+// value of characters other than quotes, '=', '<', '>', a backtick and the
+// control characters and space, or a value in single or double quotes. It
+// returns -1 when none starts there.
+func attrValueEnd(s string, p int) int {
+	if p >= len(s) {
+		return -1
+	}
+	if c := s[p]; c == '"' || c == '\'' {
+		i := strings.IndexByte(s[p+1:], c)
+		if i < 0 {
+			return -1
+		}
+		return p + 1 + i + 1
+	}
+	q := p
+	for q < len(s) && s[q] > 0x20 && strings.IndexByte("\"'=<>`", s[q]) < 0 {
+		q++
+	}
+	if q == p {
+		return -1
+	}
+	return q
+}
+
+// skipSpace returns the index of the first character at or after p that is not
+// white space, as JavaScript's \s reads it: the ASCII white space and line
+// terminators, and the Unicode space separators.
+func skipSpace(s string, p int) int {
+	for p < len(s) {
+		n := jsSpaceAt(s[p:])
+		if n == 0 {
+			break
+		}
+		p += n
+	}
+	return p
+}
+
+// jsSpaceAt returns the byte length of the white space character at the start of
+// s, as JavaScript's \s reads it, or 0 when s does not start with one.
+func jsSpaceAt(s string) int {
+	r, n := utf8.DecodeRuneInString(s)
+	switch {
+	case r == '\t' || r == '\n' || r == '\v' || r == '\f' || r == '\r' || r == ' ':
+		return n
+	case r == 0xa0 || r == 0x1680 || (0x2000 <= r && r <= 0x200a) || r == 0x2028 || r == 0x2029 ||
+		r == 0x202f || r == 0x205f || r == 0x3000 || r == 0xfeff:
+		return n
+	}
+	return 0
+}
+
+// isASCIILetter reports whether c is an ASCII letter.
+func isASCIILetter(c byte) bool { return ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') }
+
+// asciiLower lowers the ASCII letters of s, keeping every other byte, so that its
+// length is s's length.
+func asciiLower(s string) string {
+	b := []byte(s)
+	for i, c := range b {
+		if 'A' <= c && c <= 'Z' {
+			b[i] = c + ('a' - 'A')
+		}
+	}
+	return string(b)
+}
+
+// htmlEnds reports whether line holds the end condition of an HTML block of type
+// kind: for types 1 to 5 the closing marker of the block, for types 6 and 7 a
+// blank line, which the block does not take in.
 func htmlEnds(kind int, line string) bool {
 	switch kind {
 	case 1:
-		lower := strings.ToLower(line)
+		lower := asciiLower(line)
 		for _, end := range []string{"</script>", "</pre>", "</style>", "</textarea>"} {
 			if strings.Contains(lower, end) {
 				return true
@@ -548,37 +756,10 @@ func htmlEnds(kind int, line string) bool {
 		return strings.Contains(line, ">")
 	case 5:
 		return strings.Contains(line, "]]>")
+	case 6, 7:
+		return isBlank(line)
 	}
 	return false
-}
-
-// htmlOpen reports whether the lines leave an HTML block of types 1 to 5 open at
-// their end. Such a block takes in the element that follows it.
-func htmlOpen(lines []string) bool {
-	kind := 0
-	var fence fenceMark
-	inFence := false
-	for _, line := range lines {
-		switch {
-		case kind != 0:
-			if htmlEnds(kind, line) {
-				kind = 0
-			}
-		case inFence:
-			if closesFence(line, fence) {
-				inFence = false
-			}
-		default:
-			if k := htmlStart(line); k != 0 {
-				if !htmlEnds(k, line) {
-					kind = k
-				}
-			} else if f, ok := fenceOpenAt(line); ok {
-				fence, inFence = f, true
-			}
-		}
-	}
-	return kind != 0
 }
 
 // splitLines splits text, which ends with a line feed or is empty, into its
