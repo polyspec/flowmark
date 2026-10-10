@@ -3,6 +3,12 @@
 
 ## Unreleased
 
+- T10-1: the board never shows a state the document does not hold. A refused drop (done →
+  doing, or an edge that needs evidence) left the card in the column it was dropped on while
+  the markdown kept its state; the plugin now judges a drop before moving anything and redraws
+  from the document after every operation, clears the columns on an empty answer and re-reads
+  the state machine on a changed event. The change lives in the plugin repository.
+
 - T7.3-3: the sidecar answers stay whole lines. The watcher's poll goroutine and the request
   loop wrote to one buffered stream without a lock, so a pushed changed event could tear an
   answer line — the page then lost an answer and its view of the corpus. One lock now guards

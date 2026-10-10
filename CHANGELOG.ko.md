@@ -1,8 +1,13 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 36c4f8d317144c6094cf4b82c0dcdf965a2792e7ed4d626c199d1c165959d834 -->
+<!-- source-sha256: 5a49ff4a476402dcb3f99e936e5c1d4b67875b6c3bf80e413ea8741e0d18e5c7 -->
 # Changelog
 
 ## Unreleased
+
+- T10-1: 보드는 문서가 갖지 않은 상태를 보여주지 않는다. 거절된 drop(done → doing, 또는
+  evidence가 필요한 edge)이 카드를 drop한 column에 남기고 markdown은 상태를 지켰다. plugin은 이제
+  옮기기 전에 drop을 판정하고, 모든 operation 뒤에 문서에서 다시 그리며, 빈 답에 column을 비우고,
+  changed event에 state machine을 다시 읽는다. 변경은 plugin repository에 있다.
 
 - T7.3-3: sidecar 답은 온전한 한 줄로 남는다. watcher의 poll goroutine과 요청 loop가 lock 없이
   하나의 buffered stream에 썼기 때문에 push된 changed event가 답 줄을 찢을 수 있었고, 그러면
