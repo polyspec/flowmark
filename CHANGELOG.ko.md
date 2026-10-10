@@ -1,8 +1,18 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 3d0eecde662880897c53dbc670695352a92849501a52b3bef70727e01a5f9e87 -->
+<!-- source-sha256: 43a93502ed7859f96a4ee68ae78e319a8ca383033eb8ecff45dfe3c8af668277 -->
 # Changelog
 
 ## Unreleased
+
+- T12.2.2-1: `files` codec와 store가 T12.1-3과 T12.1-4의 판정을 따른다. H1 제목은 마지막 `\#`을 `#`으로 읽고,
+  마지막 `#` 연속이 공백이나 tab 뒤에 오거나 제목 전체이면 마지막 `#`을 escape해 쓰며, `\#`로 끝나는 제목은
+  `CONSTRAINT`다. 줄 바꿈으로 시작하거나 끝나는 markdown 값, CR이나 U+0000을 가진 값은 거절되고, 요소 앞에서
+  fence나 HTML block을 열어 둔 값, setext heading을 가진 값도 거절된다. field list 뒤의 `files` body는 들여쓴
+  줄로 시작하지 않는다. BOM과 CR은 `format.noncanonical`이고, U+0000은 `format.encoding`이며, typed scalar는 정식
+  형식으로 쓴다. column type이 아닌 scalar, dangling 외래 key, 대소문자만 다른 중복 key는 읽은 그대로(raw 텍스트,
+  기록된 target) 유지되어 validator의 `type`, `reference.dangling`, `key.duplicate`로 넘어간다. key는 `-`로 끝날 수
+  있고 `-_`는 없다. 렌더링이 떨어뜨리는 한 줄 자리의 공백은 `format.noncanonical`이다. field list 바로 뒤의 body
+  줄은 `format.block`이다.
 
 - T12.1-5: spec이 `document` codec에 필요했던 판정을 적는다. `now`는 `datetime` 기본값에서 현재 시각을 뜻하는
   keyword이며 저장되지 않는다: `now`로 쓰인 시간 값은 그 type이 아니며, 텍스트 `now`는 text다. 저장 순서를 벗어난

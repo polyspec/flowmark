@@ -12,6 +12,8 @@ import (
 
 // ParseFilesTable reads the rows of the files table under the corpus root:
 // the files <root>/<table>/<key>.flowmark.md. A missing folder has no rows.
+// Rows whose keys differ only in case are all returned: key.duplicate is a
+// validator rule, not a read fault.
 // Only the documents of the folder are read; a symbolic link is never
 // followed, and a document that is not of the folder is a walk diagnostic.
 func ParseFilesTable(cat *catalog.Catalog, root, table string, lk Linker) ([]*Row, []Diagnostic) {
@@ -33,27 +35,7 @@ func ParseFilesTable(cat *catalog.Catalog, root, table string, lk Linker) ([]*Ro
 	}
 	w := &walker{cat: cat, lay: lay, lk: lk}
 	w.visit(dir, table, 0)
-	rows, diags := keepFirstKeys(table, w.rows)
-	return rows, append(w.diags, diags...)
-}
-
-// keepFirstKeys keeps the rows whose keys differ from every earlier key without
-// regard to case; a later row that collides is a diagnostic and is not kept,
-// since case-insensitive file systems and lowercased anchors would confuse it.
-func keepFirstKeys(table string, rows []*Row) ([]*Row, []Diagnostic) {
-	var kept []*Row
-	var diags []Diagnostic
-	seen := map[string]string{}
-	for _, r := range rows {
-		low := strings.ToLower(r.Key)
-		if first, dup := seen[low]; dup {
-			diags = append(diags, fileDiag(table+"/"+r.Key+fileSuffix, RuleBlock, "the key "+r.Key+" collides with "+first+" without regard to case"))
-			continue
-		}
-		seen[low] = r.Key
-		kept = append(kept, r)
-	}
-	return kept, diags
+	return w.rows, w.diags
 }
 
 // walker reads the documents under the folder of a files table.

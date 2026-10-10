@@ -93,6 +93,7 @@ type parseCase struct {
 	rule string
 	line int
 	kept bool
+	raw  string // the scalar column that is kept as its raw text, when accepted
 }
 
 func accept(name, text string) parseCase { return parseCase{name: name, text: text, kept: true} }
@@ -110,8 +111,10 @@ func parseCases() []parseCase {
 		// The file: encoding, line endings and the final line feed.
 		accept("10#encoding-and-line-structure: canonical base", withBase()),
 		reject("10#encoding-and-line-structure: invalid UTF-8", RuleEncoding, 2, "# Title\n\xff\n"),
+		reject("10#encoding-and-line-structure: U+0000 in a value", RuleEncoding, 5, withBase("a\x00b")),
 		{name: "10#encoding-and-line-structure: byte order mark", text: "\xef\xbb\xbf" + withBase(), rule: RuleNoncanonical, line: 1, kept: true},
 		noncanonical("10#encoding-and-line-structure: CRLF line endings", 1, strings.ReplaceAll(withBase(), "\n", "\r\n")),
+		noncanonical("10#encoding-and-line-structure: bare CR line ending", 2, "# Title\n- position: 1\r- done: true\n"),
 		noncanonical("10#encoding-and-line-structure: no final line feed", 3, "# Title\n- position: 1\n- done: true"),
 		reject("10#encoding-and-line-structure: empty file", RuleBlock, 1, ""),
 
@@ -119,10 +122,13 @@ func parseCases() []parseCase {
 		{name: "20#keys: key with underscore and dash", rel: "tasks/a_b-c1.flowmark.md", text: withBase(), kept: true},
 		{name: "20#keys: key that is COM10", rel: "tasks/COM10.flowmark.md", text: withBase(), kept: true},
 		{name: "20#keys: key that begins with CONX", rel: "tasks/CONX.flowmark.md", text: withBase(), kept: true},
+		{name: "20#keys: key that ends with a dash", rel: "tasks/a-.flowmark.md", text: withBase(), kept: true},
+		{name: "20#keys: key with an underscore after a dash", rel: "tasks/a_-b.flowmark.md", text: withBase(), kept: true},
 		{name: "20#keys: key that begins with an underscore", rel: "tasks/_a.flowmark.md", text: withBase(), rule: RuleBlock, line: 1},
 		{name: "20#keys: key that begins with a dash", rel: "tasks/-a.flowmark.md", text: withBase(), rule: RuleBlock, line: 1},
+		{name: "20#keys: negative integer key", rel: "tasks/-7.flowmark.md", text: withBase(), rule: RuleBlock, line: 1},
 		{name: "20#keys: key with a double dash", rel: "tasks/a--b.flowmark.md", text: withBase(), rule: RuleBlock, line: 1},
-		{name: "20#keys: key that ends with a dash", rel: "tasks/a-.flowmark.md", text: withBase(), rule: RuleBlock, line: 1},
+		{name: "20#keys: key with a dash before an underscore", rel: "tasks/a-_b.flowmark.md", text: withBase(), rule: RuleBlock, line: 1},
 		{name: "20#keys: key with a dot", rel: "tasks/a.b.flowmark.md", text: withBase(), rule: RuleBlock, line: 1},
 		{name: "20#keys: key with a space", rel: "tasks/a b.flowmark.md", text: withBase(), rule: RuleBlock, line: 1},
 		{name: "20#keys: key with a non-ASCII letter", rel: "tasks/가.flowmark.md", text: withBase(), rule: RuleBlock, line: 1},
@@ -139,15 +145,20 @@ func parseCases() []parseCase {
 		reject("10#single-line-places: H2 instead of H1", RuleBlock, 1, doc("## Title", "- position: 1", "- done: true", "")),
 		reject("10#single-line-places: no space after the hash", RuleBlock, 1, doc("#Title", "- position: 1", "- done: true", "")),
 		reject("10#single-line-places: empty title", RuleBlock, 1, doc("# ", "- position: 1", "- done: true", "")),
-		reject("10#single-line-places: title with a leading space", RuleBlock, 1, doc("#  Title", "- position: 1", "- done: true", "")),
-		reject("10#single-line-places: title with a trailing space", RuleBlock, 1, doc("# Title ", "- position: 1", "- done: true", "")),
+		reject("10#single-line-places: title that is only a closing sequence", RuleBlock, 1, doc("# #", "- position: 1", "- done: true", "")),
+		noncanonical("10#single-line-places: title with a leading space", 1, doc("#  Title", "- position: 1", "- done: true", "")),
+		noncanonical("10#single-line-places: title with a trailing space", 1, doc("# Title ", "- position: 1", "- done: true", "")),
 		reject("10#single-line-places: title with a comment opener", RuleBlock, 1, doc("# a <!-- b", "- position: 1", "- done: true", "")),
 		reject("10#single-line-places: title with a closing tag", RuleBlock, 1, doc("# a </b", "- position: 1", "- done: true", "")),
 		accept("10#single-line-places: title with a bare angle bracket", doc("# a <3", "- position: 1", "- done: true", "")),
 		accept("10#single-line-places: title that ends in an escaped hash", doc(`# Count the \#`, "- position: 1", "- done: true", "")),
-		accept("10#single-line-places: title whose escaped text is a raw backslash hash", doc(`# a \#`, "- position: 1", "- done: true", "")),
+		accept("10#single-line-places: title that is the escaped text a backslash hash", doc(`# a \#`, "- position: 1", "- done: true", "")),
 		accept("10#single-line-places: title that ends in a hash run", doc(`# x #\#`, "- position: 1", "- done: true", "")),
+		accept("10#single-line-places: title that is only a hash", doc(`# \#`, "- position: 1", "- done: true", "")),
+		accept("10#single-line-places: title that is only two hashes", doc(`# #\#`, "- position: 1", "- done: true", "")),
 		noncanonical("10#single-line-places: title with an unescaped closing hash", 1, doc("# a #", "- position: 1", "- done: true", "")),
+		noncanonical("10#single-line-places: title with a tab before the closing hash", 1, doc("# a\t#", "- position: 1", "- done: true", "")),
+		noncanonical("10#single-line-places: escaped hash the write rule would not produce", 1, doc(`# C\#`, "- position: 1", "- done: true", "")),
 
 		// The field list: the stored scalar columns in column order.
 		reject("10#the-field-list-of-a-files-row: field of an unknown column", RuleBlock, 4, withBaseFields("- nope: 1", "")),
@@ -156,43 +167,47 @@ func parseCases() []parseCase {
 		reject("10#the-field-list-of-a-files-row: field without a colon", RuleBlock, 2, doc("# Title", "- position 1", "- done: true", "")),
 		reject("10#the-field-list-of-a-files-row: field without a space after the colon", RuleBlock, 2, doc("# Title", "- position:1", "- done: true", "")),
 		noncanonical("10#readable-values: integer with leading zero", 2, doc("# Title", "- position: 01", "- done: true", "")),
-		reject("10#readable-values: integer with a decimal point", RuleBlock, 2, doc("# Title", "- position: 1.0", "- done: true", "")),
-		reject("10#readable-values: integer past i32", RuleBlock, 2, doc("# Title", "- position: 2147483648", "- done: true", "")),
-		reject("10#readable-values: integer with a plus sign", RuleBlock, 2, doc("# Title", "- position: +1", "- done: true", "")),
+		acceptRaw("10#readable-values: integer with a decimal point", "position", doc("# Title", "- position: 1.0", "- done: true", "")),
+		acceptRaw("10#readable-values: integer past i32", "position", doc("# Title", "- position: 2147483648", "- done: true", "")),
+		acceptRaw("10#readable-values: integer with a plus sign", "position", doc("# Title", "- position: +1", "- done: true", "")),
 		noncanonical("10#readable-values: decimal without its scale", 3, doc("# Title", "- position: 1", "- estimate: 12.5", "- done: true", "")),
-		reject("10#readable-values: decimal past its scale", RuleBlock, 3, doc("# Title", "- position: 1", "- estimate: 12.555", "- done: true", "")),
+		acceptRaw("10#readable-values: decimal past its scale", "estimate", doc("# Title", "- position: 1", "- estimate: 12.555", "- done: true", "")),
 		accept("10#readable-values: decimal at its scale", doc("# Title", "- position: 1", "- estimate: 12.50", "- done: true", "")),
-		reject("10#readable-values: bool with a capital", RuleBlock, 3, doc("# Title", "- position: 1", "- done: True", "")),
-		reject("10#readable-values: bool written as a digit", RuleBlock, 3, doc("# Title", "- position: 1", "- done: 1", "")),
+		acceptRaw("10#readable-values: bool with a capital", "done", doc("# Title", "- position: 1", "- done: True", "")),
+		acceptRaw("10#readable-values: bool written as a digit", "done", doc("# Title", "- position: 1", "- done: 1", "")),
 		noncanonical("10#readable-values: f64 with trailing zeros", 4, doc("# Title", "- position: 1", "- done: true", "- score: 0.50", "")),
 		accept("10#readable-values: f64 in its shortest form", doc("# Title", "- position: 1", "- done: true", "- score: 0.5", "")),
-		reject("10#readable-values: date that is not a day", RuleBlock, 4, doc("# Title", "- position: 1", "- done: true", "- seen_on: 2026-02-30", "")),
-		reject("10#readable-values: date without padding", RuleBlock, 4, doc("# Title", "- position: 1", "- done: true", "- seen_on: 2026-2-1", "")),
-		reject("10#readable-values: datetime with T", RuleBlock, 5, doc("# Title", "- position: 1", "- done: true", "- seen_on: 2026-10-11", "- seen_at: 2026-10-11T09:30:00", "")),
-		reject("10#readable-values: datetime with fraction at precision 0", RuleBlock, 5, doc("# Title", "- position: 1", "- done: true", "- seen_on: 2026-10-11", "- seen_at: 2026-10-11 09:30:00.5", "")),
-		reject("10#readable-values: datetime now", RuleBlock, 5, doc("# Title", "- position: 1", "- done: true", "- seen_on: 2026-10-11", "- seen_at: now", "")),
+		acceptRaw("10#readable-values: date that is not a day", "seen_on", doc("# Title", "- position: 1", "- done: true", "- seen_on: 2026-02-30", "")),
+		acceptRaw("10#readable-values: date without padding", "seen_on", doc("# Title", "- position: 1", "- done: true", "- seen_on: 2026-2-1", "")),
+		acceptRaw("10#readable-values: datetime with T", "seen_at", doc("# Title", "- position: 1", "- done: true", "- seen_on: 2026-10-11", "- seen_at: 2026-10-11T09:30:00", "")),
+		acceptRaw("10#readable-values: datetime with fraction at precision 0", "seen_at", doc("# Title", "- position: 1", "- done: true", "- seen_on: 2026-10-11", "- seen_at: 2026-10-11 09:30:00.5", "")),
+		acceptRaw("10#readable-values: datetime now", "seen_at", doc("# Title", "- position: 1", "- done: true", "- seen_on: 2026-10-11", "- seen_at: now", "")),
 		noncanonical("10#readable-values: time without its fraction digits", 6, doc("# Title", "- position: 1", "- done: true", "- seen_on: 2026-10-11", "- seen_at: 2026-10-11 09:30:00", "- clock: 09:30:00", "")),
-		reject("10#readable-values: time at hour 24", RuleBlock, 6, doc("# Title", "- position: 1", "- done: true", "- seen_on: 2026-10-11", "- seen_at: 2026-10-11 09:30:00", "- clock: 24:00:00", "")),
+		acceptRaw("10#readable-values: time at hour 24", "clock", doc("# Title", "- position: 1", "- done: true", "- seen_on: 2026-10-11", "- seen_at: 2026-10-11 09:30:00", "- clock: 24:00:00", "")),
 		noncanonical("10#readable-values: uuid in upper case", 7, doc("# Title", "- position: 1", "- done: true", "- seen_on: 2026-10-11", "- seen_at: 2026-10-11 09:30:00", "- clock: 09:30:00.250", "- ref: 0F8FAD5B-D9CB-469F-A165-8C9D2E7F1A2B", "")),
-		reject("10#readable-values: uuid that is not one", RuleBlock, 7, doc("# Title", "- position: 1", "- done: true", "- seen_on: 2026-10-11", "- seen_at: 2026-10-11 09:30:00", "- clock: 09:30:00.250", "- ref: not-a-uuid", "")),
+		acceptRaw("10#readable-values: uuid that is not one", "ref", doc("# Title", "- position: 1", "- done: true", "- seen_on: 2026-10-11", "- seen_at: 2026-10-11 09:30:00", "- clock: 09:30:00.250", "- ref: not-a-uuid", "")),
 		noncanonical("10#readable-values: bytes without padding", 4, doc("# Title", "- position: 1", "- done: true", "- blob: AAEC/w", "")),
-		reject("10#readable-values: bytes that are not base64", RuleBlock, 4, doc("# Title", "- position: 1", "- done: true", "- blob: !!", "")),
+		acceptRaw("10#readable-values: bytes that are not base64", "blob", doc("# Title", "- position: 1", "- done: true", "- blob: !!", "")),
 		accept("10#readable-values: empty bytes", doc("# Title", "- position: 1", "- done: true", "- blob:", "")),
-		reject("10#readable-values: i16 past its range", RuleBlock, 4, doc("# Title", "- position: 1", "- done: true", "- weight: 32768", "")),
-		reject("10#readable-values: i64 past its range", RuleBlock, 4, doc("# Title", "- position: 1", "- done: true", "- big: 9223372036854775808", "")),
+		acceptRaw("10#readable-values: i16 past its range", "weight", doc("# Title", "- position: 1", "- done: true", "- weight: 32768", "")),
+		acceptRaw("10#readable-values: i64 past its range", "big", doc("# Title", "- position: 1", "- done: true", "- big: 9223372036854775808", "")),
 		reject("10#single-line-places: text with raw HTML", RuleBlock, 4, doc("# Title", "- position: 1", "- done: true", "- note: <b>x", "")),
-		reject("10#single-line-places: text with a trailing space", RuleBlock, 4, doc("# Title", "- position: 1", "- done: true", "- note: x ", "")),
+		noncanonical("10#single-line-places: text with a trailing space", 4, doc("# Title", "- position: 1", "- done: true", "- note: x ", "")),
+		noncanonical("10#single-line-places: text with two spaces after the colon", 4, doc("# Title", "- position: 1", "- done: true", "- note:  x", "")),
+		noncanonical("10#single-line-places: owner with a trailing space", 3, doc("# Title", "- position: 1", "- owner: max ", "- done: true", "")),
 		accept("10#readable-values: text with a bare angle bracket", doc("# Title", "- position: 1", "- done: true", "- note: <3", "")),
 		accept("10#readable-values: empty text of a nullable column", doc("# Title", "- position: 1", "- done: true", "- note:", "")),
-		reject("10#readable-values: varchar past its length", RuleBlock, 3, doc("# Title", "- position: 1", "- owner: 0123456789012345678901234567890123", "- done: true", "")),
-		reject("10#the-field-list-of-a-files-row: field with no value", RuleBlock, 3, doc("# Title", "- position: 1", "- done:", "")),
-		reject("10#readable-values: field that writes now", RuleBlock, 5, doc("# Title", "- position: 1", "- done: true", "- seen_on: 2026-10-11", "- seen_at: now", "")),
-		noncanonical("10#the-field-list-of-a-files-row: field list without the blank line", 4, "# Title\n- position: 1\n- done: true\nBody.\n"),
-		accept("10#the-field-list-of-a-files-row: body that begins with a blank line", doc("# Title", "- position: 1", "- done: true", "", "", "Body.")),
+		acceptRaw("10#readable-values: varchar past its length", "owner", doc("# Title", "- position: 1", "- owner: 0123456789012345678901234567890123", "- done: true", "")),
+		acceptRaw("10#readable-values: empty text of a non-null column that is not text", "done", doc("# Title", "- position: 1", "- done:", "")),
+		acceptRaw("10#readable-values: field that writes now", "seen_at", doc("# Title", "- position: 1", "- done: true", "- seen_on: 2026-10-11", "- seen_at: now", "")),
+		accept("10#readable-values: text that is the word now", doc("# Title", "- position: 1", "- done: true", "- note: now", "")),
+		reject("10#the-field-list-of-a-files-row: body line directly after the field list", RuleBlock, 4, "# Title\n- position: 1\n- done: true\nBody.\n"),
+		noncanonical("10#the-field-list-of-a-files-row: missing blank line before a section after the fields", 4, "# Title\n- position: 1\n- done: true\n## evidence\n\nx\n"),
 
 		// The parent link: a foreign key is a link with its derived target.
 		accept("10#foreign-keys-as-links: parent link to a row", doc("# Title", "- parent: [T2](T2.flowmark.md)", "- position: 1", "- done: true", "")),
-		reject("10#foreign-keys-as-links: parent link to no row", RuleBlock, 2, doc("# Title", "- parent: [T9](T9.flowmark.md)", "- position: 1", "- done: true", "")),
+		accept("10#foreign-keys-as-links: dangling parent keeps its written target", doc("# Title", "- parent: [T9](T9.flowmark.md)", "- position: 1", "- done: true", "")),
+		accept("10#foreign-keys-as-links: dangling parent keeps another written target", doc("# Title", "- parent: [T9](../x/T9.flowmark.md)", "- position: 1", "- done: true", "")),
 		noncanonical("10#foreign-keys-as-links: parent link with another target", 2, doc("# Title", "- parent: [T2](../tasks/T2.flowmark.md)", "- position: 1", "- done: true", "")),
 		noncanonical("10#foreign-keys-as-links: parent link whose text is another row", 2, doc("# Title", "- parent: [T2](T1.flowmark.md)", "- position: 1", "- done: true", "")),
 		reject("10#foreign-keys-as-links: parent without a link", RuleBlock, 2, doc("# Title", "- parent: T2", "- position: 1", "- done: true", "")),
@@ -203,11 +218,19 @@ func parseCases() []parseCase {
 		accept("10#sections-and-their-values: body with a deeper heading", withBase("Body text.", "", "### Deeper", "", "Last.")),
 		accept("10#sections-and-their-values: body with a heading inside a fence", withBase("```", "## x", "```")),
 		accept("10#sections-and-their-values: body with an open fence that hides a section heading", withBase("```", "## evidence", "x")),
-		accept("10#sections-and-their-values: body that is one blank line", raw("# Title", "- position: 1", "- done: true", "", "")),
+		noncanonical("10#sections-and-their-values: body that is one blank line", 5, raw("# Title", "- position: 1", "- done: true", "", "")),
 		noncanonical("10#sections-and-their-values: trailing blank line after the fields", 4, raw("# Title", "- position: 1", "- done: true", "")),
 		accept("10#sections-and-their-values: fields with no body and no section", doc("# Title", "- position: 1", "- done: true")),
+		noncanonical("10#sections-and-their-values: body that begins with a blank line", 5, doc("# Title", "- position: 1", "- done: true", "", "", "Body.")),
+		accept("10#sections-and-their-values: body with one space of indent after the fields", withBase(" x")),
 		reject("10#the-field-list-of-a-files-row: body that begins with a list item", RuleBlock, 5, withBase("- item")),
+		reject("10#the-field-list-of-a-files-row: body indented by two spaces after the fields", RuleBlock, 5, withBase("  x")),
+		reject("10#the-field-list-of-a-files-row: body indented by a tab after the fields", RuleBlock, 5, withBase("\tx")),
 		reject("10#sections-and-their-values: body with an H1 line", RuleSection, 5, withBase("# Other")),
+		reject("10#sections-and-their-values: body with a setext H1", RuleSection, 5, withBase("Title", "===")),
+		reject("10#sections-and-their-values: body with a setext H2 that names no section", RuleSection, 5, withBase("x", "---")),
+		accept("10#sections-and-their-values: body with a thematic break after a blank line", withBase("x", "", "---")),
+		noncanonical("10#sections-and-their-values: body with a setext heading that names a section", 5, withBase("evidence", "---", "", "Obs.")),
 
 		// The sections: the nullable markdown columns, in column order.
 		accept("10#sections-and-their-values: evidence section", withBase("## evidence", "", "Obs.")),
@@ -223,6 +246,13 @@ func parseCases() []parseCase {
 		noncanonical("10#sections-and-their-values: section heading with a trailing space", 5, withBase("## evidence ", "", "x")),
 		noncanonical("10#sections-and-their-values: missing blank line before a section", 4, doc("# Title", "- position: 1", "- done: true", "## evidence", "", "e")),
 	}
+}
+
+// acceptRaw is an accepted input with a scalar that is not of its column type:
+// the row is kept with no diagnostic, the scalar is kept as its raw text, and
+// the validator reports its type.
+func acceptRaw(name, col, text string) parseCase {
+	return parseCase{name: name, text: text, kept: true, raw: col}
 }
 
 // withBaseFields returns the canonical base with extra field lines after the
@@ -451,20 +481,33 @@ func TestRenderRules(t *testing.T) {
 	cases := []rc{
 		{name: "10#document-order: base row", mut: func(r *Row) {}, out: baseOut},
 		{name: "10#single-line-places: title that ends in a hash", mut: func(r *Row) { r.Title = "Count the #" }, out: doc(`# Count the \#`, "- position: 1", "- done: true", "")},
+		{name: "10#single-line-places: title that is only a hash", mut: func(r *Row) { r.Title = "#" }, out: doc(`# \#`, "- position: 1", "- done: true", "")},
+		{name: "10#single-line-places: title that is only two hashes", mut: func(r *Row) { r.Title = "##" }, out: doc(`# #\#`, "- position: 1", "- done: true", "")},
+		{name: "10#single-line-places: title that ends in a tab and a hash", mut: func(r *Row) { r.Title = "a\t#" }, out: doc("# a\t\\#", "- position: 1", "- done: true", "")},
 		{name: "10#single-line-places: title that reads back as another", mut: func(r *Row) { r.Title = `a \#` }, rule: RuleConstraint, line: 1},
+		{name: "10#single-line-places: title that ends in a backslash hash", mut: func(r *Row) { r.Title = `a\#` }, rule: RuleConstraint, line: 1},
 		{name: "10#single-line-places: empty title", mut: func(r *Row) { r.Title = "" }, rule: RuleConstraint, line: 1},
 		{name: "10#single-line-places: title with a line feed", mut: func(r *Row) { r.Title = "a\nb" }, rule: RuleConstraint, line: 1},
 		{name: "10#single-line-places: title with a leading space", mut: func(r *Row) { r.Title = " a" }, rule: RuleConstraint, line: 1},
 		{name: "10#single-line-places: title with raw HTML", mut: func(r *Row) { r.Title = "a <!b" }, rule: RuleConstraint, line: 1},
 		{name: "10#single-line-places: title that is not UTF-8", mut: func(r *Row) { r.Title = "a\xff" }, rule: RuleConstraint, line: 1},
+		{name: "10#encoding-and-line-structure: title with a U+0000", mut: func(r *Row) { r.Title = "a\x00b" }, rule: RuleConstraint, line: 1},
 		{name: "20#keys: key CON", mut: func(r *Row) { r.Key = "CON" }, rule: RuleConstraint, line: 1},
 		{name: "20#keys: key with a double dash", mut: func(r *Row) { r.Key = "a--b" }, rule: RuleConstraint, line: 1},
+		{name: "20#keys: key with a dash before an underscore", mut: func(r *Row) { r.Key = "a-_b" }, rule: RuleConstraint, line: 1},
+		{name: "20#keys: key that ends with a dash", mut: func(r *Row) { r.Key = "a-" }, out: baseOut},
 		{name: "20#keys: key with a space", mut: func(r *Row) { r.Key = "a b" }, rule: RuleConstraint, line: 1},
 		{name: "20#keys: key longer than the varchar", mut: func(r *Row) { r.Key = strings.Repeat("a", 33) }, rule: RuleConstraint, line: 1},
 		{name: "10#document-order: row of another table", mut: func(r *Row) { r.Table = "memos" }, rule: RuleConstraint, line: 1},
 		{name: "10#readable-values: non-null column without a value", mut: func(r *Row) { delete(r.Scalars, "position") }, rule: RuleConstraint, line: 2},
-		{name: "10#readable-values: integer with leading zero", mut: func(r *Row) { r.Scalars["position"] = sp("01") }, rule: RuleConstraint, line: 2},
+		{name: "10#readable-values: integer with leading zero is written canonically", mut: func(r *Row) { r.Scalars["position"] = sp("01") }, out: baseOut},
 		{name: "10#readable-values: integer that is not one", mut: func(r *Row) { r.Scalars["position"] = sp("x") }, rule: RuleConstraint, line: 2},
+		{name: "10#readable-values: decimal is padded to its scale", mut: func(r *Row) { r.Scalars["estimate"] = sp("1.5") }, out: doc("# Title", "- position: 1", "- estimate: 1.50", "- done: true", "")},
+		{name: "10#readable-values: f64 is written in its shortest form", mut: func(r *Row) { r.Scalars["score"] = sp("0.50") }, out: doc("# Title", "- position: 1", "- done: true", "- score: 0.5", "")},
+		{name: "10#readable-values: bytes are written padded", mut: func(r *Row) { r.Scalars["blob"] = sp("AAEC/w") }, out: doc("# Title", "- position: 1", "- done: true", "- blob: AAEC/w==", "")},
+		{name: "10#readable-values: text now is text", mut: func(r *Row) { r.Scalars["note"] = sp("now") }, out: doc("# Title", "- position: 1", "- done: true", "- note: now", "")},
+		{name: "10#readable-values: decimal that CanonicalLiteral refuses", mut: func(r *Row) { r.Scalars["estimate"] = sp("12.555") }, rule: RuleConstraint, line: 3},
+		{name: "10#readable-values: bool with a capital", mut: func(r *Row) { r.Scalars["done"] = sp("True") }, rule: RuleConstraint, line: 3},
 		{name: "10#readable-values: now is refused", mut: func(r *Row) {
 			r.Scalars["seen_on"] = sp("2026-10-11")
 			r.Scalars["seen_at"] = sp("now")
@@ -474,12 +517,33 @@ func TestRenderRules(t *testing.T) {
 		{name: "10#readable-values: text past the varchar", mut: func(r *Row) { r.Scalars["owner"] = sp(strings.Repeat("x", 33)) }, rule: RuleConstraint, line: 3},
 		{name: "10#readable-values: empty text of a nullable column", mut: func(r *Row) { r.Scalars["note"] = sp("") }, out: doc("# Title", "- position: 1", "- done: true", "- note:", "")},
 		{name: "10#readable-values: absent nullable column", mut: func(r *Row) { r.Scalars["owner"] = nil }, out: baseOut},
+		{name: "10#readable-values: raw value kept as read", mut: func(r *Row) {
+			r.Scalars["seen_on"] = sp("2026-02-30")
+			r.Raw = map[string]string{"seen_on": "2026-02-30"}
+		}, out: doc("# Title", "- position: 1", "- done: true", "- seen_on: 2026-02-30", "")},
+		{name: "10#readable-values: raw value changed by the write", mut: func(r *Row) {
+			r.Scalars["seen_on"] = sp("2026-02-31")
+			r.Raw = map[string]string{"seen_on": "2026-02-30"}
+		}, rule: RuleConstraint, line: 4},
 		{name: "10#the-field-list-of-a-files-row: column of another table", mut: func(r *Row) { r.Scalars["nope"] = sp("x") }, rule: RuleConstraint, line: 1},
 		{name: "10#the-field-list-of-a-files-row: the key column as a scalar", mut: func(r *Row) { r.Scalars["id"] = sp("T1") }, rule: RuleConstraint, line: 1},
-		{name: "10#foreign-keys-as-links: a foreign key to a row that is not there", mut: func(r *Row) { r.Scalars["parent"] = sp("T9") }, rule: RuleConstraint, line: 2},
+		{name: "10#foreign-keys-as-links: a foreign key to a row that is not there", mut: func(r *Row) { r.Scalars["parent"] = sp("T9") }, rule: RuleForeignKey, line: 2},
+		{name: "10#foreign-keys-as-links: a dangling foreign key keeps its written target", mut: func(r *Row) {
+			r.Scalars["parent"] = sp("T9")
+			r.Dangling = map[string]DanglingLink{"parent": {Key: "T9", Target: "../x/T9.flowmark.md"}}
+		}, out: doc("# Title", "- parent: [T9](../x/T9.flowmark.md)", "- position: 1", "- done: true", "")},
+		{name: "10#foreign-keys-as-links: a written target of another key is not kept", mut: func(r *Row) {
+			r.Scalars["parent"] = sp("T9")
+			r.Dangling = map[string]DanglingLink{"parent": {Key: "T8", Target: "../x/T8.flowmark.md"}}
+		}, rule: RuleForeignKey, line: 2},
 		{name: "10#foreign-keys-as-links: a foreign key to a row", mut: func(r *Row) { r.Scalars["parent"] = sp("T2") }, out: doc("# Title", "- parent: [T2](T2.flowmark.md)", "- position: 1", "- done: true", "")},
 		{name: "10#sections-and-their-values: body without a line feed", mut: func(r *Row) { r.Body = "x" }, rule: RuleConstraint, line: 5},
 		{name: "10#the-field-list-of-a-files-row: body that begins with a list item", mut: func(r *Row) { r.Body = "- x\n" }, rule: RuleConstraint, line: 5},
+		{name: "10#the-field-list-of-a-files-row: body indented by two spaces after the fields", mut: func(r *Row) { r.Body = "  x\n" }, rule: RuleConstraint, line: 5},
+		{name: "10#the-field-list-of-a-files-row: body indented by a tab after the fields", mut: func(r *Row) { r.Body = "\tx\n" }, rule: RuleConstraint, line: 5},
+		{name: "10#sections-and-their-values: body with a leading blank line", mut: func(r *Row) { r.Body = "\nx\n" }, rule: RuleConstraint, line: 5},
+		{name: "10#sections-and-their-values: body with a trailing blank line", mut: func(r *Row) { r.Body = "x\n\n" }, rule: RuleConstraint, line: 6},
+		{name: "10#sections-and-their-values: body with a leading white space line", mut: func(r *Row) { r.Body = "  \nx\n" }, rule: RuleConstraint, line: 5},
 		{name: "10#sections-and-their-values: body with a level-2 heading", mut: func(r *Row) { r.Body = "x\n## y\n" }, rule: RuleConstraint, line: 6},
 		{name: "10#sections-and-their-values: body with a level-1 heading", mut: func(r *Row) { r.Body = "# y\n" }, rule: RuleConstraint, line: 5},
 		{name: "10#sections-and-their-values: body with a deeper heading", mut: func(r *Row) { r.Body = "### y\n" }, out: withBase("### y")},
@@ -488,10 +552,26 @@ func TestRenderRules(t *testing.T) {
 			r.Body = "```\n"
 			r.Sections["evidence"] = sp("x\n")
 		}, rule: RuleConstraint, line: 5},
+		{name: "10#sections-and-their-values: body with a setext H2 underline", mut: func(r *Row) { r.Body = "x\n---\n" }, rule: RuleConstraint, line: 6},
+		{name: "10#sections-and-their-values: body with a setext H1 underline", mut: func(r *Row) { r.Body = "x\n===\n" }, rule: RuleConstraint, line: 6},
+		{name: "10#sections-and-their-values: body with a thematic break after a blank line", mut: func(r *Row) { r.Body = "x\n\n---\n" }, out: withBase("x", "", "---")},
+		{name: "10#sections-and-their-values: body with an open HTML comment before a section", mut: func(r *Row) {
+			r.Body = "<!--\n"
+			r.Sections["evidence"] = sp("x\n")
+		}, rule: RuleConstraint, line: 5},
+		{name: "10#sections-and-their-values: body with a closed HTML comment before a section", mut: func(r *Row) {
+			r.Body = "<!-- c -->\n"
+			r.Sections["evidence"] = sp("x\n")
+		}, out: withBase("<!-- c -->", "", "## evidence", "", "x")},
+		{name: "10#sections-and-their-values: body with an open HTML comment at the end", mut: func(r *Row) { r.Body = "<!--\nx\n" }, out: withBase("<!--", "x")},
+		{name: "10#encoding-and-line-structure: body with a bare CR", mut: func(r *Row) { r.Body = "a\rb\n" }, rule: RuleConstraint, line: 5},
 		{name: "10#encoding-and-line-structure: body with CRLF", mut: func(r *Row) { r.Body = "a\r\nb\n" }, rule: RuleConstraint, line: 5},
+		{name: "10#encoding-and-line-structure: body with a U+0000", mut: func(r *Row) { r.Body = "a\x00b\n" }, rule: RuleConstraint, line: 5},
 		{name: "10#encoding-and-line-structure: body that is not UTF-8", mut: func(r *Row) { r.Body = "\xff\n" }, rule: RuleConstraint, line: 5},
 		{name: "10#sections-and-their-values: section without a line feed", mut: func(r *Row) { r.Sections["evidence"] = sp("x") }, rule: RuleConstraint, line: 7},
 		{name: "10#sections-and-their-values: section with a level-2 heading", mut: func(r *Row) { r.Sections["evidence"] = sp("## x\n") }, rule: RuleConstraint, line: 7},
+		{name: "10#sections-and-their-values: section with a setext underline", mut: func(r *Row) { r.Sections["evidence"] = sp("a\n===\n") }, rule: RuleConstraint, line: 8},
+		{name: "10#sections-and-their-values: section with a leading blank line", mut: func(r *Row) { r.Sections["evidence"] = sp("\nx\n") }, rule: RuleConstraint, line: 7},
 		{name: "10#sections-and-their-values: section that is not declared", mut: func(r *Row) { r.Sections["nope"] = sp("x\n") }, rule: RuleConstraint, line: 1},
 		{name: "10#sections-and-their-values: body given as a section", mut: func(r *Row) { r.Sections["body"] = sp("x\n") }, rule: RuleConstraint, line: 1},
 		{name: "10#sections-and-their-values: present empty section", mut: func(r *Row) { r.Sections["cause"] = sp("") }, out: withBase("## cause")},
@@ -535,6 +615,8 @@ func TestMemosHaveNoFieldList(t *testing.T) {
 	cases := []parseCase{
 		accept("10#document-order: body after one blank line", "# Memo\n\nBody.\n"),
 		accept("10#document-order: empty body", "# Memo\n"),
+		accept("10#the-field-list-of-a-files-row: indented body without a field list", "# Memo\n\n  x\n"),
+		noncanonical("10#document-order: extra blank line before the body", 3, "# Memo\n\n\nBody.\n"),
 		noncanonical("10#document-order: body without the blank line", 2, "# Memo\nBody.\n"),
 		noncanonical("10#document-order: blank line with no body", 2, "# Memo\n\n"),
 		reject("10#the-field-list-of-a-files-row: body that begins with a list item", RuleBlock, 3, "# Memo\n\n- item\n"),
@@ -560,6 +642,30 @@ func TestMemosHaveNoFieldList(t *testing.T) {
 			}
 			if row != nil {
 				checkP2(t, cat, row, lk)
+			}
+		})
+	}
+}
+
+// TestDiagnosticColumnsCountCodePoints pins 10#diagnostics: a column is counted in
+// code points, so the element after multi-byte text is at its code-point column.
+func TestDiagnosticColumnsCountCodePoints(t *testing.T) {
+	cat := loadFixture(t)
+	lk := fixtureLinker()
+	cases := []struct {
+		name, text string
+		line, col  int
+		rule       string
+	}{
+		{"invalid UTF-8 after multi-byte text", "# Title\n- position: 1\n- done: true\n- owner: 한\xff\n", 4, 11, RuleEncoding},
+		{"U+0000 after multi-byte text", "# 한글\n- position: 1\n- done: true\n\n한\x00\n", 5, 2, RuleEncoding},
+		{"raw HTML after multi-byte text", "# Title\n- position: 1\n- done: true\n- note: 한 <b>x\n", 4, 9, RuleBlock},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, diags := ParseFile(cat, "tasks", "tasks/T1.flowmark.md", []byte(c.text), lk)
+			if len(diags) == 0 || diags[0].Rule != c.rule || diags[0].Line != c.line || diags[0].Column != c.col {
+				t.Fatalf("diagnostics %+v; want %s at %d:%d", diags, c.rule, c.line, c.col)
 			}
 		})
 	}

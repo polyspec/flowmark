@@ -237,26 +237,29 @@ func TestIntegerKeysAndMandatorySection(t *testing.T) {
 	})
 }
 
-// TestKeysCollideWithoutRegardToCase pins 20#keys: a key that collides without
-// regard to case is a key.duplicate of the validator, and the first key is kept.
-// The codec still reports it as format.block; T12.2.2-1 corrects that.
-// It is a unit test: a case-insensitive file
-// system cannot hold two files whose names differ only in case, so the rule is
-// tested on rows.
+// TestKeysCollideWithoutRegardToCase pins 20#keys and 10#diagnostics: two rows
+// whose keys differ only in case are both rows of the codec with no diagnostic;
+// key.duplicate is the validator's rule, so the codec never makes a file
+// unreadable for it. A case-insensitive file system holds one of the two files,
+// so the test runs only where both names can be written.
 func TestKeysCollideWithoutRegardToCase(t *testing.T) {
-	rows := []*Row{{Key: "T1"}, {Key: "t2"}, {Key: "t1"}, {Key: "T2"}}
-	kept, diags := keepFirstKeys("tasks", rows)
+	cat := loadFixture(t)
+	lk := fixtureLinker()
+	root := tree(t, map[string]string{"tasks/T1.flowmark.md": withBase(), "tasks/t1.flowmark.md": withBase()}, nil)
+	entries, err := os.ReadDir(filepath.Join(root, "tasks"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) < 2 {
+		t.Skip("the file system is case-insensitive; the two names cannot coexist")
+	}
+	rows, diags := ParseFilesTable(cat, root, "tasks", lk)
 	var keys []string
-	for _, r := range kept {
+	for _, r := range rows {
 		keys = append(keys, r.Key)
 	}
-	if !reflect.DeepEqual(keys, []string{"T1", "t2"}) {
-		t.Fatalf("kept = %v; want [T1 t2]", keys)
-	}
-	if len(diags) != 2 || diags[0].File != "tasks/t1.flowmark.md" || diags[0].Rule != RuleBlock || diags[1].File != "tasks/T2.flowmark.md" {
-		t.Fatalf("diagnostics = %+v", diags)
-	}
-	if !strings.Contains(diags[0].Message, "collides with T1") || !strings.Contains(diags[1].Message, "collides with t2") {
-		t.Fatalf("diagnostic messages = %+v", diags)
+	sort.Strings(keys)
+	if !reflect.DeepEqual(keys, []string{"T1", "t1"}) || len(diags) > 0 {
+		t.Fatalf("rows = %v, diagnostics = %+v; want both rows and no diagnostic", keys, diags)
 	}
 }

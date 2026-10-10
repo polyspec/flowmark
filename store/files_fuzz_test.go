@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/polyspec/orm/engine/dbspec"
 )
 
 // fuzzSeeds are the golden tasks files and the noncanonical spellings of them.
@@ -81,7 +83,12 @@ func FuzzRenderFile(f *testing.F) {
 		if len(pd) > 0 || back == nil {
 			t.Fatalf("written file does not parse cleanly: %+v\ntitle %q body %q\nout %q", pd, title, body, out)
 		}
-		if back.Title != title || back.Body != body || *back.Scalars["position"] != position || *back.Scalars["note"] != note {
+		// An integer is written in its canonical form, so the expected text is the canonical one.
+		wantPosition, ok := readable(dbspec.Type{Kind: dbspec.TypeI32}, position)
+		if !ok {
+			t.Fatalf("an integer the writer accepted is not canonical: %q", position)
+		}
+		if back.Title != title || back.Body != body || *back.Scalars["position"] != wantPosition || *back.Scalars["note"] != note {
 			t.Fatalf("row changed on the round trip: %+v", back)
 		}
 		if !strings.HasPrefix(string(out), "# ") {

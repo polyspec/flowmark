@@ -3,6 +3,17 @@
 
 ## Unreleased
 
+- T12.2.2-1: the `files` codec and store follow the T12.1-3 and T12.1-4 rulings. An H1 title reads a final `\#`
+  as `#`, is written with its last `#` escaped when its final hash run follows a space or a tab or is the whole
+  title, and a title ending in `\#` is `CONSTRAINT`. A markdown value that begins or ends with a blank line, or
+  holds a CR or a U+0000, is refused; a value that leaves a fence or an HTML block open before an element, or holds
+  a setext heading, is refused; a `files` body after a field list does not begin with an indented line. A BOM or a CR
+  is `format.noncanonical`, a U+0000 is `format.encoding`, and a typed scalar is written in its canonical form. A
+  scalar not of its column type, a dangling foreign key and a key that differs from another only in case are kept as
+  read (a raw text, a written target) for the validator's `type`, `reference.dangling` and `key.duplicate`. A key may
+  end with `-` and holds no `-_`. White space that rendering drops around a single-line place is
+  `format.noncanonical`. A body line directly after the field list is `format.block`.
+
 - T12.1-5: the specifications state the rulings the `document` codec needed. `now` is dbspec's keyword for the
   current time in a `datetime` default and is never stored: a temporal value written `now` is not of its type, and a
   text `now` is text. A table row out of storage order is `format.noncanonical`; a `parent` cycle among a file's rows
