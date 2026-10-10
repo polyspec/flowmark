@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database-checklist -->
-<!-- source-sha256: 11a65db33a2bf33f3f8627f802e98c83c9c0e5012e4d8cc1048bd8955537d724 -->
+<!-- source-sha256: f0a00246480a8e37be17a107e3b94081f824db3ba00a89231655ffd49283d231 -->
 # markdown database checklist
 
 ## T12 markdown database
@@ -18,7 +18,7 @@
   - 완료 기준: 거절마다 테스트 하나와 적재된 fixture catalog 하나.
 - [o] T12.2.1-1 catalog는 `.dbs` 집합만 읽는다: `dbspec/flowmark.json`과 그 번역은 제거하며, `dbspec/`의 다른 file은 모두 catalog 진단이다 (T12.2.1 후속; T12.1-1 선행)
   - 완료 기준: 사례마다 테스트 하나이며, catalog API에 translations 필드가 남지 않는다.
-- [ ] T12.2.1-2 markdown table의 모든 외래 key는 markdown table의 단일 column 기본 key를 가리킨다. 그 밖의 외래 key는 위치가 정해진 catalog 진단이다. 원인: 외래 key는 가리키는 행으로의 link로 쓰이고 행은 단일 column key로만 link를 가지므로, `files` codec이 어떤 규칙도 자리를 정하지 않은 복합 외래 key를 만나 그 column을 평범한 값으로 썼다 (T12.2.1, T12.2.2 후속)
+- [o] T12.2.1-2 markdown table의 모든 외래 key는 markdown table의 단일 column 기본 key를 가리킨다. 그 밖의 외래 key는 위치가 정해진 catalog 진단이다. 원인: 외래 key는 가리키는 행으로의 link로 쓰이고 행은 단일 column key로만 link를 가지므로, `files` codec이 어떤 규칙도 자리를 정하지 않은 복합 외래 key를 만나 그 column을 평범한 값으로 썼다 (T12.2.1, T12.2.2 후속)
   - 완료 기준: 복합 외래 key와 key가 아닌 unique column을 가리키는 외래 key에 대해 허용과 거절 사례가 있고, spec 30과 그 twin이 규칙을 적으며, `go test ./catalog/...`, `make documents-check`, `make refs-check`가 통과한다.
 - [o] T12.2.2 `files` 저장: 행마다 `<table>/<key>.flowmark.md` 파일 하나를 parse·render한다 — H1 제목, 저장되는 scalar column의 field list(읽을 수 있는 값 형식), 본문, level-2 section, 외래 key는 link — P1/P2를 갖는다. literal은 그것을 담은 고정된 orm commit의 `CanonicalLiteral`로 읽는다 (T12.1-1, T12.2.1-1 선행)
   - 완료 기준: golden fixture가 byte 단위로 round-trip하고, 모든 규칙마다 허용과 거절 사례가 있으며, parse와 emit은 golden seed로 fuzz한다. store/literal.go는 orm의 로직을 복사하지 않는다.

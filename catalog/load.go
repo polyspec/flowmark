@@ -38,6 +38,7 @@ func Load(root string) (*Catalog, []Diagnostic) {
 		hash = l.manifest(docs)
 	}
 	l.collectTables(docs)
+	l.checkForeignKeys()
 	l.resolveLayout()
 	l.checkNames()
 	if len(l.diags) > 0 {

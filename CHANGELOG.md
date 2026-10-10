@@ -3,6 +3,10 @@
 
 ## Unreleased
 
+- T12.2.1-2: every foreign key of a table is one column that references the one-column primary key
+  of a table. A composite foreign key, or one referencing a unique non-key column, is a located
+  `catalog` diagnostic at the foreign key. A link to a row has only the row's one-column key.
+
 - T12.2.2: the `files` storage parses and renders one `<table>/<key>.flowmark.md` per row: the H1
   title with its `\#` escape, the field list of the stored scalar columns in their readable value
   forms, the body, the level-2 sections of the nullable markdown columns, and foreign keys as links

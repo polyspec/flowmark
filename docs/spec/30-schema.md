@@ -53,6 +53,10 @@ behaviour.
 - **Required**: a table with a `state_machine` declares its `history` and at least one `initial`
   state; a `list` or `files` storage declares `title`; a `list` storage with a state column
   declares a `checkbox` for every state.
+- **Foreign keys.** Every foreign key of a table is one column that references the one-column
+  primary key of a table. A composite foreign key, or one that references a unique non-key
+  column, is a schema error, located at the foreign key. Grounding: a foreign key is written as a
+  link to the referenced row, and a row has a link only through its one-column key.
 
 ## Name rules
 

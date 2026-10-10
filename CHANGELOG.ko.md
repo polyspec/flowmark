@@ -1,8 +1,12 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 22c62a95103ba5a5be433eecc6ee23be7a3949645c3cc56b3d5945e34d748809 -->
+<!-- source-sha256: 16b91c3fa3ecf1d0825c55b3b4d0014e467e90b885416b6fdb68e53e2e0c7d59 -->
 # Changelog
 
 ## Unreleased
+
+- T12.2.1-2: markdown table의 모든 외래 key는 하나의 column이며 어떤 table의 단일 column primary key를 가리킨다.
+  composite 외래 key, 또는 unique이지만 key가 아닌 column을 가리키는 외래 key는 그 외래 key의 위치에 놓인
+  `catalog` 진단이다. 행으로의 link는 그 행의 단일 column key만 가진다.
 
 - T12.2.2: `files` 저장이 행마다 `<table>/<key>.flowmark.md` 파일 하나를 parse하고 render한다. H1
   제목(`\#` escape 포함), 저장되는 scalar column의 field list(읽을 수 있는 값 형식), 본문, nullable
