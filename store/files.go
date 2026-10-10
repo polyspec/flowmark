@@ -169,6 +169,9 @@ func ParseFile(cat *catalog.Catalog, table, rel string, data []byte, lk Linker) 
 		p.readSections(lines, b, row, dp)
 		dp.resolveLinks()
 	}
+	for _, c := range anchorClashes(lines, tableLevels(lay.table, 0, lay.children)) {
+		p.fail(c.line, 1, RuleBlock, c.message())
+	}
 	if p.fatal {
 		return nil, p.diags
 	}
@@ -417,7 +420,15 @@ func RenderFile(cat *catalog.Catalog, table string, row *Row, lk Linker) ([]byte
 	if err != nil {
 		return nil, []Diagnostic{fileDiag(table, RuleWalk, err.Error())}
 	}
-	return renderRow(lay, row, lk)
+	out, diags := renderRow(lay, row, lk)
+	if len(diags) > 0 {
+		return nil, diags
+	}
+	rel := row.Table + "/" + row.Key + fileSuffix
+	if rd := anchorRefusals(rel, out, tableLevels(lay.table, 0, lay.children)); len(rd) > 0 {
+		return nil, rd
+	}
+	return out, nil
 }
 
 // writer collects the file being written and the refusals of its values. An element

@@ -253,7 +253,11 @@ func ParseDocument(cat *catalog.Catalog, table, rel string, data []byte, lk Link
 	if !ok {
 		return nil, p.diags, nil
 	}
-	recs := p.run(lay, splitLines(text))
+	lines := splitLines(text)
+	recs := p.run(lay, lines)
+	for _, c := range anchorClashes(lines, tableLevels(lay.table, lay.scope-1, lay.children)) {
+		p.fail(c.line, 1, RuleBlock, c.message())
+	}
 	if p.fatal {
 		return nil, p.diags, nil
 	}

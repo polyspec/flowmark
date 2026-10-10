@@ -1,8 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 9e9aac096245bb6f15bea645d0b3a6bc5a4db889fd3b6c0f24a6b68188e30d32 -->
+<!-- source-sha256: 5f849477fd26d144dcc385212401e840ba58c1d68966d208ba1ce30d740a1372 -->
 # Changelog
 
 ## Unreleased
+
+- T12.2.2-6: `files`와 `document` codec이 spec 10의 상세 anchor 충돌 규칙을 적용한다. 상세 heading이 아닌 heading은 fold(F_G나 F_M, 끝 숫자 run을 뗀 것)가 상세 anchor의 fold와 같으면 거절한다. anchor와 같은 id를 정하는 attribute list와 anchor와 같은 HTML `id` 또는 `name`도 대소문자를 가리지 않고 거절한다. 쓰기가 충돌을 들이면 다른 heading을 이름으로 든 `CONSTRAINT`이며, 중복 key는 `DUPLICATE_KEY`로 남는다. 읽기의 충돌은 `format.block`이다. heading은 중첩된 것까지 CommonMark block 구조에서 얻고, inline 텍스트는 link, emphasis, code span, entity, raw HTML을 읽는 최소 reader가 commonmark.js 0.31.2에 대조한다. 모듈은 `golang.org/x/text` v0.42.0을 직접 의존성으로 추가한다. fold가 `norm.NFKD`를 쓰는데 표준 라이브러리에는 Unicode 17.0.0의 분해가 없기 때문이며, 테스트가 `norm.Version`을 17.0.0으로 고정한다. `internal/htmlentity`는 `entities` 3.0.1 데이터의 이름 참조를 담으며, 그 데이터에서 생성되고 테스트가 새로 만든 것과 대조한다.
 
 - T12.2.2-5: heading scanner가 CommonMark 0.31.2처럼 `#` 연속 뒤에 tab이 오는 ATX heading을 읽는다(줄 끝은 이미 읽었다). hash 뒤의 tab은 제목, section, block, 상세 heading의 비정규 철자(`format.noncanonical`)이며, scanner, section 경계, 상세 heading 파싱이 같은 읽기를 따른다. `##x`와 `#` 일곱 개는 여전히 텍스트다. spec 10은 상세 heading 규칙에 tab을 적는다.
 

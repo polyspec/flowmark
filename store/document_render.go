@@ -21,7 +21,13 @@ func RenderDocument(cat *catalog.Catalog, table string, rows []*Row, lk Linker) 
 		return nil, nil, err
 	}
 	out, diags := renderDocument(lay, rows, lk, true)
-	return out, diags, nil
+	if len(diags) > 0 {
+		return nil, diags, nil
+	}
+	if rd := anchorRefusals(docFileName(lay), out, tableLevels(lay.table, lay.scope-1, lay.children)); len(rd) > 0 {
+		return nil, rd, nil
+	}
+	return out, nil, nil
 }
 
 // renderDocument writes the document of rows in its canonical form. A write refuses

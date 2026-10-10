@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database-checklist -->
-<!-- source-sha256: f9ed90872acf9ccd7688e9f7a5ee6da1ebed54b44cce14acd3fad18e25e9190a -->
+<!-- source-sha256: b24c32d78a5afcaf7344f5bbf191e9e63d966f9e2b323f63b72ed56ab2ac9964 -->
 # markdown database checklist
 
 ## T12 markdown database
@@ -35,7 +35,7 @@
   - 완료 기준: fixture와 그 사례가 있고, fuzz target이 golden으로 seed되며, `go test -count=1 ./store/`가 통과한다.
 - [o] T12.2.2-5 codec이 CommonMark처럼 `#` 연속 뒤에 tab이 오는 ATX heading을 읽는다: `store/markdown.go`는 지금 space를 요구한다 (T12.2.2-3 후속)
   - 완료 기준: commonmark.js 0.31.2에 고정한 허용과 거절 사례가 있고 `go test -count=1 ./store/`가 통과한다.
-- [ ] T12.2.2-6 codec이 T12.1-4의 상세 anchor 충돌 규칙을 적용한다: 끝 숫자 run을 뗀 fold(F_G나 F_M)가 상세 anchor와 같은 상세 heading 아닌 heading, anchor와 같은 id를 정하는 attribute list, anchor와 같은 HTML `id`나 `name`은 쓰기에서 `CONSTRAINT`, 읽기에서 `format.block`이다. 지금은 어느 codec도 이를 검사하지 않는다 (T12.1-4, T12.2.3 후속)
+- [o] T12.2.2-6 codec이 T12.1-4의 상세 anchor 충돌 규칙을 적용한다: 끝 숫자 run을 뗀 fold(F_G나 F_M)가 상세 anchor와 같은 상세 heading 아닌 heading, anchor와 같은 id를 정하는 attribute list, anchor와 같은 HTML `id`나 `name`은 쓰기에서 `CONSTRAINT`, 읽기에서 `format.block`이다. 지금은 어느 codec도 이를 검사하지 않는다 (T12.1-4, T12.2.3 후속)
   - 완료 기준: fold마다, 끝 숫자 제거, attribute list 형식마다, HTML에 대해 files와 document 저장에서 허용과 거절 사례가 있고 `go test -count=1 ./...`가 통과한다.
 - [o] T12.2.2-4 `files` codec이 T12.1-9의 보이지 않는 문자 규칙을 `files` 행이 가진 두 한 줄 자리, 즉 H1 제목과 field list 값에 적용한다: 쓰기의 끝 거절, 읽기 분류(CommonMark가 떼어내는 자리의 space나 tab은 `format.noncanonical`, 끝의 그 밖의 보이지 않는 문자는 `format.block`), U+1680과 prepended concatenation mark의 제외. Default_Ignorable_Code_Point table은 `internal/unicodedcp/testdata`에 둔 Unicode 17.0.0 data 파일에서 생성하며 테스트가 최신성을 확인한다. 같은 규칙이 덮는 list 행과 table cell은 T12.2.3의 것이다. T12.2.3은 거기서 공유 helper `invisible`과 `invisibleAtEnd`를 적용하며, bare token의 제외, 따옴표 쓰기와 그 읽기 규칙을 함께 적용한다. 원인: T12.1-9가 codec이 검사하는 공백을 바꾸었고, Go의 `unicode` 패키지에는 Default_Ignorable_Code_Point 속성이 없으므로 codec은 Unicode 17.0.0 data에서 생성한 table로 그것을 읽으며, 그 table의 최신성은 테스트가 확인한다 (T12.1-9 후속; T12.2.2-2 필요)
   - 완료 기준: 문자 부류마다, 자리마다(H1 제목, field list 값, list 제목과 field, table cell) 허용과 거절 사례가 있고, 생성된 table의 Unicode 17.0.0 data 대비 최신성 테스트가 있으며, fuzz target이 새 사례로 seed되고, `go test -count=1 ./...`, `make documents-check`, `make refs-check`가 통과한다.
