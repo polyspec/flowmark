@@ -3,9 +3,10 @@
 
 [한국어](10-canonical-format.ko.md)
 
-This specification pins the byte form of one document. It states the grammar subset, the
-idempotency propositions, the ordering rules and the encoding. Everything the renderer owns is
-stated here; everything else is preserved payload.
+This specification pins the byte form of the storages the [document model](20-document-model.md)
+names. It states the idempotency propositions, the document order, the list and table grammars,
+the sections, and the encoding. Everything the renderer owns is stated here; everything else is
+preserved payload.
 
 ## Idempotency
 
@@ -17,60 +18,86 @@ stated here; everything else is preserved payload.
 
 ## The skeleton and the preservation boundary
 
-The renderer owns exactly the **skeleton**: the header comments it stamps (`doc-id`,
-`source-sha256`, provenance), the frontmatter block, heading lines, the item and table lines it
-re-sorts, and the blank lines between skeleton elements. Every other byte — prose runs, fenced
-blocks, inline formatting, HTML comments other than the owned markers — is **preserved payload**:
-the renderer moves, wraps and re-sorts skeleton lines and never rewrites payload bytes.
+The renderer owns exactly the **skeleton**: the header comments, the frontmatter block, the H1,
+the heading lines of block and detail sections, the list lines and table lines of the rows, and
+the blank lines between skeleton elements. The values of `markdown` columns — the body and the
+column sections — are payload: the renderer moves them with their row and never rewrites their
+bytes.
 
-- Non-canonical input (a BOM, CRLF, a skeleton line in a non-canonical shape) is a
-  `format.noncanonical` diagnostic. `flowmark canon` is a one-shot migration transaction that
-  rewrites the document to canonical form; a logical write never normalizes as a side effect.
+- Non-canonical input (a BOM, CRLF, a skeleton line in a non-canonical shape, rows out of their
+  storage order) is a `format.noncanonical` diagnostic. `flowmark canon` is a one-shot migration
+  transaction that rewrites the document to canonical form; a logical write never normalizes as
+  a side effect.
 
-## Document grammar
+## Document order
 
-A document is, in order: header comments; an H1 title; the preamble; a YAML frontmatter block;
-then H2 sections and structured blocks. The strict parser accepts exactly:
+- **A `files` row** is, in order: the header comments (`<!-- doc-id: <key> -->` first, then any
+  provenance comment); the frontmatter block; the H1 title; the body; the level-2 sections of the
+  row scope.
+- **A `document` file** `<table>.md` is: `<!-- doc-id: <table> -->`; `# <table>`; the list or table
+  of the rows directly under the H1; the detail sections at level 2.
+- **A block section** is a heading at level b named by the child table, inside the parent row's
+  scope; its list or table follows the heading, and its rows' detail sections follow at level
+  b + 1.
+- **A detail section** is the heading `<h> <key>` — the key alone, never a title copy — followed
+  by the row's body and then the row scope's sections at level h + 1. A detail section whose key
+  names no row of its block is `format.block`. Detail sections of nested list rows are flat
+  siblings. Rows without a detail section have the empty body.
+- A heading that a layout would need past H6 is a schema error, decided when the catalog loads.
 
-- **Header comments**: `<!-- doc-id: <id> -->` exactly once, first; `<!-- source-sha256: … -->` on
-  a twin; provenance comments on adapter-owned documents.
-- **Preamble**: the text between the H1 and the first H2 maps to the reserved long-text column
-  `preamble`.
-- **H2 sections**: one H2 heading per declared long-text column; an absent section is NULL, a
-  present but empty section is the empty text. A heading with no declared column is a diagnostic.
-- **Structured blocks** are the child-table layouts of the [document model](20-document-model.md).
+## Sections and their values
+
+- The body and every `markdown` column value of a row scope at level L end at the next heading
+  of level ≤ L, counted only outside fenced blocks (CommonMark block structure). A value holds
+  only headings deeper than L; a write of a value with a heading line of level ≤ L outside a
+  fence is `CONSTRAINT`.
+- In a row scope at level L, each nullable `markdown` column and each child block is a heading at
+  level L named by the column or the child table. An absent section is NULL; a present empty
+  section is the empty text. The body is never NULL. An undeclared heading at level L is
+  `format.section`.
+
+## List rows
+
+- A list row is `- [<glyph>] <key> <title>[ <field>…]`, or `- <key> <title>[ <field>…]` when the
+  table has no state column. The glyph is the `checkbox` glyph of the row's state.
+- Fields are parsed from the right: a token `<declared column>:<value>`, where the value is a bare
+  token without space, `"` or `\`, or `"…"` with `\"` and `\\` as its escapes. Only declared
+  scalar columns are fields. An absent field is NULL; `col:""` is the empty text; a non-null
+  column without a default is written.
+- A title token matching `<declared column>:` is written `<column>\:`. The title is the text
+  between the key and the first field.
+- A child row is indented two spaces deeper than its parent; the indentation is the `parent`
+  column and nothing else writes it. The placement foreign key and `parent` are never written as
+  fields; writing one is `format.block`.
+
+## Table rows
+
+- A table's header row names the stored scalar columns; every stored scalar column has a header,
+  and a header that names no column is `format.block`. A cell writes `|` as `\|`.
+- An empty cell is NULL; the empty text of a non-null text column is written `""`.
+
+## Single-line places
+
+A list title, a list field and a table cell are single-line: a value with a line feed there is
+`CONSTRAINT` on write. A key in a list or table storage contains no space, `#`, `|` or line feed.
 
 ## Frontmatter profile
 
 - YAML **1.2 core schema**, block style in the value region; anchors, aliases and tags are
   rejected; comments are rejected in v1 (a comment-preserving round-trip emitter is a stated
   non-goal until a requirement names it).
-- Key syntax follows the dbspec name rule, NFC-normalized; unknown keys are diagnostics.
-- Value syntax per type: decimal, datetime and uuid literals use the dbspec canonical forms;
-  `bytes` is base64; a text value that may hold a newline cannot live in a markdown-table cell.
-
-## Task IDs and ordering
-
-- **Grammar**: `T<n>(.<n>)*(-<n>)?` with no leading zeros and no suffix `-0`; equality is string
-  equality on the canonical form. The suffix is part of the identity and travels with its base
-  under renumber.
-- **Ordering is type-directed**: ID-typed keys compare segment-wise numeric — `T8.0.9` sorts
-  before `T8.0.10` — the suffix compares numerically after its base path, and children of a
-  suffixed item bind the suffix to the last path segment (`T8.0.14-1.3` is a child of
-  `T8.0.14-1`). Text compares by codepoint; composite keys compare lexicographically by
-  component type. `group_count` groups NULLs together.
-- **References are structural**: a reference is a task-ID token in prose, and prose excludes
-  fenced blocks and inline code spans — a grammar example is not a reference. Codemods that
-  rewrite references are the stated exception to payload preservation.
+- Each key is a declared scalar column of the `files` table; an unknown key is `format.frontmatter`.
+  An absent key is NULL.
+- Value syntax per type: every value uses the dbspec canonical literal form; `bytes` is base64.
 
 ## Encoding
 
 UTF-8 without a BOM; LF is the canonical line ending; input accepts CRLF as valid (P2) and
-reports it as non-canonical (P1); IDs and keys are NFC; payload bytes are otherwise preserved
-as they are.
+reports it as non-canonical (P1); keys are NFC; payload bytes are otherwise preserved as they
+are.
 
 ## Diagnostics
 
 Every rule above reports `{file, line, column, rule, message}` with the rule names
-`format.noncanonical`, `format.header`, `format.frontmatter`, `format.section`,
-`format.block` and `format.encoding`.
+`format.noncanonical`, `format.header`, `format.frontmatter`, `format.section`, `format.block`
+and `format.encoding`.
