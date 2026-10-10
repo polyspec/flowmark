@@ -3,6 +3,10 @@
 
 ## Unreleased
 
+- T8.4-2: the repository tracks no built executable. The root `flowmark`, written by a
+  `go build` in the repository root, leaves the index and is ignored; `make build` writes
+  `build/flowmark`.
+
 - T10-5: the plugin repository tracks no built executable. The 16 MB example host binary is
   ignored; `go build -o example .` regenerates it. The change lives in the plugin repository.
 

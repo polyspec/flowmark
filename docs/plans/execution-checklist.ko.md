@@ -1,5 +1,5 @@
 <!-- doc-id: execution-checklist -->
-<!-- source-sha256: 5f60cbde2f0c92b88abaf5ec7ac4729508cba0ef41e436c7c3d51a69e4b531f9 -->
+<!-- source-sha256: 68d5892744ee790cde59cffe3d799396af11bff3ffc78a9779d5362eb7729c70 -->
 # 실행 체크리스트
 
 ## T1a 설계 session
@@ -70,7 +70,7 @@
 - [o] T8.4 이슈를 write path로 입력한다: add가 유일한 ID의 대기 항목을 추가하고 rm이 하나를 지우며 하위를 가진 부모는 거부한다 — CLI·MCP tool·sidecar operation 모두 (T8.3 후속)
 - [o] T8.4-1 sidecar add가 path 없는 요청을 첫 문서로 보내며 answer가 문서가 정한 ID를 말한다 (T8.4 후속)
   - 완료 기준: path를 실어줄 items answer가 아직 없는 빈 corpus에 sidecar로 첫 이슈를 추가하면 첫 문서에 항목이 쓰이고 ` added`가 아니라 `T1 added`로 답한다.
-- [ ] T8.4-2 repository는 빌드된 실행 파일을 추적하지 않는다: 루트의 `flowmark`를 추적에서 빼고 ignore하며, build는 `build/`에만 쓴다 (T8.4 후속). 원인: repository 루트에서 실행한 `go build`가 4.4 MB 실행 파일 `flowmark`를 썼고 T8.4 commit이 그것을 담았다
+- [o] T8.4-2 repository는 빌드된 실행 파일을 추적하지 않는다: 루트의 `flowmark`를 추적에서 빼고 ignore하며, build는 `build/`에만 쓴다 (T8.4 후속). 원인: repository 루트에서 실행한 `go build`가 4.4 MB 실행 파일 `flowmark`를 썼고 T8.4 commit이 그것을 담았다
   - 완료 기준: `git ls-files`에 빌드된 실행 파일이 없고, 루트에서 `go build ./cmd/flowmark`를 해도 `git status`가 깨끗하며, `make build`는 `build/flowmark`에만 쓴다.
 - [o] T8.5 Mermaid block이 유일한 transition 권위다: Transition이 edge·필수 필드·glyph를 문서 자신의 state machine에서 읽고 AddItem이 `[*]` 줄에서 초기 상태를 취하며 ApplySchema가 Mermaid block을 다시 쓰고 — 내장 table은 남지 않는다 (T8.4 후속)
   - 완료 기준: 사용자 정의 상태 이름을 가진 문서가 자신이 선언한 edge대로 전이한다 — 선언 안 된 edge는 거부, edge label이 필수 evidence를 정하고 새 항목은 선언된 초기 상태에 놓인다 — 그리고 Go source에서 hardcoded state map을 `grep`으로 찾을 수 없다.

@@ -1,8 +1,11 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: bdec8eb76b53a621904aeb7a1612fcb066ddc9b2aa9eed917fe8906ed2536878 -->
+<!-- source-sha256: 21eaa4e7413b8b6dbd1510856ee9c11873aaffd5a3d14dc344fe25226c51d0df -->
 # Changelog
 
 ## Unreleased
+
+- T8.4-2: repository는 빌드된 실행 파일을 추적하지 않는다. repository 루트의 `go build`가 쓴 루트의
+  `flowmark`는 index에서 빠지고 ignore되며, `make build`는 `build/flowmark`에 쓴다.
 
 - T10-5: plugin repository는 빌드된 실행 파일을 추적하지 않는다. 16 MB example host binary는
   ignore하고 `go build -o example .`로 다시 만든다. 변경은
