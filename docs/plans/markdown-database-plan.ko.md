@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database -->
-<!-- source-sha256: 841af2e8ec0c50f6df2866e250a60f2fea7031eb9376636d306a891fc2f01788 -->
+<!-- source-sha256: dfcf00ef49a37ff7c0c5ab02de8af787875eec5179ea8521d55bc98f58b939f0 -->
 # markdown database 계획
 
 [English](markdown-database-plan.md)
@@ -104,7 +104,7 @@ NULL이 아니며 비어 있을 수 있고, view의 entity table은 둘 다 선�
   GitHub, GitLab, VS Code, MkDocs가 heading에 대해 만드는 anchor인 link다. Pandoc은 주장 대상이 아니다: 기본 설정은 상대 경로 link target을 다시 쓰지 않는다.
   근거: 문서는 database의 유일한 저장소이므로
   읽을 수 있는 문서로 남아야 하며, 기계만 필요로 하는 것은 catalog(`dbspec/`)나 `.flowmark/`에 속한다.
-- 인코딩: BOM 없는 UTF-8, LF, 정확히 마지막 LF 하나. 줄 끝은 CommonMark가 읽는 대로 LF, CRLF, 또는 뒤에 LF가 없는 CR이다. BOM, 모든 줄 끝의 CR, 마지막 LF가 없음, 끝의 빈 줄은 `format.noncanonical`이고, UTF-8이 아닌 byte와 U+0000은 `format.encoding`이다. 값은 줄 바꿈으로 시작하거나 끝나지 않으며 공백만 있는 줄로 시작하거나 끝나지 않는다. `format.*` 진단이 있는 file을 다시 쓰는 logical write는 `CONSTRAINT`이며, `format.noncanonical`이면 `flowmark canon`을 밝힌다. `files` 행의 file 전체를 지우는 delete는 rewrite 거절에서만 면제되며, restrict 검사는 그 행을 참조할 수 있는 모든 table의 행을 여전히 필요로 하며(자신의 table을 `parent`로 하는 것, 자식 및 이력 block, 그 행으로의 foreign key를 가진 모든 table), 그 중 하나라도 사용할 수 없으면 그 delete는 `CONSTRAINT`다. `format.block`, `format.section`, `format.encoding`이나 그 행 사이의 `parent.cycle`이 있는 file을 가지거나 바이트 단위로 같은 key를 가진 두 행이 있는 table은 사용할 수 없다: 그 행을 필요로 하는 모든 요청이나 검사는 file과 진단을 밝히며 `CONSTRAINT`로 실패한다. block table은 placement parent의 file을 재귀적으로 가진다. corpus 열기, introspection, `flowmark validate`와 `flowmark canon`은 사용할 수 없는 table에서 결코 실패하지 않으며, 그 table이 필요한 export는 실패하고 아무것도 쓰지 않는다.
+- 인코딩: BOM 없는 UTF-8, LF, 정확히 마지막 LF 하나. 줄 끝은 CommonMark가 읽는 대로 LF, CRLF, 또는 뒤에 LF가 없는 CR이다. BOM, 모든 줄 끝의 CR, 마지막 LF가 없음, 끝의 빈 줄은 `format.noncanonical`이고, UTF-8이 아닌 byte와 U+0000은 `format.encoding`이다. 값은 줄 바꿈으로 시작하거나 끝나지 않으며 space와 tab만 있는 줄(CommonMark의 빈 줄)로 시작하거나 끝나지 않는다. `format.*` 진단이 있는 file을 다시 쓰는 logical write는 `CONSTRAINT`이며, `format.noncanonical`이면 `flowmark canon`을 밝힌다. `files` 행의 file 전체를 지우는 delete는 rewrite 거절에서만 면제되며, restrict 검사는 그 행을 참조할 수 있는 모든 table의 행을 여전히 필요로 하며(자신의 table을 `parent`로 하는 것, 자식 및 이력 block, 그 행으로의 foreign key를 가진 모든 table), 그 중 하나라도 사용할 수 없으면 그 delete는 `CONSTRAINT`다. `format.block`, `format.section`, `format.encoding`이나 그 행 사이의 `parent.cycle`이 있는 file을 가지거나 바이트 단위로 같은 key를 가진 두 행이 있는 table은 사용할 수 없다: 그 행을 필요로 하는 모든 요청이나 검사는 file과 진단을 밝히며 `CONSTRAINT`로 실패한다. block table은 placement parent의 file을 재귀적으로 가진다. corpus 열기, introspection, `flowmark validate`와 `flowmark canon`은 사용할 수 없는 table에서 결코 실패하지 않으며, 그 table이 필요한 export는 실패하고 아무것도 쓰지 않는다.
 
 - 이 판정과 함께 철회한다: `<!-- doc-id -->` header, 출처 주석, `files` 행의 frontmatter, twin 규칙,
   `dbspec/flowmark.json`의 `translations` setting. adapter가 소유한 문서의 sync 출처는 문서 밖으로
@@ -209,13 +209,13 @@ markdown 전용 선언은 모두 dbspec **manifest setting**이며 `markdown <co
   orm의 `dbspec.CanonicalLiteral(t, v)`로 읽고, date, time, datetime, uuid는
   `CanonicalLiteral(t, "'" + v + "'")`로 읽어 결과에서 따옴표를 뺀다. `now`는 `datetime` 기본값에서 현재 시각을 뜻하는 dbspec keyword이며 결코 저장되는 값이 아니다: 엔진이 insert에서 그것이 뜻하는 시각을 쓴다. `now`로 쓰인 시간 값(date, time, datetime)은 그 type이 아니며(읽기에서 `type`, 쓰기에서 `CONSTRAINT`), text 값 `now`는 text다. text는 column의
   길이를 검사하며, 한 줄 자리에서는 아래 규칙을 따른다. 쓰인 형식이 정규 형식과 다른 값은 읽기에서 `format.noncanonical`이다. 값이 column의 type이 아니면 validator의 `type`이고 쓰기에서 `CONSTRAINT`다. 쓰기에서 수, `true`/`false`, date, time, datetime, uuid는 `CanonicalLiteral`이 주는 형식으로 쓴다(`1.5`를 `decimal(4,2)`에 넣으면 `1.50`; float는 왕복하는 가장 적은 자릿수의 고정 표기, 0은 `0`). `CanonicalLiteral`이 거절하는 값(scale보다 많은 소수 자릿수 — 0 포함, precision − scale보다 많은 정수 자릿수, precision보다 많은 소수 자릿수의 time이나 datetime)은 `CONSTRAINT`다. bytes는 padding이 있는 표준 base64(RFC 4648 §4)로 쓰며, bytes column에서 그 밖의 텍스트를 읽으면 `type`이다. text와 `markdown` 값은 자리의 escape를 빼고 바이트 그대로 쓰며, 그렇게 쓸 수 없는 값은 `CONSTRAINT`다. validator의 `type` 값을 평가하는 요청은 `CONSTRAINT`로 실패한다. 쓰기는 문서 바이트를 정규화하지 않는다.
-- **한 줄 자리**는 title(list 행, H1, cell 안), list field, field list의 값, table cell이다. 그곳의 공백은 space와 tab이며, CommonMark가 떼어낼 때 세는 것과 같다. 그곳의 값에
-  줄바꿈, 앞뒤 공백, 또는 `<` 뒤에 `!`, `/`, 문자가 오는 것(raw HTML이 값을 숨기거나 바꾼다)이 있으면
-  쓰기에서 `CONSTRAINT`다. 읽기에서는 렌더링이 텍스트와 다르게 보이는 한 줄 값(인용된 list field나 cell의 앞뒤 공백, `<` 뒤에 `!`, `/`, 글자)이 `format.block`이고, 렌더링이 떨어뜨리는 공백은 `format.noncanonical`이다. 각 자리는 하나의 정식 구분자를 가진다(H1 표지 뒤 `# `, field list column 뒤 `: `, 빈 텍스트는 아무것도 없음, list 토큰 사이 공백 하나, cell은 `| v |`). 그 밖의 공백은 `format.noncanonical`이다. 한 줄 값은 쓴 그대로의 인라인 markdown이며, 명시된 경우를 빼고는 escape하지
+- **한 줄 자리**는 title(list 행, H1, cell 안), list field, field list의 값, table cell이다. 그곳의 보이지 않는 문자는 spec 10이 정한 것이다(U+1680을 뺀 공백, Cc 제어 문자, Prepended_Concatenation_Mark를 뺀 Cf 형식 문자, Default_Ignorable_Code_Point). 근거: 그런 문자는 글리프 없이 그려지므로 독자는 볼 수 없다. U+1680과 prepended concatenation mark는 글리프가 있어 텍스트다. viewer들이 끝에서 떼어내는 집합이 서로 다르다(Python-Markdown은 U+001C–U+001F를 떼어낸다). CommonMark 0.31.2는 space와 tab을 떼어낸다. 그곳의 값에
+  줄바꿈, 양 끝의 보이지 않는 문자, 또는 `<` 뒤에 `!`, `/`, 문자가 오는 것(raw HTML이 값을 숨기거나 바꾼다)이 있으면
+  쓰기에서 `CONSTRAINT`다. 읽기에서는 렌더링이 텍스트와 다르게 보이는 한 줄 값(인용된 list field나 인용된 cell(`"…"`)의 따옴표 안 양 끝에 보이지 않는 문자가 있는 것, `<` 뒤에 `!`, `/`, 글자)이 `format.block`이고, 읽기에서, CommonMark가 줄 내용의 끝에서(또는 GFM이 cell의 끝에서) 떼어내는 자리에 있는, 한 줄 자리의 끝의 space나 tab은 `format.noncanonical`이다. 뒤따르는 list 토큰 앞의 space는 구분자다. 뒤따르는 토큰 앞에서 list 제목을 끝내는 tab은 `format.block`이다. 끝에 있는 그 밖의 보이지 않는 문자는 쓰기 규칙이 다시 만들 수 없으므로 `format.block`이다. 각 자리는 하나의 정식 구분자를 가진다(H1 표지 뒤 `# `, field list column 뒤 `: `, 빈 텍스트는 아무것도 없음, list 토큰 사이 space 하나, cell은 `| v |`). 그 밖의 space나 tab은 `format.noncanonical`이다. 한 줄 값은 쓴 그대로의 인라인 markdown이며, 명시된 경우를 빼고는 escape하지
   않는다.
 - `files`: H1 바로 뒤의 field list — 저장되는 non-null scalar 값마다 항목 하나 `- <column>: <value>`,
-  column 순서대로, 그 뒤 빈 줄은 비어 있지 않은 body나 섹션이 뒤따를 때에만 선다. NULL은 없는 항목이고, 빈 텍스트는 콜론 뒤가 빈 항목이다. `files` 행의 body는 `-` list 항목으로 시작하지 않으며, field list 뒤에 두 column 이상(공백 또는 tab) 들여쓴 줄로 시작하지도 않는다 — 그런 body의 쓰기는 `CONSTRAINT`다(body는 `*`나 `+` list 또는 다른
-  블록으로 시작할 수 있다). 따라서 읽을 때 H1 바로 뒤의 `-` 항목이 field list이며, `-` 항목으로 시작하는 body와 field list 뒤에서 첫 줄이 두 column 이상(공백 또는 tab) 들여쓴 body는 `format.block`이고(쓰기는 `CONSTRAINT`), column 순서대로의
+  column 순서대로, 그 뒤 빈 줄은 비어 있지 않은 body나 섹션이 뒤따를 때에만 선다. NULL은 없는 항목이고, 빈 텍스트는 콜론 뒤가 빈 항목이다. `files` 행의 body는 `-` list 항목으로 시작하지 않으며, field list 뒤에 두 column 이상(space 또는 tab) 들여쓴 줄로 시작하지도 않는다 — 그런 body의 쓰기는 `CONSTRAINT`다(body는 `*`나 `+` list 또는 다른
+  블록으로 시작할 수 있다). 따라서 읽을 때 H1 바로 뒤의 `-` 항목이 field list이며, `-` 항목으로 시작하는 body와 field list 뒤에서 첫 줄이 두 column 이상(space 또는 tab) 들여쓴 body는 `format.block`이고(쓰기는 `CONSTRAINT`), column 순서대로의
   `- <저장되는 scalar column>: <value>` 꼴이 아닌 항목은 `format.block`이다. non-null column의 없는 항목은
   `format.block`이다. 엔진은 insert에서 default를 명시적으로 쓴다. non-null scalar가 없는 `files` 행은
   field list가 없으며, 비어 있지 않은 body는 H1 뒤 빈 줄 하나 다음에 오고, 빈 body는 아무것도 쓰지 않는다.
@@ -224,8 +224,8 @@ markdown 전용 선언은 모두 dbspec **manifest setting**이며 `markdown <co
   text는 쓴 그대로 쓴다. 빈 cell은 NULL이고, 빈 텍스트는 `""`이다. `"`로 시작하는 값은 `\"`와 `\\`를 가진
   `"…"`로 쓴다. table cell에서 값의 각 `|`는 `\|`로 쓰고 다른 `\`는 더하지 않는다. 읽을 때 `\` 바로 뒤에 오는 `|`는 그 `\` 앞에 무엇이 있든 cell 경계가 아니며, 그 `\` 하나를 뺀다. 인용형 `"…"`을 먼저 적용하고 pipe escape를 마지막에 적용하므로, 읽을 때는 pipe escape를 먼저 뺀다. block table에서 배치 foreign key는 cell이 아니며, `parent`는 cell이다. 같은 file의 두 행이 공유하는 key를 가리키는 `parent` cell은 `format.block`이다: 부모를 배정할 수 없기 때문이다.
 - `list`(block 또는 document): `- [<glyph>] <key> <title>[ <field>…]`, 상태 column이 없으면 `- <key>
-  <title>[ <field>…]`. field는 오른쪽부터 parse한다: token `<선언된 column>:<value>`이고, value는 공백, `"`, `\` 없는
-  bare token이거나 `\"`와 `\\`를 escape로 갖는 `"…"`다. 없는 field는 NULL, `col:""`은 빈 텍스트이며, 모든 non-null
+  <title>[ <field>…]`. field는 오른쪽부터 parse한다: token `<선언된 column>:<value>`이고, value는 보이지 않는 문자, `"`, `\`가 없는
+  bare token이거나 `\"`와 `\\`를 escape로 갖는 `"…"`다(보이지 않는 문자를 가진 값은 따옴표로 쓴다). 읽기에서, bare value에 보이지 않는 문자를 가진 token `<선언된 column>:<value>`는 `format.block`이다. 쓰기 규칙은 그것도, 그런 제목 token도 만들지 않기 때문이다. 없는 field는 NULL, `col:""`은 빈 텍스트이며, 모든 non-null
   column은 쓴다 — 엔진은 insert에서 default를 명시적으로 쓰고, non-null field가 빠진 행은 `format.block`이다. `<선언된
   column>:`과 맞는 제목 token은 `<column>\:`로 쓰며, `<선언된 column>\:`과 맞는 제목 token은 `<column>:`으로 읽고, 그 밖의 `\:`는 해석하지 않는다. `<선언된 column>\:`과 맞는 제목 token은 쓰기에서 `CONSTRAINT`다: 그것은 `<column>:`으로 다시 읽히므로, `<column>\:`와 `<column>:`이 같은 식으로 쓰이게 된다. `@`와 날짜 sigil은 제거한다.
 - 배치 foreign key와 `parent`는 block list 행의 field로 쓰지 않으며, 쓰면 `format.block`이다.
