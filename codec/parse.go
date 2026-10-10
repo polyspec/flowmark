@@ -62,11 +62,29 @@ func Parse(text string) (*Document, []Diagnostic) {
 	if document.DocID == "" {
 		report(1, RuleHeader, "the document names no doc-id; the header comment is required")
 	}
-	if at > 0 && at < len(lines) && lines[at] == "" {
-		report(at+1, RuleHeader, "the title follows the header comments without a blank line")
-	}
 	for at < len(lines) && lines[at] == "" {
 		at++
+	}
+
+	// Frontmatter may sit before the title — the standard markdown position. One pair of
+	// `---` fences, parsed the same way as the after-preamble block.
+	if at < len(lines) && lines[at] == "---" && at+1 < len(lines) && lines[at+1] != "---" {
+		at++
+		for at < len(lines) && lines[at] != "---" {
+			document.Frontmatter = append(document.Frontmatter, lines[at])
+			at++
+		}
+		if at >= len(lines) {
+			report(at, RuleFrontmatter, "the frontmatter block has no closing fence")
+		} else {
+			at++
+		}
+		for at < len(lines) && lines[at] == "" {
+			at++
+		}
+		var found []Diagnostic
+		document.FM, found = ParseFrontmatter(document.Frontmatter, 2)
+		diagnostics = append(diagnostics, found...)
 	}
 
 	// The title: exactly one level-1 ATX heading.
@@ -107,6 +125,7 @@ func Parse(text string) (*Document, []Diagnostic) {
 			at++
 		}
 
+		document.Frontmatter = inside
 		var found []Diagnostic
 		document.FM, found = ParseFrontmatter(inside, open+2)
 		diagnostics = append(diagnostics, found...)

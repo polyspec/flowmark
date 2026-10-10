@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/polyspec/flowmark/codec"
 )
@@ -276,22 +275,4 @@ func EditTitle(root, relativePath, id, title string) error {
 		}
 	}
 	return fmt.Errorf("the item %q is not in %s", id, relativePath)
-}
-
-// stamp writes one history continuation line under the item: `  - at <RFC3339> <event>`.
-func stamp(lines []string, itemLine int, event string) []string {
-	at := time.Now().UTC().Format(time.RFC3339)
-	record := "  - at " + at + " " + event
-	insert := itemLine + 1
-	return append(lines[:insert], append([]string{record}, lines[insert:]...)...)
-}
-
-// findItemEnd returns the line just past the item's continuation lines (0-indexed).
-func findItemEnd(document *codec.Document, id string) int {
-	for _, item := range document.Items {
-		if item.ID == id {
-			return item.Line - 1 + 1 + len(item.Continuations)
-		}
-	}
-	return -1
 }
