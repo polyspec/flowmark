@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database-checklist -->
-<!-- source-sha256: ff12e71b29904e53e25254ce6039a185eb005633e5e89514c50c0a0bb4c805f9 -->
+<!-- source-sha256: 1de1b37a77d8bcb8c18eb2fada44bbf368638c44b791e4a4ed3e2825dbd4a3df -->
 # markdown database checklist
 
 ## T12 markdown database
@@ -9,6 +9,8 @@
   - 완료 기준: 계획의 모든 판정이 해당 spec에 근거를 갖춘 명제로 서고, design plan이 정정된 seam과 철회된 T8.5를 그것을 철회하게 한 사실과 함께 적으며, `make documents-check`와 `make refs-check`가 통과한다.
 - [o] T12.1-1 readable-document 판정에 맞춰 spec을 다시 쓴다: `*.flowmark.md` 기준, 주석 없음, file 이름이 key, key와 이름 규칙, field list, 읽을 수 있는 값 형식, 파생 target을 가진 link로서의 외래 key, `<table> <key>` 상세 heading과 그 anchor, walk, 그리고 doc-id header, frontmatter, twin, `dbspec/flowmark.json`의 철회 (T12.1 후속)
   - 완료 기준: spec 10, 20, 30, 50, 70, 100, 110이 계획의 "읽을 수 있는 문서"와 저장 문법의 모든 규칙을 근거를 갖춘 명제로 적고, `make documents-check`와 `make refs-check`가 통과한다.
+- [o] T12.1-2 다른 heading이 가져갈 수 없는 상세 heading: 상세 heading은 `<h> <table> row <key>`이고 anchor는 `<table>-row-<소문자 key>`다. key는 `--`를 담지 않고 `-`로 끝나지 않는다. 상세 anchor는 GitHub의 두 slug 중복 처리(github.com의 counter와 github-slugger의 건너뛰기) 모두에서 비어 있어야 한다. anchor를 가져갈 수 있는 것은 payload heading과 `files` 행의 H1 제목뿐이며, 그렇게 만드는 쓰기는 `CONSTRAINT`다. link는 GitHub식 heading slug를 쓰는 viewer에서 이어진다고 명시한다. 같은 file의 table과 같은 이름의 markdown column 또는 block table에 관한 spec 30 규칙은 그 catalog 검사와 함께 철회한다. 원인: 여러 부모 행 아래 반복되는 block heading이 slug `<table>-1`, `<table>-2`를 가져가는데 이는 상세 heading `<table> 1`, `<table> 2`의 anchor이므로, 정수 key의 block table이 두 부모 행 아래 있는 모든 corpus가 깨진다 (T12.1-1, T12.2.1-1 후속)
+  - 완료 기준: spec 10, 20, 30, 50, 100과 계획, 그 twin이 새 heading, anchor, key 규칙을 적고, catalog에 same-file 이름 규칙이 없으며 그 테스트도 함께 제거되고, `go test ./catalog/...`, `make documents-check`, `make refs-check`가 통과한다.
 - [ ] T12.2 저장 codec: `files`, `document`, `block` 저장을 list와 table 형식으로 parse·render하고 모든 저장의 P1/P2를 갖는다. orm `T62` 선행 (T12.1 선행)
 - [o] T12.2.1 catalog를 적재한다: corpus root의 `dbspec/*.dbs` 집합을 orm의 `engine/dbspec`으로, `dbspec/flowmark.json`(번역)을 함께 읽는다. catalog 없음, `store` 없는 table, 복합 key, `aes`/`aes_version`/`blind_index`, `audit`/`immutable`, `cascade`/`set_null`, 외부 `use`, state machine의 `history` 또는 `initial` 없음, list 또는 files 저장의 `title` 없음, H6을 넘는 제목 깊이를 각각 위치가 정해진 진단으로 거절한다 (orm `T62` 선행)
   - 완료 기준: 거절마다 테스트 하나와 적재된 fixture catalog 하나.

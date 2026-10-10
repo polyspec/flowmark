@@ -1,5 +1,5 @@
 <!-- doc-id: spec-document-model -->
-<!-- source-sha256: 1f8a36ea6192f0ded8221fb538dcba306d3b012ad52bae50a7dc1b8d6ff4058f -->
+<!-- source-sha256: 7b3fd2128a7fb5afbc024397aaf7bc448d70e70463d8574abe478f9172893c58 -->
 # 문서 모델
 
 [English](20-document-model.md)
@@ -51,7 +51,8 @@ aggregate냐 split이냐는 저장 선언이다. 논리 관계는 모든 저장�
 - `files` 행의 key는 file 이름에서 `.flowmark.md`를 뺀 것이다.
 - 모든 key는 동시에 file 이름, URL path 조각, heading anchor의 일부다. key는 `A`–`Z`, `a`–`z`, `0`–`9`,
   `_`, `-`로 이루어지며 문자나 숫자로 시작한다: 선행 `_`는 강조로 렌더되어 보이는 key와 그 anchor를
-  모두 바꾸기 때문이다.
+  모두 바꾸기 때문이다. key는 `--`를 담지 않고 `-`로 끝나지 않는다: 연속 hyphen을 접는 viewer(GitLab, MkDocs)가
+  anchor를 바꾸기 때문이다.
 - key는 대소문자를 무시하고 table 안에서 유일하다. 대소문자를 구분하지 않는 file system과 소문자로 된
   anchor가 그렇지 않으면 충돌하기 때문이다.
 - 외래 key는 참조된 key와 byte 단위로 맞는다. key와 대소문자만 다른 link 텍스트는 dangling 참조다.
@@ -82,7 +83,7 @@ aggregate냐 split이냐는 저장 선언이다. 논리 관계는 모든 저장�
 ## 행 scope
 
 - `files` 행의 scope는 그 file이고, 섹션은 level 2다.
-- block이나 document 행의 scope는 상세 섹션 `<h> <table> <key>`이고(level b 블록 섹션 아래에서 h = b + 1,
+- block이나 document 행의 scope는 상세 섹션 `<h> <table> row <key>`이고(level b 블록 섹션 아래에서 h = b + 1,
   document file에서 h = 2), 섹션은 level h + 1이다.
 - `markdown` column은 모든 저장에서 언제나 행 scope의 섹션이다 — field나 cell이 아니다. nullable
   `markdown` column과 자식 블록은 각각 column이나 자식 table 이름을 가진 행 scope의 섹션이며, 부모의
@@ -118,7 +119,7 @@ aggregate냐 split이냐는 저장 선언이다. 논리 관계는 모든 저장�
 - 모든 foreign key는 restrict-only다([constraints](50-constraints.md)). `cascade`와 `set_null`은 catalog를
   읽을 때 거절한다([schema](30-schema.md)).
 - 외래 key 값은 link다. link의 텍스트는 참조된 key이고, target은 참조된 행에서 유도된다. 정식 형식은
-  [canonical format](10-canonical-format.md)이 정한다. 모든 관계는 어느 markdown viewer에서든 따라갈 수
+  [canonical format](10-canonical-format.md)이 정한다. 모든 관계는 GitHub식 heading slug를 쓰는 markdown viewer(GitHub, GitLab, VS Code, Pandoc)에서 따라갈 수
   있는 link다.
 - file 간 one-to-many는 자식 table을 `store files`로 두고 foreign key를 그 field list에 쓴다. file 안의
   one-to-many는 자식 table을 `store block`으로 둔다.

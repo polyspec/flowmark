@@ -53,8 +53,9 @@ On write, each of the following is `CONSTRAINT`; the rule that states it is name
 - a `files` body whose first line is a `-` list item ([canonical format](10-canonical-format.md));
 - a `markdown` value holding a heading line of level ≤ L outside a fence
   ([canonical format](10-canonical-format.md));
-- a detail heading whose slug differs from its anchor, because an earlier heading took it, naming
-  the earlier heading ([canonical format](10-canonical-format.md));
+- a detail heading whose anchor another heading takes, or whose slug differs from its anchor, naming
+  the other heading, and the title update, payload write or row insert that introduces the collision
+  ([canonical format](10-canonical-format.md));
 - `now` as a value, and a text longer than its column ([canonical format](10-canonical-format.md)).
 
 On read, the walk reports `corpus.walk` and the format rules report `format.*`, as stated in the

@@ -40,8 +40,8 @@ Every foreign key has its leading index. The checks are `start_on is null or sta
   `- [~] T1 Write the spec assignee:[P1](people.flowmark.md)`: the person row has no detail section,
   so the target has no anchor.
 - In the table cells of `item_links`, `from_item` and `to_item` are links such as
-  `[T1](items.flowmark.md#items-t1)`, the anchor present exactly when the item has a detail section.
-- A multi-line evidence is a section: `items.flowmark.md` H1, `## items T1`, `### item_history`, `#### item_history <id>`, `##### evidence` — within H6.
+  `[T1](items.flowmark.md#items-row-t1)`, the anchor present exactly when the item has a detail section.
+- A multi-line evidence is a section: `items.flowmark.md` H1, `## items row T1`, `### item_history`, `#### item_history row <id>`, `##### evidence` — within H6.
 
 ## The state machine
 

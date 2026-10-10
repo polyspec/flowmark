@@ -25,7 +25,8 @@ payload.
 - A corpus document is a complete markdown document. A reader who does not know flowmark reads it
   as it is: it carries no comment, no marker, no frontmatter and no hidden field.
 - Its structure is ordinary markdown: headings, lists, tables and a field list. Every relation is a
-  link that a reader can follow in any markdown viewer.
+  link that a reader can follow in a markdown viewer with GitHub-style heading slugs (GitHub, GitLab,
+  VS Code, Pandoc).
 - Grounding: the documents are the database's only storage, so they must stay readable documents.
   What only the machine needs belongs to the catalog (`dbspec/`) or to `.flowmark/`.
 
@@ -49,8 +50,8 @@ their bytes.
   level-2 sections of the row scope.
 - **A `document` file** `<table>.flowmark.md` holds: the H1 line `# <table>`; the list or table of
   its rows directly under the H1; the detail sections at level 2.
-- **A detail section** is the heading `<h> <table> <key>` — the table name, one space and the key,
-  never a title copy — followed by the row's body and then the row scope's sections at level h + 1.
+- **A detail section** is the heading `<h> <table> row <key>` — the table name, one space, the word
+  `row`, one space and the key, never a title copy — followed by the row's body and then the row scope's sections at level h + 1.
   A detail row's scope is at level h + 1. Detail sections of nested list rows are flat siblings.
 - **A block section** is a heading at level b named by the child table, inside the parent row's
   scope; its list or table follows the heading, and its rows' detail sections follow at level
@@ -66,14 +67,23 @@ their bytes.
 
 ## Detail headings and anchors
 
-- The anchor of a detail heading is `<table>-<lowercased key>`: the heading `## items T2` has the
-  anchor `items-t2`.
-- The engine computes the slug of every heading in a file, skeleton and payload alike, in document
-  order. The slug is GitHub's: the heading's rendered inline text, lowercased, with every character
-  other than a letter, a digit, a space, `-` or `_` removed and each space written as `-`; a
-  repeated slug takes the suffix `-1`, `-2` in document order.
-- A detail heading whose slug differs from its anchor, because an earlier heading took it, is
-  `CONSTRAINT` on write, naming the earlier heading, and `format.block` on read.
+- The anchor of a detail heading is `<table>-row-<lowercased key>`: the heading `## items row T2`
+  has the anchor `items-row-t2`. The table is the anchor text before its first `-`, since a table
+  name contains no `-`.
+- The slug is GitHub's: the heading's rendered inline text, lowercased, with every character other
+  than a letter, a digit, a space, `-` or `_` removed and each space written as `-`. The engine
+  computes the slug of every heading in a file, skeleton and payload alike, in document order.
+- A detail anchor must be free under both de-duplications of GitHub slugs: (a) github-slugger, where
+  a repeated slug takes the first suffix `-1`, `-2`, … not yet taken; and (b) github.com, which
+  suffixes a repeated base slug with a counter without checking. A block or markdown-column section
+  heading, repeated or not, slugs to `<name>` or `<name>-<digits>` and can never equal a
+  `<table>-row-<key>` anchor, so only a payload heading or the H1 title of a `files` row can take a
+  detail anchor.
+- A detail heading whose anchor another heading takes, or whose slug differs from its anchor, is
+  `CONSTRAINT` on write, naming the other heading, and refuses whichever write introduces the
+  collision: a title update, a payload write or a row insert. On read it is `format.block`.
+- A detail heading in a non-canonical spelling (extra spaces, a wrong case of `row`) is
+  `format.noncanonical`, so `flowmark canon` repairs it.
 
 ## Sections and their values
 
@@ -192,7 +202,7 @@ except as this section states.
 - Examples: a `files` row `comments/C5.flowmark.md` links its post as
   `[P3](../posts/P3.flowmark.md)`; a block comment inside `posts/P3.flowmark.md` links its author as
   `[max](../people.flowmark.md)`; the root `items.flowmark.md` links a row that has a detail section
-  in the same file as `[T2](#items-t2)`.
+  in the same file as `[T2](#items-row-t2)`.
 
 ## Encoding
 

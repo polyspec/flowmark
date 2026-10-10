@@ -54,7 +54,9 @@ so the same rows can be stored either way.
 - A `files` row's key is its file name without `.flowmark.md`.
 - Every key is a file name, a URL path segment and part of a heading anchor at once. A key consists
   of `A`–`Z`, `a`–`z`, `0`–`9`, `_` and `-`, and begins with a letter or a digit: a leading `_`
-  would render as emphasis and alter both the shown key and its anchor.
+  would render as emphasis and alter both the shown key and its anchor. A key holds no `--` and does
+  not end with `-`: viewers that collapse hyphen runs (GitLab, MkDocs) would otherwise alter the
+  anchor.
 - A key is unique within its table without regard to case, because case-insensitive file systems
   and lowercased anchors would otherwise collide.
 - A foreign key matches the referenced key byte for byte. A link text that differs from the key
@@ -91,7 +93,7 @@ so the same rows can be stored either way.
 ## Row scope
 
 - A `files` row's scope is its file, with its sections at level 2.
-- A block or document row's scope is its detail section `<h> <table> <key>` (h = b + 1 under a block
+- A block or document row's scope is its detail section `<h> <table> row <key>` (h = b + 1 under a block
   section at level b, h = 2 in a document file), with its sections at level h + 1.
 - A `markdown` column is always a section of the row scope — never a field or a cell — in every
   storage. Each nullable `markdown` column and each child block is a section of the row scope
@@ -133,7 +135,8 @@ so the same rows can be stored either way.
   are rejected at catalog load ([schema](30-schema.md)).
 - A foreign key value is a link. Its text is the referenced key and its target is derived from the
   referenced row, as the [canonical format](10-canonical-format.md) states. Every relation is a
-  link that a reader can follow in any markdown viewer.
+  link that a reader can follow in a markdown viewer with GitHub-style heading slugs (GitHub, GitLab,
+  VS Code, Pandoc).
 - A one-to-many across files stores the child table with `store files` and writes the foreign key
   in its field list. A one-to-many inside a file stores the child table with `store block`.
 - Many-to-many is a link table with an `identity` key.

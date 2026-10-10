@@ -1,5 +1,5 @@
 <!-- doc-id: spec-checklist -->
-<!-- source-sha256: e16fc3ffc0d75649875f396e9d9911c4549157a3b6071608d66ded7d9531a037 -->
+<!-- source-sha256: 3612711bac504524bc462af2f1709cf8807c271bf574bf220dde8209ca70c4d6 -->
 # 응용 schema
 
 [English](100-checklist.md)
@@ -39,9 +39,9 @@
 - 외래 key는 [canonical format](10-canonical-format.md)이 정한 대로 link다. 담당자 `P1`을 가진 진행 중인
   `items`의 list 행은 `- [~] T1 Write the spec assignee:[P1](people.flowmark.md)`로 쓴다: 사람 행은
   상세 섹션이 없으므로 target에 anchor가 없다.
-- `item_links`의 table cell에서 `from_item`과 `to_item`은 `[T1](items.flowmark.md#items-t1)` 같은 link다.
+- `item_links`의 table cell에서 `from_item`과 `to_item`은 `[T1](items.flowmark.md#items-row-t1)` 같은 link다.
   anchor는 item이 상세 섹션을 가질 때에만 있다.
-- 여러 줄 evidence는 section이다: `items.flowmark.md` H1, `## items T1`, `### item_history`, `#### item_history <id>`, `##### evidence` — H6 안에 든다.
+- 여러 줄 evidence는 section이다: `items.flowmark.md` H1, `## items row T1`, `### item_history`, `#### item_history row <id>`, `##### evidence` — H6 안에 든다.
 
 ## 상태기계
 

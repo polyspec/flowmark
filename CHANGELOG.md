@@ -3,6 +3,15 @@
 
 ## Unreleased
 
+- T12.1-2: a detail heading is `<h> <table> row <key>` with the anchor `<table>-row-<lowercased key>`,
+  so a block or markdown-column heading repeated under several parents can no longer take a detail
+  anchor (`items-1` is not `items row 1`). A key holds no `--` and does not end with `-`. A detail
+  anchor must be free under both GitHub slug de-duplications (github-slugger and github.com); a
+  heading that takes it is `CONSTRAINT` on write and `format.block` on read, and a non-canonical
+  spelling is `format.noncanonical`. Links are stated to resolve in viewers with GitHub-style heading
+  slugs. The catalog's same-file name rule is withdrawn: a markdown column or a block table may be
+  named like another table of its file; the child-named-like-markdown-column rule stays.
+
 - T12.2.1-1: the catalog reads only the `.dbs` set. `dbspec/flowmark.json` and its `translations`
   field are removed, with the settings reader and the `Translations` field of the Catalog API. Any
   other entry in `dbspec/`, a file of another name or a folder, is a `catalog` diagnostic; hidden

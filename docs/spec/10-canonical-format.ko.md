@@ -1,5 +1,5 @@
 <!-- doc-id: spec-canonical-format -->
-<!-- source-sha256: 5e8bf6d3fd3ef024ceb6815c3ca35878570ad03ee2097491bcb89399e05bfe74 -->
+<!-- source-sha256: 8331ffa5ed8a2f74fe89a3c556ef949f502f732dde347c4c504c761fc8d65ff2 -->
 # Canonical format
 
 [English](10-canonical-format.md)
@@ -22,8 +22,8 @@ idempotency 명제, readable 문서, skeleton, 문서 순서, 상세 heading과 
   정한다.
 - corpus 문서는 완전한 markdown 문서다. flowmark를 모르는 독자도 있는 그대로 읽는다: comment,
   marker, frontmatter, 숨은 field를 갖지 않는다.
-- 구조는 평범한 markdown이다: heading, list, table, field list. 모든 관계는 어느 markdown viewer에서든
-  따라갈 수 있는 link다.
+- 구조는 평범한 markdown이다: heading, list, table, field list. 모든 관계는 GitHub식 heading slug를 쓰는
+  markdown viewer(GitHub, GitLab, VS Code, Pandoc)에서 따라갈 수 있는 link다.
 - 근거: 문서는 database의 유일한 저장이므로 읽을 수 있는 문서로 남아야 한다. 기계만 필요로 하는 것은
   catalog(`dbspec/`)나 `.flowmark/`에 속한다.
 
@@ -43,7 +43,7 @@ column 섹션 — 은 payload다: renderer는 이를 행과 함께 옮기고 그
   값의 field list 뒤 빈 줄, body, 행 scope의 level-2 섹션을 가진다.
 - **`document` file** `<table>.flowmark.md`는: H1 줄 `# <table>`, H1 바로 아래 행들의 list나 table,
   level 2의 상세 섹션을 가진다.
-- **상세 섹션**은 heading `<h> <table> <key>` — table 이름, 공백 하나, key — 이며 제목 사본은 없다.
+- **상세 섹션**은 heading `<h> <table> row <key>` — table 이름, 공백 하나, `row`, 공백 하나, key — 이며 제목 사본은 없다.
   그 뒤에 행의 body가 오고, level h + 1의 행 scope 섹션이 뒤따른다. 상세 행의 scope는 level h + 1이다.
   중첩된 list 행의 상세 섹션은 평평한 형제다.
 - **블록 섹션**은 부모 행 scope 안에서 자식 table 이름을 가진 level b heading이다. heading 뒤에 list나
@@ -59,12 +59,20 @@ column 섹션 — 은 payload다: renderer는 이를 행과 함께 옮기고 그
 
 ## 상세 heading과 anchor
 
-- 상세 섹션의 anchor는 `<table>-<소문자 key>`다: heading `## items T2`의 anchor는 `items-t2`다.
-- 엔진은 file 안의 모든 heading — skeleton과 payload 모두 — 의 slug를 문서 순서대로 계산한다. slug는
-  GitHub의 것이다: heading의 렌더된 inline 텍스트를 소문자로 하고, 문자, 숫자, 공백, `-`, `_` 외의 모든
-  문자를 지우며, 각 공백을 `-`로 쓴다. 반복되는 slug는 문서 순서대로 `-1`, `-2` 접미사를 받는다.
-- 앞선 heading이 차지해서 상세 heading의 slug가 anchor와 다르면, 쓰기에서는 앞선 heading을 밝히는
-  `CONSTRAINT`이고 읽기에서는 `format.block`이다.
+- 상세 섹션의 anchor는 `<table>-row-<소문자 key>`다: heading `## items row T2`의 anchor는
+  `items-row-t2`다. table은 anchor 텍스트에서 첫 `-` 앞이며, table 이름에는 `-`가 없다.
+- slug는 GitHub의 것이다: heading의 렌더된 inline 텍스트를 소문자로 하고, 문자, 숫자, 공백, `-`, `_` 외의 모든
+  문자를 지우며, 각 공백을 `-`로 쓴다. 엔진은 file 안의 모든 heading — skeleton과 payload 모두 — 의 slug를
+  문서 순서대로 계산한다.
+- 상세 anchor는 GitHub slug의 두 중복 처리 모두에서 비어 있어야 한다: (a) github-slugger는 반복되는 slug가
+  아직 차지되지 않은 첫 접미사 `-1`, `-2`, …를 받는다. (b) github.com은 반복되는 기본 slug에 확인 없이
+  counter 접미사를 붙인다. level b 블록 또는 markdown column 섹션 heading은 반복되든 아니든 `<name>` 또는
+  `<name>-<digits>`로 slug가 되며 `<table>-row-<key>` anchor와 결코 같지 않으므로, 상세 anchor를 가져갈 수
+  있는 것은 payload heading과 `files` 행의 H1 제목뿐이다.
+- 다른 heading이 anchor를 가져갔거나 slug가 anchor와 다른 상세 heading은 쓰기에서 `CONSTRAINT`이며, 그
+  heading을 밝히고 충돌을 일으키는 쓰기 — 제목 갱신, payload 쓰기, 행 삽입 — 를 거절한다. 읽기에서는
+  `format.block`이다.
+- 공백이 더 있거나 `row`의 대소문자가 다른 상세 heading은 `format.noncanonical`이며, `flowmark canon`이 고친다.
 
 ## 섹션과 그 값
 
@@ -161,7 +169,7 @@ markdown이며, 이 절이 정한 경우를 빼고는 escape하지 않는다.
 - `files` 행에 쓴 `parent`도 link다. block 행의 배치 foreign key는 쓰지 않는다.
 - 예: `comments/C5.flowmark.md` `files` 행은 자기 post를 `[P3](../posts/P3.flowmark.md)`로 link한다;
   `posts/P3.flowmark.md` 안의 block 댓글은 자기 작성자를 `[max](../people.flowmark.md)`로 link한다;
-  루트 `items.flowmark.md`는 같은 file 안에 상세 섹션을 가진 행을 `[T2](#items-t2)`로 link한다.
+  루트 `items.flowmark.md`는 같은 file 안에 상세 섹션을 가진 행을 `[T2](#items-row-t2)`로 link한다.
 
 ## Encoding
 
