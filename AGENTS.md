@@ -24,7 +24,11 @@ has its checklist in `docs/plans/`.
   is hard to meet while testing — that is a betrayal of the criterion.
 - A judgement that is hard to make, or a new line of reasoning, is verified adversarially by an
   agent, which is asked for its solutions as well as its objections; the rounds repeat until no
-  disagreement remains.
+  disagreement remains. Its scope is fixed before the first round: the propositions under review,
+  stated as written, and what lies outside them. A finding counts only when it shows a proposition
+  wrong, contradicted by another document, or missing a case it claims to cover; a new question
+  next to the scope becomes its own checklist item, never a further round. Without a fixed scope
+  the rounds do not converge.
 - No backward compatibility: an old path is removed, never kept behind a compatibility layer, a
   fallback or a migration shim.
 - Errors are never hidden: no fallback that turns a wrong input into a plausible one, no silent
