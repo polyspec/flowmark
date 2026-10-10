@@ -6,8 +6,8 @@ github.com/mattn/go-isatty v0.0.24 h1:tGZZoVgT/KiqK1c8ocVLeDS8BSWMRd47J3Lbz7vsRe
 github.com/mattn/go-isatty v0.0.24/go.mod h1:nMCL3Zebbrt45jsMDgnfIwz6ydEQApk5oEI3HqDio6A=
 github.com/ncruces/go-strftime v1.0.0 h1:HMFp8mLCTPp341M/ZnA4qaf7ZlsbTc+miZjCLOFAw7w=
 github.com/ncruces/go-strftime v1.0.0/go.mod h1:Fwc5htZGVVkseilnfgOVb9mKy6w1naJmn9CehxcKcls=
-github.com/polyspec/orm v0.0.8-0.20261010155917-1f1d6f334e5d h1:PAfG491UxnJBqgl5f26lVhYD83qswDr36S5YghqWYAA=
-github.com/polyspec/orm v0.0.8-0.20261010155917-1f1d6f334e5d/go.mod h1:J0114vLLCy/ZlHXUU+Z1NsVKAcaMA3+URcCLwRQ4tDI=
+github.com/polyspec/orm v0.0.8-0.20261010172059-72e2b53539a4 h1:6/nVd51EwmKbgdDgVXvSxBVNl1SyhQHVq0/gpHMQyXc=
+github.com/polyspec/orm v0.0.8-0.20261010172059-72e2b53539a4/go.mod h1:J0114vLLCy/ZlHXUU+Z1NsVKAcaMA3+URcCLwRQ4tDI=
 github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec h1:W09IVJc94icq4NjY3clb7Lk8O1qJ8BdBEF8z0ibU0rE=
 github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec/go.mod h1:qqbHyh8v60DhA7CoWK5oRCqLrMHRGoxYCSS9EjAz6Eo=
 golang.org/x/sys v0.48.0 h1:bbX/i/6MgT9BVLM9RT1thmxL04yeTAhbEz4SyadbXoo=

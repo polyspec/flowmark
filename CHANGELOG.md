@@ -3,6 +3,18 @@
 
 ## Unreleased
 
+- T12.2.2: the `files` storage parses and renders one `<table>/<key>.flowmark.md` per row: the H1
+  title with its `\#` escape, the field list of the stored scalar columns in their readable value
+  forms, the body, the level-2 sections of the nullable markdown columns, and foreign keys as links
+  whose targets come from a `Linker`. Literals are read through orm's `CanonicalLiteral` at the
+  pinned commit `72e2b535`. A noncanonical spelling is `format.noncanonical`: its row is returned,
+  and emitting it gives the canonical file. A byte order mark is a noncanonical
+  `format.noncanonical`; invalid UTF-8 is a fatal `format.encoding`. A file outside its place, a symbolic link, a folder
+  named as a document and a suffix in another case are `corpus.walk`; a key that breaks the key
+  rules is `format.block`; a write the rules refuse is `CONSTRAINT`. A child block section is
+  `format.section` until T12.2.4 reads it. The golden fixtures round-trip byte for byte, and parse
+  and emit are fuzzed.
+
 - T12.1-2: a detail heading is `<h> <table> row <key>` with the anchor `<table>-row-<lowercased key>`,
   so a block or markdown-column heading repeated under several parents can no longer take a detail
   anchor (`items-1` is not `items row 1`). A key holds no `--` and does not end with `-`. A detail
