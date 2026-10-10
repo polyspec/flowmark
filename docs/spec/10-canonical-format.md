@@ -157,12 +157,14 @@ and the column sections — are payload: the renderer moves them with their row 
   section boundary, and the rule refuses every one of them.
 - A value that leaves a fence or an HTML block open is refused only when the element that follows would be
   taken into it under the CommonMark block structure: `CONSTRAINT` on write, whichever write places that element (the check
-  runs on the file the write produces), and `format.block` on read. A block left open inside a container
-  that a following top-level element closes is no fault. An open top-level fence takes in everything to the end of
-  the file, so on read it cannot stand before a following element: a heading inside a fence is no boundary,
-  and the value runs on to the fence's close or to the end of the file, as CommonMark reads it. Grounding:
-  an open fence or HTML block that takes in the element that follows changes what the value reads back as,
-  so the file reads differently from what a viewer shows.
+  runs on the file the write produces). On read, the lines that such a block takes in are the value's text: under
+  the CommonMark block structure they are no boundary, and a viewer shows them inside the block, so no read fault
+  is reported for them. A block left open inside a container that a following top-level element closes is no fault.
+  A top-level fence that the value leaves open takes in every line up to its closing fence or to the end of the
+  file, so on read the value runs on past those lines to the next top-level heading of level ≤ L or to the end of
+  the file, and a heading inside the fence is no boundary, as CommonMark reads it. Grounding:
+  an open fence or HTML block that takes in the element that follows makes that element the value's text, so a
+  write that places it would not store the element it places.
 - A child block section is written only when the block holds at least one row — an empty block and an
   absent block both mean zero rows, so only one form can be canonical (P1); a parent row with no child
   rows has no block heading, and an empty block heading is `format.noncanonical`.
