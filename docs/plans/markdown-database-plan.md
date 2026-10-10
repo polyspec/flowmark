@@ -103,6 +103,22 @@ compatibility, no fallback, no hidden error, no trick; rules first.
 - This repository is not a corpus: `make validate` and the prose ID checker are removed with the
   old engine; `make refs-check` keeps checking the kit-tracked checklists.
 
+## The readable document
+
+- **A corpus document is a file whose name ends with `.flowmark.md`**, under the corpus root and
+  outside `dbspec/`, `.flowmark/` and hidden entries. The name is the only criterion that makes a
+  file part of the database; every other file is outside it and draws no diagnostic.
+- **Every corpus document is a complete markdown document** that a reader who does not know
+  flowmark reads as it is: no comment, no marker, no hidden field. Its structure is ordinary
+  markdown — headings, lists, tables, a field list — and every relation is a link the reader can
+  follow in any markdown viewer. Grounding: the documents are the database's only storage, so
+  they must stay a readable document; what only the machine needs belongs to the catalog
+  (`dbspec/`) or to `.flowmark/`.
+- Withdrawn with this ruling: the `<!-- doc-id -->` header, the provenance comment, the
+  frontmatter of a `files` row, the twin rule and the `translations` setting with
+  `dbspec/flowmark.json`. The sync provenance of an adapter-owned document moves out of the
+  document; where it lives is decided with the adapter work (open question).
+
 ## The storage grammar
 
 Every markdown-specific declaration is a dbspec **manifest setting**, after the precedent of the
@@ -113,20 +129,30 @@ reimplements them.
 ### Storage
 
 - Exactly one per table, or a schema error:
-  - `store files` — one file per row in the folder named after the table, under the corpus root.
-    An insert writes `<table>/<key>.md`; the engine never renames a file, and a key change keeps
-    the file.
-  - `store document list` / `store document table` — every row in the one file `<table>.md` at
-    the corpus root: `<!-- doc-id: <table> -->`, `# <table>`, then the list or table directly
-    under the H1 and the detail sections at H2. A doc-id is unique across the rows and
-    `document` files of the corpus; its twins share it.
+  - `store files` — one file per row, `<table>/<key>.flowmark.md` under the corpus root. The file
+    name is the key; a key change renames the file in the same transaction.
+  - `store document list` / `store document table` — every row in the one file
+    `<table>.flowmark.md` at the corpus root: `# <table>`, then the list or table directly under
+    the H1 and the detail sections at H2.
   - `store block <fk> list` / `store block <fk> table` — the rows inside the scope of the parent
     row that the named foreign key references.
 
 ### Keys
 
 - A markdown table has a single-column primary key; a composite key is a schema error.
-- A `files` row's key is its `<!-- doc-id: -->` value; the file name carries no meaning.
+- A `files` row's key is its file name without `.flowmark.md`.
+- **Every key is a file name, a URL path segment and part of a heading anchor at once**: it
+  consists of `A`–`Z`, `a`–`z`, `0`–`9`, `_` and `-`, begins with a letter or a digit (a leading
+  `_` would render as emphasis and alter both the shown key and its anchor), and is unique within
+  its table without regard to case (case-insensitive file systems and lowercased anchors would
+  otherwise collide). A foreign key matches the referenced key byte for byte; a link text that
+  differs only in case is a dangling reference. A key or a table name equal, without regard to
+  case, to `CON`, `PRN`, `AUX`, `NUL`, `COM0`–`COM9` or `LPT0`–`LPT9` is refused — a table name as a
+  schema error, a key as `CONSTRAINT` — since those names are reserved file names on Windows; a
+  `files` key is at most 243 bytes, so its file name stays within 255. A file name that is not the
+  canonical text of its key's type (`007.flowmark.md` for an integer key) is `format.block`. A key
+  change that differs only in case renames through an intermediate name inside the journaled
+  transaction.
 - `identity` is allowed on every markdown table: an insert that omits the key gets `max+1`,
   allocated under the lock; reuse after a git rewind is accepted and stated. A text key with
   `key_prefix <p>` is allocated `<p><n + 1>`, where n is the largest decimal suffix without a
@@ -134,8 +160,7 @@ reimplements them.
   executor-assigned, as with `identity`, so an insert may omit it. A text key without
   `key_prefix` must be given by the insert. A `key_prefix` column is a `varchar` (dbspec keys no
   `text` column). A key written by hand is accepted when it is unique and has the column's type;
-  a key not of the form `<p><n>` does not count toward n. A key in a list or table storage
-  contains no space, `#`, `|` or line feed.
+  a key not of the form `<p><n>` does not count toward n.
 - Keys are opaque: no ID grammar exists, and no relation is read from a key. The suffix grammar
   (`T8.0.14-1`), `taskIDLess` and spec 10's "Task IDs and ordering" are removed.
 
@@ -143,12 +168,14 @@ reimplements them.
 
 - `title <column>` and `body <column>` are optional per-table settings. A `list` storage and a
   `files` storage require `title` (the line text, the H1); a `table` storage may declare it as a
-  cell. The title is non-null and refuses the empty text.
+  cell. The title is non-null and refuses the empty text. A title whose text ends with a space and
+  one or more `#` is written in its H1 with its last `#` as `\#`, since CommonMark would read it
+  as a closing sequence.
 - `body` is a `markdown` column and never NULL. It lives in the row scope in every storage: the
   text after the H1 of a file, or the text of the row's detail section before its first
   sub-heading; a row without a detail section has the empty text as its body.
-- A `files` row is, in order: the header comments, the frontmatter, the H1 title, the body, then
-  the level-2 sections (spec 10's document order is amended). The body and every `markdown`
+- A `files` row is, in order: the H1 title, the field list of its stored scalar columns, the body,
+  then the level-2 sections (spec 10's document order is amended). The body and every `markdown`
   section value end at the next heading of level ≤ L, counted only outside fenced blocks
   (CommonMark block structure); such a value contains only headings deeper than L, and a write of
   a value with a heading line of level ≤ L outside a fence is `CONSTRAINT`.
@@ -158,33 +185,64 @@ reimplements them.
 ### Row scope, sections and depth
 
 - A `files` row's scope is its file (level L = 2 under the H1 title). A block storage's section is
-  a heading at level b, and its rows' detail sections `<h> <key>` are at h = b + 1; a document
-  storage's detail sections are at h = 2. A detail row's scope is at L = h + 1. The heading holds
-  the key only, never a title copy; a detail section whose key names no row of its block is
-  `format.block`. Detail sections of nested list rows are flat siblings.
+  a heading at level b, and its rows' detail sections are at h = b + 1; a document storage's detail
+  sections are at h = 2. A detail row's scope is at L = h + 1. Detail sections of nested list rows
+  are flat siblings.
+- A block or document row has a detail section exactly when its body is not empty, a nullable
+  markdown column is not NULL, or it has a child block row; a detail section without any of them is
+  `format.noncanonical`.
+- **A detail heading is `<h> <table> <key>`** — the table name, one space, the key; never a title
+  copy — and its anchor is `<table>-<lowercased key>`. In each file the engine computes the slug of
+  every heading, skeleton and payload alike, in document order — GitHub's slug: the heading's
+  rendered inline text, lowercased, every character other than a letter, a digit, a space, `-` or
+  `_` removed, each space as `-`, a repeat suffixed `-1`, `-2` in document order; a detail heading
+  whose slug differs from its anchor (an earlier heading took it) is `CONSTRAINT` on write, naming
+  the earlier heading, and `format.block` on read. A detail section whose key names no row of its
+  block is `format.block`.
 - A `markdown` column is always a section of the row scope — never a field or a cell — in every
   storage.
 - In a row scope at level L, each nullable `markdown` column and each child block is a heading at
   level L named by the column or the child table. An absent section is NULL; a present empty
   section is the empty text. A child table named like a markdown column of its parent is a schema
-  error. A key containing `#` or a line feed is refused in a block or document table. A layout
-  that needs a heading past H6 is a schema error.
+  error, and so is a markdown column or a block table named like a table whose detail sections can
+  stand in the same file (the repeated section heading's `-1`, `-2` slugs would take that table's
+  anchors). A layout that needs a heading past H6 is a schema error.
 
 ### Scalar columns
 
-- `files`: a frontmatter key per column.
+- **Values are written in a readable form**, not as dbspec literals: text as it is; integers,
+  decimals and floats in their canonical number form; `true`/`false`; a date `YYYY-MM-DD`; a
+  datetime `YYYY-MM-DD HH:MM:SS[.f…]` and a time `HH:MM:SS[.f…]` with exactly the column's
+  precision in fraction digits; a lowercase uuid; bytes as padded base64; a foreign key as a link
+  (below). The type always comes from the catalog. The engine reads a number or `true`/`false`
+  with orm's `dbspec.CanonicalLiteral(t, v)`, and a date, time, datetime or uuid with
+  `CanonicalLiteral(t, "'" + v + "'")` with the quotes removed from the result; `now` is refused;
+  text is checked against its column's length, and in a single-line place by the rules below. A
+  value whose canonical form differs from its written form is `format.noncanonical`.
+- **Single-line places** are a title (in a list row, an H1 or a cell), a list field, a field-list
+  value and a table cell. A value there with a line feed, with leading or trailing white space, or
+  containing `<` followed by `!`, `/` or a letter (raw HTML would hide or alter it) is `CONSTRAINT`
+  on write. A single-line value is inline markdown as written and is never escaped except as stated.
+- `files`: a field list right after the H1 — one item `- <column>: <value>` per non-null stored
+  scalar value, in column order, followed by a blank line. NULL is an absent item; the empty text
+  is an item with nothing after the colon. The body never begins with a `-` list item — a write
+  whose body's first line is one is `CONSTRAINT` (a body may open with a `*` or `+` list or any
+  other block) — so on read the `-` items directly after the H1 are the field list, and an item
+  that is not `- <stored scalar column>: <value>` in column order is `format.block`. An absent item
+  of a non-null column is `format.block`; the engine writes a default explicitly on insert.
 - `table` (block or document): a cell under the column-named header; every stored column has a
-  header.
+  header. Text is written as it is; an empty cell is NULL; the empty text is `""`; a value
+  beginning with `"` is written `"…"` with `\"` and `\\`; `|` is `\|`, and a `\` before `|` is
+  `\\`.
 - `list` (block or document): `- [<glyph>] <key> <title>[ <field>…]`, or
-  `- <key> <title>[ <field>…]` without a state column. Fields are parsed from the right: a token `<declared column>:<value>`,
-  the value a bare token without space, `"` or `\`, or `"…"` with `\"` and `\\` as escapes. A
-  table cell writes `|` as `\|`. An absent field is NULL; `col:""` is the empty text; a
-  non-null column is written — the engine writes a default explicitly on insert, and a row
-  missing a non-null field is `format.block`. A title token matching `<declared column>:` is
-  written `<column>\:`. The `@` and date sigils are removed.
-- A value with a line feed in a single-line place (a list title or field, a table cell) is
-  `CONSTRAINT` on write. The placement foreign key and `parent` are never written in a block row;
-  writing one is `format.block`.
+  `- <key> <title>[ <field>…]` without a state column. Fields are parsed from the right: a token
+  `<declared column>:<value>`, the value a bare token without space, `"` or `\`, or `"…"` with
+  `\"` and `\\` as escapes. An absent field is NULL; `col:""` is the empty text; every non-null
+  column is written — the engine writes a default explicitly on insert, and a row missing a
+  non-null field is `format.block`. A title token matching `<declared column>:` is written
+  `<column>\:`. The `@` and date sigils are removed.
+- The placement foreign key and `parent` are never written in a block row; writing one is
+  `format.block`.
 
 ### State, hierarchy and order
 
@@ -196,7 +254,7 @@ reimplements them.
 - `order <column>` names a non-null `i32` or `i64` column with no default, in no key, index or
   check. Its value is the row's 1-based position among the rows with the same placement parent
   and the same `parent`. In block and document storages it is never written — derived from line
-  order on read, `format.block` when written; in `files` storage it is a frontmatter field whose
+  order on read, `format.block` when written; in `files` storage it is a field-list item whose
   sibling values must be exactly 1..n (a gap or a duplicate is a validate diagnostic). An insert
   may omit it — orm treats an order column as executor-assigned, so the client sends no value —
   and the row appends; with k it places the row at k. An update to k moves the row and the
@@ -214,7 +272,22 @@ reimplements them.
 ### Relations, links and history
 
 - Every foreign key is restrict-only; `cascade` and `set_null` are rejected. A one-to-many across
-  files stores the child table with `store files` and writes the foreign key in its frontmatter.
+  files stores the child table with `store files` and writes the foreign key in its field list.
+- **A foreign key value is a link** `[<key>](<target>)` in every place a scalar is written: the
+  link text is the referenced key — the data — and the target is derived from it: the relative
+  path, with `/` on every platform, to the file that holds the referenced row, plus `#<anchor>`
+  exactly when that row has a detail section; a link inside the referenced row's own file is
+  `#<anchor>` alone, or that file's name when the row has no anchor. A write that adds or removes a
+  row's detail section rewrites every link to that row in the same transaction. A target that
+  differs from the derived one is `format.noncanonical`; a key that names no row is a dangling
+  reference; a key update of a referenced row is `FOREIGN_KEY` (restrict), so a target never
+  moves under a link. A `parent` written in a `files` row is a link too; the placement foreign
+  key of a block row is never written. Examples: a `files` row `comments/C5.flowmark.md` links its
+  post `[P3](../posts/P3.flowmark.md)`; a block comment inside `posts/P3.flowmark.md` links its
+  author `[max](../people.flowmark.md)`; the root `items.flowmark.md` links a row with a detail
+  section in the same file `[T2](#items-t2)`.
+- A list glyph other than ` ` and `x` renders as literal bracket text in common viewers; the state
+  names are the catalog's, and the glyphs of `flowmark.dbs` are its convention.
 - Many-to-many is a link table with an `identity` key, such as
   `item_links(id, from_item, to_item, kind)` with
   `check ck_item_links_kind (kind in ('blocks', 'relates', 'duplicates', 'supersedes'))`.
@@ -266,18 +339,24 @@ reimplements them.
   it (a human edit) is a validate diagnostic that blocks no other write. The relative rule
   `doing < done + 2` is removed — its limit vanishes as done items accumulate.
 
-### Translations
+### The walk
 
-- A twin is a file `<name>.<lang>.md` whose doc-id equals a row's; it is not a row and the engine
-  never writes it. The language list is the corpus setting `translations` in `dbspec/flowmark.json`,
-  which kit's `config/documents.json` mirrors; a row whose source changed makes its twin stale
-  under kit's `source-sha256` rule.
+- The walk reads every `*.flowmark.md` file. One whose place matches no table — not
+  `<table>.flowmark.md` of a document table, not `<table>/<key>.flowmark.md` of a files table — or a
+  `.flowmark.md` entry that cannot be read is a `corpus.walk` diagnostic. Names are compared byte
+  for byte: a `.flowmark.md` suffix, a table folder or a document file name in another case is
+  `corpus.walk`. The walk never follows a symlink; a symlink whose name ends with `.flowmark.md`, or
+  a symlinked folder named like a `files` table, is `corpus.walk`, and any other symlink is outside
+  the database. A hard link cannot be told from a file portably, so it is not a rule (the
+  multi-platform rule); the engine writes a document by a temp file and a rename, so a hard-linked
+  document is unlinked by its first write. `dbspec/` holds only the `.dbs` set; another file there
+  is a catalog diagnostic.
 
 ### Construct coverage
 
 | dbspec construct | On a markdown corpus |
 | --- | --- |
-| types | every type, in the dbspec canonical literal form in every storage; `bytes` as base64 |
+| types | every type, in the readable value form of the storage grammar (read through orm's `CanonicalLiteral`; text checked for length; `bytes` as padded base64) |
 | primary key | single column; composite is a schema error |
 | unique key, check | enforced at commit; a check whose predicate is unknown (NULL) passes and a unique key treats NULLs as distinct, as in SQL |
 | index | accepted; derived in memory |
@@ -343,6 +422,13 @@ reimplements them.
   and the board says why — it never moves a card it does not store. After an accepted drop the
   board redraws from the rows the operation returns, never from the drop position; a drop across
   columns places the card where the view's sort puts it.
+- **A board example** proves a one-to-many relation in markdown: `posts` (title, body,
+  author → people, created) with `comments` (body, author → people, created, a `parent` for
+  replies). In one variant a post's comments are `store block fk_comments_post list` rows inside
+  the post's file; in the other they are `store files` rows whose field list links to their post.
+  Both variants run the same create, read, update and delete operations through the engine and
+  yield the same rows, and every document reads as an ordinary board page — the post, its fields
+  as links, its comments — in any markdown viewer.
 
 ## Layering
 
@@ -379,7 +465,9 @@ named here.
   - T12.8 the conformance vectors rewritten for the grammar;
   - T12.9 the server (`serve`, token, session control messages; requires the orm protocol item);
   - T12.10 the CLI, MCP and sidecar operations over any table, and `flowmark install`;
-  - T12.11 the demos as one dataset in three storages, and the hardcoding inventory at zero.
+  - T12.11 the demos as one dataset in three storages, and the hardcoding inventory at zero;
+  - T12.11.1 the board example: posts with comments and replies, in the block and the files
+    variants, driven through the engine;
   - T12.12 the orm release tag required instead of the pseudo-version.
   The new engine is built beside the old one, whose codec, executor and application paths the
   faces still use; T12.10 switches the faces to the new engine and removes the old paths with no
@@ -439,3 +527,8 @@ cover one item.
   Chrome; a refused transition returns to its place.
 - Documents and hardcoding: `make documents-check`, `make refs-check` and `make kit-check` pass,
   and a grep of the inventory finds nothing.
+- Test density: every grammar and constraint rule has accepting and rejecting cases; P1/P2 golden
+  fixtures per storage cover every column type and both NULL and empty forms; parse and emit are
+  fuzzed with the golden seeds.
+- The board example: creating a post, adding comments and a reply, editing and deleting through the
+  engine read back the same rows in both variants.

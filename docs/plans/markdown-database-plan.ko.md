@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database -->
-<!-- source-sha256: 44b6c45a64c978eb2d5c9c9fd483872e7e1746f061362c5ef87ea364b416ba55 -->
+<!-- source-sha256: 90afe2cc92d20cb7ed1eb3f81a78b2aa603c1dd0925aa217696864a9658e70e0 -->
 # markdown database 계획
 
 [English](markdown-database-plan.md)
@@ -94,6 +94,19 @@ NULL이 아니며 비어 있을 수 있고, view의 entity table은 둘 다 선�
 - 이 repository는 corpus가 아니다: `make validate`와 prose ID 검사기는 옛 엔진과 함께 제거하고,
   `make refs-check`는 kit이 추적하는 checklist를 계속 검사한다.
 
+## 읽을 수 있는 문서
+
+- **corpus 문서는 이름이 `.flowmark.md`로 끝나는 file이다.** corpus root 아래에 있고 `dbspec/`,
+  `.flowmark/`와 숨김 항목 밖에 있는 file이다. 이름만이 file을 database의 일부로 만드는 기준이며,
+  그 밖의 모든 file은 database 밖이고 진단을 내지 않는다.
+- **모든 corpus 문서는 완전한 markdown 문서다.** flowmark를 모르는 독자도 그대로 읽으며, 주석,
+  표지, 숨은 field가 없다. 구조는 평범한 markdown(heading, list, table, field list)이고 모든 관계는
+  어떤 markdown viewer에서든 따라갈 수 있는 link다. 근거: 문서는 database의 유일한 저장소이므로
+  읽을 수 있는 문서로 남아야 하며, 기계만 필요로 하는 것은 catalog(`dbspec/`)나 `.flowmark/`에 속한다.
+- 이 판정과 함께 철회한다: `<!-- doc-id -->` header, 출처 주석, `files` 행의 frontmatter, twin 규칙,
+  `dbspec/flowmark.json`의 `translations` setting. adapter가 소유한 문서의 sync 출처는 문서 밖으로
+  옮기며, 그 자리는 adapter 작업과 함께 정한다(열린 질문).
+
 ## 저장 문법
 
 markdown 전용 선언은 모두 dbspec **manifest setting**이며 `markdown <column>` setting을 선례로
@@ -103,26 +116,33 @@ markdown 전용 선언은 모두 dbspec **manifest setting**이며 `markdown <co
 ### 저장
 
 - table마다 정확히 하나, 없으면 schema 오류:
-  - `store files` — corpus root 아래 table 이름의 폴더에 행마다 file 하나. insert는
-    `<table>/<key>.md`를 쓴다. 엔진은 file 이름을 바꾸지 않으며 key가 바뀌어도 file은 그대로다.
-  - `store document list` / `store document table` — 모든 행이 corpus root의 file `<table>.md` 하나에
-    있다: `<!-- doc-id: <table> -->`, `# <table>`, 그 바로 아래 list나 table, H2의 상세 섹션. doc-id는
-    corpus의 행과 `document` file 사이에서 유일하며 twin은 같은 doc-id를 공유한다.
-  - `store block <fk> list` / `store block <fk> table` — 이름 붙은 foreign key가 가리키는 부모 행의
+  - `store files` — corpus root 아래의 `<table>/<key>.flowmark.md`에 행마다 file 하나. file 이름이
+    key이며, key가 바뀌면 같은 transaction에서 file 이름을 바꾼다.
+  - `store document list` / `store document table` — 모든 행이 corpus root의 file
+    `<table>.flowmark.md` 하나에 있다: `# <table>`, 그 바로 아래 H1 밑의 list나 table, H2의 상세 섹션.
+  - `store block <fk> list` / `store block <fk> table` — 이름 붙은 foreign key가 참조하는 부모 행의
     scope 안의 행.
 
 ### Key
 
 - markdown table은 단일 column primary key를 갖는다. composite key는 schema 오류다.
-- `files` 행의 key는 `<!-- doc-id: -->` 값이다. file 이름은 의미가 없다.
+- `files` 행의 key는 file 이름에서 `.flowmark.md`를 뺀 것이다.
+- **모든 key는 동시에 file 이름, URL path segment, heading anchor의 일부다**: `A`–`Z`, `a`–`z`,
+  `0`–`9`, `_`, `-`로 이루어지고, 문자나 숫자로 시작하며(앞의 `_`는 강조로 렌더되어 보이는 key와
+  anchor를 바꾼다), table 안에서 대소문자를 무시하고 유일하다(대소문자를 구분하지 않는 file system과
+  소문자로 바뀐 anchor가 충돌하지 않도록). 외래 key는 참조된 key와 byte 단위로 맞는다. 대소문자만 다른
+  link 텍스트는 dangling 참조다. 대소문자를 무시했을 때 `CON`, `PRN`, `AUX`, `NUL`, `COM0`–`COM9`,
+  `LPT0`–`LPT9`와 같은 key나 table 이름은 거절한다 — table 이름은 schema 오류로, key는 `CONSTRAINT`로
+  — Windows에서 이 이름들은 예약된 file 이름이기 때문이다. `files` key는 최대 243 byte이므로 file 이름이
+  255 안에 든다. key의 정규 문자열이 아닌 file 이름(정수 key의 `007.flowmark.md`)은 `format.block`이다.
+  대소문자만 다른 key 변경은 journal된 transaction 안에서 중간 이름을 거쳐 이름을 바꾼다.
 - `identity`는 모든 markdown table에 허용된다: key를 생략한 insert는 lock 아래 할당된 `max+1`을
   받으며, git을 되감은 뒤의 재사용은 받아들이고 명시한다. `key_prefix <p>`를 가진 문자 key는
   `<p><n + 1>`로 할당되며, n은 `<p><n>` 꼴 key 가운데 선행 0 없는 가장 큰 10진 접미사다. orm은 이런
   column을 `identity`처럼 executor가 할당하는 것으로 다루므로 insert가 생략할 수 있다.
   `key_prefix` 없는 문자 key는 insert가 주어야 한다. `key_prefix` column은 `varchar`다(dbspec은
   `text` column을 key로 쓰지 않는다). 손으로 쓴 key는 유일하고 column type을 가지면 받아들이며,
-  `<p><n>` 꼴이 아닌 key는 n에 세지 않는다. list나 table 저장의 key는 공백, `#`, `|`, 줄바꿈을 갖지
-  않는다.
+  `<p><n>` 꼴이 아닌 key는 n에 세지 않는다.
 - key는 불투명하다: ID 문법은 없고 key에서 관계를 읽지 않는다. suffix 문법(`T8.0.14-1`),
   `taskIDLess`, spec 10의 "Task IDs and ordering"은 제거한다.
 
@@ -130,10 +150,11 @@ markdown 전용 선언은 모두 dbspec **manifest setting**이며 `markdown <co
 
 - `title <column>`과 `body <column>`은 table마다 선택하는 setting이다. `list` 저장과 `files` 저장은
   `title`을 요구하고(줄 텍스트, H1), `table` 저장은 cell로 선언할 수 있다. 제목은 non-null이며 빈
-  텍스트를 거절한다.
+  텍스트를 거절한다. 공백과 하나 이상의 `#`으로 끝나는 제목은 H1에서 마지막 `#`을 `\#`로 쓴다.
+  CommonMark가 그것을 닫는 sequence로 읽기 때문이다.
 - `body`는 `markdown` column이며 NULL이 아니다. 모든 저장에서 행 scope에 놓인다: file의 H1 뒤 텍스트,
   또는 행 상세 섹션의 첫 하위 heading 앞 텍스트. 상세 섹션이 없는 행의 body는 빈 텍스트다.
-- `files` 행은 차례로 header comment, frontmatter, H1 제목, body, level-2 섹션이다(spec 10의 문서
+- `files` 행은 차례로 H1 제목, 저장되는 scalar column의 field list, body, level-2 섹션이다(spec 10의 문서
   순서를 개정한다). body와 모든 `markdown` 섹션 값은 fenced block 밖에서만 세는(CommonMark block
   구조) 다음 level ≤ L heading에서 끝난다. 그런 값은 L보다 깊은 heading만 담으며, fence 밖에 level ≤ L
   heading 줄을 가진 값의 쓰기는 `CONSTRAINT`다.
@@ -143,26 +164,53 @@ markdown 전용 선언은 모두 dbspec **manifest setting**이며 `markdown <co
 ### 행 scope, 섹션, 깊이
 
 - `files` 행의 scope는 그 file이다(H1 제목 아래 level L = 2). block 저장의 섹션은 level b heading이고
-  그 행들의 상세 섹션 `<h> <key>`는 h = b + 1에 있다. document 저장의 상세 섹션은 h = 2다. 상세 행의
-  scope는 L = h + 1이다. heading은 key만 갖고 제목 사본을 갖지 않는다. 블록의 어떤 행도 가리키지 않는
-  key의 상세 섹션은 `format.block`이다. 중첩된 list 행의 상세 섹션은 평평한 형제다.
+  그 행들의 상세 섹션은 h = b + 1에 있다. document 저장의 상세 섹션은 h = 2다. 상세 행의 scope는
+  L = h + 1이다. 중첩된 list 행의 상세 섹션은 평평한 형제다.
+- block이나 document 행은 body가 비어 있지 않거나, nullable `markdown` column이 NULL이 아니거나, 자식
+  block 행을 가질 때에만 상세 섹션을 가진다. 어느 것도 없는 상세 섹션은 `format.noncanonical`이다.
+- **상세 heading은 `<h> <table> <key>`다** — table 이름, 공백 하나, key이며 제목 사본은 결코 아니다 — 그
+  anchor는 `<table>-<소문자 key>`다. 각 file에서 엔진은 모든 heading(골격과 payload 모두)의 slug를 문서
+  순서대로 계산한다 — GitHub의 slug로, heading의 렌더된 인라인 텍스트를 소문자로 만들고, 문자, 숫자, 공백,
+  `-`, `_`가 아닌 모든 문자를 지우며, 공백은 `-`로 바꾸고, 반복은 문서 순서대로 `-1`, `-2`를 붙인다.
+  slug가 anchor와 다른(앞선 heading이 그것을 차지한) 상세 heading은 쓰기에서 앞선 heading을 밝히는
+  `CONSTRAINT`, 읽기에서 `format.block`이다. 블록의 어떤 행도 가리키지 않는 key의 상세 섹션은
+  `format.block`이다.
 - `markdown` column은 모든 저장에서 언제나 행 scope의 섹션이다 — field나 cell이 아니다.
-- level L의 행 scope에서 nullable `markdown` column과 자식 블록은 각각 column이나 자식 table 이름을
-  가진 level L heading이다. 없는 섹션은 NULL, 비어 있는 섹션은 빈 텍스트다. 부모의 markdown column과
-  같은 이름의 자식 table은 schema 오류다. block이나 document table에서 `#`나 줄바꿈을 담은 key는
-  거절한다. H6를 넘는 heading이 필요한 layout은 schema 오류다.
+- level L의 행 scope에서 nullable `markdown` column과 자식 block은 각각 column이나 자식 table 이름을
+  가진 level L heading이다. 없는 섹션은 NULL이고, 있는 빈 섹션은 빈 텍스트다. 부모의 markdown column과
+  같은 이름의 자식 table은 schema 오류이며, 같은 file에 상세 섹션이 들어갈 수 있는 table 이름과 같은
+  markdown column이나 block table도 그렇다(반복된 섹션 heading의 `-1`, `-2` slug가 그 table의 anchor를
+  차지하기 때문이다). H6를 넘는 heading이 필요한 layout은 schema 오류다.
 
-### Scalar column
+### Scalar columns
 
-- `files`: column마다 frontmatter key 하나.
+- **값은 dbspec literal이 아니라 읽을 수 있는 형식으로 쓴다**: text는 그대로; 정수, decimal, float는 정규
+  숫자 형식; `true`/`false`; date는 `YYYY-MM-DD`; datetime은 `YYYY-MM-DD HH:MM:SS[.f…]`, time은
+  `HH:MM:SS[.f…]`이며 fraction 자릿수는 column의 precision과 정확히 같다; 소문자 uuid; bytes는 padding이
+  있는 base64; foreign key는 link다(아래). type은 항상 catalog에서 온다. 엔진은 숫자와 `true`/`false`를
+  orm의 `dbspec.CanonicalLiteral(t, v)`로 읽고, date, time, datetime, uuid는
+  `CanonicalLiteral(t, "'" + v + "'")`로 읽어 결과에서 따옴표를 뺀다. `now`는 거절한다. text는 column의
+  길이를 검사하며, 한 줄 자리에서는 아래 규칙을 따른다. 값의 정규 형식이 쓰인 형식과 다르면
+  `format.noncanonical`이다.
+- **한 줄 자리**는 title(list 행, H1, cell 안), list field, field list의 값, table cell이다. 그곳의 값에
+  줄바꿈, 앞뒤 공백, 또는 `<` 뒤에 `!`, `/`, 문자가 오는 것(raw HTML이 값을 숨기거나 바꾼다)이 있으면
+  쓰기에서 `CONSTRAINT`다. 한 줄 값은 쓴 그대로의 인라인 markdown이며, 명시된 경우를 빼고는 escape하지
+  않는다.
+- `files`: H1 바로 뒤의 field list — 저장되는 non-null scalar 값마다 항목 하나 `- <column>: <value>`,
+  column 순서대로, 그 뒤 빈 줄. NULL은 없는 항목이고, 빈 텍스트는 콜론 뒤가 빈 항목이다. body는 `-` list
+  항목으로 시작하지 않는다 — 첫 줄이 그러한 body의 쓰기는 `CONSTRAINT`다(body는 `*`나 `+` list 또는 다른
+  블록으로 시작할 수 있다). 따라서 읽을 때 H1 바로 뒤의 `-` 항목이 field list이며, column 순서대로의
+  `- <저장되는 scalar column>: <value>` 꼴이 아닌 항목은 `format.block`이다. non-null column의 없는 항목은
+  `format.block`이다. 엔진은 insert에서 default를 명시적으로 쓴다.
 - `table`(block 또는 document): column 이름 header 아래의 cell. 저장되는 모든 column은 header를 갖는다.
-- `list`(block 또는 document): `- [<glyph>] <key> <title>[ <field>…]`, 상태 column이 없으면
-  `- <key> <title>[ <field>…]`. field는 오른쪽부터 parse한다: token `<선언된 column>:<value>`이고,
-  value는 공백, `"`, `\` 없는 bare token이거나 `\"`와 `\\`를 escape로 갖는 `"…"`다. table cell은
-  `|`를 `\|`로 쓴다. 없는 field는 NULL, `col:""`은 빈 텍스트이며, 모든 non-null column은 쓴다 —
-  엔진은 insert에서 default를 명시적으로 쓰고, non-null field가 빠진 행은 `format.block`이다. `<선언된 column>:`과 맞는 제목 token은 `<column>\:`로 쓴다. `@`와 날짜 sigil은 제거한다.
-- 한 줄 자리(list 제목이나 field, table cell)에 줄바꿈을 가진 값은 쓰기에서 `CONSTRAINT`다. 배치
-  foreign key와 `parent`는 block 행에 쓰지 않으며, 쓰면 `format.block`이다.
+  text는 쓴 그대로 쓴다. 빈 cell은 NULL이고, 빈 텍스트는 `""`이다. `"`로 시작하는 값은 `\"`와 `\\`를 가진
+  `"…"`로 쓴다. `|`는 `\|`로 쓰며, `|` 앞의 `\`는 `\\`로 쓴다.
+- `list`(block 또는 document): `- [<glyph>] <key> <title>[ <field>…]`, 상태 column이 없으면 `- <key>
+  <title>[ <field>…]`. field는 오른쪽부터 parse한다: token `<선언된 column>:<value>`이고, value는 공백, `"`, `\` 없는
+  bare token이거나 `\"`와 `\\`를 escape로 갖는 `"…"`다. 없는 field는 NULL, `col:""`은 빈 텍스트이며, 모든 non-null
+  column은 쓴다 — 엔진은 insert에서 default를 명시적으로 쓰고, non-null field가 빠진 행은 `format.block`이다. `<선언된
+  column>:`과 맞는 제목 token은 `<column>\:`로 쓴다. `@`와 날짜 sigil은 제거한다.
+- 배치 foreign key와 `parent`는 block 행에 쓰지 않으며, 쓰면 `format.block`이다.
 
 ### 상태, 계층, 순서
 
@@ -174,7 +222,7 @@ markdown 전용 선언은 모두 dbspec **manifest setting**이며 `markdown <co
 - `order <column>`은 default 없고 key, index, check에 들지 않는 non-null `i32`나 `i64` column을
   가리킨다. 값은 같은 배치 부모와 같은 `parent`를 가진 행 사이에서의 1부터의 위치다. block과
   document 저장에서는 쓰지 않는다 — 읽을 때 줄 순서에서 유도되며 쓰면 `format.block`이다. `files`
-  저장에서는 frontmatter field이며 형제 값은 정확히 1..n이어야 한다(빈틈이나 중복은 validate 진단).
+  저장에서는 field list의 항목이며 형제 값은 정확히 1..n이어야 한다(빈틈이나 중복은 validate 진단).
   insert는 이를 생략할 수 있고 — orm은 order column을 executor가 할당하는 것으로 다루므로 client는
   값을 보내지 않는다 — 행은 뒤에 붙는다. k를 주면 k에 놓는다. k로의 update는 행을 옮기고 형제가 같은
   transaction에서 따라간다. k < 1이나 k > n + 1은 `CONSTRAINT`이며 잘라 맞추지 않는다. `order`를
@@ -189,7 +237,20 @@ markdown 전용 선언은 모두 dbspec **manifest setting**이며 `markdown <co
 ### 관계, link, 이력
 
 - 모든 foreign key는 restrict-only이며 `cascade`와 `set_null`은 거절한다. file 간 one-to-many는 자식
-  table을 `store files`로 두고 foreign key를 그 frontmatter에 쓴다.
+  table을 `store files`로 두고 foreign key를 그 field list에 쓴다.
+- **foreign key 값은 link다** `[<key>](<target>)`이며, scalar가 쓰이는 모든 자리에서 그렇다: link 텍스트는
+  참조된 key — 데이터 — 이고, target은 그것으로부터 유도된다: 참조된 행을 가진 file까지의 상대 경로(모든
+  플랫폼에서 `/`)에, 그 행이 상세 섹션을 가질 때에만 `#<anchor>`를 붙인다. 참조된 행 자신의 file 안의 link는
+  `#<anchor>`만이며, 행이 anchor를 갖지 않으면 그 file 이름이다. 행의 상세 섹션을 추가하거나 제거하는 쓰기는
+  같은 transaction에서 그 행을 가리키는 모든 link를 다시 쓴다. 유도된 것과 다른 target은
+  `format.noncanonical`이고, 존재하지 않는 key를 가리키는 것은 dangling 참조다. 참조된 행의 key 변경은
+  `FOREIGN_KEY`(restrict)이므로 target은 link 아래에서 결코 움직이지 않는다. `files` 행에 쓴 `parent`도
+  link이며, block 행의 배치 foreign key는 결코 쓰지 않는다. 예: `comments/C5.flowmark.md` 행은 자신의 post를
+  `[P3](../posts/P3.flowmark.md)`로 link하고, `posts/P3.flowmark.md` 안의 block comment는 자신의 author를
+  `[max](../people.flowmark.md)`로 link하며, 루트의 `items.flowmark.md`는 같은 file 안에 상세 섹션을 가진 행을
+  `[T2](#items-t2)`로 link한다.
+- 공백과 `x`가 아닌 list glyph는 흔한 viewer에서 문자 그대로의 대괄호 텍스트로 렌더된다. state 이름은
+  catalog의 것이며, `flowmark.dbs`의 glyph는 그 관례다.
 - 다대다는 `identity` key를 가진 link table이다. 예:
   `item_links(id, from_item, to_item, kind)`와
   `check ck_item_links_kind (kind in ('blocks', 'relates', 'duplicates', 'supersedes'))`. 간트의 의존
@@ -232,18 +293,22 @@ markdown 전용 선언은 모두 dbspec **manifest setting**이며 `markdown <co
   않는 validate 진단이다. 상대 규칙 `doing < done + 2`는 done 항목이 쌓일수록 제한이 사라지므로
   제거한다.
 
-### 번역
+### 순회
 
-- twin은 doc-id가 어떤 행의 doc-id와 같은 file `<name>.<lang>.md`다. 행이 아니며 엔진은 쓰지 않는다.
-  언어 목록은 `dbspec/flowmark.json`의 corpus setting `translations`이고 kit의
-  `config/documents.json`이 이를 반영한다. 원본이 바뀐 행은 kit의 `source-sha256` 규칙에 따라 twin을
-  낡게 만든다.
+- walk는 모든 `*.flowmark.md` file을 읽는다. 위치가 어떤 table과도 맞지 않는 file — document table의
+  `<table>.flowmark.md`도, files table의 `<table>/<key>.flowmark.md`도 아닌 것 — 이나 읽을 수 없는
+  `.flowmark.md` 항목은 `corpus.walk` 진단이다. 이름은 byte 단위로 비교한다: `.flowmark.md` 접미사, table
+  폴더, document file 이름의 대소문자가 다르면 `corpus.walk`다. walk는 symlink를 따라가지 않는다. 이름이
+  `.flowmark.md`로 끝나는 symlink나 `files` table과 이름이 같은 symlink 폴더는 `corpus.walk`이며, 그 밖의
+  symlink는 database 밖이다. hard link는 이식성 있게 file과 구별할 수 없으므로 규칙이 아니다(다중 플랫폼
+  규칙). 엔진은 문서를 임시 file과 rename으로 쓰므로, hard link된 문서는 첫 쓰기에서 link가 끊어진다.
+  `dbspec/`에는 `.dbs` set만 있으며, 그곳의 다른 file은 catalog 진단이다.
 
 ### 구성 대응
 
 | dbspec 구성 | markdown corpus에서 |
 | --- | --- |
-| type | 모든 type, 모든 저장에서 dbspec canonical literal 형식. `bytes`는 base64 |
+| type | 모든 type, 저장 문법의 읽을 수 있는 값 형식으로(orm의 `CanonicalLiteral`로 읽고, text는 길이를 검사하며, `bytes`는 padding 있는 base64) |
 | primary key | 단일 column. composite는 schema 오류 |
 | unique key, check | commit에서 강제. 술어가 unknown(NULL)인 check는 통과하고 unique key는 SQL처럼 NULL을 서로 다르게 본다 |
 | index | 받아들임. memory에서 유도 |
@@ -276,13 +341,13 @@ markdown 전용 선언은 모두 dbspec **manifest setting**이며 `markdown <co
   datetime"을 담는 dbspec type은 없고, datetime만 쓰는 column은 날짜만 있는 마감을 모호한 자정으로
   바꾼다. 간트는 날짜만 있는 시작을 그날의 시작부터, 날짜만 있는 마감을 그날의 끝까지 그린다.
 - `items` 기계는 전부 선언된다: `state varchar(16)`, `state_machine state initial waiting`, spec 100의
-  전이·종료·`require` 줄(waiting → doing; doing → done require evidence; doing → bypassed require
-  cause, retry; bypassed → doing; waiting → impossible require cause; done과 impossible은 종료),
-  `checkbox state waiting ' '`, `doing '~'`, `done 'o'`, `bypassed '!'`, `impossible '-'` (각각 한 글자이며 list 행의 대괄호 사이에 쓴다),
-  `history item_history row item from from_state to to_state at at`. `item_history(id i64 identity,
-  item varchar(32), from_state, to_state, at, evidence, cause, retry)`는 같은 세 `markdown` column을
-  선언하고 `foreign key fk_history_item (item) references items (id)`와 그 index를 갖는다. 여러 줄
-  evidence는 섹션이다(`items.md` H1, `## T1`, `### item_history`, `#### <id>`, `##### evidence` — H6
+  전이·종료·`require` 줄(waiting → doing; doing → done require evidence; doing → bypassed require cause,
+  retry; bypassed → doing; waiting → impossible require cause; done과 impossible은 종료), `checkbox
+  state waiting ' '`, `doing '~'`, `done 'o'`, `bypassed '!'`, `impossible '-'` (각각 한 글자이며 list 행의
+  대괄호 사이에 쓴다), `history item_history row item from from_state to to_state at at`. `item_history(id
+  i64 identity, item varchar(32), from_state, to_state, at, evidence, cause, retry)`는 같은 세
+  `markdown` column을 선언하고 `foreign key fk_history_item (item) references items (id)`와 그 index를 갖는다.
+  여러 줄 evidence는 섹션이다(`items.md` H1, `## T1`, `### item_history`, `#### <id>`, `##### evidence` — H6
   안).
 - `flowmark.dbs`는 `limit`를 선언하지 않는다: 사용자의 WIP 규칙 — 시작보다 완료, 독립 항목은 병렬
   허용 — 은 어떤 개수로도 표현되지 않는 작업 규칙이며 숫자는 지어낸 것이 된다. `limit` setting은 숫자를
@@ -302,6 +367,11 @@ markdown 전용 선언은 모두 dbspec **manifest setting**이며 `markdown <co
   정한다. column을 넘는 drop은 상태를 바꾼다. 그 밖의 drop은 거절하고 보드가 이유를 말한다 — 저장하지
   않는 card는 옮기지 않는다. 받아들여진 drop 뒤 보드는 drop 위치가 아니라 operation이 돌려준 행으로
   다시 그리며, column을 넘는 drop은 view의 정렬이 정하는 자리에 card를 놓는다.
+- **board 예제**는 markdown에서 일대다 관계를 증명한다: `posts`(title, body, author → people, created)와
+  `comments`(body, author → people, created, 답글을 위한 `parent`)가 있다. 한 변형에서는 post의 comment가 post 파일 안의
+  `store block fk_comments_post list` 행으로, 다른 변형에서는 field list가 post를 link하는 `store files` 행으로 저장된다.
+  두 변형은 같은 create, read, update, delete 연산을 엔진으로 실행하며 같은 행을 내고, 모든 문서는 어떤 markdown viewer에서든 평범한
+  board 페이지 — post, 그 field들의 link, 그 comment들 — 로 읽힌다.
 
 ## 계층
 
@@ -336,9 +406,11 @@ repository마다 자기 checklist를 운영한다. orm과 plugin의 작업은 �
   - T12.8 문법에 맞게 다시 쓴 conformance vector.
   - T12.9 server(`serve`, token, session control message. orm protocol 항목 선행).
   - T12.10 모든 table에 대한 CLI, MCP, sidecar operation과 `flowmark install`.
-  - T12.11 하나의 dataset을 세 저장 방식으로 둔 demo와 0이 된 하드코딩 목록.
+  - T12.11 하나의 dataset을 세 저장 방식으로 둔 demo와 0이 된 하드코딩 목록;
+  - T12.11.1 board 예제: comment와 답글을 가진 post를 block 변형과 files 변형에서 엔진으로 구동한다;
   - T12.12 pseudo-version 대신 요구되는 orm release tag.
-  새 엔진은 옛 엔진 곁에 세워지며, 옛 엔진의 codec, executor, application 경로는 faces가 여전히 사용한다. T12.10이 faces를 새 엔진으로 전환하고 옛 경로를 호환 layer 없이 제거하며, T12.12는 released orm을 요구한다.
+  새 엔진은 옛 엔진 곁에 세워지며, 옛 엔진의 codec, executor, application 경로는 faces가 여전히 사용한다. T12.10이 faces를 새 엔진으로
+  전환하고 옛 경로를 호환 layer 없이 제거하며, T12.12는 released orm을 요구한다.
 - **orm**(자기 checklist): protocol의 IR executor와 capability table, dbspec setting `store`,
   `key_prefix`, `title`, `body`, `checkbox`, `order`, `state_machine … limit`,
   `state_machine … history`, `state_machine … initial`과 corpus 거절, corpus에서의 `history`와
@@ -392,3 +464,6 @@ repository마다 자기 checklist를 운영한다. orm과 plugin의 작업은 �
   돌아온다.
 - 문서와 하드코딩: `make documents-check`, `make refs-check`, `make kit-check`가 통과하고 목록을
   grep하면 아무것도 나오지 않는다.
+- 테스트 밀도: 모든 문법과 제약 규칙에는 허용되는 case와 거절되는 case가 있고, 저장마다 모든 column type과 NULL 및 빈 형태를 덮는 P1/P2 golden
+  fixture가 있으며, parse와 emit은 golden seed로 fuzz된다.
+- board 예제: post를 만들고 comment와 답글을 추가하며, 편집과 삭제를 엔진으로 수행하면 두 변형 모두 같은 행을 다시 읽는다.
