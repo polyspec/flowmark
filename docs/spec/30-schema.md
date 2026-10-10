@@ -34,7 +34,7 @@ behaviour.
 | `title <column>` | the row's title: non-null, never empty |
 | `body <column>` | the row's body: a `markdown` column, never NULL |
 | `order <column>` | the row's position among its siblings; orm treats the column as executor-assigned |
-| `checkbox <column> <state> '<glyph>'` | the list glyph of a state |
+| `checkbox <column> <state> '<glyph>'` | the list glyph of a state: exactly one character, written between the brackets of a list row (`- [<glyph>] …`) |
 | `markdown <column>` | the column holds markdown prose and is stored as a section |
 | `state_machine <column> initial <state>` | an initial state; may repeat |
 | `state_machine <column> <from> -> <to> [require (…)]`, `state_machine <column> terminal <state> [require (…)]` | the transitions and terminals, as dbspec defines them |

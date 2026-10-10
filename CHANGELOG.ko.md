@@ -1,8 +1,17 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 8f3435415ea9ed86a2f145a5509c85c91c9f5a9354ed4f6348b940428e375552 -->
+<!-- source-sha256: e2d28d5b30b94ea8d7c5041b678c9c55d326664f4452a8b208d6f826752fd8ef -->
 # Changelog
 
 ## Unreleased
+
+- T12.2.1: `catalog` package가 corpus root의 catalog를 적재한다. orm의 `engine/dbspec`으로 `dbspec/*.dbs`
+  집합을, `dbspec/flowmark.json` 번역과 함께 읽으며, spec이 명한 각 경우를 위치가 정해진 진단으로 거절한다:
+  catalog 없음, `store` 없는 table, 복합 key, `aes`/`aes_version`/`blind_index`, `audit`/`immutable`,
+  `cascade`/`set_null`, 외부 `use`, `history` 또는 `initial` 없는 state machine, `title` 없는 list 또는
+  files 저장, H6을 넘는 제목 깊이, block 순환. 적재된 catalog는 table마다 저장, key, title, body, order,
+  markdown column과 state machine을 가진다. glyph 표기를 바로잡는다: spec 100, spec 30과 markdown database
+  계획은 checkbox glyph를 `'[ ]'` 등 대신 대괄호 사이의 한 글자(`waiting ' '`, `doing '~'`, `done 'o'`,
+  `bypassed '!'`, `impossible '-'`)로 쓴다. orm의 `checkbox` setting이 정확히 한 글자를 받기 때문이다.
 
 - T12.1: 판정과 spec을 markdown database 계획 위에서 다시 쓴다. flowmark가 엔진이고 orm은 `markdown://`으로
   IR executor로서 접속한다. `dbspec/` catalog가 유일한 schema이고, 각 table은 `files`, `document`,

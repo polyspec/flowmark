@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database -->
-<!-- source-sha256: d09fa6852b5cc3ff2067425ebfbd7a0ec8cdfb3657be35fc739a3d7b45f70724 -->
+<!-- source-sha256: 44b6c45a64c978eb2d5c9c9fd483872e7e1746f061362c5ef87ea364b416ba55 -->
 # markdown database 계획
 
 [English](markdown-database-plan.md)
@@ -278,7 +278,7 @@ markdown 전용 선언은 모두 dbspec **manifest setting**이며 `markdown <co
 - `items` 기계는 전부 선언된다: `state varchar(16)`, `state_machine state initial waiting`, spec 100의
   전이·종료·`require` 줄(waiting → doing; doing → done require evidence; doing → bypassed require
   cause, retry; bypassed → doing; waiting → impossible require cause; done과 impossible은 종료),
-  `checkbox state waiting '[ ]'`, `doing '[~]'`, `done '[o]'`, `bypassed '[!]'`, `impossible '[-]'`,
+  `checkbox state waiting ' '`, `doing '~'`, `done 'o'`, `bypassed '!'`, `impossible '-'` (각각 한 글자이며 list 행의 대괄호 사이에 쓴다),
   `history item_history row item from from_state to to_state at at`. `item_history(id i64 identity,
   item varchar(32), from_state, to_state, at, evidence, cause, retry)`는 같은 세 `markdown` column을
   선언하고 `foreign key fk_history_item (item) references items (id)`와 그 index를 갖는다. 여러 줄
