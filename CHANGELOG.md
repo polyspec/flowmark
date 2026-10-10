@@ -3,6 +3,14 @@
 
 ## Unreleased
 
+- T8.4-4: `TestAddWithoutPathOnEmptyCorpus` passes on every run. The test assumed the add answer
+  comes before the watcher's change event, but the order is not defined: the watcher reports the
+  add's own write, and a sidecar may push change events at any time. The test now asserts that the
+  one string answer is `T1 added` and that every other message is a changed event of the surface.
+  `Serve` also no longer returns while a poll goroutine can still write to the output: `stop` waits
+  for the poll loops, which removes a data race that `go test -race` reported on the output buffer,
+  and a poll loop ends at once when stopped instead of finishing its wait between two polls.
+
 - T1.3-1: the reference check reads the files of the checkout that Git does not ignore, through
   kit's `trackedFiles`, as the kit checks do. Ignored directories such as the agent worktrees under
   `.claude/worktrees/` no longer change its result.

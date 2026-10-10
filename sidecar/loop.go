@@ -44,7 +44,7 @@ type operation struct {
 func Serve(in io.Reader, out io.Writer) {
 	writer := &stream{out: bufio.NewWriter(out)}
 	defer writer.flush()
-	watcher := &corpusWatcher{surfaces: map[int]string{}, finger: map[string]string{}}
+	watcher := newCorpusWatcher()
 	defer watcher.stop()
 	scanner := bufio.NewScanner(in)
 	scanner.Buffer(make([]byte, 1024*1024), 64*1024*1024)
@@ -241,6 +241,13 @@ type corpusWatcher struct {
 	surfaces map[int]string
 	finger   map[string]string
 	stopped  bool
+	quit     chan struct{}  // closed by stop, ending the wait between two polls
+	polls    sync.WaitGroup // the poll goroutines, which write to the session's output
+}
+
+// newCorpusWatcher returns a watcher with no surface.
+func newCorpusWatcher() *corpusWatcher {
+	return &corpusWatcher{surfaces: map[int]string{}, finger: map[string]string{}, quit: make(chan struct{})}
 }
 
 // watch remembers the surface root and starts one poll loop per distinct root.
@@ -260,6 +267,7 @@ func (w *corpusWatcher) watch(surface int, root string, writer *stream) {
 		}
 	}
 	if firstRoot {
+		w.polls.Add(1)
 		go w.poll(writer)
 	}
 }
@@ -271,15 +279,21 @@ func (w *corpusWatcher) forget(surface int) {
 	delete(w.surfaces, surface)
 }
 
-// stop ends every poll loop with the session.
+// stop ends every poll loop with the session and waits until none is left, so no changed
+// event is written after the session has ended.
 func (w *corpusWatcher) stop() {
 	w.mu.Lock()
-	w.stopped = true
+	if !w.stopped {
+		w.stopped = true
+		close(w.quit)
+	}
 	w.mu.Unlock()
+	w.polls.Wait()
 }
 
 // poll compares the fingerprint of the watched roots and pushes changed events.
 func (w *corpusWatcher) poll(writer *stream) {
+	defer w.polls.Done()
 	for {
 		w.mu.Lock()
 		if w.stopped || len(w.surfaces) == 0 {
@@ -304,7 +318,11 @@ func (w *corpusWatcher) poll(writer *stream) {
 				w.push(writer)
 			}
 		}
-		time.Sleep(400 * time.Millisecond)
+		select {
+		case <-w.quit:
+			return
+		case <-time.After(400 * time.Millisecond):
+		}
 	}
 }
 
