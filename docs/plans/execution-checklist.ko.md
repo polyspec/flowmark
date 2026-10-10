@@ -1,5 +1,5 @@
 <!-- doc-id: execution-checklist -->
-<!-- source-sha256: 68d5892744ee790cde59cffe3d799396af11bff3ffc78a9779d5362eb7729c70 -->
+<!-- source-sha256: 514818298e59843d755d4383f2d1b12ec808fad90cf61e3e82f67fdb5a7c4e79 -->
 # 실행 체크리스트
 
 ## T1a 설계 session
@@ -72,6 +72,8 @@
   - 완료 기준: path를 실어줄 items answer가 아직 없는 빈 corpus에 sidecar로 첫 이슈를 추가하면 첫 문서에 항목이 쓰이고 ` added`가 아니라 `T1 added`로 답한다.
 - [o] T8.4-2 repository는 빌드된 실행 파일을 추적하지 않는다: 루트의 `flowmark`를 추적에서 빼고 ignore하며, build는 `build/`에만 쓴다 (T8.4 후속). 원인: repository 루트에서 실행한 `go build`가 4.4 MB 실행 파일 `flowmark`를 썼고 T8.4 commit이 그것을 담았다
   - 완료 기준: `git ls-files`에 빌드된 실행 파일이 없고, 루트에서 `go build ./cmd/flowmark`를 해도 `git status`가 깨끗하며, `make build`는 `build/flowmark`에만 쓴다.
+- [o] T8.4-3 `go vet`이 예전 write path를 통과한다: `MoveItem`이 옮길 줄을 append 한 번으로 복사한다 (T8.4 후속). 원인: T8.4 commit이 복사를 값이 없는 두 번째 `append`로 감쌌고, `go vet`이 이를 보고한다
+  - 완료 기준: `go vet ./...`이 app/에 대해 아무것도 보고하지 않고, `go test ./app/`이 통과한다.
 - [o] T8.5 Mermaid block이 유일한 transition 권위다: Transition이 edge·필수 필드·glyph를 문서 자신의 state machine에서 읽고 AddItem이 `[*]` 줄에서 초기 상태를 취하며 ApplySchema가 Mermaid block을 다시 쓰고 — 내장 table은 남지 않는다 (T8.4 후속)
   - 완료 기준: 사용자 정의 상태 이름을 가진 문서가 자신이 선언한 edge대로 전이한다 — 선언 안 된 edge는 거부, edge label이 필수 evidence를 정하고 새 항목은 선언된 초기 상태에 놓인다 — 그리고 Go source에서 hardcoded state map을 `grep`으로 찾을 수 없다.
 - [o] T8.6 write path가 table 형식을 섬긴다: transition·edit·add·remove·move가 items table의 행 cell을 다시 쓴다 — 문서당 하나의 문법, 행과 table의 혼재는 거부한다 (T8.5 후속, T4.3 선행)

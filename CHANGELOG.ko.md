@@ -1,5 +1,5 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: a11f0eaaf82e28bd5b5ec6d0c2f3f17aeebd35e98e5c9b408ed2d838e51250fa -->
+<!-- source-sha256: 8f3435415ea9ed86a2f145a5509c85c91c9f5a9354ed4f6348b940428e375552 -->
 # Changelog
 
 ## Unreleased
@@ -10,6 +10,9 @@
   operations는 server, session, commit 순서, 실패 code를, constraints는 이력·빈틈·사슬·repair를 갖는
   상태기계를 고정하며, `flowmark.dbs`가 응용 schema다. design plan은 revision 3을 기록하고 문서 안
   Mermaid authority(T8.5)는 철회한다.
+
+- T8.4-3: `go vet`이 예전 write path를 통과한다. `MoveItem`은 옮길 줄을 `append` 한 번으로 복사하며,
+  T8.4가 더한 값이 없는 두 번째 `append`는 제거한다.
 
 - T8.4-2: repository는 빌드된 실행 파일을 추적하지 않는다. repository 루트의 `go build`가 쓴 루트의
   `flowmark`는 index에서 빠지고 ignore되며, `make build`는 `build/flowmark`에 쓴다.
