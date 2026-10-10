@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database-checklist -->
-<!-- source-sha256: 05629a6efaf9b8a4dc5ede2df99e8442ba58a274133c0b95e593786808d52c83 -->
+<!-- source-sha256: 9a4662cedf9905c92a9888a36eb90a3efe3ce887293996b120e01fe554ecc1c9 -->
 # markdown database checklist
 
 ## T12 markdown database
@@ -19,6 +19,8 @@
   - 완료 기준: spec 10 또는 20과 그 twin이 각 답을 근거와 함께 적고, 이 항목의 문구를 범위로 한 적대 검증을 거치며, `make documents-check`와 `make refs-check`가 통과한다.
 - [ ] T12.1-7 setext 밑줄이 level L보다 깊으면 어떤 섹션도 끝내지 않는다: setext 규칙이 그것을 여전히 거절하는지 근거와 함께 정한다 (T12.1-6 후속)
   - 완료 기준: spec 10과 그 twin이 그 판정을 근거와 함께 적고, `make documents-check`와 `make refs-check`가 통과한다.
+- [ ] T12.1-8 spec이 다시 짠 `files` codec에 필요했던 읽기 규칙을 적는다: 뒤에 요소가 오기 전에 fence나 CommonMark type 1–5의 HTML block을 열어 둔 값을 담은 file은 쓰기에서 `CONSTRAINT`이듯 읽기에서 `format.block`이다. 읽은 형태를 쓰기 규칙이 다시 만들 수 없는 제목(예: `# a\\#`)은 `format.block`이다. 홀로 쓰인 CR은 줄 끝이며 `format.noncanonical`이다. 한 줄 자리 규칙의 공백은 space와 tab이다. 원인: T12.2.2-1 codec이 규칙 없이 이것들을 하나씩 골라야 했다 (T12.2.2-1 후속)
+  - 완료 기준: spec 10과 그 twin이 각 규칙을 근거와 함께 적고, 이 항목의 문구를 범위로 한 적대 검증을 거치며, `make documents-check`와 `make refs-check`가 통과한다.
 - [ ] T12.2.2-2 codec은 heading을 CommonMark block 구조로 찾는다: list 항목이나 block quote 안의 heading은 섹션 경계가 아니므로, `store/markdown.go`는 list 항목 안의 들여쓴 `##` 줄을 경계로 보지 않는다 (T12.1-6 후속; T12.2.2-1 필요)
   - 완료 기준: `go test ./store/...`에 list 항목 안의 body `##` 줄은 섹션이 아니라는 수용 사례와 최상위 줄은 경계라는 거부 사례가 있고, `make documents-check`와 `make refs-check`가 통과한다.
 - [o] T12.1-3 spec이 `files` codec에 필요했던 판정을 적는다: 읽을 때 없는 non-null field 또는 section, 렌더링이 inline markdown을 넘어 텍스트와 다르게 보이는 한 줄 값, `-` item으로 시작하는 `files` body와 field list 뒤에서 첫 줄이 두 column 이상(공백 또는 tab) 들여쓴 body는 `format.block`이며 같은 결함은 쓰기에서 `CONSTRAINT`다. column type이 아닌 값, dangling 외래 key, 대소문자를 무시하고 겹치는 key 충돌은 validator 규칙(`type`, `reference.dangling`, `key.duplicate`)이며, dangling 외래 key나 중복 key를 새로 만드는 쓰기는 각각 `FOREIGN_KEY`, `DUPLICATE_KEY`다. 렌더링이 한 줄 자리 둘레에서 떨어뜨리는 공백은 `format.noncanonical`이다. 본문이 아닌 non-null `markdown` column은 언제나 있는 section이다. `#`뿐인 제목, 또는 끝의 `#` 연속이 공백이나 tab 뒤에 오는 제목은 마지막 `#`을 `\#`로 쓰고, `\#`로 끝나는 제목은 `CONSTRAINT`다. field list 뒤의 빈 줄은 비어 있지 않은 body나 section 앞에서만 서며, 문서는 LF 하나로 끝난다. markdown 값은 줄 바꿈으로 시작하거나 끝나지 않는다. BOM이나 CR은 `format.noncanonical`이다. table folder가 없으면 빈 table이다. 쓰기는 typed 값을 canonical 형식으로 쓰며, `format.*` 진단이 있는 file을 다시 쓰는 logical write는 `CONSTRAINT`로 거절하며 `format.noncanonical`이면 `flowmark canon`을 밝힌다. 거절은 `flowmark canon`의 대상, 추가된 column이 일으킨 진단에 대한 add-column migration, `files` 행의 file 전체를 지우는 delete를 면제하며, `format.block`, `format.section`, `format.encoding`이 있는 file을 가진 table은 그 행이 필요한 요청과 검사에 사용할 수 없다; table은 행이 있을 수 있는 모든 file을 가지며 block table은 placement parent의 file을 포함하고, 바이트 단위로 같은 key를 가진 두 행은 table을 사용할 수 없게 하며, 잘못된 type의 값을 평가하는 요청은 `CONSTRAINT`로 실패하고, 사용할 수 없는 table이 필요한 export는 실패하며 아무것도 쓰지 않는다; `corpus.walk` 항목이 table의 자리에 있거나 다른 대소문자의 suffix가 있으면 사람이 corpus를 고치기 전까지 그 table은 사용할 수 없고, `type` 진단은 제약 검사가 그 값을 평가해야 할 때에만 commit을 실패시키며, 그 값을 읽는 export는 실패한다 (T12.2.2 후속)
