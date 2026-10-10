@@ -3,6 +3,8 @@
 
 ## Unreleased
 
+- T12.2.2-4: the `files` codec applies the invisible-character rule of spec 10 to the H1 title and to a field-list value. An invisible character at either end is refused on write as `CONSTRAINT`; on read a space or a tab that CommonMark strips is `format.noncanonical`, and any other invisible character at an end is `format.block`. The invisible characters are the White_Space characters other than U+1680, the controls, the format characters other than the prepended concatenation marks, and the Default_Ignorable_Code_Point characters; the last come from a table generated from the Unicode 17.0.0 data file and checked fresh by a test. List rows and table cells follow in T12.2.3.
+
 - T12.1-11: the specifications and the plan state the read side of an open block as it is. The lines that a fence or an HTML block left open takes in are the value's text on read, since under the CommonMark block structure they are no boundary and a viewer shows them inside the block; only the write that places an element after such a block is `CONSTRAINT`. The `format.block` read clause of an open block is withdrawn, as no reader can observe that fault, and the open top-level fence sentence reads consistently with this rule.
 
 - T12.2.2-3: the `files` codec applies the open-block rule of spec 10 on write: a value that leaves a fence or an HTML block open before the element that follows it, which that element would be taken into, is `CONSTRAINT`. The block scanner reads HTML blocks of types 6 and 7 as CommonMark 0.31.2 does, a type 7 block not interrupting a paragraph, and a block left open inside a list item that a top-level heading closes is no fault.

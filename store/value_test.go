@@ -107,6 +107,94 @@ func TestSingleLineFaults(t *testing.T) {
 	}
 }
 
+// TestInvisibleCharacters pins the invisible classes of spec 10 (Single-line
+// places) under Unicode 17.0.0: a White_Space character other than U+1680, a
+// control, a format character other than a Prepended_Concatenation_Mark, and a
+// Default_Ignorable_Code_Point. One member of each class is named, and a
+// Prepended_Concatenation_Mark of each of its ranges, so the classes are pinned.
+func TestInvisibleCharacters(t *testing.T) {
+	cases := []struct {
+		name string
+		r    rune
+		want bool
+	}{
+		{"SPACE is White_Space", 0x0020, true},
+		{"TAB is White_Space and Cc", 0x0009, true},
+		{"LINE FEED is White_Space and Cc", 0x000A, true},
+		{"VERTICAL TAB is White_Space and Cc", 0x000B, true},
+		{"NEXT LINE is White_Space and Cc", 0x0085, true},
+		{"NO-BREAK SPACE is White_Space", 0x00A0, true},
+		{"EN QUAD is White_Space", 0x2000, true},
+		{"LINE SEPARATOR is White_Space", 0x2028, true},
+		{"IDEOGRAPHIC SPACE is White_Space", 0x3000, true},
+		{"OGHAM SPACE MARK is White_Space but text", 0x1680, false},
+		{"NUL is Cc", 0x0000, true},
+		{"FILE SEPARATOR is Cc and not White_Space", 0x001C, true},
+		{"UNIT SEPARATOR is Cc and not White_Space", 0x001F, true},
+		{"DELETE is Cc", 0x007F, true},
+		{"APPLICATION PROGRAM COMMAND is Cc", 0x009F, true},
+		{"SOFT HYPHEN is Cf", 0x00AD, true},
+		{"ZERO WIDTH SPACE is Cf", 0x200B, true},
+		{"ZERO WIDTH NO-BREAK SPACE is Cf", 0xFEFF, true},
+		{"LANGUAGE TAG is Cf", 0xE0001, true},
+		{"ARABIC NUMBER SIGN is Cf and a Prepended_Concatenation_Mark", 0x0600, false},
+		{"ARABIC END OF AYAH is Cf and a Prepended_Concatenation_Mark", 0x06DD, false},
+		{"SYRIAC ABBREVIATION MARK is Cf and a Prepended_Concatenation_Mark", 0x070F, false},
+		{"ARABIC DISPUTED END OF AYAH is a Prepended_Concatenation_Mark", 0x0890, false},
+		{"ARABIC SMALL LOW WAW is a Prepended_Concatenation_Mark", 0x08E2, false},
+		{"KAITHI NUMBER SIGN is a Prepended_Concatenation_Mark", 0x110BD, false},
+		{"KAITHI NUMBER SIGN ABOVE is a Prepended_Concatenation_Mark", 0x110CD, false},
+		{"COMBINING GRAPHEME JOINER is Default_Ignorable_Code_Point only", 0x034F, true},
+		{"HANGUL FILLER is Default_Ignorable_Code_Point only", 0x3164, true},
+		{"VARIATION SELECTOR-16 is Default_Ignorable_Code_Point only", 0xFE0F, true},
+		{"reserved code point 2065 is Default_Ignorable_Code_Point", 0x2065, true},
+		{"LATIN SMALL LETTER A", 0x0061, false},
+		{"LATIN SMALL LETTER E WITH ACUTE", 0x00E9, false},
+		{"CJK UNIFIED IDEOGRAPH-4E2D", 0x4E2D, false},
+		{"HYPHEN", 0x2010, false},
+		{"INTERLINEAR ANNOTATION ANCHOR is Cf, though excluded from Default_Ignorable_Code_Point", 0xFFF9, true},
+		{"GRINNING FACE", 0x1F600, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := invisible(c.r); got != c.want {
+				t.Fatalf("invisible(%U) = %v; want %v", c.r, got, c.want)
+			}
+		})
+	}
+}
+
+// TestInvisibleAtEnd: an end is the first or the last character; a character
+// inside the value is not an end, and an invalid byte is not a character.
+func TestInvisibleAtEnd(t *testing.T) {
+	cases := []struct {
+		in   string
+		want bool
+	}{
+		{"", false},
+		{"a", false},
+		{" ", true},
+		{" a", true},
+		{"a ", true},
+		{"a b", false},
+		{" a", true},
+		{"a\t", true},
+		{"a b", false},
+		{" ", false},
+		{" a ", false},
+		{"۝a۝", false},
+		{"ㅤa", true},
+		{"a͏", true},
+		{"a​b", false},
+		{"a\xff", false},
+	}
+	for _, c := range cases {
+		if got := invisibleAtEnd(c.in); got != c.want {
+			t.Fatalf("invisibleAtEnd(%q) = %v; want %v", c.in, got, c.want)
+		}
+	}
+}
+
 // TestKeyRules: every input pins 20#keys (the key shape and the reserved names).
 func TestKeyRules(t *testing.T) {
 	long := strings.Repeat("a", 243)

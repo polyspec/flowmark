@@ -1,8 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 368c2162080acab539603da21758ad9675c89e3c1e154c8cb4ef2f396d4cf519 -->
+<!-- source-sha256: 659f1db1955c90884008c2e3fe6b24111cf640c7c9ede56cd2592dc4fdf38d99 -->
 # Changelog
 
 ## Unreleased
+
+- T12.2.2-4: `files` codec이 H1 제목과 field list 값에 spec 10의 보이지 않는 문자 규칙을 적용한다. 양 끝의 보이지 않는 문자는 쓰기에서 `CONSTRAINT`로 거절되며, 읽기에서 CommonMark가 떼어내는 space나 tab은 `format.noncanonical`이고, 끝의 그 밖의 보이지 않는 문자는 `format.block`이다. 보이지 않는 문자는 U+1680을 뺀 White_Space 문자, 제어 문자, prepended concatenation mark를 뺀 형식 문자, Default_Ignorable_Code_Point 문자이며, 마지막 것은 Unicode 17.0.0 data 파일에서 생성한 table이고 테스트가 최신성을 확인한다. list 행과 table cell은 T12.2.3에서 따른다.
 
 - T12.1-11: spec과 plan이 열린 block의 읽기 쪽을 있는 그대로 적는다. 열린 채 남은 fence나 HTML block이 흡수한 줄은 CommonMark block 구조에서 경계가 아니고 viewer도 그 block 안에 보여 주므로 읽기에서 값의 텍스트다. 그런 block 뒤에 요소를 두는 쓰기만 `CONSTRAINT`다. 어떤 reader도 관찰할 수 없는 결함을 가리키는 열린 block의 읽기 `format.block` 구절은 철회하며, 최상위 열린 fence 문장은 이 규칙과 일관되게 고친다.
 

@@ -25,6 +25,14 @@ func fuzzSeeds(f *testing.F) {
 	f.Add([]byte(withBase()))
 	f.Add([]byte(withBase("## evidence", "", "a", "```", "## x", "```")))
 	f.Add([]byte(withBase("## cause", "", "## evidence", "")))
+	// Invisible characters at the ends of the single-line places, the text that is not one, and the interior.
+	f.Add([]byte(doc("#  Title", "- position: 1", "- done: true")))
+	f.Add([]byte(doc("# Title​", "- position: 1", "- done: true")))
+	f.Add([]byte(doc("# Title", "- position: 1", "- done: true", "- note: ㅤa", "")))
+	f.Add([]byte(doc("# Title", "- position: 1", "- done: true", "- note: a͏", "")))
+	f.Add([]byte(doc("# Title", "- position: 1", "- done: true", "- note:  a۝", "")))
+	f.Add([]byte(doc("# Title", "- position: 1", "- done: true", "- note: a\u001c", "")))
+	f.Add([]byte(doc("# Title", "- position: 1", "- done: true", "- note: a b", "")))
 }
 
 // FuzzParseFile requires that a parse never panics, that a parsed row emits
@@ -66,6 +74,10 @@ func FuzzRenderFile(f *testing.F) {
 	f.Add("Parse and render the files storage", "Intro line.\n", `it's: "quoted" ünï`, "1", "max", "Observed.\n", true)
 	f.Add("Count the #", "", "", "7", "", "", false)
 	f.Add("a \\#", "```\n## x\n```\n", "<3", "-3", "x", "", true)
+	f.Add("a ", "", "۝", "1", "", "", true)
+	f.Add(" a", "", "", "1", "", "", true)
+	f.Add("Title", "", "a​", "1", "", "", true)
+	f.Add("Title", "", "ㅤa͏", "1", "", "", true)
 	cat := loadFixture(f)
 	lk := fixtureLinker()
 	f.Fuzz(func(t *testing.T, title, body, note, position, owner, evidence string, done bool) {

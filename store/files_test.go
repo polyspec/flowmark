@@ -671,6 +671,139 @@ func TestRenderRules(t *testing.T) {
 	}
 }
 
+// invisibleClass is one character of the invisible-character rule of spec 10
+// (Single-line places). An invisible character is refused at an end of a value
+// on write and is format.block on read; a space or a tab, which CommonMark
+// strips at the ends of a heading and of a paragraph, is format.noncanonical on
+// read; a character that is text is accepted at either end.
+type invisibleClass struct {
+	name      string
+	r         rune
+	invisible bool
+	stripped  bool
+}
+
+var invisibleClasses = []invisibleClass{
+	{"U+0020 SPACE (White_Space, stripped by CommonMark)", ' ', true, true},
+	{"U+0009 TAB (Cc, stripped by CommonMark)", '\t', true, true},
+	{"U+000B VT (Cc and White_Space)", 0x0B, true, false},
+	{"U+001C FILE SEPARATOR (Cc, not White_Space)", 0x1C, true, false},
+	{"U+0085 NEXT LINE (Cc and White_Space)", 0x85, true, false},
+	{"U+00A0 NO-BREAK SPACE (White_Space)", 0xA0, true, false},
+	{"U+3000 IDEOGRAPHIC SPACE (White_Space)", 0x3000, true, false},
+	{"U+200B ZERO WIDTH SPACE (Cf and Default_Ignorable_Code_Point)", 0x200B, true, false},
+	{"U+FEFF ZERO WIDTH NO-BREAK SPACE (Cf and Default_Ignorable_Code_Point)", 0xFEFF, true, false},
+	{"U+3164 HANGUL FILLER (Default_Ignorable_Code_Point only)", 0x3164, true, false},
+	{"U+034F COMBINING GRAPHEME JOINER (Default_Ignorable_Code_Point only)", 0x034F, true, false},
+	{"U+FE0F VARIATION SELECTOR-16 (Default_Ignorable_Code_Point only)", 0xFE0F, true, false},
+	{"U+1680 OGHAM SPACE MARK (White_Space, text)", 0x1680, false, false},
+	{"U+0600 ARABIC NUMBER SIGN (Cf and Prepended_Concatenation_Mark, text)", 0x0600, false, false},
+	{"U+06DD ARABIC END OF AYAH (Cf and Prepended_Concatenation_Mark, text)", 0x06DD, false, false},
+}
+
+// TestInvisibleEdges applies the invisible-character rule to the two single-line
+// places of a files row that the codec holds: the H1 title and a field-list
+// value. Every class is tried at the lead, at the trail and inside the value.
+func TestInvisibleEdges(t *testing.T) {
+	cat := loadFixture(t)
+	lk := fixtureLinker()
+	type place struct {
+		name string
+		row  func(v string) *Row
+		file func(v string) string
+	}
+	places := []place{
+		{
+			name: "10#single-line-places: H1 title",
+			row: func(v string) *Row {
+				r := validRow()
+				r.Title = v
+				return r
+			},
+			file: func(v string) string { return doc("# "+v, "- position: 1", "- done: true", "") },
+		},
+		{
+			name: "10#single-line-places: field-list value",
+			row: func(v string) *Row {
+				r := validRow()
+				r.Scalars["note"] = sp(v)
+				return r
+			},
+			file: func(v string) string { return doc("# Title", "- position: 1", "- done: true", "- note: "+v, "") },
+		},
+	}
+	for _, pl := range places {
+		for _, c := range invisibleClasses {
+			for _, end := range []string{"lead", "trail", "interior"} {
+				v := "a" + string(c.r) + "b"
+				switch end {
+				case "lead":
+					v = string(c.r) + "a"
+				case "trail":
+					v = "a" + string(c.r)
+				}
+				edge := end != "interior"
+				t.Run(pl.name+" "+end+" "+c.name, func(t *testing.T) {
+					// Write: an invisible character at an end is CONSTRAINT; any other is written as it is.
+					out, diags := RenderFile(cat, "tasks", pl.row(v), lk)
+					if c.invisible && edge {
+						if out != nil || len(diags) == 0 {
+							t.Fatalf("written %q; want CONSTRAINT", out)
+						}
+						for _, d := range diags {
+							if d.Rule != RuleConstraint {
+								t.Fatalf("diagnostic %+v; want CONSTRAINT", d)
+							}
+						}
+					} else {
+						if len(diags) > 0 {
+							t.Fatalf("refused: %+v", diags)
+						}
+						if string(out) != pl.file(v) {
+							t.Fatalf("written %q; want %q", out, pl.file(v))
+						}
+						checkP2(t, cat, pl.row(v), lk)
+					}
+					// Read: an invisible character at an end is format.block, except that a
+					// space or a tab is format.noncanonical; the interior and the text are read.
+					text := pl.file(v)
+					row, rd := ParseFile(cat, "tasks", "tasks/T1.flowmark.md", []byte(text), lk)
+					switch {
+					case c.invisible && edge && !c.stripped:
+						if row != nil || len(rd) == 0 {
+							t.Fatalf("read %q with row %v; want format.block", text, row != nil)
+						}
+						for _, d := range rd {
+							if d.Rule != RuleBlock {
+								t.Fatalf("diagnostic %+v; want format.block", d)
+							}
+						}
+					case c.stripped && edge:
+						if row == nil || len(rd) == 0 {
+							t.Fatalf("read %q with row %v; want format.noncanonical", text, row != nil)
+						}
+						for _, d := range rd {
+							if d.Rule != RuleNoncanonical {
+								t.Fatalf("diagnostic %+v; want format.noncanonical", d)
+							}
+						}
+						if out := checkP2(t, cat, row, lk); string(out) == text {
+							t.Fatalf("noncanonical %q emits itself", text)
+						}
+					default:
+						if len(rd) > 0 || row == nil {
+							t.Fatalf("read %q: %+v; want accepted", text, rd)
+						}
+						if out := checkP2(t, cat, row, lk); string(out) != text {
+							t.Fatalf("P1: emit %q; want %q", out, text)
+						}
+					}
+				})
+			}
+		}
+	}
+}
+
 // TestMemosHaveNoFieldList covers a files table without a non-null stored
 // scalar, whose file has no field list: the body follows the H1 after one blank.
 func TestMemosHaveNoFieldList(t *testing.T) {
