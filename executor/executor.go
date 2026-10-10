@@ -76,6 +76,7 @@ func Open(root string) (*Corpus, error) {
 				"assignee": item.Assignee,
 				"due":      item.Due,
 				"doc_id":   document.DocID,
+				"path":     filepath.ToSlash(relative),
 				"order":    strconv.Itoa(position + 1),
 			})
 		}
@@ -91,6 +92,7 @@ func Open(root string) (*Corpus, error) {
 					"state":  row[state],
 					"title":  row[title],
 					"doc_id": document.DocID,
+					"path":   filepath.ToSlash(relative),
 					"order":  strconv.Itoa(position + 1),
 				}
 				if assignee >= 0 {

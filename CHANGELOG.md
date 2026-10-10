@@ -3,6 +3,10 @@
 
 ## Unreleased
 
+- T7.1-1: `flowmark items` prints the same item the sidecar serves: six tab-separated columns
+  ending in the path, assignee and due. The executor rows carry the path directly, so the
+  sidecar drops its documents join.
+
 - T8.6: the write path serves the table form. A document whose items live in a table gets the
   same commands as the list form: a transition rewrites the state cell by the document's own
   edges, an add appends a row with the auto ID (NextID reads table rows), an edit rewrites the

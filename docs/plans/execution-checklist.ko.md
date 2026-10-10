@@ -1,5 +1,5 @@
 <!-- doc-id: execution-checklist -->
-<!-- source-sha256: 011364e484928572817e9ab8174c6fbadc0bfd273fe5b107db8a3536986f0297 -->
+<!-- source-sha256: 5a624fa2d892c9e7728f20e877428ea06c52606c661617eba22c882a5860eac4 -->
 # 실행 체크리스트
 
 ## T1a 설계 session
@@ -58,6 +58,8 @@
 - [o] T6.2 rowset을 provenance header와 readonly drift 규칙으로 markdown에 materialize한다 (T6.1 선행)
 - [o] T7 세 개의 face — CLI·MCP server·soksak sidecar — orm model API 위의 thin adapter (T5 선행)
 - [o] T7.1 CLI face: corpus 위의 validate·items·transition (T3 선행)
+- [o] T7.1-1 CLI items answer가 path·assignee·due column을 실는다 — sidecar answer와 같은 column이고 executor 행이 path를 직접 가진다 (T7.1 후속)
+  - 완료 기준: assignee와 due가 있는 corpus에서 `flowmark items <root>`가 path·assignee·due로 끝나는 6개 tab column을 출력하며 writer에 대한 test가 있다.
 - [o] T7.2 MCP server face: stdio 위의 initialize·tools/list·tools/call (T7.1 선행)
 - [o] T7.3 soksak sidecar face: stdio 위의 protocol v1 message loop (T7.1 선행)
 - [o] T7.3-1 sidecar와 MCP의 각 message를 즉시 flush한다. 원인: Serve가 bufio flush를 입력이 끝날 때까지 미뤄서, session을 열어 두는 host — 예제 Wails host, MCP client — 가 process가 멈출 때까지 응답을 받지 못했다. protocol과 JSON-RPC session 모두 session이 진행되는 동안 각 message를 전달한다. 완료 기준: 모든 응답이 write 시점에, 입력이 끝나기 전에 flush되고 pipe가 열려 있는 상태에서 응답 한 건을 읽는 회귀 시험이 이를 덮는다.

@@ -1,8 +1,11 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 4834caa4ecaa49ce9beb218518ad9ccc02e33264d178b2167e71dfe868f95670 -->
+<!-- source-sha256: 6708edf15bf61e47e7103211078a9366063cf736966a47954ab05a16e3c95d34 -->
 # Changelog
 
 ## Unreleased
+
+- T7.1-1: `flowmark items`가 sidecar가 섬기는 것과 같은 항목을 출력한다: path·assignee·due로
+  끝나는 6개 tab column. executor 행이 path를 직접 실어 sidecar는 documents join을 버린다.
 
 - T8.6: write path가 table 형식을 섬긴다. 항목이 table에 사는 문서가 list 형식과 같은
   명령을 받는다: transition이 문서 자신의 edge대로 state cell을 다시 쓰고 add가 자동

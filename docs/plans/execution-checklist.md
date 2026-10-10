@@ -57,6 +57,8 @@
 - [o] T6.2 Materialize a rowset into markdown with the provenance header and the readonly drift rules (requires T6.1)
 - [o] T7 The three faces — CLI, MCP server and soksak sidecar — as thin adapters over the orm model API (requires T5)
 - [o] T7.1 The CLI face: validate, items and transition over the corpus (requires T3)
+- [o] T7.1-1 The CLI items answer carries the path, assignee and due columns — the same columns the sidecar answer holds, and the executor rows carry the path directly (follow-up of T7.1)
+  - Completion criteria: `flowmark items <root>` over a corpus with an assignee and a due prints six tab-separated columns ending in the path, assignee and due, with a test over the writer.
 - [o] T7.2 The MCP server face: initialize, tools/list and tools/call over stdio (requires T7.1)
 - [o] T7.3 The soksak sidecar face: the protocol v1 message loop over stdio (requires T7.1)
 - [o] T7.3-1 Flush each sidecar and MCP message on its own. Cause: Serve held the bufio flush until the input ended, so a host that keeps the session open — the example Wails host, an MCP client — received no answer until the process stopped; the protocol and the JSON-RPC session both deliver each message while the session runs. Acceptance: every answer flushes on write, before the input ends, with a regression test that reads one answer while the pipe stays open.

@@ -117,14 +117,6 @@ func run(root string, operation *operation) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		documents, err := opened.All("documents", executor.Query{})
-		if err != nil {
-			return "", err
-		}
-		pathOf := map[string]string{}
-		for _, row := range documents {
-			pathOf[row["doc_id"]] = row["path"]
-		}
 		rows, err := opened.All("items", executor.Query{})
 		if err != nil {
 			return "", err
@@ -132,7 +124,7 @@ func run(root string, operation *operation) (string, error) {
 		// state, id, title, path, assignee, due — the page addresses its operations by the path.
 		lines := make([]string, 0, len(rows))
 		for _, row := range rows {
-			lines = append(lines, fmt.Sprintf("%s\t%s\t%s\t%s\t%s\t%s", row["state"], row["id"], row["title"], pathOf[row["doc_id"]], row["assignee"], row["due"]))
+			lines = append(lines, fmt.Sprintf("%s\t%s\t%s\t%s\t%s\t%s", row["state"], row["id"], row["title"], row["path"], row["assignee"], row["due"]))
 		}
 		return strings.Join(lines, "\n"), nil
 	case "people":
