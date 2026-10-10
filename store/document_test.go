@@ -265,6 +265,82 @@ func documentParseCases() []docCase {
 			row("M2", "[M1](milestones.flowmark.md)", "B"))},
 		{name: "10#order: the order column is not a header", table: "milestones", rule: RuleBlock, line: 2,
 			text: milestonesOf("| id | parent | title | position |", "| --- | --- | --- | --- |", row("M1", "", "A", "1"))},
+
+		// Block sections: a child block in a row's detail section, its list or table, and its rows' detail sections.
+		docAccept("10#document-order: a table block under a row", itemsOf(
+			"- [ ] T1 Plan done:false", "", "## items row T1", "", "### item_history",
+			"| id | from_state | to_state | at |", "| --- | --- | --- | --- |",
+			"| 1 | waiting | doing | 2026-10-01 08:00:00.000000 |")),
+		docAccept("10#detail-sections: a block row with a section, and a row without a detail section", itemsOf(
+			"- [ ] T1 Plan done:false", "", "## items row T1", "", "### item_history",
+			"| id | from_state | to_state | at |", "| --- | --- | --- | --- |",
+			"| 1 | waiting | doing | 2026-10-01 08:00:00.000000 |",
+			"| 2 | doing | done | 2026-10-01 09:00:00.000000 |",
+			"", "#### item_history row 1", "", "##### evidence", "", "Checked.")),
+		docAccept("10#detail-sections: a block row with a present empty section", itemsOf(
+			"- [ ] T1 Plan done:false", "", "## items row T1", "", "### item_history",
+			"| id | from_state | to_state | at |", "| --- | --- | --- | --- |",
+			"| 1 | waiting | doing | 2026-10-01 08:00:00.000000 |",
+			"", "#### item_history row 1", "", "##### evidence")),
+		docAccept("10#document-order: a list block of nested rows, a NULL field and a body", itemsOf(
+			"- [ ] T1 Plan done:false", "", "## items row T1", "", "### item_notes",
+			"- N1 Spec the codec tag:urgent", `  - N2 Child note tag:""`, "- N3 Plain",
+			"", "#### item_notes row N1", "", "Body of N1.")),
+		docAccept("10#sections-and-their-values: a markdown section before a child block", itemsOf(
+			"- [ ] T1 Plan done:false", "", "## items row T1", "", "### evidence", "", "Proof.",
+			"", "### item_history", "| id | from_state | to_state | at |", "| --- | --- | --- | --- |",
+			"| 1 | waiting | doing | 2026-10-01 08:00:00.000000 |")),
+		docAccept("10#document-order: a placement foreign key is implied by nesting, not a field", itemsOf(
+			"- [ ] T1 Plan done:false", "", "## items row T1", "", "### item_notes",
+			"- N1 Spec the codec")),
+		noncanonicalDoc("10#document-order: an empty block heading", 6, itemsOf(
+			"- [ ] T1 Plan done:false", "", "## items row T1", "", "### item_history")),
+		noncanonicalDoc("10#document-order: a blank line between a block heading and its rows", 7, itemsOf(
+			"- [ ] T1 Plan done:false", "", "## items row T1", "", "### item_history", "",
+			"| id | from_state | to_state | at |", "| --- | --- | --- | --- |",
+			"| 1 | waiting | doing | 2026-10-01 08:00:00.000000 |")),
+		docReject("10#list-rows: a placement foreign key written as a field of a block row", RuleBlock, 7, itemsOf(
+			"- [ ] T1 Plan done:false", "", "## items row T1", "", "### item_notes",
+			"- N1 Spec item:T1 tag:urgent")),
+		docReject("10#table-rows: a placement foreign key written as a cell of a block table", RuleBlock, 7, itemsOf(
+			"- [ ] T1 Plan done:false", "", "## items row T1", "", "### item_history",
+			"| id | item | from_state | to_state | at |", "| --- | --- | --- | --- | --- |",
+			"| 1 | T1 | waiting | doing | 2026-10-01 08:00:00.000000 |")),
+		docReject("10#table-rows: a non-null cell of a block row that is NULL", RuleBlock, 9, itemsOf(
+			"- [ ] T1 Plan done:false", "", "## items row T1", "", "### item_history",
+			"| id | from_state | to_state | at |", "| --- | --- | --- | --- |",
+			"| 1 | waiting |  | 2026-10-01 08:00:00.000000 |")),
+		docReject("10#detail-sections: two block rows with one key and a detail section each collide", RuleBlock, 25, itemsOf(
+			"- [ ] T1 Plan done:false", "- [ ] T2 Other done:false", "", "## items row T1", "", "### item_history",
+			"| id | from_state | to_state | at |", "| --- | --- | --- | --- |",
+			"| 1 | waiting | doing | 2026-10-01 08:00:00.000000 |",
+			"", "#### item_history row 1", "", "##### evidence", "", "Checked.",
+			"", "## items row T2", "", "### item_history",
+			"| id | from_state | to_state | at |", "| --- | --- | --- | --- |",
+			"| 1 | doing | done | 2026-10-01 09:00:00.000000 |",
+			"", "#### item_history row 1", "", "##### evidence", "", "Other.")),
+		docReject("10#detail-sections: a block row's detail names no row of its block", RuleBlock, 11, itemsOf(
+			"- [ ] T1 Plan done:false", "", "## items row T1", "", "### item_history",
+			"| id | from_state | to_state | at |", "| --- | --- | --- | --- |",
+			"| 1 | waiting | doing | 2026-10-01 08:00:00.000000 |",
+			"", "#### item_history row 9", "", "x")),
+		docReject("10#detail-sections: a block row's detail at the level of the row above", RuleBlock, 11, itemsOf(
+			"- [ ] T1 Plan done:false", "", "## items row T1", "", "### item_history",
+			"| id | from_state | to_state | at |", "| --- | --- | --- | --- |",
+			"| 1 | waiting | doing | 2026-10-01 08:00:00.000000 |",
+			"", "##### item_history row 1", "", "x")),
+		docReject("10#document-order: content after a block's table", RuleBlock, 10, itemsOf(
+			"- [ ] T1 Plan done:false", "", "## items row T1", "", "### item_history",
+			"| id | from_state | to_state | at |", "| --- | --- | --- | --- |",
+			"| 1 | waiting | doing | 2026-10-01 08:00:00.000000 |",
+			"Stray.")),
+		docReject("10#detail-sections: a block named at the level of its row's detail heading", RuleBlock, 8, itemsOf(
+			"- [ ] T1 Plan done:false", "", "## items row T1", "", "Body.", "", "## item_history", "| id | from_state | to_state | at |")),
+		docReject("10#sections-and-their-values: a block section written twice", RuleSection, 11, itemsOf(
+			"- [ ] T1 Plan done:false", "", "## items row T1", "", "### item_history",
+			"| id | from_state | to_state | at |", "| --- | --- | --- | --- |",
+			"| 1 | waiting | doing | 2026-10-01 08:00:00.000000 |",
+			"", "### item_history", "| id | from_state | to_state | at |", "| --- | --- | --- | --- |")),
 	}
 }
 
@@ -327,48 +403,11 @@ func TestParseDocumentRules(t *testing.T) {
 	}
 }
 
-// writeDocument is the writer's checks and bytes without RenderDocument's guard for
-// a table with a child block. The glyph, order and value rules of such a table are
-// tested through it; RenderDocument's guard is tested by TestRenderDocumentChildBlockGuard.
-func writeDocument(cat *catalog.Catalog, table string, rows []*Row, lk Linker) ([]byte, []Diagnostic, error) {
-	lay, err := docLayoutOf(cat, table)
-	if err != nil {
-		return nil, nil, err
-	}
-	out, diags := renderDocument(lay, rows, lk, true)
-	return out, diags, nil
-}
-
-// TestRenderDocumentChildBlockGuard requires that RenderDocument refuses a table
-// whose catalog declares a child block with an error naming T12.2.4, so that no
-// write drops the block's rows, and that it writes the tables without one.
-func TestRenderDocumentChildBlockGuard(t *testing.T) {
-	cat := loadDocumentFixture(t)
-	lk := documentLinker()
-	out, diags, err := RenderDocument(cat, "items", []*Row{item("T1", "Plan", "waiting", "1", map[string]string{"done": "false"})}, lk)
-	if err == nil || out != nil || diags != nil {
-		t.Fatalf("items with the child block item_history: out %q, diags %+v, err %v; want a refusal", out, diags, err)
-	}
-	for _, want := range []string{"items.flowmark.md", "item_history", "T12.2.4"} {
-		if !strings.Contains(err.Error(), want) {
-			t.Fatalf("the refusal %q does not name %s", err, want)
-		}
-	}
-	out, diags, err = RenderDocument(cat, "notes", []*Row{notePlan("N1", "", "Plan")}, lk)
-	if err != nil || len(diags) > 0 || string(out) != "# notes\n- N1 Plan\n" {
-		t.Fatalf("notes: out %q, diags %+v, err %v", out, diags, err)
-	}
-	out, diags, err = RenderDocument(cat, "milestones", nil, lk)
-	if err != nil || len(diags) > 0 || string(out) != "# milestones\n" {
-		t.Fatalf("milestones: out %q, diags %+v, err %v", out, diags, err)
-	}
-}
-
 // checkDocumentP2 requires that the rows write, that the written bytes parse
 // back without a diagnostic, and that the rows write the same bytes again.
 func checkDocumentP2(t *testing.T, cat *catalog.Catalog, table string, rows []*Row, lk Linker) []byte {
 	t.Helper()
-	out, diags, err := writeDocument(cat, table, rows, lk)
+	out, diags, err := RenderDocument(cat, table, rows, lk)
 	if err != nil || len(diags) > 0 {
 		t.Fatalf("the rows are refused on write: %v %+v", err, diags)
 	}
@@ -376,7 +415,7 @@ func checkDocumentP2(t *testing.T, cat *catalog.Catalog, table string, rows []*R
 	if err != nil || len(diags) > 0 || back == nil {
 		t.Fatalf("written file does not parse cleanly: %v %+v\n%s", err, diags, out)
 	}
-	again, diags, err := writeDocument(cat, table, back, lk)
+	again, diags, err := RenderDocument(cat, table, back, lk)
 	if err != nil || len(diags) > 0 || !bytes.Equal(again, out) {
 		t.Fatalf("P2: emit(parse(emit(d))) != emit(d)\n got: %q\nwant: %q", again, out)
 	}
@@ -396,7 +435,7 @@ func TestDocumentGoldens(t *testing.T) {
 			if err != nil || len(diags) > 0 || rows == nil {
 				t.Fatalf("golden has diagnostics: %v %+v", err, diags)
 			}
-			out, diags, err := writeDocument(cat, table, rows, lk)
+			out, diags, err := RenderDocument(cat, table, rows, lk)
 			if err != nil || len(diags) > 0 || !bytes.Equal(out, data) {
 				t.Fatalf("P1 failed: %v %+v\n got: %q\nwant: %q", err, diags, out, data)
 			}
@@ -405,19 +444,16 @@ func TestDocumentGoldens(t *testing.T) {
 	}
 }
 
-// TestChildBlockIsNotImplemented requires that a child block section, which the
-// items table has in its catalog, is refused as the layout of T12.2.4 and not as
-// a spelling or a rule of the document.
-func TestChildBlockIsNotImplemented(t *testing.T) {
+// TestBlockTableIsNoDocument requires that a block table is not read or written as
+// a document file: its rows live in the detail sections of its placement parent.
+func TestBlockTableIsNoDocument(t *testing.T) {
 	cat := loadDocumentFixture(t)
 	lk := documentLinker()
-	text := itemsOf("- [ ] T1 Plan done:false", "", "## items row T1", "", "### item_history", "", "x")
-	_, _, err := ParseDocument(cat, "items", "items.flowmark.md", []byte(text), lk)
-	if err == nil || !strings.Contains(err.Error(), "not implemented until T12.2.4") {
-		t.Fatalf("a child block section: err = %v; want a not-implemented error", err)
-	}
 	if _, _, err := ParseDocument(cat, "item_history", "item_history.flowmark.md", nil, lk); err == nil {
 		t.Fatal("a block table read as a document table: want an error")
+	}
+	if _, _, err := RenderDocument(cat, "item_notes", nil, lk); err == nil {
+		t.Fatal("a block table written as a document table: want an error")
 	}
 }
 
@@ -562,7 +598,97 @@ func writeCases() []writeCase {
 			out: "# people\n" + peopleHeader + "\n" + peopleDelim + "\n" +
 				row("P1", "", `Max \| Ops`, `""`, "true", "", "", "", "", "", "", "", "", "") + "\n" +
 				"\n## people row P1\n\n### bio\n\nNotes.\n"},
+
+		// Block sections: a block is written in its row's detail section, only when it holds rows.
+		{name: "10#document-order: a table block under a row", rows: []*Row{
+			withBlock(item("T1", "Plan", "waiting", "1", done), "item_history", historyRow("1", "waiting", "doing", "2026-10-01 08:00:00.000000"))},
+			out: "# items\n- [ ] T1 Plan done:false\n\n## items row T1\n\n### item_history\n" +
+				"| id | from_state | to_state | at |\n| --- | --- | --- | --- |\n" +
+				"| 1 | waiting | doing | 2026-10-01 08:00:00.000000 |\n"},
+		{name: "10#detail-sections: a block row's section and its detail heading", rows: []*Row{
+			withBlock(item("T1", "Plan", "waiting", "1", done), "item_history",
+				withSection(historyRow("1", "waiting", "doing", "2026-10-01 08:00:00.000000"), "evidence", "Checked.\n"))},
+			out: "# items\n- [ ] T1 Plan done:false\n\n## items row T1\n\n### item_history\n" +
+				"| id | from_state | to_state | at |\n| --- | --- | --- | --- |\n" +
+				"| 1 | waiting | doing | 2026-10-01 08:00:00.000000 |\n\n" +
+				"#### item_history row 1\n\n##### evidence\n\nChecked.\n"},
+		{name: "10#document-order: an empty block is not written", rows: []*Row{
+			withBlock(item("T1", "Plan", "waiting", "1", done), "item_history")},
+			out: "# items\n- [ ] T1 Plan done:false\n"},
+		{name: "10#document-order: a block of two rows is written in storage order", rows: []*Row{
+			withBlock(item("T1", "Plan", "waiting", "1", done), "item_history",
+				historyRow("2", "doing", "done", "2026-10-01 09:00:00.000000"),
+				historyRow("1", "waiting", "doing", "2026-10-01 08:00:00.000000"))},
+			out: "# items\n- [ ] T1 Plan done:false\n\n## items row T1\n\n### item_history\n" +
+				"| id | from_state | to_state | at |\n| --- | --- | --- | --- |\n" +
+				"| 1 | waiting | doing | 2026-10-01 08:00:00.000000 |\n" +
+				"| 2 | doing | done | 2026-10-01 09:00:00.000000 |\n"},
+		{name: "10#document-order: a list block of nested rows", rows: []*Row{
+			withBlock(item("T1", "Plan", "waiting", "1", done), "item_notes",
+				noteRow("N1", "", "Spec the codec", "1", map[string]string{"tag": "urgent"}),
+				noteRow("N2", "N1", "Child note", "1", map[string]string{"tag": ""}))},
+			out: "# items\n- [ ] T1 Plan done:false\n\n## items row T1\n\n### item_notes\n" +
+				"- N1 Spec the codec tag:urgent\n  - N2 Child note tag:\"\"\n"},
+		{name: "10#list-rows: a block of list rows whose order has a gap", rows: []*Row{
+			withBlock(item("T1", "Plan", "waiting", "1", done), "item_notes",
+				noteRow("N1", "", "A", "1", nil), noteRow("N2", "", "B", "3", nil))}, rule: RuleConstraint},
+		{name: "10#list-rows: two block rows with keys equal without regard to case", rows: []*Row{
+			withBlock(item("T1", "Plan", "waiting", "1", done), "item_notes",
+				noteRow("N1", "", "A", "1", nil), noteRow("n1", "", "B", "2", nil))}, rule: RuleDuplicateKey},
+		{name: "10#hierarchy: a block row whose parent names no row of its block", rows: []*Row{
+			withBlock(item("T1", "Plan", "waiting", "1", done), "item_notes",
+				noteRow("N1", "N9", "A", "1", nil))}, rule: RuleConstraint},
+		{name: "10#detail-sections: a block that the table does not declare", rows: []*Row{
+			withBlock(item("T1", "Plan", "waiting", "1", done), "item_links",
+				historyRow("1", "waiting", "doing", "2026-10-01 08:00:00.000000"))}, rule: RuleConstraint},
+		{name: "10#detail-sections: a block row of another table", rows: []*Row{
+			withBlock(item("T1", "Plan", "waiting", "1", done), "item_history", noteRow("N1", "", "A", "1", nil))}, rule: RuleConstraint},
+		{name: "10#hierarchy: a placement foreign key assigned to a block row", rows: []*Row{
+			withBlock(item("T1", "Plan", "waiting", "1", done), "item_history",
+				withScalar(historyRow("1", "waiting", "doing", "2026-10-01 08:00:00.000000"), "item", "T2"))}, rule: RuleConstraint},
+		{name: "10#detail-sections: a block row missing a non-null cell", rows: []*Row{
+			withBlock(item("T1", "Plan", "waiting", "1", done), "item_history",
+				withoutScalar(historyRow("1", "waiting", "doing", "2026-10-01 08:00:00.000000"), "to_state"))}, rule: RuleConstraint},
 	}
+}
+
+// withBlock sets the rows of the child block table of row r.
+func withBlock(r *Row, table string, rows ...*Row) *Row {
+	if r.Blocks == nil {
+		r.Blocks = map[string][]*Row{}
+	}
+	r.Blocks[table] = rows
+	return r
+}
+
+// withScalar sets the scalar column name of row r.
+func withScalar(r *Row, name, value string) *Row {
+	r.Scalars[name] = sp(value)
+	return r
+}
+
+// withoutScalar removes the scalar column name from row r.
+func withoutScalar(r *Row, name string) *Row {
+	delete(r.Scalars, name)
+	return r
+}
+
+// historyRow is a row of the item_history block of an items row; its evidence is NULL.
+func historyRow(id, from, to, at string) *Row {
+	sc := map[string]*string{"from_state": sp(from), "to_state": sp(to), "at": sp(at)}
+	return &Row{Table: "item_history", Key: id, Scalars: sc, Sections: map[string]*string{}, Raw: map[string]string{}, Dangling: map[string]DanglingLink{}}
+}
+
+// noteRow is a row of the item_notes block of an items row with its parent, its order and the scalars given.
+func noteRow(key, parent, title, position string, scalars map[string]string) *Row {
+	sc := map[string]*string{"position": sp(position)}
+	if parent != "" {
+		sc["parent"] = sp(parent)
+	}
+	for k, v := range scalars {
+		sc[k] = sp(v)
+	}
+	return &Row{Table: "item_notes", Key: key, Title: title, Scalars: sc, Sections: map[string]*string{}, Raw: map[string]string{}, Dangling: map[string]DanglingLink{}}
 }
 
 // withParent sets the parent of row r to the key parent, empty for a root row.
@@ -630,7 +756,7 @@ func TestRenderDocumentRules(t *testing.T) {
 			if table == "" {
 				table = "items"
 			}
-			out, diags, err := writeDocument(cat, table, c.rows, lk)
+			out, diags, err := RenderDocument(cat, table, c.rows, lk)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}

@@ -13,25 +13,28 @@ import (
 	"github.com/polyspec/orm/engine/dbspec"
 )
 
-// docLayout is the storage of one document table as its catalog declares it: a
-// list or a table, its key, its title, body and order, its state and parent, and
-// its scalar columns, sections and foreign keys.
+// docLayout is the storage of one list or table of rows as its catalog declares it:
+// a document table, or a block table inside the row scope of its placement parent.
+// It holds the key, the title, body and order, the state and parent, the scalar
+// columns, sections and foreign keys, the row scope level, and the child blocks.
 type docLayout struct {
-	table    string
-	list     bool
-	key      dbspec.Column
-	title    string            // the title column, "" when none
-	body     string            // the body column, "" when none
-	order    string            // the order column, "" when none
-	state    string            // the state column of a list, "" when none
-	parent   string            // "parent" when the table has the self foreign key parent, "" otherwise
-	scalars  []dbspec.Column   // the stored scalar columns: every column but the key, body, order and markdown columns
-	fields   []dbspec.Column   // a list's fields: the scalars but its title, state and parent
-	sections []section         // the markdown columns other than the body, in column order
-	fks      map[string]string // the referenced table of each foreign key
-	glyphs   map[string]string // state -> glyph of a list
-	states   map[string]string // glyph -> state of a list
-	children []string          // the block tables whose rows are stored in the detail sections of this table
+	table     string
+	list      bool
+	scope     int // the level of the row scope: the level of its sections
+	key       dbspec.Column
+	title     string            // the title column, "" when none
+	body      string            // the body column, "" when none
+	order     string            // the order column, "" when none
+	state     string            // the state column of a list, "" when none
+	parent    string            // "parent" when the table has the self foreign key parent, "" otherwise
+	placement string            // the placement foreign key of a block table, "" for a document table
+	scalars   []dbspec.Column   // the stored scalar columns: every column but the key, body, order, markdown and placement columns
+	fields    []dbspec.Column   // a list's fields: the scalars but its title, state and parent
+	sections  []section         // the markdown columns other than the body, in column order
+	fks       map[string]string // the referenced table of each foreign key
+	glyphs    map[string]string // state -> glyph of a list
+	states    map[string]string // glyph -> state of a list
+	children  []*docLayout      // the block tables stored in the row scope of this table, by table name
 }
 
 // docLayoutOf returns the layout of table, which must be a document table of cat.
@@ -43,8 +46,15 @@ func docLayoutOf(cat *catalog.Catalog, table string) (*docLayout, error) {
 	if tb.Storage.Kind != catalog.StorageDocument {
 		return nil, fmt.Errorf("table %s is not a document table", table)
 	}
+	return layoutOfTable(cat, tb, "")
+}
+
+// layoutOfTable returns the layout of the list or table tb, whose placement foreign
+// key is placement, "" for a document table. Its child blocks are laid out in turn.
+func layoutOfTable(cat *catalog.Catalog, tb *catalog.Table, placement string) (*docLayout, error) {
+	table := tb.Name
 	lay := &docLayout{
-		table: table, list: tb.Storage.Shape == catalog.ShapeList,
+		table: table, list: tb.Storage.Shape == catalog.ShapeList, scope: tb.RowScope, placement: placement,
 		title: tb.Title, body: tb.Body, order: tb.Order,
 		fks: map[string]string{}, glyphs: map[string]string{}, states: map[string]string{},
 	}
@@ -57,7 +67,7 @@ func docLayoutOf(cat *catalog.Catalog, table string) (*docLayout, error) {
 		switch {
 		case c.Name == tb.Key:
 			lay.key, keyFound = c, true
-		case c.Name == tb.Body || c.Name == tb.Order:
+		case c.Name == tb.Body || c.Name == tb.Order || c.Name == placement:
 		case markdown[c.Name]:
 			lay.sections = append(lay.sections, section{name: c.Name, nullable: c.Null})
 		default:
@@ -91,12 +101,54 @@ func docLayoutOf(cat *catalog.Catalog, table string) (*docLayout, error) {
 			lay.fields = append(lay.fields, c)
 		}
 	}
+	children, err := childLayouts(cat, table)
+	if err != nil {
+		return nil, err
+	}
+	lay.children = children
+	return lay, nil
+}
+
+// childLayouts returns the layouts of the block tables whose placement parent is
+// table, in table name order, which is the order of their sections in a row scope.
+func childLayouts(cat *catalog.Catalog, table string) ([]*docLayout, error) {
+	var out []*docLayout
 	for _, t := range cat.Tables {
-		if t.Storage.Kind == catalog.StorageBlock && t.Storage.Parent == table {
-			lay.children = append(lay.children, t.Name)
+		if t.Storage.Kind != catalog.StorageBlock || t.Storage.Parent != table {
+			continue
+		}
+		placement, err := placementColumn(t)
+		if err != nil {
+			return nil, err
+		}
+		child, err := layoutOfTable(cat, t, placement)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, child)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].table < out[j].table })
+	return out, nil
+}
+
+// placementColumn returns the column of the placement foreign key of block table t.
+func placementColumn(t *catalog.Table) (string, error) {
+	for _, fk := range t.ForeignKeys {
+		if fk.Name == t.Storage.ParentForeignKey && len(fk.Columns) == 1 {
+			return fk.Columns[0], nil
 		}
 	}
-	return lay, nil
+	return "", fmt.Errorf("table %s: the placement foreign key %s is not a one-column foreign key", t.Name, t.Storage.ParentForeignKey)
+}
+
+// childNamed returns the child block of the table whose name is name, or nil.
+func (l *docLayout) childNamed(name string) *docLayout {
+	for _, c := range l.children {
+		if c.table == name {
+			return c
+		}
+	}
+	return nil
 }
 
 // isField reports whether name is a field of a list row.
@@ -148,21 +200,15 @@ func (l *docLayout) sectionOf(name string) (section, bool) {
 	return section{}, false
 }
 
-// docRec is a row of the file: its row, the line of the row, and the detail
-// section that the row has, nil when it has none.
+// docRec is a row of a list or table: its row, its layout, the line of the row, and
+// whether the row has a detail section. seen holds the names of the sections and
+// child blocks that its detail section has read.
 type docRec struct {
 	row    *Row
+	lay    *docLayout
 	line   int
-	detail *docDetail
-}
-
-// docDetail is a detail section: its key, the line of its heading, and its body
-// and sections as they are written.
-type docDetail struct {
-	key      string
-	line     int
-	body     string
-	sections map[string]*string
+	detail bool
+	seen   map[string]bool
 }
 
 // docLink is a foreign key value whose target is resolved once every detail
@@ -178,43 +224,40 @@ type docLink struct {
 	col    int
 }
 
-// docParser reads one document file.
+// docParser reads one document file, or the block sections of a files row. The
+// rows of the scope being read are recs, under the layout lay; all holds every row
+// of the file at any depth once its scope is read. Links are resolved at the end,
+// once every row of the file is known.
 type docParser struct {
-	sink
-	lay      *docLayout
-	lk       Linker
-	recs     []*docRec
-	details  []*docDetail
-	links    []docLink
-	childErr error
+	*sink
+	rel     string // the file's name, from which its links are derived
+	lay     *docLayout
+	lk      Linker
+	recs    []*docRec
+	all     []*docRec
+	links   []docLink
+	details map[string]bool // the heading text of each detail section read: two of one text collide
 }
 
 // ParseDocument reads the document file rel of a document table, <table>.flowmark.md,
-// whose bytes are data. It returns the rows in storage order, unless a diagnostic
-// makes the file unreadable. A layout that stores a child block is refused with an
-// error: the block sections are the layout of T12.2.4. A noncanonical file returns
+// whose bytes are data. It returns the rows in storage order, each with its child
+// blocks, unless a diagnostic makes the file unreadable. A noncanonical file returns
 // its rows with the diagnostics, and writing the rows gives the canonical file.
 func ParseDocument(cat *catalog.Catalog, table, rel string, data []byte, lk Linker) ([]*Row, []Diagnostic, error) {
 	lay, err := docLayoutOf(cat, table)
 	if err != nil {
 		return nil, nil, err
 	}
-	p := &docParser{sink: sink{rel: rel}, lay: lay, lk: lk}
+	p := newDocParser(&sink{rel: rel}, rel, lk)
 	text, ok := p.normalize(data)
 	if !ok {
 		return nil, p.diags, nil
 	}
-	p.run(splitLines(text))
-	if p.childErr != nil {
-		return nil, nil, p.childErr
-	}
+	recs := p.run(lay, splitLines(text))
 	if p.fatal {
 		return nil, p.diags, nil
 	}
-	rows := make([]*Row, len(p.recs))
-	for i, rec := range p.recs {
-		rows[i] = rec.row
-	}
+	rows := sortedRows(lay, recs)
 	out, rd := renderDocument(lay, rows, lk, false)
 	if len(rd) > 0 {
 		return nil, append(p.diags, rd...), nil
@@ -223,17 +266,17 @@ func ParseDocument(cat *catalog.Catalog, table, rel string, data []byte, lk Link
 		line, col := diffAt([]byte(text), out)
 		p.warn(line, col, RuleNoncanonical, "the document is not in its canonical form")
 	}
-	order, _, _ := storageOrder(lay, rows)
-	sorted := make([]*Row, 0, len(order))
-	for _, i := range order {
-		sorted = append(sorted, rows[i])
-	}
-	return sorted, p.diags, nil
+	return rows, p.diags, nil
 }
 
-// run reads the H1, the list or table of the rows, and the detail sections.
-func (p *docParser) run(lines []string) {
-	lay := p.lay
+// newDocParser returns a parser of the file rel, whose diagnostics go to s.
+func newDocParser(s *sink, rel string, lk Linker) *docParser {
+	return &docParser{sink: s, rel: rel, lk: lk, details: map[string]bool{}}
+}
+
+// run reads the H1, the list or table of the rows, and their detail sections, and
+// returns the rows of the file's top scope.
+func (p *docParser) run(lay *docLayout, lines []string) []*docRec {
 	i := 0
 	if len(lines) > 0 {
 		if level, text, ok := headingOf(lines[0]); ok && level == 1 && trimWhite(text) == lay.table {
@@ -250,13 +293,22 @@ func (p *docParser) run(lines []string) {
 		p.warn(i+1, 1, RuleNoncanonical, "a blank line between the H1 and the rows")
 		i++
 	}
-	if lay.list {
-		i = p.readList(lines, i)
-	} else {
-		i = p.readTable(lines, i)
+	p.lay, p.recs = lay, nil
+	i = p.readRows(lines, i)
+	recs := p.recs
+	p.readDetails(lines, i, len(lines))
+	p.checkScope(recs)
+	p.resolveLinks()
+	return recs
+}
+
+// readRows reads the list or the table of the rows of the layout p.lay from line i,
+// and returns the index of the first line after them.
+func (p *docParser) readRows(lines []string, i int) int {
+	if p.lay.list {
+		return p.readList(lines, i)
 	}
-	p.readDetails(lines, i)
-	p.resolve()
+	return p.readTable(lines, i)
 }
 
 // colAt returns the 1-based column, in code points, of byte offset off of line.
@@ -386,7 +438,7 @@ func (p *docParser) listRow(lineNo int, line string, indent int) *docRec {
 	for k, tok := range toks {
 		p.tokenSeparator(lineNo, line, titleStart, k, tok)
 	}
-	rec := &docRec{row: newRow(lay.table, key, title), line: lineNo}
+	rec := &docRec{row: newRow(lay.table, key, title), lay: lay, line: lineNo}
 	if state != "" {
 		rec.row.Scalars[lay.state] = sp(state)
 	}
@@ -516,6 +568,9 @@ func (l *docLayout) names() []string {
 	}
 	if l.order != "" {
 		out = append(out, l.order)
+	}
+	if l.placement != "" {
+		out = append(out, l.placement)
 	}
 	if l.title != "" && !slices.Contains(out, l.title) {
 		out = append(out, l.title)
@@ -784,7 +839,7 @@ func (p *docParser) tableRow(lineNo int, text string) *docRec {
 		p.fail(lineNo, colAt(text, cells[0].at+1), RuleBlock, msg)
 		return nil
 	}
-	rec := &docRec{row: newRow(lay.table, key, ""), line: lineNo}
+	rec := &docRec{row: newRow(lay.table, key, ""), lay: lay, line: lineNo}
 	for j, c := range lay.scalars {
 		cell := cells[j+1]
 		v, null, ok := p.cellValue(lineNo, text, cell)
@@ -808,12 +863,14 @@ func (p *docParser) tableRow(lineNo int, text string) *docRec {
 	return rec
 }
 
-// readDetails reads the content after the list or table from line i: blank lines,
-// then the detail sections, each a level-2 heading and the lines up to the next
-// heading of level 2 or less. Any other content is format.block.
-func (p *docParser) readDetails(lines []string, i int) {
-	heads := scanHeadings(lines, i).heads
-	first := len(lines)
+// readDetails reads the content after the list or table of the rows p.recs, from
+// line i to end: blank lines, then the detail sections of the rows, each a heading
+// of the detail level of the layout (the scope level less one) and the lines up to
+// the next heading of that level or less. Any other content is format.block.
+func (p *docParser) readDetails(lines []string, i, end int) {
+	h := p.lay.scope - 1
+	heads := scanHeadings(lines[:end], i).heads
+	first := end
 	if len(heads) > 0 {
 		first = heads[0].at
 	}
@@ -824,72 +881,109 @@ func (p *docParser) readDetails(lines []string, i int) {
 		}
 	}
 	for k := 0; k < len(heads); {
-		h := heads[k]
+		hd := heads[k]
 		next := k + 1
-		for next < len(heads) && heads[next].level > 2 {
+		for next < len(heads) && heads[next].level > h {
 			next++
 		}
-		end := len(lines)
+		stop := end
 		if next < len(heads) {
-			end = heads[next].at
+			stop = heads[next].at
 		}
-		if h.level == 2 {
-			p.readDetail(lines, h, heads[k+1:next], end)
+		if hd.level == h {
+			p.readDetail(lines, hd, heads[k+1:next], stop)
 		} else {
-			p.fail(h.at+1, 1, RuleBlock, "content after the list or table is not a detail section")
+			p.fail(hd.at+1, 1, RuleBlock, "content after the list or table is not a detail section")
 		}
 		k = next
 	}
 }
 
-// readDetail reads the detail section whose level-2 heading is h, with the
-// level-3 headings sub and the lines up to end: its body, and its sections.
+// readDetail reads the detail section whose heading is h, with the headings sub
+// below it, up to end. The section names one row of p.recs; its body follows the
+// heading up to the first heading of the section level, and then its sections and
+// child blocks.
 func (p *docParser) readDetail(lines []string, h heading, sub []heading, end int) {
 	lay := p.lay
-	t := trimWhite(h.text)
-	parts := strings.Fields(t)
+	marks := strings.Repeat("#", h.level)
+	parts := strings.Fields(trimWhite(h.text))
 	if len(parts) != 3 || parts[0] != lay.table || !strings.EqualFold(parts[1], "row") || parts[2] == "" {
-		p.fail(h.at+1, 4, RuleBlock, "a detail section is `## "+lay.table+" row <key>`")
+		p.fail(h.at+1, 4, RuleBlock, "a detail section is `"+marks+" "+lay.table+" row <key>`")
 		return
 	}
 	key := parts[2]
 	if h.last != h.at || h.text != lay.table+" row "+key {
-		p.warn(h.at+1, 4, RuleNoncanonical, "the detail heading is written `## "+lay.table+" row "+key+"`")
+		p.warn(h.at+1, 4, RuleNoncanonical, "the detail heading is written `"+marks+" "+lay.table+" row "+key+"`")
 	}
-	det := &docDetail{key: key, line: h.at + 1, sections: map[string]*string{}}
-	var secs []heading
+	// Two detail sections of one file under one heading text collide, whatever block
+	// holds them, since their anchors are equal; a case difference is key.duplicate.
+	text := lay.table + " row " + key
+	if p.details[text] {
+		p.fail(h.at+1, 4, RuleBlock, "the detail section "+text+" collides with another detail section of the file")
+		return
+	}
+	p.details[text] = true
+	var match []*docRec
+	for _, rec := range p.recs {
+		if rec.row.Key == key {
+			match = append(match, rec)
+		}
+	}
+	switch {
+	case len(match) == 0:
+		p.fail(h.at+1, 4, RuleBlock, "the detail section names no row "+key)
+		return
+	case len(match) > 1:
+		p.fail(h.at+1, 4, RuleBlock, "the key "+key+" is shared by two rows, so its detail section cannot be assigned")
+		return
+	case match[0].detail:
+		p.fail(h.at+1, 4, RuleBlock, "the row "+key+" has a second detail section")
+		return
+	}
+	rec := match[0]
+	rec.detail = true
+	rec.seen = map[string]bool{}
+	var bounds []heading
 	for _, s := range sub {
-		if s.level <= 3 {
-			secs = append(secs, s)
+		if s.level <= lay.scope {
+			bounds = append(bounds, s)
 		}
 	}
 	bEnd := end
-	if len(secs) > 0 {
-		bEnd = secs[0].at
+	if len(bounds) > 0 {
+		bEnd = bounds[0].at
 	}
 	body, _ := p.valueLines(lines, h.last+1, bEnd, true)
-	det.body = joinLines(body)
-	for k, s := range secs {
+	rec.row.Body = joinLines(body)
+	for k, s := range bounds {
 		sEnd := end
-		if k+1 < len(secs) {
-			sEnd = secs[k+1].at
+		if k+1 < len(bounds) {
+			sEnd = bounds[k+1].at
 		}
-		p.readSection(lines, s, sEnd, det)
+		p.readSection(lines, s, sEnd, rec)
 	}
-	if det.body == "" && len(det.sections) == 0 {
-		p.warn(h.at+1, 1, RuleNoncanonical, "a detail section with no body and no section is not written: the row has no detail section")
+	if !hasContent(rec.row) && blankLines(lines[h.last+1:end]) {
+		p.warn(h.at+1, 1, RuleNoncanonical, "a detail section with no body, section or block is not written: the row has no detail section")
 	}
-	p.details = append(p.details, det)
 }
 
-// readSection reads the section whose level-3 heading is s, up to sEnd, into det.
-// A child block of the table is refused with an error: it is T12.2.4's layout.
-func (p *docParser) readSection(lines []string, s heading, sEnd int, det *docDetail) {
+// readSection reads the heading s of a detail section of rec, up to sEnd: a markdown
+// section of the row, or a child block of the row, which is read in its own scope.
+func (p *docParser) readSection(lines []string, s heading, sEnd int, rec *docRec) {
 	lay := p.lay
 	name := trimWhite(s.text)
-	if slices.Contains(lay.children, name) {
-		if p.childErr == nil {
-			p.childErr = fmt.Errorf("table %s: the child block %s of a detail section is not implemented until T12.2.4", lay.table, name)
+	marks := strings.Repeat("#", s.level)
+	if child := lay.childNamed(name); child != nil {
+		if rec.seen[name] {
+			p.fail(s.at+1, 5, RuleSection, "the block "+name+" is written twice")
+			return
+		}
+		rec.seen[name] = true
+		if s.text != name {
+			p.warn(s.at+1, 5, RuleNoncanonical, "the block heading has extra spaces")
+		}
+		if rows := p.readChildBlock(lines, s, sEnd, child); len(rows) > 0 {
+			setBlock(rec.row, child.table, rows)
 		}
 		return
 	}
@@ -897,45 +991,67 @@ func (p *docParser) readSection(lines []string, s heading, sEnd int, det *docDet
 		p.warn(s.at+1, 5, RuleNoncanonical, "the section heading has extra spaces")
 	}
 	if _, ok := lay.sectionOf(name); !ok {
-		p.fail(s.at+1, 5, RuleSection, "### "+name+" is not a section of "+lay.table)
+		p.fail(s.at+1, 5, RuleSection, marks+" "+name+" is not a section of "+lay.table)
 		return
 	}
-	if det.sections[name] != nil {
+	if rec.seen[name] {
 		p.fail(s.at+1, 5, RuleSection, "the section "+name+" is written twice")
 		return
 	}
+	rec.seen[name] = true
 	value, _ := p.valueLines(lines, s.last+1, sEnd, true)
 	v := joinLines(value)
-	det.sections[name] = &v
+	rec.row.Sections[name] = &v
 }
 
-// resolve checks the rows once every line is read: each detail section goes to
-// the one row of its key, the non-null values are present, the order is stated by
-// the line order, the parents name rows, the links have their targets, and the
-// parents form no cycle.
-func (p *docParser) resolve() {
-	lay := p.lay
-	for _, d := range p.details {
-		var match []*docRec
-		for _, rec := range p.recs {
-			if rec.row.Key == d.key {
-				match = append(match, rec)
-			}
-		}
-		switch {
-		case len(match) == 0:
-			p.fail(d.line, 4, RuleBlock, "the detail section names no row "+d.key)
-		case len(match) > 1:
-			p.fail(d.line, 4, RuleBlock, "the key "+d.key+" is shared by two rows, so its detail section cannot be assigned")
-		case match[0].detail != nil:
-			p.fail(d.line, 4, RuleBlock, "the row "+d.key+" has a second detail section")
-		default:
-			match[0].detail = d
-			match[0].row.Body = d.body
-			match[0].row.Sections = d.sections
+// readChildBlock reads the child block whose heading is h, up to end, in the scope
+// of the child's layout: its list or table, then the detail sections of its rows. It
+// returns the rows in storage order; a block with no rows is noncanonical.
+func (p *docParser) readChildBlock(lines []string, h heading, end int, child *docLayout) []*Row {
+	outerLay, outerRecs := p.lay, p.recs
+	p.lay, p.recs = child, nil
+	defer func() { p.lay, p.recs = outerLay, outerRecs }()
+	i := h.last + 1
+	if i < end && lines[i] == "" {
+		p.warn(i+1, 1, RuleNoncanonical, "a blank line between the block heading and its rows")
+		i++
+	}
+	start := i
+	i = p.readRows(lines[:end], i)
+	if i == start {
+		p.warn(h.at+1, 1, RuleNoncanonical, "an empty block heading: a block with no rows is not written")
+	}
+	p.readDetails(lines, i, end)
+	recs := p.recs
+	p.checkScope(recs)
+	return sortedRows(child, recs)
+}
+
+// blankLines reports whether every line is blank.
+func blankLines(lines []string) bool {
+	for _, line := range lines {
+		if !isBlank(line) {
+			return false
 		}
 	}
-	for _, rec := range p.recs {
+	return true
+}
+
+// setBlock sets the child rows of the block table of row r.
+func setBlock(r *Row, table string, rows []*Row) {
+	if r.Blocks == nil {
+		r.Blocks = map[string][]*Row{}
+	}
+	r.Blocks[table] = rows
+}
+
+// checkScope checks the rows of one scope once their detail sections are read: the
+// non-null sections and values are present, the order is stated by the line order,
+// the parents name rows of the scope, and the parents form no cycle. The rows then
+// belong to the rows of the file, where a link finds them.
+func (p *docParser) checkScope(recs []*docRec) {
+	lay := p.lay
+	for _, rec := range recs {
 		for _, s := range lay.sections {
 			if !s.nullable && rec.row.Sections[s.name] == nil {
 				p.fail(rec.line, 1, RuleBlock, "the non-null section "+s.name+" is missing")
@@ -952,30 +1068,40 @@ func (p *docParser) resolve() {
 	}
 	if lay.order != "" {
 		pos := map[string]int{}
-		for _, rec := range p.recs {
+		for _, rec := range recs {
 			g := parentKey(lay, rec.row)
 			pos[g]++
 			rec.row.Scalars[lay.order] = sp(strconv.Itoa(pos[g]))
 		}
 	}
 	if lay.parent != "" {
-		for _, rec := range p.recs {
+		for _, rec := range recs {
 			v := rec.row.Scalars[lay.parent]
 			if v == nil {
 				continue
 			}
-			switch n := countRows(p.recs, *v); {
+			switch n := countRows(recs, *v); {
 			case n == 0:
-				p.fail(rec.line, 1, RuleBlock, "the parent "+*v+" names no row of its file")
+				p.fail(rec.line, 1, RuleBlock, "the parent "+*v+" names no row of its block")
 			case n > 1:
-				p.fail(rec.line, 1, RuleBlock, "the parent "+*v+" names a key that two rows of the file share")
+				p.fail(rec.line, 1, RuleBlock, "the parent "+*v+" names a key that two rows of the block share")
 			}
 		}
 	}
+	if _, _, unreached := storageOrder(lay, recRows(recs)); len(unreached) > 0 {
+		p.fail(recs[unreached[0]].line, 1, RuleParentCycle, "the parents of the rows form a cycle")
+	}
+	p.all = append(p.all, recs...)
+}
+
+// resolveLinks checks each foreign key of the file against the row it names, once
+// every row of the file is known: a key that names no row keeps its written target,
+// and a target other than the derived one is noncanonical.
+func (p *docParser) resolveLinks() {
 	for _, l := range p.links {
 		want, ok := p.linkTarget(l.table, l.key)
 		if !ok {
-			if l.column != lay.parent {
+			if l.column != l.rec.lay.parent {
 				l.rec.row.Dangling[l.column] = DanglingLink{Key: l.key, Target: l.target}
 			}
 			continue
@@ -984,32 +1110,38 @@ func (p *docParser) resolve() {
 			p.warn(l.line, l.col, RuleNoncanonical, "the link target is "+want)
 		}
 	}
-	if p.fatal {
-		return
-	}
-	rows := make([]*Row, len(p.recs))
-	for i, rec := range p.recs {
+}
+
+// recRows returns the rows of recs, in their order.
+func recRows(recs []*docRec) []*Row {
+	rows := make([]*Row, len(recs))
+	for i, rec := range recs {
 		rows[i] = rec.row
 	}
-	if _, _, unreached := storageOrder(lay, rows); len(unreached) > 0 {
-		rec := p.recs[unreached[0]]
-		p.fail(rec.line, 1, RuleParentCycle, "the parents of the rows form a cycle")
+	return rows
+}
+
+// sortedRows returns the rows of recs in the storage order of lay.
+func sortedRows(lay *docLayout, recs []*docRec) []*Row {
+	rows := recRows(recs)
+	order, _, _ := storageOrder(lay, rows)
+	out := make([]*Row, 0, len(order))
+	for _, i := range order {
+		out = append(out, rows[i])
 	}
+	return out
 }
 
 // linkTarget derives the target of a link to the row key of table: for a row of
 // this file, the file's name with the anchor of the row's detail section when it
 // has one; otherwise the linker's target. It reports false when no row has the key.
 func (p *docParser) linkTarget(table, key string) (string, bool) {
-	if table == p.lay.table {
-		for _, rec := range p.recs {
-			if rec.row.Key == key {
-				return localLink(p.lay, docFileName(p.lay), rec.row), true
-			}
+	for _, rec := range p.all {
+		if rec.row.Table == table && rec.row.Key == key {
+			return localLink(rec.lay, p.rel, rec.row), true
 		}
-		return "", false
 	}
-	target, err := p.lk.Target(docFileName(p.lay), table, key)
+	target, err := p.lk.Target(p.rel, table, key)
 	return target, err == nil
 }
 
@@ -1027,14 +1159,33 @@ func localLink(lay *docLayout, rel string, r *Row) string {
 	return link
 }
 
-// hasDetail reports whether row r has a detail section: a body, a present section,
-// or a non-null section, which is always present.
+// hasDetail reports whether row r has a detail section: content that it holds, or
+// a non-null section, which is always present.
 func hasDetail(lay *docLayout, r *Row) bool {
-	if r.Body != "" {
+	if hasContent(r) {
 		return true
 	}
 	for _, s := range lay.sections {
-		if r.Sections[s.name] != nil || !s.nullable {
+		if !s.nullable {
+			return true
+		}
+	}
+	return false
+}
+
+// hasContent reports whether row r holds a body, a present section or a child row:
+// the content that a detail section writes.
+func hasContent(r *Row) bool {
+	if r.Body != "" {
+		return true
+	}
+	for _, v := range r.Sections {
+		if v != nil {
+			return true
+		}
+	}
+	for _, rows := range r.Blocks {
+		if len(rows) > 0 {
 			return true
 		}
 	}
@@ -1102,11 +1253,20 @@ func storageOrder(lay *docLayout, rows []*Row) (order, depth, unreached []int) {
 // order column, else by their keys.
 func siblingLess(lay *docLayout, a, b *Row) bool {
 	if lay.order != "" {
-		x, _ := strconv.Atoi(*a.Scalars[lay.order])
-		y, _ := strconv.Atoi(*b.Scalars[lay.order])
-		return x < y
+		return orderValue(a, lay.order) < orderValue(b, lay.order)
 	}
 	return keyLess(lay.key.Type, a.Key, b.Key)
+}
+
+// orderValue returns the value of the order column of row r as a number. A missing
+// or unreadable value is 0: a write refuses it, and a read always has the value.
+func orderValue(r *Row, column string) int {
+	v := r.Scalars[column]
+	if v == nil {
+		return 0
+	}
+	n, _ := strconv.Atoi(*v)
+	return n
 }
 
 // keyLess orders two canonical keys: numerically for an integer key, else by their

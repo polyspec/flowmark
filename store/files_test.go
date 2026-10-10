@@ -58,8 +58,6 @@ func readGolden(t testing.TB, rel string) []byte {
 	return b
 }
 
-func sp(v string) *string { return &v }
-
 // doc joins lines as a file: each line is terminated by a line feed. A file
 // never ends in a blank line, so one trailing empty line is dropped; raw keeps it.
 func doc(lines ...string) string {
@@ -301,7 +299,7 @@ func withBaseFields(extra ...string) string {
 func TestParseFileRules(t *testing.T) {
 	cat := loadFixture(t)
 	lk := fixtureLinker()
-	for _, c := range parseCases() {
+	for _, c := range append(parseCases(), blockParseCases()...) {
 		t.Run(c.name, func(t *testing.T) {
 			rel := c.rel
 			if rel == "" {
@@ -371,7 +369,7 @@ func checkP2(t *testing.T, cat *catalog.Catalog, row *Row, lk Linker) []byte {
 func TestGoldenP1(t *testing.T) {
 	cat := loadFixture(t)
 	lk := fixtureLinker()
-	for _, rel := range []string{"tasks/T1.flowmark.md", "tasks/T2.flowmark.md", "tasks/T3.flowmark.md", "memos/M1.flowmark.md", "memos/M2.flowmark.md"} {
+	for _, rel := range []string{"tasks/T1.flowmark.md", "tasks/T2.flowmark.md", "tasks/T3.flowmark.md", "tasks/T4.flowmark.md", "memos/M1.flowmark.md", "memos/M2.flowmark.md"} {
 		t.Run(rel, func(t *testing.T) {
 			data := readGolden(t, rel)
 			table := strings.Split(rel, "/")[0]

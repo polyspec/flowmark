@@ -49,3 +49,39 @@ table memos {
     markdown summary
   }
 }
+
+table task_steps {
+  id varchar(16)
+  task varchar(32)
+  parent varchar(16) null
+  title varchar(255)
+  body text
+  position i32
+  done bool
+  primary key (id)
+  index ix_task_steps_task (task)
+  index ix_task_steps_parent (parent)
+  foreign key fk_step_task (task) references tasks (id) on delete restrict on update restrict
+  foreign key fk_step_parent (parent) references task_steps (id) on delete restrict on update restrict
+  settings {
+    store block fk_step_task list
+    title title
+    body body
+    order position
+    markdown body
+  }
+}
+
+table step_refs {
+  id i64 identity
+  step varchar(16)
+  label varchar(16) null
+  note text null
+  primary key (id)
+  index ix_step_refs_step (step)
+  foreign key fk_ref_step (step) references task_steps (id) on delete restrict on update restrict
+  settings {
+    store block fk_ref_step table
+    markdown note
+  }
+}
