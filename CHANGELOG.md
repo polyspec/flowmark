@@ -9,6 +9,12 @@
   heading only when it closes a top-level paragraph, and a lazy continuation line is paragraph text, as CommonMark
   0.31.2 reads it.
 
+- T12.1-8: the specifications state the read rules the `files` codec needed. A value that leaves an HTML block of
+  CommonMark types 1–5 open before a following element is `format.block` on read, as it is `CONSTRAINT` on
+  write; an open fence cannot precede an element on read, since a heading inside it is no boundary. A title whose decoded text is empty or ends in `\#` is `format.block` on read, since the write rule
+  cannot produce its H1 again. A line ending is LF, CRLF or a bare CR as CommonMark reads it, and a CR in any of
+  them is `format.noncanonical`. White space in the single-line rules is the space and the tab.
+
 - T12.2.2-1: the `files` codec and store follow the T12.1-3 and T12.1-4 rulings. An H1 title reads a final `\#`
   as `#`, is written with its last `#` escaped when its final hash run follows a space or a tab or is the whole
   title, and a title ending in `\#` is `CONSTRAINT`. A markdown value that begins or ends with a blank line, or

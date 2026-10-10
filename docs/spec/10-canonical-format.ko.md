@@ -1,5 +1,5 @@
 <!-- doc-id: spec-canonical-format -->
-<!-- source-sha256: c2fade1dcf73011b46530f469b3b2bc86e02d2869d1dfda1cb91f400c5cf438d -->
+<!-- source-sha256: 805b697d137c696304752f79f9c35f643243d6e9f2210ebd666c49b6b1823a4a -->
 # Canonical format
 
 [English](10-canonical-format.md)
@@ -92,7 +92,7 @@ column 섹션 — 은 payload다: renderer는 이를 행과 함께 옮기고 그
 - body가 아닌 모든 `markdown` column은 level L 행 scope의 column 이름을 가진 섹션이다: non-null column의 섹션은 언제나 있고, nullable column의 섹션은 값이 NULL일 때에만 없다. 없는 non-null 섹션은 읽기에서 `format.block`, 쓰기에서 `CONSTRAINT`다. 비어 있는 섹션은 빈 텍스트다. body는 NULL이 아니며 섹션이 아니다. 자식 블록은 자식 table 이름을 가진 level L heading이다. 선언되지 않은 level L heading은 `format.section`이다. 근거: non-null 값은 언제나 쓰이므로 그 섹션이 없을 수 없고, NULL 값에는 쓸 텍스트가 없으므로 섹션이 없다.
 - 값은 file 안에서 framing된다: 값이 비어 있지 않을 때에만 heading 뒤에 빈 줄이 서고, 값의 줄들이 따르며, 뒤따르는 요소가 있으면 그 앞에 빈 줄이 선다. 값은 줄 바꿈으로 시작하거나 끝나지 않으며, 양 끝에 공백만 있는 줄을 담지 않는다. 그런 값의 쓰기는 `CONSTRAINT`다. 근거: framing 빈 줄은 요소를 가르므로, 줄 바꿈으로 시작하거나 끝나는 값은 framing이 바뀐 채 읽히고, 양 끝의 공백만 있는 줄은 framing 줄로 읽힌다.
 - framing 빈 줄은 skeleton이다: 읽을 때 값의 양 끝에 있는 추가 빈 줄이나 공백만 있는 줄은 값의 일부가 아니며 `format.noncanonical`이며, 요소가 여전히 다시 읽히는 framing 빈 줄의 누락도 `format.noncanonical`이다. 다만 field list의 마지막 항목 바로 뒤에 오는 body 줄은 `format.block`이다. `flowmark canon`이 둘 다 고친다.
-- 값은 최상위 setext heading을 담지 않는다: fence 밖이고 컨테이너 밖에서, 최상위 문단의 줄 바로 뒤에 `=`만 또는 `-`만 있는 줄(들여쓰기 최대 세 칸, 뒤의 공백이나 tab은 있어도 된다)은 쓰기에서 `CONSTRAINT`이며, 읽기에서는 CommonMark가 setext heading으로 읽는 곳이 heading이다. 컨테이너 안의 setext heading은 이 규칙 밖이다. 값이 CommonMark type 1–5의 fence나 HTML block을 열린 채로 남기면, 뒤따르는 요소가 있을 때 `CONSTRAINT`다. 그 요소를 어느 쓰기가 놓든 마찬가지이며, 검사는 쓰기가 만드는 file 전체에 대해 돈다. 근거: 최상위 setext 밑줄은 값의 마지막 줄을 최상위 heading으로 바꾸고, 열린 fence나 HTML block은 뒤따르는 요소를 흡수하므로, 어느 쪽이든 값이 다시 읽히는 내용이 달라진다. 컨테이너 안의 heading은 섹션 경계를 바꾸지 않는다.
+- 값은 최상위 setext heading을 담지 않는다: fence 밖이고 컨테이너 밖에서, 최상위 문단의 줄 바로 뒤에 `=`만 또는 `-`만 있는 줄(들여쓰기 최대 세 칸, 뒤의 공백이나 tab은 있어도 된다)은 쓰기에서 `CONSTRAINT`이며, 읽기에서는 CommonMark가 setext heading으로 읽는 곳이 heading이다. 컨테이너 안의 setext heading은 이 규칙 밖이다. 값이 CommonMark type 1–5의 fence나 HTML block을 열린 채로 남기면, 뒤따르는 요소가 있을 때 `CONSTRAINT`다. 그 요소를 어느 쓰기가 놓든 마찬가지이며, 검사는 쓰기가 만드는 file 전체에 대해 돈다. 읽을 때는 CommonMark type 1–5의 HTML block을 열린 채 뒤따르는 요소를 앞에 둔 file이 `format.block`이다. 열린 fence는 읽을 때 뒤따르는 요소 앞에 설 수 없다: fence 안의 heading은 경계가 아니므로, 값은 CommonMark가 읽는 대로 그 fence가 닫히는 곳이나 file 끝까지 이어진다. 근거: 최상위 setext 밑줄은 값의 마지막 줄을 최상위 heading으로 바꾸고, 열린 fence나 HTML block은 뒤따르는 요소를 흡수하므로, 어느 쪽이든 값이 다시 읽히는 내용이 달라진다. 읽을 때 열린 HTML block 안의 heading은 fence와 컨테이너만 heading을 가리므로 여전히 값을 끝내지만, CommonMark는 그것을 block의 일부로 읽으므로 file이 viewer가 보여 주는 것과 다르게 읽힌다. 컨테이너 안의 heading은 섹션 경계를 바꾸지 않는다.
 - 자식 블록 섹션은 블록이 행을 하나 이상 가질 때만 쓴다 — 빈 블록과 없는 블록은 모두 행이 0개라는 뜻이므로, 정식 형식은 하나뿐이다(P1). 자식 행이 없는 부모 행은 블록 heading을 갖지 않으며, 빈 블록 heading은 `format.noncanonical`이다.
 - `markdown` column은 모든 저장에서 언제나 행 scope의 섹션이다 — field나 cell이 아니다.
 
@@ -148,11 +148,11 @@ scalar 값은 dbspec literal이 아니라 읽을 수 있는 형식으로 쓴다.
 
 ## 한 줄 자리
 
-제목(list 행, H1, cell 안의 제목), list field, field list의 값, table cell은 한 줄 자리다. 한 줄 값은 쓴 그대로의 inline markdown이며, 이 절이 정한 경우를 빼고는 escape하지 않는다.
+제목(list 행, H1, cell 안의 제목), list field, field list의 값, table cell은 한 줄 자리다. 한 줄 값은 쓴 그대로의 inline markdown이며, 이 절이 정한 경우를 빼고는 escape하지 않는다. 이 절의 규칙에서 공백은 space(U+0020)와 tab(U+0009)이며, CommonMark가 문단의 양 끝을 떼어낼 때 세는 것과 같다. 그 밖의 문자, 예컨대 no-break space는 텍스트다. 근거: CommonMark 0.31.2는 문단과 ATX heading 내용의 양 끝에서 정확히 이 문자들을 떼어내므로, 규칙도 같은 문자를 가리켜야 한다.
 
 - 쓰기에서, 그 자리에 줄바꿈이나 CR을 가진 값, 앞이나 뒤에 공백을 가진 값, 또는 `<` 뒤에 `!`, `/`, 글자가 오는 값은 `CONSTRAINT`다. 줄바꿈은 한 줄에 쓸 수 없고, raw HTML은 값을 숨기거나 바꾸기 때문이다.
 - 읽기에서, 렌더링이 inline markdown을 넘어 텍스트와 다르게 보이는 한 줄 값은 `format.block`이며, 정확히 다음이다: 앞이나 뒤에 공백이 있는 인용된 list field나 cell, 또는 `<` 뒤에 `!`, `/`, 글자가 오는 값. 렌더링이 한 줄 자리 둘레의 공백을 떨어뜨리면 그것은 `format.noncanonical`이다. 각 자리는 하나의 정식 구분자를 가진다(H1 표지 뒤 `# `, field list column 뒤 `: `, 빈 텍스트는 아무것도 없음, list 토큰 사이 공백 하나, cell은 `| v |`). 그 밖의 공백은 `format.noncanonical`이다.
-- H1의 제목에서 마지막 `#` 연속이 공백이나 tab 뒤에 오거나, `#` 문자뿐인 제목은 마지막 `#`을 `\#`로 쓴다. CommonMark가 그 연속을 닫는 열로 읽기 때문이다(`#`만 있는 줄은 빈 heading이다). 읽을 때 제목은 CommonMark의 앞뒤 공백, tab, 닫는 열을 뺀 raw heading 내용이며, 마지막 `\#`은 `#`으로 읽는다. 다른 escape는 해석하지 않는다. 쓰기 규칙이 만들지 않을 마지막 `\#`(예: `# C\#`)은 `format.noncanonical`이다. `\#`로 끝나는 제목은 쓰기에서 `CONSTRAINT`다: `#`으로 다시 읽히기 때문이다. `\#`과 `#`, `#\#`과 `##`이 같은 식으로 쓰이게 된다. 읽기에서 H1의 닫는 열은 `format.noncanonical`이다. 근거: 제목은 그 텍스트 그대로 다시 읽히도록 쓴다.
+- H1의 제목에서 마지막 `#` 연속이 공백이나 tab 뒤에 오거나, `#` 문자뿐인 제목은 마지막 `#`을 `\#`로 쓴다. CommonMark가 그 연속을 닫는 열로 읽기 때문이다(`#`만 있는 줄은 빈 heading이다). 읽을 때 제목은 CommonMark의 앞뒤 공백, tab, 닫는 열을 뺀 raw heading 내용이며, 마지막 `\#`은 `#`으로 읽는다. 다른 escape는 해석하지 않는다. 쓰기 규칙이 만들지 않을 마지막 `\#`(예: `# C\#`, 제목 `C#`은 `# C#`으로 쓴다)은 `format.noncanonical`이다. 쓰기가 거절하는 해석 텍스트를 가진 제목 — 빈 텍스트(예: `#`, `# #`), 또는 `\#`로 끝나는 텍스트(예: `# a\\#`, `a\#`으로 해석)로, 이것은 `#`으로 다시 읽히므로 `\#`과 `#`, `#\#`과 `##`이 같은 식으로 쓰이게 된다 — 은 읽기에서 `format.block`이고 쓰기에서 `CONSTRAINT`다. 읽기에서 H1의 닫는 열은 `format.noncanonical`이다. 근거: 제목은 그 텍스트 그대로 다시 읽히도록 쓴다. 쓰기가 거절하는 제목은 만들 수 있는 H1이 없으므로 그 file은 왕복할 수 없다(P1, P2).
 
 ## `files` 행의 field list
 
@@ -179,7 +179,7 @@ scalar 값은 dbspec literal이 아니라 읽을 수 있는 형식으로 쓴다.
 ## Encoding과 줄 구조
 
 - 문서는 BOM 없는 UTF-8이며, canonical 줄 끝은 LF다. 그 밖의 payload byte는 있는 그대로 보존한다.
-- BOM, 그리고 CR(단독이든 CRLF 줄 끝이든)은 P2 아래 유효한 입력이며 `format.noncanonical`이다: canonical 형식에는 둘 다 없으므로 P1이 성립하지 않는다. 읽을 때 값은 모든 줄 끝을 LF로 읽는다. 근거: multi-platform — `autocrlf`를 쓰는 Windows checkout은 Unix checkout과 같은 값을 읽어야 한다. 이 바이트를 없애는 것은 `flowmark canon`뿐이다.
+- 줄 끝은 CommonMark가 읽는 대로 LF, CRLF, 또는 뒤에 LF가 없는 CR이다. BOM, 그리고 모든 줄 끝의 CR(단독이든 CRLF든)은 P2 아래 유효한 입력이며 `format.noncanonical`이다: canonical 형식에는 둘 다 없으므로 P1이 성립하지 않는다. 읽을 때 값은 모든 줄 끝을 LF로 읽으므로, 단독 CR은 CommonMark에서처럼 줄을 가른다. 근거: multi-platform — `autocrlf`를 쓰는 Windows checkout은 Unix checkout과 같은 값을 읽어야 한다. 이 바이트를 없애는 것은 `flowmark canon`뿐이다.
 - UTF-8이 아닌 byte와 U+0000은 `format.encoding`이다: 그것들에서는 어떤 텍스트도 읽을 수 없다.
 - 문서는 정확히 LF 하나로 끝난다. 마지막 LF가 없거나 끝에 빈 줄이 있는 문서는 `format.noncanonical`이다. 근거: 문법에는 마지막 줄 뒤의 요소가 없으므로, 그 뒤의 줄 바꿈은 어떤 요소에도 속하지 않아 emit에서 사라진다.
 - `format.*` 진단이 있는 file을 다시 쓰는 logical write는 `CONSTRAINT`다, 면제를 제외하고. 다른 행의 validator 진단(`type`, `key.duplicate`, `reference.dangling`, `check`, `order`, `state.limit`, `history.gap`, `history.chain`, 여러 `files` file에 걸친 `parent.cycle`)은 commit을 실패시키지 않되, `type` 진단은 commit의 제약 검사가 그 값을 평가해야 할 때 commit을 실패시키고, 바이트 단위로 같은 key를 가진 두 행은 그 table을 사용할 수 없게 한다([사용할 수 없는 table](#진단)); `format.*` 진단은 다시 쓰기 거절과 사용할 수 없는 table 상태([사용할 수 없는 table](#진단))가 정하는 경우에만 commit을 실패시킨다. file을 다시 써야 하는 commit — 행 자신의 file, 상세 섹션이 생기거나 사라지는 행으로의 link를 가진 file, `order`의 형제 — 은 그 file이 `format.*` 진단을 가지면 거절한다: `CONSTRAINT`이며 file과 진단을 밝히고, `format.noncanonical`이면 `flowmark canon`을 밝힌다. 세 commit은 면제된다: 대상에 대한 `flowmark canon`([operations](40-ops.ko.md#canon-연산)), 추가된 column이 일으킨 진단에 대한 add-column migration([migration](80-migration.ko.md)) — 그 진단은 그 migration에 대해 table을 사용할 수 없게 하지 않는다 —, `files` 행의 file 전체를 지우는 delete는 rewrite 거절에서만 면제되는데, file을 지우는 것은 그 file의 바이트를 다시 쓰지 않고 거절이 지키는 것이 바로 그 바이트이기 때문이다. restrict 검사는 그 행을 참조할 수 있는 모든 table의 행을 여전히 필요로 하며(자신의 table을 `parent`로 하는 것, 자식 및 이력 block, 그 행으로의 foreign key를 가진 모든 table), 그 중 하나라도 사용할 수 없으면 그 delete는 `CONSTRAINT`다. install이 쓰는 `.gitattributes`가 없으면 Windows `autocrlf` checkout은 모든 값을 읽지만 `flowmark canon` 전까지 위의 면제를 뺀 기존 문서를 다시 쓰는 모든 쓰기를 거절한다. 근거: 쓰기는 사용자가 쓰지 않은 바이트를 바꾸면 안 되며, migration은 별도의 명시적 transaction이다.

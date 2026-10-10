@@ -148,10 +148,15 @@ and the column sections — are payload: the renderer moves them with their row 
   of a top-level paragraph, is `CONSTRAINT` on write; on read, a setext heading is a heading where CommonMark reads one.
   A setext heading inside a container is not within this rule. A value that leaves a fence or an HTML
   block of CommonMark types 1–5 open is `CONSTRAINT` when an element follows it, whichever write places
-  that element: the check runs on the file the write produces. Grounding: a top-level setext underline
-  turns the value's last line into a top-level heading, and an open fence or HTML block takes in the
-  element that follows, so either changes what the value reads back as; a heading inside a container
-  changes no section boundary.
+  that element: the check runs on the file the write produces. On read, a file in which a value leaves
+  an HTML block of CommonMark types 1–5 open before a following element is `format.block`. An open
+  fence cannot stand before a following element on read: a heading inside a fence is no boundary, so
+  the value runs on to the fence's close or to the end of the file, as CommonMark reads it. Grounding:
+  a top-level setext underline turns the value's last line into a top-level heading, and an open fence
+  or HTML block takes in the element that follows, so either changes what the value reads back as; on
+  read a heading inside an open HTML block still ends the value, since only fences and containers hide
+  a heading, whereas CommonMark reads it as part of the block, so the file reads differently from what
+  a viewer shows. A heading inside a container changes no section boundary.
 - A child block section is written only when the block holds at least one row — an empty block and an
   absent block both mean zero rows, so only one form can be canonical (P1); a parent row with no child
   rows has no block heading, and an empty block heading is `format.noncanonical`.
@@ -233,7 +238,10 @@ catalog.
 
 A title (in a list row, in an H1 or in a cell), a list field, a field-list value and a table cell are
 single-line places. A single-line value is inline markdown as written and is never escaped, except as
-this section states.
+this section states. White space in the rules of this section is the space (U+0020) and the tab
+(U+0009), as CommonMark's stripping of a paragraph's ends counts them; any other character, such as a
+no-break space, is text. Grounding: CommonMark 0.31.2 strips exactly these characters from the ends of a
+paragraph and of an ATX heading's content, so the rules name the same ones.
 
 - On write, a value there that contains a line feed or a CR, that has leading or trailing white space,
   or that contains `<` followed by `!`, `/` or a letter is `CONSTRAINT`: a line feed cannot be written
@@ -242,10 +250,12 @@ this section states.
   would hide or alter it). White space that rendering drops around a single-line place is `format.noncanonical`. Each place has one canonical separator (`# ` after the H1 marker, `: ` after a field-list column or nothing for the empty text, one space between list tokens, `| v |` in a cell); any other white space there is `format.noncanonical`.
 - A title in an H1 whose final run of `#` follows a space or a tab, or that consists only of `#`, is
   written with its last `#` as `\#`, since CommonMark would read the run as a closing sequence (a line
-  of `#` alone is an empty heading). On read, the title is the raw heading content with CommonMark's leading and trailing spaces, tabs and closing sequence removed, and a final `\#` read as `#`; no other escape is decoded. A final `\#` that the write rule would not produce (as in `# C\#`) is `format.noncanonical`. A title ending in `\#` is `CONSTRAINT` on write, since it would
-  read back as `#`: `\#` and `#`, and `#\#` and `##`, would be written alike. On read, an H1 closing
-  sequence is `format.noncanonical`. Grounding: a title is written so that it reads back as the same
-  text.
+  of `#` alone is an empty heading). On read, the title is the raw heading content with CommonMark's leading and trailing spaces, tabs and closing sequence removed, and a final `\#` read as `#`; no other escape is decoded. A final `\#` that the write rule would not produce (as in `# C\#`, whose title `C#` is written
+  `# C#`) is `format.noncanonical`. A title whose decoded text the write refuses — the empty text (as in `#` or `# #`), or a text ending in
+  `\#` (as `# a\\#`, decoded `a\#`), which would read back as `#`, since `\#` and `#`, and `#\#` and `##`,
+  would be written alike — is `format.block` on read and `CONSTRAINT` on write. On read, an H1 closing sequence is
+  `format.noncanonical`. Grounding: a title is written so that it reads back as the same text; a title
+  the write refuses has no H1 that the writer produces, so its file cannot round-trip (P1, P2).
 
 ## The field list of a files row
 
@@ -290,9 +300,10 @@ this section states.
 
 - A document is UTF-8 without a byte order mark, and LF is its canonical line ending; payload bytes are
   otherwise preserved as they are.
-- A byte order mark, and a CR (bare or in a CRLF line ending), is valid input under P2 and is
-  `format.noncanonical`: P1 fails, since the canonical form has neither. On read, a value reads every
-  line ending as LF. Grounding: multi-platform — a Windows checkout with `autocrlf` must read the same
+- A line ending is an LF, a CRLF, or a CR not followed by an LF, as CommonMark reads it. A byte order
+  mark, and a CR in any line ending, is valid input under P2 and is `format.noncanonical`: P1 fails,
+  since the canonical form has neither. On read, a value reads every line ending as LF, so a bare CR
+  splits its line as it does in CommonMark. Grounding: multi-platform — a Windows checkout with `autocrlf` must read the same
   values as a Unix checkout. Only `flowmark canon` removes these bytes.
 - Invalid UTF-8, and a U+0000, is `format.encoding`: no text can be read from them.
 - A document ends with exactly one LF. A document without a final LF, or with a trailing blank line, is
