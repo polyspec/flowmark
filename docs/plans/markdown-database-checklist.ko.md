@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database-checklist -->
-<!-- source-sha256: f6b369c1a82b649dd97533bbad1a8a3ab3b677a4a6be2a5ff71b37ef33619284 -->
+<!-- source-sha256: 10a0718d37b6445dc6cfed8048a7a12e781f92d66f7c02425a5820f6972a4de7 -->
 # markdown database checklist
 
 ## T12 markdown database
@@ -23,7 +23,9 @@
   - 완료 기준: spec 10과 그 twin이 각 규칙을 근거와 함께 적고, 이 항목의 문구를 범위로 한 적대 검증을 거치며, `make documents-check`와 `make refs-check`가 통과한다.
 - [ ] T12.1-9 단일 줄 자리 가장자리의 공백은 이름 붙은 viewer들이 떼어내는 것의 합집합으로 거절한다 — Unicode White_Space 문자들이며, 여기에는 GFM의 U+000B와 U+000C, markdown-it과 Python-Markdown의 Unicode trim이 포함된다 — 그래서 어떤 viewer도 값을 텍스트와 다르게 보이지 않는다. spec 10이 근거와 함께 이를 적는다 (T12.1-8 후속)
   - 완료 기준: spec 10과 그 twin이 규칙을 근거와 함께 적고, 이 항목의 문구를 범위로 한 적대 검증을 거치며, `make documents-check`와 `make refs-check`가 통과한다.
-- [ ] T12.2.2-3 `files` codec이 T12.1-8의 읽기 규칙을 적용한다: CommonMark type 1–5의 HTML block을 요소 앞에서 열어 둔 값은 읽기에서 `format.block`이다(`htmlOpen`은 지금 쓰기에서만 적용된다) (T12.1-8 후속; T12.2.2-2 필요)
+- [ ] T12.1-10 섹션 경계와 값의 끝은 하나의 규칙으로 CommonMark 0.31.2가 해석하는 block 구조를 따른다: 섹션 경계는 그 구조의 최상위 heading이므로, 모든 type(6과 7 포함)의 HTML block, 게으른 연속 줄, 문단을 끊을 수 있는 것에 관한 규칙이 CommonMark가 정한 그대로 센다. fence나 HTML block을 열어 둔 값은 그 구조에서 뒤따르는 요소가 그 안에 흡수될 때에만 거절하며, 뒤따르는 최상위 요소가 닫는 컨테이너 안에 열린 채 남은 block은 결함이 아니다. 원인: T12.2.2-2 scanner는 spec 10이 fence, HTML type 1–5, 컨테이너만 이름 붙인 곳에서 CommonMark를 따라야 했고, 열린 block 거절이 컨테이너를 보지 못함을 찾았다 (T12.2.2-2, T12.1-8 후속)
+  - 완료 기준: spec 10과 그 twin이 규칙을 근거와 함께 적고, 더 좁은 T12.1-6과 T12.1-8의 문장이 그것으로 바뀌며, 이 항목의 문구를 범위로 한 적대 검증을 거치고, `make documents-check`와 `make refs-check`가 통과한다.
+- [ ] T12.2.2-3 `files` codec이 T12.1-8의 읽기 규칙을 적용한다: CommonMark type 1–5의 HTML block을 요소 앞에서 열어 둔 값은 읽기에서 `format.block`이다(`htmlOpen`은 지금 쓰기에서만 적용된다) (T12.1-8 후속; T12.2.2-2와 T12.1-10 필요. T12.1-10의 더 넓은 규칙, 즉 모든 HTML block type과 뒤따르는 요소를 흡수할 때만 거절되는 열린 block을 적용한다)
   - 완료 기준: 읽기 사례의 RED 테스트가 의도한 이유로 실패함을 확인한 뒤 GREEN이 되고, `go test -count=1 ./store/ ./catalog/`, `make documents-check`와 `make refs-check`가 통과한다.
 - [o] T12.2.2-2 codec은 heading을 CommonMark block 구조로 찾는다: list 항목이나 block quote 안의 heading은 섹션 경계가 아니므로, `store/markdown.go`는 list 항목 안의 들여쓴 `##` 줄을 경계로 보지 않는다 (T12.1-6 후속; T12.2.2-1 필요)
   - 완료 기준: `go test ./store/...`에 list 항목 안의 body `##` 줄은 섹션이 아니라는 수용 사례와 최상위 줄은 경계라는 거부 사례가 있고, `make documents-check`와 `make refs-check`가 통과한다.
