@@ -1,8 +1,11 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: cb7b4d764560594aa004ec7a4d3be34dfe855d347f86d307cda703ee15244a9a -->
+<!-- source-sha256: 60a32101f58f2051b15e0099edc2e107f2939eb6a313202111b04d9ee3ffed42 -->
 # Changelog
 
 ## Unreleased
+
+- T10-4: 새 이슈 row는 column 맨 아래에 고정된다. 카드 목록이 column을 채우고 자기 안에서 스크롤
+  하므로 카드가 몇 개든 row가 계속 보인다. 변경은 plugin repository에 있다.
 
 - T10-3: 보드의 모든 column이 가장 붐비는 column의 높이가 아니라 보드의 전체 높이를 쓰고, 카드가
   넘치면 자기 안에서 스크롤한다. 변경은 plugin repository에 있다.
