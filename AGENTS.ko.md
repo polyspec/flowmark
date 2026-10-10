@@ -1,5 +1,5 @@
 <!-- doc-id: agents -->
-<!-- source-sha256: e34cd0a08c47ae7acdc2f455f91828e9d68240a44eb34efc6aaf8b100b1bb973 -->
+<!-- source-sha256: d25b4d98e3651bbf025b13595793ddbc6fddc61b7d3b73c9903a97b2d19184c3 -->
 # 개발 규칙
 
 [English](AGENTS.md)
@@ -71,6 +71,7 @@ GitHub, Jira), 응용 schema이고, [polyspec/orm](https://github.com/polyspec/o
 - 결함은 그것을 재현하는 RED test(또는 재현할 deterministic case)로 시작하고, 의도한 이유로
   실패함을 확인한 뒤 원인을 고치고 같은 case를 GREEN으로 통과시킨다. checklist 항목은 관측 가능한
   올바름의 기준을 남긴다.
+- 엔진은 database이므로 그 unit test는 촘촘하다: 모든 문법과 제약 규칙에는 허용되는 case와 거절되는 case가 최소 하나씩 있고, table 기반이며 edge case를 포함한다. 모든 저장에는 모든 column type과 NULL 형태 및 빈 형태를 덮는 P1/P2 golden fixture가 있다. parse와 emit은 golden fixture를 seed로 `go test -fuzz`를 사용해 fuzz하며, fuzzer가 찾은 실패 입력은 regression case로 남는다. 규칙을 추가하는 항목은 이 case들이 있을 때까지 끝난 것이 아니다.
 - English 문서가 canonical이다. 모든 문서는 같은 정보를 가진 `.ko.md` twin이 있고 같은 변경에서
   함께 편집한다. 한국어에서 발견한 수정은 다음 `make documents-stamp` 전에 English 파일로 이식한다.
   정정은 fresh stamp를 가진 새 commit이다.
