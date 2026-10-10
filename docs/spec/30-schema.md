@@ -3,58 +3,81 @@
 
 [한국어](30-schema.ko.md)
 
-This specification pins the schema language relationship: dbspec is the root grammar and the
-authority, and a document carries only projections and provisional fragments of it.
+This specification pins the schema of a corpus: the catalog, the markdown settings, the corpus
+rules on dbspec constructs, and the catalog's two operations — install and introspection.
 
-## Derivation ruling
+## The catalog
 
-- **dbspec ⇒ frontmatter.** The `.dbs` dbspec of the corpus is the single authority. Frontmatter
-  DDL is not an independent language: it is a dbspec fragment embedded in the frontmatter, and
-  derivation always flows from dbspec into documents.
-- Grounding: schema is law and rows are data — a per-document copy of the law diverging is itself
-  the drift bug class; the orm planner, IR and conformance bind to the dbspec manifest hash; and
-  the reverse direction would compose the corpus schema by merging per-document declarations,
-  creating DDL reconciliation across branches.
+- The `dbspec/*.dbs` document set of a corpus root is the catalog: the only origin of the schema,
+  as a database catalog is. Documents carry no schema copy and no stamp — a database keeps its
+  schema once and never per row, and a copy per document makes the drift of the copies a bug
+  class of its own.
+- flowmark reads the catalog with orm's Go `engine/dbspec` package and uses its manifest hash; it
+  never reimplements the grammar. `use` lines resolve within the `dbspec/` set; an external
+  document is a schema error.
+- The corpus setting file `dbspec/flowmark.json` holds what is not a table declaration: the
+  `translations` language list.
+- Standalone documents with an embedded schema fragment do not exist: a corpus is a root with a
+  catalog.
 
-## The embedding
+## Markdown settings
 
-- The fragment is always a **YAML literal block scalar** (`|`), which settles YAML-hostile tokens
-  — names like `yes` or `on`, datetime colons, `#` inside the fragment — and keeps one parser
-  and one type system.
-- dbspec diagnostics are **offset-mapped** into file coordinates, so an embedded-fragment error
-  names its place in the document.
-- The fragment is canonicalized (LF, final newline) at embed time; the stamp carries the
-  **canonical** fragment — there is no second, minified emission form.
+Every markdown-specific declaration is a dbspec **manifest setting**, after the precedent of the
+`markdown <column>` setting: the SQL backends ignore it, introspection of a database returns a
+plain column, and the setting names the columns it applies to — a column's name never selects a
+behaviour.
 
-## Standalone documents
+| Setting | Meaning |
+| --- | --- |
+| `store files` / `store document list\|table` / `store block <fk> list\|table` | the table's storage ([document model](20-document-model.md)); exactly one per table on a corpus |
+| `key_prefix <p>` | the `varchar` primary key is allocated `<p><n + 1>`; orm treats the column as executor-assigned |
+| `title <column>` | the row's title: non-null, never empty |
+| `body <column>` | the row's body: a `markdown` column, never NULL |
+| `order <column>` | the row's position among its siblings; orm treats the column as executor-assigned |
+| `checkbox <column> <state> '<glyph>'` | the list glyph of a state |
+| `markdown <column>` | the column holds markdown prose and is stored as a section |
+| `state_machine <column> initial <state>` | an initial state; may repeat |
+| `state_machine <column> <from> -> <to> [require (…)]`, `state_machine <column> terminal <state> [require (…)]` | the transitions and terminals, as dbspec defines them |
+| `state_machine <column> history <table> row <fk column> from <column> to <column> at <column>` | the history table and its named columns |
+| `state_machine <column> limit <state> <n>` | at most n rows in the state |
 
-- A document outside any repository is its own **provisional authority**: its embedded fragment
-  compiles to the same IR over a one-document set, and `use` declarations are not valid in a
-  standalone fragment.
-- On import into a corpus, the repository's `.dbs` becomes the authority and the embedded
-  fragment becomes a consistency check target: a mismatch is `schema.drift`.
+## Corpus rules on dbspec constructs
 
-## The schema stamp
+- **Rejected** on a corpus, each a schema error: a composite primary key; `aes`, `aes_version` and
+  `blind_index` (the key never leaves the client); `audit` and `immutable` (markdown has no
+  triggers; `state_machine … history` records transitions instead); `cascade` and `set_null`
+  actions; an external `use` document; a table without a `store` setting.
+- **Allowed**: `identity` on every markdown table, allocated `max+1` under the lock.
+- **Required**: a table with a `state_machine` declares its `history` and at least one `initial`
+  state; a `list` or `files` storage declares `title`; a `list` storage with a state column
+  declares a `checkbox` for every state.
 
-Every document of a corpus carries a stamp rendered from the `.dbs`: the manifest hash, the
-`schema_version` and the canonical fragment of its table. The stamp is a **verified cache, not
-data** — a mismatch with the repository's manifest is a located diagnostic, never a silent
-reparse, and a human may not edit it.
+## The state set
 
-## Markdown-specific schema surface
+- A machine's states are the states its `initial`, transition and `terminal` lines name.
+  `checkbox` covers that set exactly with distinct glyphs; `checkbox`, `limit` or `initial` naming
+  another state is a setting error.
+- A `default` of the state column is an initial state, otherwise a setting error. An initial state
+  that is also terminal is a setting error.
 
-- **Manifest-level settings only, never rendered types.** Markdown-flavored column traits and
-  checklist child-table sugar are settings of the manifest, as `updated` and `soft_delete` are:
-  a real database introspects them back as plain `text`, so render→introspect→same-document
-  holds. The state machine is likewise a manifest-level setting with its own sub-grammar, which
-  the SQL backends ignore as they ignore `navigation` and the markdown validator enforces.
-- **`identity` columns are rejected** on markdown corpora: keys are human-assigned through the
-  [ID grammar](10-canonical-format.md), an insert that omits the primary key is an error, and
-  `flowmark next-id` is the allocation helper. Key non-reuse under git rewind is abandoned by
-  design — git history is the allocator of record.
-- **Foreign-key actions are restrict-only**; `cascade` and `set_null` are rejected at schema
-  parse, because they are unimplementable for a writer that bypasses the executor.
-- **`audit` and `immutable` are advisory**: violations are validate-time rejections; there is no
-  trigger-time prevention for a human's file edit.
-- **Defaults**: a human-authored file missing a non-null defaulted column is rejected by
-  validate; `flowmark ingest` stamps defaults explicitly.
+## The history table
+
+The history setting names the history table's columns: the `<fk column>` has a foreign key to the
+state table with its leading index; `from` and `to` have the state column's type; `at` is
+`datetime(6)`; and one nullable column per column that a `require` list names has that column's
+name and type. The table has no other column besides its `identity` key and declares no `title`
+or `body`; any mismatch is a setting error at the history table's name. It is stored
+`block <fk> table`.
+
+## Install
+
+`flowmark install <corpus>` generates the storage skeleton from the catalog — the folder of each
+`files` table, the document of each `document` table — as `CREATE TABLE` creates storage. Block
+sections appear with their first row. Schema install through orm over `markdown://` is
+`CAPABILITY_UNSUPPORTED`.
+
+## Introspection
+
+Introspection validates every document against the catalog and returns the catalog; a document
+that fails is a located diagnostic. A corpus without a catalog has no schema to return; a tool
+that drafts one is not part of this specification.
