@@ -38,28 +38,19 @@ func Parse(text string) (*Document, []Diagnostic) {
 	document := &Document{}
 	at := 0
 
-	// The header comments: a contiguous run at the top of the file.
-	for at < len(lines) {
-		match := headerComment.FindStringSubmatch(lines[at])
-		if match == nil {
-			break
-		}
-		kind, value := match[1], match[2]
-		switch kind {
-		case "doc-id":
-			if document.DocID != "" {
-				report(at+1, RuleHeader, fmt.Sprintf("the doc-id %q appears twice", value))
-			} else {
-				document.DocID = value
+	// HTML comments before the title are metadata — extract doc-id when present, skip the rest.
+	for at < len(lines) && strings.HasPrefix(strings.TrimSpace(lines[at]), "<!--") {
+		if match := headerComment.FindStringSubmatch(lines[at]); match != nil {
+			if match[1] == "doc-id" {
+				document.DocID = match[2]
+			} else if match[1] == "source-sha256" {
+				document.TwinSHA = match[2]
+			} else if match[1] == "owner" {
+				document.Owner = match[2]
 			}
-		case "source-sha256":
-			document.TwinSHA = value
-		case "owner":
-			document.Owner = value
 		}
 		at++
 	}
-
 	for at < len(lines) && lines[at] == "" {
 		at++
 	}
