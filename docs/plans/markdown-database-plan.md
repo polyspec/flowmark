@@ -178,7 +178,8 @@ reimplements them.
   `- <key> <title>[ <field>…]` without a state column. Fields are parsed from the right: a token `<declared column>:<value>`,
   the value a bare token without space, `"` or `\`, or `"…"` with `\"` and `\\` as escapes. A
   table cell writes `|` as `\|`. An absent field is NULL; `col:""` is the empty text; a
-  non-null column without a default is written. A title token matching `<declared column>:` is
+  non-null column is written — the engine writes a default explicitly on insert, and a row
+  missing a non-null field is `format.block`. A title token matching `<declared column>:` is
   written `<column>\:`. The `@` and date sigils are removed.
 - A value with a line feed in a single-line place (a list title or field, a table cell) is
   `CONSTRAINT` on write. The placement foreign key and `parent` are never written in a block row;

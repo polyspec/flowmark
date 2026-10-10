@@ -62,8 +62,9 @@ bytes.
   table has no state column. The glyph is the `checkbox` glyph of the row's state.
 - Fields are parsed from the right: a token `<declared column>:<value>`, where the value is a bare
   token without space, `"` or `\`, or `"…"` with `\"` and `\\` as its escapes. Only declared
-  scalar columns are fields. An absent field is NULL; `col:""` is the empty text; a non-null
-  column without a default is written.
+  scalar columns are fields. An absent field is NULL; `col:""` is the empty text; every non-null
+  column is written — the engine writes a default explicitly on insert, and a row missing a
+  non-null field is `format.block`.
 - A title token matching `<declared column>:` is written `<column>\:`. The title is the text
   between the key and the first field.
 - A child row is indented two spaces deeper than its parent; the indentation is the `parent`
@@ -74,7 +75,7 @@ bytes.
 
 - A table's header row names the stored scalar columns; every stored scalar column has a header,
   and a header that names no column is `format.block`. A cell writes `|` as `\|`.
-- An empty cell is NULL; the empty text of a non-null text column is written `""`.
+- An empty cell is NULL; the empty text is written `""`; every non-null column has a value.
 
 ## Single-line places
 
@@ -87,7 +88,8 @@ A list title, a list field and a table cell are single-line: a value with a line
   rejected; comments are rejected in v1 (a comment-preserving round-trip emitter is a stated
   non-goal until a requirement names it).
 - Each key is a declared scalar column of the `files` table; an unknown key is `format.frontmatter`.
-  An absent key is NULL.
+  An absent key is NULL; every non-null column has its key, and a missing one is
+  `format.frontmatter`.
 - Value syntax per type: every value uses the dbspec canonical literal form; `bytes` is base64.
 
 ## Encoding

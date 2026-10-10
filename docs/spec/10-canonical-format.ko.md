@@ -1,5 +1,5 @@
 <!-- doc-id: spec-canonical-format -->
-<!-- source-sha256: b4192455c8747e090e09efd9a39e8dc6428957b1f3512656dd2fedb5295903da -->
+<!-- source-sha256: 66379261ac7bb51e1fd3475175e23159f975904ca02e6c79645d1b5fe2a0fcdb -->
 # Canonical format
 
 [English](10-canonical-format.md)
@@ -53,7 +53,8 @@ column 섹션 — 은 payload다: renderer는 이를 행과 함께 옮기고 그
   `- <key> <title>[ <field>…]`이다. glyph는 행 상태의 `checkbox` glyph다.
 - field는 오른쪽부터 parse한다: token `<선언된 column>:<value>`이고, value는 공백, `"`, `\` 없는 bare
   token이거나 `\"`와 `\\`를 escape로 갖는 `"…"`다. 선언된 scalar column만 field다. 없는 field는 NULL,
-  `col:""`은 빈 텍스트이고, default 없는 non-null column은 쓴다.
+  `col:""`은 빈 텍스트이며, 모든 non-null column은 쓴다 — 엔진은 insert에서 default를 명시적으로 쓰고,
+  non-null field가 빠진 행은 `format.block`이다.
 - `<선언된 column>:`과 맞는 제목 token은 `<column>\:`로 쓴다. 제목은 key와 첫 field 사이의 텍스트다.
 - 자식 행은 부모보다 두 칸 더 들여 쓴다. 들여쓰기가 `parent` column이며 다른 것이 이를 쓰지 않는다.
   배치 foreign key와 `parent`는 field로 쓰지 않으며, 쓰면 `format.block`이다.
@@ -62,7 +63,7 @@ column 섹션 — 은 payload다: renderer는 이를 행과 함께 옮기고 그
 
 - table의 header 행은 저장되는 scalar column을 이름 붙인다. 저장되는 모든 scalar column은 header를
   가지며, 어떤 column도 이름 붙이지 않는 header는 `format.block`이다. cell은 `|`를 `\|`로 쓴다.
-- 빈 cell은 NULL이고, non-null text column의 빈 텍스트는 `""`로 쓴다.
+- 빈 cell은 NULL이고, 빈 텍스트는 `""`로 쓰며, 모든 non-null column은 값을 갖는다.
 
 ## 한 줄 자리
 
@@ -74,7 +75,7 @@ list나 table 저장의 key는 공백, `#`, `|`, 줄바꿈을 갖지 않는다.
 - YAML **1.2 core schema**, 값 영역은 block style이며 anchor, alias, tag는 거절한다. comment는 v1에서
   거절한다(comment를 보존하는 round-trip emitter는 요구가 이름 붙일 때까지 명시된 비목표다).
 - 각 key는 `files` table의 선언된 scalar column이며, 모르는 key는 `format.frontmatter`다. 없는 key는
-  NULL이다.
+  NULL이며, 모든 non-null column은 자기 key를 갖고 빠지면 `format.frontmatter`다.
 - type별 값 문법: 모든 값은 dbspec canonical literal 형식을 쓰고 `bytes`는 base64다.
 
 ## Encoding
