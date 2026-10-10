@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database-checklist -->
-<!-- source-sha256: 9615ae49b421b98ea0ac6aa2d95bcf07784d7ec3714fd920d49052a1fdde4425 -->
+<!-- source-sha256: 430b79a4aa912cd8b77c2e5afce38ccedf539ee57485df49aabd7a33db73ea26 -->
 # markdown database checklist
 
 ## T12 markdown database
@@ -7,7 +7,7 @@
 - [ ] T12 markdown database: `dbspec/` catalog이 선언하는 유한한 저장 문법, orm이 DSN으로 IR executor로서 접속하는 엔진으로서의 flowmark, 같은 행 위의 view. 원인: list·table·detailed 형태는 규칙 없이 demo 사례였고 — body column도, parent도, 관계도, 이력도 없었다 — 계획은 엔진을 orm에 두었으나 엔진은 flowmark에 있었으며, 여러 동작이 하드코딩되어 있었다 (T8.5, T10, T11 후속)
 - [o] T12.1 markdown database 계획을 바탕으로 판정과 spec 00, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110을 다시 쓴다: seam 정정, T8.5 철회, 저장 문법, catalog, server와 transaction, 이력, view (T12 선행)
   - 완료 기준: 계획의 모든 판정이 해당 spec에 근거를 갖춘 명제로 서고, design plan이 정정된 seam과 철회된 T8.5를 그것을 철회하게 한 사실과 함께 적으며, `make documents-check`와 `make refs-check`가 통과한다.
-- [ ] T12.1-1 readable-document 판정에 맞춰 spec을 다시 쓴다: `*.flowmark.md` 기준, 주석 없음, file 이름이 key, key와 이름 규칙, field list, 읽을 수 있는 값 형식, 파생 target을 가진 link로서의 외래 key, `<table> <key>` 상세 heading과 그 anchor, walk, 그리고 doc-id header, frontmatter, twin, `dbspec/flowmark.json`의 철회 (T12.1 후속)
+- [o] T12.1-1 readable-document 판정에 맞춰 spec을 다시 쓴다: `*.flowmark.md` 기준, 주석 없음, file 이름이 key, key와 이름 규칙, field list, 읽을 수 있는 값 형식, 파생 target을 가진 link로서의 외래 key, `<table> <key>` 상세 heading과 그 anchor, walk, 그리고 doc-id header, frontmatter, twin, `dbspec/flowmark.json`의 철회 (T12.1 후속)
   - 완료 기준: spec 10, 20, 30, 50, 70, 100, 110이 계획의 "읽을 수 있는 문서"와 저장 문법의 모든 규칙을 근거를 갖춘 명제로 적고, `make documents-check`와 `make refs-check`가 통과한다.
 - [ ] T12.2 저장 codec: `files`, `document`, `block` 저장을 list와 table 형식으로 parse·render하고 모든 저장의 P1/P2를 갖는다. orm `T62` 선행 (T12.1 선행)
 - [o] T12.2.1 catalog를 적재한다: corpus root의 `dbspec/*.dbs` 집합을 orm의 `engine/dbspec`으로, `dbspec/flowmark.json`(번역)을 함께 읽는다. catalog 없음, `store` 없는 table, 복합 key, `aes`/`aes_version`/`blind_index`, `audit`/`immutable`, `cascade`/`set_null`, 외부 `use`, state machine의 `history` 또는 `initial` 없음, list 또는 files 저장의 `title` 없음, H6을 넘는 제목 깊이를 각각 위치가 정해진 진단으로 거절한다 (orm `T62` 선행)
@@ -36,5 +36,7 @@
 - [ ] T12.11 하나의 dataset을 세 저장 방식으로 둔 demo와 계획의 하드코딩 목록 0 (T12.10 선행)
 - [ ] T12.11.1 board 예제: 댓글과 답글을 가진 post를 block과 files 두 변형으로, engine을 통해 구동한다 (T12.10 선행)
   - 완료 기준: engine을 통해 post를 만들고, 댓글과 답글을 달고, 고치고 지우면 두 변형에서 같은 행을 다시 읽으며, 두 corpus가 P1/P2로 round-trip한다.
+- [ ] T12.11.2 board 앱: hyper(페이지), crudui(form, 목록, 검증)와 `markdown://` 위의 orm으로 만든 board를 `examples/board`에서 hyper의 PHP, Node.js, Python server 위에서 실행한다 (T12.9, T12.11.1, orm `T64`, `T65`, `T67` 선행)
+  - 완료 기준: 각 server에서 form을 통해 post를 만들고, 댓글과 답글을 달고, 고치고 지우면 같은 corpus file이 바뀌며, 모든 페이지가 같은 행을 그리고, list와 post 페이지의 screenshot이 캡처된다.
 - [ ] T12.12 pseudo-version 대신 orm release를 요구한다: T12.11이 끝나면 flowmark의 go.mod는 `T61`과 `T62`를 담은 released orm tag를 요구한다 (T12.11 선행, orm release 항목 선행)
   - 완료 기준: go.mod가 tag된 orm 버전을 요구하고, `go build ./...`와 `go test ./...`가 통과한다.

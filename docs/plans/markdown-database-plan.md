@@ -150,8 +150,8 @@ reimplements them.
   case, to `CON`, `PRN`, `AUX`, `NUL`, `COM0`–`COM9` or `LPT0`–`LPT9` is refused — a table name as a
   schema error, a key as `CONSTRAINT` — since those names are reserved file names on Windows; a
   `files` key is at most 243 bytes, so its file name stays within 255. A file name that is not the
-  canonical text of its key's type (`007.flowmark.md` for an integer key) is `format.block`. A key
-  change that differs only in case renames through an intermediate name inside the journaled
+  canonical text of its key's type (`007.flowmark.md` for an integer key) is `format.block`. A file
+  name whose key breaks the key shape is `format.block` on read. A key change that differs only in case renames through an intermediate name inside the journaled
   transaction.
 - `identity` is allowed on every markdown table: an insert that omits the key gets `max+1`,
   allocated under the lock; reuse after a git rewind is accepted and stated. A text key with
@@ -207,6 +207,12 @@ reimplements them.
   error, and so is a markdown column or a block table named like a table whose detail sections can
   stand in the same file (the repeated section heading's `-1`, `-2` slugs would take that table's
   anchors). A layout that needs a heading past H6 is a schema error.
+- A row scope's sections stand in a fixed order: the nullable `markdown` columns in column order,
+  then the child blocks in table name order (dbspec's canonical order). Detail sections stand in
+  the storage order of their rows.
+- Any content after a block's or document's list or table other than its rows' detail sections
+  — up to the next heading of level ≤ b in a block section, or to the end of a document file — is
+  `format.block`.
 
 ### Scalar columns
 
@@ -230,10 +236,13 @@ reimplements them.
   other block) — so on read the `-` items directly after the H1 are the field list, and an item
   that is not `- <stored scalar column>: <value>` in column order is `format.block`. An absent item
   of a non-null column is `format.block`; the engine writes a default explicitly on insert.
+  A `files` row without a non-null stored scalar has no field list; the body follows the H1 after
+  one blank line.
 - `table` (block or document): a cell under the column-named header; every stored column has a
-  header. Text is written as it is; an empty cell is NULL; the empty text is `""`; a value
+  header. The key is the first cell, under a header named by the key column; the stored scalar
+  columns follow in column order. Text is written as it is; an empty cell is NULL; the empty text is `""`; a value
   beginning with `"` is written `"…"` with `\"` and `\\`; `|` is `\|`, and a `\` before `|` is
-  `\\`.
+  `\\`. In a block table the placement foreign key is never a cell; `parent` is a cell.
 - `list` (block or document): `- [<glyph>] <key> <title>[ <field>…]`, or
   `- <key> <title>[ <field>…]` without a state column. Fields are parsed from the right: a token
   `<declared column>:<value>`, the value a bare token without space, `"` or `\`, or `"…"` with
@@ -241,7 +250,7 @@ reimplements them.
   column is written — the engine writes a default explicitly on insert, and a row missing a
   non-null field is `format.block`. A title token matching `<declared column>:` is written
   `<column>\:`. The `@` and date sigils are removed.
-- The placement foreign key and `parent` are never written in a block row; writing one is
+- The placement foreign key and `parent` are never written as fields of a block list row; writing one is
   `format.block`.
 
 ### State, hierarchy and order
@@ -400,8 +409,8 @@ reimplements them.
   item from from_state to to_state at at`. `item_history(id i64 identity, item varchar(32),
   from_state, to_state, at, evidence, cause, retry)` declares the same three `markdown` columns
   and has `foreign key fk_history_item (item) references items (id)` with its index. A
-  multi-line evidence is a section (`items.md` H1, `## T1`, `### item_history`, `#### <id>`,
-  `##### evidence` — within H6).
+  multi-line evidence is a section (`items.flowmark.md` H1, `## items T1`, `### item_history`,
+  `#### item_history <id>`, `##### evidence` — within H6).
 - `flowmark.dbs` declares no `limit`: the owner's WIP rule — completion before starting, with
   independent items allowed in parallel — is a working rule that no count expresses, and a
   number would be invented. The `limit` setting stays for a schema that names one. The engine
@@ -420,8 +429,10 @@ reimplements them.
 - A kanban drop sets `order` only when the view has no `sort` (storage order) and both neighbours
   share the card's parent; a drop across columns changes the state. Any other drop is refused
   and the board says why — it never moves a card it does not store. After an accepted drop the
-  board redraws from the rows the operation returns, never from the drop position; a drop across
-  columns places the card where the view's sort puts it.
+  board redraws from the rows the operation returns, never from the drop position. `order` is set
+  only by a same-parent drop in storage order; a cross-column drop is a state change only, so the
+  card keeps its `order` and shows where the view's sort — or, without one, storage order — puts
+  it.
 - **A board example** proves a one-to-many relation in markdown: `posts` (title, body,
   author → people, created) with `comments` (body, author → people, created, a `parent` for
   replies). In one variant a post's comments are `store block fk_comments_post list` rows inside
@@ -429,6 +440,15 @@ reimplements them.
   Both variants run the same create, read, update and delete operations through the engine and
   yield the same rows, and every document reads as an ordinary board page — the post, its fields
   as links, its comments — in any markdown viewer.
+- **The board app** is the same board built with the polyspec stack — hyper renders the list and
+  the post-with-comments pages, crudui defines the post and comment forms, lists and validation,
+  and orm reaches the corpus through `markdown://`. It runs on hyper's PHP, Node.js and Python
+  servers, each through its orm client's markdown IR executor, and every server shows and changes
+  the same rows.
+- **The Wails example host stays** beside the board app: the plugin repository's example window
+  loads the plugin page unchanged and bridges the sidecar to the flowmark binary, so it proves the
+  views through the sidecar while the board app proves orm through `markdown://`. It moves to the
+  table-scoped sidecar operations and `*.flowmark.md` demo corpora (the plugin's own checklist).
 
 ## Layering
 
@@ -468,6 +488,7 @@ named here.
   - T12.11 the demos as one dataset in three storages, and the hardcoding inventory at zero;
   - T12.11.1 the board example: posts with comments and replies, in the block and the files
     variants, driven through the engine;
+  - T12.11.2 the board app with hyper, crudui and orm over `markdown://` on hyper's three servers (requires T12.9 and orm `T64`, `T65`, `T67`);
   - T12.12 the orm release tag required instead of the pseudo-version.
   The new engine is built beside the old one, whose codec, executor and application paths the
   faces still use; T12.10 switches the faces to the new engine and removes the old paths with no
@@ -532,3 +553,4 @@ cover one item.
   fuzzed with the golden seeds.
 - The board example: creating a post, adding comments and a reply, editing and deleting through the
   engine read back the same rows in both variants.
+- The board app: on each hyper server a post is created, commented, replied to, edited and deleted through the forms, and the pages are captured in screenshots.

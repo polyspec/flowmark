@@ -12,7 +12,7 @@ specification is written when evolution beyond the v1 scope starts.
   storage skeleton from the catalog ([schema](30-schema.md)). dbplan chains (the orm `plans.md`
   lifecycle) are `CAPABILITY_UNSUPPORTED` over `markdown://`: their server-session, hold-table and
   introspection machinery has no markdown equivalent in v1.
-- An added nullable column needs no rewrite: an absent field, cell, key or section is NULL. An
+- An added nullable column needs no rewrite: an absent field-list item, list field, cell or section is NULL. An
   added non-null column is added with a default, and a one-shot transaction writes the default
   into every existing row, because every non-null column is written
   ([canonical format](10-canonical-format.md)).

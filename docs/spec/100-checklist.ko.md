@@ -1,5 +1,5 @@
 <!-- doc-id: spec-checklist -->
-<!-- source-sha256: 01ed594097561cd4fb7f01923baf1f63f133723f83c32c04441845f379652f74 -->
+<!-- source-sha256: e16fc3ffc0d75649875f396e9d9911c4549157a3b6071608d66ded7d9531a037 -->
 # 응용 schema
 
 [English](100-checklist.md)
@@ -12,11 +12,11 @@
 
 | Table | 저장 | Column과 setting |
 | --- | --- | --- |
-| `items` | `store document list` | `id varchar(32)`와 `key_prefix 'T'`, `parent varchar(32) null` → items, `state varchar(16)`, `title varchar(255)`와 `title title`, `body text`와 `markdown body`·`body body`, `assignee varchar(32) null` → people, `start_on date null`·`start_at datetime(0) null`·`due_on date null`·`due_at datetime(0) null`, `priority i16 null`, `position i32`와 `order position`, `evidence text null`·`cause text null`·`retry text null`(각각 `markdown`) |
-| `people` | `store document table` | `id varchar(32)`와 `key_prefix 'P'`, `name varchar(255)`와 `title name` |
-| `item_links` | `store document table` | `id i64 identity`, `from_item varchar(32)` → items, `to_item varchar(32)` → items, `kind varchar(16)` |
-| `item_history` | `store block fk_history_item table` | `id i64 identity`, `fk_history_item`으로 items를 가리키는 `item varchar(32)`, `state`와 같은 type의 `from_state`·`to_state`, `at datetime(6)`, items와 같은 `evidence`·`cause`·`retry`(각각 `markdown`) |
-| `views` | `store document table` | `id i64 identity`, `title varchar(255)`와 `title title`, `body text`와 `markdown body`·`body body`, `kind varchar(16)`, `entity varchar(63)`, `filter text`와 `sort text`(`codec filter ordered_json`과 `codec sort ordered_json`), `group_by varchar(63) null` |
+| `items` | `store document list`, file `items.flowmark.md` | `id varchar(32)`와 `key_prefix 'T'`, `parent varchar(32) null` → items, `state varchar(16)`, `title varchar(255)`와 `title title`, `body text`와 `markdown body`·`body body`, `assignee varchar(32) null` → people, `start_on date null`·`start_at datetime(0) null`·`due_on date null`·`due_at datetime(0) null`, `priority i16 null`, `position i32`와 `order position`, `evidence text null`·`cause text null`·`retry text null`(각각 `markdown`) |
+| `people` | `store document table`, file `people.flowmark.md` | `id varchar(32)`와 `key_prefix 'P'`, `name varchar(255)`와 `title name` |
+| `item_links` | `store document table`, file `item_links.flowmark.md` | `id i64 identity`, `from_item varchar(32)` → items, `to_item varchar(32)` → items, `kind varchar(16)` |
+| `item_history` | `store block fk_history_item table`, 자기 item의 상세 섹션 안 | `id i64 identity`, `fk_history_item`으로 items를 가리키는 `item varchar(32)`, `state`와 같은 type의 `from_state`·`to_state`, `at datetime(6)`, items와 같은 `evidence`·`cause`·`retry`(각각 `markdown`) |
+| `views` | `store document table`, file `views.flowmark.md` | `id i64 identity`, `title varchar(255)`와 `title title`, `body text`와 `markdown body`·`body body`, `kind varchar(16)`, `entity varchar(63)`, `filter text`와 `sort text`(`codec filter ordered_json`과 `codec sort ordered_json`), `group_by varchar(63) null` |
 
 모든 foreign key는 선행 index를 갖는다. check는 `start_on is null or start_at is null`,
 `due_on is null or due_at is null`,
@@ -26,8 +26,22 @@
 - **시점마다 두 column**은 마감이 시각을 가질 수 있다는 판정을 지킨다: "date 또는 datetime"을 담는 dbspec
   type은 없고, datetime만 쓰는 column은 날짜만 있는 마감을 모호한 자정으로 바꾼다. 간트는 날짜만 있는
   시작을 그날의 시작부터, 날짜만 있는 마감을 그날의 끝까지 그린다.
-- **빈 담당자는 self다.** 이름을 추측하지 않는다.
+- **NULL 담당자는 self다.** 이름을 추측하지 않는다.
 - **간트 의존 edge**는 kind `blocks`인 `item_links` 행이다.
+
+## 파일과 link
+
+- `items`, `people`, `item_links`, `views`의 행은 각각 이름으로 정해지는 document file 하나의 행이다
+  (`items.flowmark.md`, `people.flowmark.md`, `item_links.flowmark.md`, `views.flowmark.md`).
+  `item_history`
+  행은 자기 item의 상세 섹션 안에 있는 block 행이다. key는 [document model](20-document-model.md)의 key
+  규칙을 따른다: `T1`과 `P1`은 각각 `items`와 `people` table의 key다.
+- 외래 key는 [canonical format](10-canonical-format.md)이 정한 대로 link다. 담당자 `P1`을 가진 진행 중인
+  `items`의 list 행은 `- [~] T1 Write the spec assignee:[P1](people.flowmark.md)`로 쓴다: 사람 행은
+  상세 섹션이 없으므로 target에 anchor가 없다.
+- `item_links`의 table cell에서 `from_item`과 `to_item`은 `[T1](items.flowmark.md#items-t1)` 같은 link다.
+  anchor는 item이 상세 섹션을 가질 때에만 있다.
+- 여러 줄 evidence는 section이다: `items.flowmark.md` H1, `## items T1`, `### item_history`, `#### item_history <id>`, `##### evidence` — H6 안에 든다.
 
 ## 상태기계
 
@@ -56,10 +70,13 @@
 - view는 `views`의 행이다. `filter`는 IR `Group`을, `sort`는 IR `Order` 목록을 담으며, 쓰기와 validate에서
   runtime model에 대해 `ir.Validate`로 검증한다. catalog 변경으로 무효가 된 view는 위치가 있는 진단이다.
   GUI에서 저장한 filter는 catalog를 고치지 않는다.
-- 칸반, 목록, 간트 view는 entity table이 `title`과 `body`를 선언할 것을 요구한다.
+- 칸반, 목록, 간트 view는 entity table이 `title`과 `body`를 선언할 것을 요구한다. `flowmark.dbs`는
+  `items`에 둘 다 선언한다.
 - 칸반 drop은 view에 `sort`가 없고(저장 순서) 양쪽 이웃이 card의 parent를 공유할 때만 `order`를 정한다.
   column을 넘는 drop은 상태를 바꾼다. 그 밖의 drop은 거절하고 보드가 이유를 말한다 — 저장하지 않는 card는
-  옮기지 않는다. 받아들여진 drop 뒤 보드는 drop 위치가 아니라 operation이 돌려준 행으로 다시 그린다. column을 넘는 drop은 card를 view의 sort가 놓는 자리에 둔다. `sort`가 없으면 상태 변경은 card의 `order`를 유지한다.
+  옮기지 않는다. 받아들여진 drop 뒤 보드는 drop 위치가 아니라 operation이 돌려준 행으로 다시 그린다.
+  `order`는 저장 순서 안의 같은 parent drop에서만 정해진다. column을 넘는 drop은 상태 변경뿐이므로
+  card는 자기 `order`를 유지하고, view의 정렬 — 없으면 저장 순서 — 이 정하는 자리에 나타난다.
 - 어떤 view도 자기 write path를 갖지 않는다: 불법 drag는 불법 CLI 쓰기와 같은 검증에 실패한다.
 
 ## 이 repository의 checklist

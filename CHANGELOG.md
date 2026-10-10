@@ -3,6 +3,17 @@
 
 ## Unreleased
 
+- T12.1-1: the specifications state the readable-document ruling. A corpus document is a
+  `*.flowmark.md` file that reads as an ordinary markdown document, with no comment, frontmatter,
+  doc-id, provenance or twin marker. A `files` row is the file `<table>/<key>.flowmark.md` and its
+  key is the file name; keys are portable file names and anchors. Spec 10 states the field list,
+  the readable value forms, the single-line places, the detail headings `<h> <table> <key>` with
+  their anchors, the order of sections, and foreign keys as links with derived targets; spec 20
+  and spec 50 state the walk, the key rules and `corpus.walk`; spec 30 withdraws
+  `dbspec/flowmark.json`; the sync provenance moves out of the document (open question 5). The
+  design plan, spec 00 and spec 80 drop their withdrawn leftovers, and the plan adds the board
+  app on the polyspec stack and keeps the Wails example host.
+
 - T2.5-1: the corpus golden test reads the documents `config/documents.json` selects, through the same selection as `make documents-check`, instead of every markdown file outside four hard-coded directories. A markdown fixture under a package's `testdata` directory no longer breaks `go test ./codec/`; `config/documents.json` excludes `**/testdata/**` from the documents.
 
 - T12.2.1: the `catalog` package loads the catalog of a corpus root. It reads the `dbspec/*.dbs`

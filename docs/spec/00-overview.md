@@ -58,8 +58,7 @@ and state.
 | truth ownership | which side of a sync pair holds the authority for a table |
 | adapter | an external system bound by the one sync contract (a database, a tracker) |
 | face | one of the binary's entry points: server, CLI, MCP server, soksak sidecar |
-| twin | a translation file of a row's document, bound by `source-sha256` |
-| doc-id | the identity in a document's header comment; the key of a `files` row |
+| key | a row's identity; the file name of a `files` row (`<table>/<key>.flowmark.md`) |
 
 ## Non-goals
 
