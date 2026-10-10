@@ -3,6 +3,10 @@
 
 ## Unreleased
 
+- T10-3: every board column takes the full height of the board instead of the height of the
+  busiest column, and scrolls inside itself when its cards overflow. The change lives in the
+  plugin repository.
+
 - T10-2: the new-issue row follows the last card of its column and the whole column takes a
   drop; the card list no longer fills the column, so a stretched column leaves no gap. The
   change lives in the plugin repository.

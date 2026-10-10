@@ -1,5 +1,5 @@
 <!-- doc-id: execution-checklist -->
-<!-- source-sha256: 4bcef24586a157bcedf5a8d827dbb1af144cdc92ea30b60ff1b03a33da7e0c33 -->
+<!-- source-sha256: 9cc53f4a9265de0314a99654675082bfdb071c372936817a5496c881e741baec -->
 # 실행 체크리스트
 
 ## T1a 설계 session
@@ -84,7 +84,7 @@
   - 완료 기준: 순수 함수 `planDrop`이 DOM을 옮기기 전에 모든 drop을 판정하고(거절은 아무것도 옮기지 않고 보드를 새로 읽는다), 모든 operation은 수락이든 거절이든 items 새로고침으로 끝나며, 빈 답은 column을 비우고, changed event는 schema를 다시 읽어 달라졌을 때만 column을 다시 만든다. plugin의 `node --test`가 각 경우를 덮는다.
 - [o] T10-2 새 이슈 row는 column 바닥에 붙지 않고 그 column의 마지막 카드 바로 아래에 따라온다. column 전체가 drop을 받는다. 원인: 카드 목록이 column을 채우도록 늘어나서(`flex:1`) 키 큰 이웃에 맞춰 늘어난 column은 카드와 row 사이에 틈이 생겼고, 그 틈이나 row 위의 drop은 목록을 찾지 못했다 (T10-1 후속)
   - 완료 기준: row가 짧은 column과 빈 column에서도 마지막 카드 바로 아래에 놓이고, column 안 어디에 drop해도 그 column의 목록에 들어가며, `node --test ui/`가 drop 대상을 덮는다.
-- [~] T10-3 모든 column은 보드의 전체 높이를 쓴다. 어떤 column도 이웃에서 높이를 받지 않는다. 원인: 보드 grid가 row를 가장 긴 column에 맞췄고(`align-content:start`) 짧은 column이 거기에 늘어나서, 높이가 가장 붐비는 column을 따랐다 — 독립도 전체도 아니었다 (T10-2 후속)
+- [o] T10-3 모든 column은 보드의 전체 높이를 쓴다. 어떤 column도 이웃에서 높이를 받지 않는다. 원인: 보드 grid가 row를 가장 긴 column에 맞췄고(`align-content:start`) 짧은 column이 거기에 늘어나서, 높이가 가장 붐비는 column을 따랐다 — 독립도 전체도 아니었다 (T10-2 후속)
   - 완료 기준: 렌더된 창에서 카드가 어떻든 모든 column이 보드 위에서 아래까지 뻗고, 카드가 넘치는 column은 자기 안에서 스크롤하며, 렌더링을 screenshot으로 관측한다.
 - [o] T11 항목에 사람과 날짜: 항목 title이 `@assignee`와 마감 date·datetime(`YYYY-MM-DD`, `YYYY-MM-DDTHH:MM[:SS]`, zone 선택)으로 끝날 수 있고 문서가 사람 table(`id`/`name` header)을 선언된 사람의 registry로 가지며 빈 담당자는 self다 — 이름을 추측하지 않는다 — items·people surface가 이들을 노출한다 (T4.3 선행)
   - 완료 기준: codec이 끝 token들을 title에서 분리하고 시간이 붙은 마감도 받으며 `All("items")`이 list·table 항목 모두에 assignee·due를 실고 `All("people")`이 사람 행을 반환하며 sidecar의 items answer가 assignee·due column을 얻고 `people` answer를 가진다.
