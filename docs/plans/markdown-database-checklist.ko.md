@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database-checklist -->
-<!-- source-sha256: 780d51ede499394cc511c0f0637d6a6d1d5082057b8d532ecf72e0f09ec1e9d8 -->
+<!-- source-sha256: 28a103fe5c88a589311ac6b133124627ef487db4feb1b816d9f8ae87c6caf164 -->
 # markdown database checklist
 
 ## T12 markdown database
@@ -32,6 +32,7 @@
 - [ ] T12.1-13 spec이 block codec이 규칙 없이 내린 판단을 적는다: `parent`가 행을 가리켜야 하는 범위(spec 10은 "그 file의", spec 20은 "행의 block 밖"이라 말한다: 하나의 범위, 즉 block으로 판정한다), block heading 뒤 list나 table 앞의 빈 줄, 한 행 아래 두 번 쓰인 child table의 block, 서로 다른 block의 두 행이 함께 가진 key의 상세 섹션을 그 중 하나만 가질 때, block 행에서 자기 `files` file의 행으로 가는 link의 유도. 원인: T12.2.4 codec이 spec이 말하지 않거나 서로 다른 곳에서 이것들을 골랐다 (T12.2.4 후속)
   - 완료 기준: spec 10, 20과 그 twin이 각 판정을 근거와 함께 적고 더는 서로 다르지 않으며, 이 항목의 문구를 범위로 한 적대 검증을 거치고, codec 테스트가 사례마다 고정하는 규칙을 밝히며, `make documents-check`와 `make refs-check`가 통과한다.
 - [ ] T12.1-14 spec이 anchor 충돌 codec에 필요했던 것을 적는다: heading의 렌더된 inline 텍스트는 file 어디든 있는 link reference definition을 포함해 CommonMark 0.31.2를 따른다(full이나 collapsed reference link는 그 label이 정의되면 link 텍스트로, 아니면 글자 그대로의 텍스트로 센다). image는 이름 붙은 각 viewer의 anchor가 취하는 것에 따라 alt 텍스트로 세거나 아예 세지 않는다. attribute list는 Python-Markdown의 attr_list가 읽는 자리(heading이나 block의 마지막 줄 끝, 마지막 id token이 이긴다)에서 file 어디서든 id를 정한다. 충돌의 위치는 그것을 담은 block의 첫 줄이다. 상세 heading은 그 table의 상세 level이면서 최상위에 있는 것이며, 그 밖의 `<table> row <key>` heading은 payload heading이다. 원인: T12.2.2-6 codec이 spec 10이 말하지 않는 곳에서 이것들을 골랐다 (T12.2.2-6 후속)
+- [ ] T12.1-15 block table의 state machine이 column을 `require`할 수 있는지를 spec이 근거와 함께 정한다. 원인: require된 column은 기계의 history table에 같은 이름의 `markdown` column을 더한다(spec 30). level 5의 block row 아래에서 history block은 level 7에 서고, 그 row는 H6를 넘는 section을 쓴다. catalog는 T12.2.4-1의 깊이 규칙으로 그 layout을 거절하지만, 거기서 `require`를 쓸 수 없다고 적은 spec 문장은 없다. 또 spec 100은 `item_history`를 require된 markdown column과 함께 선언한다. 완료 기준: 결정과 근거가 spec 30, spec 100과 그 twin에 있고, 첫 round 전에 범위를 고정한 적대 검증을 거쳤다. catalog를 바꾸면 red 다음 green test가 있다 (T12.2.4-1 후속)
   - 완료 기준: spec 10과 그 twin이 각 판정을 근거와 함께 적고, 이 항목의 문구를 범위로 한 적대 검증을 거치며, codec이 아직 따르지 않는 판정마다 codec 후속 항목을 등재하고, `make documents-check`와 `make refs-check`가 통과한다.
 - [o] T12.2.4-1 상태기계를 가진 table의 `list` 저장 block을 다룬다: checkbox glyph, 상태, 중첩 행을 가진 fixture block과 허용과 거절 사례, P1/P2 golden (T12.2.4 후속)
   - 완료 기준: fixture와 그 사례가 있고, fuzz target이 golden으로 seed되며, `go test -count=1 ./store/`가 통과한다.
