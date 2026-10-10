@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database-checklist -->
-<!-- source-sha256: 9930a67b16a522c04ee6444b65871427ef09f1d744513a54afe68e1dce961e8f -->
+<!-- source-sha256: bcd1abecbe43244dd96ed40b9d2599b4925510e5460519fa166eed39229b87d5 -->
 # markdown database checklist
 
 ## T12 markdown database
@@ -29,6 +29,10 @@
   - 완료 기준: spec 10, 50, plan과 그 twin이 규칙을 근거와 함께 적고, 이 항목의 문구를 범위로 한 적대 검증을 거치며, `make documents-check`와 `make refs-check`가 통과한다.
 - [ ] T12.1-12 spec이 `document` codec이 규칙 없이 내린 판단을 적는다: document file의 행은 H1 줄 바로 아래에 빈 줄 하나를 두고 서며 다른 개수는 `format.noncanonical`이다. table의 구분 행은 column마다 `---`이며 다른 정렬 형식은 `format.noncanonical`, 그 밖은 `format.block`이다. 다른 table을 가리키는 상세 heading은 `format.block`이고 `row`의 대소문자 차이는 `format.noncanonical`이다. 두 행이 함께 가진 key의 상세 섹션은 하나만 상세 섹션을 가져도 섹션을 배정할 수 없으므로 `format.block`이다. 제목 token은 접두가 아니라 token 전체로 `<선언된 column>:`과 맞춘다. field 앞에서 list 제목을 끝내는 tab은 `format.block`이고, token 사이의 그 밖의 여분 space나 tab은 `format.noncanonical`이다. 쓰기 거절의 위치는 저장 순서의 그 행이다. 원인: T12.2.3 codec이 spec 10이 말하지 않는 곳에서 이것들을 골랐다 (T12.2.3 후속)
   - 완료 기준: spec 10과 그 twin이 각 판정을 근거와 함께 적고, 이 항목의 문구를 범위로 한 적대 검증을 거치며, document codec 테스트가 사례마다 고정하는 spec 규칙을 밝히고, `make documents-check`와 `make refs-check`가 통과한다.
+- [ ] T12.1-13 spec이 block codec이 규칙 없이 내린 판단을 적는다: `parent`가 행을 가리켜야 하는 범위(spec 10은 "그 file의", spec 20은 "행의 block 밖"이라 말한다: 하나의 범위, 즉 block으로 판정한다), block heading 뒤 list나 table 앞의 빈 줄, 한 행 아래 두 번 쓰인 child table의 block, 서로 다른 block의 두 행이 함께 가진 key의 상세 섹션을 그 중 하나만 가질 때, block 행에서 자기 `files` file의 행으로 가는 link의 유도. 원인: T12.2.4 codec이 spec이 말하지 않거나 서로 다른 곳에서 이것들을 골랐다 (T12.2.4 후속)
+  - 완료 기준: spec 10, 20과 그 twin이 각 판정을 근거와 함께 적고 더는 서로 다르지 않으며, 이 항목의 문구를 범위로 한 적대 검증을 거치고, codec 테스트가 사례마다 고정하는 규칙을 밝히며, `make documents-check`와 `make refs-check`가 통과한다.
+- [ ] T12.2.4-1 상태기계를 가진 table의 `list` 저장 block을 다룬다: checkbox glyph, 상태, 중첩 행을 가진 fixture block과 허용과 거절 사례, P1/P2 golden (T12.2.4 후속)
+  - 완료 기준: fixture와 그 사례가 있고, fuzz target이 golden으로 seed되며, `go test -count=1 ./store/`가 통과한다.
 - [ ] T12.2.2-5 codec이 CommonMark처럼 `#` 연속 뒤에 tab이 오는 ATX heading을 읽는다: `store/markdown.go`는 지금 space를 요구한다 (T12.2.2-3 후속)
   - 완료 기준: commonmark.js 0.31.2에 고정한 허용과 거절 사례가 있고 `go test -count=1 ./store/`가 통과한다.
 - [ ] T12.2.2-6 codec이 T12.1-4의 상세 anchor 충돌 규칙을 적용한다: 끝 숫자 run을 뗀 fold(F_G나 F_M)가 상세 anchor와 같은 상세 heading 아닌 heading, anchor와 같은 id를 정하는 attribute list, anchor와 같은 HTML `id`나 `name`은 쓰기에서 `CONSTRAINT`, 읽기에서 `format.block`이다. 지금은 어느 codec도 이를 검사하지 않는다 (T12.1-4, T12.2.3 후속)
