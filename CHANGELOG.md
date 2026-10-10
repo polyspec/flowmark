@@ -3,6 +3,10 @@
 
 ## Unreleased
 
+- T1.3-1: the reference check reads the files of the checkout that Git does not ignore, through
+  kit's `trackedFiles`, as the kit checks do. Ignored directories such as the agent worktrees under
+  `.claude/worktrees/` no longer change its result.
+
 - T12.2.1-2: every foreign key of a table is one column that references the one-column primary key
   of a table. A composite foreign key, or one referencing a unique non-key column, is a located
   `catalog` diagnostic at the foreign key. A link to a row has only the row's one-column key.

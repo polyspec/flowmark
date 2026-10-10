@@ -1,8 +1,11 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 16b91c3fa3ecf1d0825c55b3b4d0014e467e90b885416b6fdb68e53e2e0c7d59 -->
+<!-- source-sha256: dcff438ce1c8df1686d7d2d43ae8b8af61ba8cbfe97c3160cd8b157ca2a95a27 -->
 # Changelog
 
 ## Unreleased
+
+- T1.3-1: 참조 검사는 kit 검사처럼 kit의 `trackedFiles`로 Git이 무시하지 않는 checkout의 file을 읽는다.
+  `.claude/worktrees/` 아래 agent worktree 같은 무시되는 directory가 더 이상 결과를 바꾸지 않는다.
 
 - T12.2.1-2: markdown table의 모든 외래 key는 하나의 column이며 어떤 table의 단일 column primary key를 가리킨다.
   composite 외래 key, 또는 unique이지만 key가 아닌 column을 가리키는 외래 key는 그 외래 key의 위치에 놓인
