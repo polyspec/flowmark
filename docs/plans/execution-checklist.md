@@ -43,6 +43,8 @@
 - [o] T2.3 Parse the child blocks — checklist items and markdown tables — into rows (requires T2.2)
 - [o] T2.4 Report every parse rule as a located diagnostic with the fixed rule names (requires T2.1)
 - [o] T2.5 Prove P1 and P2 over the corpus of this repository with a fuzz-free golden set (requires T2.1)
+- [o] T2.5-1 The corpus golden test selects the documents of config/documents.json (follow-up of T2.5). Cause: its walk selected every markdown file outside four hard-coded directories, so a test fixture of another package broke it.
+  - Completion criteria: a markdown fixture under a package's testdata directory leaves `go test ./codec/` green, and the test reads the same documents as `make documents-check`.
 - [o] T3 Validator: corpus-global constraints (requires T2)
 - [o] T3.1 Validate the corpus keys and references: unique doc-ids and item IDs, and every task-ID token in prose resolves (requires T2)
 - [o] T3.2 Wire `flowmark validate` as the owning command over a corpus directory (requires T3.1)

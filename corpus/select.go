@@ -18,6 +18,20 @@ func ValidateSelected(root string, include, exclude []string) ([]Finding, error)
 	return validateDocuments(documents)
 }
 
+// SelectedPaths lists the markdown documents a documents configuration selects, as paths
+// relative to `root` and slash-separated, in walk order.
+func SelectedPaths(root string, include, exclude []string) ([]string, error) {
+	documents, err := selectedDocuments(root, include, exclude)
+	if err != nil {
+		return nil, err
+	}
+	paths := make([]string, 0, len(documents))
+	for _, document := range documents {
+		paths = append(paths, document.path)
+	}
+	return paths, nil
+}
+
 // selectedDocuments reads the selected markdown files as path-text pairs.
 func selectedDocuments(root string, include, exclude []string) ([]documentText, error) {
 	var documents []documentText

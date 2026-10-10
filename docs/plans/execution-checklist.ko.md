@@ -1,5 +1,5 @@
 <!-- doc-id: execution-checklist -->
-<!-- source-sha256: 514818298e59843d755d4383f2d1b12ec808fad90cf61e3e82f67fdb5a7c4e79 -->
+<!-- source-sha256: ca9753f342308cd2a3b75f5b5a6905de2ec2c44f6b16d6f9cd53850e75c72ffd -->
 # 실행 체크리스트
 
 ## T1a 설계 session
@@ -44,6 +44,8 @@
 - [o] T2.3 child block — checklist 항목과 markdown table — 을 row로 parse한다 (T2.2 선행)
 - [o] T2.4 모든 parse 규칙을 고정 rule 이름의 located diagnostic으로 보고한다 (T2.1 선행)
 - [o] T2.5 이 저장소의 corpus에서 P1과 P2를 golden set으로 증명한다 (T2.1 선행)
+- [o] T2.5-1 corpus golden 테스트가 config/documents.json의 문서를 선택한다 (T2.5 후속). 원인: 그 walk가 네 개의 고정 디렉터리 밖의 markdown 파일을 전부 골라, 다른 패키지의 테스트 fixture가 테스트를 깨뜨렸다.
+  - 완료 기준: 패키지의 testdata 디렉터리 아래 markdown fixture가 있어도 `go test ./codec/`이 통과하고, 테스트는 `make documents-check`와 같은 문서를 읽는다.
 - [o] T3 Validator: corpus-global 제약 (T2 선행)
 - [o] T3.1 corpus의 key와 참조를 검증한다: doc-id와 item ID의 유일성, 산문의 모든 task-ID token 해석 (T2 선행)
 - [o] T3.2 config/documents.json의 선택으로 corpus directory를 검사하는 flowmark validate를 소유 명령으로 연결한다 (T3.1 선행)

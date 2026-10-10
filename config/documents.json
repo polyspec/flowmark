@@ -6,7 +6,8 @@
   "exclude": [
     "**/node_modules/**",
     "**/vendor/**",
-    "tests/kit/**"
+    "tests/kit/**",
+    "**/testdata/**"
   ],
   "changelogs": [
     "CHANGELOG.md"
