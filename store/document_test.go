@@ -343,7 +343,39 @@ func documentParseCases() []docCase {
 			"| id | from_state | to_state | at |", "| --- | --- | --- | --- |",
 			"| 1 | waiting | doing | 2026-10-01 08:00:00.000000 |",
 			"", "### item_history", "| id | from_state | to_state | at |", "| --- | --- | --- | --- |")),
+
+		// The block of a state machine (item_checks): its glyphs, fields, order, nesting and history block.
+		docAccept("10#list-rows: the glyph of each state in a block", checkedOf("- [ ] C1 Open done:false", "- [~] C2 Doing done:false", "- [x] C3 Done done:true")),
+		docReject("10#list-rows: an unknown glyph in a block", RuleBlock, 7, checkedOf("- [?] C1 Open done:false")),
+		docReject("10#list-rows: a missing glyph in a block", RuleBlock, 7, checkedOf("- C1 Open done:false")),
+		docAccept("10#list-rows: a child and a grandchild indented in a block", checkedOf("- [x] C1 Plan done:true", "  - [~] C2 Child done:false", "    - [ ] C3 Grandchild done:false")),
+		docReject("10#list-rows: a row indented under no row of its block", RuleBlock, 7, checkedOf("  - [ ] C1 Child done:false")),
+		docReject("10#list-rows: a child row indented under a parent in another block", RuleBlock, 13, itemsOf(
+			"- [ ] T1 Plan done:false", "- [ ] T2 Other done:false", "", "## items row T1", "", "### item_checks",
+			"- [x] C1 Plan done:true", "", "## items row T2", "", "### item_checks", "  - [ ] C2 Child done:false")),
+		docAccept("10#list-rows: fields after the title in a block", checkedOf("- [ ] C1 Plan done:false weight:2")),
+		docReject("10#list-rows: a field before the title in a block", RuleBlock, 7, checkedOf("- [ ] C1 weight:2 Plan done:false")),
+		docAccept("10#list-rows: an escaped title token in a block", checkedOf(`- [ ] C1 Set weight\: review done:false`)),
+		docAccept("10#order: siblings of a block in their line order", checkedOf("- [ ] C2 Two done:false", "- [ ] C1 One done:false")),
+		docReject("20#order: the order column written as a field of a block row", RuleBlock, 7, checkedOf("- [ ] C1 Plan done:false position:1")),
+		docReject("10#list-rows: a placement foreign key written as a field of a block row", RuleBlock, 7, checkedOf("- [ ] C1 Plan item:T1 done:false")),
+		docReject("10#list-rows: a non-null field of a block row missing", RuleBlock, 7, checkedOf("- [ ] C1 Plan")),
+		docAccept("10#detail-sections: a present empty section of a block row", checkedOf("- [x] C1 Plan done:true", "", "#### item_checks row C1", "", "##### evidence")),
+		docAccept("10#document-order: a history block under a block row's detail section", checkedOf(
+			"- [~] C1 Plan done:false", "", "#### item_checks row C1", "", "##### item_check_history",
+			"| id | from_state | to_state | at |", "| --- | --- | --- | --- |",
+			"| 1 | open | doing | 2026-10-01 08:00:00.000000 |")),
+		docReject("20#document-order: a history block outside its block row's detail section", RuleBlock, 9, checkedOf(
+			"- [~] C1 Plan done:false", "", "##### item_check_history", "| id | from_state | to_state | at |", "| --- | --- | --- | --- |")),
+		docReject("10#detail-sections: a block row's detail names no row of its block", RuleBlock, 9, checkedOf(
+			"- [x] C1 Plan done:true", "", "#### item_checks row C9", "", "x")),
 	}
+}
+
+// checkedOf is the items file whose row T1 holds an item_checks block of the given
+// lines: the block heading is line 6, so its first row is line 7.
+func checkedOf(rows ...string) string {
+	return itemsOf(append([]string{"- [ ] T1 Plan done:false", "", "## items row T1", "", "### item_checks"}, rows...)...)
 }
 
 // TestParseDocumentRules reads each case: an accepted input has no diagnostic,

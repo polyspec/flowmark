@@ -1,8 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 5f849477fd26d144dcc385212401e840ba58c1d68966d208ba1ce30d740a1372 -->
+<!-- source-sha256: 0444d9ee1b5594aee2cd996f18d0930c74be10a56284cd4d2f848e45af2450f0 -->
 # Changelog
 
 ## Unreleased
+
+- T12.2.4-1: store fixture에 `list` storage이고 table에 상태기계가 있는 block을 더했다: 각 items row 아래의 `item_checks`는 세 상태마다 checkbox glyph, 중첩 행, order column, 그리고 행의 상세 section 안의 `history` block(`item_check_history`)을 가진다. 허용과 거절 사례가 그것이 쓰는 각 규칙을 고정하고, items golden이 그 P1과 P2 왕복을 담으며, fuzz target은 그 golden으로 시드된다. catalog의 heading 깊이 규칙이 history block을 level 7에서 거절했으나 그 행은 거기서 heading을 쓰지 않는다. 이제 규칙은 행이 H6를 넘는 heading을 쓰는 layout만 거절하며, spec 30이 그렇게 적는다. body만 있는 level 7 행은 유효하고, level 7의 markdown column은 여전히 거절된다.
 
 - T12.2.2-6: `files`와 `document` codec이 spec 10의 상세 anchor 충돌 규칙을 적용한다. 상세 heading이 아닌 heading은 fold(F_G나 F_M, 끝 숫자 run을 뗀 것)가 상세 anchor의 fold와 같으면 거절한다. anchor와 같은 id를 정하는 attribute list와 anchor와 같은 HTML `id` 또는 `name`도 대소문자를 가리지 않고 거절한다. 쓰기가 충돌을 들이면 다른 heading을 이름으로 든 `CONSTRAINT`이며, 중복 key는 `DUPLICATE_KEY`로 남는다. 읽기의 충돌은 `format.block`이다. heading은 중첩된 것까지 CommonMark block 구조에서 얻고, inline 텍스트는 link, emphasis, code span, entity, raw HTML을 읽는 최소 reader가 commonmark.js 0.31.2에 대조한다. 모듈은 `golang.org/x/text` v0.42.0을 직접 의존성으로 추가한다. fold가 `norm.NFKD`를 쓰는데 표준 라이브러리에는 Unicode 17.0.0의 분해가 없기 때문이며, 테스트가 `norm.Version`을 17.0.0으로 고정한다. `internal/htmlentity`는 `entities` 3.0.1 데이터의 이름 참조를 담으며, 그 데이터에서 생성되고 테스트가 새로 만든 것과 대조한다.
 

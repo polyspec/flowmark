@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database-checklist -->
-<!-- source-sha256: 652f3bf15d1cc664cc4a5c23144e9d4b2efdbe8dba45bdafb05dfb705a5a53cc -->
+<!-- source-sha256: 780d51ede499394cc511c0f0637d6a6d1d5082057b8d532ecf72e0f09ec1e9d8 -->
 # markdown database checklist
 
 ## T12 markdown database
@@ -33,7 +33,7 @@
   - 완료 기준: spec 10, 20과 그 twin이 각 판정을 근거와 함께 적고 더는 서로 다르지 않으며, 이 항목의 문구를 범위로 한 적대 검증을 거치고, codec 테스트가 사례마다 고정하는 규칙을 밝히며, `make documents-check`와 `make refs-check`가 통과한다.
 - [ ] T12.1-14 spec이 anchor 충돌 codec에 필요했던 것을 적는다: heading의 렌더된 inline 텍스트는 file 어디든 있는 link reference definition을 포함해 CommonMark 0.31.2를 따른다(full이나 collapsed reference link는 그 label이 정의되면 link 텍스트로, 아니면 글자 그대로의 텍스트로 센다). image는 이름 붙은 각 viewer의 anchor가 취하는 것에 따라 alt 텍스트로 세거나 아예 세지 않는다. attribute list는 Python-Markdown의 attr_list가 읽는 자리(heading이나 block의 마지막 줄 끝, 마지막 id token이 이긴다)에서 file 어디서든 id를 정한다. 충돌의 위치는 그것을 담은 block의 첫 줄이다. 상세 heading은 그 table의 상세 level이면서 최상위에 있는 것이며, 그 밖의 `<table> row <key>` heading은 payload heading이다. 원인: T12.2.2-6 codec이 spec 10이 말하지 않는 곳에서 이것들을 골랐다 (T12.2.2-6 후속)
   - 완료 기준: spec 10과 그 twin이 각 판정을 근거와 함께 적고, 이 항목의 문구를 범위로 한 적대 검증을 거치며, codec이 아직 따르지 않는 판정마다 codec 후속 항목을 등재하고, `make documents-check`와 `make refs-check`가 통과한다.
-- [ ] T12.2.4-1 상태기계를 가진 table의 `list` 저장 block을 다룬다: checkbox glyph, 상태, 중첩 행을 가진 fixture block과 허용과 거절 사례, P1/P2 golden (T12.2.4 후속)
+- [o] T12.2.4-1 상태기계를 가진 table의 `list` 저장 block을 다룬다: checkbox glyph, 상태, 중첩 행을 가진 fixture block과 허용과 거절 사례, P1/P2 golden (T12.2.4 후속)
   - 완료 기준: fixture와 그 사례가 있고, fuzz target이 golden으로 seed되며, `go test -count=1 ./store/`가 통과한다.
 - [o] T12.2.2-5 codec이 CommonMark처럼 `#` 연속 뒤에 tab이 오는 ATX heading을 읽는다: `store/markdown.go`는 지금 space를 요구한다 (T12.2.2-3 후속)
   - 완료 기준: commonmark.js 0.31.2에 고정한 허용과 거절 사례가 있고 `go test -count=1 ./store/`가 통과한다.

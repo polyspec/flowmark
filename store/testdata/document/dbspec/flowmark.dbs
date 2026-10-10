@@ -148,3 +148,63 @@ table item_notes {
     markdown body
   }
 }
+
+table item_checks {
+  id varchar(16)
+  item varchar(32)
+  parent varchar(16) null
+  state varchar(16)
+  title varchar(255)
+  body text
+  position i32
+  owner varchar(32) null
+  estimate decimal(6,2) null
+  done bool
+  score f64 null
+  seen_on date null
+  seen_at datetime(0) null
+  clock time(3) null
+  ref uuid null
+  blob bytes null
+  weight i16 null
+  big i64 null
+  note text null
+  evidence text null
+  primary key (id)
+  index ix_item_checks_item (item)
+  index ix_item_checks_parent (parent)
+  index ix_item_checks_owner (owner)
+  foreign key fk_check_item (item) references items (id) on delete restrict on update restrict
+  foreign key fk_check_parent (parent) references item_checks (id) on delete restrict on update restrict
+  foreign key fk_check_owner (owner) references people (id) on delete restrict on update restrict
+  settings {
+    store block fk_check_item list
+    title title
+    body body
+    order position
+    markdown body
+    markdown evidence
+    checkbox state open ' '
+    checkbox state doing '~'
+    checkbox state done 'x'
+    state_machine state initial open
+    state_machine state open -> doing
+    state_machine state doing -> done
+    state_machine state terminal done
+    state_machine state history item_check_history row check_id from from_state to to_state at at
+  }
+}
+
+table item_check_history {
+  id i64 identity
+  check_id varchar(16)
+  from_state varchar(16)
+  to_state varchar(16)
+  at datetime(6)
+  primary key (id)
+  index ix_item_check_history_check (check_id)
+  foreign key fk_check_history (check_id) references item_checks (id) on delete restrict on update restrict
+  settings {
+    store block fk_check_history table
+  }
+}
