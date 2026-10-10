@@ -42,8 +42,8 @@ type operation struct {
 // message of the protocol produces no answer; the host treats a protocol breach by killing
 // the process, so the loop stops reading.
 func Serve(in io.Reader, out io.Writer) {
-	writer := bufio.NewWriter(out)
-	defer writer.Flush()
+	writer := &stream{out: bufio.NewWriter(out)}
+	defer writer.flush()
 	watcher := &corpusWatcher{surfaces: map[int]string{}, finger: map[string]string{}}
 	defer watcher.stop()
 	scanner := bufio.NewScanner(in)
@@ -207,15 +207,31 @@ func run(root string, operation *operation) (string, error) {
 	return "", fmt.Errorf("the operation %q is unknown", operation.Operation)
 }
 
-func write(writer *bufio.Writer, message map[string]any) {
+// stream is the one output of a session: the request loop and the watcher's poll goroutine
+// both answer through it, and the lock keeps every message one whole line.
+type stream struct {
+	mu  sync.Mutex
+	out *bufio.Writer
+}
+
+// flush drains the buffer under the lock — the session end may meet a poll still writing.
+func (s *stream) flush() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.out.Flush()
+}
+
+func write(writer *stream, message map[string]any) {
 	text, err := json.Marshal(message)
 	if err != nil {
 		return
 	}
-	writer.Write(text)
-	writer.WriteByte('\n')
+	writer.mu.Lock()
+	defer writer.mu.Unlock()
+	writer.out.Write(text)
+	writer.out.WriteByte('\n')
 	// The host reads each answer while the process runs; a message flushes on its own.
-	writer.Flush()
+	writer.out.Flush()
 }
 
 // corpusWatcher polls the markdown files of each open surface root and pushes a changed
@@ -228,7 +244,7 @@ type corpusWatcher struct {
 }
 
 // watch remembers the surface root and starts one poll loop per distinct root.
-func (w *corpusWatcher) watch(surface int, root string, writer *bufio.Writer) {
+func (w *corpusWatcher) watch(surface int, root string, writer *stream) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if w.stopped {
@@ -236,6 +252,13 @@ func (w *corpusWatcher) watch(surface int, root string, writer *bufio.Writer) {
 	}
 	firstRoot := len(w.surfaces) == 0
 	w.surfaces[surface] = root
+	// The baseline predates the first answer of the root: an edit made right after that
+	// answer differs from it, so the page is told instead of keeping a stale view.
+	if _, held := w.finger[root]; !held {
+		if finger, err := fingerprint(root); err == nil {
+			w.finger[root] = finger
+		}
+	}
 	if firstRoot {
 		go w.poll(writer)
 	}
@@ -256,7 +279,7 @@ func (w *corpusWatcher) stop() {
 }
 
 // poll compares the fingerprint of the watched roots and pushes changed events.
-func (w *corpusWatcher) poll(writer *bufio.Writer) {
+func (w *corpusWatcher) poll(writer *stream) {
 	for {
 		w.mu.Lock()
 		if w.stopped || len(w.surfaces) == 0 {
@@ -286,7 +309,7 @@ func (w *corpusWatcher) poll(writer *bufio.Writer) {
 }
 
 // push sends one changed event to every open surface.
-func (w *corpusWatcher) push(writer *bufio.Writer) {
+func (w *corpusWatcher) push(writer *stream) {
 	w.mu.Lock()
 	surfaces := make([]int, 0, len(w.surfaces))
 	for surface := range w.surfaces {

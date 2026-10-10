@@ -1,8 +1,14 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 6708edf15bf61e47e7103211078a9366063cf736966a47954ab05a16e3c95d34 -->
+<!-- source-sha256: 36c4f8d317144c6094cf4b82c0dcdf965a2792e7ed4d626c199d1c165959d834 -->
 # Changelog
 
 ## Unreleased
+
+- T7.3-3: sidecar 답은 온전한 한 줄로 남는다. watcher의 poll goroutine과 요청 loop가 lock 없이
+  하나의 buffered stream에 썼기 때문에 push된 changed event가 답 줄을 찢을 수 있었고, 그러면
+  page가 답 하나와 corpus에 대한 view를 잃었다. 이제 하나의 lock이 stream을 지키고, session
+  종료도 그 lock 아래서 flush하며, root의 fingerprint 기준선은 surface를 watch할 때 — 첫 답보다
+  앞서 — 잡아 그 답 직후의 편집도 감지한다.
 
 - T7.1-1: `flowmark items`가 sidecar가 섬기는 것과 같은 항목을 출력한다: path·assignee·due로
   끝나는 6개 tab column. executor 행이 path를 직접 실어 sidecar는 documents join을 버린다.

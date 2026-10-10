@@ -3,6 +3,12 @@
 
 ## Unreleased
 
+- T7.3-3: the sidecar answers stay whole lines. The watcher's poll goroutine and the request
+  loop wrote to one buffered stream without a lock, so a pushed changed event could tear an
+  answer line — the page then lost an answer and its view of the corpus. One lock now guards
+  the stream, the session end flushes under it, and a root's fingerprint baseline is taken when
+  the surface is watched, before its first answer, so an edit right after that answer is seen.
+
 - T7.1-1: `flowmark items` prints the same item the sidecar serves: six tab-separated columns
   ending in the path, assignee and due. The executor rows carry the path directly, so the
   sidecar drops its documents join.
