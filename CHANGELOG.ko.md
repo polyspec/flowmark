@@ -1,8 +1,12 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: e43c1b38e58f1ab1c7d54652a9847b34260dcc24480534d228ed679667470eeb -->
+<!-- source-sha256: 5a632cc236894e1b0adeab327d280af5c39abdefb8a4f02d1ca5274bfea8f8b7 -->
 # Changelog
 
 ## Unreleased
+
+- T4.3: 항목은 table 형태로도 존재한다. header row가 state·id·title column을 정의하는 markdown table이
+  그 문서의 항목 목록이다 — 문서가 쓴 header가 정의다 — 그리고 `All("items")`이 행 순서대로 행을
+  반환한다. codec이 모든 data row의 절대 줄을 기록해 write path가 그들을 지목할 수 있다.
 
 - T8.5: 문서의 Mermaid block이 유일한 transition 권위다. Transition이 edge·필수 evidence·glyph를
   문서 자신의 state machine에서 읽고 — 선언되지 않은 edge는 거부된다 — AddItem이 `[*]` 줄이 가리키는

@@ -76,6 +76,21 @@ func Open(root string) (*Corpus, error) {
 				"order":  strconv.Itoa(position + 1),
 			})
 		}
+		// A table whose header names the state, id and title columns is the document's item
+		// list in table form: its rows are items in row order, the table grammar the document
+		// itself declares.
+		if table := codec.ItemsTable(document); table != nil {
+			state, id, title := table.Column("state"), table.Column("id"), table.Column("title")
+			for position, row := range table.Rows {
+				corpus.items = append(corpus.items, Row{
+					"id":     row[id],
+					"state":  row[state],
+					"title":  row[title],
+					"doc_id": document.DocID,
+					"order":  strconv.Itoa(position + 1),
+				})
+			}
+		}
 		return nil
 	})
 	if err != nil {

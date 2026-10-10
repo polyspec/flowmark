@@ -3,6 +3,11 @@
 
 ## Unreleased
 
+- T4.3: items also live in table form. A markdown table whose header row names the state, id and
+  title columns is the document's item list — the header the document writes is the definition —
+  and `All("items")` returns its rows in row order; the codec records the absolute line of every
+  data row so a write path can address them.
+
 - T8.5: the Mermaid block of the document is the only transition authority. Transition reads the
   edges, the required evidence and the glyphs from the document's own state machine — an
   undeclared edge is refused — AddItem lands a new item in the state the `[*]` line names, the
