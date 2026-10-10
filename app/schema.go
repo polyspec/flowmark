@@ -29,7 +29,7 @@ func SchemaFromDocument(root, relativePath string) (StateSchema, error) {
 			return schema, nil
 		}
 	}
-	return Schema(), nil
+	return StateSchema{}, fmt.Errorf("the document holds no Mermaid stateDiagram-v2 block")
 }
 
 // SchemaMermaid writes the state machine as a Mermaid stateDiagram-v2 with a left-to-right
@@ -334,7 +334,7 @@ func SchemaFromMermaidBlock(root, relativePath string) (StateSchema, error) {
 			block = append(block, line)
 		}
 	}
-	return Schema(), nil
+	return StateSchema{}, fmt.Errorf("the document holds no Mermaid stateDiagram-v2 block")
 }
 
 // TransitionRule is one allowed transition from the document's Mermaid block.

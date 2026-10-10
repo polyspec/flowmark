@@ -79,9 +79,9 @@ func Serve(in io.Reader, out io.Writer) {
 func run(root string, operation *operation) (string, error) {
 	switch operation.Operation {
 	case "schema.mermaid":
-		schema := app.Schema()
-		if declared := declaredFromMermaid(root); declared != nil {
-			schema = *declared
+		schema, err := app.SchemaFromMermaidBlock(root, firstFlowmarkFile(root))
+		if err != nil {
+			return "", fmt.Errorf("the corpus declares no state machine: %v", err)
 		}
 		return app.SchemaMermaid(schema), nil
 	case "schema":
@@ -316,4 +316,24 @@ func declaredFromMermaid(root string) *app.StateSchema {
 		return nil
 	})
 	return found
+}
+
+// firstFlowmarkFile returns the relative path of the first .md file under root.
+func firstFlowmarkFile(root string) string {
+	var first string
+	filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+		if err != nil || first != "" || entry.IsDir() {
+			if entry != nil && entry.IsDir() && strings.HasPrefix(entry.Name(), ".") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if strings.HasSuffix(entry.Name(), ".md") {
+			if rel, err := filepath.Rel(root, path); err == nil {
+				first = filepath.ToSlash(rel)
+			}
+		}
+		return nil
+	})
+	return first
 }
