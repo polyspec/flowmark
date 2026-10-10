@@ -111,7 +111,8 @@ compatibility, no fallback, no hidden error, no trick; rules first.
 - **Every corpus document is a complete markdown document** that a reader who does not know
   flowmark reads as it is: no comment, no marker, no hidden field. Its structure is ordinary
   markdown — headings, lists, tables, a field list — and every relation is a link the reader can
-  follow in any markdown viewer. Grounding: the documents are the database's only storage, so
+  follow in a markdown viewer with GitHub-style heading slugs (GitHub, GitLab, VS Code, Pandoc).
+  Grounding: the documents are the database's only storage, so
   they must stay a readable document; what only the machine needs belongs to the catalog
   (`dbspec/`) or to `.flowmark/`.
 - Withdrawn with this ruling: the `<!-- doc-id -->` header, the provenance comment, the
@@ -143,7 +144,9 @@ reimplements them.
 - A `files` row's key is its file name without `.flowmark.md`.
 - **Every key is a file name, a URL path segment and part of a heading anchor at once**: it
   consists of `A`–`Z`, `a`–`z`, `0`–`9`, `_` and `-`, begins with a letter or a digit (a leading
-  `_` would render as emphasis and alter both the shown key and its anchor), and is unique within
+  `_` would render as emphasis and alter both the shown key and its anchor), holds no `--` and does
+  not end with `-` (viewers that collapse hyphen runs, GitLab and MkDocs, would alter the anchor),
+  and is unique within
   its table without regard to case (case-insensitive file systems and lowercased anchors would
   otherwise collide). A foreign key matches the referenced key byte for byte; a link text that
   differs only in case is a dangling reference. A key or a table name equal, without regard to
@@ -191,22 +194,28 @@ reimplements them.
 - A block or document row has a detail section exactly when its body is not empty, a nullable
   markdown column is not NULL, or it has a child block row; a detail section without any of them is
   `format.noncanonical`.
-- **A detail heading is `<h> <table> <key>`** — the table name, one space, the key; never a title
-  copy — and its anchor is `<table>-<lowercased key>`. In each file the engine computes the slug of
-  every heading, skeleton and payload alike, in document order — GitHub's slug: the heading's
-  rendered inline text, lowercased, every character other than a letter, a digit, a space, `-` or
-  `_` removed, each space as `-`, a repeat suffixed `-1`, `-2` in document order; a detail heading
-  whose slug differs from its anchor (an earlier heading took it) is `CONSTRAINT` on write, naming
-  the earlier heading, and `format.block` on read. A detail section whose key names no row of its
-  block is `format.block`.
+- **A detail heading is `<h> <table> row <key>`** — the table name, one space, the word `row`, one
+  space, the key; never a title copy — and its anchor is `<table>-row-<lowercased key>`, so
+  `## items row T2` has the anchor `items-row-t2`; the table is the anchor text before its first
+  `-`, as table names hold no `-`. The slug is GitHub's: the heading's rendered inline text,
+  lowercased, every character other than a letter, a digit, a space, `-` or `_` removed, each space
+  as `-`. In each file the engine computes the slug of every heading, skeleton and payload alike, in
+  document order. A detail anchor must be free under both GitHub de-duplications: github-slugger,
+  where a repeat takes the first suffix `-1`, `-2`, … not yet taken, and github.com, which suffixes
+  a repeated base slug with a counter without checking. A block or markdown-column section heading,
+  repeated or not, slugs to `<name>` or `<name>-<digits>` and never equals a `<table>-row-<key>`
+  anchor, so only a payload heading or the H1 title of a `files` row can take a detail anchor. A
+  detail heading whose anchor another heading takes, or whose slug differs from its anchor, is
+  `CONSTRAINT` on write, naming the other heading and refusing the title update, payload write or
+  row insert that introduces the collision, and `format.block` on read; a detail heading in a
+  non-canonical spelling (extra spaces, a wrong case of `row`) is `format.noncanonical`, which
+  `flowmark canon` repairs. A detail section whose key names no row of its block is `format.block`.
 - A `markdown` column is always a section of the row scope — never a field or a cell — in every
   storage.
 - In a row scope at level L, each nullable `markdown` column and each child block is a heading at
   level L named by the column or the child table. An absent section is NULL; a present empty
   section is the empty text. A child table named like a markdown column of its parent is a schema
-  error, and so is a markdown column or a block table named like a table whose detail sections can
-  stand in the same file (the repeated section heading's `-1`, `-2` slugs would take that table's
-  anchors). A layout that needs a heading past H6 is a schema error.
+  error. A layout that needs a heading past H6 is a schema error.
 - A row scope's sections stand in a fixed order: the nullable `markdown` columns in column order,
   then the child blocks in table name order (dbspec's canonical order). Detail sections stand in
   the storage order of their rows.
@@ -294,7 +303,7 @@ reimplements them.
   key of a block row is never written. Examples: a `files` row `comments/C5.flowmark.md` links its
   post `[P3](../posts/P3.flowmark.md)`; a block comment inside `posts/P3.flowmark.md` links its
   author `[max](../people.flowmark.md)`; the root `items.flowmark.md` links a row with a detail
-  section in the same file `[T2](#items-t2)`.
+  section in the same file `[T2](#items-row-t2)`.
 - A list glyph other than ` ` and `x` renders as literal bracket text in common viewers; the state
   names are the catalog's, and the glyphs of `flowmark.dbs` are its convention.
 - Many-to-many is a link table with an `identity` key, such as
@@ -409,8 +418,8 @@ reimplements them.
   item from from_state to to_state at at`. `item_history(id i64 identity, item varchar(32),
   from_state, to_state, at, evidence, cause, retry)` declares the same three `markdown` columns
   and has `foreign key fk_history_item (item) references items (id)` with its index. A
-  multi-line evidence is a section (`items.flowmark.md` H1, `## items T1`, `### item_history`,
-  `#### item_history <id>`, `##### evidence` — within H6).
+  multi-line evidence is a section (`items.flowmark.md` H1, `## items row T1`, `### item_history`,
+  `#### item_history row <id>`, `##### evidence` — within H6).
 - `flowmark.dbs` declares no `limit`: the owner's WIP rule — completion before starting, with
   independent items allowed in parallel — is a working rule that no count expresses, and a
   number would be invented. The `limit` setting stays for a schema that names one. The engine
@@ -439,7 +448,8 @@ reimplements them.
   the post's file; in the other they are `store files` rows whose field list links to their post.
   Both variants run the same create, read, update and delete operations through the engine and
   yield the same rows, and every document reads as an ordinary board page — the post, its fields
-  as links, its comments — in any markdown viewer.
+  as links, its comments — in a markdown viewer with GitHub-style heading slugs (GitHub, GitLab,
+  VS Code, Pandoc).
 - **The board app** is the same board built with the polyspec stack — hyper renders the list and
   the post-with-comments pages, crudui defines the post and comment forms, lists and validation,
   and orm reaches the corpus through `markdown://`. It runs on hyper's PHP, Node.js and Python

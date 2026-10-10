@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database -->
-<!-- source-sha256: b1d63d2875b92123ae933113d19e4b2588f7c954e7cfc91f5315451e26514f42 -->
+<!-- source-sha256: 32fe1c8736ba7582a7e70efe48a5048c2512a7de62bad95087a3c002d478ee89 -->
 # markdown database 계획
 
 [English](markdown-database-plan.md)
@@ -101,7 +101,8 @@ NULL이 아니며 비어 있을 수 있고, view의 entity table은 둘 다 선�
   그 밖의 모든 file은 database 밖이고 진단을 내지 않는다.
 - **모든 corpus 문서는 완전한 markdown 문서다.** flowmark를 모르는 독자도 그대로 읽으며, 주석,
   표지, 숨은 field가 없다. 구조는 평범한 markdown(heading, list, table, field list)이고 모든 관계는
-  어떤 markdown viewer에서든 따라갈 수 있는 link다. 근거: 문서는 database의 유일한 저장소이므로
+  GitHub식 heading slug를 쓰는 markdown viewer(GitHub, GitLab, VS Code, Pandoc)에서 따라갈 수 있는 link다.
+  근거: 문서는 database의 유일한 저장소이므로
   읽을 수 있는 문서로 남아야 하며, 기계만 필요로 하는 것은 catalog(`dbspec/`)나 `.flowmark/`에 속한다.
 - 이 판정과 함께 철회한다: `<!-- doc-id -->` header, 출처 주석, `files` 행의 frontmatter, twin 규칙,
   `dbspec/flowmark.json`의 `translations` setting. adapter가 소유한 문서의 sync 출처는 문서 밖으로
@@ -129,7 +130,8 @@ markdown 전용 선언은 모두 dbspec **manifest setting**이며 `markdown <co
 - `files` 행의 key는 file 이름에서 `.flowmark.md`를 뺀 것이다.
 - **모든 key는 동시에 file 이름, URL path segment, heading anchor의 일부다**: `A`–`Z`, `a`–`z`,
   `0`–`9`, `_`, `-`로 이루어지고, 문자나 숫자로 시작하며(앞의 `_`는 강조로 렌더되어 보이는 key와
-  anchor를 바꾼다), table 안에서 대소문자를 무시하고 유일하다(대소문자를 구분하지 않는 file system과
+  anchor를 바꾼다), `--`를 담지 않고 `-`로 끝나지 않으며(연속 hyphen을 접는 GitLab, MkDocs가 anchor를 바꾸지 않도록),
+  table 안에서 대소문자를 무시하고 유일하다(대소문자를 구분하지 않는 file system과
   소문자로 바뀐 anchor가 충돌하지 않도록). 외래 key는 참조된 key와 byte 단위로 맞는다. 대소문자만 다른
   link 텍스트는 dangling 참조다. 대소문자를 무시했을 때 `CON`, `PRN`, `AUX`, `NUL`, `COM0`–`COM9`,
   `LPT0`–`LPT9`와 같은 key나 table 이름은 거절한다 — table 이름은 schema 오류로, key는 `CONSTRAINT`로
@@ -169,19 +171,23 @@ markdown 전용 선언은 모두 dbspec **manifest setting**이며 `markdown <co
   L = h + 1이다. 중첩된 list 행의 상세 섹션은 평평한 형제다.
 - block이나 document 행은 body가 비어 있지 않거나, nullable `markdown` column이 NULL이 아니거나, 자식
   block 행을 가질 때에만 상세 섹션을 가진다. 어느 것도 없는 상세 섹션은 `format.noncanonical`이다.
-- **상세 heading은 `<h> <table> <key>`다** — table 이름, 공백 하나, key이며 제목 사본은 결코 아니다 — 그
-  anchor는 `<table>-<소문자 key>`다. 각 file에서 엔진은 모든 heading(골격과 payload 모두)의 slug를 문서
-  순서대로 계산한다 — GitHub의 slug로, heading의 렌더된 인라인 텍스트를 소문자로 만들고, 문자, 숫자, 공백,
-  `-`, `_`가 아닌 모든 문자를 지우며, 공백은 `-`로 바꾸고, 반복은 문서 순서대로 `-1`, `-2`를 붙인다.
-  slug가 anchor와 다른(앞선 heading이 그것을 차지한) 상세 heading은 쓰기에서 앞선 heading을 밝히는
-  `CONSTRAINT`, 읽기에서 `format.block`이다. 블록의 어떤 행도 가리키지 않는 key의 상세 섹션은
-  `format.block`이다.
+- **상세 heading은 `<h> <table> row <key>`다** — table 이름, 공백 하나, `row`, 공백 하나, key이며 제목 사본은
+  결코 아니다 — 그 anchor는 `<table>-row-<소문자 key>`다(`## items row T2`의 anchor는 `items-row-t2`).
+  table은 anchor 텍스트에서 첫 `-` 앞이며 table 이름에는 `-`가 없다. slug는 GitHub의 것이다: heading의 렌더된
+  인라인 텍스트를 소문자로 만들고, 문자, 숫자, 공백, `-`, `_`가 아닌 모든 문자를 지우며, 공백은 `-`로 바꾼다.
+  각 file에서 엔진은 모든 heading(골격과 payload 모두)의 slug를 문서 순서대로 계산한다. 상세 anchor는 GitHub
+  slug의 두 중복 처리 모두에서 비어 있어야 한다: github-slugger는 반복을 아직 차지되지 않은 첫 접미사 `-1`, `-2`, …로
+  보내고, github.com은 반복되는 기본 slug에 확인 없이 counter를 붙인다. 블록 또는 markdown column 섹션 heading은
+  반복되든 아니든 `<name>` 또는 `<name>-<digits>`로 slug가 되어 `<table>-row-<key>` anchor와 결코 같지 않으므로,
+  상세 anchor를 가져갈 수 있는 것은 payload heading과 `files` 행의 H1 제목뿐이다. 다른 heading이 anchor를 가져갔거나
+  slug가 anchor와 다른 상세 heading은 쓰기에서 `CONSTRAINT`이며, 그 heading을 밝히고 충돌을 일으키는 제목 갱신,
+  payload 쓰기 또는 행 삽입을 거절한다. 읽기에서는 `format.block`이다. 공백이 더 있거나 `row`의 대소문자가 다른
+  상세 heading은 `format.noncanonical`이며, `flowmark canon`이 고친다. 블록의 어떤 행도 가리키지 않는 key의 상세
+  섹션은 `format.block`이다.
 - `markdown` column은 모든 저장에서 언제나 행 scope의 섹션이다 — field나 cell이 아니다.
 - level L의 행 scope에서 nullable `markdown` column과 자식 block은 각각 column이나 자식 table 이름을
   가진 level L heading이다. 없는 섹션은 NULL이고, 있는 빈 섹션은 빈 텍스트다. 부모의 markdown column과
-  같은 이름의 자식 table은 schema 오류이며, 같은 file에 상세 섹션이 들어갈 수 있는 table 이름과 같은
-  markdown column이나 block table도 그렇다(반복된 섹션 heading의 `-1`, `-2` slug가 그 table의 anchor를
-  차지하기 때문이다). H6를 넘는 heading이 필요한 layout은 schema 오류다.
+  같은 이름의 자식 table은 schema 오류다. H6를 넘는 heading이 필요한 layout은 schema 오류다.
 - 행 scope의 섹션은 고정된 순서를 따른다: nullable `markdown` column은 column 순서대로, 그다음 자식 block은
   table 이름 순서대로(dbspec의 정준 순서). 상세 섹션은 행의 저장 순서를 따른다.
 - block이나 document의 list나 table 뒤의 내용은, 그 행들의 상세 섹션을 제외하고 모두 `format.block`이다.
@@ -255,7 +261,7 @@ markdown 전용 선언은 모두 dbspec **manifest setting**이며 `markdown <co
   link이며, block 행의 배치 foreign key는 결코 쓰지 않는다. 예: `comments/C5.flowmark.md` 행은 자신의 post를
   `[P3](../posts/P3.flowmark.md)`로 link하고, `posts/P3.flowmark.md` 안의 block comment는 자신의 author를
   `[max](../people.flowmark.md)`로 link하며, 루트의 `items.flowmark.md`는 같은 file 안에 상세 섹션을 가진 행을
-  `[T2](#items-t2)`로 link한다.
+  `[T2](#items-row-t2)`로 link한다.
 - 공백과 `x`가 아닌 list glyph는 흔한 viewer에서 문자 그대로의 대괄호 텍스트로 렌더된다. state 이름은
   catalog의 것이며, `flowmark.dbs`의 glyph는 그 관례다.
 - 다대다는 `identity` key를 가진 link table이다. 예:
@@ -354,7 +360,7 @@ markdown 전용 선언은 모두 dbspec **manifest setting**이며 `markdown <co
   대괄호 사이에 쓴다), `history item_history row item from from_state to to_state at at`. `item_history(id
   i64 identity, item varchar(32), from_state, to_state, at, evidence, cause, retry)`는 같은 세
   `markdown` column을 선언하고 `foreign key fk_history_item (item) references items (id)`와 그 index를 갖는다.
-  여러 줄 evidence는 섹션이다(`items.flowmark.md` H1, `## items T1`, `### item_history`, `#### item_history <id>`,
+  여러 줄 evidence는 섹션이다(`items.flowmark.md` H1, `## items row T1`, `### item_history`, `#### item_history row <id>`,
   `##### evidence` — H6 안).
 - `flowmark.dbs`는 `limit`를 선언하지 않는다: 사용자의 WIP 규칙 — 시작보다 완료, 독립 항목은 병렬
   허용 — 은 어떤 개수로도 표현되지 않는 작업 규칙이며 숫자는 지어낸 것이 된다. `limit` setting은 숫자를
@@ -379,7 +385,7 @@ markdown 전용 선언은 모두 dbspec **manifest setting**이며 `markdown <co
 - **board 예제**는 markdown에서 일대다 관계를 증명한다: `posts`(title, body, author → people, created)와
   `comments`(body, author → people, created, 답글을 위한 `parent`)가 있다. 한 변형에서는 post의 comment가 post 파일 안의
   `store block fk_comments_post list` 행으로, 다른 변형에서는 field list가 post를 link하는 `store files` 행으로 저장된다.
-  두 변형은 같은 create, read, update, delete 연산을 엔진으로 실행하며 같은 행을 내고, 모든 문서는 어떤 markdown viewer에서든 평범한
+  두 변형은 같은 create, read, update, delete 연산을 엔진으로 실행하며 같은 행을 내고, 모든 문서는 GitHub식 heading slug를 쓰는 markdown viewer(GitHub, GitLab, VS Code, Pandoc)에서 평범한
   board 페이지 — post, 그 field들의 link, 그 comment들 — 로 읽힌다.
 - **board 앱**은 같은 board를 polyspec 스택으로 만든 것이다 — hyper가 list와 post-with-comments
   페이지를 그리고, crudui가 post와 comment의 form, 목록, 검증을 정의하며, orm이 `markdown://`을 통해

@@ -1,8 +1,16 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 683d49a88c52436a94676656ec03e1548e624e9ab9a2014dc0c6a37ce17018d8 -->
+<!-- source-sha256: b3fe79fefb6d229b2aff436b78e23ed84a5767433f5d657d8a8e3cc6c46ac42b -->
 # Changelog
 
 ## Unreleased
+
+- T12.1-2: 상세 heading은 `<h> <table> row <key>`이고 anchor는 `<table>-row-<소문자 key>`다. 여러 부모 아래
+  반복되는 block이나 markdown column heading은 더 이상 상세 anchor를 가져갈 수 없다(`items-1`은 `items row 1`이
+  아니다). key는 `--`를 담지 않고 `-`로 끝나지 않는다. 상세 anchor는 GitHub slug의 두 중복 처리(github-slugger와
+  github.com) 모두에서 비어 있어야 하며, 그것을 가져가는 heading은 쓰기에서 `CONSTRAINT`, 읽기에서
+  `format.block`이고, 공백이 다른 표기는 `format.noncanonical`이다. link는 GitHub식 heading slug를 쓰는 viewer에서
+  이어진다고 명시한다. catalog의 same-file 이름 규칙은 철회한다: markdown column이나 block table은 같은 file의
+  다른 table과 같은 이름일 수 있다. 자식 table이 부모의 markdown column과 같은 이름이면 거절하는 규칙은 남는다.
 
 - T12.2.1-1: catalog는 `.dbs` 집합만 읽는다. `dbspec/flowmark.json`과 그 `translations` 필드를
   settings reader, Catalog API의 `Translations` 필드와 함께 제거한다. `dbspec/`의 다른 항목, 즉 다른

@@ -704,16 +704,14 @@ const notesDoc = `table notes {
 
 table views {`
 
-// TestLoadRejectsNameOfSameFileTable pins that a markdown column or a block
-// table may not be named like another table whose detail sections stand in
-// the same file: the document table with its block descendants, or the files
-// table's file with its block descendants. A table of another file is not.
-func TestLoadRejectsNameOfSameFileTable(t *testing.T) {
+// TestLoadAcceptsNameOfSameFileTable pins that a markdown column or a block
+// table may be named like another table of its file. The same-file name rule
+// is withdrawn: a detail anchor is `<table>-row-<key>`, which no block or
+// markdown-column section heading slugs to, so such a name cannot collide.
+func TestLoadAcceptsNameOfSameFileTable(t *testing.T) {
 	cases := []struct {
 		name  string
 		edits [][2]string
-		owner string // the table the diagnostic is located at; "" accepts
-		msg   string
 	}{
 		{
 			name:  "column of items named like a document of another file",
@@ -722,7 +720,6 @@ func TestLoadRejectsNameOfSameFileTable(t *testing.T) {
 		{
 			name:  "column of a block named like its document",
 			edits: [][2]string{{"table views {", itemNotes("items")}},
-			owner: "item_notes", msg: "named like table items",
 		},
 		{
 			name:  "column of a block named like no table of its file",
@@ -731,7 +728,6 @@ func TestLoadRejectsNameOfSameFileTable(t *testing.T) {
 		{
 			name:  "column of a files row named like its grandchild block",
 			edits: [][2]string{{"table views {", noteGroup("review")}},
-			owner: "note", msg: "named like table review",
 		},
 		{
 			name:  "column of a files row named like no table of its file",
@@ -740,16 +736,11 @@ func TestLoadRejectsNameOfSameFileTable(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			root, text := editedCorpus(t, c.edits...)
+			root, _ := editedCorpus(t, c.edits...)
 			cat, diags := catalog.Load(root)
-			if c.owner == "" {
-				if len(diags) != 0 || cat == nil {
-					t.Fatalf("diagnostics = %+v, want an accepted catalog", diags)
-				}
-				return
+			if len(diags) != 0 || cat == nil {
+				t.Fatalf("diagnostics = %+v, want an accepted catalog", diags)
 			}
-			expectRejected(t, cat, diags)
-			expectTableDiag(t, diags, text, c.owner, c.msg)
 		})
 	}
 }

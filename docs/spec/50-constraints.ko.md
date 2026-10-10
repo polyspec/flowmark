@@ -1,5 +1,5 @@
 <!-- doc-id: spec-constraints -->
-<!-- source-sha256: 6e4ba02cc782e30c0c3f9c1702645cf0a1be0e30a1d62d2ed6314ae1ce1307fc -->
+<!-- source-sha256: 0af18055340ade06ccbb0a5699f894ce157a5b5c7163908b660c3b6d58c36c50 -->
 # Constraints
 
 [English](50-constraints.md)
@@ -49,8 +49,8 @@
   field, field list 값 안에서([canonical format](10-canonical-format.md));
 - 첫 줄이 `-` list 항목인 `files` body([canonical format](10-canonical-format.md));
 - fence 밖에 level ≤ L heading 줄을 가진 `markdown` 값([canonical format](10-canonical-format.md));
-- 앞선 heading이 차지해서 slug가 anchor와 다른 상세 heading — 앞선 heading을 밝힌다
-  ([canonical format](10-canonical-format.md));
+- 다른 heading이 anchor를 가져갔거나 slug가 anchor와 다른 상세 heading — 그 heading을 밝히고, 충돌을 일으키는
+  제목 갱신, payload 쓰기 또는 행 삽입을 밝힌다([canonical format](10-canonical-format.md));
 - 값으로서의 `now`, 그리고 column 길이를 넘는 text([canonical format](10-canonical-format.md)).
 
 읽기에서는 walk가 `corpus.walk`를, 형식 규칙이 `format.*`를 보고한다. 그 내용은

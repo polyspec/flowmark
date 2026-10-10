@@ -127,72 +127,21 @@ func reservedName(name string) bool {
 	return up[3] >= '0' && up[3] <= '9'
 }
 
-// checkNames runs the name rules that need the storage tree, once every
-// table's storage and parent are resolved. A child block table may not be
-// named like a markdown column of its parent. A markdown column, or a block
-// table, may not be named like another table whose detail sections stand in
-// the same file: the document table of a file with its block descendants, or
-// the block descendants of a files table, whose rows keep their sections in
-// their own files. The comparison ignores case, as the section slugs do. A
-// table is not compared with itself, since a repeated section's slug can take
-// its own anchor only by the data, and the write rule of detail headings
-// refuses that.
+// checkNames runs the name rule that needs the storage tree, once every
+// table's storage and parent are resolved: a child block table may not be
+// named like a markdown column of its parent. The comparison ignores case.
 func (l *loader) checkNames() {
 	for _, r := range l.order {
-		if !r.linked {
+		if !r.linked || r.storage.Kind != StorageBlock {
 			continue
 		}
-		if r.storage.Kind == StorageBlock {
-			parent := l.refs[r.storage.Parent]
-			for _, m := range markdownOf(parent.table) {
-				if strings.EqualFold(m, r.table.Name) {
-					l.add(l.tableDiag(r.doc, r.table.Name, "block table "+r.table.Name+" is named like markdown column "+m+" of its parent "+parent.table.Name))
-				}
-			}
-		}
-		same := l.sameFile(l.rootOf(r))
-		names := markdownOf(r.table)
-		if r.storage.Kind == StorageBlock {
-			names = append(names, r.table.Name)
-		}
-		for _, name := range names {
-			what := "markdown column " + name + " of table " + r.table.Name
-			if name == r.table.Name {
-				what = "table " + r.table.Name
-			}
-			for _, x := range same {
-				if x == r || x.storage.Parent == r.table.Name || !strings.EqualFold(x.table.Name, name) {
-					continue
-				}
-				l.add(l.tableDiag(r.doc, r.table.Name, what+" is named like table "+x.table.Name+", whose detail sections stand in the same file"))
+		parent := l.refs[r.storage.Parent]
+		for _, m := range markdownOf(parent.table) {
+			if strings.EqualFold(m, r.table.Name) {
+				l.add(l.tableDiag(r.doc, r.table.Name, "block table "+r.table.Name+" is named like markdown column "+m+" of its parent "+parent.table.Name))
 			}
 		}
 	}
-}
-
-// rootOf returns the table whose file holds the row scope of r: r itself for
-// a document or files table, otherwise the root of its block parent.
-func (l *loader) rootOf(r *tableRef) *tableRef {
-	for r.storage.Kind == StorageBlock {
-		r = l.refs[r.storage.Parent]
-	}
-	return r
-}
-
-// sameFile returns the tables whose detail sections stand in the file of the
-// root: the root itself when it is a document table, and every block
-// descendant of the root. A files table has no detail sections of its own.
-func (l *loader) sameFile(root *tableRef) []*tableRef {
-	var out []*tableRef
-	if root.storage.Kind == StorageDocument {
-		out = append(out, root)
-	}
-	for _, x := range l.order {
-		if x.linked && x.storage.Kind == StorageBlock && l.rootOf(x) == root {
-			out = append(out, x)
-		}
-	}
-	return out
 }
 
 // markdownOf returns the names of the markdown columns of a table.

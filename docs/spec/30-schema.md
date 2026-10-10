@@ -59,9 +59,6 @@ behaviour.
 - **Reserved table names.** A table whose name equals, without regard to case, `CON`, `PRN`, `AUX`,
   `NUL`, `COM0`–`COM9` or `LPT0`–`LPT9` is a schema error: these are reserved file names on Windows.
 - **A child table named like a markdown column** of its parent is a schema error.
-- **A markdown column or a block table named like a table whose detail sections can stand in the
-  same file** is a schema error: the repeated section heading's `-1`, `-2` slugs would take that
-  table's anchors ([canonical format](10-canonical-format.md)).
 - **Heading depth.** A layout that needs a heading past H6 is a schema error, decided when the
   catalog loads.
 

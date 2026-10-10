@@ -1,5 +1,5 @@
 <!-- doc-id: spec-schema -->
-<!-- source-sha256: 9a359dd2ebbd99f215e8b59f45a11748661a244bcdbc3243bbcaefee15820f2f -->
+<!-- source-sha256: 09ab7f2db7d8bd677edb80b2703797c8e600cafad1a3bbe7207871e1a3a4ed02 -->
 # Schema
 
 [English](30-schema.md)
@@ -54,9 +54,6 @@ column을 이름 붙인다 — column 이름이 동작을 고르지 않는다.
 - **예약된 table 이름.** 대소문자를 무시하고 `CON`, `PRN`, `AUX`, `NUL`, `COM0`–`COM9`, `LPT0`–`LPT9`와
   같은 table 이름은 schema 오류다: Windows의 예약된 file 이름이기 때문이다.
 - **부모의 markdown column과 같은 이름을 가진 자식 table**은 schema 오류다.
-- **상세 섹션이 같은 file에 들어설 수 있는 table과 같은 이름의 markdown column이나 block table**은
-  schema 오류다: 반복되는 섹션 heading의 `-1`, `-2` slug가 그 table의 anchor를 차지하기 때문이다
-  ([canonical format](10-canonical-format.md)).
 - **heading 깊이.** layout이 H6를 넘는 heading을 필요로 하면 schema 오류이며, catalog를 읽을 때 정해진다.
 
 ## 상태 집합
