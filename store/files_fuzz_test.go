@@ -8,34 +8,69 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/polyspec/flowmark/catalog"
 	"github.com/polyspec/orm/engine/dbspec"
 )
 
-// fuzzSeeds are the golden tasks files and the noncanonical spellings of them.
+// fileTarget is one table the file fuzzer reads: its catalog, its table, the file
+// it reads and the linker of its corpus.
+type fileTarget struct {
+	cat   *catalog.Catalog
+	table string
+	rel   string
+	lk    Linker
+}
+
+// fileTargets are the tables the file fuzzer reads, selected by a byte: the tasks of
+// the fixture, the entries of the files corpus, and the plans of the block corpora,
+// as a list (target 2) and as a table (target 3).
+func fileTargets(f testing.TB) []fileTarget {
+	return []fileTarget{
+		{loadFixture(f), "tasks", "tasks/T1.flowmark.md", fixtureLinker()},
+		{equivCatalog(f, equivFiles), "entries", "entries/E1.flowmark.md", equivLinker()},
+		{equivCatalog(f, equivBlock), "plans", "plans/P1.flowmark.md", equivBlockLinker()},
+		{equivCatalog(f, equivBlockTable), "plans", "plans/P1.flowmark.md", equivBlockLinker()},
+	}
+}
+
+// fuzzSeeds are the golden documents of the file targets and their noncanonical
+// spellings: the tasks files of the fixture (target 0), the entries of the files
+// corpus (target 1), and the plans of the block corpora (targets 2 and 3).
 func fuzzSeeds(f *testing.F) {
+	seed := func(sel uint8, b []byte) {
+		f.Add(sel, b)
+		f.Add(sel, bytes.ReplaceAll(b, []byte("\n"), []byte("\r\n")))
+		f.Add(sel, bytes.TrimSuffix(b, []byte("\n")))
+	}
 	for _, rel := range []string{"tasks/T1.flowmark.md", "tasks/T2.flowmark.md", "tasks/T3.flowmark.md", "tasks/T4.flowmark.md"} {
 		b, err := os.ReadFile(filepath.Join(fixtureRoot, rel))
 		if err != nil {
 			f.Fatal(err)
 		}
-		f.Add(b)
-		f.Add(bytes.ReplaceAll(b, []byte("\n"), []byte("\r\n")))
-		f.Add(bytes.TrimSuffix(b, []byte("\n")))
+		seed(0, b)
 	}
-	f.Add([]byte(withBase()))
-	f.Add([]byte(withBase("## evidence", "", "a", "```", "## x", "```")))
-	f.Add([]byte(withBase("## cause", "", "## evidence", "")))
-	f.Add([]byte(withBase("## task_steps")))
-	f.Add([]byte(withBase("## task_steps", "- S1 Draft done:true", "", "### task_steps row S1", "", "#### step_refs", "| id | label |", "| --- | --- |", "| 1 | spec |", "", "##### step_refs row 1", "", "###### note", "", "Ref.")))
-	f.Add([]byte(withBase("## cause", "", "Cause.", "", "## task_steps", "- S1 Draft done:true", "  - S2 Child done:false")))
+	for _, s := range []struct {
+		sel  uint8
+		root string
+	}{{1, equivFiles}, {2, equivBlock}, {3, equivBlockTable}} {
+		for _, rel := range equivGoldens(equivCorpusAt(s.root)) {
+			seed(s.sel, readEquiv(f, s.root, rel))
+		}
+	}
+	f.Add(uint8(0), []byte(withBase()))
+	f.Add(uint8(0), []byte(withBase("## evidence", "", "a", "```", "## x", "```")))
+	f.Add(uint8(0), []byte(withBase("## cause", "", "## evidence", "")))
+	f.Add(uint8(0), []byte(withBase("## task_steps")))
+	f.Add(uint8(0), []byte(withBase("## task_steps", "- S1 Draft done:true", "", "### task_steps row S1", "", "#### step_refs", "| id | label |", "| --- | --- |", "| 1 | spec |", "", "##### step_refs row 1", "", "###### note", "", "Ref.")))
+	f.Add(uint8(0), []byte(withBase("## cause", "", "Cause.", "", "## task_steps", "- S1 Draft done:true", "  - S2 Child done:false")))
 	// Invisible characters at the ends of the single-line places, the text that is not one, and the interior.
-	f.Add([]byte(doc("#  Title", "- position: 1", "- done: true")))
-	f.Add([]byte(doc("# Title​", "- position: 1", "- done: true")))
-	f.Add([]byte(doc("# Title", "- position: 1", "- done: true", "- note: ㅤa", "")))
-	f.Add([]byte(doc("# Title", "- position: 1", "- done: true", "- note: a͏", "")))
-	f.Add([]byte(doc("# Title", "- position: 1", "- done: true", "- note:  a۝", "")))
-	f.Add([]byte(doc("# Title", "- position: 1", "- done: true", "- note: a\u001c", "")))
-	f.Add([]byte(doc("# Title", "- position: 1", "- done: true", "- note: a b", "")))
+	f.Add(uint8(0), []byte(doc("#  Title", "- position: 1", "- done: true")))
+	f.Add(uint8(0), []byte(doc("# Title​", "- position: 1", "- done: true")))
+	f.Add(uint8(0), []byte(doc("# Title", "- position: 1", "- done: true", "- note: ㅤa", "")))
+	f.Add(uint8(0), []byte(doc("# Title", "- position: 1", "- done: true", "- note: a͏", "")))
+	f.Add(uint8(0), []byte(doc("# Title", "- position: 1", "- done: true", "- note:  a۝", "")))
+	f.Add(uint8(0), []byte(doc("# Title", "- position: 1", "- done: true", "- note: a\u001c", "")))
+	f.Add(uint8(0), []byte(doc("# Title", "- position: 1", "- done: true", "- note: a b", "")))
 }
 
 // FuzzParseFile requires that a parse never panics, that a parsed row emits
@@ -43,25 +78,26 @@ func fuzzSeeds(f *testing.F) {
 // and that an input without diagnostic is emitted as itself (P1).
 func FuzzParseFile(f *testing.F) {
 	fuzzSeeds(f)
-	cat := loadFixture(f)
-	lk := fixtureLinker()
-	f.Fuzz(func(t *testing.T, data []byte) {
-		row, diags := ParseFile(cat, "tasks", "tasks/T1.flowmark.md", data, lk)
+	targets := fileTargets(f)
+	f.Fuzz(func(t *testing.T, sel uint8, data []byte) {
+		tg := targets[int(sel)%len(targets)]
+		cat, table, rel, lk := tg.cat, tg.table, tg.rel, tg.lk
+		row, diags := ParseFile(cat, table, rel, data, lk)
 		if row == nil {
 			if len(diags) == 0 {
 				t.Fatal("no row and no diagnostic")
 			}
 			return
 		}
-		out, rd := RenderFile(cat, "tasks", row, lk)
+		out, rd := RenderFile(cat, table, row, lk)
 		if len(rd) > 0 {
 			t.Fatalf("a parsed row is refused on write: %+v\ninput: %q", rd, data)
 		}
-		back, pd := ParseFile(cat, "tasks", "tasks/T1.flowmark.md", out, lk)
+		back, pd := ParseFile(cat, table, rel, out, lk)
 		if len(pd) > 0 || back == nil {
 			t.Fatalf("emitted file does not parse cleanly: %+v\ninput: %q\nemit: %q", pd, data, out)
 		}
-		again, rd := RenderFile(cat, "tasks", back, lk)
+		again, rd := RenderFile(cat, table, back, lk)
 		if len(rd) > 0 || !bytes.Equal(again, out) {
 			t.Fatalf("P2 failed\ninput: %q\nemit: %q\nagain: %q", data, out, again)
 		}

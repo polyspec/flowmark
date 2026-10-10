@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database-checklist -->
-<!-- source-sha256: 28a103fe5c88a589311ac6b133124627ef487db4feb1b816d9f8ae87c6caf164 -->
+<!-- source-sha256: 29cfb43ceb39e7faa3db8686671370fdb481ee9d884decea5a398105cadeace3 -->
 # markdown database checklist
 
 ## T12 markdown database
@@ -63,7 +63,7 @@
   - 완료 기준: T12.2.2와 같다. 모든 규칙마다 허용과 거절 사례가 있고, parse와 emit은 golden seed로 fuzz한다.
 - [o] T12.2.4 `block` 저장: 부모 row의 scope 안의 child block을 다음 level에 재귀적으로 두며, 비어 있지 않을 때만 쓴다. detail section과 그 section을 포함한다 (T12.2.2, T12.2.3 선행)
   - 완료 기준: T12.2.2와 같으며, block row의 detail section 안의 block을 포함한다. 모든 규칙마다 허용과 거절 사례가 있고, parse와 emit은 golden seed로 fuzz한다.
-- [ ] T12.2.5 하나의 dataset을 세 저장 방식으로: 같은 행을 files, document, block으로 저장하면 같은 행으로 parse되고, 각 저장마다 P1/P2가 성립한다 (T12.2.4 선행)
+- [o] T12.2.5 하나의 dataset을 세 저장 방식으로: 같은 행을 files, document, block으로 저장하면 같은 행으로 parse되고, 각 저장마다 P1/P2가 성립한다 (T12.2.4 선행)
   - 완료 기준: 저장 등가성 테스트. 모든 규칙마다 허용과 거절 사례가 있고, parse와 emit은 golden seed로 fuzz한다.
 - [ ] T12.3 validator: key, foreign key, 순환, 제목, 블록 형식, 순서, limit, 이력 빈틈과 사슬, view. codec이 담은 값의 원문, 쓰인 target, 중복 행에 대한 `type`, `reference.dangling`, `key.duplicate`의 보고와 file을 가로지르는 `parent.cycle`을 포함한다 (T12.2 선행)
   - 완료 기준: 모든 규칙마다 허용과 거절 사례가 있고, parse와 emit은 golden seed로 fuzz한다.

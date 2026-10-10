@@ -1,0 +1,26 @@
+dbspec 1 flowmark
+
+table entries {
+  id varchar(16)
+  parent varchar(16) null
+  title varchar(255)
+  body text
+  position i32
+  kind varchar(16)
+  label varchar(32) null
+  count i32
+  done bool
+  due date null
+  summary text null
+  primary key (id)
+  index ix_entries_parent (parent)
+  foreign key fk_entries_parent (parent) references entries (id) on delete restrict on update restrict
+  settings {
+    store files
+    title title
+    body body
+    order position
+    markdown body
+    markdown summary
+  }
+}
