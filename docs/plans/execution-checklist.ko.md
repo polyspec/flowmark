@@ -1,5 +1,5 @@
 <!-- doc-id: execution-checklist -->
-<!-- source-sha256: eb84e674f90e505718cced2f1de059621b72ec19a6e938f135428dad6bfc1bf4 -->
+<!-- source-sha256: 05ba3481991a79dacf0dc538ef3fefd0ffa44bbc98ba49f5f2123cfd43eecdb1 -->
 # 실행 체크리스트
 
 ## T1a 설계 session
@@ -64,6 +64,8 @@
 - [o] T8.2 corpus에 전환을 적용한다: 상태 재작성, revision 줄 추가, WIP gate 유지 (T8.1 선행)
 - [o] T8.3 `flowmark items`와 `flowmark transition`을 소유 명령으로 연결한다 (T8.2 선행)
 - [o] T8.4 이슈를 write path로 입력한다: add가 유일한 ID의 대기 항목을 추가하고 rm이 하나를 지우며 하위를 가진 부모는 거부한다 — CLI·MCP tool·sidecar operation 모두 (T8.3 후속)
+- [o] T8.5 Mermaid block이 유일한 transition 권위다: Transition이 edge·필수 필드·glyph를 문서 자신의 state machine에서 읽고 AddItem이 `[*]` 줄에서 초기 상태를 취하며 ApplySchema가 Mermaid block을 다시 쓰고 — 내장 table은 남지 않는다 (T8.4 후속)
+  - 완료 기준: 사용자 정의 상태 이름을 가진 문서가 자신이 선언한 edge대로 전이한다 — 선언 안 된 edge는 거부, edge label이 필수 evidence를 정하고 새 항목은 선언된 초기 상태에 놓인다 — 그리고 Go source에서 hardcoded state map을 `grep`으로 찾을 수 없다.
 - [o] T7.3-2 corpus를 감시해 changed event를 push한다: sidecar가 열린 surface root의 fingerprint를 poll하고 push하며 page가 session 동안 갱신된다 (T7.3-1 후속)
 - [o] T9 Conformance vector: corpus before, request, 기대 corpus after (T4 선행)
 - [o] T9.1 vector 형식을 정의하고 첫 vector를 executor로 실행한다 (T4 선행)

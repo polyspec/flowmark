@@ -304,31 +304,6 @@ func fingerprint(root string) (string, error) {
 	return strings.Join(parts, "|"), err
 }
 
-// declaredFromMermaid walks the corpus for the first mermaid stateDiagram-v2 block.
-func declaredFromMermaid(root string) *app.StateSchema {
-	var found *app.StateSchema
-	filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
-		if err != nil || found != nil {
-			return nil
-		}
-		if entry.IsDir() {
-			if strings.HasPrefix(entry.Name(), ".") {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if !strings.HasSuffix(entry.Name(), ".md") {
-			return nil
-		}
-		schema, err := app.SchemaFromMermaidBlock(filepath.Dir(path), filepath.Base(path))
-		if err == nil && len(schema.States) > 0 && len(schema.States) != 5 {
-			found = &schema
-		}
-		return nil
-	})
-	return found
-}
-
 // firstFlowmarkFile returns the relative path of the first .md file under root.
 func firstFlowmarkFile(root string) string {
 	var first string

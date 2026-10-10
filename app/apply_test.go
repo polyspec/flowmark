@@ -8,7 +8,11 @@ import (
 	"testing"
 )
 
-const board = "<!-- doc-id: plans-execution-checklist -->\n# Checklist\n\n## Work\n\n- [ ] T1.1 Write the parser\n- [~] T2.1 Print the union\n  - Criteria: it prints.\n- [ ] T3.1 Keep the gate\n"
+const board = "# Checklist\n\n## State machine\n\n```mermaid\nstateDiagram-v2\n    direction LR\n    [*] --> waiting\n    waiting : [ ] waiting\n    waiting --> doing\n    waiting --> impossible: cause\n    doing : [~] doing\n    doing --> done: evidence\n    doing --> bypassed: cause, retry\n    doing --> waiting\n    bypassed : [!] bypassed\n    bypassed --> doing\n    done : [o] done\n    impossible : [-] impossible\n    done --> [*]\n    impossible --> [*]\n```\n\n## Work\n\n- [ ] T1.1 Write the parser\n- [~] T2.1 Print the union\n  - Criteria: it prints.\n- [ ] T3.1 Keep the gate\n"
+
+// customBoard declares its own state names and edges: the document, not a built-in table,
+// is the only authority.
+const customBoard = "# Custom\n\n## State machine\n\n```mermaid\nstateDiagram-v2\n    direction LR\n    [*] --> draft\n    draft : [ ] draft\n    draft --> review\n    review : [~] review\n    review --> shipped: evidence\n    shipped : [o] shipped\n    shipped --> [*]\n```\n\n## Work\n\n- [ ] T1 First item\n"
 
 func rootWith(t *testing.T, text string) string {
 	t.Helper()
@@ -22,6 +26,42 @@ func rootWith(t *testing.T, text string) string {
 	return root
 }
 
+func TestTransitionFollowsTheDocument(t *testing.T) {
+	root := rootWith(t, customBoard)
+	// the document declares draft -> review with no required field
+	if err := Transition(root, "docs/plans/list.md", "T1", "review", ""); err != nil {
+		t.Fatal(err)
+	}
+	text, _ := os.ReadFile(filepath.Join(root, "docs", "plans", "list.md"))
+	if !strings.Contains(string(text), "- [~] T1 First item") {
+		t.Fatalf("text:\n%s", string(text))
+	}
+	// the document declares no review -> draft edge: it is refused
+	if err := Transition(root, "docs/plans/list.md", "T1", "draft", ""); err == nil {
+		t.Fatal("an undeclared transition passes")
+	}
+	// the document requires evidence on review -> shipped
+	if err := Transition(root, "docs/plans/list.md", "T1", "shipped", ""); err == nil {
+		t.Fatal("shipped without evidence passes")
+	}
+	if err := Transition(root, "docs/plans/list.md", "T1", "shipped", "make test passes"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestAddItemTakesTheInitialGlyph(t *testing.T) {
+	// the initial state of this document is review ([~]), not waiting
+	initial := "# Custom\n\n## State machine\n\n```mermaid\nstateDiagram-v2\n    direction LR\n    [*] --> review\n    review : [~] review\n    review --> shipped: evidence\n    shipped : [o] shipped\n    shipped --> [*]\n```\n\n## Work\n"
+	root := rootWith(t, initial)
+	if err := AddItem(root, "docs/plans/list.md", "", "A new issue"); err != nil {
+		t.Fatal(err)
+	}
+	text, _ := os.ReadFile(filepath.Join(root, "docs", "plans", "list.md"))
+	if !strings.Contains(string(text), "- [~] T1 A new issue") {
+		t.Fatalf("text:\n%s", string(text))
+	}
+}
+
 func TestApplyWaitingToDoing(t *testing.T) {
 	root := rootWith(t, board)
 	if err := Transition(root, "docs/plans/list.md", "T1.1", "doing", ""); err != nil {
@@ -31,7 +71,7 @@ func TestApplyWaitingToDoing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "<!-- doc-id: plans-execution-checklist -->\n# Checklist\n\n## Work\n\n- [~] T1.1 Write the parser\n- [~] T2.1 Print the union\n  - Criteria: it prints.\n- [ ] T3.1 Keep the gate\n"
+	want := strings.Replace(board, "- [ ] T1.1 Write the parser", "- [~] T1.1 Write the parser", 1)
 	if string(text) != want {
 		t.Fatalf("text:\n%q\nwant:\n%q", string(text), want)
 	}
@@ -154,8 +194,15 @@ func TestMoveItem(t *testing.T) {
 		t.Fatal(err)
 	}
 	lines := strings.Split(string(text), "\n")
-	// T3.1 should now be right after T1.1 (before T2.1)
-	if !strings.Contains(lines[5], "T1.1") || !strings.Contains(lines[6], "T3.1") || !strings.Contains(lines[7], "T2.1") {
+	// T3.1 should now sit right after T1.1 (before T2.1)
+	at := 0
+	for i, line := range lines {
+		if strings.Contains(line, "T1.1") {
+			at = i
+			break
+		}
+	}
+	if !strings.Contains(lines[at+1], "T3.1") || !strings.Contains(lines[at+2], "T2.1") {
 		t.Fatalf("order:\n%s", string(text))
 	}
 	// T2.1's continuation moved with it
@@ -171,9 +218,15 @@ func TestMoveToTop(t *testing.T) {
 	}
 	text, _ := os.ReadFile(filepath.Join(root, "docs", "plans", "list.md"))
 	lines := strings.Split(string(text), "\n")
-	// T3.1 should be the first item (line 5 in this fixture, 0-indexed)
-	if !strings.Contains(lines[5], "T3.1") {
-		t.Fatalf("T3.1 is not first:\n%s", string(text))
+	// T3.1 should be the first item of the Work section
+	first := true
+	for _, line := range lines {
+		if strings.HasPrefix(line, "- ") {
+			if first && !strings.Contains(line, "T3.1") {
+				t.Fatalf("T3.1 is not first:\n%s", string(text))
+			}
+			first = false
+		}
 	}
 }
 

@@ -1,5 +1,6 @@
 // Package app is the checklist application: the local issue model of spec 100-checklist —
-// the state machine, the transition over a corpus and the commands.
+// the state machine a document declares in its Mermaid block, the transition over a corpus
+// and the commands.
 package app
 
 import (
@@ -7,60 +8,6 @@ import (
 	"strconv"
 	"strings"
 )
-
-// The five states and their kit glyphs.
-var glyphs = map[string]string{
-	"waiting":    "[ ]",
-	"doing":      "[~]",
-	"done":       "[o]",
-	"bypassed":   "[!]",
-	"impossible": "[-]",
-}
-
-var states = map[string]string{
-	"[ ]": "waiting",
-	"[~]": "doing",
-	"[o]": "done",
-	"[!]": "bypassed",
-	"[-]": "impossible",
-}
-
-// StateOf maps a kit glyph to its state name; an unknown glyph maps to none.
-func StateOf(glyph string) (string, bool) {
-	state, ok := states[glyph]
-	return state, ok
-}
-
-// GlyphOf maps a state name to its kit glyph.
-func GlyphOf(state string) string {
-	return glyphs[state]
-}
-
-// Rule is one allowed transition with the fields it requires on the item.
-type Rule struct {
-	From, To string
-	Requires []string
-}
-
-// The transition table: done is terminal — a related issue spawns a superseded item instead
-// (spec 100-checklist).
-var transitions = []Rule{
-	{From: "waiting", To: "doing"},
-	{From: "doing", To: "done", Requires: []string{"evidence"}},
-	{From: "doing", To: "bypassed", Requires: []string{"cause", "retry"}},
-	{From: "bypassed", To: "doing"},
-	{From: "waiting", To: "impossible", Requires: []string{"cause"}},
-}
-
-// CanTransition names the transition between two states, or none when the table refuses it.
-func CanTransition(from, to string) (Rule, bool) {
-	for _, transition := range transitions {
-		if transition.From == from && transition.To == to {
-			return transition, true
-		}
-	}
-	return Rule{}, false
-}
 
 // SupersededID returns the next suffixed ID of a base for a related issue of a done item:
 // T8.0.14 spawns T8.0.14-1, then T8.0.14-2.
@@ -77,11 +24,13 @@ func SupersededID(base string, existing []string) string {
 	return fmt.Sprintf("%s-%d", base, highest+1)
 }
 
-// StateSchema is the schema of a checklist: the states with their glyphs and labels, and
-// the transitions with their evidence rules — what a board needs to build itself.
+// StateSchema is the schema a document declares: the states with their glyphs and labels,
+// the transitions with their evidence rules, and the initial state — what a board needs to
+// build itself. The Mermaid block of the document is the only authority.
 type StateSchema struct {
 	States      []StateDef      `json:"states"`
 	Transitions []TransitionDef `json:"transitions"`
+	Initial     string          `json:"initial,omitempty"`
 }
 
 // StateDef is one column of a board.
@@ -96,4 +45,46 @@ type TransitionDef struct {
 	From     string   `json:"from"`
 	To       string   `json:"to"`
 	Requires []string `json:"requires,omitempty"`
+}
+
+// StateByName finds a state of the schema by name; nil when the schema holds none.
+func (s StateSchema) StateByName(name string) *StateDef {
+	for i := range s.States {
+		if s.States[i].Name == name {
+			return &s.States[i]
+		}
+	}
+	return nil
+}
+
+// StateByGlyph finds a state of the schema by glyph; nil when the schema holds none.
+func (s StateSchema) StateByGlyph(glyph string) *StateDef {
+	for i := range s.States {
+		if s.States[i].Glyph == glyph {
+			return &s.States[i]
+		}
+	}
+	return nil
+}
+
+// Edge finds the declared transition between two state names; nil when the schema holds none.
+func (s StateSchema) Edge(from, to string) *TransitionDef {
+	for i := range s.Transitions {
+		if s.Transitions[i].From == from && s.Transitions[i].To == to {
+			return &s.Transitions[i]
+		}
+	}
+	return nil
+}
+
+// GlyphOfInitial returns the glyph of the declared initial state; the schema holds none
+// without an initial state.
+func (s StateSchema) GlyphOfInitial() string {
+	if s.Initial == "" {
+		return ""
+	}
+	if state := s.StateByName(s.Initial); state != nil {
+		return state.Glyph
+	}
+	return ""
 }
