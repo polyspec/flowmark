@@ -1,5 +1,5 @@
 <!-- doc-id: execution-checklist -->
-<!-- source-sha256: 3f6d9e69164cbb6aa7167774464e3e36271be478d2fb4c0d61c38aa8ba73238b -->
+<!-- source-sha256: b717f22e25258788b0a22876222750d614c22d458b6bdc78defa69537f503ad4 -->
 # 실행 체크리스트
 
 ## T1a 설계 session
@@ -66,6 +66,8 @@
 - [o] T8.2 corpus에 전환을 적용한다: 상태 재작성, revision 줄 추가, WIP gate 유지 (T8.1 선행)
 - [o] T8.3 `flowmark items`와 `flowmark transition`을 소유 명령으로 연결한다 (T8.2 선행)
 - [o] T8.4 이슈를 write path로 입력한다: add가 유일한 ID의 대기 항목을 추가하고 rm이 하나를 지우며 하위를 가진 부모는 거부한다 — CLI·MCP tool·sidecar operation 모두 (T8.3 후속)
+- [o] T8.4-1 sidecar add가 path 없는 요청을 첫 문서로 보내며 answer가 문서가 정한 ID를 말한다 (T8.4 후속)
+  - 완료 기준: path를 실어줄 items answer가 아직 없는 빈 corpus에 sidecar로 첫 이슈를 추가하면 첫 문서에 항목이 쓰이고 ` added`가 아니라 `T1 added`로 답한다.
 - [o] T8.5 Mermaid block이 유일한 transition 권위다: Transition이 edge·필수 필드·glyph를 문서 자신의 state machine에서 읽고 AddItem이 `[*]` 줄에서 초기 상태를 취하며 ApplySchema가 Mermaid block을 다시 쓰고 — 내장 table은 남지 않는다 (T8.4 후속)
   - 완료 기준: 사용자 정의 상태 이름을 가진 문서가 자신이 선언한 edge대로 전이한다 — 선언 안 된 edge는 거부, edge label이 필수 evidence를 정하고 새 항목은 선언된 초기 상태에 놓인다 — 그리고 Go source에서 hardcoded state map을 `grep`으로 찾을 수 없다.
 - [o] T8.6 write path가 table 형식을 섬긴다: transition·edit·add·remove·move가 items table의 행 cell을 다시 쓴다 — 문서당 하나의 문법, 행과 table의 혼재는 거부한다 (T8.5 후속, T4.3 선행)
