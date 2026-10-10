@@ -1,8 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: c6764a3ac2da0e0476e01d586da403d443adbad42ff383ca0c7dea038de3c488 -->
+<!-- source-sha256: cb906d30929af0cc1e3d34b77b5c0d0b054306bda2a05ae0044cba9d88b1b1ab -->
 # Changelog
 
 ## Unreleased
+
+- T12.1-7: spec이 setext 규칙의 근거를 적는다. setext heading은 level 1 또는 2이고 모든 행 scope의 level L은 2 이상이므로 L보다 깊은 setext 밑줄은 없으며, spec 10의 setext 거절이 값의 모든 최상위 setext heading을 덮는다. plan도 같은 근거를 적는다.
 
 - T12.1-10: 섹션 경계와 값의 끝에 대해 하나의 규칙, 즉 CommonMark 0.31.2 block 구조를 spec이 적는다. 최상위 heading은 ATX heading이거나 최상위 문단을 닫는 setext heading이며, fence, 모든 type(1~7)의 HTML block, 컨테이너, 게으른 연속 줄, 문단 중단 규칙은 CommonMark가 정한 그대로 센다. fence나 HTML block을 열어 둔 값은 뒤따르는 요소가 그 안으로 흡수될 때에만 거절하며, 뒤따르는 최상위 요소가 닫는 컨테이너 안에 열린 채 남은 block은 결함이 아니다. 이것은 T12.1-6과 T12.1-8의 좁은 문장을 대체한다.
 

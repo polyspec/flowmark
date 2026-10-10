@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database-checklist -->
-<!-- source-sha256: 5f4309cc6b512eed59b947a8da591a86d46b38a609792921cec6e09567941050 -->
+<!-- source-sha256: 03b5dac1c2bcffa3d6338e459deac5763c0336385abfc43bc65a649dd7b1e4d7 -->
 # markdown database checklist
 
 ## T12 markdown database
@@ -17,7 +17,7 @@
   - 완료 기준: spec 10, 20, 30과 그 twin이 각 판정을 근거와 함께 적고, 이 항목의 문구를 범위로 한 적대 검증을 거치며, catalog가 checkbox가 없거나 상태 column이 nullable인 list 저장을 허용과 거절 사례와 함께 거절하고, `make documents-check`와 `make refs-check`가 통과한다.
 - [o] T12.1-6 spec이 T12.1-3 옆에서 나온 질문에 답한다: `files` table folder와 같은 이름의 일반 file, field list가 없고 body가 빈 `files` 행에서 H1과 첫 section 사이의 빈 줄, file 전체 delete 면제의 근거 (T12.1-3 후속) 답할 질문: 이미 열려 있는 값(fence나 HTML block) 뒤에 요소를 두게 하는 쓰기가 `CONSTRAINT`인지; 컨테이너 안의 setext heading이 "값은 setext heading을 담지 않는다"의 범위에 드는지; 잘못된 UTF-8 byte의 `format.encoding` 진단의 열; orm dbspec에서 열을 가져오는 `catalog` 진단이 canonical format대로 code point를 세는지; file 전체나 `corpus.walk` 진단의 열
   - 완료 기준: spec 10 또는 20과 그 twin이 각 답을 근거와 함께 적고, 이 항목의 문구를 범위로 한 적대 검증을 거치며, `make documents-check`와 `make refs-check`가 통과한다.
-- [ ] T12.1-7 setext 밑줄이 level L보다 깊으면 어떤 섹션도 끝내지 않는다: setext 규칙이 그것을 여전히 거절하는지 근거와 함께 정한다 (T12.1-6 후속)
+- [o] T12.1-7 setext 밑줄이 level L보다 깊으면 어떤 섹션도 끝내지 않는다: setext 규칙이 그것을 여전히 거절하는지 근거와 함께 정한다 (T12.1-6 후속)
   - 완료 기준: spec 10과 그 twin이 그 판정을 근거와 함께 적고, `make documents-check`와 `make refs-check`가 통과한다.
 - [o] T12.1-8 spec이 다시 짠 `files` codec에 필요했던 읽기 규칙을 적는다: 뒤에 요소가 오기 전에 CommonMark type 1–5의 HTML block을 열어 둔 값을 담은 file은 쓰기에서 `CONSTRAINT`이듯 읽기에서 `format.block`이다. 읽은 형태를 쓰기 규칙이 다시 만들 수 없는 제목(예: `# a\\#`)은 `format.block`이다. 홀로 쓰인 CR은 줄 끝이며 `format.noncanonical`이다. 한 줄 자리 규칙의 공백은 space와 tab이다. 원인: T12.2.2-1 codec이 규칙 없이 이것들을 하나씩 골라야 했다 (T12.2.2-1 후속)
   - 완료 기준: spec 10과 그 twin이 각 규칙을 근거와 함께 적고, 이 항목의 문구를 범위로 한 적대 검증을 거치며, `make documents-check`와 `make refs-check`가 통과한다.
