@@ -3,6 +3,12 @@
 
 ## Unreleased
 
+- T12.2.2-2: the block scanner reads CommonMark containers. A heading inside a list item (by the content indent of
+  the item, ordered and tab-indented ones included) or a block quote, a line inside a fence, and a line inside an HTML
+  block of types 1 to 5 are not section boundaries; only a top-level heading ends a body. A setext underline is a
+  heading only when it closes a top-level paragraph, and a lazy continuation line is paragraph text, as CommonMark
+  0.31.2 reads it.
+
 - T12.2.2-1: the `files` codec and store follow the T12.1-3 and T12.1-4 rulings. An H1 title reads a final `\#`
   as `#`, is written with its last `#` escaped when its final hash run follows a space or a tab or is the whole
   title, and a title ending in `\#` is `CONSTRAINT`. A markdown value that begins or ends with a blank line, or

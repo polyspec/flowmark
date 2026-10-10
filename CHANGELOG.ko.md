@@ -1,8 +1,13 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: b37db91923e0cd8960c9c96998ec425c67b5c9fd79f235698149504ff7bc18f1 -->
+<!-- source-sha256: d737bf71b4781398b1a200842b82187f24d971c6f2133e764cd5993acaa72f26 -->
 # Changelog
 
 ## Unreleased
+
+- T12.2.2-2: block scanner가 CommonMark container를 읽는다. list 항목(항목의 내용 들여쓰기 기준, 순서 있는 항목과
+  tab 들여쓰기 항목 포함)이나 block quote 안의 heading, fence 안의 줄, type 1~5 HTML block 안의 줄은 섹션 경계가
+  아니며, 최상위 heading만 body를 끝낸다. setext 밑줄은 최상위 문단을 닫을 때만 heading이고, 게으른 연속 줄은
+  CommonMark 0.31.2가 읽는 그대로 문단 글이다.
 
 - T12.2.2-1: `files` codec와 store가 T12.1-3과 T12.1-4의 판정을 따른다. H1 제목은 마지막 `\#`을 `#`으로 읽고,
   마지막 `#` 연속이 공백이나 tab 뒤에 오거나 제목 전체이면 마지막 `#`을 escape해 쓰며, `\#`로 끝나는 제목은
