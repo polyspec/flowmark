@@ -34,6 +34,7 @@ type operation struct {
 	State     string `json:"state"`
 	Evidence  string `json:"evidence"`
 	After     string `json:"after"`
+	Position  bool   `json:"position"`
 }
 
 // Serve reads the host messages and answers each: a closed handshake answers closed, a page
@@ -77,6 +78,13 @@ func Serve(in io.Reader, out io.Writer) {
 
 func run(root string, operation *operation) (string, error) {
 	switch operation.Operation {
+	case "schema":
+		schema := app.Schema()
+		text, err := json.Marshal(schema)
+		if err != nil {
+			return "", err
+		}
+		return string(text), nil
 	case "items":
 		opened, err := executor.Open(root)
 		if err != nil {
@@ -131,6 +139,11 @@ func run(root string, operation *operation) (string, error) {
 	case "transition":
 		if err := app.Transition(root, operation.Path, operation.ID, operation.State, operation.Evidence); err != nil {
 			return "", err
+		}
+		if operation.After != "" || operation.Position {
+			if err := app.MoveItem(root, operation.Path, operation.ID, operation.After); err != nil {
+				return "", err
+			}
 		}
 		return fmt.Sprintf("%s is %s", operation.ID, operation.State), nil
 	}
