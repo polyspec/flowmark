@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database -->
-<!-- source-sha256: 0a34c2e7fa067d48c41f2f9d222ee27c32bd7caf53f6cccbddfb407c1c1a7810 -->
+<!-- source-sha256: e7c1345760d61d91c5f45650cd68372c3aee1aab56be1f701e8fa9e84bb7be9c -->
 # markdown database 계획
 
 [English](markdown-database-plan.md)
@@ -104,7 +104,7 @@ NULL이 아니며 비어 있을 수 있고, view의 entity table은 둘 다 선�
   GitHub, GitLab, VS Code, MkDocs가 heading에 대해 만드는 anchor인 link다. Pandoc은 주장 대상이 아니다: 기본 설정은 상대 경로 link target을 다시 쓰지 않는다.
   근거: 문서는 database의 유일한 저장소이므로
   읽을 수 있는 문서로 남아야 하며, 기계만 필요로 하는 것은 catalog(`dbspec/`)나 `.flowmark/`에 속한다.
-- 인코딩: BOM 없는 UTF-8, LF, 정확히 마지막 LF 하나. BOM, CR, 마지막 LF가 없음, 끝의 빈 줄은 `format.noncanonical`이고, UTF-8이 아닌 byte와 U+0000은 `format.encoding`이다. 값은 줄 바꿈으로 시작하거나 끝나지 않으며 공백만 있는 줄로 시작하거나 끝나지 않는다. `format.*` 진단이 있는 file을 다시 쓰는 logical write는 `CONSTRAINT`이며, `format.noncanonical`이면 `flowmark canon`을 밝힌다. `files` 행의 file 전체를 지우는 delete는 rewrite 거절에서만 면제되며, restrict 검사는 그 행을 참조할 수 있는 모든 table의 행을 여전히 필요로 하며(자신의 table을 `parent`로 하는 것, 자식 및 이력 block, 그 행으로의 foreign key를 가진 모든 table), 그 중 하나라도 사용할 수 없으면 그 delete는 `CONSTRAINT`다. `format.block`, `format.section`, `format.encoding`이나 그 행 사이의 `parent.cycle`이 있는 file을 가지거나 바이트 단위로 같은 key를 가진 두 행이 있는 table은 사용할 수 없다: 그 행을 필요로 하는 모든 요청이나 검사는 file과 진단을 밝히며 `CONSTRAINT`로 실패한다. block table은 placement parent의 file을 재귀적으로 가진다. corpus 열기, introspection, `flowmark validate`와 `flowmark canon`은 사용할 수 없는 table에서 결코 실패하지 않으며, 그 table이 필요한 export는 실패하고 아무것도 쓰지 않는다.
+- 인코딩: BOM 없는 UTF-8, LF, 정확히 마지막 LF 하나. 줄 끝은 CommonMark가 읽는 대로 LF, CRLF, 또는 뒤에 LF가 없는 CR이다. BOM, 모든 줄 끝의 CR, 마지막 LF가 없음, 끝의 빈 줄은 `format.noncanonical`이고, UTF-8이 아닌 byte와 U+0000은 `format.encoding`이다. 값은 줄 바꿈으로 시작하거나 끝나지 않으며 공백만 있는 줄로 시작하거나 끝나지 않는다. `format.*` 진단이 있는 file을 다시 쓰는 logical write는 `CONSTRAINT`이며, `format.noncanonical`이면 `flowmark canon`을 밝힌다. `files` 행의 file 전체를 지우는 delete는 rewrite 거절에서만 면제되며, restrict 검사는 그 행을 참조할 수 있는 모든 table의 행을 여전히 필요로 하며(자신의 table을 `parent`로 하는 것, 자식 및 이력 block, 그 행으로의 foreign key를 가진 모든 table), 그 중 하나라도 사용할 수 없으면 그 delete는 `CONSTRAINT`다. `format.block`, `format.section`, `format.encoding`이나 그 행 사이의 `parent.cycle`이 있는 file을 가지거나 바이트 단위로 같은 key를 가진 두 행이 있는 table은 사용할 수 없다: 그 행을 필요로 하는 모든 요청이나 검사는 file과 진단을 밝히며 `CONSTRAINT`로 실패한다. block table은 placement parent의 file을 재귀적으로 가진다. corpus 열기, introspection, `flowmark validate`와 `flowmark canon`은 사용할 수 없는 table에서 결코 실패하지 않으며, 그 table이 필요한 export는 실패하고 아무것도 쓰지 않는다.
 
 - 이 판정과 함께 철회한다: `<!-- doc-id -->` header, 출처 주석, `files` 행의 frontmatter, twin 규칙,
   `dbspec/flowmark.json`의 `translations` setting. adapter가 소유한 문서의 sync 출처는 문서 밖으로
@@ -159,14 +159,14 @@ markdown 전용 선언은 모두 dbspec **manifest setting**이며 `markdown <co
 
 - `title <column>`과 `body <column>`은 table마다 선택하는 setting이다. `list` 저장과 `files` 저장은
   `title`을 요구하고(줄 텍스트, H1), `table` 저장은 cell로 선언할 수 있다. 제목은 non-null이며 빈
-  텍스트를 거절한다. H1의 제목에서 마지막 `#` 연속이 공백이나 tab 뒤에 오거나 `#` 문자뿐이면 마지막 `#`을 `\#`로 쓴다. CommonMark가 그 연속을 닫는 sequence로 읽기 때문이다. 읽을 때 마지막 `\#`은 제목의 `#`이며, H1의 닫는 열은 `format.noncanonical`이다. `\#`로 끝나는 제목은 `#`으로 다시 읽히므로 쓰기에서 `CONSTRAINT`다.
+  텍스트를 거절한다. H1의 제목에서 마지막 `#` 연속이 공백이나 tab 뒤에 오거나 `#` 문자뿐이면 마지막 `#`을 `\#`로 쓴다. CommonMark가 그 연속을 닫는 sequence로 읽기 때문이다. 읽을 때 마지막 `\#`은 제목의 `#`이며, H1의 닫는 열은 `format.noncanonical`이다. 해석한 텍스트가 비었거나 `\#`로 끝나는 제목은 읽기에서 `format.block`이고 쓰기에서 `CONSTRAINT`다: 쓰기 규칙이 그 H1을 다시 만들 수 없기 때문이다.
 - `body`는 `markdown` column이며 NULL이 아니다. 모든 저장에서 행 scope에 놓인다: file의 H1 뒤 텍스트,
   또는 행 상세 섹션의 첫 최상위(컨테이너 밖) level ≤ h + 1 heading 앞 텍스트. 상세 섹션이 없는 행의 body는 빈 텍스트다.
 - `files` 행은 차례로 H1 제목, 저장되는 scalar column의 field list, body, level-2 섹션이다(spec 10의 문서
   순서를 개정한다). body와 모든 `markdown` 섹션 값은 fenced block 밖이고 컨테이너(block quote나 list 항목) 밖에서만 세는
   (CommonMark block 구조) 다음 최상위 level ≤ L heading에서 끝난다. 그런 값은 L보다 깊은 최상위 heading만
   담으며, fence 밖이고 컨테이너 밖에 최상위 level ≤ L heading 줄을 가진 값의 쓰기는 `CONSTRAINT`다. 값은 최상위
-  setext heading을 담지 않는다: fence 밖이고 컨테이너 밖에서, 최상위 문단의 줄 바로 뒤에 `=`만 또는 `-`만 있는 줄(들여쓰기 최대 세 칸, 뒤의 공백이나 tab은 있어도 된다)은 쓰기에서 `CONSTRAINT`이며, 읽기에서는 CommonMark가 setext heading으로 읽는 곳이 heading이다. 컨테이너 안의 setext heading은 이 규칙 밖이다. 값이 CommonMark type 1–5의 fence나 HTML block을 열린 채로 남기면, 뒤따르는 요소가 있을 때 — 그 요소를 어느 쓰기가 놓든 — `CONSTRAINT`다.
+  setext heading을 담지 않는다: fence 밖이고 컨테이너 밖에서, 최상위 문단의 줄 바로 뒤에 `=`만 또는 `-`만 있는 줄(들여쓰기 최대 세 칸, 뒤의 공백이나 tab은 있어도 된다)은 쓰기에서 `CONSTRAINT`이며, 읽기에서는 CommonMark가 setext heading으로 읽는 곳이 heading이다. 컨테이너 안의 setext heading은 이 규칙 밖이다. 값이 CommonMark type 1–5의 fence나 HTML block을 열린 채로 남기면, 뒤따르는 요소가 있을 때 — 그 요소를 어느 쓰기가 놓든 — `CONSTRAINT`다. 읽을 때 CommonMark type 1–5의 HTML block을 열린 채 뒤따르는 요소를 앞에 둔 file은 `format.block`이다(fence는 그럴 수 없다: 그 안의 heading은 경계가 아니다).
 - 칸반, 목록, 간트 view는 entity table이 둘 다 선언할 것을 요구한다. `flowmark.dbs`는 `items`에 둘 다
   선언한다.
 
@@ -211,7 +211,7 @@ markdown 전용 선언은 모두 dbspec **manifest setting**이며 `markdown <co
   orm의 `dbspec.CanonicalLiteral(t, v)`로 읽고, date, time, datetime, uuid는
   `CanonicalLiteral(t, "'" + v + "'")`로 읽어 결과에서 따옴표를 뺀다. `now`는 `datetime` 기본값에서 현재 시각을 뜻하는 dbspec keyword이며 결코 저장되는 값이 아니다: 엔진이 insert에서 그것이 뜻하는 시각을 쓴다. `now`로 쓰인 시간 값(date, time, datetime)은 그 type이 아니며(읽기에서 `type`, 쓰기에서 `CONSTRAINT`), text 값 `now`는 text다. text는 column의
   길이를 검사하며, 한 줄 자리에서는 아래 규칙을 따른다. 쓰인 형식이 정규 형식과 다른 값은 읽기에서 `format.noncanonical`이다. 값이 column의 type이 아니면 validator의 `type`이고 쓰기에서 `CONSTRAINT`다. 쓰기에서 수, `true`/`false`, date, time, datetime, uuid는 `CanonicalLiteral`이 주는 형식으로 쓴다(`1.5`를 `decimal(4,2)`에 넣으면 `1.50`; float는 왕복하는 가장 적은 자릿수의 고정 표기, 0은 `0`). `CanonicalLiteral`이 거절하는 값(scale보다 많은 소수 자릿수 — 0 포함, precision − scale보다 많은 정수 자릿수, precision보다 많은 소수 자릿수의 time이나 datetime)은 `CONSTRAINT`다. bytes는 padding이 있는 표준 base64(RFC 4648 §4)로 쓰며, bytes column에서 그 밖의 텍스트를 읽으면 `type`이다. text와 `markdown` 값은 자리의 escape를 빼고 바이트 그대로 쓰며, 그렇게 쓸 수 없는 값은 `CONSTRAINT`다. validator의 `type` 값을 평가하는 요청은 `CONSTRAINT`로 실패한다. 쓰기는 문서 바이트를 정규화하지 않는다.
-- **한 줄 자리**는 title(list 행, H1, cell 안), list field, field list의 값, table cell이다. 그곳의 값에
+- **한 줄 자리**는 title(list 행, H1, cell 안), list field, field list의 값, table cell이다. 그곳의 공백은 space와 tab이며, CommonMark가 떼어낼 때 세는 것과 같다. 그곳의 값에
   줄바꿈, 앞뒤 공백, 또는 `<` 뒤에 `!`, `/`, 문자가 오는 것(raw HTML이 값을 숨기거나 바꾼다)이 있으면
   쓰기에서 `CONSTRAINT`다. 읽기에서는 렌더링이 텍스트와 다르게 보이는 한 줄 값(인용된 list field나 cell의 앞뒤 공백, `<` 뒤에 `!`, `/`, 글자)이 `format.block`이고, 렌더링이 떨어뜨리는 공백은 `format.noncanonical`이다. 각 자리는 하나의 정식 구분자를 가진다(H1 표지 뒤 `# `, field list column 뒤 `: `, 빈 텍스트는 아무것도 없음, list 토큰 사이 공백 하나, cell은 `| v |`). 그 밖의 공백은 `format.noncanonical`이다. 한 줄 값은 쓴 그대로의 인라인 markdown이며, 명시된 경우를 빼고는 escape하지
   않는다.

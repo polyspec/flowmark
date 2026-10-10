@@ -1,5 +1,5 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: d737bf71b4781398b1a200842b82187f24d971c6f2133e764cd5993acaa72f26 -->
+<!-- source-sha256: bbe48d5c5ed7b545b33df1d1dba6004a40c841573c66bfe90a97af5e90905374 -->
 # Changelog
 
 ## Unreleased
@@ -8,6 +8,11 @@
   tab 들여쓰기 항목 포함)이나 block quote 안의 heading, fence 안의 줄, type 1~5 HTML block 안의 줄은 섹션 경계가
   아니며, 최상위 heading만 body를 끝낸다. setext 밑줄은 최상위 문단을 닫을 때만 heading이고, 게으른 연속 줄은
   CommonMark 0.31.2가 읽는 그대로 문단 글이다.
+
+- T12.1-8: spec이 다시 짠 `files` codec에 필요했던 읽기 규칙을 적는다. CommonMark type 1–5의 HTML block을 요소 앞에서 열어 둔 값은 쓰기에서 `CONSTRAINT`이듯 읽기에서 `format.block`이다. 열린 fence는 읽을 때 요소 앞에 설 수 없다: 그 안의 heading은 경계가 아니다. 해석한 텍스트가 비었거나 `\#`로 끝나는
+  제목은 쓰기 규칙이 그 H1을 다시 만들 수 없으므로 읽기에서 `format.block`이다. 줄 끝은 CommonMark가 읽는 대로
+  LF, CRLF, 뒤에 LF가 없는 CR이며, 그 중 CR이 있으면 `format.noncanonical`이다. 한 줄 자리 규칙의 공백은 space와
+  tab이다.
 
 - T12.2.2-1: `files` codec와 store가 T12.1-3과 T12.1-4의 판정을 따른다. H1 제목은 마지막 `\#`을 `#`으로 읽고,
   마지막 `#` 연속이 공백이나 tab 뒤에 오거나 제목 전체이면 마지막 `#`을 escape해 쓰며, `\#`로 끝나는 제목은
