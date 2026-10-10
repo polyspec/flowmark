@@ -5,6 +5,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -124,6 +125,12 @@ func validate(root string) int {
 }
 
 func items(root string) int {
+	return itemsTo(os.Stdout, root)
+}
+
+// itemsTo writes the item rows: state, id, title, path, assignee and due — the same columns
+// the sidecar answer carries, so every face shows the same item.
+func itemsTo(w io.Writer, root string) int {
 	opened, err := executor.Open(root)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "flowmark items: %v\n", err)
@@ -135,7 +142,7 @@ func items(root string) int {
 		return 2
 	}
 	for _, row := range rows {
-		fmt.Printf("%s\t%s\t%s\n", row["state"], row["id"], row["title"])
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", row["state"], row["id"], row["title"], row["path"], row["assignee"], row["due"])
 	}
 	return 0
 }
