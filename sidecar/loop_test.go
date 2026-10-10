@@ -2,6 +2,7 @@
 package sidecar
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -194,5 +195,48 @@ func TestAddWithoutPathOnEmptyCorpus(t *testing.T) {
 	}
 	if !strings.Contains(string(text), "- [ ] T1 First issue") {
 		t.Fatalf("text:\n%s", string(text))
+	}
+}
+
+// A poll goroutine and the request loop write to one stream: every line stays whole.
+func TestConcurrentWritesStayWholeLines(t *testing.T) {
+	var out bytes.Buffer
+	writer := &stream{out: bufio.NewWriterSize(&out, 64)} // a small buffer forces flushes inside a message
+	var group sync.WaitGroup
+	for g := 0; g < 8; g++ {
+		group.Add(1)
+		go func(g int) {
+			defer group.Done()
+			for i := 0; i < 200; i++ {
+				write(writer, map[string]any{"surface": g, "body": strings.Repeat("x", 100)})
+			}
+		}(g)
+	}
+	group.Wait()
+	writer.out.Flush()
+	text := strings.Split(strings.TrimSuffix(out.String(), "\n"), "\n")
+	if len(text) != 8*200 {
+		t.Fatalf("lines: %d, want %d", len(text), 8*200)
+	}
+	for _, line := range text {
+		var decoded map[string]any
+		if err := json.Unmarshal([]byte(line), &decoded); err != nil {
+			t.Fatalf("a line is torn: %v: %.60s", err, line)
+		}
+	}
+}
+
+// The baseline of a root is taken when the surface is watched — before its first answer is
+// built — so an edit made right after that answer is never taken for the baseline.
+func TestWatchTakesTheBaselineAtOnce(t *testing.T) {
+	root := corpusDir(t)
+	watcher := &corpusWatcher{surfaces: map[int]string{}, finger: map[string]string{}}
+	defer watcher.stop()
+	watcher.watch(1, root, &stream{out: bufio.NewWriter(io.Discard)})
+	watcher.mu.Lock()
+	known := watcher.finger[root]
+	watcher.mu.Unlock()
+	if known == "" {
+		t.Fatal("the watcher holds no baseline right after watch")
 	}
 }

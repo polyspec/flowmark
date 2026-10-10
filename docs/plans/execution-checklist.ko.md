@@ -1,5 +1,5 @@
 <!-- doc-id: execution-checklist -->
-<!-- source-sha256: 2d2c8ff0cdb27840add0d2500a5372ced10756ef93b3633ab52dd2ac2e20e2a8 -->
+<!-- source-sha256: 4bd1553da41ae6f1d0d381a378f57e9e5aae2ce94c9d959163b43c5e3898e7bc -->
 # 실행 체크리스트
 
 ## T1a 설계 session
@@ -75,7 +75,7 @@
 - [o] T8.6 write path가 table 형식을 섬긴다: transition·edit·add·remove·move가 items table의 행 cell을 다시 쓴다 — 문서당 하나의 문법, 행과 table의 혼재는 거부한다 (T8.5 후속, T4.3 선행)
   - 완료 기준: table 형식 문서에서 transition이 문서 자신의 edge대로 state cell을 다시 쓰고 add가 자동 ID로 행을 추가하며 edit이 title cell을 고치고 move가 행 순서를 바꾸고 remove가 행을 지운다.
 - [o] T7.3-2 corpus를 감시해 changed event를 push한다: sidecar가 열린 surface root의 fingerprint를 poll하고 push하며 page가 session 동안 갱신된다 (T7.3-1 후속)
-- [~] T7.3-3 sidecar 답은 온전한 한 줄로 남고 watcher의 기준 fingerprint는 첫 답보다 앞선다: poll goroutine과 요청 loop가 하나의 writer를 하나의 lock으로 공유하고, root의 fingerprint는 첫 답을 만들기 전에 잡는다 (T7.3-2 후속)
+- [o] T7.3-3 sidecar 답은 온전한 한 줄로 남고 watcher의 기준 fingerprint는 첫 답보다 앞선다: poll goroutine과 요청 loop가 하나의 writer를 하나의 lock으로 공유하고, root의 fingerprint는 첫 답을 만들기 전에 잡는다 (T7.3-2 후속)
   - 완료 기준: 동시에 나가는 changed event와 답이 한 줄 안에서 섞이지 않고(`-race` 아래 test가 온전한 JSON 줄만 읽는다), root의 첫 items 답 직후의 편집도 changed event를 push한다.
 - [o] T9 Conformance vector: corpus before, request, 기대 corpus after (T4 선행)
 - [o] T9.1 vector 형식을 정의하고 첫 vector를 executor로 실행한다 (T4 선행)

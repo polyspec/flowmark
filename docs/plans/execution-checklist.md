@@ -74,7 +74,7 @@
 - [o] T8.6 The write path serves the table form: transition, edit, add, remove and move rewrite the row cells of an items table — one grammar per document, a mix of lines and a table is refused (follow-up of T8.5, requires T4.3)
   - Completion criteria: on a table-format document a transition rewrites the state cell by the document's own edges, an add appends a row with the auto ID, an edit rewrites the title cell, a move reorders the rows and a remove deletes the row.
 - [o] T7.3-2 Watch the corpus and push a changed event: the sidecar polls the fingerprints of the open surface roots and pushes, the page refreshes while the session runs (follow-up of T7.3-1)
-- [~] T7.3-3 The sidecar answers stay whole lines and the watcher baseline predates the first answer: the poll goroutine and the request loop share one writer under one lock, and a root's fingerprint is taken before its first answer is built (follow-up of T7.3-2)
+- [o] T7.3-3 The sidecar answers stay whole lines and the watcher baseline predates the first answer: the poll goroutine and the request loop share one writer under one lock, and a root's fingerprint is taken before its first answer is built (follow-up of T7.3-2)
   - Completion criteria: concurrent changed events and answers never interleave inside a line (a test under `-race` reads only whole JSON lines), and an edit made right after the first items answer of a root still pushes a changed event.
 - [o] T9 Conformance vectors: corpus before, request, expected corpus after (requires T4)
 - [o] T9.1 Define the vector shape and run the first vectors through the executor (requires T4)
