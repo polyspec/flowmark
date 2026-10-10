@@ -49,7 +49,7 @@ The failure codes are those of [operations](40-ops.md).
 
 On write, each of the following is `CONSTRAINT`; the rule that states it is named in brackets:
 
-- a single-line value with a line feed or a CR, with leading or trailing white space, or with `<` followed
+- a single-line value with a line feed or a CR, beginning or ending with an invisible character (as spec 10 defines it: white space other than U+1680, Cc, Cf other than a Prepended_Concatenation_Mark, or Default_Ignorable_Code_Point), or with `<` followed
   by `!`, `/` or a letter, in a list title, an H1, a cell, a list field or a field-list value
   ([canonical format](10-canonical-format.md));
 - a `files` body whose first line is a `-` list item or, after a field list, whose first line is indented by two or more columns (spaces, or a tab) ([canonical format](10-canonical-format.md));

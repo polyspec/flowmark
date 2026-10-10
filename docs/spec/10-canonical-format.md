@@ -143,11 +143,11 @@ and the column sections — are payload: the renderer moves them with their row 
   NULL value has no text, so its section is absent.
 - A value is framed in the file: a blank line follows its heading only when the value is non-empty, the
   value's lines follow, and a blank line precedes the next element when one follows. The value neither
-  begins nor ends with a line feed and holds no line of only white space at either end; a write of a
+  begins nor ends with a line feed and holds no blank line at either end (a line of only spaces and tabs, which is CommonMark's blank line); a write of a
   value that does is `CONSTRAINT`. Grounding: the framing blank lines separate the elements, so a value
-  that began or ended with a line feed would read back with its framing changed, and a line of only
-  white space at either end would be read as a framing line.
-- The framing blank lines are skeleton: on read, a further blank line or line of only white space at either end of a value is not part of the value and is `format.noncanonical`, and so is a missing framing blank line where the element still reads back, except a body line directly after the last field-list item, which is `format.block`; `flowmark canon` repairs both.
+  that began or ended with a line feed would read back with its framing changed, and a blank line
+  at either end would be read as a framing line.
+- The framing blank lines are skeleton: on read, a further blank line (a line of only spaces and tabs) at either end of a value is not part of the value and is `format.noncanonical`, and so is a missing framing blank line where the element still reads back, except a body line directly after the last field-list item, which is `format.block`; `flowmark canon` repairs both.
 - A value holds no top-level setext heading: a line of only `=` or only `-`, of at most three spaces of
   indent and any trailing spaces or tabs, directly after a line of a top-level paragraph of the value, is
   `CONSTRAINT` on write; on read, a setext heading is a heading where CommonMark reads one. Grounding: a
@@ -212,7 +212,7 @@ catalog.
 - A list glyph other than ` ` and `x` renders as literal bracket text in common viewers. The state
   names are the catalog's; the glyphs of `flowmark.dbs` are its convention.
 - Fields are parsed from the right: a token `<declared column>:<value>`, where the value is a bare
-  token without space, `"` or `\`, or `"…"` with `\"` and `\\` as its escapes. A field carries no
+  token without any invisible character, `"` or `\`, or `"…"` with `\"` and `\\` as its escapes. A value holding an invisible character is written quoted, since an invisible character inside a bare token reads as a separator or not at all. On read, a token `<declared column>:<value>` whose bare value holds an invisible character is `format.block`, since the write rule produces neither it nor such a title token. A field carries no
   sigil. Only stored scalar columns are fields.
 - An absent field is NULL; `col:""` is the empty text. Every non-null column is written; a row
   missing a non-null field is `format.block`.
@@ -244,16 +244,23 @@ catalog.
 
 A title (in a list row, in an H1 or in a cell), a list field, a field-list value and a table cell are
 single-line places. A single-line value is inline markdown as written and is never escaped, except as
-this section states. White space in the rules of this section is the space (U+0020) and the tab
-(U+0009), as CommonMark's stripping of a paragraph's ends counts them; any other character, such as a
-no-break space, is text. Grounding: CommonMark 0.31.2 strips exactly these characters from the ends of a
-paragraph and of an ATX heading's content, so the rules name the same ones.
+this section states. In this section, white space is a character with the Unicode White_Space property,
+and an invisible character is a white space character other than U+1680, a control character (general category Cc), a format
+character (general category Cf, such as U+FEFF) other than a Prepended_Concatenation_Mark (U+0600–U+0605, U+06DD, U+070F, U+0890–U+0891, U+08E2, U+110BD and U+110CD in Unicode 17.0.0), or a Default_Ignorable_Code_Point (such as U+3164, U+115F,
+U+034F and the variation selectors); the Unicode properties are those of Unicode 17.0.0, the version of
+the `unicode` package of Go that the engine is built with. The edge rules of this section refuse an invisible character at
+either end of a value; a character inside a value is not an edge. Inside a separator the canonical
+white space is the space (U+0020). Grounding: such a character renders with no glyph, so a reader cannot see it; U+1680 and the prepended concatenation marks render with a glyph and are text. The viewers strip
+different sets of them at the edges (Python-Markdown strips U+001C to U+001F, which are not White_Space),
+so refusing every invisible character at an end keeps the value's text and what any viewer shows the same,
+whatever the viewer's version. CommonMark 0.31.2 strips the space and the tab from the ends of a paragraph
+and of an ATX heading's content, so these two are part of the set.
 
-- On write, a value there that contains a line feed or a CR, that has leading or trailing white space,
+- On write, a value there that contains a line feed or a CR, that begins or ends with an invisible character,
   or that contains `<` followed by `!`, `/` or a letter is `CONSTRAINT`: a line feed cannot be written
   on one line, and raw HTML would hide or alter the value.
-- On read, a single-line value that renders differently from its text beyond its inline markdown is `format.block`; this is exactly a quoted list field or cell with leading or trailing white space, or a value with `<` followed by `!`, `/` or a letter (raw HTML
-  would hide or alter it). White space that rendering drops around a single-line place is `format.noncanonical`. Each place has one canonical separator (`# ` after the H1 marker, `: ` after a field-list column or nothing for the empty text, one space between list tokens, `| v |` in a cell); any other white space there is `format.noncanonical`.
+- On read, a single-line value that renders differently from its text beyond its inline markdown is `format.block`; this is exactly a quoted list field or quoted cell (`"…"`) with an invisible character at either end inside its quotes, or a value with `<` followed by `!`, `/` or a letter (raw HTML
+  would hide or alter it). On read, a space or a tab at an end of a single-line place where CommonMark strips it at the ends of a line's content (or GFM at the ends of a cell) is `format.noncanonical`; a space before a following list token is a separator; a tab that ends a list title before a following token is `format.block`; any other invisible character at an end is `format.block`, since the write rule cannot produce it again. Each place has one canonical separator (`# ` after the H1 marker, `: ` after a field-list column or nothing for the empty text, one space between list tokens, `| v |` in a cell); any other space or tab there is `format.noncanonical`.
 - A title in an H1 whose final run of `#` follows a space or a tab, or that consists only of `#`, is
   written with its last `#` as `\#`, since CommonMark would read the run as a closing sequence (a line
   of `#` alone is an empty heading). On read, the title is the raw heading content with CommonMark's leading and trailing spaces, tabs and closing sequence removed, and a final `\#` read as `#`; no other escape is decoded. A final `\#` that the write rule would not produce (as in `# C\#`, whose title `C#` is written
@@ -274,7 +281,7 @@ paragraph and of an ATX heading's content, so the rules name the same ones.
   so is a body whose first line is indented by two or more columns (spaces, or a tab) when a field list precedes it. On read, a body line directly after the last field-list item without the blank line is `format.block`, since CommonMark reads it as a continuation of that item. The body may open with a
   `*` or `+` list or any other block. Grounding: a `-` item after the H1 is a field in the grammar, so
   such a body could not be read back as the body it was written from.
-- An item that is not `- <stored scalar column>: <value>` in column order is `format.block`; white space other than the canonical separator is `format.noncanonical`, as [Single-line places](#single-line-places) states. An absent
+- An item that is not `- <stored scalar column>: <value>` in column order is `format.block`; a space or a tab other than the canonical separator is `format.noncanonical`, as [Single-line places](#single-line-places) states. An absent
   item of a non-null column is `format.block`; the engine writes a default explicitly on insert.
 
 ## Foreign keys as links
@@ -335,7 +342,7 @@ walk's rule is `corpus.walk` of the [document model](20-document-model.md).
 
 - **Read and write faults.** On read, these are `format.block`: a missing non-null field or section; a
   single-line value that renders differently from its text beyond its inline markdown (see [Single-line places](#single-line-places));
-  a `files` body whose first line is a `-` list item; a `files` body whose first line is indented by two or more columns (spaces, or a tab) after a field list. The same faults are `CONSTRAINT` on write. White space that rendering drops around a single-line place is `format.noncanonical` on read. Grounding: a
+  a `files` body whose first line is a `-` list item; a `files` body whose first line is indented by two or more columns (spaces, or a tab) after a field list. The same faults are `CONSTRAINT` on write. On read, a space or a tab at an end of a single-line place where CommonMark strips it at the ends of a line's content (or GFM at the ends of a cell) is `format.noncanonical`; a space before a following list token is a separator; a tab that ends a list title before a following token is `format.block`; any other invisible character at an end is `format.block`. Grounding: a
   read reports what the document holds, and a write refuses to produce what could not be read back.
 - **Validator rules.** A value not of its column type is `type`, a dangling foreign key is `reference.dangling`, and a key equal to another key of its table without regard to case is `key.duplicate`. The validator reports them over the corpus. They never make a file unreadable, except a `parent` of a block or document row that names no row of its file, which is `format.block` ([canonical format](#foreign-keys-as-links)), and a `parent` cell that names a key two rows of its file share, which is `format.block` too ([Table rows](#table-rows)). Grounding: a file's readability must not depend on other files, or deleting a parent file would make its children unreadable and unrepairable. A value not of its column type is `CONSTRAINT` on write; a write that introduces a dangling foreign key or a duplicate key is `FOREIGN_KEY` or `DUPLICATE_KEY`. The commit refusal is stated under [Encoding and line structure](#encoding-and-line-structure). Opening a corpus, introspection, `flowmark validate` and `flowmark canon` are not requests over rows: they never fail on an unavailable table, apart from canon's link-derivation refusal ([operations](40-ops.md#the-canon-operation)). The validator reports every file's `format.*` and `parent.cycle` diagnostics, and the validator rules of every row it can read in a file without `format.block`, `format.section`, `format.encoding` or `parent.cycle`; a rule that needs the complete rows of a table that holds such a file — `reference.dangling` into it, `key.duplicate`, `order` and `state.limit` within it — is not reported for that table, and the file's own diagnostic stands for it; a table unavailable only through byte-for-byte equal keys has every rule reported.
 - **Unavailable table.** A table is unavailable when it holds a file with `format.block`, `format.section`, `format.encoding` or a `parent.cycle` among its rows, or when two of its rows have byte-for-byte equal keys; the request then names the second row's file and `key.duplicate`. A table holds every corpus document at a place its storage names: a `files` table every `<table>/<name>.flowmark.md`, a `document` table `<table>.flowmark.md`, and a block table every file its placement parent's table holds, recursively, so a history block is unavailable with its state table. A table is also unavailable while a `corpus.walk` entry stands at such a place, or at a name equal to one without regard to case — an entry that cannot be read, a symlink or a non-folder entry at a `files` table's place, or a suffix, folder or document name in another case. Grounding: a missing folder is an empty table, but an entry in its place is neither a folder nor absent, and the engine neither renames nor removes an entry it does not own, so the table's rows cannot be read or written. A file whose name does not end with `.flowmark.md`, compared without regard to case, is outside the database and never makes a table unavailable. Every request that needs any of its rows — a read of it, a point lookup by key included, an insert, update or delete in it, a join, relation or subquery over it, the rewrite of the links to a row whose detail section appears or disappears when a link may lie in it, and every constraint check over it (a primary or unique key, a reference, a link target, a `limit` count, an `order` sibling set, a `check`) — fails as `CONSTRAINT`, naming the file and the diagnostic. A request never answers from the other files' rows alone. A `files` file whose name is not the canonical text of a key is `format.block`, so its table is unavailable too. Grounding: an answer or a check over rows the engine cannot read would be wrong without saying so, and a request cannot name one of two rows with byte-for-byte equal keys. The engine writes nothing in an unavailable table apart from `flowmark canon` on its files ([operations](40-ops.md#the-canon-operation)): a human repairs, renames or removes the row or file that makes it unavailable by editing the corpus, and the table is available again on the next read. Grounding: a request cannot name one of two byte-equal rows, and a row the engine cannot read cannot be deleted through it.

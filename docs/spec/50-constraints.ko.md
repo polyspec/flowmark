@@ -1,5 +1,5 @@
 <!-- doc-id: spec-constraints -->
-<!-- source-sha256: 1b9f4d91d31bce195f0532efaab880dcade9bddb4f62e736cc952daec56437cb -->
+<!-- source-sha256: cd75bd91370d6084b97cbe0cd1e71e1f66c35766af1d42975b820437878af002 -->
 # Constraints
 
 [English](50-constraints.md)
@@ -43,9 +43,9 @@
 
 쓰기에서 다음 각각은 `CONSTRAINT`다. 괄호 안은 그것을 정하는 규칙이다:
 
-- 줄바꿈이나 CR, 앞이나 뒤의 공백, 또는 `<` 뒤에 `!`, `/`, 글자가 오는 한 줄 값 — list 제목, H1, cell, list
+- 줄바꿈이나 CR, 앞이나 뒤의 보이지 않는 문자(spec 10이 정한 것: U+1680을 뺀 공백, Cc, Prepended_Concatenation_Mark를 뺀 Cf, Default_Ignorable_Code_Point), 또는 `<` 뒤에 `!`, `/`, 글자가 오는 한 줄 값 — list 제목, H1, cell, list
   field, field list 값 안에서([canonical format](10-canonical-format.md));
-- 첫 줄이 `-` list 항목이거나, field list 뒤에 두 column 이상(공백 또는 tab) 들여쓴 줄인 `files` body([canonical format](10-canonical-format.md));
+- 첫 줄이 `-` list 항목이거나, field list 뒤에 두 column 이상(space 또는 tab) 들여쓴 줄인 `files` body([canonical format](10-canonical-format.md));
 - `files` row의 H1 제목 텍스트가 `\#`로 끝나는 제목([canonical format](10-canonical-format.md));
 - 바이트 그대로 쓸 수 없는 text나 `markdown` 값, 그리고 `CanonicalLiteral`이 거절하는 typed 값(scale보다 많은 소수 자릿수 — 0 포함, precision − scale보다 많은 정수 자릿수, precision보다 많은 소수 자릿수의 time이나 datetime)([canonical format](10-canonical-format.md));
 - `format.*` 진단이 있는 file을 다시 쓰는 logical write는 file과 진단을 밝히며 `CONSTRAINT`다. 그 진단이 `format.noncanonical`이면 `flowmark canon`을 밝힌다(commit의 면제를 제외하고)([canonical format](10-canonical-format.md)). 쓰기는 문서 바이트를 정규화하지 않는다;

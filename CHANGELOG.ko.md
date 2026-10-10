@@ -1,8 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: cb906d30929af0cc1e3d34b77b5c0d0b054306bda2a05ae0044cba9d88b1b1ab -->
+<!-- source-sha256: aed821fa41ad61fa4d32d6f67f5686460c29b04e04c31c737dddf0f15af997d0 -->
 # Changelog
 
 ## Unreleased
+
+- T12.1-9: spec과 plan이 단일 줄 값의 양 끝에 있는 보이지 않는 문자를 거절한다: U+1680을 뺀 Unicode White_Space 속성의 문자, 제어 문자(Cc), Prepended_Concatenation_Mark를 뺀 형식 문자(Cf, U+FEFF 포함), Default_Ignorable_Code_Point다(Unicode 17.0.0 기준). 그런 문자는 글리프 없이 그려지므로 독자는 볼 수 없고(U+1680과 prepended concatenation mark는 글리프가 있어 텍스트다) viewer들이 끝에서 떼어내는 문자 집합이 서로 다르므로, 모두 거절하면 viewer의 버전과 무관하게 각 viewer가 값의 텍스트를 보여 준다. 구분자의 정식 공백은 여전히 space다. 읽기에서 끝의 space나 tab은 CommonMark가 떼어내므로 `format.noncanonical`이며(list 제목의 끝에서 뒤따르는 토큰 앞의 tab은 `format.block`), 끝의 그 밖의 보이지 않는 문자는 쓰기 규칙이 다시 만들 수 없으므로 `format.block`이다. T12.1-8의 space와 tab 정의를 대체하며, framing 빈 줄을 space와 tab만 있는 줄로 명시한다.
 
 - T12.1-7: spec이 setext 규칙의 근거를 적는다. setext heading은 level 1 또는 2이고 모든 행 scope의 level L은 2 이상이므로 L보다 깊은 setext 밑줄은 없으며, spec 10의 setext 거절이 값의 모든 최상위 setext heading을 덮는다. plan도 같은 근거를 적는다.
 

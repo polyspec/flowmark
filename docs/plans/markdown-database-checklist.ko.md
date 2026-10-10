@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database-checklist -->
-<!-- source-sha256: 03b5dac1c2bcffa3d6338e459deac5763c0336385abfc43bc65a649dd7b1e4d7 -->
+<!-- source-sha256: bb0ba8255fbcc4d35672891b50e2f79fbde6b2c543d5e9b768f9928870541dac -->
 # markdown database checklist
 
 ## T12 markdown database
@@ -21,10 +21,12 @@
   - 완료 기준: spec 10과 그 twin이 그 판정을 근거와 함께 적고, `make documents-check`와 `make refs-check`가 통과한다.
 - [o] T12.1-8 spec이 다시 짠 `files` codec에 필요했던 읽기 규칙을 적는다: 뒤에 요소가 오기 전에 CommonMark type 1–5의 HTML block을 열어 둔 값을 담은 file은 쓰기에서 `CONSTRAINT`이듯 읽기에서 `format.block`이다. 읽은 형태를 쓰기 규칙이 다시 만들 수 없는 제목(예: `# a\\#`)은 `format.block`이다. 홀로 쓰인 CR은 줄 끝이며 `format.noncanonical`이다. 한 줄 자리 규칙의 공백은 space와 tab이다. 원인: T12.2.2-1 codec이 규칙 없이 이것들을 하나씩 골라야 했다 (T12.2.2-1 후속)
   - 완료 기준: spec 10과 그 twin이 각 규칙을 근거와 함께 적고, 이 항목의 문구를 범위로 한 적대 검증을 거치며, `make documents-check`와 `make refs-check`가 통과한다.
-- [ ] T12.1-9 단일 줄 자리 가장자리의 공백은 이름 붙은 viewer들이 떼어내는 것의 합집합으로 거절한다 — Unicode White_Space 문자들이며, 여기에는 GFM의 U+000B와 U+000C, markdown-it과 Python-Markdown의 Unicode trim이 포함된다 — 그래서 어떤 viewer도 값을 텍스트와 다르게 보이지 않는다. spec 10이 근거와 함께 이를 적는다 (T12.1-8 후속)
+- [o] T12.1-9 단일 줄 자리의 양 끝에 있는 보이지 않는 문자는 거절한다. 그런 문자는 글리프 없이 그려지므로 독자는 볼 수 없고, 이름 붙은 viewer들은 그런 문자를 서로 다른 집합으로 떼어내기 때문이다. 보이지 않는 문자는 U+1680을 뺀 Unicode White_Space 속성의 문자, 제어 문자(Cc), Prepended_Concatenation_Mark를 뺀 형식 문자(Cf, U+FEFF 포함), Default_Ignorable_Code_Point이며 Unicode 17.0.0 기준이다. spec 10이 근거와 함께 이를 적는다 (T12.1-8 후속)
   - 완료 기준: spec 10과 그 twin이 규칙을 근거와 함께 적고, 이 항목의 문구를 범위로 한 적대 검증을 거치며, `make documents-check`와 `make refs-check`가 통과한다.
 - [o] T12.1-10 섹션 경계와 값의 끝은 하나의 규칙으로 CommonMark 0.31.2가 해석하는 block 구조를 따른다: 섹션 경계는 그 구조의 최상위 heading이므로, 모든 type(6과 7 포함)의 HTML block, 게으른 연속 줄, 문단을 끊을 수 있는 것에 관한 규칙이 CommonMark가 정한 그대로 센다. fence나 HTML block을 열어 둔 값은 그 구조에서 뒤따르는 요소가 그 안에 흡수될 때에만 거절하며, 뒤따르는 최상위 요소가 닫는 컨테이너 안에 열린 채 남은 block은 결함이 아니다. 원인: T12.2.2-2 scanner는 spec 10이 fence, HTML type 1–5, 컨테이너만 이름 붙인 곳에서 CommonMark를 따라야 했고, 열린 block 거절이 컨테이너를 보지 못함을 찾았다 (T12.2.2-2, T12.1-8 후속)
   - 완료 기준: spec 10과 그 twin이 규칙을 근거와 함께 적고, 더 좁은 T12.1-6과 T12.1-8의 문장이 그것으로 바뀌며, 이 항목의 문구를 범위로 한 적대 검증을 거치고, `make documents-check`와 `make refs-check`가 통과한다.
+- [ ] T12.2.2-4 `files` codec이 T12.1-9의 보이지 않는 문자 규칙을 적용한다: 끝의 거절, 읽기 분류(CommonMark나 GFM이 떼어내는 자리의 space나 tab은 `format.noncanonical`, 끝의 그 밖의 보이지 않는 문자는 `format.block`), 따옴표 쓰기를 동반한 bare token의 제외와 그 읽기 규칙, U+1680과 prepended concatenation mark의 제외. 원인: T12.1-9가 codec이 검사하는 공백을 바꾸었고, Go의 `unicode` 패키지에는 Default_Ignorable_Code_Point 속성이 없으므로 codec은 Unicode 17.0.0 data에서 생성한 table로 그것을 읽으며, 그 table의 최신성은 테스트가 확인한다 (T12.1-9 후속; T12.2.2-2 필요)
+  - 완료 기준: 문자 부류마다, 자리마다(H1 제목, field list 값, list 제목과 field, table cell) 허용과 거절 사례가 있고, 생성된 table의 Unicode 17.0.0 data 대비 최신성 테스트가 있으며, fuzz target이 새 사례로 seed되고, `go test -count=1 ./...`, `make documents-check`, `make refs-check`가 통과한다.
 - [ ] T12.2.2-3 `files` codec이 T12.1-8의 읽기 규칙을 적용한다: CommonMark type 1–5의 HTML block을 요소 앞에서 열어 둔 값은 읽기에서 `format.block`이다(`htmlOpen`은 지금 쓰기에서만 적용된다) (T12.1-8 후속; T12.2.2-2와 T12.1-10 필요. T12.1-10의 더 넓은 규칙, 즉 모든 HTML block type과 뒤따르는 요소를 흡수할 때만 거절되는 열린 block을 적용한다)
   - 완료 기준: 읽기 사례의 RED 테스트가 의도한 이유로 실패함을 확인한 뒤 GREEN이 되고, `go test -count=1 ./store/ ./catalog/`, `make documents-check`와 `make refs-check`가 통과한다.
 - [o] T12.2.2-2 codec은 heading을 CommonMark block 구조로 찾는다: list 항목이나 block quote 안의 heading은 섹션 경계가 아니므로, `store/markdown.go`는 list 항목 안의 들여쓴 `##` 줄을 경계로 보지 않는다 (T12.1-6 후속; T12.2.2-1 필요)
