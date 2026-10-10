@@ -3,6 +3,8 @@
 
 ## Unreleased
 
+- T2.5-1: the corpus golden test reads the documents `config/documents.json` selects, through the same selection as `make documents-check`, instead of every markdown file outside four hard-coded directories. A markdown fixture under a package's `testdata` directory no longer breaks `go test ./codec/`; `config/documents.json` excludes `**/testdata/**` from the documents.
+
 - T12.2.1: the `catalog` package loads the catalog of a corpus root. It reads the `dbspec/*.dbs`
   set with orm's `engine/dbspec` and the `dbspec/flowmark.json` translations, and rejects each
   case the spec names as a located diagnostic: a missing catalog, a table without `store`, a

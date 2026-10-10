@@ -1,8 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: e2d28d5b30b94ea8d7c5041b678c9c55d326664f4452a8b208d6f826752fd8ef -->
+<!-- source-sha256: b8de70daf875c7de0b4f79f462e4f81c7252d00c1c1e0973be90704639ca2f44 -->
 # Changelog
 
 ## Unreleased
+
+- T2.5-1: corpus golden 테스트가 네 개의 고정 디렉터리 밖의 모든 markdown 파일 대신 `config/documents.json`이 고른 문서를 읽는다. `make documents-check`와 같은 선택을 쓴다. 패키지의 `testdata` 디렉터리 아래 markdown fixture가 더는 `go test ./codec/`을 깨지 않으며, `config/documents.json`은 `**/testdata/**`를 문서에서 제외한다.
 
 - T12.2.1: `catalog` package가 corpus root의 catalog를 적재한다. orm의 `engine/dbspec`으로 `dbspec/*.dbs`
   집합을, `dbspec/flowmark.json` 번역과 함께 읽으며, spec이 명한 각 경우를 위치가 정해진 진단으로 거절한다:
