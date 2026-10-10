@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database-checklist -->
-<!-- source-sha256: 430b79a4aa912cd8b77c2e5afce38ccedf539ee57485df49aabd7a33db73ea26 -->
+<!-- source-sha256: ff12e71b29904e53e25254ce6039a185eb005633e5e89514c50c0a0bb4c805f9 -->
 # markdown database checklist
 
 ## T12 markdown database
@@ -12,7 +12,7 @@
 - [ ] T12.2 저장 codec: `files`, `document`, `block` 저장을 list와 table 형식으로 parse·render하고 모든 저장의 P1/P2를 갖는다. orm `T62` 선행 (T12.1 선행)
 - [o] T12.2.1 catalog를 적재한다: corpus root의 `dbspec/*.dbs` 집합을 orm의 `engine/dbspec`으로, `dbspec/flowmark.json`(번역)을 함께 읽는다. catalog 없음, `store` 없는 table, 복합 key, `aes`/`aes_version`/`blind_index`, `audit`/`immutable`, `cascade`/`set_null`, 외부 `use`, state machine의 `history` 또는 `initial` 없음, list 또는 files 저장의 `title` 없음, H6을 넘는 제목 깊이를 각각 위치가 정해진 진단으로 거절한다 (orm `T62` 선행)
   - 완료 기준: 거절마다 테스트 하나와 적재된 fixture catalog 하나.
-- [ ] T12.2.1-1 catalog는 `.dbs` 집합만 읽는다: `dbspec/flowmark.json`과 그 번역은 제거하며, `dbspec/`의 다른 file은 모두 catalog 진단이다 (T12.2.1 후속; T12.1-1 선행)
+- [o] T12.2.1-1 catalog는 `.dbs` 집합만 읽는다: `dbspec/flowmark.json`과 그 번역은 제거하며, `dbspec/`의 다른 file은 모두 catalog 진단이다 (T12.2.1 후속; T12.1-1 선행)
   - 완료 기준: 사례마다 테스트 하나이며, catalog API에 translations 필드가 남지 않는다.
 - [~] T12.2.2 `files` 저장: 행마다 `<table>/<key>.flowmark.md` 파일 하나를 parse·render한다 — H1 제목, 저장되는 scalar column의 field list(읽을 수 있는 값 형식), 본문, level-2 section, 외래 key는 link — P1/P2를 갖는다. literal은 그것을 담은 고정된 orm commit의 `CanonicalLiteral`로 읽는다 (T12.1-1, T12.2.1-1 선행)
   - 완료 기준: golden fixture가 byte 단위로 round-trip하고, 모든 규칙마다 허용과 거절 사례가 있으며, parse와 emit은 golden seed로 fuzz한다. store/literal.go는 orm의 로직을 복사하지 않는다.

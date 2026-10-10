@@ -3,6 +3,16 @@
 
 ## Unreleased
 
+- T12.2.1-1: the catalog reads only the `.dbs` set. `dbspec/flowmark.json` and its `translations`
+  field are removed, with the settings reader and the `Translations` field of the Catalog API. Any
+  other entry in `dbspec/`, a file of another name or a folder, is a `catalog` diagnostic; hidden
+  entries are skipped. The name rules of spec 30 are enforced: a table named like a Windows device
+  name (`con`, `prn`, `aux`, `nul`, `com0`-`com9`, `lpt0`-`lpt9`) is a schema error; a child block
+  table named like a markdown column of its parent is a schema error; a markdown column or a block
+  table named like another table whose detail sections stand in the same file (a document table
+  with its block descendants, or the block descendants of a files table) is a schema error. The
+  name comparison ignores case. The fixture catalog no longer carries `dbspec/flowmark.json`.
+
 - T12.1-1: the specifications state the readable-document ruling. A corpus document is a
   `*.flowmark.md` file that reads as an ordinary markdown document, with no comment, frontmatter,
   doc-id, provenance or twin marker. A `files` row is the file `<table>/<key>.flowmark.md` and its
