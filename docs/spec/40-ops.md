@@ -3,61 +3,88 @@
 
 [한국어](40-ops.ko.md)
 
-This specification pins the operational semantics: opening a corpus, the transaction protocol,
-the lock, the revision token and the cost model. The order of the commit protocol is normative.
+This specification pins the operational semantics: opening a corpus, the server and its
+sessions, the lock, the transaction and commit protocol, the clock and the failure vocabulary.
+The order of the commit protocol is normative.
 
 ## Opening a corpus
 
-- Opening runs **recovery first**: a stage with a prepare record is completed, a stage without
-  one is discarded, and a target whose current hash matches neither recorded hash — a human edit
+- Opening runs **recovery first**: a stage with a prepare record is completed, a stage without one
+  is discarded, and a target whose current hash matches neither recorded hash — a human edit
   landed mid-crash — is refused and reported, never silently overwritten.
-- The walk builds the corpus view: folders bound by the schema, documents parsed, indexes
-  derived, the parsed-row cache keyed by file content hash reused for unchanged files.
+- Opening loads the catalog, walks the corpus, parses the documents, derives the indexes, and
+  reuses the parsed-row cache keyed by file content hash for unchanged files.
+
+## The server
+
+- `flowmark serve <corpus> --port <port>` is the resident face that orm clients reach. It binds
+  loopback TCP only. On its first start it writes a random token to `.flowmark/server.json`; the
+  token is kept across restarts and replaced only by `flowmark serve --new-token`.
+- The DSN is `markdown://127.0.0.1:<port>/<corpus>?token=<token>`, where `<corpus>` is the corpus
+  root's directory name. A corpus or token mismatch is `CONFIG`. Remote access and other
+  authentication are outside v1.
+- A connection is a session: JSON lines of requests and control messages, each answered in order
+  ([capability table](60-dialect.md) holds the request and answer shapes).
 
 ## The lock
 
-- **One portable lock, per operation.** Every operation — read or write, CLI, MCP or sidecar —
-  takes the same lock file with holder identity and stale detection for its own duration, with a
-  timeout that names the holder. There is no long-lived lock, no reader/writer split, and no
-  daemon: a face runs inside its host's lifetime.
-- A commit conflict — a target changed since it was read — fails with the file and line and a
-  defined **re-read-and-retry-once** contract. No silent merge, ever.
-- Multi-platform grounding: no flock, no OS-specific durability; the lock is a lock file with
-  holder identity (the kit holder-lock precedent), and crash safety comes from the journal
-  replay below.
+- **One portable lock.** Every operation — read or write, from any face — takes the same lock
+  file with holder identity and stale detection: a lock file with `<pid>@<host>/<session>`, after
+  the kit holder-lock precedent; no flock, no OS-specific primitive.
+- The lock is held for one operation, or for one server transaction from `begin` to `commit` or
+  `rollback`. A closed connection, or a transaction idle longer than the server flag
+  `tx_idle_ms`, rolls the transaction back and releases the lock.
+- The CLI, MCP and sidecar wait on the same lock and fail with `LOCK_TIMEOUT` naming the holder.
+
+## Transactions
+
+- Requests inside a transaction read the staged post-image; a savepoint is a nested stage, and
+  `rollback_to` discards the stages above it.
+- A face retries a single-operation write once after a re-read when the commit meets
+  `CORPUS_CONFLICT`. A server transaction is never retried by the server; the orm client receives
+  `WRITE_CONFLICT`.
 
 ## The commit protocol
 
-1. Write every post-image file into `.flowmark/tx/<id>/` content-addressed and fsync it.
-2. Copy the pre-image of every target into the stage and fsync.
-3. Write and fsync the **prepare record**: every rename with its pre- and post-hashes.
-4. Perform the renames through the runtime's atomic rename.
-5. Write and fsync the commit record.
-6. Collect the stage.
+1. Check that every target is unchanged since it was read; otherwise fail `CORPUS_CONFLICT`
+   naming the file and line.
+2. Run the constraint checks against the corpus re-read under the lock with the post-image
+   applied — not against a snapshot taken at `begin`, and not against a predicted touched-file
+   set. A history gap on another row never fails the commit.
+3. Write every post-image file into `.flowmark/tx/<id>/` content-addressed and fsync it.
+4. Copy the pre-image of every target into the stage and fsync.
+5. Write and fsync the **prepare record**: every rename with its pre- and post-hashes.
+6. Perform the renames through the runtime's atomic rename.
+7. Write and fsync the commit record.
+8. Collect the stage.
 
-Validation runs at commit **against the corpus freshly re-read under the lock** — not against a
-BEGIN snapshot and not against a predicted touched-file set (referential discovery makes that
-set unknowable in advance). Durability across power loss relies on this journal and the recovery
-on open, not on OS-specific directory fsync semantics.
+Durability across power loss relies on this journal and the recovery on open, not on
+OS-specific directory fsync semantics.
 
-## Corpus revision
+## The clock
 
-- A monotonically increasing counter in `.flowmark/`, bumped by every commit. A multi-call read
-  session — paginate — carries the token and fails with `CORPUS_CHANGED` on mismatch, or degrades
-  to keyset pagination. `orderByRandom` is seeded per revision.
+Every engine-assigned time — `updated`, `soft_delete`, `default now`, a history row's `at` — is
+the request's `now` for an orm request, and otherwise the engine's UTC clock truncated to
+microseconds.
 
 ## Cost model
 
 - A per-command p95 latency target is declared here (hundreds of milliseconds at the corpus
   envelope of [open questions](110-open-questions.md)).
 - The parsed-row cache avoids re-parsing unchanged files; the default per-transaction validation
-  is the FK/UK closure of the post-image; full `flowmark validate` runs on demand and on schema
-  change.
-- A long-lived face (the sidecar) may watch the corpus for reads and push change events to its
+  is the closure of the post-image; full `flowmark validate` runs on demand and on catalog change.
+- A long-lived face (the sidecar, the server) may watch the corpus and push change events to its
   host; writes still go through the transaction protocol only.
 
 ## Failure vocabulary
 
-`LOCK_TIMEOUT` names the holder; `CORPUS_CONFLICT` names the file and line; `CORPUS_CHANGED`
-names the revision; recovery refusals name the target and both recorded hashes. Every failure
-message names the cause and the fix.
+| Face name | orm code | Meaning |
+| --- | --- | --- |
+| `LOCK_TIMEOUT` | `CANCELED` | the lock wait ended; names the holder |
+| `CORPUS_CONFLICT` | `WRITE_CONFLICT` | a target changed since it was read; names the file and line |
+| `DUPLICATE_KEY` | `DUPLICATE_KEY` | a primary or unique key value already exists; names both places |
+| `FOREIGN_KEY` | `FOREIGN_KEY` | a reference names no row, or a referenced row is deleted while referenced |
+| `CONSTRAINT` | `CONSTRAINT` | any other rule of the catalog refused the write — a check, a title, a transition, a required column, a limit, an order, a single-line place; names the rule and the place |
+| recovery refusal | — | names the target and both recorded hashes; opening refuses until resolved |
+
+Every failure message names the cause and the fix.
