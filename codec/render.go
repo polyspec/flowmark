@@ -7,12 +7,20 @@ import "strings"
 // lines byte for byte (spec 10-canonical-format).
 func Render(document *Document) string {
 	var header strings.Builder
-	header.WriteString("<!-- doc-id: " + document.DocID + " -->")
+	if document.DocID != "" {
+		header.WriteString("<!-- doc-id: " + document.DocID + " -->")
+	}
 	if document.TwinSHA != "" {
-		header.WriteString("\n<!-- source-sha256: " + document.TwinSHA + " -->")
+		if header.Len() > 0 {
+			header.WriteString("\n")
+		}
+		header.WriteString("<!-- source-sha256: " + document.TwinSHA + " -->")
 	}
 	if document.Owner != "" {
-		header.WriteString("\n<!-- owner: " + document.Owner + " -->")
+		if header.Len() > 0 {
+			header.WriteString("\n")
+		}
+		header.WriteString("<!-- owner: " + document.Owner + " -->")
 	}
 	if document.Title != "" {
 		header.WriteString("\n# " + document.Title)

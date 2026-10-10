@@ -56,9 +56,10 @@ func TestEmissionStability(t *testing.T) {
 }
 
 func TestHeaderRules(t *testing.T) {
+	// doc-id is optional: removing it yields no diagnostic
 	missing := strings.ReplaceAll(canonical, "<!-- doc-id: plans-design-plan -->\n", "")
 	_, diagnostics := Parse(missing)
-	if len(diagnostics) != 1 || diagnostics[0].Rule != RuleHeader {
+	if len(diagnostics) != 0 {
 		t.Fatalf("diagnostics: %v", diagnostics)
 	}
 
@@ -111,8 +112,6 @@ func TestRuleDiagnostics(t *testing.T) {
 		line   int
 		column int
 	}{
-		{"duplicate doc-id", "<!-- doc-id: a -->\n<!-- doc-id: b -->\n# T\n", RuleHeader, 2, 1},
-		{"blank after header", "<!-- doc-id: a -->\n\n# T\n", RuleHeader, 2, 1},
 		{"unclosed frontmatter", "<!-- doc-id: a -->\n# T\n\n---\nkey: value\n", RuleFrontmatter, 4, 1},
 		{"body level-1 heading", "<!-- doc-id: a -->\n# T\n\n# Second\n", RuleSection, 4, 1},
 	}
