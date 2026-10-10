@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database -->
-<!-- source-sha256: 57ecdaee86c5de25f65156dcdca1ecf2852fb49963704c01322a5f5b960f7278 -->
+<!-- source-sha256: 7d86324f96a5227c913f7e014c2626e0e6aa87d9f1c6f8cc8d4107d3687b3311 -->
 # markdown database 계획
 
 [English](markdown-database-plan.md)
@@ -159,8 +159,8 @@ markdown 전용 선언은 모두 dbspec **manifest setting**이며 `markdown <co
 - `list`(block 또는 document): `- [<glyph>] <key> <title>[ <field>…]`, 상태 column이 없으면
   `- <key> <title>[ <field>…]`. field는 오른쪽부터 parse한다: token `<선언된 column>:<value>`이고,
   value는 공백, `"`, `\` 없는 bare token이거나 `\"`와 `\\`를 escape로 갖는 `"…"`다. table cell은
-  `|`를 `\|`로 쓴다. 없는 field는 NULL, `col:""`은 빈 텍스트이며, default 없는 non-null column은
-  쓴다. `<선언된 column>:`과 맞는 제목 token은 `<column>\:`로 쓴다. `@`와 날짜 sigil은 제거한다.
+  `|`를 `\|`로 쓴다. 없는 field는 NULL, `col:""`은 빈 텍스트이며, 모든 non-null column은 쓴다 —
+  엔진은 insert에서 default를 명시적으로 쓰고, non-null field가 빠진 행은 `format.block`이다. `<선언된 column>:`과 맞는 제목 token은 `<column>\:`로 쓴다. `@`와 날짜 sigil은 제거한다.
 - 한 줄 자리(list 제목이나 field, table cell)에 줄바꿈을 가진 값은 쓰기에서 `CONSTRAINT`다. 배치
   foreign key와 `parent`는 block 행에 쓰지 않으며, 쓰면 `format.block`이다.
 
