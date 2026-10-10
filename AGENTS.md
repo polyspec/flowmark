@@ -18,9 +18,13 @@ has its checklist in `docs/plans/`.
   is reported and corrected, and an oddity found while reading or changing code is reported at
   once with the question whether a rule must be made or corrected.
 - Rules first. Development proceeds by stating logical rules and keeping them; behaviour that
-  follows no stated rule is a defect. A criterion, once set, is never lowered to let a test pass
-  — that is a betrayal of the criterion. A criterion that is itself wrong is raised as a problem
-  and corrected explicitly.
+  follows no stated rule is a defect. The measure of every decision is what is right — never that
+  an existing principle, rule or precedent says so. A criterion is not eternal: it is changed when
+  the situation shows it wrong, and only with its grounding stated. It is never lowered because it
+  is hard to meet while testing — that is a betrayal of the criterion.
+- A judgement that is hard to make, or a new line of reasoning, is verified adversarially by an
+  agent, which is asked for its solutions as well as its objections; the rounds repeat until no
+  disagreement remains.
 - No backward compatibility: an old path is removed, never kept behind a compatibility layer, a
   fallback or a migration shim.
 - Errors are never hidden: no fallback that turns a wrong input into a plausible one, no silent
