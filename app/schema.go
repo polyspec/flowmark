@@ -32,12 +32,12 @@ func SchemaFromDocument(root, relativePath string) (StateSchema, error) {
 	return Schema(), nil
 }
 
-// SchemaMermaid writes the state machine as a Mermaid stateDiagram-v2: the states as nodes,
-// the transitions as edges, the requires as edge labels, and the initial and terminal
-// states as entry and exit points.
+// SchemaMermaid writes the state machine as a Mermaid stateDiagram-v2 with a left-to-right
+// direction: the states as nodes, the transitions as edges, the requires as edge labels,
+// and the initial and terminal states as entry and exit points.
 func SchemaMermaid(schema StateSchema) string {
 	var out strings.Builder
-	out.WriteString("stateDiagram-v2\n")
+	out.WriteString("stateDiagram-v2\n    direction LR\n")
 	hasIncoming := map[string]bool{}
 	hasOutgoing := map[string]bool{}
 	for _, t := range schema.Transitions {
@@ -217,7 +217,7 @@ func writeSchema(text string, schema StateSchema) (string, error) {
 
 // ParseMermaid reads a Mermaid stateDiagram-v2 text into a schema: `[*] --> X` names the
 // initial state, `X : glyph label` describes a state, `A --> B: requires` is a transition,
-// and `B --> [*]` marks a terminal.
+// and `B --> [*]` marks a terminal. A `direction` line is ignored.
 func ParseMermaid(text string) (StateSchema, error) {
 	lines := strings.Split(text, "\n")
 	var states []StateDef
@@ -226,7 +226,7 @@ func ParseMermaid(text string) (StateSchema, error) {
 	seen := map[string]bool{}
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "stateDiagram-v2") {
+		if line == "" || strings.HasPrefix(line, "stateDiagram-v2") || strings.HasPrefix(line, "direction") {
 			continue
 		}
 		// `X : glyph label` — a state description
