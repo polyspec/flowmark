@@ -75,7 +75,7 @@ func TestSchemaFromDocumentDefault(t *testing.T) {
 func TestSchemaMermaid(t *testing.T) {
 	schema, _ := SchemaFromDocument(schemaRoot(t), "docs/plans/checklist.md")
 	mermaid := SchemaMermaid(schema)
-	for _, part := range []string{"stateDiagram-v2", "[*] --> 대기", "진행 --> 완료: evidence", "완료 --> [*]"} {
+	for _, part := range []string{"stateDiagram-v2", "[*] --> waiting", "doing --> done: evidence", "done --> [*]"} {
 		if !strings.Contains(mermaid, part) {
 			t.Fatalf("mermaid holds no %q:\n%s", part, mermaid)
 		}

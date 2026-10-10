@@ -59,9 +59,7 @@ func Parse(text string) (*Document, []Diagnostic) {
 		}
 		at++
 	}
-	if document.DocID == "" {
-		report(1, RuleHeader, "the document names no doc-id; the header comment is required")
-	}
+
 	for at < len(lines) && lines[at] == "" {
 		at++
 	}

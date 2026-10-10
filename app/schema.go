@@ -44,23 +44,25 @@ func SchemaMermaid(schema StateSchema) string {
 		hasIncoming[t.To] = true
 		hasOutgoing[t.From] = true
 	}
+	// state descriptions: the name is the identifier, the glyph+label is the description
+	for _, s := range schema.States {
+		fmt.Fprintf(&out, "    %s : %s\n", s.Name, s.Label)
+	}
 	for i, s := range schema.States {
 		if i == 0 || !hasIncoming[s.Name] {
-			fmt.Fprintf(&out, "    [*] --> %s\n", s.Label)
+			fmt.Fprintf(&out, "    [*] --> %s\n", s.Name)
 		}
 	}
 	for _, t := range schema.Transitions {
-		from := labelOf(schema, t.From)
-		to := labelOf(schema, t.To)
 		if len(t.Requires) > 0 {
-			fmt.Fprintf(&out, "    %s --> %s: %s\n", from, to, strings.Join(t.Requires, ", "))
+			fmt.Fprintf(&out, "    %s --> %s: %s\n", t.From, t.To, strings.Join(t.Requires, ", "))
 		} else {
-			fmt.Fprintf(&out, "    %s --> %s\n", from, to)
+			fmt.Fprintf(&out, "    %s --> %s\n", t.From, t.To)
 		}
 	}
 	for _, s := range schema.States {
 		if !hasOutgoing[s.Name] {
-			fmt.Fprintf(&out, "    %s --> [*]\n", s.Label)
+			fmt.Fprintf(&out, "    %s --> [*]\n", s.Name)
 		}
 	}
 	return out.String()
@@ -333,4 +335,61 @@ func SchemaFromMermaidBlock(root, relativePath string) (StateSchema, error) {
 		}
 	}
 	return Schema(), nil
+}
+
+// TransitionRule is one allowed transition from the document's Mermaid block.
+type TransitionRule struct {
+	From, To string
+	Requires []string
+}
+
+// RulesFromDocument reads the transition rules from the document's Mermaid block.
+// No Mermaid block: no transitions are allowed — the markdown is the only authority.
+func RulesFromDocument(root, relativePath string) (map[string]map[string][]string, error) {
+	schema, err := SchemaFromMermaidBlock(root, relativePath)
+	if err != nil {
+		return nil, err
+	}
+	rules := map[string]map[string][]string{}
+	for _, t := range schema.Transitions {
+		if rules[t.From] == nil {
+			rules[t.From] = map[string][]string{}
+		}
+		rules[t.From][t.To] = t.Requires
+	}
+	return rules, nil
+}
+
+// GlyphForState reads the glyph for a state name from the document's Mermaid block.
+func GlyphForState(root, relativePath, stateName string) (string, error) {
+	schema, err := SchemaFromMermaidBlock(root, relativePath)
+	if err != nil {
+		return "", err
+	}
+	for _, s := range schema.States {
+		if s.Name == stateName {
+			return s.Glyph, nil
+		}
+	}
+	// also check by glyph (the caller may pass a glyph)
+	for _, s := range schema.States {
+		if s.Glyph == stateName {
+			return s.Glyph, nil
+		}
+	}
+	return "", fmt.Errorf("the state %q is not in the state machine of %s", stateName, relativePath)
+}
+
+// StateNameForGlyph reads the state name for a glyph from the document's Mermaid block.
+func StateNameForGlyph(root, relativePath, glyph string) (string, error) {
+	schema, err := SchemaFromMermaidBlock(root, relativePath)
+	if err != nil {
+		return "", err
+	}
+	for _, s := range schema.States {
+		if s.Glyph == glyph {
+			return s.Name, nil
+		}
+	}
+	return glyph, nil // not declared: the glyph is its own name
 }
