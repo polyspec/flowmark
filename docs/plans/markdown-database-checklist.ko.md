@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database-checklist -->
-<!-- source-sha256: 09a2856896afbc6ced9a25498c2e82965bc3b4997a0ec07c0c7bb0dcce92fdce -->
+<!-- source-sha256: 4e2a54eb406972ff8a1bda1b4d55d6c07e29f79848d0294f7897e719a57d1454 -->
 # markdown database checklist
 
 ## T12 markdown database
@@ -25,6 +25,8 @@
   - 완료 기준: spec 10과 그 twin이 규칙을 근거와 함께 적고, 이 항목의 문구를 범위로 한 적대 검증을 거치며, `make documents-check`와 `make refs-check`가 통과한다.
 - [o] T12.1-10 섹션 경계와 값의 끝은 하나의 규칙으로 CommonMark 0.31.2가 해석하는 block 구조를 따른다: 섹션 경계는 그 구조의 최상위 heading이므로, 모든 type(6과 7 포함)의 HTML block, 게으른 연속 줄, 문단을 끊을 수 있는 것에 관한 규칙이 CommonMark가 정한 그대로 센다. fence나 HTML block을 열어 둔 값은 그 구조에서 뒤따르는 요소가 그 안에 흡수될 때에만 거절하며, 뒤따르는 최상위 요소가 닫는 컨테이너 안에 열린 채 남은 block은 결함이 아니다. 원인: T12.2.2-2 scanner는 spec 10이 fence, HTML type 1–5, 컨테이너만 이름 붙인 곳에서 CommonMark를 따라야 했고, 열린 block 거절이 컨테이너를 보지 못함을 찾았다 (T12.2.2-2, T12.1-8 후속)
   - 완료 기준: spec 10과 그 twin이 규칙을 근거와 함께 적고, 더 좁은 T12.1-6과 T12.1-8의 문장이 그것으로 바뀌며, 이 항목의 문구를 범위로 한 적대 검증을 거치고, `make documents-check`와 `make refs-check`가 통과한다.
+- [ ] T12.1-11 spec 10이 열린 block의 읽기 쪽을 있는 그대로 적는다: 열린 채 남은 fence나 HTML block이 흡수한 줄은 CommonMark block 구조에서 경계가 아니고 viewer도 그 block 안에 보여 주므로 읽기에서 값의 텍스트다. 그런 block 뒤에 요소를 두는 쓰기만 `CONSTRAINT`다. T12.1-8이 적고 T12.1-10이 남긴 읽기의 `format.block` 구절은 어떤 reader도 관찰할 수 없는 결함을 가리키므로 철회한다. 원인: T12.2.2-3 codec이 그 읽기 쪽이 비어 있음을 찾았다 (T12.1-10, T12.2.2-3 후속)
+  - 완료 기준: spec 10, 50, plan과 그 twin이 규칙을 근거와 함께 적고, 이 항목의 문구를 범위로 한 적대 검증을 거치며, `make documents-check`와 `make refs-check`가 통과한다.
 - [ ] T12.2.2-4 `files` codec이 T12.1-9의 보이지 않는 문자 규칙을 적용한다: 끝의 거절, 읽기 분류(CommonMark나 GFM이 떼어내는 자리의 space나 tab은 `format.noncanonical`, 끝의 그 밖의 보이지 않는 문자는 `format.block`), 따옴표 쓰기를 동반한 bare token의 제외와 그 읽기 규칙, U+1680과 prepended concatenation mark의 제외. 원인: T12.1-9가 codec이 검사하는 공백을 바꾸었고, Go의 `unicode` 패키지에는 Default_Ignorable_Code_Point 속성이 없으므로 codec은 Unicode 17.0.0 data에서 생성한 table로 그것을 읽으며, 그 table의 최신성은 테스트가 확인한다 (T12.1-9 후속; T12.2.2-2 필요)
   - 완료 기준: 문자 부류마다, 자리마다(H1 제목, field list 값, list 제목과 field, table cell) 허용과 거절 사례가 있고, 생성된 table의 Unicode 17.0.0 data 대비 최신성 테스트가 있으며, fuzz target이 새 사례로 seed되고, `go test -count=1 ./...`, `make documents-check`, `make refs-check`가 통과한다.
 - [o] T12.2.2-3 `files` codec이 T12.1-8과 T12.1-10의 열린 block 규칙을 적용한다: block scanner가 모든 CommonMark type의 HTML block을 읽고, 흡수할 뒤따르는 요소 앞에서 fence나 HTML block을 열어 두는 쓰기는 `CONSTRAINT`다. 읽기에서 그런 block이 흡수한 줄은 CommonMark block 구조에서 경계가 아니므로 값의 텍스트이며, 읽기 쪽에는 보고할 결함이 없다(T12.1-11이 spec 10에 이를 적는다) (T12.1-8 후속; T12.2.2-2와 T12.1-10 필요. T12.1-10의 더 넓은 규칙, 즉 모든 HTML block type과 뒤따르는 요소를 흡수할 때만 거절되는 열린 block을 적용한다)
