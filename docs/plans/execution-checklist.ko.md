@@ -1,5 +1,5 @@
 <!-- doc-id: execution-checklist -->
-<!-- source-sha256: 89299142d5c76453f4f9ee32b2240c644d47f14ff0294840a2911210de4ed0b1 -->
+<!-- source-sha256: 233205391477fbf8f64bc1916d943ae21d6ee70f7d4742f9a3595c96e440ef25 -->
 # 실행 체크리스트
 
 ## T1a 설계 session
@@ -82,5 +82,7 @@
 - [o] T10 자기 repo의 soksak plugin: 칸반 보드와 issue tracker — 또 하나의 thin consumer (T8 선행)
 - [o] T10-1 보드는 문서가 갖지 않은 상태를 보여주지 않는다. 원인: drop이 전이를 판정하기 전에 카드를 옮겼고, 거절(done → doing처럼 선언되지 않은 edge, 또는 evidence가 필요한 edge)은 되돌림 없이 return해서 markdown은 상태를 지키는데 카드는 틀린 column에 남았다. 빈 items 답(마지막 item 삭제)은 toast로만 보이고 옛 카드를 남겼고, changed event는 items만 새로 읽고 state machine은 읽지 않아 Mermaid block을 고치면 column이 낡았다 (T10 후속)
   - 완료 기준: 순수 함수 `planDrop`이 DOM을 옮기기 전에 모든 drop을 판정하고(거절은 아무것도 옮기지 않고 보드를 새로 읽는다), 모든 operation은 수락이든 거절이든 items 새로고침으로 끝나며, 빈 답은 column을 비우고, changed event는 schema를 다시 읽어 달라졌을 때만 column을 다시 만든다. plugin의 `node --test`가 각 경우를 덮는다.
+- [~] T10-2 새 이슈 row는 column 바닥에 붙지 않고 그 column의 마지막 카드 바로 아래에 따라온다. column 전체가 drop을 받는다. 원인: 카드 목록이 column을 채우도록 늘어나서(`flex:1`) 키 큰 이웃에 맞춰 늘어난 column은 카드와 row 사이에 틈이 생겼고, 그 틈이나 row 위의 drop은 목록을 찾지 못했다 (T10-1 후속)
+  - 완료 기준: row가 짧은 column과 빈 column에서도 마지막 카드 바로 아래에 놓이고, column 안 어디에 drop해도 그 column의 목록에 들어가며, `node --test ui/`가 drop 대상을 덮는다.
 - [o] T11 항목에 사람과 날짜: 항목 title이 `@assignee`와 마감 date·datetime(`YYYY-MM-DD`, `YYYY-MM-DDTHH:MM[:SS]`, zone 선택)으로 끝날 수 있고 문서가 사람 table(`id`/`name` header)을 선언된 사람의 registry로 가지며 빈 담당자는 self다 — 이름을 추측하지 않는다 — items·people surface가 이들을 노출한다 (T4.3 선행)
   - 완료 기준: codec이 끝 token들을 title에서 분리하고 시간이 붙은 마감도 받으며 `All("items")`이 list·table 항목 모두에 assignee·due를 실고 `All("people")`이 사람 행을 반환하며 sidecar의 items answer가 assignee·due column을 얻고 `people` answer를 가진다.
