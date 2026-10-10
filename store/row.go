@@ -18,6 +18,8 @@ const (
 	RuleWalk         = "corpus.walk"
 	RuleConstraint   = "CONSTRAINT"
 	RuleForeignKey   = "FOREIGN_KEY"
+	RuleDuplicateKey = "DUPLICATE_KEY"
+	RuleParentCycle  = "parent.cycle"
 )
 
 // Row is one row of a table in its readable form.

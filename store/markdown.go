@@ -501,9 +501,13 @@ func setextText(lines []string) string {
 
 // boundary returns the index of the first heading of level 2 or less at or after
 // from, outside fenced blocks and HTML blocks, or len(lines) when there is none.
-func boundary(lines []string, from int) int {
+func boundary(lines []string, from int) int { return boundaryLevel(lines, from, 2) }
+
+// boundaryLevel returns the index of the first top-level heading of level or less
+// at or after from, or len(lines) when there is none.
+func boundaryLevel(lines []string, from, level int) int {
 	for _, h := range scanHeadings(lines, from).heads {
-		if h.level <= 2 {
+		if h.level <= level {
 			return h.at
 		}
 	}

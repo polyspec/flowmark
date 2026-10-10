@@ -1,8 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 659f1db1955c90884008c2e3fe6b24111cf640c7c9ede56cd2592dc4fdf38d99 -->
+<!-- source-sha256: 060aeb5184400d4f5897ee3e0159f0188ab32d02a3384ae2faf372ce9e7f6f47 -->
 # Changelog
 
 ## Unreleased
+
+- T12.2.3: `document` storage codec이 list와 table 형식의 `<table>.flowmark.md`를 parse하고 쓴다. H1, 그 아래의 행(list 행은 glyph, key, 제목, 오른쪽에서 escape와 함께 parse하는 field, 들여쓰기는 `parent`; table 행은 key가 먼저이고, pipe escape를 가진 cell, NULL과 빈 텍스트), 저장 순서의 detail section `## <table> row <key>`(본문과 section 포함)를 다룬다. `order`는 읽을 때 1부터 세는 형제 위치로 채우고, 쓸 때는 형제 집합마다 정확히 1..m으로 취한다. 쓰는 쪽은 행의 순서를 스스로 맞추며 정렬되지 않은 입력을 거절하지 않는다. 외래 key는 linker를 거친 link이며 dangling link는 쓰인 target을 유지한다. T12.2.4까지 쓰기는 catalog가 child block을 선언한 table을 거절하며, 오류는 table, block과 T12.2.4를 이름으로 든다. 그래서 어떤 쓰기도 block의 행을 떨어뜨리지 않는다. 읽기는 child block section을 담은 detail section을 같은 이름으로 거절한다. 시간 값이 `now`로 쓰이면 그 type이 아니다. 읽을 때는 쓰인 대로 두고 쓸 때는 거절하며, 텍스트 값 `now`는 텍스트다. 규칙마다 허용과 거절 사례가 있고 세 golden은 P1·P2이며, parse와 render fuzz target은 그 golden으로 seed된다.
 
 - T12.2.2-4: `files` codec이 H1 제목과 field list 값에 spec 10의 보이지 않는 문자 규칙을 적용한다. 양 끝의 보이지 않는 문자는 쓰기에서 `CONSTRAINT`로 거절되며, 읽기에서 CommonMark가 떼어내는 space나 tab은 `format.noncanonical`이고, 끝의 그 밖의 보이지 않는 문자는 `format.block`이다. 보이지 않는 문자는 U+1680을 뺀 White_Space 문자, 제어 문자, prepended concatenation mark를 뺀 형식 문자, Default_Ignorable_Code_Point 문자이며, 마지막 것은 Unicode 17.0.0 data 파일에서 생성한 table이고 테스트가 최신성을 확인한다. list 행과 table cell은 T12.2.3에서 따른다.
 
