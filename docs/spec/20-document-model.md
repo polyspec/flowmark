@@ -18,7 +18,7 @@ are in the [canonical format](10-canonical-format.md); the declarations are in t
 
 - A corpus document is a file whose name ends with `.flowmark.md`, under the corpus root and outside
   `dbspec/`, `.flowmark/` and hidden entries. The name is the only criterion that makes a file part
-  of the database; every other file is outside it and draws no diagnostic.
+  of the database; every other file is outside it and draws no diagnostic, except a name whose suffix is `.flowmark.md` without regard to case, which is `corpus.walk`.
 - The walk reads every `*.flowmark.md` file. A file whose place matches no table — neither
   `<table>.flowmark.md` of a `document` table nor `<table>/<key>.flowmark.md` of a `files`
   table — is a `corpus.walk` diagnostic, and so is a `.flowmark.md` entry that cannot be read.
@@ -45,6 +45,12 @@ guessed.
 - **`store block <fk> list`, `store block <fk> table`** — the rows inside the scope of the parent
   row that the named foreign key references.
 
+- A missing table folder (`files`) or a missing document file (`document`) is an empty table: zero
+  rows and no diagnostic. A document file without its H1 line is `format.noncanonical`. Grounding: git keeps no empty folders, so a checkout may hold no folder for a table without rows; an absent folder or file holds no rows, as an empty folder or a document file holding only `# <table>` does, so its absence is one form of zero rows, not a corpus defect.
+- A `.flowmark.md` file at a place no table names is `corpus.walk`, as the walk states; it never stands in for a missing table.
+- An insert creates the folder or the file. A delete of the last row of a `document` table leaves the
+  file with its H1 line `# <table>` and one LF.
+
 Aggregate or split is a storage declaration; the logical relations are the same in every storage,
 so the same rows can be stored either way.
 
@@ -58,7 +64,8 @@ so the same rows can be stored either way.
   not end with `-`: viewers that collapse hyphen runs (GitLab, MkDocs) would otherwise alter the
   anchor.
 - A key is unique within its table without regard to case, because case-insensitive file systems
-  and lowercased anchors would otherwise collide.
+  and lowercased anchors would otherwise collide. A key equal to another key of its table without regard to case is `DUPLICATE_KEY` on a write that
+  introduces it and `key.duplicate` in the validator; it never makes a file unreadable, except that two rows of one file whose keys are byte for byte equal and that both have detail sections are `format.block`, since the two sections share one heading text ([canonical format](10-canonical-format.md#detail-headings-and-anchors)); two rows with byte-for-byte equal keys make their table unavailable ([canonical format](10-canonical-format.md#diagnostics)).
 - A foreign key matches the referenced key byte for byte. A link text that differs from the key
   only in case is a dangling reference.
 - A key or a table name equal, without regard to case, to `CON`, `PRN`, `AUX`, `NUL`, `COM0`–`COM9`
@@ -86,7 +93,7 @@ so the same rows can be stored either way.
   `files` storage require `title` — the line text, the H1; a `table` storage may declare it as a
   cell. A declared title is non-null and refuses the empty text.
 - `body` is a `markdown` column and never NULL. It is the text of a `files` row after its H1 and
-  field list, or the text of a detail section before its first sub-heading; a row without a detail
+  field list, or the text of a detail section before its first heading at level h + 1; a row without a detail
   section has the empty text as its body.
 - A view of kind kanban, list or gantt requires its entity table to declare both.
 
@@ -96,8 +103,9 @@ so the same rows can be stored either way.
 - A block or document row's scope is its detail section `<h> <table> row <key>` (h = b + 1 under a block
   section at level b, h = 2 in a document file), with its sections at level h + 1.
 - A `markdown` column is always a section of the row scope — never a field or a cell — in every
-  storage. Each nullable `markdown` column and each child block is a section of the row scope
-  named by the column or the child table; a child table named like a markdown column of its
+  storage. Each `markdown` column other than the body (a non-null one always present, a nullable one
+  when it is not NULL) and each child block is a section of the row scope named by the column or
+  the child table; a child table named like a markdown column of its
   parent is a schema error.
 
 ## Hierarchy
@@ -134,7 +142,8 @@ so the same rows can be stored either way.
 - Every foreign key is restrict-only ([constraints](50-constraints.md)): `cascade` and `set_null`
   are rejected at catalog load ([schema](30-schema.md)).
 - A foreign key value is a link. Its text is the referenced key and its target is derived from the
-  referenced row, as the [canonical format](10-canonical-format.md) states. Every relation is a
+  referenced row, as the [canonical format](10-canonical-format.md) states. A dangling foreign key is the validator's `reference.dangling`; a write that introduces one is
+  `FOREIGN_KEY`, and it never makes a file unreadable. Every relation is a
   link that a reader can follow in a markdown viewer with GitHub-style heading slugs (GitHub, GitLab,
   VS Code, Pandoc).
 - A one-to-many across files stores the child table with `store files` and writes the foreign key

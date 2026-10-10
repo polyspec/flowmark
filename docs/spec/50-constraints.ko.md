@@ -1,5 +1,5 @@
 <!-- doc-id: spec-constraints -->
-<!-- source-sha256: 0af18055340ade06ccbb0a5699f894ce157a5b5c7163908b660c3b6d58c36c50 -->
+<!-- source-sha256: de1ddf956ab0c3263fade7e9dd50bdf5408e802cc5176a8dd19b837acb54cefa -->
 # Constraints
 
 [English](50-constraints.md)
@@ -13,14 +13,13 @@
 - **Strict parse.** [문법](10-canonical-format.md)을 벗어난 줄, 블록, 섹션, key는 위치가 있는 진단이다.
   관대한 mode도, 보이지 않는 데이터도 없다.
 - **Type.** 모든 값은 [canonical format](10-canonical-format.md)의 읽을 수 있는 형식으로 자기 dbspec type을 따른다. type을 어긴 값은 그 자리의
-  진단이고 쓰기에서 `CONSTRAINT`다.
+  진단이 validator의 `type`이고, 값을 배정하는 쓰기에서 `CONSTRAINT`다([canonical format](10-canonical-format.md)).
 
 ## Key와 참조
 
-- **primary key와 unique key**는 table 전체에서 강제한다. 중복은 쓰기에서 `DUPLICATE_KEY`이고, 두 번째
-  자리에서 첫 자리를 가리키는 진단이다. unique key는 SQL처럼 NULL을 서로 다르게 본다.
+- **primary key와 unique key**는 table 전체에서 강제한다. 중복은 그것을 새로 만드는 쓰기에서 `DUPLICATE_KEY`이고, 두 번째 자리에서 첫 자리를 가리키는 validator의 `key.duplicate` 진단이다. unique key는 SQL처럼 NULL을 서로 다르게 본다.
 - **foreign key**는 참조된 key와 byte 단위로 정확히 일치해야 풀린다. 어떤 행도 가리키지 않는 참조는
-  dangling 참조다: 쓰기에서 `FOREIGN_KEY`이고 참조 자리의 진단이다.
+  dangling 참조다: 그것을 새로 만드는 쓰기는 `FOREIGN_KEY`이고, validator의 `reference.dangling`이 참조 자리에 보고하며, file을 읽을 수 없게 하지 않는다.
 - **참조된 행의 key 갱신**은 `FOREIGN_KEY`(restrict-only)다. 그래서 link의 target은 link 아래에서
   움직이지 않는다.
 - **참조 action은 restrict-only다.** `cascade`와 `set_null`은 catalog를 읽을 때 거절한다: 엔진을
@@ -36,8 +35,7 @@
 - **예약 이름.** 대소문자를 무시하고 `CON`, `PRN`, `AUX`, `NUL`, `COM0`–`COM9`, `LPT0`–`LPT9`와 같은
   key는 쓰기에서 `CONSTRAINT`다([schema](30-schema.md)는 table 이름을 거절한다).
 - **길이.** 243 byte를 넘는 `files` key는 쓰기에서 `CONSTRAINT`다.
-- **대소문자 무시 유일성.** 대소문자를 무시하고 table의 다른 key와 같은 key는 쓰기에서
-  `DUPLICATE_KEY`이며, 첫 key를 밝힌다 — 충돌은 key의 file 이름과 anchor가 중복된 것이다.
+- **대소문자 무시 유일성.** 대소문자를 무시하고 table의 다른 key와 같은 key는 그것을 새로 만드는 쓰기에서 `DUPLICATE_KEY`이며, 첫 key를 밝힌다. validator의 `key.duplicate`이기도 하다. 충돌은 key의 file 이름과 anchor가 중복된 것이며, file을 읽을 수 없게 하지 않는다. 다만 같은 file 안에서 바이트 단위로 같은 key를 가지고 둘 다 상세 섹션을 가진 두 행은 두 섹션이 같은 heading 텍스트를 가지므로 `format.block`이다([canonical format](10-canonical-format.md#detail-headings-and-anchors)); 바이트 단위로 같은 key를 가진 두 행은 그 table을 사용할 수 없게 한다([canonical format](10-canonical-format.md#diagnostics)).
 - **정식 file 이름.** key 타입의 정식 텍스트가 아닌 `files` file 이름은 읽기에서 `format.block`이다
   ([document model](20-document-model.md)).
 
@@ -45,9 +43,12 @@
 
 쓰기에서 다음 각각은 `CONSTRAINT`다. 괄호 안은 그것을 정하는 규칙이다:
 
-- 줄바꿈, 앞이나 뒤의 공백, 또는 `<` 뒤에 `!`, `/`, 글자가 오는 한 줄 값 — list 제목, H1, cell, list
+- 줄바꿈이나 CR, 앞이나 뒤의 공백, 또는 `<` 뒤에 `!`, `/`, 글자가 오는 한 줄 값 — list 제목, H1, cell, list
   field, field list 값 안에서([canonical format](10-canonical-format.md));
-- 첫 줄이 `-` list 항목인 `files` body([canonical format](10-canonical-format.md));
+- 첫 줄이 `-` list 항목이거나, field list 뒤에 두 column 이상(공백 또는 tab) 들여쓴 줄인 `files` body([canonical format](10-canonical-format.md));
+- `files` row의 H1 제목 텍스트가 `\#`로 끝나는 제목([canonical format](10-canonical-format.md));
+- 바이트 그대로 쓸 수 없는 text나 `markdown` 값, 그리고 `CanonicalLiteral`이 거절하는 typed 값(scale보다 많은 소수 자릿수 — 0 포함, precision − scale보다 많은 정수 자릿수, precision보다 많은 소수 자릿수의 time이나 datetime)([canonical format](10-canonical-format.md));
+- `format.*` 진단이 있는 file을 다시 쓰는 logical write는 file과 진단을 밝히며 `CONSTRAINT`다. 그 진단이 `format.noncanonical`이면 `flowmark canon`을 밝힌다(commit의 면제를 제외하고)([canonical format](10-canonical-format.md)). 쓰기는 문서 바이트를 정규화하지 않는다;
 - fence 밖에 level ≤ L heading 줄을 가진 `markdown` 값([canonical format](10-canonical-format.md));
 - 다른 heading이 anchor를 가져갔거나 slug가 anchor와 다른 상세 heading — 그 heading을 밝히고, 충돌을 일으키는
   제목 갱신, payload 쓰기 또는 행 삽입을 밝힌다([canonical format](10-canonical-format.md));
@@ -92,7 +93,7 @@ check는 commit에서 강제한다. 술어가 unknown(NULL)인 check는 SQL처�
   않는 한 보고된다.
 - **Commit.** commit은 먼저 그 대상이 읽은 뒤 바뀌지 않았는지 검사한다: 바뀌었으면 `WRITE_CONFLICT`다.
   이력 빈틈(`history.gap`)을 포함한 constraint 검사는 잠금 아래에서 다시 읽은 corpus 위에서 실행한다.
-  다른 행의 빈틈은 commit을 결코 실패시키지 않는다.
+  다른 행의 validator 진단(`type`, `key.duplicate`, `reference.dangling`, `check`, `order`, `state.limit`, `history.gap`, `history.chain`)은 commit을 실패시키지 않되, `type` 진단은 commit의 제약 검사가 그 값을 평가해야 할 때 commit을 실패시키고, 바이트 단위로 같은 key를 가진 두 행은 그 table을 사용할 수 없게 한다([canonical format](10-canonical-format.md#diagnostics)); `format.*` 진단은 다시 쓰기 거절과 사용할 수 없는 table 상태([canonical format](10-canonical-format.ko.md#진단))가 정하는 경우에만 commit을 실패시킨다. file을 다시 써야 하는 commit — 행 자신의 file, 상세 섹션이 생기거나 사라지는 행으로의 link를 가진 file, `order`의 형제 — 은 그 file이 `format.*` 진단을 가지면 거절한다: `CONSTRAINT`이며 file과 진단을 밝히고, `format.noncanonical`이면 `flowmark canon`을 밝힌다. 세 commit은 면제된다: 대상에 대한 `flowmark canon`([operations](40-ops.ko.md#canon-연산)), 추가된 column이 일으킨 진단에 대한 add-column migration([migration](80-migration.ko.md)) — 그 진단은 그 migration에 대해 table을 사용할 수 없게 하지 않는다 —, `files` 행의 file 전체를 지우는 delete는 rewrite 거절에서만 면제되며, restrict 검사는 그 행을 참조할 수 있는 모든 table의 행을 여전히 필요로 하며(자신의 table을 `parent`로 하는 것, 자식 및 이력 block, 그 행으로의 foreign key를 가진 모든 table), 그 중 하나라도 사용할 수 없으면 그 delete는 `CONSTRAINT`다.
 - **Repair.** `flowmark history repair <table> <key> [--from <initial state>]`는 마지막 `to`에서 — 이력
   없는 행은 하나뿐인 초기 상태, 또는 초기 상태가 여럿이면 필수인 `--from`에서 — 현재 상태로 가는 이력
   행 하나를 insert한다. `at`은 엔진 시계이고 필수 column은 행에서 복사한다. 그 쌍이 선언된 전이가
@@ -117,4 +118,4 @@ database는 작성자 독점을 강제하지만 corpus에는 그것이 없다. �
 `state.required`, `state.limit`, `history.gap`, `history.chain`, `corpus.walk`
 ([document model](20-document-model.md)의 walk 규칙), 그리고 canonical format의 `format.*` 규칙이다: `format.noncanonical`, `format.block`,
 `format.section`, `format.encoding`. 검증은 corpus 전체에 걸친다. 깨진 corpus 안의 깨끗한 file이 corpus를
-유효하게 만들지 않는다.
+유효하게 만들지 않는다. 열기, introspection, `flowmark validate`, `flowmark canon`은 행에 대한 요청이 아니므로 사용할 수 없는 table에서 결코 실패하지 않으며, canon의 링크 유도 거절은 예외다([operations](40-ops.ko.md#canon-연산)). validator는 모든 file의 `format.*` 진단과, `format.block`, `format.section`, `format.encoding`이 없는 file 안에서 읽을 수 있는 모든 행의 validator 규칙을 보고한다. `format.block`, `format.section`, `format.encoding`이 있는 file을 가진 table의 완전한 행을 필요로 하는 규칙 — 그 table로의 `reference.dangling`, `key.duplicate`, 그 안의 `order`와 `state.limit` — 은 그 table에 대해 보고하지 않으며, file 자신의 진단이 그것을 대신한다. 바이트 단위로 같은 key 때문에만 사용할 수 없는 table은 모든 규칙이 보고된다.

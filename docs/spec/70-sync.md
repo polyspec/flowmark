@@ -12,7 +12,8 @@ specification is written when an adapter beyond the database export starts.
   adapter; GitHub (issues, projects) and Jira follow under the same contract.
 - md→db is a derived export: the database is rebuildable from the corpus. The export reads the
   rows through the engine and renders its statements through orm's SQL dialect renderer from the
-  catalog's runtime model — it hand-renders no SQL and names no table of its own.
+  catalog's runtime model — it hand-renders no SQL and names no table of its own. An export that needs an unavailable table fails as `CONSTRAINT`, naming the file and the diagnostic, and writes nothing; it never exports the other tables alone ([canonical format](10-canonical-format.md#diagnostics)). An export that reads a value with a `type` diagnostic fails the same way and writes nothing.
+
 - db→md (and every adapter→md) is a materialization: the adapter's rows are written into their
   declared storages through the engine, marked by their sync provenance, and a commit records them.
   The provenance is not part of the document; where it lives is open question 5

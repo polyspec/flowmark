@@ -1,5 +1,5 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 97f426092d6e51c7c2d163c91ecac881f8bb8f8b5fba5789834aa271c075b597 -->
+<!-- source-sha256: 06ba31105f0ba9f3155ce4ee6347ca6a3596e2b2913a39869926237194c2023a -->
 # Changelog
 
 ## Unreleased
@@ -11,6 +11,8 @@
   아직 쓸 수 있는 동안 반환하지 않는다: `stop`이 poll loop들을 기다리며, `go test -race`가 출력
   buffer에서 보고한 data race를 없앤다. poll loop는 멈추면 두 poll 사이의 대기를 마저 채우지 않고
   바로 끝난다.
+
+- T12.1-3: spec이 `files` codec에 필요한 판정을 적는다. 읽기에서 없는 non-null field나 section, 렌더링이 inline markdown을 넘어 텍스트와 다르게 보이는 한 줄 값, `-` 항목으로 시작하는 `files` body, field list 뒤에서 첫 줄이 두 column 이상(공백 또는 tab) 들여쓴 `files` body는 `format.block`이고, 렌더링이 한 줄 자리 둘레에서 떨어뜨리는 공백은 `format.noncanonical`이다. BOM이나 CR은 `format.noncanonical`이고, UTF-8이 아닌 byte나 U+0000은 `format.encoding`이다. 같은 읽기 결함은 쓰기에서 `CONSTRAINT`다. column type이 아닌 값, dangling 외래 key, 대소문자를 무시하고 겹치는 key는 validator 규칙(`type`, `reference.dangling`, `key.duplicate`)이며, dangling 외래 key나 중복 key를 새로 만드는 쓰기는 각각 `FOREIGN_KEY`, `DUPLICATE_KEY`다. 본문이 아닌 non-null `markdown` column은 언제나 있는 section이다. 마지막 `#` 연속이 공백이나 tab 뒤에 오거나 `#`뿐인 제목은 마지막 `#`을 `\#`로 쓰고, `\#`로 끝나는 제목은 거절한다. markdown 값은 줄 바꿈으로 시작하거나 끝나지 않는다. field list 뒤의 빈 줄은 비어 있지 않은 body나 section 앞에서만 서며, 문서는 LF 하나로 끝난다. `format.*` 진단이 있는 file을 다시 쓰는 logical write는 `CONSTRAINT`로 거절하며, `format.noncanonical`이면 `flowmark canon`을 밝힌다. spec 40은 문서 바이트를 정규화하는 유일한 연산인 `flowmark canon`을 추가하고, `format.*` 진단이 있는 file을 다시 써야 하는 commit을 거절한다. 거절은 `flowmark canon`의 대상, 추가된 column이 일으킨 진단에 대한 add-column migration, `files` 행의 file 전체를 지우는 delete를 면제하며, `format.block`, `format.section`, `format.encoding`이 있는 file을 가진 table은 그 행이 필요한 요청과 검사에 사용할 수 없다. `flowmark install`은 `.gitattributes`에 줄을 더하고, table folder가 없으면 빈 table이며, typed 값은 쓰기에서 canonical 형식으로 쓴다. table은 행이 있을 수 있는 모든 file을 가지며, block table은 placement parent의 file을 포함한다. 바이트 단위로 같은 key를 가진 두 행은 table을 사용할 수 없게 하고, 잘못된 type의 값을 평가하는 요청은 `CONSTRAINT`로 실패하며, 사용할 수 없는 table이 필요한 export는 실패하고 아무것도 쓰지 않는다. `corpus.walk` 항목이나 다른 대소문자의 suffix가 table의 자리에 있으면 사람이 corpus를 고치기 전까지 그 table은 사용할 수 없고, 고치면 다음 읽기에서 다시 사용할 수 있다. `type` 진단은 제약 검사가 그 값을 평가해야 할 때에만 commit을 실패시키며, 그 값을 읽는 export는 실패한다. `files` codec의 테스트 사례는 고정하는 spec section을 밝힌다.
 
 - T1.3-1: 참조 검사는 kit 검사처럼 kit의 `trackedFiles`로 Git이 무시하지 않는 checkout의 file을 읽는다.
   `.claude/worktrees/` 아래 agent worktree 같은 무시되는 directory가 더 이상 결과를 바꾸지 않는다.

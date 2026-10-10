@@ -12,15 +12,15 @@ The failure codes are those of [operations](40-ops.md).
 - **Strict parse.** A line, block, section or key outside the [grammar](10-canonical-format.md) is
   a located diagnostic; there is no lenient mode and no invisible data.
 - **Types.** Every value follows its dbspec type in the readable form of the [canonical format](10-canonical-format.md); a value that fails
-  its type is a diagnostic at the value's place and `CONSTRAINT` on write.
+  its type is the validator's `type`, and `CONSTRAINT` on a write that assigns it ([canonical format](10-canonical-format.md)).
 
 ## Keys and references
 
-- **Primary and unique keys** are enforced over the whole table; a duplicate is `DUPLICATE_KEY` on
-  write and a diagnostic at the second occurrence with a pointer to the first. A unique key treats
+- **Primary and unique keys** are enforced over the whole table; a duplicate is `DUPLICATE_KEY` on a write that introduces it, and the validator's `key.duplicate` at the second occurrence with a pointer to the first. A unique key treats
   NULLs as distinct, as in SQL.
 - **Foreign keys** resolve by exact byte match with the referenced key; a reference that names no
-  row is a dangling reference: `FOREIGN_KEY` on write and a diagnostic at the reference's place.
+  row is a dangling reference: `FOREIGN_KEY` on a write that introduces it, and the validator's
+  `reference.dangling` at the reference's place; it never makes a file unreadable.
 - **Key update of a referenced row** is `FOREIGN_KEY` (restrict-only), so a link target never moves
   under a link.
 - **Referential actions are restrict-only.** `cascade` and `set_null` are rejected at catalog load:
@@ -38,8 +38,9 @@ The failure codes are those of [operations](40-ops.md).
   `COM0`–`COM9` or `LPT0`–`LPT9` is `CONSTRAINT` on write ([schema](30-schema.md) refuses the table
   name).
 - **Length.** A `files` key longer than 243 bytes is `CONSTRAINT` on write.
-- **Case-insensitive uniqueness.** A key equal to another key of its table without regard to case
-  is `DUPLICATE_KEY` on write, naming the first — a collision is a duplicate of the key's file name and anchor.
+- **Case-insensitive uniqueness.** A key equal to another key of its table without regard to case is
+  `DUPLICATE_KEY` on a write that introduces it, naming the first, and the validator's `key.duplicate`; the
+  collision is a duplicate of the key's file name and anchor, and it never makes a file unreadable, except that two rows of one file whose keys are byte for byte equal and that both have detail sections are `format.block`, since the two sections share one heading text ([canonical format](10-canonical-format.md#detail-headings-and-anchors)); two rows with byte-for-byte equal keys make their table unavailable ([canonical format](10-canonical-format.md#diagnostics)).
 - **Canonical file name.** A `files` file whose name is not the canonical text of its key's type is
   `format.block` on read ([document model](20-document-model.md)).
 
@@ -47,10 +48,13 @@ The failure codes are those of [operations](40-ops.md).
 
 On write, each of the following is `CONSTRAINT`; the rule that states it is named in brackets:
 
-- a single-line value with a line feed, with leading or trailing white space, or with `<` followed
+- a single-line value with a line feed or a CR, with leading or trailing white space, or with `<` followed
   by `!`, `/` or a letter, in a list title, an H1, a cell, a list field or a field-list value
   ([canonical format](10-canonical-format.md));
-- a `files` body whose first line is a `-` list item ([canonical format](10-canonical-format.md));
+- a `files` body whose first line is a `-` list item or, after a field list, whose first line is indented by two or more columns (spaces, or a tab) ([canonical format](10-canonical-format.md));
+- an H1 title (of a `files` row) whose text ends in `\#` ([canonical format](10-canonical-format.md));
+- a text or `markdown` value that cannot be written byte for byte, and a typed value that `CanonicalLiteral` refuses (a decimal with more fraction digits than its scale, zeros included, or more integer digits than precision − scale; a time or datetime with more fraction digits than its precision) ([canonical format](10-canonical-format.md));
+- a logical write that rewrites a file with a `format.*` diagnostic, naming the file and the diagnostic, and naming `flowmark canon` when it is `format.noncanonical`, apart from the exemptions of the commit ([canonical format](10-canonical-format.md)); a write never normalizes document bytes;
 - a `markdown` value holding a heading line of level ≤ L outside a fence
   ([canonical format](10-canonical-format.md));
 - a detail heading whose anchor another heading takes, or whose slug differs from its anchor, naming
@@ -104,7 +108,7 @@ A check is enforced at commit; a check whose predicate is unknown (NULL) passes,
   reported, unless a human forges a consistent history.
 - **Commit.** A commit first checks that its targets are unchanged since they were read, else
   `WRITE_CONFLICT`. The constraint checks, `history.gap` included, then run on the corpus re-read
-  under the lock. A gap on another row never fails the commit.
+  under the lock. A validator diagnostic on another row (`type`, `key.duplicate`, `reference.dangling`, `check`, `order`, `state.limit`, `history.gap`, `history.chain`) never fails the commit, except that a `type` diagnostic fails it when a constraint check of the commit must evaluate that value ([canonical format](10-canonical-format.md#readable-values)), and two rows with byte-for-byte equal keys make their table unavailable ([canonical format](10-canonical-format.md#diagnostics)); a `format.*` diagnostic fails it only as the rewrite refusal and the unavailable table state ([canonical format](10-canonical-format.md#diagnostics)). A commit that must rewrite a file — the row's own file, a file holding a link to a row whose detail section appears or disappears, an `order` sibling — is refused when that file has a `format.*` diagnostic: `CONSTRAINT`, naming the file and the diagnostic, and naming `flowmark canon` when it is `format.noncanonical`. Three commits are exempt: `flowmark canon` for its targets ([operations](40-ops.md#the-canon-operation)); the add-column migration, for the diagnostics the added column causes, which do not make its table unavailable to that migration ([migration](80-migration.md)); and a delete that removes a `files` row's whole file from the rewrite refusal only — its restrict check still needs the rows of every table that may reference the row (its own table through `parent`, its child and history blocks, and every table with a foreign key to it), so such a delete is `CONSTRAINT` when any of them is unavailable.
 - **Repair.** `flowmark history repair <table> <key> [--from <initial state>]` inserts one history
   row from the last `to` — for a row without history, the one initial state, or `--from`, required
   when the machine has several — to the current state, with `at` from the engine clock and the
@@ -132,4 +136,4 @@ Every rule reports `{file, line, column, rule, message}`; the rule names are `ca
 `state.required`, `state.limit`, `history.gap`, `history.chain`, `corpus.walk` (the walk of the
 [document model](20-document-model.md)) and the `format.*` rules of the canonical format:
 `format.noncanonical`, `format.block`, `format.section` and `format.encoding`. Validation is
-corpus-global; a clean file in a broken corpus does not make the corpus valid.
+corpus-global; a clean file in a broken corpus does not make the corpus valid. Opening a corpus, introspection, `flowmark validate` and `flowmark canon` are not requests over rows: they never fail on an unavailable table, apart from canon's link-derivation refusal ([operations](40-ops.md#the-canon-operation)). The validator reports every file's `format.*` diagnostics, and the validator rules of every row it can read in a file without `format.block`, `format.section` or `format.encoding`; a rule that needs the complete rows of a table that holds a file with `format.block`, `format.section` or `format.encoding` — `reference.dangling` into it, `key.duplicate`, `order` and `state.limit` within it — is not reported for that table, and the file's own diagnostic stands for it; a table unavailable only through byte-for-byte equal keys has every rule reported.

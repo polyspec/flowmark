@@ -88,7 +88,8 @@ or `body`; any mismatch is a setting error at the history table's name. It is st
 
 `flowmark install <corpus>` generates the storage skeleton from the catalog — the folder of each
 `files` table and the file `<table>.flowmark.md` of each `document` table, and no block section,
-since an empty block is not written — as `CREATE TABLE` creates storage. Schema install through orm
+since an empty block is not written — as `CREATE TABLE` creates storage. `flowmark install` adds the line `*.flowmark.md text eol=lf` to `<corpus>/.gitattributes`, creating the file when it is missing and keeping its other lines, so a git checkout keeps LF on every platform ([canonical format](10-canonical-format.md#encoding-and-line-structure)).
+Schema install through orm
 over `markdown://` is `CAPABILITY_UNSUPPORTED`.
 
 ## Introspection

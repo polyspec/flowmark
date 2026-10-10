@@ -90,7 +90,7 @@ compatibility, no fallback, no hidden error, no trick; rules first.
 - Documents carry no schema stamp: the `dbspec/` set is the catalog, as a database keeps its
   schema once and never per row. Spec 30's stamp, standalone documents and embedded fragments
   are withdrawn.
-- `flowmark install` generates the storage skeleton from the catalog — the folder of each `files`
+- `flowmark install` adds the line `*.flowmark.md text eol=lf` to `<corpus>/.gitattributes`, creating the file when it is missing and keeping its other lines, and generates the storage skeleton from the catalog — the folder of each `files`
   table and the document of each `document` table, and no block section, since an empty block is
   not written — as `CREATE TABLE` creates storage. Schema install
   through orm over `markdown://` is `CAPABILITY_UNSUPPORTED`.
@@ -115,6 +115,8 @@ compatibility, no fallback, no hidden error, no trick; rules first.
   Grounding: the documents are the database's only storage, so
   they must stay a readable document; what only the machine needs belongs to the catalog
   (`dbspec/`) or to `.flowmark/`.
+- Encoding: UTF-8 without a BOM, LF, exactly one final LF; a BOM, a CR, a missing final LF and a trailing blank line are `format.noncanonical`; invalid UTF-8 and U+0000 are `format.encoding`; a value never begins or ends with a line feed or a white-space-only line; a logical write that rewrites a file with a `format.*` diagnostic is `CONSTRAINT`, naming `flowmark canon` for `format.noncanonical`; a delete that removes a `files` row's whole file is exempt from the rewrite refusal, but its restrict check still needs the rows of every table that may reference the row (its own table through `parent`, its child and history blocks, and every table with a foreign key to it), so such a delete is `CONSTRAINT` when any of them is unavailable. A table that holds a file with `format.block`, `format.section` or `format.encoding`, or two rows with byte-for-byte equal keys, is unavailable: every request or check that needs its rows fails as `CONSTRAINT`, naming the file and the diagnostic; a block table holds its placement parent's files, recursively. Opening a corpus, introspection, `flowmark validate` and `flowmark canon` never fail on an unavailable table, and an export that needs one fails and writes nothing.
+
 - Withdrawn with this ruling: the `<!-- doc-id -->` header, the provenance comment, the
   frontmatter of a `files` row, the twin rule and the `translations` setting with
   `dbspec/flowmark.json`. The sync provenance of an adapter-owned document moves out of the
@@ -137,6 +139,10 @@ reimplements them.
     the H1 and the detail sections at H2.
   - `store block <fk> list` / `store block <fk> table` — the rows inside the scope of the parent
     row that the named foreign key references.
+- A missing table folder (`files`) or a missing document file (`document`) is an empty table: zero
+  rows and no diagnostic. Grounding: git keeps no empty folders, and an absent folder or file holds the rows
+  that an empty one holds, none. So its absence is one form of zero rows, not a corpus defect. An insert creates the folder or the file; a delete of the last row of a
+  `document` table leaves `# <table>` and one LF.
 
 ### Keys
 
@@ -148,8 +154,8 @@ reimplements them.
   not end with `-` (viewers that collapse hyphen runs, GitLab and MkDocs, would alter the anchor),
   and is unique within
   its table without regard to case (case-insensitive file systems and lowercased anchors would
-  otherwise collide). A foreign key matches the referenced key byte for byte; a link text that
-  differs only in case is a dangling reference. A key or a table name equal, without regard to
+  otherwise collide); a key equal to another key of its table without regard to case is `DUPLICATE_KEY` on a write that introduces it and `key.duplicate` in the validator. A foreign key matches the referenced key byte for byte; a link text that
+  differs only in case is a dangling reference: the validator's `reference.dangling`, and `FOREIGN_KEY` on a write that introduces it; two rows with byte-for-byte equal keys make their table unavailable. A key or a table name equal, without regard to
   case, to `CON`, `PRN`, `AUX`, `NUL`, `COM0`–`COM9` or `LPT0`–`LPT9` is refused — a table name as a
   schema error, a key as `CONSTRAINT` — since those names are reserved file names on Windows; a
   `files` key is at most 243 bytes, so its file name stays within 255. A file name that is not the
@@ -171,14 +177,11 @@ reimplements them.
 
 - `title <column>` and `body <column>` are optional per-table settings. A `list` storage and a
   `files` storage require `title` (the line text, the H1); a `table` storage may declare it as a
-  cell. The title is non-null and refuses the empty text. A title whose text ends with a space and
-  one or more `#` is written in its H1 with its last `#` as `\#`, since CommonMark would read it
-  as a closing sequence.
+  cell. The title is non-null and refuses the empty text. A title in an H1 whose final run of `#` follows a space or a tab, or that consists only of `#`, is written with its last `#` as `\#`; on read a final `\#` is the title's `#`, and an H1 closing sequence is `format.noncanonical`; a title ending in `\#` is `CONSTRAINT` on write, since it would read back as `#`.
 - `body` is a `markdown` column and never NULL. It lives in the row scope in every storage: the
-  text after the H1 of a file, or the text of the row's detail section before its first
-  sub-heading; a row without a detail section has the empty text as its body.
-- A `files` row is, in order: the H1 title, the field list of its stored scalar columns, the body,
-  then the level-2 sections (spec 10's document order is amended). The body and every `markdown`
+  text after the H1 of a file, or the text of the row's detail section before its first heading at level h + 1; a row without a detail section has the empty text as its body.
+- A `files` row is, in order: the H1 title, the field list of its stored scalar columns when it has
+  one, the body, then the level-2 sections (spec 10's document order is amended). The body and every `markdown`
   section value end at the next heading of level ≤ L, counted only outside fenced blocks
   (CommonMark block structure); such a value contains only headings deeper than L, and a write of
   a value with a heading line of level ≤ L outside a fence is `CONSTRAINT`.
@@ -191,8 +194,7 @@ reimplements them.
   a heading at level b, and its rows' detail sections are at h = b + 1; a document storage's detail
   sections are at h = 2. A detail row's scope is at L = h + 1. Detail sections of nested list rows
   are flat siblings.
-- A block or document row has a detail section exactly when its body is not empty, a nullable
-  markdown column is not NULL, or it has a child block row; a detail section without any of them is
+- A block or document row has a detail section exactly when its body is not empty, its table has a non-null `markdown` column other than the body, a nullable `markdown` column of it is not NULL, or it has a child block row; a detail section without any of them is
   `format.noncanonical`.
 - **A detail heading is `<h> <table> row <key>`** — the table name, one space, the word `row`, one
   space, the key; never a title copy — and its anchor is `<table>-row-<lowercased key>`, so
@@ -207,16 +209,18 @@ reimplements them.
   anchor, so only a payload heading or the H1 title of a `files` row can take a detail anchor. A
   detail heading whose anchor another heading takes, or whose slug differs from its anchor, is
   `CONSTRAINT` on write, naming the other heading and refusing the title update, payload write or
-  row insert that introduces the collision, and `format.block` on read; a detail heading in a
+  row insert that introduces the collision, and `format.block` on read, except between the detail headings of two rows whose keys differ only in case, which is `key.duplicate` alone; two detail sections of one file under the same heading text are `format.block`, since neither can be assigned to a row; a detail heading in a
   non-canonical spelling (extra spaces, a wrong case of `row`) is `format.noncanonical`, which
   `flowmark canon` repairs. A detail section whose key names no row of its block is `format.block`.
 - A `markdown` column is always a section of the row scope — never a field or a cell — in every
   storage.
-- In a row scope at level L, each nullable `markdown` column and each child block is a heading at
-  level L named by the column or the child table. An absent section is NULL; a present empty
-  section is the empty text. A child table named like a markdown column of its parent is a schema
+- In a row scope at level L, each `markdown` column other than the body and each child block is a
+  heading at level L named by the column or the child table. A nullable column's section is absent
+  exactly when its value is NULL, and a non-null column's section is always present, so its absence
+  is `format.block`; a present empty section is the empty text. A child table named like a markdown column of its parent is a schema
   error. A layout that needs a heading past H6 is a schema error.
-- A row scope's sections stand in a fixed order: the nullable `markdown` columns in column order,
+- A row scope's sections stand in a fixed order: the `markdown` columns other than the body, nullable
+  and non-null alike, in column order,
   then the child blocks in table name order (dbspec's canonical order). Detail sections stand in
   the storage order of their rows.
 - Any content after a block's or document's list or table other than its rows' detail sections
@@ -233,20 +237,18 @@ reimplements them.
   with orm's `dbspec.CanonicalLiteral(t, v)`, and a date, time, datetime or uuid with
   `CanonicalLiteral(t, "'" + v + "'")` with the quotes removed from the result; `now` is refused;
   text is checked against its column's length, and in a single-line place by the rules below. A
-  value whose canonical form differs from its written form is `format.noncanonical`.
+  value whose written form differs from its canonical form is `format.noncanonical` on read; a value not of its column type is the validator's `type`, and `CONSTRAINT` on write. On write, a number, `true`/`false`, a date, a time, a datetime or a uuid is written as `CanonicalLiteral` gives it (`1.5` into `decimal(4,2)` is `1.50`; a float in fixed notation with the fewest digits that round-trip, zero as `0`), and a value `CanonicalLiteral` refuses is `CONSTRAINT` (a decimal with more fraction digits than its scale, zeros included, or more integer digits than precision − scale; a time or datetime with more fraction digits than its precision); bytes are written as padded standard base64 (RFC 4648 §4), and on read any other text in a bytes column is `type`; a text or `markdown` value is written byte for byte, apart from its place's escapes, and one that cannot be is `CONSTRAINT`; a request that evaluates such a value fails as `CONSTRAINT`. A write never normalizes document bytes.
 - **Single-line places** are a title (in a list row, an H1 or a cell), a list field, a field-list
   value and a table cell. A value there with a line feed, with leading or trailing white space, or
-  containing `<` followed by `!`, `/` or a letter (raw HTML would hide or alter it) is `CONSTRAINT`
-  on write. A single-line value is inline markdown as written and is never escaped except as stated.
+  containing `<` followed by `!`, `/` or a letter (raw HTML would hide or alter it) is `CONSTRAINT` on write. On read, a single-line value that renders differently from its text (a quoted list field or cell with leading or trailing white space, or `<` followed by `!`, `/` or a letter) is `format.block`, and white space that rendering drops around it is `format.noncanonical`. Each place has one canonical separator (`# ` after the H1 marker, `: ` after a field-list column or nothing for the empty text, one space between list tokens, `| v |` in a cell); any other white space there is `format.noncanonical`. A single-line value is inline markdown as written and is never escaped except as stated.
 - `files`: a field list right after the H1 — one item `- <column>: <value>` per non-null stored
-  scalar value, in column order, followed by a blank line. NULL is an absent item; the empty text
-  is an item with nothing after the colon. The body never begins with a `-` list item — a write
+  scalar value, in column order, followed by a blank line when a non-empty body or a section follows it. NULL is an absent item; the empty text
+  is an item with nothing after the colon. The body of a `files` row never begins with a `-` list item — a write
   whose body's first line is one is `CONSTRAINT` (a body may open with a `*` or `+` list or any
-  other block) — so on read the `-` items directly after the H1 are the field list, and an item
+  other block) — so on read the `-` items directly after the H1 are the field list, a body that opens with a `-` item is `format.block`, as is a body whose first line is indented by two or more columns (spaces, or a tab) after the field list (a write of either is `CONSTRAINT`), and an item
   that is not `- <stored scalar column>: <value>` in column order is `format.block`. An absent item
   of a non-null column is `format.block`; the engine writes a default explicitly on insert.
-  A `files` row without a non-null stored scalar has no field list; the body follows the H1 after
-  one blank line.
+  A `files` row without a non-null stored scalar has no field list; a non-empty body follows the H1 after one blank line, and an empty body writes nothing.
 - `table` (block or document): a cell under the column-named header; every stored column has a
   header. The key is the first cell, under a header named by the key column; the stored scalar
   columns follow in column order. Text is written as it is; an empty cell is NULL; the empty text is `""`; a value
@@ -297,8 +299,7 @@ reimplements them.
   exactly when that row has a detail section; a link inside the referenced row's own file is
   `#<anchor>` alone, or that file's name when the row has no anchor. A write that adds or removes a
   row's detail section rewrites every link to that row in the same transaction. A target that
-  differs from the derived one is `format.noncanonical`; a key that names no row is a dangling
-  reference; a key update of a referenced row is `FOREIGN_KEY` (restrict), so a target never
+  differs from the derived one is `format.noncanonical`; a key that names no row is a dangling reference (`reference.dangling` in the validator; `FOREIGN_KEY` on a write that introduces it; it never makes a file unreadable); a key update of a referenced row is `FOREIGN_KEY` (restrict), so a target never
   moves under a link. A `parent` written in a `files` row is a link too; the placement foreign
   key of a block row is never written. Examples: a `files` row `comments/C5.flowmark.md` links its
   post `[P3](../posts/P3.flowmark.md)`; a block comment inside `posts/P3.flowmark.md` links its
@@ -338,6 +339,7 @@ reimplements them.
   gapped row is `CONSTRAINT` until the gap is closed, while updates of its other columns are
   allowed. A state change outside the engine is therefore reported, unless a human forges a
   consistent history.
+- `flowmark canon <corpus> [file…]` rewrites the named files, or every corpus document when none is named, to canonical form in one transaction, and refuses a named file with `format.block`, `format.section` or `format.encoding`; with no file named, it rewrites only the documents whose only `format.*` diagnostics are `format.noncanonical` and reports the others. It is the one operation that normalizes document bytes; a logical write never does. Canon changes no logical value, so the key, reference and constraint checks never refuse it; a target whose link derivation needs an unavailable table refuses a named-file canon as `CONSTRAINT`, naming both files, and with no file named it is reported and not rewritten. A value with a validator diagnostic keeps its written text.
 - `flowmark history repair <table> <key> [--from <initial state>]` inserts one history row from
   the last `to` — for a row without history, the one initial state, or `--from`, required when
   the machine has several — to the current state, with `at` from the engine clock and the require
@@ -347,7 +349,7 @@ reimplements them.
   editing. The repair is a normal transaction that the human commits.
 - A commit first checks that its targets are unchanged since they were read (`WRITE_CONFLICT`
   otherwise); the constraint checks, `history.gap` included, then run on the corpus re-read under
-  the lock. A gap on another row never fails the commit.
+  the lock. A validator diagnostic on another row (`type`, `key.duplicate`, `reference.dangling`, `check`, `order`, `state.limit`, `history.gap`, `history.chain`) never fails the commit, except that a `type` diagnostic fails it when a constraint check of the commit must evaluate that value ([canonical format](../spec/10-canonical-format.md#readable-values)), and two rows with byte-for-byte equal keys make their table unavailable ([canonical format](../spec/10-canonical-format.md#diagnostics)); a `format.*` diagnostic fails it only as the rewrite refusal and the unavailable table state ([canonical format](../spec/10-canonical-format.md#diagnostics)). A commit that must rewrite a file — the row's own file, a file holding a link to a row whose detail section appears or disappears, an `order` sibling — is refused when that file has a `format.*` diagnostic: `CONSTRAINT`, naming the file and the diagnostic, and naming `flowmark canon` when it is `format.noncanonical`. Three commits are exempt: `flowmark canon` for its targets ([operations](../spec/40-ops.md#the-canon-operation)); the add-column migration, for the diagnostics the added column causes, which do not make its table unavailable to that migration ([migration](../spec/80-migration.md)); and a delete that removes a `files` row's whole file from the rewrite refusal only — its restrict check still needs the rows of every table that may reference the row (its own table through `parent`, its child and history blocks, and every table with a foreign key to it), so such a delete is `CONSTRAINT` when any of them is unavailable.
 - A transition, or an entry into a terminal state, whose line has `require (c1, …)` must assign
   every listed column in the same update; an unassigned column, `null` or the empty text is
   `CONSTRAINT` naming the column. The history row copies the assigned values, and the state table

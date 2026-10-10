@@ -70,72 +70,72 @@ func TestParseFilesTableWalk(t *testing.T) {
 		rules []string
 	}{
 		{
-			name:  "only flowmark documents are rows",
+			name:  "20#corpus-documents-and-the-walk: only flowmark documents are rows",
 			files: map[string]string{"tasks/T1.flowmark.md": good, "tasks/README.md": "# x\n", "tasks/notes.txt": "x"},
 			keys:  []string{"T1"},
 		},
 		{
-			name:  "hidden entries are outside the walk",
+			name:  "20#corpus-documents-and-the-walk: hidden entries are outside the walk",
 			files: map[string]string{"tasks/T1.flowmark.md": good, "tasks/.T9.flowmark.md": "junk", "tasks/.git/x.flowmark.md": "junk"},
 			keys:  []string{"T1"},
 		},
 		{
-			name:  "suffix in another case is a walk diagnostic",
+			name:  "20#corpus-documents-and-the-walk: suffix in another case is a walk diagnostic",
 			files: map[string]string{"tasks/T1.flowmark.md": good, "tasks/T2.FLOWMARK.md": good},
 			keys:  []string{"T1"},
 			rules: []string{RuleWalk},
 		},
 		{
-			name:  "a document in a subfolder is a walk diagnostic",
+			name:  "20#corpus-documents-and-the-walk: a document in a subfolder is a walk diagnostic",
 			files: map[string]string{"tasks/T1.flowmark.md": good, "tasks/sub/T3.flowmark.md": good, "tasks/sub/x.md": "x"},
 			keys:  []string{"T1"},
 			rules: []string{RuleWalk},
 		},
 		{
-			name:  "a symbolic link named as a document is a walk diagnostic and is not followed",
+			name:  "20#corpus-documents-and-the-walk: a symbolic link named as a document is a walk diagnostic and is not followed",
 			files: map[string]string{"tasks/T1.flowmark.md": good},
 			links: map[string]string{"tasks/L.flowmark.md": "T1.flowmark.md"},
 			keys:  []string{"T1"},
 			rules: []string{RuleWalk},
 		},
 		{
-			name:  "a dangling symbolic link named as a document is a walk diagnostic",
+			name:  "20#corpus-documents-and-the-walk: a dangling symbolic link named as a document is a walk diagnostic",
 			files: map[string]string{"tasks/T1.flowmark.md": good},
 			links: map[string]string{"tasks/D.flowmark.md": "missing.flowmark.md"},
 			keys:  []string{"T1"},
 			rules: []string{RuleWalk},
 		},
 		{
-			name:  "any other symbolic link is outside the database",
+			name:  "20#corpus-documents-and-the-walk: any other symbolic link is outside the database",
 			files: map[string]string{"tasks/T1.flowmark.md": good},
 			links: map[string]string{"tasks/L.md": "T1.flowmark.md", "tasks/other": "T1.flowmark.md"},
 			keys:  []string{"T1"},
 		},
 		{
-			name:  "a folder named as a document is a walk diagnostic",
+			name:  "20#corpus-documents-and-the-walk: a folder named as a document is a walk diagnostic",
 			files: map[string]string{"tasks/T1.flowmark.md": good, "tasks/Dir.flowmark.md/": ""},
 			keys:  []string{"T1"},
 			rules: []string{RuleWalk},
 		},
 		{
-			name:  "an invalid document is reported and is not a row",
+			name:  "20#corpus-documents-and-the-walk: an invalid document is reported and is not a row",
 			files: map[string]string{"tasks/T1.flowmark.md": good, "tasks/T4.flowmark.md": "# Title\n"},
 			keys:  []string{"T1"},
 			rules: []string{RuleBlock, RuleBlock},
 		},
 		{
-			name:  "a symbolic link named as the table folder is a walk diagnostic",
+			name:  "20#corpus-documents-and-the-walk: a symbolic link named as the table folder is a walk diagnostic",
 			files: map[string]string{"elsewhere/T1.flowmark.md": good},
 			links: map[string]string{"tasks": "elsewhere"},
 			rules: []string{RuleWalk},
 		},
 		{
-			name:  "a table folder that is a file is a walk diagnostic",
+			name:  "20#corpus-documents-and-the-walk: a table folder that is a file is a walk diagnostic",
 			files: map[string]string{"tasks": "x"},
 			rules: []string{RuleWalk},
 		},
 		{
-			name: "a missing table folder has no rows and no diagnostic",
+			name: "20#storage: a missing table folder has no rows and no diagnostic",
 		},
 	}
 	for _, c := range cases {
@@ -201,12 +201,12 @@ func TestIntegerKeysAndMandatorySection(t *testing.T) {
 	cases := []struct {
 		name, rel, text, rule string
 	}{
-		{"canonical integer name", "notes/7.flowmark.md", "# Seven\n\n## summary\n\nx\n", ""},
-		{"present empty mandatory section", "notes/8.flowmark.md", "# Eight\n\n## summary\n", ""},
-		{"integer name with a leading zero", "notes/007.flowmark.md", "# Seven\n\n## summary\n", RuleBlock},
-		{"negative integer name", "notes/-7.flowmark.md", "# Seven\n\n## summary\n", RuleBlock},
-		{"text name for an integer key", "notes/seven.flowmark.md", "# Seven\n\n## summary\n", RuleBlock},
-		{"mandatory section missing", "notes/9.flowmark.md", "# Nine\n", RuleBlock},
+		{"20#keys: canonical integer name", "notes/7.flowmark.md", "# Seven\n\n## summary\n\nx\n", ""},
+		{"10#sections-and-their-values: present empty mandatory section", "notes/8.flowmark.md", "# Eight\n\n## summary\n", ""},
+		{"20#keys: integer name with a leading zero", "notes/007.flowmark.md", "# Seven\n\n## summary\n", RuleBlock},
+		{"20#keys: negative integer name", "notes/-7.flowmark.md", "# Seven\n\n## summary\n", RuleBlock},
+		{"20#keys: text name for an integer key", "notes/seven.flowmark.md", "# Seven\n\n## summary\n", RuleBlock},
+		{"10#sections-and-their-values: mandatory section missing", "notes/9.flowmark.md", "# Nine\n", RuleBlock},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -237,7 +237,10 @@ func TestIntegerKeysAndMandatorySection(t *testing.T) {
 	})
 }
 
-// TestKeysCollideWithoutRegardToCase is a unit test: a case-insensitive file
+// TestKeysCollideWithoutRegardToCase pins 20#keys: a key that collides without
+// regard to case is a key.duplicate of the validator, and the first key is kept.
+// The codec still reports it as format.block; T12.2.2-1 corrects that.
+// It is a unit test: a case-insensitive file
 // system cannot hold two files whose names differ only in case, so the rule is
 // tested on rows.
 func TestKeysCollideWithoutRegardToCase(t *testing.T) {

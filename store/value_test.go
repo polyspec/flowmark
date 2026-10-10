@@ -22,50 +22,50 @@ func TestReadableValues(t *testing.T) {
 		want string
 		ok   bool
 	}{
-		{"i32 accepts a canonical integer", typ(dbspec.TypeI32), "-3", "-3", true},
-		{"i32 canonicalizes leading zeros", typ(dbspec.TypeI32), "007", "7", true},
-		{"i32 refuses a plus sign", typ(dbspec.TypeI32), "+3", "", false},
-		{"i32 refuses a decimal point", typ(dbspec.TypeI32), "3.0", "", false},
-		{"i32 refuses the top of the range plus one", typ(dbspec.TypeI32), "2147483648", "", false},
-		{"i32 accepts the top of the range", typ(dbspec.TypeI32), "2147483647", "2147483647", true},
-		{"i16 refuses out of range", typ(dbspec.TypeI16), "32768", "", false},
-		{"i64 accepts the maximum", typ(dbspec.TypeI64), "9223372036854775807", "9223372036854775807", true},
-		{"i64 refuses past the maximum", typ(dbspec.TypeI64), "9223372036854775808", "", false},
-		{"decimal keeps its scale", dec62, "12.50", "12.50", true},
-		{"decimal pads to its scale", dec62, "12.5", "12.50", true},
-		{"decimal refuses more fraction digits than its scale", dec62, "12.555", "", false},
-		{"decimal refuses more integer digits than its precision", dec62, "1234567.00", "", false},
-		{"f64 writes its shortest form", typ(dbspec.TypeF64), "0.50", "0.5", true},
-		{"f64 writes zero as 0", typ(dbspec.TypeF64), "0.0", "0", true},
-		{"f64 refuses a word", typ(dbspec.TypeF64), "NaN", "", false},
-		{"bool accepts true", typ(dbspec.TypeBool), "true", "true", true},
-		{"bool refuses a capital", typ(dbspec.TypeBool), "True", "", false},
-		{"bool refuses a digit", typ(dbspec.TypeBool), "1", "", false},
-		{"date accepts a date", typ(dbspec.TypeDate), "2026-10-11", "2026-10-11", true},
-		{"date accepts a leap day", typ(dbspec.TypeDate), "2024-02-29", "2024-02-29", true},
-		{"date refuses a day past its month", typ(dbspec.TypeDate), "2026-02-30", "", false},
-		{"date refuses a leap day of a common year", typ(dbspec.TypeDate), "2026-02-29", "", false},
-		{"date refuses an unpadded month", typ(dbspec.TypeDate), "2026-1-1", "", false},
-		{"date refuses now", typ(dbspec.TypeDate), "now", "", false},
-		{"date refuses a quote inside", typ(dbspec.TypeDate), "2026'-10-11", "", false},
-		{"time writes the column's fraction digits", time3, "09:30:00", "09:30:00.000", true},
-		{"time keeps exact fraction digits", time3, "09:30:00.250", "09:30:00.250", true},
-		{"time refuses more fraction digits", time3, "09:30:00.2500", "", false},
-		{"time refuses hour 24", time3, "24:00:00", "", false},
-		{"time without fraction digits", time0, "09:30:00", "09:30:00", true},
-		{"time refuses a fraction for precision zero", time0, "09:30:00.5", "", false},
-		{"datetime accepts the space form", dt0, "2026-10-11 09:30:00", "2026-10-11 09:30:00", true},
-		{"datetime refuses the T form", dt0, "2026-10-11T09:30:00", "", false},
-		{"datetime refuses now", dt0, "now", "", false},
-		{"uuid is lowercase", typ(dbspec.TypeUUID), "0F8FAD5B-D9CB-469F-A165-8C9D2E7F1A2B", "0f8fad5b-d9cb-469f-a165-8c9d2e7f1a2b", true},
-		{"uuid refuses a non-uuid", typ(dbspec.TypeUUID), "not-a-uuid", "", false},
-		{"bytes are padded base64", typ(dbspec.TypeBytes), "AAEC/w==", "AAEC/w==", true},
-		{"bytes pad unpadded base64", typ(dbspec.TypeBytes), "AAEC/w", "AAEC/w==", true},
-		{"bytes accept the empty text", typ(dbspec.TypeBytes), "", "", true},
-		{"bytes refuse what is not base64", typ(dbspec.TypeBytes), "!!", "", false},
-		{"text is written as it is", typ(dbspec.TypeText), "  any <thing> ", "  any <thing> ", true},
-		{"varchar counts runes", vc3, "한글!", "한글!", true},
-		{"varchar refuses more runes than its length", vc3, "한글!!", "", false},
+		{"10#readable-values: i32 accepts a canonical integer", typ(dbspec.TypeI32), "-3", "-3", true},
+		{"10#readable-values: i32 canonicalizes leading zeros", typ(dbspec.TypeI32), "007", "7", true},
+		{"10#readable-values: i32 refuses a plus sign", typ(dbspec.TypeI32), "+3", "", false},
+		{"10#readable-values: i32 refuses a decimal point", typ(dbspec.TypeI32), "3.0", "", false},
+		{"10#readable-values: i32 refuses the top of the range plus one", typ(dbspec.TypeI32), "2147483648", "", false},
+		{"10#readable-values: i32 accepts the top of the range", typ(dbspec.TypeI32), "2147483647", "2147483647", true},
+		{"10#readable-values: i16 refuses out of range", typ(dbspec.TypeI16), "32768", "", false},
+		{"10#readable-values: i64 accepts the maximum", typ(dbspec.TypeI64), "9223372036854775807", "9223372036854775807", true},
+		{"10#readable-values: i64 refuses past the maximum", typ(dbspec.TypeI64), "9223372036854775808", "", false},
+		{"10#readable-values: decimal keeps its scale", dec62, "12.50", "12.50", true},
+		{"10#readable-values: decimal pads to its scale", dec62, "12.5", "12.50", true},
+		{"10#readable-values: decimal refuses more fraction digits than its scale", dec62, "12.555", "", false},
+		{"10#readable-values: decimal refuses more integer digits than its precision", dec62, "1234567.00", "", false},
+		{"10#readable-values: f64 writes its shortest form", typ(dbspec.TypeF64), "0.50", "0.5", true},
+		{"10#readable-values: f64 writes zero as 0", typ(dbspec.TypeF64), "0.0", "0", true},
+		{"10#readable-values: f64 refuses a word", typ(dbspec.TypeF64), "NaN", "", false},
+		{"10#readable-values: bool accepts true", typ(dbspec.TypeBool), "true", "true", true},
+		{"10#readable-values: bool refuses a capital", typ(dbspec.TypeBool), "True", "", false},
+		{"10#readable-values: bool refuses a digit", typ(dbspec.TypeBool), "1", "", false},
+		{"10#readable-values: date accepts a date", typ(dbspec.TypeDate), "2026-10-11", "2026-10-11", true},
+		{"10#readable-values: date accepts a leap day", typ(dbspec.TypeDate), "2024-02-29", "2024-02-29", true},
+		{"10#readable-values: date refuses a day past its month", typ(dbspec.TypeDate), "2026-02-30", "", false},
+		{"10#readable-values: date refuses a leap day of a common year", typ(dbspec.TypeDate), "2026-02-29", "", false},
+		{"10#readable-values: date refuses an unpadded month", typ(dbspec.TypeDate), "2026-1-1", "", false},
+		{"10#readable-values: date refuses now", typ(dbspec.TypeDate), "now", "", false},
+		{"10#readable-values: date refuses a quote inside", typ(dbspec.TypeDate), "2026'-10-11", "", false},
+		{"10#readable-values: time writes the column's fraction digits", time3, "09:30:00", "09:30:00.000", true},
+		{"10#readable-values: time keeps exact fraction digits", time3, "09:30:00.250", "09:30:00.250", true},
+		{"10#readable-values: time refuses more fraction digits", time3, "09:30:00.2500", "", false},
+		{"10#readable-values: time refuses hour 24", time3, "24:00:00", "", false},
+		{"10#readable-values: time without fraction digits", time0, "09:30:00", "09:30:00", true},
+		{"10#readable-values: time refuses a fraction for precision zero", time0, "09:30:00.5", "", false},
+		{"10#readable-values: datetime accepts the space form", dt0, "2026-10-11 09:30:00", "2026-10-11 09:30:00", true},
+		{"10#readable-values: datetime refuses the T form", dt0, "2026-10-11T09:30:00", "", false},
+		{"10#readable-values: datetime refuses now", dt0, "now", "", false},
+		{"10#readable-values: uuid is lowercase", typ(dbspec.TypeUUID), "0F8FAD5B-D9CB-469F-A165-8C9D2E7F1A2B", "0f8fad5b-d9cb-469f-a165-8c9d2e7f1a2b", true},
+		{"10#readable-values: uuid refuses a non-uuid", typ(dbspec.TypeUUID), "not-a-uuid", "", false},
+		{"10#readable-values: bytes are padded base64", typ(dbspec.TypeBytes), "AAEC/w==", "AAEC/w==", true},
+		{"10#readable-values: bytes pad unpadded base64", typ(dbspec.TypeBytes), "AAEC/w", "AAEC/w==", true},
+		{"10#readable-values: bytes accept the empty text", typ(dbspec.TypeBytes), "", "", true},
+		{"10#readable-values: bytes refuse what is not base64", typ(dbspec.TypeBytes), "!!", "", false},
+		{"10#readable-values: text is written as it is", typ(dbspec.TypeText), "  any <thing> ", "  any <thing> ", true},
+		{"10#readable-values: varchar counts runes", vc3, "한글!", "한글!", true},
+		{"10#readable-values: varchar refuses more runes than its length", vc3, "한글!!", "", false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -77,6 +77,8 @@ func TestReadableValues(t *testing.T) {
 	}
 }
 
+// TestSingleLineFaults: every input pins 10#single-line-places (the faults of a
+// single-line place, and the inputs that are not faults).
 func TestSingleLineFaults(t *testing.T) {
 	cases := []struct {
 		in   string
@@ -104,6 +106,7 @@ func TestSingleLineFaults(t *testing.T) {
 	}
 }
 
+// TestKeyRules: every input pins 20#keys (the key shape and the reserved names).
 func TestKeyRules(t *testing.T) {
 	long := strings.Repeat("a", 243)
 	cases := []struct {
@@ -152,6 +155,8 @@ func TestKeyRules(t *testing.T) {
 	}
 }
 
+// TestSplitLink: every input pins 10#foreign-keys-as-links (the link form of a
+// foreign key value).
 func TestSplitLink(t *testing.T) {
 	cases := []struct {
 		in, key, target string
@@ -175,6 +180,8 @@ func TestSplitLink(t *testing.T) {
 	}
 }
 
+// TestTitleEscape: every input pins 10#single-line-places (the escape of a title
+// in an H1 and its read-back).
 func TestTitleEscape(t *testing.T) {
 	cases := []struct {
 		title, text string

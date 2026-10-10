@@ -15,6 +15,13 @@ The order of the commit protocol is normative.
 - Opening loads the catalog, walks the corpus, parses the documents, derives the indexes, and
   reuses the parsed-row cache keyed by file content hash for unchanged files.
 
+## The canon operation
+
+- `flowmark canon <corpus> [file…]` rewrites the named files, or every corpus document when none is named,
+  to canonical form in one transaction. Its targets are exempt from the commit refusal of a file with a `format.*` diagnostic. A named file with `format.block`, `format.section` or `format.encoding` refuses the command as `CONSTRAINT`, naming the file, and nothing is written; with no file named, its targets are the corpus documents whose only `format.*` diagnostics are `format.noncanonical`, and it reports every other file and does not rewrite it. A `corpus.walk` file is never a target. Canon changes no logical value, so the key, reference and constraint checks never refuse it; a target whose link derivation needs an unavailable table; a link to a `files` row derives from its key alone and needs no table, and a link to a block or document row needs that row's table; such a target refuses a named-file canon as `CONSTRAINT`, naming both files, and with no file named it is reported and not rewritten. A value with a validator diagnostic keeps its written text. It is the one operation that normalizes document bytes; a logical write never does.
+  Grounding: a migration is a separate, explicit transaction, so a logical write never changes bytes
+  the user did not write.
+
 ## The server
 
 - `flowmark serve <corpus> --port <port>` is the resident face that orm clients reach. `--port` is
@@ -50,7 +57,7 @@ The order of the commit protocol is normative.
    naming the file and line.
 2. Run the constraint checks against the corpus re-read under the lock with the post-image
    applied — not against a snapshot taken at `begin`, and not against a predicted touched-file
-   set. A history gap on another row never fails the commit.
+   set. A validator diagnostic on another row (`type`, `key.duplicate`, `reference.dangling`, `check`, `order`, `state.limit`, `history.gap`, `history.chain`) never fails the commit, except that a `type` diagnostic fails it when a constraint check of the commit must evaluate that value ([canonical format](10-canonical-format.md#readable-values)), and two rows with byte-for-byte equal keys make their table unavailable ([canonical format](10-canonical-format.md#diagnostics)); a `format.*` diagnostic fails it only as the rewrite refusal and the unavailable table state ([canonical format](10-canonical-format.md#diagnostics)). A commit that must rewrite a file — the row's own file, a file holding a link to a row whose detail section appears or disappears, an `order` sibling — is refused when that file has a `format.*` diagnostic: `CONSTRAINT`, naming the file and the diagnostic, and naming `flowmark canon` when it is `format.noncanonical`. Three commits are exempt: `flowmark canon` for its targets ([operations](#the-canon-operation)); the add-column migration, for the diagnostics the added column causes, which do not make its table unavailable to that migration ([migration](80-migration.md)); and a delete that removes a `files` row's whole file from the rewrite refusal only — its restrict check still needs the rows of every table that may reference the row (its own table through `parent`, its child and history blocks, and every table with a foreign key to it), so such a delete is `CONSTRAINT` when any of them is unavailable.
 3. Write every post-image file into `.flowmark/tx/<id>/` content-addressed and fsync it.
 4. Copy the pre-image of every target into the stage and fsync.
 5. Write and fsync the **prepare record**: every rename with its pre- and post-hashes.
@@ -87,7 +94,7 @@ microseconds.
 | `CORPUS_CONFLICT` | `WRITE_CONFLICT` | a target changed since it was read; names the file and line |
 | `DUPLICATE_KEY` | `DUPLICATE_KEY` | a primary or unique key value already exists; names both places |
 | `FOREIGN_KEY` | `FOREIGN_KEY` | a reference names no row, or a referenced row is deleted while referenced |
-| `CONSTRAINT` | `CONSTRAINT` | any other rule of the catalog refused the write — a check, a title, a transition, a required column, a limit, an order, a single-line place; names the rule and the place |
+| `CONSTRAINT` | `CONSTRAINT` | any other rule of the catalog refused the write — a check, a title, a transition, a required column, a limit, an order, a single-line place, a non-canonical or malformed document that the write would rewrite; names the rule and the place; or a request, read or write, that needs the rows of an unavailable table ([canonical format](10-canonical-format.md#diagnostics)), naming the file and the diagnostic |
 | recovery refusal | — | names the target and both recorded hashes; opening refuses until resolved |
 
 Every failure message names the cause and the fix.
