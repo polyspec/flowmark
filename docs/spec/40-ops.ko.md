@@ -1,5 +1,5 @@
 <!-- doc-id: spec-ops -->
-<!-- source-sha256: 9827cd01a57aa65f4bbc0a0bd0256c9f0da6a6675990b07bb256f0c57436846f -->
+<!-- source-sha256: f4eefea00049d2ee758cfb3fb627bd5cc7140c0f045d493030cabddb6885324c -->
 # Operations
 
 [English](40-ops.md)
@@ -17,7 +17,8 @@
 
 ## Server
 
-- `flowmark serve <corpus> --port <port>`는 orm client가 접속하는 상주 face다. loopback TCP에만 bind한다.
+- `flowmark serve <corpus> --port <port>`는 orm client가 접속하는 상주 face다. `--port`는 필수다.
+  loopback TCP에만 bind한다.
   처음 시작할 때 무작위 token을 `.flowmark/server.json`에 쓰며, token은 재시작해도 유지되고
   `flowmark serve --new-token`으로만 바뀐다.
 - DSN은 `markdown://127.0.0.1:<port>/<corpus>?token=<token>`이고 `<corpus>`는 corpus root의 directory
@@ -40,7 +41,7 @@
 - transaction 안의 요청은 stage된 post-image를 읽는다. savepoint는 중첩 stage이고 `rollback_to`는 그
   위의 stage를 버린다.
 - face는 commit이 `CORPUS_CONFLICT`를 만나면 다시 읽은 뒤 단일 operation 쓰기를 한 번 재시도한다.
-  server transaction은 server가 재시도하지 않으며 orm client는 `WRITE_CONFLICT`를 받는다.
+  server transaction은 server가 재시도하지 않으며 orm client는 `WRITE_CONFLICT`를 받고 이를 재시도하지 않는다.
 
 ## Commit protocol
 
@@ -67,8 +68,10 @@
 
 - command별 p95 지연 목표를 여기서 선언한다([open questions](110-open-questions.md)의 corpus 규모에서
   수백 millisecond).
-- parse된 행 cache는 바뀌지 않은 file의 재parse를 피한다. transaction별 기본 검증은 post-image의 closure이고,
-  전체 `flowmark validate`는 요청할 때와 catalog가 바뀔 때 실행한다.
+- parse된 행 cache는 바뀌지 않은 file의 재parse를 피한다. commit은 transaction이 결과를 바꿀 수 있는
+  모든 제약을 검사한다: 대상 행의 key, 참조, check, 순서, limit, 전이, `history.gap`과, 그 행들이 참조하거나
+  참조되는 행들이며 — lock 아래 다시 읽은 corpus에서 평가한다. 전체 `flowmark validate`는 요청할 때와
+  catalog가 바뀔 때 실행한다.
 - 오래 사는 face(sidecar, server)는 corpus를 지켜보다 host에 변경 event를 push할 수 있다. 쓰기는 여전히
   transaction protocol로만 간다.
 
@@ -76,7 +79,7 @@
 
 | face 이름 | orm code | 뜻 |
 | --- | --- | --- |
-| `LOCK_TIMEOUT` | `CANCELED` | lock 대기가 끝났다. holder를 밝힌다 |
+| `LOCK_TIMEOUT` | `CANCELED` | lock 대기가 끝났다. holder를 밝힌다 — SQLite의 `busy_timeout`이 그렇듯 `CANCELED`다 |
 | `CORPUS_CONFLICT` | `WRITE_CONFLICT` | 읽은 뒤 대상이 바뀌었다. file과 줄을 밝힌다 |
 | `DUPLICATE_KEY` | `DUPLICATE_KEY` | primary나 unique key 값이 이미 있다. 두 자리를 밝힌다 |
 | `FOREIGN_KEY` | `FOREIGN_KEY` | 참조가 어떤 행도 가리키지 않거나, 참조된 행을 참조되는 동안 지우려 했다 |

@@ -15,7 +15,7 @@ A corpus extends it by adding columns. This specification pins its tables and it
 | `people` | `store document table` | `id varchar(32)` with `key_prefix 'P'`; `name varchar(255)` with `title name` |
 | `item_links` | `store document table` | `id i64 identity`; `from_item varchar(32)` → items; `to_item varchar(32)` → items; `kind varchar(16)` |
 | `item_history` | `store block fk_history_item table` | `id i64 identity`; `item varchar(32)` → items by `fk_history_item`; `from_state`, `to_state` as `state`; `at datetime(6)`; `evidence`, `cause`, `retry` as on items, each `markdown` |
-| `views` | `store document table` | `id i64 identity`; `title varchar(255)` with `title title`; `body text` with `markdown body` and `body body`; `kind varchar(16)`; `entity varchar(63)`; `filter text` and `sort text`, each `codec … ordered_json`; `group_by varchar(63) null` |
+| `views` | `store document table` | `id i64 identity`; `title varchar(255)` with `title title`; `body text` with `markdown body` and `body body`; `kind varchar(16)`; `entity varchar(63)`; `filter text` and `sort text` with `codec filter ordered_json` and `codec sort ordered_json`; `group_by varchar(63) null` |
 
 Every foreign key has its leading index. The checks are `start_on is null or start_at is null`,
 `due_on is null or due_at is null`,
@@ -27,6 +27,7 @@ Every foreign key has its leading index. The checks are `start_on is null or sta
   midnight. A gantt draws a date-only start from the start of its day and a date-only due through
   the end of its day.
 - **A blank assignee is self**; no name is ever guessed for it.
+- **A gantt dependency edge** is an `item_links` row of kind `blocks`.
 
 ## The state machine
 
@@ -58,7 +59,9 @@ Every foreign key has its leading index. The checks are `start_on is null or sta
 - A kanban drop sets `order` only when the view has no `sort` (storage order) and both neighbours
   share the card's parent; a drop across columns changes the state. Any other drop is refused and
   the board says why — it never moves a card it does not store. After an accepted drop the board
-  redraws from the rows the operation returns, never from the drop position.
+  redraws from the rows the operation returns, never from the drop position. A drop across columns
+  places the card where the view's sort puts it; without a `sort`, the state change keeps the card's
+  `order`.
 - No view has a write path of its own: an illegal drag fails the same validation as an illegal CLI
   write.
 

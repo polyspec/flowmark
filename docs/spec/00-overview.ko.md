@@ -1,5 +1,5 @@
 <!-- doc-id: spec-overview -->
-<!-- source-sha256: 8bb22176e8cfe2086d41434a84d371d69a943b1fc67c3b4f282df069f05336fb -->
+<!-- source-sha256: 1e2b99d55284488be3cb9d0f8f2b6df70441398f03ba657931708ec35f24a9d7 -->
 # 개요
 
 [English](00-overview.md)
@@ -21,8 +21,8 @@ flowmark는 markdown 문법을 가진 텍스트 DB다. 파일이 database이고,
   않는다. 근거: orm 안의 엔진은 다섯 client가 각자 가져야 하고, 별도 엔진은 구현이 하나다.
 - **catalog가 schema다.** corpus root는 모든 table과 그 저장과 setting을 선언하는 dbspec 문서 set
   `dbspec/*.dbs`를 담는다([schema](30-schema.md)). database가 schema를 행마다가 아니라 한 번만 두듯
-  문서는 schema 사본을 갖지 않는다. flowmark는 orm의 Go `engine/dbspec` package로 catalog를 읽고 다시
-  구현하지 않는다.
+  문서는 schema 사본을 갖지 않는다. flowmark는 catalog와 IR을 orm의 Go `engine/dbspec`과 `engine/ir` package를 library로 써서 읽고, 이들을
+  다시 구현하지 않는다.
 - **corpus가 진실이다.** corpus는 catalog가 기술하는 markdown 문서의 directory tree다. 모든 쓰기는
   transaction 안에서 codec과 validator를 지나고, 모든 읽기는 같은 executor를 지난다. 외부 database가
   있다면 sync adapter의 파생 쪽이거나 소유 쪽이며, 숨은 mirror가 아니다.

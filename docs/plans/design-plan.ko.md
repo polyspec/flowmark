@@ -1,5 +1,5 @@
 <!-- doc-id: plans-design-plan -->
-<!-- source-sha256: ed534ffaef608f00fb22db4a424dcb118695d512292b49025c2988bd8b51c5e0 -->
+<!-- source-sha256: 60cf838556025cbe1fcc5be0cc5f20862c5ab906c5930e286b802507b206db41 -->
 # flowmark 설계 계획
 
 Revision 2 — 3개 lane의 적대 감사 결과(engine core, orm 통합, 운영)와 multi-platform 지시를 아래 판정에 접는다. 감사의 blocker는 전부 판정이 되었고, 부수지 못한 주장은 문서 끝에 남긴다.
@@ -52,7 +52,7 @@ flowmark = the markdown database engine (one Go binary)
    ├─ codec: strict parser + canonical renderer of the storages (two-clause idempotency, §2)
    ├─ validator: catalog constraints (type/PK/UNIQUE/FK/CHECK/state machine and history)
    ├─ IR executor over in-memory indexes derived from the parsed corpus
-   ├─ write path: lock → stage → conflict check → validate → prepare record → renames → commit
+   ├─ write path: lock → conflict check → validate → stage → prepare record → renames → commit
    ├─ .flowmark/: lock, tx journal, server token, parsed-row cache
    ├─ faces: server · CLI · MCP · soksak sidecar
    └─ sync engine: md→db export / db→md materialize (§7)
@@ -90,7 +90,7 @@ flowmark = the markdown database engine (one Go binary)
 - **Server**(Revision 3)는 loopback에 bind하고 유지되는 token을 갖는 상주 face다. DSN은 `markdown://127.0.0.1:<port>/<corpus>?token=<token>`이다.
 - **검증은 commit 시점에 충돌 검사 뒤 lock 아래에서 corpus를 새로 읽어 수행한다** — BEGIN snapshot도 예측된 touch file 집합도 아니다.
 - corpus revision과 `CORPUS_CHANGED`는 철회한다(Revision 3): `paginate`는 요청 하나이고, 호출을 넘어 읽는 face는 없다.
-- **비용 모델**: 40-ops가 per-command p95 latency 목표를 선언한다(corpus envelope 기준 수백 ms 단위); file content hash를 key로 하는 `.flowmark/cache/`의 parsed row cache가 변하지 않은 file의 재parse를 피한다; 기본 per-transaction 검증은 post-image의 FK/UK closure이고, 전체 `flowmark validate`는 on demand와 schema 변경 시에 실행한다.
+- **비용 모델**: 40-ops가 per-command p95 latency 목표를 선언한다(corpus envelope 기준 수백 ms 단위); file content hash를 key로 하는 `.flowmark/cache/`의 parsed row cache가 변하지 않은 file의 재parse를 피한다; commit은 transaction이 바꿀 수 있는 모든 제약을 lock 아래 다시 읽은 corpus에서 검사하며, 전체 `flowmark validate`는 on demand와 catalog 변경 시에 실행한다.
 - Walk 규칙: `.flowmark/`와 숨김 항목 건너뛰기; corpus 안의 symlink·hardlink는 located diagnostic; nested corpus root는 error.
 
 ### 6. Constraints와 capability table (`50-constraints.md`, `60-dialect.md`)
@@ -116,7 +116,7 @@ flowmark = the markdown database engine (one Go binary)
 
 - `flowmark.dbs`(Revision 3): `items`(parent, 이력을 갖는 5상태 기계, 제목, body, 담당자, date/datetime 쌍인 시작과 마감, priority, position), `people`, `item_links`(blocks, relates, duplicates, supersedes), `item_history`, `views`.
 - **View는 데이터이자 thin consumer다**: 칸반, 목록, 간트 view는 `views`의 행이다. 보드는 엔진으로 읽고 같은 operation으로 쓴다 — 불법 drag는 불법 CLI 쓰기와 똑같이 실패한다. view 전용 write path는 없고, WIP limit을 지어내지 않는다.
-- 이 repository는 corpus가 아니다(Revision 3): 그 checklist는 손으로 관리하는 kit 문서로 남으므로 cutover는 철회한다. `make refs-check`는 계속 문서의 task ID를 해석한다.
+- 이 repository는 corpus가 아니다(Revision 3): 그 checklist는 손으로 관리하는 kit 문서로 남으므로 cutover는 철회한다. `make validate`와 prose ID checker는 옛 엔진과 함께 제거되며, `make refs-check`는 계속 kit이 추적하는 checklist를 검사한다.
 
 ## Session 계획 (이번 session은 T1a, 다음 session은 T1b)
 
@@ -132,7 +132,7 @@ flowmark = the markdown database engine (one Go binary)
 
 **T9 conformance 계약 (지금 확정)**: markdown vector는 corpus-before + IR request + 기대 corpus-after / 기대 rows이며 Go executor에 대해 실행한다. SQL/binds 비교는 적용되지 않는다(SQL이 없으므로). 다른 client가 executor를 port할 때 교차 비교가 시작된다. (Revision 3: vector는 flowmark 엔진에 대해 실행하고, orm의 executor conformance는 flowmark build를 고정한다.)
 
-**이후 phase (checklist `[ ]` 항목으로만 등록)**: T2 codec(Go), T3 validator, T4 executor, T5 orm markdown-executor 통합(manifest setting, state-machine sub-grammar — orm 저장소 변경), T6 sync(adapter 계약과 database adapter; GitHub·Jira adapter는 그 아래에 등록), T7 세 개의 face — CLI·MCP server·soksak sidecar(protocol v1: stdio JSON lines, surface routing, host 소유 lifecycle; MCP tool 목록 mini-spec 먼저, 작업 단위 lock은 이미 core 판정), T8 checklist app(local issue model), T9 conformance vectors, T10 자기 repo의 soksak plugin — local 칸반 보드와 issue tracker, 또 하나의 thin consumer로서 view 전용 write path 없음.
+**이후 phase (checklist `[ ]` 항목으로만 등록)**: T2 codec(Go), T3 validator, T4 executor, T5 orm markdown-executor 통합(manifest setting, state-machine sub-grammar — orm 저장소 변경), T6 sync(adapter 계약과 database adapter; GitHub·Jira adapter는 그 아래에 등록), T7 세 개의 face — CLI·MCP server·soksak sidecar(protocol v1: stdio JSON lines, surface routing, host 소유 lifecycle; MCP tool 목록 mini-spec 먼저, lock은 작업마다 또는 server transaction마다 잡힌다(§5)), T8 checklist app(local issue model), T9 conformance vectors, T10 자기 repo의 soksak plugin — local 칸반 보드와 issue tracker, 또 하나의 thin consumer로서 view 전용 write path 없음.
 
 ## 감사가 부수지 못한 것
 

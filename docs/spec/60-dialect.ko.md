@@ -1,5 +1,5 @@
 <!-- doc-id: spec-dialect -->
-<!-- source-sha256: 22bec596b0805cf3b0bfc4eea4a2860f3ea19d223e8d5d995cc1d6d138b55bab -->
+<!-- source-sha256: b2d123666f16187ae8d0035a2779dc8eeb65553be76e5c3e026d1926b0045fff -->
 # Capability table
 
 [English](60-dialect.md)
@@ -41,7 +41,9 @@ surface가 corpus에서 무엇을 하는지 또는 orm 전통에 따라 `CAPABIL
 | relation(`limit_per_parent`, `if_parent`, `flatten`, `key_by`, `no_cascade_delete`) | 지원. executor가 조립한다 |
 | subquery(`tuple_in`, `tuple_not_in`, scalar `Sub` aggregate) | 지원 |
 | `now`, `default now`, `updated`, `soft_delete` | orm 시계 규칙에 따른 요청의 `now` |
-| codec column | client가 적용한다. 저장 값은 encode된 값이다 |
+| codec columns | orm 요청에서는 client가 적용한다. 엔진이 시작하는 쓰기(CLI, MCP, sidecar, 이력)는 orm의 Go codec package로 codec을 적용하며, 검증은 같은 package로 decode한다. 저장 값은 encode된 값이며, byte를 만드는 단계는 base64다 |
+| indexes | 허용되며 메모리에서 유도된다 |
+| `select explicit`, `entity`, `navigation` | client 쪽이며 저장에 효과가 없다 |
 | `aes`, `aes_version`, `blind_index` | corpus에서 schema 오류 — key는 client를 떠나지 않는다 |
 | `audit`, `immutable` setting | corpus에서 schema 오류. 대신 `state_machine … history` |
 | transaction | session 위의 `begin`부터 `commit`/`rollback`까지. `readOnly`는 지키며 lock을 잡는다 |

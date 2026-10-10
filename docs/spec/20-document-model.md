@@ -82,7 +82,9 @@ so the same rows can be stored either way.
   are exactly 1..n; a gap or a duplicate is a validate diagnostic.
 - An insert may omit it and the row appends; with k it places the row at k. An update to k moves
   the row and the siblings follow in the same transaction; k < 1 or k > n + 1 is `CONSTRAINT`,
-  never clamped. An update that assigns `order` matches exactly one row, otherwise `CONSTRAINT`.
+  never clamped. n is the number of rows among the destination siblings excluding the row itself,
+  so k lies in 1..n + 1 for an insert, a parent change and an in-place move alike. An update that
+  assigns `order` matches exactly one row, otherwise `CONSTRAINT`.
   Changing `parent` without `order` appends to the new siblings, and the old siblings close the
   gap. Moving a row moves its subtree.
 - Without an `order` column, siblings stand in key order (numeric for integer keys, codepoint for

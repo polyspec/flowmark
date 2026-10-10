@@ -1,5 +1,5 @@
 <!-- doc-id: spec-document-model -->
-<!-- source-sha256: 1c1b4d5ed45bcbfb74a866d4baeb650c6aea166524623d155e690afbabec2f0b -->
+<!-- source-sha256: 3eeb46c6986633be3546f7bb70ff3d96900df513972fd714fae6b68ccbe72b83 -->
 # 문서 모델
 
 [English](20-document-model.md)
@@ -74,7 +74,8 @@ aggregate냐 split이냐는 저장 선언이다. 논리 관계는 모든 저장�
 - block과 document 저장에서는 쓰지 않는다: 읽을 때 줄 순서에서 유도되고, 쓰면 `format.block`이다.
   `files` 저장에서는 frontmatter field이며 형제 값은 정확히 1..n이다. 빈틈이나 중복은 validate 진단이다.
 - insert는 이를 생략할 수 있고 행은 뒤에 붙는다. k를 주면 k에 놓는다. k로의 update는 행을 옮기고
-  형제가 같은 transaction에서 따라간다. k < 1이나 k > n + 1은 `CONSTRAINT`이며 잘라 맞추지 않는다.
+  형제가 같은 transaction에서 따라간다. k < 1이나 k > n + 1은 `CONSTRAINT`이며 잘라 맞추지 않는다. n은 행 자신을 제외한 목적지 형제 사이의 행 수이므로, insert, parent 변경, 제자리
+  이동 모두에서 k는 1..n + 1 범위에 있다.
   `order`를 할당하는 update는 정확히 한 행과 맞아야 하며 아니면 `CONSTRAINT`다. `order` 없이
   `parent`를 바꾸면 새 형제 뒤에 붙고 옛 형제는 빈틈을 닫는다. 행을 옮기면 subtree가 함께 옮겨진다.
 - `order` column이 없으면 형제는 key 순서(정수 key는 숫자, 문자는 codepoint)로 서며 각 자식은 부모를

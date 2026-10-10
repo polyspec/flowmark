@@ -51,7 +51,7 @@ flowmark = the markdown database engine (one Go binary)
    ├─ codec: strict parser + canonical renderer of the storages (two-clause idempotency, §2)
    ├─ validator: catalog constraints (type/PK/UNIQUE/FK/CHECK/state machine and history)
    ├─ IR executor over in-memory indexes derived from the parsed corpus
-   ├─ write path: lock → stage → conflict check → validate → prepare record → renames → commit
+   ├─ write path: lock → conflict check → validate → stage → prepare record → renames → commit
    ├─ .flowmark/: lock, tx journal, server token, parsed-row cache
    ├─ faces: server · CLI · MCP · soksak sidecar
    └─ sync engine: md→db export / db→md materialize (§7)
@@ -89,7 +89,7 @@ flowmark = the markdown database engine (one Go binary)
 - **The server** (Revision 3) is a resident face bound to loopback with a kept token; the DSN is `markdown://127.0.0.1:<port>/<corpus>?token=<token>`.
 - **Validation runs at commit against the corpus freshly re-read under the lock**, after the conflict check — not against a BEGIN snapshot, and not against a predicted touched-file set.
 - The corpus revision and `CORPUS_CHANGED` are withdrawn (Revision 3): `paginate` is one request, and no face reads across calls.
-- **Cost model**: a per-command p95 latency target is declared in 40-ops (order: hundreds of milliseconds at the corpus envelope); a `.flowmark/cache/` of parsed rows keyed by per-file content hash avoids re-parsing unchanged files; default per-transaction validation is the FK/UK closure of the post-image with full `flowmark validate` on demand and on schema change.
+- **Cost model**: a per-command p95 latency target is declared in 40-ops (order: hundreds of milliseconds at the corpus envelope); a `.flowmark/cache/` of parsed rows keyed by per-file content hash avoids re-parsing unchanged files; the commit checks every constraint the transaction can change, on the corpus re-read under the lock, with full `flowmark validate` on demand and on catalog change.
 - Walk rules: skip `.flowmark/` and hidden entries; a symlink or hardlink inside the corpus is a located diagnostic; a nested corpus root is an error.
 
 ### 6. Constraints and the capability table (`50-constraints.md`, `60-dialect.md`)
@@ -115,7 +115,7 @@ flowmark = the markdown database engine (one Go binary)
 
 - `flowmark.dbs` (Revision 3): `items` (parent, the five-state machine with its history, title, body, assignee, start and due as date/datetime pairs, priority, position), `people`, `item_links` (blocks, relates, duplicates, supersedes), `item_history` and `views`.
 - **Views are data and thin consumers**: a kanban, list or gantt view is a row of `views`; a board reads through the engine and writes through the same operations — an illegal drag fails exactly like an illegal CLI write. No view-specific write path exists, and no WIP limit is invented.
-- This repository is not a corpus (Revision 3): its checklists stay kit documents managed by hand, so the cutover is withdrawn; `make refs-check` keeps resolving task IDs in documents.
+- This repository is not a corpus (Revision 3): its checklists stay kit documents managed by hand, so the cutover is withdrawn; `make validate` and the prose ID checker are removed with the old engine; `make refs-check` keeps checking the kit-tracked checklists.
 
 ## Session plan (T1a this session; T1b next session)
 
@@ -131,7 +131,7 @@ flowmark = the markdown database engine (one Go binary)
 
 **T9 conformance contract (stated now)**: markdown vectors are corpus-before + IR request + expected corpus-after / expected rows, run against the Go executor; SQL/binds comparison does not apply (there is no SQL). Cross-client comparison begins when other clients port the executor. (Revision 3: vectors run against the flowmark engine; orm's executor conformance pins a flowmark build.)
 
-**Later phases (registered as `[ ]` checklist items only)**: T2 codec (Go), T3 validator, T4 executor, T5 orm markdown-executor integration (manifest settings, state-machine sub-grammar — orm-repo changes), T6 sync (the adapter contract and the database adapter; GitHub and Jira adapters register under it), T7 the three faces — CLI, MCP server and soksak sidecar (protocol v1: JSON lines over stdio, surface routing, host-owned lifecycle; the MCP tool list gets its mini-spec first, and per-operation locking is already the core ruling), T8 checklist app (the local issue model), T9 conformance vectors, T10 the soksak plugin in its own repository — the local kanban board and issue tracker as one more thin consumer, with no view-specific write path.
+**Later phases (registered as `[ ]` checklist items only)**: T2 codec (Go), T3 validator, T4 executor, T5 orm markdown-executor integration (manifest settings, state-machine sub-grammar — orm-repo changes), T6 sync (the adapter contract and the database adapter; GitHub and Jira adapters register under it), T7 the three faces — CLI, MCP server and soksak sidecar (protocol v1: JSON lines over stdio, surface routing, host-owned lifecycle; the MCP tool list gets its mini-spec first, and the lock is held per operation or per server transaction (§5)), T8 checklist app (the local issue model), T9 conformance vectors, T10 the soksak plugin in its own repository — the local kanban board and issue tracker as one more thin consumer, with no view-specific write path.
 
 ## What the audit could not break
 

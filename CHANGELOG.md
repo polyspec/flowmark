@@ -3,6 +3,14 @@
 
 ## Unreleased
 
+- T12.1: the rulings and specifications are rewritten on the markdown database plan. flowmark is
+  the engine and orm reaches it as an IR executor by `markdown://`; the `dbspec/` catalog is the
+  only schema; each table declares a `files`, `document` or `block` storage; keys are opaque; the
+  canonical format pins the row scopes, sections, list fields and table cells; operations pin the
+  server, sessions, the commit order and the failure codes; constraints pin the state machine
+  with its history, gap, chain and repair; `flowmark.dbs` is the application schema. The design
+  plan records revision 3 and the in-document Mermaid authority (T8.5) is withdrawn.
+
 - T8.4-2: the repository tracks no built executable. The root `flowmark`, written by a
   `go build` in the repository root, leaves the index and is ignored; `make build` writes
   `build/flowmark`.

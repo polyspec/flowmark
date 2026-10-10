@@ -42,7 +42,9 @@ Go client implements it first and every other client is its own orm item.
 | relations (`limit_per_parent`, `if_parent`, `flatten`, `key_by`, `no_cascade_delete`) | Supported; assembled by the executor |
 | subqueries (`tuple_in`, `tuple_not_in`, scalar `Sub` aggregates) | Supported |
 | `now`, `default now`, `updated`, `soft_delete` | The request's `now`, under the orm clock rule |
-| codec columns | Applied by the client; the stored value is the encoded one |
+| codec columns | Applied by the client on an orm request; a write the engine originates (CLI, MCP, sidecar, history) applies the codec through orm's Go codec package, and validation decodes with the same package; the stored value is the encoded one, a byte-producing stage as base64 |
+| indexes | Accepted; derived in memory |
+| `select explicit`, `entity`, `navigation` | Client-side; no storage effect |
 | `aes`, `aes_version`, `blind_index` | Schema error on a corpus — the key never leaves the client |
 | `audit`, `immutable` settings | Schema error on a corpus; `state_machine … history` instead |
 | transactions | `begin` to `commit`/`rollback` over the session; `readOnly` honoured and takes the lock |

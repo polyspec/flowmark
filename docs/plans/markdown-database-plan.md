@@ -90,8 +90,9 @@ compatibility, no fallback, no hidden error, no trick; rules first.
 - Documents carry no schema stamp: the `dbspec/` set is the catalog, as a database keeps its
   schema once and never per row. Spec 30's stamp, standalone documents and embedded fragments
   are withdrawn.
-- `flowmark install` generates the storage skeleton from the catalog — folders, the document of
-  each `document` table, empty block sections — as `CREATE TABLE` creates storage. Schema install
+- `flowmark install` generates the storage skeleton from the catalog — the folder of each `files`
+  table and the document of each `document` table, and no block section, since an empty block is
+  not written — as `CREATE TABLE` creates storage. Schema install
   through orm over `markdown://` is `CAPABILITY_UNSUPPORTED`.
 - Introspection validates every document against the catalog and returns the catalog; a document
   that fails is a located diagnostic. A tool that drafts a catalog from a corpus without one is
@@ -305,7 +306,8 @@ reimplements them.
   varchar(32), name varchar(255))` with `key_prefix 'P'` and `title name`, `item_links(id i64
   identity, from_item varchar(32), to_item varchar(32), kind varchar(16))` with the check
   `ck_item_links_kind`, `item_history` and `views`. Every foreign key (`parent`, `assignee`,
-  `from_item`, `to_item`, `item`) has its leading index.
+  `from_item`, `to_item`, `item`) has its leading index. A NULL assignee is self — no name is ever
+  guessed for it (the T11 ruling).
 - The two columns per point in time keep the T11 ruling that a due may carry a time: no dbspec
   type holds "date or datetime", and a datetime-only column would turn a date-only due into an
   ambiguous midnight. A gantt draws a date-only start from the start of its day and a date-only

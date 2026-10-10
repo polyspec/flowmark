@@ -17,8 +17,8 @@ The order of the commit protocol is normative.
 
 ## The server
 
-- `flowmark serve <corpus> --port <port>` is the resident face that orm clients reach. It binds
-  loopback TCP only. On its first start it writes a random token to `.flowmark/server.json`; the
+- `flowmark serve <corpus> --port <port>` is the resident face that orm clients reach. `--port` is
+  required. It binds loopback TCP only. On its first start it writes a random token to `.flowmark/server.json`; the
   token is kept across restarts and replaced only by `flowmark serve --new-token`.
 - The DSN is `markdown://127.0.0.1:<port>/<corpus>?token=<token>`, where `<corpus>` is the corpus
   root's directory name. A corpus or token mismatch is `CONFIG`. Remote access and other
@@ -42,7 +42,7 @@ The order of the commit protocol is normative.
   `rollback_to` discards the stages above it.
 - A face retries a single-operation write once after a re-read when the commit meets
   `CORPUS_CONFLICT`. A server transaction is never retried by the server; the orm client receives
-  `WRITE_CONFLICT`.
+  `WRITE_CONFLICT` and never retries it.
 
 ## The commit protocol
 
@@ -71,8 +71,11 @@ microseconds.
 
 - A per-command p95 latency target is declared here (hundreds of milliseconds at the corpus
   envelope of [open questions](110-open-questions.md)).
-- The parsed-row cache avoids re-parsing unchanged files; the default per-transaction validation
-  is the closure of the post-image; full `flowmark validate` runs on demand and on catalog change.
+- The parsed-row cache avoids re-parsing unchanged files. The commit checks every constraint whose
+  outcome the transaction can change: the keys, references, checks, order, limits, transitions and
+  `history.gap` of the target rows, and the rows they reference or that reference them, evaluated
+  on the corpus re-read under the lock. Full `flowmark validate` runs on demand and on catalog
+  change.
 - A long-lived face (the sidecar, the server) may watch the corpus and push change events to its
   host; writes still go through the transaction protocol only.
 
@@ -80,7 +83,7 @@ microseconds.
 
 | Face name | orm code | Meaning |
 | --- | --- | --- |
-| `LOCK_TIMEOUT` | `CANCELED` | the lock wait ended; names the holder |
+| `LOCK_TIMEOUT` | `CANCELED` | the lock wait ended; names the holder — `CANCELED`, as a SQLite `busy_timeout` is |
 | `CORPUS_CONFLICT` | `WRITE_CONFLICT` | a target changed since it was read; names the file and line |
 | `DUPLICATE_KEY` | `DUPLICATE_KEY` | a primary or unique key value already exists; names both places |
 | `FOREIGN_KEY` | `FOREIGN_KEY` | a reference names no row, or a referenced row is deleted while referenced |

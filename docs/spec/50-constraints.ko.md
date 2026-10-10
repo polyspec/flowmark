@@ -1,5 +1,5 @@
 <!-- doc-id: spec-constraints -->
-<!-- source-sha256: e966f43ba82f46a0dce7fa758a5b6b51f09562070ead803ed107515cdc085499 -->
+<!-- source-sha256: f67b413c0e8b507c188a3d78a5b4d36531c2935d7170d56371ca22b46dcd02d7 -->
 # Constraints
 
 [English](50-constraints.md)
@@ -35,8 +35,8 @@ check는 commit에서 강제한다. 술어가 unknown(NULL)인 check는 SQL처�
 
 - `parent` 순환은 `CONSTRAINT`다. 행의 블록 밖 `parent`는 쓰기에서 `CONSTRAINT`, 읽기에서
   `format.block`이다.
-- 1..n + 1 밖의 순서 값이나, 둘 이상의 행과 맞는 order column update는 `CONSTRAINT`다. `files` 저장에서
-  정확히 1..n이 아닌 형제 순서 값은 진단이다([document model](20-document-model.md)).
+- 1..n + 1 밖의 순서 값(n은 문서 모델이 정의하는 대로)이나, 둘 이상의 행과 맞는 order column update는
+  `CONSTRAINT`다. `files` 저장에서 정확히 1..n이 아닌 형제 순서 값은 진단이다([document model](20-document-model.md)).
 
 ## 상태기계
 
