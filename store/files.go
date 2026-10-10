@@ -132,7 +132,7 @@ func ParseFile(cat *catalog.Catalog, table, rel string, data []byte, lk Linker) 
 	if diags != nil {
 		return nil, diags
 	}
-	p := &parser{lay: lay, rel: rel, lk: lk}
+	p := &parser{sink: sink{rel: rel}, lay: lay, lk: lk}
 	text, ok := p.normalize(data)
 	if !ok {
 		return nil, p.diags
@@ -167,50 +167,10 @@ func ParseFile(cat *catalog.Catalog, table, rel string, data []byte, lk Linker) 
 // parser reads one file. A fatal diagnostic makes the file unreadable; a
 // warning marks a noncanonical file whose row is still returned.
 type parser struct {
+	sink
 	lay    *filesLayout
-	rel    string
 	lk     Linker
-	diags  []Diagnostic
-	fatal  bool
 	fields int // the number of field-list items read
-}
-
-func (p *parser) fail(line, col int, rule, msg string) {
-	p.fatal = true
-	p.diags = append(p.diags, Diagnostic{File: p.rel, Line: line, Column: col, Rule: rule, Message: msg})
-}
-
-func (p *parser) warn(line, col int, rule, msg string) {
-	p.diags = append(p.diags, Diagnostic{File: p.rel, Line: line, Column: col, Rule: rule, Message: msg})
-}
-
-// normalize checks the encoding and returns the text with LF line endings and
-// a final line feed. Each departure from the canonical bytes is a diagnostic.
-func (p *parser) normalize(data []byte) (string, bool) {
-	data = bytes.Clone(data)
-	if !utf8.Valid(data) {
-		line, col := invalidAt(data)
-		p.fail(line, col, RuleEncoding, "the file is not UTF-8")
-		return "", false
-	}
-	if i := bytes.IndexByte(data, 0); i >= 0 {
-		p.fail(lineOf(data, i), colOf(data, i), RuleEncoding, "the file holds a U+0000")
-		return "", false
-	}
-	if i := bytes.IndexByte(data, '\r'); i >= 0 {
-		p.warn(lineOf(data, i), colOf(data, i), RuleNoncanonical, "a CR; the canonical line ending is LF")
-		data = bytes.ReplaceAll(data, []byte("\r\n"), []byte("\n"))
-		data = bytes.ReplaceAll(data, []byte("\r"), []byte("\n"))
-	}
-	if bytes.HasPrefix(data, bom) {
-		p.warn(1, 1, RuleNoncanonical, "the file begins with a byte order mark; the canonical file has none")
-		data = data[len(bom):]
-	}
-	if n := len(data); n > 0 && data[n-1] != '\n' {
-		p.warn(lineOf(data, n), colOf(data, n), RuleNoncanonical, "the last line has no line feed")
-		data = append(data, '\n')
-	}
-	return string(data), true
 }
 
 // readTitle reads the H1 line, which is the title of the row. The title is read
@@ -353,37 +313,6 @@ func (p *parser) fieldValue(lineNo int, c dbspec.Column, raw string, valueCol in
 		p.warn(lineNo, valueCol, RuleNoncanonical, "the value is written "+canon)
 	}
 	row.Scalars[c.Name] = &canon
-}
-
-// valueLines returns the lines of the value between from and to, and the index
-// of its first line. The element that follows the value is at to, unless to is
-// the end of the file. A value that stands after a heading (framed) has one
-// blank line after the heading; every value has one blank line before the
-// element that follows it. Any other blank line at either end of the value is
-// not part of it and is noncanonical.
-func (p *parser) valueLines(lines []string, from, to int, framed bool) ([]string, int) {
-	end := to
-	if to < len(lines) && end > from && lines[end-1] == "" {
-		end--
-	}
-	if framed && end-from > 1 && lines[from] == "" {
-		from++
-	}
-	start := from
-	for start < end && isBlank(lines[start]) {
-		start++
-	}
-	if start > from {
-		p.warn(from+1, 1, RuleNoncanonical, "a blank line at the start of the value")
-	}
-	stop := end
-	for stop > start && isBlank(lines[stop-1]) {
-		stop--
-	}
-	if stop < end {
-		p.warn(stop+1, 1, RuleNoncanonical, "a blank line at the end of the value")
-	}
-	return lines[start:stop], start
 }
 
 // readBody reads the body, which runs from line i to the next heading of level 2
@@ -551,14 +480,14 @@ func renderRow(lay *filesLayout, row *Row, lk Linker) ([]byte, []Diagnostic) {
 		w.put("\n")
 		followed := k < len(items)-1
 		if it.body {
-			w.value("the body", it.value, w.next(), followed, true, len(fields) > 0)
+			w.value("the body", it.value, w.next(), followed, true, len(fields) > 0, 2)
 			w.put(it.value)
 			continue
 		}
 		w.put("## " + it.heading + "\n")
 		if it.value != "" {
 			w.put("\n")
-			w.value("the section "+it.heading, it.value, w.next(), followed, false, false)
+			w.value("the section "+it.heading, it.value, w.next(), followed, false, false, 2)
 			w.put(it.value)
 		}
 	}
@@ -631,12 +560,12 @@ func (w *writer) fieldText(lay *filesLayout, row *Row, c dbspec.Column, v string
 
 // value checks a body or section value that is written at line. A value ends
 // with a line feed and begins and ends with a line that is not blank; it holds
-// no CR, no U+0000 and no heading of level 2 or less outside a fence, setext
-// headings included. A body begins with neither a list item nor, after a field
-// list, an indented line. A value that leaves a fence or an HTML block open at
-// the top level is refused when the element that follows it would be taken into
-// that block.
-func (w *writer) value(name, v string, line int, followed, body, afterFields bool) {
+// no CR, no U+0000 and no heading of the level or less outside a fence, setext
+// headings included. A files body begins with neither a list item nor, after a
+// field list, an indented line. A value that leaves a fence or an HTML block open
+// at the top level is refused when the element that follows it would be taken
+// into that block.
+func (w *writer) value(name, v string, line int, followed, body, afterFields bool, level int) {
 	if v == "" {
 		return
 	}
@@ -675,11 +604,11 @@ func (w *writer) value(name, v string, line int, followed, body, afterFields boo
 	}
 	sc := scanHeadings(framed, 0)
 	for _, h := range sc.heads {
-		if h.level <= 2 {
+		if h.level <= level {
 			if h.last != h.at {
 				w.refuse(line+h.last, 1, name+" holds a setext heading")
 			} else {
-				w.refuse(line+h.at, 1, name+" holds a heading of level 2 or less")
+				w.refuse(line+h.at, 1, name+" holds a heading of level "+strconv.Itoa(level)+" or less")
 			}
 			break
 		}

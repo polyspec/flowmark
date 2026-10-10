@@ -1,0 +1,128 @@
+dbspec 1 flowmark
+
+table items {
+  id varchar(32)
+  parent varchar(32) null
+  state varchar(16)
+  title varchar(255)
+  body text
+  position i32
+  owner varchar(32) null
+  estimate decimal(6,2) null
+  done bool
+  score f64 null
+  seen_on date null
+  seen_at datetime(0) null
+  clock time(3) null
+  ref uuid null
+  blob bytes null
+  weight i16 null
+  big i64 null
+  note text null
+  evidence text null
+  cause text null
+  retry text null
+  primary key (id)
+  index ix_items_parent (parent)
+  index ix_items_owner (owner)
+  foreign key fk_items_parent (parent) references items (id) on delete restrict on update restrict
+  foreign key fk_items_owner (owner) references people (id) on delete restrict on update restrict
+  settings {
+    key_prefix 'T'
+    store document list
+    title title
+    body body
+    order position
+    markdown body
+    markdown evidence
+    markdown cause
+    markdown retry
+    checkbox state waiting ' '
+    checkbox state doing '~'
+    checkbox state done 'x'
+    state_machine state initial waiting
+    state_machine state waiting -> doing
+    state_machine state doing -> done require (evidence)
+    state_machine state terminal done
+    state_machine state history item_history row item from from_state to to_state at at
+  }
+}
+
+table people {
+  id varchar(32)
+  parent varchar(32) null
+  name varchar(255)
+  role varchar(16) null
+  active bool
+  born date null
+  seen datetime(0) null
+  clock time(3) null
+  ref uuid null
+  blob bytes null
+  weight decimal(6,2) null
+  rank i16 null
+  big i64 null
+  score f64 null
+  bio text
+  note text null
+  primary key (id)
+  index ix_people_parent (parent)
+  foreign key fk_people_parent (parent) references people (id) on delete restrict on update restrict
+  settings {
+    key_prefix 'P'
+    store document table
+    title name
+    markdown bio
+    markdown note
+  }
+}
+
+table milestones {
+  id varchar(16)
+  parent varchar(16) null
+  title varchar(255)
+  position i32
+  primary key (id)
+  index ix_milestones_parent (parent)
+  foreign key fk_milestones_parent (parent) references milestones (id) on delete restrict on update restrict
+  settings {
+    store document table
+    title title
+    order position
+  }
+}
+
+table notes {
+  id varchar(16)
+  parent varchar(16) null
+  title varchar(255)
+  body text
+  position i32
+  note text null
+  primary key (id)
+  index ix_notes_parent (parent)
+  foreign key fk_notes_parent (parent) references notes (id) on delete restrict on update restrict
+  settings {
+    store document list
+    title title
+    body body
+    order position
+    markdown body
+  }
+}
+
+table item_history {
+  id i64 identity
+  item varchar(32)
+  from_state varchar(16)
+  to_state varchar(16)
+  at datetime(6)
+  evidence text null
+  primary key (id)
+  index ix_item_history_item (item)
+  foreign key fk_history_item (item) references items (id) on delete restrict on update restrict
+  settings {
+    store block fk_history_item table
+    markdown evidence
+  }
+}
