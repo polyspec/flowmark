@@ -1,60 +1,86 @@
 <!-- doc-id: spec-constraints -->
-<!-- source-sha256: 7444a978e5c865b44c8acec55c925aa841517e85a7f640174357c0dce4de7187 -->
-# 제약
+<!-- source-sha256: e966f43ba82f46a0dce7fa758a5b6b51f09562070ead803ed107515cdc085499 -->
+# Constraints
 
 [English](50-constraints.md)
 
-이 명세는 validator가 corpus 위에서 강제하는 것과, DB 보증이 writer 독점을 전제로 했는데 사람의
-파일 편집이 그 전제를 깨는 기능들의 판정을 확정한다.
+이 spec은 엔진이 쓰기에서 강제하는 것과 validator가 corpus 위에서 보고하는 것을 고정하며, 엔진을
+우회하는 작성자 — file을 편집하는 사람 — 에 대한 판정도 포함한다. 실패 code는
+[operations](40-ops.md)의 것이다.
 
 ## Parse와 type
 
-- **Strict parse.** [grammar](10-canonical-format.ko.md) 밖의 key·line·block은 located
-  diagnostic이다; lenient mode도 없고 보이지 않는 data도 없다.
-- **Type.** frontmatter 값은 dbspec type 형식을 따른다; type에 실패하는 값은 그 자리에서
-  diagnostic이다.
+- **Strict parse.** [문법](10-canonical-format.md)을 벗어난 줄, 블록, 섹션, key는 위치가 있는 진단이다.
+  관대한 mode도, 보이지 않는 데이터도 없다.
+- **Type.** 모든 값은 canonical literal 형식으로 자기 dbspec type을 따른다. type을 어긴 값은 그 자리의
+  진단이고 쓰기에서 `CONSTRAINT`다.
 
 ## Key와 참조
 
-- **Primary key / unique.** canonical 문자열 형식으로 corpus 전체에서 강제한다; 중복은 두 번째
-  위치에서 보고되고 첫 번째를 가리킨다.
-- **Foreign key.** NFC 정규화 후 exact match로 해석한다; dangling 참조는 참조 위치에서
-  diagnostic이다. 참조 action은 restrict뿐이다 — 아래 판정 참조.
-- **soft-delete된 row는 자기 unique key를 계속 차지하고 foreign key를 계속 만족한다** (SQL
-  동등성). soft delete가 가짜 dangling 판정을 만들지 않고 같은 key의 재insert도 여전히 중복으로
-  실패한다.
+- **primary key와 unique key**는 table 전체에서 강제한다. 중복은 쓰기에서 `DUPLICATE_KEY`이고, 두 번째
+  자리에서 첫 자리를 가리키는 진단이다. unique key는 SQL처럼 NULL을 서로 다르게 본다.
+- **foreign key**는 NFC 정규화 뒤 정확히 일치로 풀린다. 어떤 행도 가리키지 않는 참조는 쓰기에서
+  `FOREIGN_KEY`이고 참조 자리의 진단이다.
+- **참조 action은 restrict-only다.** `cascade`와 `set_null`은 catalog를 읽을 때 거절한다: 엔진을
+  우회하는 작성자에게는 구현할 수 없다. 참조되는 행 — 이력 행을 가진 행 포함 — 의 삭제는
+  `FOREIGN_KEY`다.
+- **soft delete된 행도 unique key를 차지하고 foreign key를 만족한다**(SQL과 같음). 그래서 soft delete가
+  가짜 dangling 판정을 만들지 않고, 같은 key의 재insert는 여전히 중복으로 실패한다.
 
-## State machine
+## Check
 
-- state machine은 **dbspec-level manifest setting**이다 — terminal과 전환별 필수 field를 가진
-  전환 table이며, `audit` setting이 그렇듯 자체 sub-grammar로 표현된다. SQL backend는
-  `navigation`처럼 무시하고 markdown validator가 강제한다.
-- table 밖의 전환은 row와 현재 상태와 거부된 대상을 밝히는 diagnostic이다. terminal 상태의
-  갱신은 거부된다 — 그 대신 무엇을 할지는 application이 인코딩한다 (checklist application은
-  terminal 항목을 되열지 않고 superseded 항목을 만든다).
-- 전환별 필수 field는 그 전환 자체에서 검증한다; checklist application은 우회와 불가에 원인을,
-  우회에 재시도 조건을 요구한다.
+check는 commit에서 강제한다. 술어가 unknown(NULL)인 check는 SQL처럼 통과한다.
 
-## 사람 write 판정
+## 계층과 순서
 
-database는 writer 독점을 강제했지만 corpus는 그렇지 않다. 기능별로:
+- `parent` 순환은 `CONSTRAINT`다. 행의 블록 밖 `parent`는 쓰기에서 `CONSTRAINT`, 읽기에서
+  `format.block`이다.
+- 1..n + 1 밖의 순서 값이나, 둘 이상의 행과 맞는 order column update는 `CONSTRAINT`다. `files` 저장에서
+  정확히 1..n이 아닌 형제 순서 값은 진단이다([document model](20-document-model.md)).
 
-- **Foreign-key action**: restrict만 허용, `cascade`와 `set_null`은 schema parse에서 거부 —
-  executor를 우회하는 writer에게 구현 불가능하다 (사람이 부모 파일을 지우면 참조가 끊긴 row가 남고,
-  validator가 보고하며 해결 전까지 corpus가 거부한다).
-- **`audit`와 `immutable`은 advisory다**: 위반은 validate 시점 거부이고 사람 편집에 대한
-  trigger 시점 예방은 없다.
-- **기본값**: non-null 기본값 column이 빠진 사람 작성 파일은 validate가 거부하고 `flowmark
-  ingest`가 기본값을 명시적으로 찍는다.
+## 상태기계
 
-## Secret과 key 없는 실행
+- **Insert.** insert에서 행의 상태는 초기 상태다. 기계의 상태 집합 밖의 상태는 `CONSTRAINT`다.
+- **전이.** 상태 column의 update는 선언된 전이를 따른다. 다른 변경은 행, 현재 상태, 거절된 목표를
+  밝히는 `CONSTRAINT`다. 종료 상태는 떠나지 않는다 — 대신 할 일은 응용이 정한다(응용 schema는 종료된
+  항목을 다시 여는 대신 `supersedes` link와 함께 새 항목을 insert한다).
+- **필수 column.** 줄에 `require (c1, …)`를 가진 전이나 종료 상태 진입은 같은 update에서 나열된 모든
+  column을 할당한다. 할당되지 않은 column, `null`, 빈 텍스트는 그 column을 밝히는 `CONSTRAINT`다.
+  상태 table은 그 값을 유지한다.
+- **이력.** 엔진이 실행하는 모든 전이는 같은 transaction에서 이력 행 하나를 insert한다: 행의 foreign
+  key, from과 to 상태, `at`, 필수 column의 사본. insert는 이력을 쓰지 않는다.
+- **Limit.** `limit <state> <n>`은 그 상태의 table 행을 센다. 이를 넘게 할 전이, insert, update는
+  limit를 밝히는 `CONSTRAINT`다. 사람의 편집 뒤 이미 넘은 corpus는 다른 쓰기를 막지 않는 진단이다.
 
-codec column을 선언한 schema의 corpus 검증은 **key를 요구한다**: key 없는 실행은 그 column에서
-근사하지 않고 실패한다. 그런 corpus의 CI는 key를 제공한다.
+## 엔진 밖에서 바뀐 상태
 
-## Diagnostic
+- **빈틈.** 행의 상태가 마지막 이력 행의 `to`와 다르거나, 이력 행이 없을 때 상태가 초기 상태가 아니면
+  이력 빈틈이다. validate는 행의 줄에서 `history.gap`을 보고한다. 빈틈 있는 행의 엔진 전이는 빈틈이
+  닫힐 때까지 `CONSTRAINT`이고, 그 행의 다른 column update는 허용한다.
+- **사슬.** 이력 행의 `from`이 이전 행의 `to`와 다르거나 — 첫 행이면 초기 상태가 아니거나 — 그 쌍이
+  선언된 전이가 아니면 validate는 `history.chain`을 보고한다.
+- 두 진단 모두 다른 쓰기를 막지 않는다. 그러므로 엔진 밖의 상태 변경은 사람이 일관된 이력을 위조하지
+  않는 한 보고된다.
+- **Repair.** `flowmark history repair <table> <key> [--from <initial state>]`는 마지막 `to`에서 — 이력
+  없는 행은 하나뿐인 초기 상태, 또는 초기 상태가 여럿이면 필수인 `--from`에서 — 현재 상태로 가는 이력
+  행 하나를 insert한다. `at`은 엔진 시계이고 필수 column은 행에서 복사한다. 그 쌍이 선언된 전이가
+  아니거나, 전이가 요구하는 column이 행에서 null이거나 비었거나, 이 행을 세어 현재 상태의 limit를 넘으면
+  거절하며, 그때 사람이 편집으로 합법 상태를 되돌리거나 column을 채운다. repair는 사람이 commit하는 보통
+  transaction이다.
 
-모든 규칙은 `{file, line, column, rule, message}`를 보고하고 rule 이름은 `schema.drift`,
-`type`, `key.duplicate`, `reference.dangling`, `state.transition`, `state.required`와
-canonical format의 `format.*`이다. corpus 전체 검증은 corpus-global이다 — 깨진 corpus 안의
-깨끗한 파일이 corpus를 유효하게 만들지 않는다.
+## 사람이 쓴 편집에 대한 판정
+
+database는 작성자 독점을 강제하지만 corpus에는 그것이 없다. 기능별로:
+
+- **foreign key action**: 위와 같이 restrict-only다. 사람이 부모 file을 지우면 dangling 참조가 남고
+  validate가 보고한다.
+- **`audit`와 `immutable`**은 corpus에서 schema 오류다 — markdown에는 trigger가 없다. 상태기계의 이력이
+  기록된 흔적이고, 그 빈틈과 사슬 규칙이 사람의 편집이 우회한 것을 보고한다.
+- **Default**는 엔진이 insert에서 명시적으로 쓴다. non-null column이 빠진 사람이 쓴 행은 format 진단이다.
+
+## 진단
+
+모든 규칙은 `{file, line, column, rule, message}`를 보고한다. 규칙 이름은 `catalog`, `type`,
+`key.duplicate`, `reference.dangling`, `check`, `parent.cycle`, `order`, `state.transition`,
+`state.required`, `state.limit`, `history.gap`, `history.chain`, 그리고 canonical format의 `format.*`
+규칙이다. 검증은 corpus 전체에 걸친다. 깨진 corpus 안의 깨끗한 file이 corpus를 유효하게 만들지 않는다.
