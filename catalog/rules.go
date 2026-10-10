@@ -23,6 +23,11 @@ func (l *loader) checkTable(d *document, t *dbspec.Table) (Storage, bool) {
 	if len(t.PrimaryKey.Columns) > 1 {
 		report("table " + t.Name + " has a composite primary key (" + strings.Join(t.PrimaryKey.Columns, ", ") + ")")
 	}
+	if len(t.PrimaryKey.Columns) == 1 {
+		if c := columnOf(t, t.PrimaryKey.Columns[0]); c != nil && !isKeyType(c.Type.Kind) {
+			report("primary key column " + c.Name + " of table " + t.Name + " has type " + c.Type.String() + ", which is not a key type (an integer, bool, varchar, uuid or date)")
+		}
+	}
 	for _, fk := range t.ForeignKeys {
 		for _, action := range []dbspec.Action{fk.OnDelete, fk.OnUpdate} {
 			if action == dbspec.ActionCascade || action == dbspec.ActionSetNull {
@@ -88,6 +93,29 @@ func (l *loader) checkTable(d *document, t *dbspec.Table) (Storage, bool) {
 		}
 	}
 	return storage, true
+}
+
+// columnOf returns the column of t with the name, or nil when t has none.
+func columnOf(t *dbspec.Table, name string) *dbspec.Column {
+	for i := range t.Columns {
+		if t.Columns[i].Name == name {
+			return &t.Columns[i]
+		}
+	}
+	return nil
+}
+
+// isKeyType reports whether a one-column primary key may have the type: an
+// integer, bool, varchar, uuid or date. The other types cannot be written in
+// the key shape of a file name and anchor: time, datetime, decimal and f64
+// hold characters the shape refuses, and text and bytes are refused by
+// dbspec's own key rule.
+func isKeyType(k dbspec.TypeKind) bool {
+	switch k {
+	case dbspec.TypeI16, dbspec.TypeI32, dbspec.TypeI64, dbspec.TypeBool, dbspec.TypeVarchar, dbspec.TypeUUID, dbspec.TypeDate:
+		return true
+	}
+	return false
 }
 
 // tableDiag locates a diagnostic at the name of a table declaration.

@@ -1,8 +1,22 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 06ba31105f0ba9f3155ce4ee6347ca6a3596e2b2913a39869926237194c2023a -->
+<!-- source-sha256: 8da6ff7f25d080c4e7bea2ab92e878f9e011378bb4b9e9a0d01a88b435040c79 -->
 # Changelog
 
 ## Unreleased
+
+- T12.1-4: spec이 상세 anchor, key, identity의 판정을 적는다. 상세 heading의 anchor는 heading의 렌더된 inline
+  텍스트에 대한 두 fold로 file의 heading들과 대조한다. GitHub, GitLab, VS Code를 위한 F_G는 Unicode 범주가 letter나
+  십진 숫자가 아닌 문자를 지우고, 소문자로 바꾸고, NFKD로 분해하고, 결합 기호를 버리며, ASCII 글자와 숫자만 남긴다.
+  MkDocs를 위한 F_M은 소문자로 바꾸고, NFKD로 분해하고, 결합 기호를 버리며, ASCII 글자와 숫자만 남긴다. 그래서
+  `café`는 두 fold 모두에서 `cafe`가 된다. 상세 heading이 아닌 heading은 두 fold 중 하나에서 끝 십진 숫자 run을 뺀 뒤
+  같으면 상세 heading의 anchor를 가져간다. 명명된 viewer들은 점유되거나 반복된 id를 숫자를 덧붙이거나 끝 숫자를
+  올려 번호 매기기 때문이다. 두 상세 heading은 anchor가 같을 때에만 충돌하므로 key `P1`과 `P10`은 결코 충돌하지
+  않는다. anchor를 id로 정하는 attribute list와 값이 anchor인 payload HTML의 `id`나 `name`도 거절한다. 충돌을 새로
+  만드는 쓰기는 `CONSTRAINT`이며, 다만 중복 key는 `DUPLICATE_KEY`다. 읽기에서의 충돌은 `format.block`이다. 다만 대소문자만
+  다른 key의 쌍은 `key.duplicate`뿐이다. 주장하는 viewer는 GitHub, GitLab, VS Code, MkDocs이며, Pandoc은 주장하지 않는다.
+  key는 `--`와 `-_`를 담지 않고 ASCII이며, 음수 integer key는 거절된다. markdown table의 primary key는 integer, `bool`,
+  `varchar`, `uuid`, `date` column이며, catalog는 다른 type을 table 위치에서 거절한다. `identity`는 `i64` key에만 허용되며,
+  이는 dbspec이 이미 강제하고 catalog test가 고정한다. key의 날짜 범위는 0001부터 9999까지다.
 
 - T8.4-4: `TestAddWithoutPathOnEmptyCorpus`가 매번 통과한다. 이 test는 add 응답이 watcher의 변경
   event보다 먼저 온다고 가정했지만, 그 순서는 정해져 있지 않다: watcher는 add 자신의 쓰기를 보고하고,

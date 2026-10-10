@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -875,6 +876,86 @@ func TestLoadRejectsForeignKeyNotToPrimaryKey(t *testing.T) {
 			cat, diags := catalog.Load(root)
 			expectRejected(t, cat, diags)
 			expectForeignKeyDiag(t, diags, text, c.fk, c.msg)
+		})
+	}
+}
+
+// keyedTable is a document table keyed whose one-column primary key has the
+// type key, inserted before the table views of the fixture.
+func keyedTable(key string) string {
+	return fmt.Sprintf(`table keyed {
+  id %s
+  name varchar(255)
+  primary key (id)
+  settings {
+    store document table
+  }
+}
+
+table views {`, key)
+}
+
+// TestLoadKeyColumnTypes pins that the primary key of a markdown table is an
+// integer, bool, varchar, uuid or date column: a key of any other type is a
+// located catalog diagnostic, since the key shape cannot carry its text.
+func TestLoadKeyColumnTypes(t *testing.T) {
+	accepted := []string{"i16", "i32", "i64", "bool", "varchar(32)", "uuid", "date"}
+	for _, key := range accepted {
+		t.Run("accepts "+key, func(t *testing.T) {
+			root, _ := editedCorpus(t, [2]string{"table views {", keyedTable(key)})
+			cat, diags := catalog.Load(root)
+			if len(diags) != 0 || cat == nil {
+				t.Fatalf("diagnostics = %+v, want an accepted catalog", diags)
+			}
+		})
+	}
+	rejected := []string{"time(0)", "datetime(0)", "decimal(4,2)", "f64"}
+	for _, key := range rejected {
+		t.Run("rejects "+key, func(t *testing.T) {
+			root, text := editedCorpus(t, [2]string{"table views {", keyedTable(key)})
+			cat, diags := catalog.Load(root)
+			expectRejected(t, cat, diags)
+			expectTableDiag(t, diags, text, "keyed", "is not a key type")
+		})
+	}
+	// bytes and text keys are refused by dbspec's own key rule, located at
+	// the key column, before this rule runs; the cases pin that they stay
+	// refused.
+	for _, key := range []string{"bytes", "text"} {
+		t.Run("rejects "+key, func(t *testing.T) {
+			root, _ := editedCorpus(t, [2]string{"table views {", keyedTable(key)})
+			cat, diags := catalog.Load(root)
+			expectRejected(t, cat, diags)
+			if !slices.ContainsFunc(diags, func(d catalog.Diagnostic) bool {
+				return strings.Contains(d.Message, "cannot be part of a key")
+			}) {
+				t.Fatalf("diagnostics = %+v, want the dbspec key rule", diags)
+			}
+		})
+	}
+}
+
+// TestLoadIdentityKeyType pins that identity is allowed only on an i64 primary
+// key column: max+1 is an integer sequence, and dbspec allows identity only on
+// an i64 column, so any other key type is a located catalog diagnostic at the
+// identity column.
+func TestLoadIdentityKeyType(t *testing.T) {
+	root, _ := editedCorpus(t, [2]string{"table views {", keyedTable("i64 identity")})
+	cat, diags := catalog.Load(root)
+	if len(diags) != 0 || cat == nil {
+		t.Fatalf("diagnostics = %+v, want an accepted catalog", diags)
+	}
+	rejected := []string{"i32 identity", "varchar(32) identity", "uuid identity", "date identity", "bool identity"}
+	for _, key := range rejected {
+		t.Run("rejects "+key, func(t *testing.T) {
+			root, _ := editedCorpus(t, [2]string{"table views {", keyedTable(key)})
+			cat, diags := catalog.Load(root)
+			expectRejected(t, cat, diags)
+			if !slices.ContainsFunc(diags, func(d catalog.Diagnostic) bool {
+				return d.File == "dbspec/flowmark.dbs" && d.Rule == "catalog" && d.Line > 0 && strings.Contains(d.Message, "an identity column has type i64")
+			}) {
+				t.Fatalf("diagnostics = %+v, want the located identity diagnostic", diags)
+			}
 		})
 	}
 }

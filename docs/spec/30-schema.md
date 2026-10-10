@@ -49,10 +49,18 @@ behaviour.
   `blind_index` (the key never leaves the client); `audit` and `immutable` (markdown has no
   triggers; `state_machine … history` records transitions instead); `cascade` and `set_null`
   actions; an external `use` document; a table without a `store` setting.
-- **Allowed**: `identity` on every markdown table, allocated `max+1` under the lock.
+- **Allowed**: `identity` only on an `i64` primary key column of a markdown table, allocated `max+1`
+  under the lock. dbspec refuses `identity` on any other type (`an identity column has type i64`), so an
+  `i16` or `i32` key cannot take it either. Grounding: `max+1` is an integer sequence, and a `bool`,
+  `varchar`, `uuid` or `date` key has no maximum to add one to.
 - **Required**: a table with a `state_machine` declares its `history` and at least one `initial`
   state; a `list` or `files` storage declares `title`; a `list` storage with a state column
   declares a `checkbox` for every state.
+- **Key types.** The one-column primary key of a markdown table is an integer type (`i16`, `i32`,
+  `i64`), `bool`, `varchar`, `uuid` or `date`; any other type is a schema error, located at the table
+  name. Grounding: a key is a file name and an anchor, so its text must hold only the key shape
+  ([document model](20-document-model.md#keys)). A `date` is written `YYYY-MM-DD` with a year from 0001 to 9999, the range orm's date literal rule accepts, so its text has four digits and no sign, and its `-` only separates. The ordinary values of `time` and `datetime` hold `:`. The non-integral values of a `decimal` of scale above 0 and of an `f64` hold `.`, and a negative value of any of these types begins with `-`, so they can never meet the shape. A `decimal` of scale 0 holds only integers, which an integer type keys, so it is refused with the other decimals; an `f64`'s whole values are likewise integers that an integer type keys, so an `f64` key adds only values the shape refuses. `text` and `bytes` are refused by dbspec's own
+  key rule. A negative integer key is refused per value, not per type ([document model](20-document-model.md#keys)).
 - **Foreign keys.** Every foreign key of a table is one column that references the one-column
   primary key of a table. A composite foreign key, or one that references a unique non-key
   column, is a schema error, located at the foreign key. Grounding: a foreign key is written as a

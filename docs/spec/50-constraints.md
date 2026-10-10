@@ -33,7 +33,8 @@ The failure codes are those of [operations](40-ops.md).
 ## Key rules
 
 - **Shape.** A key of a markdown table consists of `A`–`Z`, `a`–`z`, `0`–`9`, `_` and `-` and begins
-  with a letter or a digit; a key outside this shape is `CONSTRAINT` on write.
+  with a letter or a digit; it holds no `--` and no `-_`. A key outside this
+  shape is `CONSTRAINT` on write.
 - **Reserved names.** A key equal, without regard to case, to `CON`, `PRN`, `AUX`, `NUL`,
   `COM0`–`COM9` or `LPT0`–`LPT9` is `CONSTRAINT` on write ([schema](30-schema.md) refuses the table
   name).
@@ -57,9 +58,9 @@ On write, each of the following is `CONSTRAINT`; the rule that states it is name
 - a logical write that rewrites a file with a `format.*` diagnostic, naming the file and the diagnostic, and naming `flowmark canon` when it is `format.noncanonical`, apart from the exemptions of the commit ([canonical format](10-canonical-format.md)); a write never normalizes document bytes;
 - a `markdown` value holding a heading line of level ≤ L outside a fence
   ([canonical format](10-canonical-format.md));
-- a detail heading whose anchor another heading takes, or whose slug differs from its anchor, naming
-  the other heading, and the title update, payload write or row insert that introduces the collision
-  ([canonical format](10-canonical-format.md));
+- a write that introduces a collision of a heading with a detail anchor, naming the other heading: a
+  title update, a payload write, a row insert, a key update, a move or the creation of a detail section, other than a duplicate key, which is `DUPLICATE_KEY`
+  ([canonical format](10-canonical-format.md#detail-headings-and-anchors));
 - `now` as a value, and a text longer than its column ([canonical format](10-canonical-format.md)).
 
 On read, the walk reports `corpus.walk` and the format rules report `format.*`, as stated in the

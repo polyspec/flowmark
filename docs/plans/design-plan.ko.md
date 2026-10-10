@@ -1,5 +1,5 @@
 <!-- doc-id: plans-design-plan -->
-<!-- source-sha256: 3edf1a6a37b1a87ea8486abe3d802e5747f11c62f5ed54abaf1ba11a83b5c7b5 -->
+<!-- source-sha256: 2597b8a30ec0c0ec65443a5ddd43e0a63ceba781983949c06adaa0dc9d1bdf10 -->
 # flowmark 설계 계획
 
 Revision 2 — 3개 lane의 적대 감사 결과(engine core, orm 통합, 운영)와 multi-platform 지시를 아래 판정에 접는다. 감사의 blocker는 전부 판정이 되었고, 부수지 못한 주장은 문서 끝에 남긴다.
@@ -82,7 +82,7 @@ flowmark = the markdown database engine (one Go binary)
 
 - **dbspec이 root grammar이자 유일한 authority.** corpus root의 `dbspec/*.dbs` set이 catalog다(Revision 3). 문서는 schema 사본도 stamp도 갖지 않고, 내장 fragment를 가진 단독 문서는 철회한다: schema는 law이고 data는 row이며, 문서마다 law의 사본을 두면 사본의 이탈이 그 자체로 bug class가 된다. orm의 engine, IR, conformance는 dbspec manifest hash에 묶여 있고, dbspec의 parser와 type system은 library로 재사용한다.
 - **Markdown 고유 schema 표면은 manifest-level setting이지 render되는 type이 아니다** (introspection 정합성, `updated`/`soft_delete` 선례): `store`, `key_prefix`, `title`, `body`, `order`, `checkbox`, `markdown`, 그리고 state machine의 `initial`, `history`, `limit`은 SQL backend가 무시하는 setting이며, 실제 database는 이들을 평범한 column으로 introspect한다.
-- **`identity`는 허용한다** — 모든 markdown table에서 lock 아래 `max+1`로 할당한다(Revision 3). git 되감기에서의 key 재사용은 받아들인다 — 할당 기록은 sequence가 아니라 git history다.
+- **`identity`는 허용한다** — markdown table의 `i64` primary key에만, lock 아래 `max+1`로 할당한다(Revision 3; 다른 key type에는 더할 최댓값이 없다). git 되감기에서의 key 재사용은 받아들인다 — 할당 기록은 sequence가 아니라 git history다.
 
 ### 5. Ops와 transaction (`40-ops.md`)
 

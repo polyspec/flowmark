@@ -1,5 +1,5 @@
 <!-- doc-id: spec-canonical-format -->
-<!-- source-sha256: 856a9d0f5a1600a262dc9f94819598bc46e032f0b2762be32c363c44c3273364 -->
+<!-- source-sha256: f7ab4ac345206391df877837448908062b47198451a3904071a4328138bc6cab -->
 # Canonical format
 
 [English](10-canonical-format.md)
@@ -22,8 +22,10 @@ idempotency 명제, readable 문서, skeleton, 문서 순서, 상세 heading과 
   정한다.
 - corpus 문서는 완전한 markdown 문서다. flowmark를 모르는 독자도 있는 그대로 읽는다: comment,
   marker, frontmatter, 숨은 field를 갖지 않는다.
-- 구조는 평범한 markdown이다: heading, list, table, field list. 모든 관계는 GitHub식 heading slug를 쓰는
-  markdown viewer(GitHub, GitLab, VS Code, Pandoc)에서 따라갈 수 있는 link다.
+- 구조는 평범한 markdown이다: heading, list, table, field list. 모든 관계는 GitHub, GitLab, VS Code, MkDocs가
+  그 heading에 대해 만드는 anchor인 `#<anchor>`를 가진 link다([상세 heading과 anchor](10-canonical-format.md#detail-headings-and-anchors)의 규칙에 따른다).
+  Pandoc은 주장 대상이 아니다: 기본 설정은 상대 경로 link target을 다시 쓰지 않으므로, corpus file 사이의 link가
+  그 출력에서 따라가진다고 주장하지 않는다.
 - 근거: 문서는 database의 유일한 저장이므로 읽을 수 있는 문서로 남아야 한다. 기계만 필요로 하는 것은
   catalog(`dbspec/`)나 `.flowmark/`에 속한다.
 
@@ -54,16 +56,33 @@ column 섹션 — 은 payload다: renderer는 이를 행과 함께 옮기고 그
 
 - 상세 섹션의 anchor는 `<table>-row-<소문자 key>`다: heading `## items row T2`의 anchor는
   `items-row-t2`다. table은 anchor 텍스트에서 첫 `-` 앞이며, table 이름에는 `-`가 없다.
-- slug는 GitHub의 것이다: heading의 렌더된 inline 텍스트를 소문자로 하고, 문자, 숫자, 공백, `-`, `_` 외의 모든
-  문자를 지우며, 각 공백을 `-`로 쓴다. 엔진은 file 안의 모든 heading — skeleton과 payload 모두 — 의 slug를
-  문서 순서대로 계산한다.
-- 상세 anchor는 GitHub slug의 두 중복 처리 모두에서 비어 있어야 한다: (a) github-slugger는 반복되는 slug가
-  아직 차지되지 않은 첫 접미사 `-1`, `-2`, …를 받는다. (b) github.com은 반복되는 기본 slug에 확인 없이
-  counter 접미사를 붙인다. level b 블록 또는 markdown column 섹션 heading은 반복되든 아니든 `<name>` 또는
-  `<name>-<digits>`로 slug가 되며 `<table>-row-<key>` anchor와 결코 같지 않으므로, 상세 anchor를 가져갈 수
-  있는 것은 payload heading과 `files` 행의 H1 제목뿐이다.
-- 다른 heading이 anchor를 가져갔거나 slug가 anchor와 다른 상세 heading은 쓰기에서 `CONSTRAINT`이며, 그
-  heading을 밝히고 충돌을 일으키는 쓰기 — 제목 갱신, payload 쓰기, 행 삽입 — 를 거절한다. 읽기에서는 `format.block`이다. 다만 대소문자만 다른 key를 가진 두 행의 상세 heading 사이는 `key.duplicate`뿐이고, 같은 file 안에서 같은 heading 텍스트를 가진 두 상세 섹션은 어느 행에도 배정할 수 없으므로 `format.block`이다.
+- **fold.** 두 fold가 heading의 렌더된 inline 텍스트에 대해 충돌을 정한다. 텍스트는 GitHub이 slug를 만드는
+  방식을 따른다(link의 target을 뺀 link 텍스트, 강조 표지 제거, code span 내용 유지, entity 해석, raw HTML 태그는
+  텍스트가 아님을 포함한다). F_G는 Unicode 일반 범주가 letter(L)나 십진 숫자(Nd)가 아닌 모든 문자를 지우고,
+  나머지를 소문자로 바꾸고, NFKD로 분해하고, 결합 기호를 버리며, 남은 ASCII 문자와 숫자만 남긴다. F_M은 텍스트를
+  소문자로 바꾸고, NFKD로 분해하고, 결합 기호를 버리며, 남은 ASCII 문자와 숫자만 남긴다. 근거: GitHub, GitLab,
+  VS Code의 anchor는 글자, 숫자, `-`, `_`, 공백을 남기고 나머지를 지우며, 그 가운데 위첨자와 원 숫자(범주 No)도
+  지운다. F_G가 그것을 지운다. MkDocs는 텍스트의 NFKD 형식에서 ASCII 문자와 숫자만 남기는데 F_M이 그것을 남기고,
+  F_G는 그렇지 않으므로 두 fold를 쓴다. `café`는 두 fold 모두에서 `cafe`가 된다.
+- **충돌 규칙.** heading은 모든 ATX heading(block-quote나 list-item 표지 뒤의 것을 포함)과, fence 밖에서
+  setext 밑줄이 뒤따르는 모든 문단이다. 그 문단 전체가 heading이다. 상세 heading도 heading이다. 상세 heading이 아닌
+  heading H는 F = F_G 또는 F = F_M 아래에서, F(H)와 F(A)가 각각의 끝 십진 숫자 run을 뺀 뒤 같으면 상세 heading의 anchor A를
+  가져간다. anchor의 fold는 두 fold에서 같다. anchor의 글자와 숫자는 ASCII이기 때문이다. 두 상세 heading은 anchor가 같을 때에만
+  충돌한다. 근거: 명명된 viewer들은 반복되거나 점유된 id를 숫자를 덧붙이거나 끝 숫자를 올리는 방식으로만 번호 매긴다(GitHub,
+  GitLab, VS Code는 `-<n>`을 덧붙이고, MkDocs는 `_<n>`을 덧붙이거나 끝의 `_<n>`을 올리며, attribute list가 설정한 id도 점유된 것으로 센다).
+  그래서 끝 숫자를 뺀 fold를 비교하면 어느 heading이나 id가 먼저 왔든 모든 번호 매기기를 다룬다. 그 비용은 상세 heading과
+  끝 숫자만 다른 payload heading도 거절된다는 것이다. 허용되는 예: 한 file의 key `T1`과 `T10`은 둘 다 상세 heading이므로
+  결코 충돌하지 않는다. 거절되는 예: `items row T_1` 상세 heading 옆의 payload heading `items row T`는 거절된다. `Notes`는
+  그렇지 않다. 이 검사는 file의 모든 heading — 골격과 payload 모두 — 에 적용한다. 또한 file의 payload에 있는 attribute list
+  `{…}`(앞의 `:`가 있거나 없는)로서 `#A`로, 또는 `id=` 뒤에 A를 그대로나 작은따옴표·큰따옴표 안에 두어 id를 A로 정하는 것과, 값이 A인 HTML `id` 또는 `name`을
+  거절하며, 모두 대소문자를 무시하고 비교한다. 근거: Python-Markdown의 attr_list 확장(MkDocs가 켤 수 있다)은 heading이나
+  block 끝의 그런 list를 id로 읽고, HTML viewer는 `id`와 `name`을 anchor로 읽으며, heading의 텍스트와 무관하다.
+- 충돌을 새로 만드는 쓰기는 `CONSTRAINT`이며 다른 heading을 밝힌다: 제목 갱신, payload 쓰기, 상세 섹션을 만드는 행
+  삽입, key 갱신, 이동, 상세 섹션의 생성. 다만 행에 같은 table의 다른 key와 대소문자를 무시하고 같은 key를 주는 쓰기는
+  `DUPLICATE_KEY`이며, 그것이 key 규칙이다([document model](20-document-model.md#keys)). 상세 섹션이 없는 행은 anchor가
+  없으므로 아무와도 충돌하지 않는다. 읽기에서 충돌은 `format.block`이다. 다만 key가 대소문자만 다른 두 상세 heading 사이는
+  `key.duplicate`뿐이다. 같은 file 안에서 같은
+  heading 텍스트를 가진 두 상세 섹션은 충돌하므로 `format.block`이며, 어느 행에도 배정할 수 없다.
 - 공백이 더 있거나 `row`의 대소문자가 다른 상세 heading은 `format.noncanonical`이며, `flowmark canon`이 고친다.
 
 ## 섹션과 그 값

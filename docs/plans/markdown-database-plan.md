@@ -111,8 +111,7 @@ compatibility, no fallback, no hidden error, no trick; rules first.
 - **Every corpus document is a complete markdown document** that a reader who does not know
   flowmark reads as it is: no comment, no marker, no hidden field. Its structure is ordinary
   markdown — headings, lists, tables, a field list — and every relation is a link the reader can
-  follow in a markdown viewer with GitHub-style heading slugs (GitHub, GitLab, VS Code, Pandoc).
-  Grounding: the documents are the database's only storage, so
+  follow in GitHub, GitLab, VS Code or MkDocs, whose anchors are the heading anchors of their rules. Pandoc is not a viewer the claim is made for: its default does not rewrite relative link targets. Grounding: the documents are the database's only storage, so
   they must stay a readable document; what only the machine needs belongs to the catalog
   (`dbspec/`) or to `.flowmark/`.
 - Encoding: UTF-8 without a BOM, LF, exactly one final LF; a BOM, a CR, a missing final LF and a trailing blank line are `format.noncanonical`; invalid UTF-8 and U+0000 are `format.encoding`; a value never begins or ends with a line feed or a white-space-only line; a logical write that rewrites a file with a `format.*` diagnostic is `CONSTRAINT`, naming `flowmark canon` for `format.noncanonical`; a delete that removes a `files` row's whole file is exempt from the rewrite refusal, but its restrict check still needs the rows of every table that may reference the row (its own table through `parent`, its child and history blocks, and every table with a foreign key to it), so such a delete is `CONSTRAINT` when any of them is unavailable. A table that holds a file with `format.block`, `format.section` or `format.encoding`, or two rows with byte-for-byte equal keys, is unavailable: every request or check that needs its rows fails as `CONSTRAINT`, naming the file and the diagnostic; a block table holds its placement parent's files, recursively. Opening a corpus, introspection, `flowmark validate` and `flowmark canon` never fail on an unavailable table, and an export that needs one fails and writes nothing.
@@ -146,12 +145,17 @@ reimplements them.
 
 ### Keys
 
-- A markdown table has a single-column primary key; a composite key is a schema error.
+- A markdown table has a single-column primary key; a composite key is a schema error. Its type is an
+  integer, `bool`, `varchar`, `uuid` or `date`, and any other type is a schema error: `time`,
+  `datetime`, `decimal` and `f64` hold characters the key shape refuses, and `text` and `bytes` are
+  refused by dbspec's key rule. A negative integer key is refused: `CONSTRAINT` on write and
+  `format.block` on read.
 - A `files` row's key is its file name without `.flowmark.md`.
 - **Every key is a file name, a URL path segment and part of a heading anchor at once**: it
-  consists of `A`–`Z`, `a`–`z`, `0`–`9`, `_` and `-`, begins with a letter or a digit (a leading
-  `_` would render as emphasis and alter both the shown key and its anchor), holds no `--` and does
-  not end with `-` (viewers that collapse hyphen runs, GitLab and MkDocs, would alter the anchor),
+  consists of `A`–`Z`, `a`–`z`, `0`–`9`, `_` and `-` only — ASCII, since the comparison and the
+  lowercased anchor are defined for these letters alone — begins with a letter or a digit (a leading
+  `_` would render as emphasis and alter both the shown key and its anchor), holds no `--` or `-_` (the MkDocs viewer collapses hyphen runs and would alter the
+  anchor; a `_` after punctuation, as in `-_`, can open emphasis),
   and is unique within
   its table without regard to case (case-insensitive file systems and lowercased anchors would
   otherwise collide); a key equal to another key of its table without regard to case is `DUPLICATE_KEY` on a write that introduces it and `key.duplicate` in the validator. A foreign key matches the referenced key byte for byte; a link text that
@@ -162,7 +166,7 @@ reimplements them.
   canonical text of its key's type (`007.flowmark.md` for an integer key) is `format.block`. A file
   name whose key breaks the key shape is `format.block` on read. A key change that differs only in case renames through an intermediate name inside the journaled
   transaction.
-- `identity` is allowed on every markdown table: an insert that omits the key gets `max+1`,
+- `identity` is allowed only on an `i64` primary key column: an insert that omits the key gets `max+1`,
   allocated under the lock; reuse after a git rewind is accepted and stated. A text key with
   `key_prefix <p>` is allocated `<p><n + 1>`, where n is the largest decimal suffix without a
   leading zero among the keys of the form `<p><n>`; orm treats such a column as
@@ -199,17 +203,22 @@ reimplements them.
 - **A detail heading is `<h> <table> row <key>`** — the table name, one space, the word `row`, one
   space, the key; never a title copy — and its anchor is `<table>-row-<lowercased key>`, so
   `## items row T2` has the anchor `items-row-t2`; the table is the anchor text before its first
-  `-`, as table names hold no `-`. The slug is GitHub's: the heading's rendered inline text,
-  lowercased, every character other than a letter, a digit, a space, `-` or `_` removed, each space
-  as `-`. In each file the engine computes the slug of every heading, skeleton and payload alike, in
-  document order. A detail anchor must be free under both GitHub de-duplications: github-slugger,
-  where a repeat takes the first suffix `-1`, `-2`, … not yet taken, and github.com, which suffixes
-  a repeated base slug with a counter without checking. A block or markdown-column section heading,
-  repeated or not, slugs to `<name>` or `<name>-<digits>` and never equals a `<table>-row-<key>`
-  anchor, so only a payload heading or the H1 title of a `files` row can take a detail anchor. A
-  detail heading whose anchor another heading takes, or whose slug differs from its anchor, is
-  `CONSTRAINT` on write, naming the other heading and refusing the title update, payload write or
-  row insert that introduces the collision, and `format.block` on read, except between the detail headings of two rows whose keys differ only in case, which is `key.duplicate` alone; two detail sections of one file under the same heading text are `format.block`, since neither can be assigned to a row; a detail heading in a
+  `-`, as table names hold no `-`. The collision rule: a heading of the file — every ATX heading, also after a block-quote or list-item
+  marker, and every paragraph followed by a setext underline (its whole text), outside fences, skeleton
+  and payload alike — other than a detail heading takes the anchor A of a detail heading when, under
+  either of two folds of its rendered inline text, the fold of the heading and F(A) are equal once a
+  final run of decimal digits is removed from each. F_G removes every character not of Unicode category
+  L or Nd, lowercases, decomposes by NFKD, drops the combining marks and keeps the ASCII letters and
+  digits; F_M lowercases, decomposes by NFKD, drops the combining marks and keeps the ASCII letters and
+  digits. The folds take the text as GitHub slugs it (link text without its target, emphasis markers
+  removed, code span content kept, entities decoded). F_G covers GitHub, GitLab and VS Code, and F_M
+  covers MkDocs; Pandoc is not claimed. The rule covers every numbering: GitHub, GitLab and VS Code
+  append `-<n>`, and MkDocs appends `_<n>` or raises a final `_<n>`, counting ids that attribute lists
+  set as taken; comparing without the final digits covers all of them whichever heading or id came
+  first, at the cost that a payload heading differing from a detail heading only in its final number is
+  refused. Two detail headings collide only when their anchors are equal. A payload attribute list
+  `{…}`, with or without a leading `:`, that sets the id A by `#A` or by `id=` followed by A bare or in single or double quotes, and a payload
+  HTML `id` or `name` equal to A, without regard to case, collide too. A write that introduces a collision — a title update, a payload write, a row insert, a key update, a move or the creation of a detail section — is `CONSTRAINT`, naming the other heading, except a write giving a row a key equal (with or without regard to case) to another key of its table, which is `DUPLICATE_KEY`, the key rule; on read it is `format.block`, except between the detail headings of two rows whose keys differ only in case, which is `key.duplicate` alone. A detail heading in a
   non-canonical spelling (extra spaces, a wrong case of `row`) is `format.noncanonical`, which
   `flowmark canon` repairs. A detail section whose key names no row of its block is `format.block`.
 - A `markdown` column is always a section of the row scope — never a field or a cell — in every
@@ -382,7 +391,7 @@ reimplements them.
 | index | accepted; derived in memory |
 | default | written explicitly on insert |
 | `null` | an absent field, cell or section, as the grammar states per storage |
-| `identity` | allowed; `max+1` under the lock |
+| `identity` | allowed on an `i64` primary key only; `max+1` under the lock |
 | foreign key | restrict-only; `cascade`, `set_null` rejected |
 | `codec` | applied by the client on an orm request; a write the engine originates (CLI, MCP, sidecar, history) applies it through orm's Go codec package, and validation decodes with the same package; the stored value is the encoded one (a byte-producing stage as base64) |
 | `aes`, `aes_version`, `blind_index` | schema error — the key never leaves the client |
@@ -450,8 +459,7 @@ reimplements them.
   the post's file; in the other they are `store files` rows whose field list links to their post.
   Both variants run the same create, read, update and delete operations through the engine and
   yield the same rows, and every document reads as an ordinary board page — the post, its fields
-  as links, its comments — in a markdown viewer with GitHub-style heading slugs (GitHub, GitLab,
-  VS Code, Pandoc).
+  as links, its comments — in GitHub, GitLab, VS Code or MkDocs; Pandoc is not claimed.
 - **The board app** is the same board built with the polyspec stack — hyper renders the list and
   the post-with-comments pages, crudui defines the post and comment forms, lists and validation,
   and orm reaches the corpus through `markdown://`. It runs on hyper's PHP, Node.js and Python

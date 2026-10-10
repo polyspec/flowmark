@@ -3,6 +3,24 @@
 
 ## Unreleased
 
+- T12.1-4: the specifications state the detail-anchor, key and identity rulings. A detail heading's
+  anchor is checked against the headings of its file under two folds of the heading's rendered inline
+  text. F_G, for GitHub, GitLab and VS Code, removes every character that is not a letter or a decimal
+  digit by Unicode category, lowercases, decomposes by NFKD, drops the combining marks, and keeps the
+  ASCII letters and digits. F_M, for MkDocs, lowercases, decomposes by NFKD, drops the combining marks,
+  and keeps the ASCII letters and digits, so `café` folds to `cafe` under both. A heading other than a
+  detail heading takes a detail anchor when the two folds are equal once a final run of decimal digits
+  is removed from each, since every named viewer numbers a taken or repeated id by appending a number or
+  raising a final number. Two detail headings collide only by equal anchors, so keys `P1` and `P10`
+  never collide. An attribute list that sets the id to the anchor, and a payload HTML `id` or `name`
+  equal to the anchor, are refused too. A write that introduces a collision is `CONSTRAINT`, except a
+  duplicate key, which is `DUPLICATE_KEY`; a read of a collision is `format.block`, except a pair of keys
+  that differ only in case, which is `key.duplicate` alone. The claimed viewers are GitHub, GitLab, VS
+  Code and MkDocs; Pandoc is not claimed. A key holds no `--` or `-_` and is ASCII; a negative integer key
+  is refused. The primary key of a markdown table is an integer, `bool`, `varchar`, `uuid` or `date`
+  column, and the catalog rejects any other type at the table; `identity` is allowed only on an `i64` key,
+  which dbspec already enforces and the catalog tests pin. A key's date range is 0001 to 9999.
+
 - T8.4-4: `TestAddWithoutPathOnEmptyCorpus` passes on every run. The test assumed the add answer
   comes before the watcher's change event, but the order is not defined: the watcher reports the
   add's own write, and a sidecar may push change events at any time. The test now asserts that the

@@ -56,13 +56,16 @@ so the same rows can be stored either way.
 
 ## Keys
 
-- A markdown table has a single-column primary key; a composite primary key is a schema error.
+- A markdown table has a single-column primary key; a composite primary key is a schema error. A
+  negative integer key is refused: its `-` begins the key, against the shape below. On write it is
+  `CONSTRAINT`; on read it is `format.block` in every storage, as any key that breaks the shape.
 - A `files` row's key is its file name without `.flowmark.md`.
 - Every key is a file name, a URL path segment and part of a heading anchor at once. A key consists
   of `A`–`Z`, `a`–`z`, `0`–`9`, `_` and `-`, and begins with a letter or a digit: a leading `_`
-  would render as emphasis and alter both the shown key and its anchor. A key holds no `--` and does
-  not end with `-`: viewers that collapse hyphen runs (GitLab, MkDocs) would otherwise alter the
-  anchor.
+  would render as emphasis and alter both the shown key and its anchor. The shape is ASCII: these
+  characters are the whole alphabet of a key, and no other character is a key character, because
+  the case-insensitive comparison and the lowercased anchor are defined for these letters alone. A
+  key holds no `--` and no `-_`: the MkDocs viewer collapses hyphen runs and would otherwise alter the anchor, and a `_` after punctuation, as in `-_`, can open emphasis.
 - A key is unique within its table without regard to case, because case-insensitive file systems
   and lowercased anchors would otherwise collide. A key equal to another key of its table without regard to case is `DUPLICATE_KEY` on a write that
   introduces it and `key.duplicate` in the validator; it never makes a file unreadable, except that two rows of one file whose keys are byte for byte equal and that both have detail sections are `format.block`, since the two sections share one heading text ([canonical format](10-canonical-format.md#detail-headings-and-anchors)); two rows with byte-for-byte equal keys make their table unavailable ([canonical format](10-canonical-format.md#diagnostics)).
@@ -76,7 +79,7 @@ so the same rows can be stored either way.
   key 7 the canonical file name is `7.flowmark.md`, and `007.flowmark.md` is not.
 - A key change that differs only in case renames the file through an intermediate name, inside the
   journaled transaction.
-- `identity` is allowed on every markdown table: an insert that omits the key gets `max+1`,
+- `identity` is allowed only on an `i64` primary key column ([schema](30-schema.md)): an insert that omits the key gets `max+1`,
   allocated under the lock. Reuse after a git rewind is accepted — git history, not a sequence, is
   the allocator of record.
 - A key with `key_prefix <p>` is allocated `<p><n + 1>`, where n is the largest decimal suffix
@@ -143,9 +146,7 @@ so the same rows can be stored either way.
   are rejected at catalog load ([schema](30-schema.md)).
 - A foreign key value is a link. Its text is the referenced key and its target is derived from the
   referenced row, as the [canonical format](10-canonical-format.md) states. A dangling foreign key is the validator's `reference.dangling`; a write that introduces one is
-  `FOREIGN_KEY`, and it never makes a file unreadable. Every relation is a
-  link that a reader can follow in a markdown viewer with GitHub-style heading slugs (GitHub, GitLab,
-  VS Code, Pandoc).
+  `FOREIGN_KEY`, and it never makes a file unreadable. Every relation is a link whose `#<anchor>` is the anchor that GitHub, GitLab, VS Code and MkDocs generate for the heading it names, as the [canonical format](10-canonical-format.md#detail-headings-and-anchors) states. Pandoc is not a viewer the claim is made for: its default does not rewrite relative link targets, so a link between corpus files is not claimed to be followed in its output.
 - A one-to-many across files stores the child table with `store files` and writes the foreign key
   in its field list. A one-to-many inside a file stores the child table with `store block`.
 - Many-to-many is a link table with an `identity` key.

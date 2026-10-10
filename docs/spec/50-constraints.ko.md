@@ -1,5 +1,5 @@
 <!-- doc-id: spec-constraints -->
-<!-- source-sha256: de1ddf956ab0c3263fade7e9dd50bdf5408e802cc5176a8dd19b837acb54cefa -->
+<!-- source-sha256: c941611f4020083e27bb883412e9af0c0aa7adebea9b2ffd2731517f227c2c35 -->
 # Constraints
 
 [English](50-constraints.md)
@@ -31,7 +31,7 @@
 ## Key 규칙
 
 - **형태.** markdown table의 key는 `A`–`Z`, `a`–`z`, `0`–`9`, `_`, `-`로 이루어지고 문자나 숫자로
-  시작한다. 이 형태 밖의 key는 쓰기에서 `CONSTRAINT`다.
+  시작하며, `--`와 `-_`를 담지 않는다. 이 형태 밖의 key는 쓰기에서 `CONSTRAINT`다.
 - **예약 이름.** 대소문자를 무시하고 `CON`, `PRN`, `AUX`, `NUL`, `COM0`–`COM9`, `LPT0`–`LPT9`와 같은
   key는 쓰기에서 `CONSTRAINT`다([schema](30-schema.md)는 table 이름을 거절한다).
 - **길이.** 243 byte를 넘는 `files` key는 쓰기에서 `CONSTRAINT`다.
@@ -50,8 +50,8 @@
 - 바이트 그대로 쓸 수 없는 text나 `markdown` 값, 그리고 `CanonicalLiteral`이 거절하는 typed 값(scale보다 많은 소수 자릿수 — 0 포함, precision − scale보다 많은 정수 자릿수, precision보다 많은 소수 자릿수의 time이나 datetime)([canonical format](10-canonical-format.md));
 - `format.*` 진단이 있는 file을 다시 쓰는 logical write는 file과 진단을 밝히며 `CONSTRAINT`다. 그 진단이 `format.noncanonical`이면 `flowmark canon`을 밝힌다(commit의 면제를 제외하고)([canonical format](10-canonical-format.md)). 쓰기는 문서 바이트를 정규화하지 않는다;
 - fence 밖에 level ≤ L heading 줄을 가진 `markdown` 값([canonical format](10-canonical-format.md));
-- 다른 heading이 anchor를 가져갔거나 slug가 anchor와 다른 상세 heading — 그 heading을 밝히고, 충돌을 일으키는
-  제목 갱신, payload 쓰기 또는 행 삽입을 밝힌다([canonical format](10-canonical-format.md));
+- 상세 anchor와 heading의 충돌을 새로 만드는 쓰기 — 제목 갱신, payload 쓰기, 행 삽입, key 갱신, 이동,
+  상세 섹션의 생성 — 는 다른 heading을 밝히며 `CONSTRAINT`다. 다만 중복 key는 `DUPLICATE_KEY`다([canonical format](10-canonical-format.md#detail-headings-and-anchors));
 - 값으로서의 `now`, 그리고 column 길이를 넘는 text([canonical format](10-canonical-format.md)).
 
 읽기에서는 walk가 `corpus.walk`를, 형식 규칙이 `format.*`를 보고한다. 그 내용은

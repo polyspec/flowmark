@@ -81,7 +81,7 @@ flowmark = the markdown database engine (one Go binary)
 
 - **dbspec is the root grammar and the only authority.** The `dbspec/*.dbs` set of a corpus root is the catalog (Revision 3). Documents carry no schema copy and no stamp, and standalone documents with embedded fragments are withdrawn: schema is law and data is rows, and a copy of the law per document makes the drift of the copies a bug class of its own. orm's engine, IR and conformance are bound to the dbspec manifest hash, and dbspec's parser and type system are reused as a library.
 - **Markdown-specific schema surface is manifest-level settings, never rendered types** (introspection coherence, the `updated`/`soft_delete` precedent): `store`, `key_prefix`, `title`, `body`, `order`, `checkbox`, `markdown` and the state machine's `initial`, `history` and `limit` are settings that the SQL backends ignore; a real database introspects them back as plain columns.
-- **`identity` is allowed** on every markdown table, allocated `max+1` under the lock (Revision 3); key reuse under git rewind is accepted — git history, not a sequence, is the allocator of record.
+- **`identity` is allowed** only on an `i64` primary key of a markdown table, allocated `max+1` under the lock (Revision 3; the other key types have no maximum to add one to); key reuse under git rewind is accepted — git history, not a sequence, is the allocator of record.
 
 ### 5. Ops and transactions (`40-ops.md`)
 

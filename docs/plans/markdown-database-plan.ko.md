@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database -->
-<!-- source-sha256: 630d31b50e6b28371e3f6884d3aa0b567717bb325d99e054118ca6df48979d01 -->
+<!-- source-sha256: 702df1809d38725a138a687f07fdb1c987c069c27d1e84bad4779205745b8bc0 -->
 # markdown database 계획
 
 [English](markdown-database-plan.md)
@@ -101,7 +101,7 @@ NULL이 아니며 비어 있을 수 있고, view의 entity table은 둘 다 선�
   그 밖의 모든 file은 database 밖이고 진단을 내지 않는다.
 - **모든 corpus 문서는 완전한 markdown 문서다.** flowmark를 모르는 독자도 그대로 읽으며, 주석,
   표지, 숨은 field가 없다. 구조는 평범한 markdown(heading, list, table, field list)이고 모든 관계는
-  GitHub식 heading slug를 쓰는 markdown viewer(GitHub, GitLab, VS Code, Pandoc)에서 따라갈 수 있는 link다.
+  GitHub, GitLab, VS Code, MkDocs가 heading에 대해 만드는 anchor인 link다. Pandoc은 주장 대상이 아니다: 기본 설정은 상대 경로 link target을 다시 쓰지 않는다.
   근거: 문서는 database의 유일한 저장소이므로
   읽을 수 있는 문서로 남아야 하며, 기계만 필요로 하는 것은 catalog(`dbspec/`)나 `.flowmark/`에 속한다.
 - 인코딩: BOM 없는 UTF-8, LF, 정확히 마지막 LF 하나. BOM, CR, 마지막 LF가 없음, 끝의 빈 줄은 `format.noncanonical`이고, UTF-8이 아닌 byte와 U+0000은 `format.encoding`이다. 값은 줄 바꿈으로 시작하거나 끝나지 않으며 공백만 있는 줄로 시작하거나 끝나지 않는다. `format.*` 진단이 있는 file을 다시 쓰는 logical write는 `CONSTRAINT`이며, `format.noncanonical`이면 `flowmark canon`을 밝힌다. `files` 행의 file 전체를 지우는 delete는 rewrite 거절에서만 면제되며, restrict 검사는 그 행을 참조할 수 있는 모든 table의 행을 여전히 필요로 하며(자신의 table을 `parent`로 하는 것, 자식 및 이력 block, 그 행으로의 foreign key를 가진 모든 table), 그 중 하나라도 사용할 수 없으면 그 delete는 `CONSTRAINT`다. `format.block`, `format.section`, `format.encoding`이 있는 file을 가지거나 바이트 단위로 같은 key를 가진 두 행이 있는 table은 사용할 수 없다: 그 행을 필요로 하는 모든 요청이나 검사는 file과 진단을 밝히며 `CONSTRAINT`로 실패한다. block table은 placement parent의 file을 재귀적으로 가진다. corpus 열기, introspection, `flowmark validate`와 `flowmark canon`은 사용할 수 없는 table에서 결코 실패하지 않으며, 그 table이 필요한 export는 실패하고 아무것도 쓰지 않는다.
@@ -129,11 +129,14 @@ markdown 전용 선언은 모두 dbspec **manifest setting**이며 `markdown <co
 
 ### Key
 
-- markdown table은 단일 column primary key를 갖는다. composite key는 schema 오류다.
+- markdown table은 단일 column primary key를 갖는다. composite key는 schema 오류다. 그 type은 integer, `bool`,
+  `varchar`, `uuid`, `date` 중 하나이며(다른 type은 schema 오류다: `time`, `datetime`, `decimal`, `f64`는 key 모양이
+  거절하는 문자를 담고, `text`와 `bytes`는 dbspec의 key 규칙이 거절한다), 음수 integer key는 거절된다: 쓰기에서
+  `CONSTRAINT`, 읽기에서 `format.block`이다.
 - `files` 행의 key는 file 이름에서 `.flowmark.md`를 뺀 것이다.
 - **모든 key는 동시에 file 이름, URL path segment, heading anchor의 일부다**: `A`–`Z`, `a`–`z`,
-  `0`–`9`, `_`, `-`로 이루어지고, 문자나 숫자로 시작하며(앞의 `_`는 강조로 렌더되어 보이는 key와
-  anchor를 바꾼다), `--`를 담지 않고 `-`로 끝나지 않으며(연속 hyphen을 접는 GitLab, MkDocs가 anchor를 바꾸지 않도록),
+  `0`–`9`, `_`, `-`로만 이루어지고(ASCII이며, 대소문자 비교와 소문자 anchor가 이 글자들에 대해서만 정의되기 때문이다), 문자나 숫자로 시작하며(앞의 `_`는 강조로 렌더되어 보이는 key와
+  anchor를 바꾼다), `--`나 `-_`를 담지 않으며(연속 hyphen을 접는 MkDocs가 anchor를 바꾸지 않도록, `-_`처럼 구두점 뒤의 `_`는 강조를 열 수 있기 때문에),
   table 안에서 대소문자를 무시하고 유일하다(대소문자를 구분하지 않는 file system과
   소문자로 바뀐 anchor가 충돌하지 않도록). 외래 key는 참조된 key와 byte 단위로 맞는다. 대소문자만 다른
   link 텍스트는 dangling 참조다 — validator의 `reference.dangling`이며, 그것을 새로 만드는 쓰기는 `FOREIGN_KEY`다. 바이트 단위로 같은 key를 가진 두 행은 그 table을 사용할 수 없게 한다. 대소문자만 다른 충돌은 그것을 새로 만드는 쓰기에서 `DUPLICATE_KEY`이고, validator의 `key.duplicate`다. 대소문자를 무시했을 때 `CON`, `PRN`, `AUX`, `NUL`, `COM0`–`COM9`,
@@ -142,7 +145,7 @@ markdown 전용 선언은 모두 dbspec **manifest setting**이며 `markdown <co
   255 안에 든다. key의 정규 문자열이 아닌 file 이름(정수 key의 `007.flowmark.md`)은 `format.block`이다.
   key 모양을 깨는 file 이름은 읽을 때 `format.block`이다.
   대소문자만 다른 key 변경은 journal된 transaction 안에서 중간 이름을 거쳐 이름을 바꾼다.
-- `identity`는 모든 markdown table에 허용된다: key를 생략한 insert는 lock 아래 할당된 `max+1`을
+- `identity`는 `i64` primary key column에만 허용된다: key를 생략한 insert는 lock 아래 할당된 `max+1`을
   받으며, git을 되감은 뒤의 재사용은 받아들이고 명시한다. `key_prefix <p>`를 가진 문자 key는
   `<p><n + 1>`로 할당되며, n은 `<p><n>` 꼴 key 가운데 선행 0 없는 가장 큰 10진 접미사다. orm은 이런
   column을 `identity`처럼 executor가 할당하는 것으로 다루므로 insert가 생략할 수 있다.
@@ -174,17 +177,20 @@ markdown 전용 선언은 모두 dbspec **manifest setting**이며 `markdown <co
 - block이나 document 행은 body가 비어 있지 않거나, 그 table에 body가 아닌 non-null `markdown` column이 있거나, body가 아닌 nullable `markdown` column이 NULL이 아닐 때, 또는 자식 block 행을 가질 때에만 상세 섹션을 가진다. 어느 것도 없는 상세 섹션은 `format.noncanonical`이다.
 - **상세 heading은 `<h> <table> row <key>`다** — table 이름, 공백 하나, `row`, 공백 하나, key이며 제목 사본은
   결코 아니다 — 그 anchor는 `<table>-row-<소문자 key>`다(`## items row T2`의 anchor는 `items-row-t2`).
-  table은 anchor 텍스트에서 첫 `-` 앞이며 table 이름에는 `-`가 없다. slug는 GitHub의 것이다: heading의 렌더된
-  인라인 텍스트를 소문자로 만들고, 문자, 숫자, 공백, `-`, `_`가 아닌 모든 문자를 지우며, 공백은 `-`로 바꾼다.
-  각 file에서 엔진은 모든 heading(골격과 payload 모두)의 slug를 문서 순서대로 계산한다. 상세 anchor는 GitHub
-  slug의 두 중복 처리 모두에서 비어 있어야 한다: github-slugger는 반복을 아직 차지되지 않은 첫 접미사 `-1`, `-2`, …로
-  보내고, github.com은 반복되는 기본 slug에 확인 없이 counter를 붙인다. 블록 또는 markdown column 섹션 heading은
-  반복되든 아니든 `<name>` 또는 `<name>-<digits>`로 slug가 되어 `<table>-row-<key>` anchor와 결코 같지 않으므로,
-  상세 anchor를 가져갈 수 있는 것은 payload heading과 `files` 행의 H1 제목뿐이다. 다른 heading이 anchor를 가져갔거나
-  slug가 anchor와 다른 상세 heading은 쓰기에서 `CONSTRAINT`이며, 그 heading을 밝히고 충돌을 일으키는 제목 갱신,
-  payload 쓰기 또는 행 삽입을 거절한다. 읽기에서는 `format.block`이다. 다만 대소문자만 다른 key를 가진 두 행의 상세 heading 사이는 `key.duplicate`뿐이고, 같은 file 안에서 같은 heading 텍스트를 가진 두 상세 섹션은 어느 행에도 배정할 수 없으므로 `format.block`이다. 공백이 더 있거나 `row`의 대소문자가 다른
-  상세 heading은 `format.noncanonical`이며, `flowmark canon`이 고친다. 블록의 어떤 행도 가리키지 않는 key의 상세
-  섹션은 `format.block`이다.
+  table은 anchor 텍스트에서 첫 `-` 앞이며 table 이름에는 `-`가 없다. 충돌 규칙: 골격과 payload를 가리지 않고 file의 모든 heading — 모든 ATX heading(block-quote나 list-item 표지 뒤의 것을
+  포함)과 fence 밖에서 setext 밑줄이 뒤따르는 모든 문단(그 문단 전체가 heading) — 은, 상세 heading이 아니면서 두 fold 중
+  하나(F = F_G 또는 F = F_M) 아래에서 heading의 fold와 F(A)가 각각의 끝 십진 숫자 run을 뺀 뒤 같을 때, 다른 상세 heading의
+  anchor A와 충돌한다. F_G는 Unicode 범주가 L이나 Nd가 아닌 문자를 모두 지우고, 소문자로 바꾸고, NFKD로 분해하고, 결합
+  기호를 버리며, ASCII 문자와 숫자만 남긴다. F_M은 소문자로 바꾸고, NFKD로 분해하고, 결합 기호를 버리며, ASCII 문자와
+  숫자만 남긴다. fold는 GitHub이 slug를 만드는 방식의 텍스트를 취한다(link의 target을 뺀 link 텍스트, 강조 표지 제거,
+  code span 내용 유지, entity 해석). F_G는 GitHub, GitLab, VS Code를, F_M은 MkDocs를 다룬다. Pandoc은 주장하지 않는다. 모든
+  번호 매기기를 다루는 근거: GitHub, GitLab, VS Code는 `-<n>`을 덧붙이고, MkDocs는 `_<n>`을 덧붙이거나 끝의 `_<n>`을 올리며,
+  attribute list가 설정한 id도 점유된 것으로 센다. 끝 숫자를 뺀 비교는 어느 heading이나 id가 먼저 왔든 모든 번호를 다루며,
+  그 비용은 상세 heading과 끝 숫자만 다른 payload heading의 거절이다. 두 상세 heading은 anchor가 같을 때에만 충돌한다.
+  payload의 attribute list `{…}`(앞의 `:`가 있거나 없는)로서 `#A`로, 또는 `id=` 뒤에 A를 그대로나 작은따옴표·큰따옴표 안에 두어 id를 A로 정하는 것과 payload
+  HTML의 `id` 또는 `name`이 A와 같은 것(대소문자 무시)도 충돌한다. 충돌을 새로 만드는 쓰기 — 제목 갱신, payload 쓰기, 행 삽입, key 갱신, 이동, 상세 섹션의 생성 — 는 다른 heading을 밝히며 `CONSTRAINT`다. 다만 행에 같은 table의 다른 key와 대소문자를 무시하고 같은 key를 주는 쓰기는 `DUPLICATE_KEY`이며, 그것이 key 규칙이다. 읽기에서는 `format.block`이다. 다만 key가 대소문자만 다른 두 행의 상세 heading
+  사이는 `key.duplicate`뿐이며(쓰기에서는 `DUPLICATE_KEY`다). 공백이 더 있거나 `row`의 대소문자가 다른 상세 heading은
+  `format.noncanonical`이며, `flowmark canon`이 고친다. 블록의 어떤 행도 가리키지 않는 key의 상세 섹션은 `format.block`이다.
 - `markdown` column은 모든 저장에서 언제나 행 scope의 섹션이다 — field나 cell이 아니다.
 - level L의 행 scope에서 body가 아닌 `markdown` column과 자식 block은 각각 column이나 자식 table 이름을
   가진 level L heading이다. nullable column의 섹션은 값이 NULL일 때에만 없고, non-null column의 섹션은 언제나 있어서
@@ -327,7 +333,7 @@ markdown 전용 선언은 모두 dbspec **manifest setting**이며 `markdown <co
 | index | 받아들임. memory에서 유도 |
 | default | insert에서 명시적으로 씀 |
 | `null` | 저장마다 문법이 정한 대로 없는 field, cell, 섹션 |
-| `identity` | 허용. lock 아래 `max+1` |
+| `identity` | `i64` primary key에만 허용. lock 아래 `max+1` |
 | foreign key | restrict-only. `cascade`, `set_null` 거절 |
 | `codec` | orm 요청에서는 client가 적용. 엔진이 시작한 쓰기(CLI, MCP, sidecar, 이력)는 orm의 Go codec package로 적용하고 검증은 같은 package로 decode. 저장 값은 encode된 값(byte를 내는 단계는 base64) |
 | `aes`, `aes_version`, `blind_index` | schema 오류 — key는 client를 떠나지 않는다 |
@@ -385,8 +391,8 @@ markdown 전용 선언은 모두 dbspec **manifest setting**이며 `markdown <co
 - **board 예제**는 markdown에서 일대다 관계를 증명한다: `posts`(title, body, author → people, created)와
   `comments`(body, author → people, created, 답글을 위한 `parent`)가 있다. 한 변형에서는 post의 comment가 post 파일 안의
   `store block fk_comments_post list` 행으로, 다른 변형에서는 field list가 post를 link하는 `store files` 행으로 저장된다.
-  두 변형은 같은 create, read, update, delete 연산을 엔진으로 실행하며 같은 행을 내고, 모든 문서는 GitHub식 heading slug를 쓰는 markdown viewer(GitHub, GitLab, VS Code, Pandoc)에서 평범한
-  board 페이지 — post, 그 field들의 link, 그 comment들 — 로 읽힌다.
+  두 변형은 같은 create, read, update, delete 연산을 엔진으로 실행하며 같은 행을 내고, 모든 문서는 GitHub, GitLab, VS Code, MkDocs에서 평범한
+  board 페이지 — post, 그 field들의 link, 그 comment들 — 로 읽힌다. Pandoc은 주장 대상이 아니다.
 - **board 앱**은 같은 board를 polyspec 스택으로 만든 것이다 — hyper가 list와 post-with-comments
   페이지를 그리고, crudui가 post와 comment의 form, 목록, 검증을 정의하며, orm이 `markdown://`을 통해
   corpus에 닿는다. hyper의 PHP, Node.js, Python server에서 각각 자기 orm client의 markdown IR
