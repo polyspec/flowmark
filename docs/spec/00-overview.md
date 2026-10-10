@@ -22,7 +22,8 @@ git keeps the audit trail, the branches and the rollback.
 - **The catalog is the schema.** A corpus root holds `dbspec/*.dbs`, the dbspec document set
   that declares every table, its storage and its settings ([schema](30-schema.md)). Documents
   carry no schema copy, as a database keeps its schema once and never per row. flowmark reads
-  the catalog with orm's Go `engine/dbspec` package and never reimplements it.
+  the catalog and the IR with orm's Go `engine/dbspec` and `engine/ir` packages as libraries and
+  never reimplements them.
 - **The corpus is the truth.** A corpus is the directory tree of markdown documents that the
   catalog describes. Every write flows through the codec and the validator inside a transaction;
   every read goes through the same executor. An external database, when present at all, is a

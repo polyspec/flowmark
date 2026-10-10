@@ -1,5 +1,5 @@
 <!-- doc-id: spec-checklist -->
-<!-- source-sha256: 786ecbc08d6a24f83d148285619fb1ba209e254826169edcd2c3d0df988c9d08 -->
+<!-- source-sha256: b9b88be50654752b27e9aefdc35e4f918e99b61b4a0c446917212c891173bd51 -->
 # 응용 schema
 
 [English](100-checklist.md)
@@ -16,7 +16,7 @@
 | `people` | `store document table` | `id varchar(32)`와 `key_prefix 'P'`, `name varchar(255)`와 `title name` |
 | `item_links` | `store document table` | `id i64 identity`, `from_item varchar(32)` → items, `to_item varchar(32)` → items, `kind varchar(16)` |
 | `item_history` | `store block fk_history_item table` | `id i64 identity`, `fk_history_item`으로 items를 가리키는 `item varchar(32)`, `state`와 같은 type의 `from_state`·`to_state`, `at datetime(6)`, items와 같은 `evidence`·`cause`·`retry`(각각 `markdown`) |
-| `views` | `store document table` | `id i64 identity`, `title varchar(255)`와 `title title`, `body text`와 `markdown body`·`body body`, `kind varchar(16)`, `entity varchar(63)`, `filter text`와 `sort text`(각각 `codec … ordered_json`), `group_by varchar(63) null` |
+| `views` | `store document table` | `id i64 identity`, `title varchar(255)`와 `title title`, `body text`와 `markdown body`·`body body`, `kind varchar(16)`, `entity varchar(63)`, `filter text`와 `sort text`(`codec filter ordered_json`과 `codec sort ordered_json`), `group_by varchar(63) null` |
 
 모든 foreign key는 선행 index를 갖는다. check는 `start_on is null or start_at is null`,
 `due_on is null or due_at is null`,
@@ -27,6 +27,7 @@
   type은 없고, datetime만 쓰는 column은 날짜만 있는 마감을 모호한 자정으로 바꾼다. 간트는 날짜만 있는
   시작을 그날의 시작부터, 날짜만 있는 마감을 그날의 끝까지 그린다.
 - **빈 담당자는 self다.** 이름을 추측하지 않는다.
+- **간트 의존 edge**는 kind `blocks`인 `item_links` 행이다.
 
 ## 상태기계
 
@@ -56,7 +57,7 @@
 - 칸반, 목록, 간트 view는 entity table이 `title`과 `body`를 선언할 것을 요구한다.
 - 칸반 drop은 view에 `sort`가 없고(저장 순서) 양쪽 이웃이 card의 parent를 공유할 때만 `order`를 정한다.
   column을 넘는 drop은 상태를 바꾼다. 그 밖의 drop은 거절하고 보드가 이유를 말한다 — 저장하지 않는 card는
-  옮기지 않는다. 받아들여진 drop 뒤 보드는 drop 위치가 아니라 operation이 돌려준 행으로 다시 그린다.
+  옮기지 않는다. 받아들여진 drop 뒤 보드는 drop 위치가 아니라 operation이 돌려준 행으로 다시 그린다. column을 넘는 drop은 card를 view의 sort가 놓는 자리에 둔다. `sort`가 없으면 상태 변경은 card의 `order`를 유지한다.
 - 어떤 view도 자기 write path를 갖지 않는다: 불법 drag는 불법 CLI 쓰기와 같은 검증에 실패한다.
 
 ## 이 repository의 checklist

@@ -55,15 +55,25 @@ bytes.
   level L named by the column or the child table. An absent section is NULL; a present empty
   section is the empty text. The body is never NULL. An undeclared heading at level L is
   `format.section`.
+- A child block section is written only when the block holds at least one row; a parent row with
+  no child rows has no block heading, and an empty block heading is `format.noncanonical`.
+
+## Stored scalar columns
+
+The stored scalar columns of a table are its columns minus the key, the `title`, the `body`, the
+`markdown` columns, the state column of a `list`, the placement foreign key, `parent` in a `list`,
+and the `order` column in a block or document storage; the key, the title, the state and the
+hierarchy have their own places. A stored scalar column is a list field, a table cell or a
+frontmatter key. Every non-null stored scalar column is written — the engine writes a default
+explicitly on insert.
 
 ## List rows
 
 - A list row is `- [<glyph>] <key> <title>[ <field>…]`, or `- <key> <title>[ <field>…]` when the
   table has no state column. The glyph is the `checkbox` glyph of the row's state.
 - Fields are parsed from the right: a token `<declared column>:<value>`, where the value is a bare
-  token without space, `"` or `\`, or `"…"` with `\"` and `\\` as its escapes. Only declared
-  scalar columns are fields. An absent field is NULL; `col:""` is the empty text; every non-null
-  column is written — the engine writes a default explicitly on insert, and a row missing a
+  token without space, `"` or `\`, or `"…"` with `\"` and `\\` as its escapes. Only stored
+  scalar columns are fields. An absent field is NULL; `col:""` is the empty text; a row missing a
   non-null field is `format.block`.
 - A title token matching `<declared column>:` is written `<column>\:`. The title is the text
   between the key and the first field.
@@ -75,7 +85,9 @@ bytes.
 
 - A table's header row names the stored scalar columns; every stored scalar column has a header,
   and a header that names no column is `format.block`. A cell writes `|` as `\|`.
-- An empty cell is NULL; the empty text is written `""`; every non-null column has a value.
+- An empty cell is NULL; the empty text is written `""`; every non-null stored scalar column has
+  a value. A cell value beginning with `"` is written inside `"…"` with `\"` and `\\` as
+  escapes, as a list field is.
 
 ## Single-line places
 
@@ -87,8 +99,8 @@ A list title, a list field and a table cell are single-line: a value with a line
 - YAML **1.2 core schema**, block style in the value region; anchors, aliases and tags are
   rejected; comments are rejected in v1 (a comment-preserving round-trip emitter is a stated
   non-goal until a requirement names it).
-- Each key is a declared scalar column of the `files` table; an unknown key is `format.frontmatter`.
-  An absent key is NULL; every non-null column has its key, and a missing one is
+- Each key is a stored scalar column of the `files` table; an unknown key is `format.frontmatter`.
+  An absent key is NULL; every non-null stored scalar column has its key, and a missing one is
   `format.frontmatter`.
 - Value syntax per type: every value uses the dbspec canonical literal form; `bytes` is base64.
 

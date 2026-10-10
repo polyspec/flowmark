@@ -1,5 +1,5 @@
 <!-- doc-id: spec-schema -->
-<!-- source-sha256: 1deb60c2521df01e8886ea14d600c00e9469c1156834bdd64a1a160dded06933 -->
+<!-- source-sha256: 60685caa0463784de5f8013b9ff5d1adb77bc54bd0fa3bfdb2e4451446f041d8 -->
 # Schema
 
 [English](30-schema.md)
@@ -26,7 +26,7 @@ column을 이름 붙인다 — column 이름이 동작을 고르지 않는다.
 | Setting | 뜻 |
 | --- | --- |
 | `store files` / `store document list\|table` / `store block <fk> list\|table` | table의 저장([document model](20-document-model.md)). corpus에서 table마다 정확히 하나 |
-| `key_prefix <p>` | `varchar` primary key를 `<p><n + 1>`로 할당한다. orm은 이 column을 executor가 할당하는 것으로 다룬다 |
+| `key_prefix <p>` | `varchar` primary key를 `<p><n + 1>`로 할당한다. orm은 이 column을 executor가 할당하는 것으로 다룬다 — `varchar`다. dbspec은 `text` column을 key로 삼지 않기 때문이다 |
 | `title <column>` | 행의 제목: non-null, 비지 않음 |
 | `body <column>` | 행의 body: `markdown` column, NULL이 아님 |
 | `order <column>` | 형제 사이에서 행의 위치. orm은 이 column을 executor가 할당하는 것으로 다룬다 |
@@ -64,8 +64,8 @@ column이 없고 `title`이나 `body`를 선언하지 않는다. 어긋나면 �
 
 ## Install
 
-`flowmark install <corpus>`는 `CREATE TABLE`이 저장소를 만들듯 catalog에서 저장 뼈대 — 각 `files`
-table의 폴더, 각 `document` table의 문서 — 를 만든다. 블록 섹션은 첫 행과 함께 나타난다. `markdown://`에
+`flowmark install <corpus>`는 catalog에서 저장 뼈대 — 각 `files` table의 폴더와 각 `document` table의
+문서이며, 빈 블록은 쓰이지 않으므로 블록 섹션은 없다 — 를 `CREATE TABLE`이 저장소를 만들듯 만든다. `markdown://`에
 대한 orm의 schema install은 `CAPABILITY_UNSUPPORTED`다.
 
 ## Introspection

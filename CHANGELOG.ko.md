@@ -1,8 +1,15 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 21eaa4e7413b8b6dbd1510856ee9c11873aaffd5a3d14dc344fe25226c51d0df -->
+<!-- source-sha256: a11f0eaaf82e28bd5b5ec6d0c2f3f17aeebd35e98e5c9b408ed2d838e51250fa -->
 # Changelog
 
 ## Unreleased
+
+- T12.1: 판정과 spec을 markdown database 계획 위에서 다시 쓴다. flowmark가 엔진이고 orm은 `markdown://`으로
+  IR executor로서 접속한다. `dbspec/` catalog가 유일한 schema이고, 각 table은 `files`, `document`,
+  `block` 저장을 선언하며, key는 불투명하다. canonical format은 행 scope, 섹션, list field, table cell을,
+  operations는 server, session, commit 순서, 실패 code를, constraints는 이력·빈틈·사슬·repair를 갖는
+  상태기계를 고정하며, `flowmark.dbs`가 응용 schema다. design plan은 revision 3을 기록하고 문서 안
+  Mermaid authority(T8.5)는 철회한다.
 
 - T8.4-2: repository는 빌드된 실행 파일을 추적하지 않는다. repository 루트의 `go build`가 쓴 루트의
   `flowmark`는 index에서 빠지고 ignore되며, `make build`는 `build/flowmark`에 쓴다.

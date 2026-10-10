@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database -->
-<!-- source-sha256: 7d86324f96a5227c913f7e014c2626e0e6aa87d9f1c6f8cc8d4107d3687b3311 -->
+<!-- source-sha256: 15cc5ac74f5b5661a531444a0579ada2ccbe4c596e48bc5b66943c685f28ae17 -->
 # markdown database 계획
 
 [English](markdown-database-plan.md)
@@ -83,8 +83,8 @@ NULL이 아니며 비어 있을 수 있고, view의 entity table은 둘 다 선�
   `.flowmark/`를 담는다. 위로 거슬러 찾지 않는다.
 - 문서는 schema stamp를 갖지 않는다: database가 schema를 행마다가 아니라 한 번만 두듯 `dbspec/` set이
   catalog다. spec 30의 stamp, 단독 문서, 내장 fragment는 철회한다.
-- `flowmark install`은 `CREATE TABLE`이 저장소를 만들듯 catalog에서 저장 뼈대 — 폴더, 각 `document`
-  table의 문서, 빈 블록 섹션 — 를 만든다. `markdown://`에 대한 orm의 schema install은
+- `flowmark install`은 catalog에서 저장 뼈대 — 각 `files` table의 폴더와 각 `document` table의 문서이며,
+  빈 블록은 쓰이지 않으므로 블록 섹션은 없다 — 를 `CREATE TABLE`이 저장소를 만들듯 만든다. `markdown://`에 대한 orm의 schema install은
   `CAPABILITY_UNSUPPORTED`다.
 - introspection은 모든 문서를 catalog에 대해 검증하고 catalog를 돌려준다. 실패한 문서는 위치가 있는
   진단이다. catalog 없는 corpus에서 catalog 초안을 만드는 도구는 이 계획에 속하지 않는다.
@@ -271,7 +271,7 @@ markdown 전용 선언은 모두 dbspec **manifest setting**이며 `markdown <co
   `people(id varchar(32), name varchar(255))`와 `key_prefix 'P'`·`title name`, `item_links(id i64
   identity, from_item varchar(32), to_item varchar(32), kind varchar(16))`와 check
   `ck_item_links_kind`, `item_history`, `views`. 모든 foreign key(`parent`, `assignee`, `from_item`,
-  `to_item`, `item`)는 선행 index를 갖는다.
+  `to_item`, `item`)는 선행 index를 갖는다. NULL인 assignee는 self다 — 이름을 추측하지 않는다(T11 판정).
 - 시점마다 두 column을 두는 것은 마감이 시각을 가질 수 있다는 T11 판정을 지키기 위함이다: "date 또는
   datetime"을 담는 dbspec type은 없고, datetime만 쓰는 column은 날짜만 있는 마감을 모호한 자정으로
   바꾼다. 간트는 날짜만 있는 시작을 그날의 시작부터, 날짜만 있는 마감을 그날의 끝까지 그린다.

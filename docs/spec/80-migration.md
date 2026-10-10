@@ -22,9 +22,9 @@ specification is written when evolution beyond the v1 scope starts.
 - **Additive-first**: a rename is an explicit step, never "add new and drop old".
 - **A storage change is a transaction**: moving a table from one storage to another rewrites every
   row in one transaction, and the rows read the same before and after.
-- **Keys are opaque**, so no key codemod rewrites references in prose; a key change is an update of
-  the key and of every foreign key that references it, refused while a restrict-only reference
-  would dangle.
+- **Keys are opaque**, so no key codemod rewrites references in prose; a key change is refused while any row
+  references the key; the referencing rows are updated first, in the same transaction, by the
+  caller.
 
 ## Open for later
 

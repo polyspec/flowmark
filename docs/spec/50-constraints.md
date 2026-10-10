@@ -36,9 +36,9 @@ A check is enforced at commit; a check whose predicate is unknown (NULL) passes,
 
 - A `parent` cycle is `CONSTRAINT`; a `parent` outside the row's block is `CONSTRAINT` on write and
   `format.block` on read.
-- An order value out of 1..n + 1, or an update of the order column that matches more than one row,
-  is `CONSTRAINT`; in `files` storage, sibling order values other than exactly 1..n are a
-  diagnostic ([document model](20-document-model.md)).
+- An order value outside 1..n + 1 (n as the document model defines it), or an update of the order
+  column that matches more than one row, is `CONSTRAINT`; in `files` storage, sibling order values
+  other than exactly 1..n are a diagnostic ([document model](20-document-model.md)).
 
 ## The state machine
 

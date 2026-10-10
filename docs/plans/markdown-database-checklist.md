@@ -4,7 +4,7 @@
 ## T12 The markdown database
 
 - [ ] T12 The markdown database: a finite storage grammar declared by the `dbspec/` catalog, flowmark as the engine that orm reaches as an IR executor by DSN, and views over the same rows. Cause: the list, table and detailed shapes were demo cases with no rule behind them — no body column, no parent, no relation, no history — the engine sat in flowmark while the plan placed it in orm, and several behaviours were hardcoded (follow-up of T8.5, T10, T11)
-- [~] T12.1 Rewrite the rulings and the specifications 00, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100 and 110 on the markdown database plan: the seam correction, the T8.5 withdrawal, the storage grammar, the catalog, the server and transactions, the history and the views (requires T12)
+- [o] T12.1 Rewrite the rulings and the specifications 00, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100 and 110 on the markdown database plan: the seam correction, the T8.5 withdrawal, the storage grammar, the catalog, the server and transactions, the history and the views (requires T12)
   - Completion criteria: every ruling of the plan stands in its specification as a proposition with its grounding, the design plan states the corrected seam and the withdrawn T8.5 with the facts that withdrew them, and `make documents-check` and `make refs-check` pass.
 - [ ] T12.2 The storage codec: parse and render `files`, `document` and `block` storages in their list and table forms, with P1/P2 for every storage; requires the orm dbspec markdown settings item (requires T12.1)
 - [ ] T12.3 The validator: keys, foreign keys, cycles, titles, block shape, order, limits, the history gap and chain, and the views (requires T12.2)

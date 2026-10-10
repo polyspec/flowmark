@@ -30,7 +30,7 @@ behaviour.
 | Setting | Meaning |
 | --- | --- |
 | `store files` / `store document list\|table` / `store block <fk> list\|table` | the table's storage ([document model](20-document-model.md)); exactly one per table on a corpus |
-| `key_prefix <p>` | the `varchar` primary key is allocated `<p><n + 1>`; orm treats the column as executor-assigned |
+| `key_prefix <p>` | the `varchar` primary key is allocated `<p><n + 1>`; orm treats the column as executor-assigned — a `varchar`, as dbspec keys no `text` column |
 | `title <column>` | the row's title: non-null, never empty |
 | `body <column>` | the row's body: a `markdown` column, never NULL |
 | `order <column>` | the row's position among its siblings; orm treats the column as executor-assigned |
@@ -72,8 +72,9 @@ or `body`; any mismatch is a setting error at the history table's name. It is st
 ## Install
 
 `flowmark install <corpus>` generates the storage skeleton from the catalog — the folder of each
-`files` table, the document of each `document` table — as `CREATE TABLE` creates storage. Block
-sections appear with their first row. Schema install through orm over `markdown://` is
+`files` table and the document of each `document` table, and no block section, since an empty
+block is not written — as `CREATE TABLE` creates storage. Schema install through orm over
+`markdown://` is
 `CAPABILITY_UNSUPPORTED`.
 
 ## Introspection

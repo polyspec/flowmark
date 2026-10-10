@@ -1,5 +1,5 @@
 <!-- doc-id: spec-migration -->
-<!-- source-sha256: fea7b8057777b1068028bc939a33e07c3a2359cac10381fc2484a75f29086277 -->
+<!-- source-sha256: e09ab9533cf3727ac28a3aaafc4e889ca06fe3e1cd7b6a6fa720c3638de85558 -->
 # Migration (범위를 정한 뼈대)
 
 [English](80-migration.md)
@@ -21,8 +21,8 @@
 - **추가 우선**: 이름 변경은 명시적인 단계이며 "새로 추가하고 옛것을 지우기"가 아니다.
 - **저장 변경은 transaction이다**: table을 한 저장에서 다른 저장으로 옮기면 모든 행을 transaction 하나로
   다시 쓰며, 행은 전후로 같게 읽힌다.
-- **key는 불투명하다.** 그래서 prose의 참조를 고쳐 쓰는 key codemod는 없다. key 변경은 key와 그것을
-  참조하는 모든 foreign key의 update이며, restrict-only 참조가 dangling이 되는 동안은 거절한다.
+- **key는 불투명하다.** 그래서 prose의 참조를 고쳐 쓰는 key codemod는 없다. key 변경은 어떤 행이든 그 key를
+  참조하는 동안 거절한다. 참조하는 행들은 먼저, 같은 transaction에서 호출자가 갱신한다.
 
 ## 나중을 위해 열어 둔 것
 
