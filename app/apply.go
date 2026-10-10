@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/polyspec/flowmark/codec"
 )
@@ -249,4 +250,48 @@ func MoveItem(root, relativePath, id, afterID string) error {
 	}
 	out := append(append(append([]string{}, rest[:insert]...), itemLines...), rest[insert:]...)
 	return os.WriteFile(path, []byte(strings.Join(out, "\n")), 0o644)
+}
+
+// EditTitle rewrites the title of one item in place, leaving the state, ID and
+// continuations alone.
+func EditTitle(root, relativePath, id, title string) error {
+	path := filepath.Join(root, filepath.FromSlash(relativePath))
+	text, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	document, diagnostics := codec.Parse(string(text))
+	if len(diagnostics) > 0 {
+		return fmt.Errorf("%s holds %d parse findings; fix them first", relativePath, len(diagnostics))
+	}
+	for _, item := range document.Items {
+		if item.ID == id {
+			lines := strings.Split(string(text), "\n")
+			at := item.Line - 1
+			prefix := "- " + item.State + " " + id + " "
+			if strings.HasPrefix(lines[at], prefix) {
+				lines[at] = prefix + title
+				return os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o644)
+			}
+		}
+	}
+	return fmt.Errorf("the item %q is not in %s", id, relativePath)
+}
+
+// stamp writes one history continuation line under the item: `  - at <RFC3339> <event>`.
+func stamp(lines []string, itemLine int, event string) []string {
+	at := time.Now().UTC().Format(time.RFC3339)
+	record := "  - at " + at + " " + event
+	insert := itemLine + 1
+	return append(lines[:insert], append([]string{record}, lines[insert:]...)...)
+}
+
+// findItemEnd returns the line just past the item's continuation lines (0-indexed).
+func findItemEnd(document *codec.Document, id string) int {
+	for _, item := range document.Items {
+		if item.ID == id {
+			return item.Line - 1 + 1 + len(item.Continuations)
+		}
+	}
+	return -1
 }
