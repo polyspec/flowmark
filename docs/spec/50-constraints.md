@@ -20,7 +20,7 @@ The failure codes are those of [operations](40-ops.md).
   NULLs as distinct, as in SQL.
 - **Foreign keys** resolve by exact byte match with the referenced key; a reference that names no
   row is a dangling reference: `FOREIGN_KEY` on a write that introduces it, and the validator's
-  `reference.dangling` at the reference's place; it never makes a file unreadable.
+  `reference.dangling` at the reference's place; it never makes a file unreadable, except a `parent` of a block or document row that names no row of its file, which is `format.block` ([canonical format](10-canonical-format.md#foreign-keys-as-links)).
 - **Key update of a referenced row** is `FOREIGN_KEY` (restrict-only), so a link target never moves
   under a link.
 - **Referential actions are restrict-only.** `cascade` and `set_null` are rejected at catalog load:
@@ -41,7 +41,7 @@ The failure codes are those of [operations](40-ops.md).
 - **Length.** A `files` key longer than 243 bytes is `CONSTRAINT` on write.
 - **Case-insensitive uniqueness.** A key equal to another key of its table without regard to case is
   `DUPLICATE_KEY` on a write that introduces it, naming the first, and the validator's `key.duplicate`; the
-  collision is a duplicate of the key's file name and anchor, and it never makes a file unreadable, except that two rows of one file whose keys are byte for byte equal and that both have detail sections are `format.block`, since the two sections share one heading text ([canonical format](10-canonical-format.md#detail-headings-and-anchors)); two rows with byte-for-byte equal keys make their table unavailable ([canonical format](10-canonical-format.md#diagnostics)).
+  collision is a duplicate of the key's file name and anchor, and it never makes a file unreadable, except that two rows of one file whose keys are byte for byte equal are `format.block` when both have detail sections, since the two sections share one heading text ([canonical format](10-canonical-format.md#detail-headings-and-anchors)), or when a `parent` cell of the file names their key, since the parent cannot be assigned ([canonical format](10-canonical-format.md#table-rows)); two rows with byte-for-byte equal keys make their table unavailable ([canonical format](10-canonical-format.md#diagnostics)).
 - **Canonical file name.** A `files` file whose name is not the canonical text of its key's type is
   `format.block` on read ([document model](20-document-model.md)).
 
@@ -61,7 +61,11 @@ On write, each of the following is `CONSTRAINT`; the rule that states it is name
 - a write that introduces a collision of a heading with a detail anchor, naming the other heading: a
   title update, a payload write, a row insert, a key update, a move or the creation of a detail section, other than a duplicate key, which is `DUPLICATE_KEY`
   ([canonical format](10-canonical-format.md#detail-headings-and-anchors));
-- `now` as a value, and a text longer than its column ([canonical format](10-canonical-format.md)).
+- a date, time or datetime value written `now`, and a text longer than its column
+  ([canonical format](10-canonical-format.md));
+- a list title token `<declared column>\:` ([canonical format](10-canonical-format.md#list-rows));
+- a `markdown` value holding a setext underline, or leaving a fence or an HTML block open before a following
+  element ([canonical format](10-canonical-format.md#sections-and-their-values)).
 
 On read, the walk reports `corpus.walk` and the format rules report `format.*`, as stated in the
 [document model](20-document-model.md) and the [canonical format](10-canonical-format.md).
@@ -72,11 +76,12 @@ A check is enforced at commit; a check whose predicate is unknown (NULL) passes,
 
 ## Hierarchy and order
 
-- A `parent` cycle is `CONSTRAINT`; a `parent` outside the row's block is `CONSTRAINT` on write and
-  `format.block` on read.
+- A `parent` cycle is `CONSTRAINT` on write, and `parent.cycle` on read for a cycle among a file's rows,
+  which leaves that file unreadable ([document model](20-document-model.md#hierarchy)); a cycle through several `files` files is the validator's `parent.cycle` alone; a `parent` outside
+  the row's block is `CONSTRAINT` on write and `format.block` on read.
 - An order value outside 1..n + 1 (n as the document model defines it), or an update of the order
-  column that matches more than one row, is `CONSTRAINT`; in `files` storage, sibling order values
-  other than exactly 1..n are a diagnostic ([document model](20-document-model.md)).
+  column that matches more than one row, is `CONSTRAINT`; a write that leaves the order values of a block or document sibling group other than exactly 1..m, m being the group's size after the write, is `CONSTRAINT`; in `files` storage, sibling order values other than exactly 1..n
+  are a diagnostic ([document model](20-document-model.md)).
 
 ## The state machine
 
@@ -109,7 +114,7 @@ A check is enforced at commit; a check whose predicate is unknown (NULL) passes,
   reported, unless a human forges a consistent history.
 - **Commit.** A commit first checks that its targets are unchanged since they were read, else
   `WRITE_CONFLICT`. The constraint checks, `history.gap` included, then run on the corpus re-read
-  under the lock. A validator diagnostic on another row (`type`, `key.duplicate`, `reference.dangling`, `check`, `order`, `state.limit`, `history.gap`, `history.chain`) never fails the commit, except that a `type` diagnostic fails it when a constraint check of the commit must evaluate that value ([canonical format](10-canonical-format.md#readable-values)), and two rows with byte-for-byte equal keys make their table unavailable ([canonical format](10-canonical-format.md#diagnostics)); a `format.*` diagnostic fails it only as the rewrite refusal and the unavailable table state ([canonical format](10-canonical-format.md#diagnostics)). A commit that must rewrite a file — the row's own file, a file holding a link to a row whose detail section appears or disappears, an `order` sibling — is refused when that file has a `format.*` diagnostic: `CONSTRAINT`, naming the file and the diagnostic, and naming `flowmark canon` when it is `format.noncanonical`. Three commits are exempt: `flowmark canon` for its targets ([operations](40-ops.md#the-canon-operation)); the add-column migration, for the diagnostics the added column causes, which do not make its table unavailable to that migration ([migration](80-migration.md)); and a delete that removes a `files` row's whole file from the rewrite refusal only — its restrict check still needs the rows of every table that may reference the row (its own table through `parent`, its child and history blocks, and every table with a foreign key to it), so such a delete is `CONSTRAINT` when any of them is unavailable.
+  under the lock. A validator diagnostic on another row (`type`, `key.duplicate`, `reference.dangling`, `check`, `order`, `state.limit`, `history.gap`, `history.chain`, and the validator's `parent.cycle` across several `files` files) never fails the commit, except that a `type` diagnostic fails it when a constraint check of the commit must evaluate that value ([canonical format](10-canonical-format.md#readable-values)), and two rows with byte-for-byte equal keys make their table unavailable ([canonical format](10-canonical-format.md#diagnostics)); a `format.*` diagnostic fails it only as the rewrite refusal and the unavailable table state ([canonical format](10-canonical-format.md#diagnostics)). A commit that must rewrite a file — the row's own file, a file holding a link to a row whose detail section appears or disappears, an `order` sibling — is refused when that file has a `format.*` diagnostic: `CONSTRAINT`, naming the file and the diagnostic, and naming `flowmark canon` when it is `format.noncanonical`. Three commits are exempt: `flowmark canon` for its targets ([operations](40-ops.md#the-canon-operation)); the add-column migration, for the diagnostics the added column causes, which do not make its table unavailable to that migration ([migration](80-migration.md)); and a delete that removes a `files` row's whole file from the rewrite refusal only — its restrict check still needs the rows of every table that may reference the row (its own table through `parent`, its child and history blocks, and every table with a foreign key to it), so such a delete is `CONSTRAINT` when any of them is unavailable.
 - **Repair.** `flowmark history repair <table> <key> [--from <initial state>]` inserts one history
   row from the last `to` — for a row without history, the one initial state, or `--from`, required
   when the machine has several — to the current state, with `at` from the engine clock and the
@@ -132,9 +137,9 @@ A database enforces a writer monopoly; a corpus does not have one. Per feature:
 
 ## Diagnostics
 
-Every rule reports `{file, line, column, rule, message}`; the rule names are `catalog`, `type`,
+Every rule reports `{file, line, column, rule, message}`, with the column as the [canonical format](10-canonical-format.md#diagnostics) states; the rule names are `catalog`, `type`,
 `key.duplicate`, `reference.dangling`, `check`, `parent.cycle`, `order`, `state.transition`,
 `state.required`, `state.limit`, `history.gap`, `history.chain`, `corpus.walk` (the walk of the
 [document model](20-document-model.md)) and the `format.*` rules of the canonical format:
 `format.noncanonical`, `format.block`, `format.section` and `format.encoding`. Validation is
-corpus-global; a clean file in a broken corpus does not make the corpus valid. Opening a corpus, introspection, `flowmark validate` and `flowmark canon` are not requests over rows: they never fail on an unavailable table, apart from canon's link-derivation refusal ([operations](40-ops.md#the-canon-operation)). The validator reports every file's `format.*` diagnostics, and the validator rules of every row it can read in a file without `format.block`, `format.section` or `format.encoding`; a rule that needs the complete rows of a table that holds a file with `format.block`, `format.section` or `format.encoding` — `reference.dangling` into it, `key.duplicate`, `order` and `state.limit` within it — is not reported for that table, and the file's own diagnostic stands for it; a table unavailable only through byte-for-byte equal keys has every rule reported.
+corpus-global; a clean file in a broken corpus does not make the corpus valid. Opening a corpus, introspection, `flowmark validate` and `flowmark canon` are not requests over rows: they never fail on an unavailable table, apart from canon's link-derivation refusal ([operations](40-ops.md#the-canon-operation)). The validator reports every file's `format.*` and `parent.cycle` diagnostics, and the validator rules of every row it can read in a file without `format.block`, `format.section`, `format.encoding` or a `parent.cycle` among its rows; a rule that needs the complete rows of a table that holds such a file — `reference.dangling` into it, `key.duplicate`, `order` and `state.limit` within it — is not reported for that table, and the file's own diagnostic stands for it; a table unavailable only through byte-for-byte equal keys has every rule reported.

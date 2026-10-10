@@ -1,5 +1,5 @@
 <!-- doc-id: spec-dialect -->
-<!-- source-sha256: f592ebf1998fb3a61f7b218b1a64aec2673bc9e65985fba402e16b49ee861353 -->
+<!-- source-sha256: 2fc16d2d0d8e92caee30debcf9210e42439f5fe5500d2a8cea50459bf78457aa -->
 # Capability table
 
 [English](60-dialect.md)
@@ -56,6 +56,6 @@ surface가 corpus에서 무엇을 하는지 또는 orm 전통에 따라 `CAPABIL
 | `fulltext`, `Lb` 연산자 | `OPERATOR_NOT_ALLOWED` |
 | lock, local setting, privilege, AES rotation utility | `CAPABILITY_UNSUPPORTED` |
 | schema install, dbplan chain | `CAPABILITY_UNSUPPORTED`. `flowmark install`이 corpus를 만들고([schema](30-schema.md)), 진화는 [migration](80-migration.md)을 따른다 |
-| 사용할 수 없는 table(`format.block`, `format.section`, `format.encoding`이 있는 file, 바이트 단위로 같은 key를 가진 두 행, 또는 자리의 `corpus.walk` 항목) | 그 행이 필요한 모든 요청은 읽기든 쓰기든 file과 진단을 밝히며 `CONSTRAINT`로 실패하며, 다른 file들의 행만으로 답하지 않는다([canonical format](10-canonical-format.ko.md#진단)) |
+| 사용할 수 없는 table(`format.block`, `format.section`, `format.encoding`이나 그 행 사이의 `parent.cycle`이 있는 file, 바이트 단위로 같은 key를 가진 두 행, 또는 자리의 `corpus.walk` 항목) | 그 행이 필요한 모든 요청은 읽기든 쓰기든 file과 진단을 밝히며 `CONSTRAINT`로 실패하며, 다른 file들의 행만으로 답하지 않는다([canonical format](10-canonical-format.ko.md#진단)) |
 
 이 표의 conformance 계약은 [conformance](90-conformance.md)다: corpus 전, 요청, 기대하는 corpus 후나 행.

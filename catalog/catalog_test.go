@@ -436,6 +436,53 @@ func TestLoadRejectsStateMachineWithoutInitial(t *testing.T) {
 	expectTableDiag(t, diags, text, "items", "no initial state")
 }
 
+// checkboxLines are the five checkbox lines of the fixture's items table, which
+// is a list storage with a state machine.
+const checkboxLines = "    checkbox state waiting ' '\n    checkbox state doing '~'\n    checkbox state done 'o'\n    checkbox state bypassed '!'\n    checkbox state impossible '-'\n"
+
+// TestLoadListStateRules pins that a list storage of a state machine declares
+// at least one checkbox. dbspec then covers every state with a checkbox, but
+// it accepts a state machine with none at all, so the rule is flowmark's.
+func TestLoadListStateRules(t *testing.T) {
+	cases := []struct {
+		name  string
+		edits [][2]string
+		msg   string // the rejection's message; empty for an accepted catalog
+	}{
+		{name: "accepts a list with checkboxes", edits: nil},
+		{name: "rejects a list without a checkbox", edits: [][2]string{{checkboxLines, ""}}, msg: "declares no checkbox"},
+		{name: "accepts a table without a checkbox", edits: [][2]string{{checkboxLines, ""}, {"    store document list\n", "    store document table\n"}}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			root, text := editedCorpus(t, c.edits...)
+			cat, diags := catalog.Load(root)
+			if c.msg == "" {
+				if len(diags) != 0 || cat == nil {
+					t.Fatalf("diagnostics = %+v, want an accepted catalog", diags)
+				}
+				return
+			}
+			expectRejected(t, cat, diags)
+			expectTableDiag(t, diags, text, "items", c.msg)
+		})
+	}
+}
+
+// TestLoadRejectsNullableStateColumn pins that the state column of a state
+// machine is non-null. dbspec refuses a nullable one in every storage, so the
+// rejection is its own, located at the state line.
+func TestLoadRejectsNullableStateColumn(t *testing.T) {
+	root, _ := editedCorpus(t, [2]string{"  state varchar(16)\n", "  state varchar(16) null\n"})
+	cat, diags := catalog.Load(root)
+	expectRejected(t, cat, diags)
+	if !slices.ContainsFunc(diags, func(d catalog.Diagnostic) bool {
+		return d.File == "dbspec/flowmark.dbs" && d.Rule == "catalog" && strings.Contains(d.Message, "needs a non-null")
+	}) {
+		t.Fatalf("diagnostics = %+v, want the non-null state rule", diags)
+	}
+}
+
 func TestLoadRejectsListWithoutTitle(t *testing.T) {
 	root, text := editedCorpus(t, [2]string{"    store document list\n    title title\n", "    store document list\n"})
 	cat, diags := catalog.Load(root)

@@ -1,5 +1,5 @@
 <!-- doc-id: spec-canonical-format -->
-<!-- source-sha256: f7ab4ac345206391df877837448908062b47198451a3904071a4328138bc6cab -->
+<!-- source-sha256: f58c25f3f9dc833e853c1a608ac0dc58139e7509c63d2578c188b9041776dbce -->
 # Canonical format
 
 [English](10-canonical-format.md)
@@ -49,7 +49,8 @@ column 섹션 — 은 payload다: renderer는 이를 행과 함께 옮기고 그
 - block이나 document의 list나 table 뒤의 내용은, 그 행들의 상세 섹션을 제외하고 모두 `format.block`이다. 이 내용은 block 섹션에서는 level b 이하의 다음 heading까지, document 파일에서는 파일 끝까지다.
 - null이 아닌 저장 scalar가 없는 `files` 행은 field list가 없으며, 비어 있지 않은 body는 H1 뒤 빈 줄 하나 다음에 오고, 빈 body는 아무것도 쓰지 않는다.
 - block이나 document 행은 body가 비어 있지 않거나, 그 table에 body가 아닌 non-null `markdown` column이 있거나, body가 아닌 nullable `markdown` column이 NULL이 아니거나, 자식 블록 행을 가질 때 상세 섹션을 가진다. 이 중 어느 것도 없는 상세 섹션은 `format.noncanonical`이다. 상세 섹션 없는 행은 빈 텍스트를 body로 갖는다. 근거: non-null 섹션은 언제나 쓰이므로 그 행은 언제나 상세 섹션을 가지며, 쓸 것이 없는 행은 상세 섹션이 없다.
-- 블록의 어떤 행도 가리키지 않는 key의 상세 섹션은 `format.block`이다.
+- 블록의 어떤 행도 가리키지 않는 key의 상세 섹션은 `format.block`이다. 같은 행의 두 번째 상세 섹션도 표기와 무관하게 `format.block`이다: 그 본문과 섹션을 배정할 수 없기 때문이다.
+- **저장 순서.** codec은 file의 저장 순서를 [document model](20-document-model.ko.md#순서)이 정하는 대로 행의 집합에서 계산하며, 정렬되지 않은 행의 집합을 거절하지 않는다. file의 행 사이의 `parent` 순환은 읽기에서 `parent.cycle`이며, 그 file은 저장 순서를 갖지 못하므로 읽을 수 없다. 근거: 저장 순서는 행의 함수이므로 행의 집합은 하나의 형식을 가진다.
 - layout이 H6를 넘는 heading을 필요로 하면 catalog를 읽을 때 정해지는 schema 오류다.
 
 ## 상세 heading과 anchor
@@ -91,13 +92,14 @@ column 섹션 — 은 payload다: renderer는 이를 행과 함께 옮기고 그
 - body가 아닌 모든 `markdown` column은 level L 행 scope의 column 이름을 가진 섹션이다: non-null column의 섹션은 언제나 있고, nullable column의 섹션은 값이 NULL일 때에만 없다. 없는 non-null 섹션은 읽기에서 `format.block`, 쓰기에서 `CONSTRAINT`다. 비어 있는 섹션은 빈 텍스트다. body는 NULL이 아니며 섹션이 아니다. 자식 블록은 자식 table 이름을 가진 level L heading이다. 선언되지 않은 level L heading은 `format.section`이다. 근거: non-null 값은 언제나 쓰이므로 그 섹션이 없을 수 없고, NULL 값에는 쓸 텍스트가 없으므로 섹션이 없다.
 - 값은 file 안에서 framing된다: 값이 비어 있지 않을 때에만 heading 뒤에 빈 줄이 서고, 값의 줄들이 따르며, 뒤따르는 요소가 있으면 그 앞에 빈 줄이 선다. 값은 줄 바꿈으로 시작하거나 끝나지 않으며, 양 끝에 공백만 있는 줄을 담지 않는다. 그런 값의 쓰기는 `CONSTRAINT`다. 근거: framing 빈 줄은 요소를 가르므로, 줄 바꿈으로 시작하거나 끝나는 값은 framing이 바뀐 채 읽히고, 양 끝의 공백만 있는 줄은 framing 줄로 읽힌다.
 - framing 빈 줄은 skeleton이다: 읽을 때 값의 양 끝에 있는 추가 빈 줄이나 공백만 있는 줄은 값의 일부가 아니며 `format.noncanonical`이며, 요소가 여전히 다시 읽히는 framing 빈 줄의 누락도 `format.noncanonical`이다. 다만 field list의 마지막 항목 바로 뒤에 오는 body 줄은 `format.block`이다. `flowmark canon`이 둘 다 고친다.
+- 값은 setext heading을 담지 않는다: fence 밖의 비어 있지 않은 줄 바로 뒤에서 `=`만 또는 `-`만 있는 줄(들여쓰기 최대 세 칸, 뒤의 공백이나 tab은 있어도 된다)은 쓰기에서 `CONSTRAINT`이며, 읽기에서는 CommonMark가 setext heading으로 읽는 곳이 heading이다. 값이 CommonMark type 1–5의 fence나 HTML block을 열린 채로 남기면, 뒤따르는 요소가 있을 때 `CONSTRAINT`다. 근거: setext 밑줄은 값의 마지막 줄을 heading으로 바꾸고, 열린 fence나 HTML block은 뒤따르는 요소를 흡수하므로, 어느 쪽이든 값이 다시 읽히는 내용이 달라진다.
 - 자식 블록 섹션은 블록이 행을 하나 이상 가질 때만 쓴다 — 빈 블록과 없는 블록은 모두 행이 0개라는 뜻이므로, 정식 형식은 하나뿐이다(P1). 자식 행이 없는 부모 행은 블록 heading을 갖지 않으며, 빈 블록 heading은 `format.noncanonical`이다.
 - `markdown` column은 모든 저장에서 언제나 행 scope의 섹션이다 — field나 cell이 아니다.
 
 ## 저장되는 scalar column
 
 table의 저장되는 scalar column은 column에서 key, `list`나 `files` 저장의 `title`, `body`, `markdown` column, `list`의 상태
-column, 배치 foreign key, `list`의 `parent`, block이나 document 저장의 `order` column을 뺀 것이다.
+column, 배치 foreign key, `list`의 `parent`, block이나 document 저장의 `order` column — 논리적 column이며 쓰지 않는다([document model](20-document-model.ko.md#순서)) — 을 뺀 것이다.
 key, 제목, 상태, 계층은 각자 자리를 가진다. 저장되는 scalar column은 `files` 행의 field list 항목,
 list 행의 field, table의 cell이다. null이 아닌 저장 scalar column은 모두 쓴다 — 엔진은 insert에서
 default를 명시적으로 쓴다.
@@ -111,7 +113,7 @@ scalar 값은 dbspec literal이 아니라 읽을 수 있는 형식으로 쓴다.
 - uuid는 소문자다. bytes는 padding이 있는 base64로 쓴다.
 - foreign key는 link다([외래 key의 link](#외래-key의-link) 참조).
 - 엔진은 수와 `true`/`false`를 orm의 `dbspec.CanonicalLiteral(t, v)`로, date, time, datetime, uuid를 `CanonicalLiteral(t, "'" + v + "'")`로 읽고, 결과에서 따옴표를 뗀다.
-- `now`는 값으로 거절한다. text는 column의 길이로 검사하며, 한 줄 자리에서는 [한 줄 자리](#한-줄-자리)의 규칙으로도 검사한다.
+- `now`는 dbspec이 `datetime` 기본값에서 현재 시각을 뜻하는 keyword이며 결코 저장되는 값이 아니다: 엔진이 insert에서 그것이 뜻하는 시각을 쓴다. `now`로 쓰인 시간 값(date, time, datetime)은 그 type이 아니며(읽기에서 `type`, 쓰기에서 `CONSTRAINT`), text 값 `now`는 text다. 근거: `now`는 쓰는 시점을 가리키므로, 저장된 `now`는 읽을 때마다 다른 시각을 가리키게 된다. text는 column의 길이로 검사하며, 한 줄 자리에서는 [한 줄 자리](#한-줄-자리)의 규칙으로도 검사한다.
 - 읽을 때 쓰인 형식이 canonical 형식과 다른 값은 `format.noncanonical`이다. column의 type이 아닌 값은 validator의 `type`이며, file을 읽을 수 없게 하지 않는다: 그 값을 평가하는 요청 — 값을 돌려주거나, predicate, join, 정렬, 그룹, 집계에 쓰는 요청 — 은 진단을 밝히며 `CONSTRAINT`로 실패한다. 값을 배정하는 쓰기가 type이 아닌 값을 쓰면 `CONSTRAINT`다. 쓰기가 배정하지 않는 값의 `type` 진단은 행 자신의 것이든 다른 행의 것이든 commit을 실패시키지 않으며, 그 값을 commit의 제약 검사(unique key, `check`, `limit`)가 평가해야 할 때에만 `CONSTRAINT`로 진단을 밝히며 실패시킨다. 그리고 `flowmark canon`을 포함해 file을 다시 쓸 때마다 그 값의 쓴 텍스트를 바이트 그대로 보존한다. key는 이 규칙에서 값이 아니다: 키의 type이 아니거나 정식 텍스트가 아닌 key는 `format.block`이다([document model](20-document-model.ko.md#key)). 근거: 엔진이 type으로 읽지 못하는 값에는 답도 비교도 없으므로 그 값이 필요한 요청이나 검사는 답할 수 없고, 필요하지 않은 것은 영향을 받지 않는다.
 
 - 쓸 때 수, `true`/`false`, date, time, datetime, uuid는 `CanonicalLiteral`이 주는 형식으로 쓴다(`1.5`를 `decimal(4,2)`에 넣으면 `1.50`; float는 왕복하는 가장 적은 자릿수의 고정 표기, 0은 `0`). `CanonicalLiteral`이 거절하는 값 — scale보다 많은 소수 자릿수(0을 포함), precision − scale보다 많은 정수 자릿수, precision보다 많은 소수 자릿수의 time이나 datetime — 은 `CONSTRAINT`다. bytes는 padding이 있는 표준 base64(RFC 4648 §4)로 쓰며, bytes column에서 그 밖의 텍스트를 읽으면 `type`이다. 근거: orm과의 parity.
@@ -129,7 +131,7 @@ scalar 값은 dbspec literal이 아니라 읽을 수 있는 형식으로 쓴다.
   field다.
 - 없는 field는 NULL, `col:""`은 빈 텍스트다. 모든 non-null column은 쓰며, non-null field가 빠진 행은
   `format.block`이다.
-- `<선언된 column>:`과 맞는 제목 token은 `<column>\:`로 쓴다. 제목은 key와 첫 field 사이의 텍스트다.
+- `<선언된 column>:`과 맞는 제목 token은 `<column>\:`로 쓰며, `<선언된 column>\:`과 맞는 제목 token은 `<column>:`으로 읽고, 그 밖의 `\:`는 해석하지 않는다. `<선언된 column>\:`과 맞는 제목 token은 쓰기에서 `CONSTRAINT`다: 그것은 `<column>:`으로 다시 읽히므로, `<column>\:`와 `<column>:`이 같은 식으로 쓰이게 된다. 제목은 key와 첫 field 사이의 텍스트다.
 - 자식 행은 부모보다 두 칸(CommonMark list 항목 내용 들여쓰기) 더 들여 쓴다. 들여쓰기가 `parent` column이며 다른 것이 이를 쓰지 않는다.
 - 배치 foreign key와 `parent`는 block list 행의 field로 쓰지 않으며, 쓰면 `format.block`이다.
 
@@ -139,11 +141,10 @@ scalar 값은 dbspec literal이 아니라 읽을 수 있는 형식으로 쓴다.
   가지며, header가 없거나 어떤 column도 이름 붙이지 않는 header는 `format.block`이다. key는 첫 cell이며 key column 이름의
   header 아래에 있다. 저장되는 scalar column은 column 순서대로 그 뒤를 잇는다.
 - 선언된 title은 column의 header 아래 cell이며 column 순서를 따른다.
-- block table에서 배치 foreign key는 결코 cell이 아니며, `parent`는 cell이다.
+- block table에서 배치 foreign key는 결코 cell이 아니며, `parent`는 cell이다. 같은 file의 두 행이 공유하는 key를 가리키는 `parent` cell은 `format.block`이다: 부모를 배정할 수 없기 때문이다.
 - cell은 text를 있는 그대로 담는다. 빈 cell은 NULL이고, 빈 텍스트는 `""`로 쓴다. 모든 non-null 저장
   scalar column은 값을 갖는다.
-- `"`로 시작하는 cell 값은 `"…"` 안에 `\"`와 `\\`를 escape로 써서 쓴다. `|`는 `\|`로, `|` 앞의 `\`는
-  `\\`로 쓴다.
+- `"`로 시작하는 cell 값은 `"…"` 안에 `\"`와 `\\`를 escape로 써서 쓴다. table cell에서 값의 각 `|`는 `\|`로 쓰고 다른 `\`는 더하지 않는다. 읽을 때 `\` 바로 뒤에 오는 `|`는 그 `\` 앞에 무엇이 있든 cell 경계가 아니며, 그 `\` 하나를 뺀다. 인용형을 먼저 적용하고 pipe escape를 마지막에 적용하므로, 읽을 때는 pipe escape를 먼저 뺀다. 근거: GFM은 `\` 뒤의 모든 `|`를 cell 텍스트로 읽고 inline 파싱 전에 그 `\`를 뺀다.
 
 ## 한 줄 자리
 
@@ -169,8 +170,7 @@ scalar 값은 dbspec literal이 아니라 읽을 수 있는 형식으로 쓴다.
     `#<anchor>`를 붙인다;
   - 참조된 행 자신의 file 안의 link는 `#<anchor>`만이며, 행이 anchor를 갖지 않으면 그 file의 이름이다.
 - 행의 상세 섹션을 더하거나 빼는 쓰기는 같은 transaction에서 그 행을 가리키는 모든 link를 다시 쓴다.
-- 유도된 것과 다른 target은 `format.noncanonical`이다. 어떤 행도 가리키지 않는 key는 dangling 참조다: validator가 `reference.dangling`으로 보고하고, 이를 새로 만드는 쓰기는 `FOREIGN_KEY`이며, file을 읽을 수 없게 하지 않는다.
-  참조된 행의 key 갱신은 `FOREIGN_KEY`(restrict-only)이므로 target은 link 아래에서 움직이지 않는다.
+- 유도된 것과 다른 target은 `format.noncanonical`이다. 어떤 행도 가리키지 않는 key는 dangling 참조다: validator가 `reference.dangling`으로 보고하고, 이를 새로 만드는 쓰기는 `FOREIGN_KEY`이며, file을 읽을 수 없게 하지 않는다. 쓴 target은 그대로 간직한다: 유도할 target이 없으므로 target 검사 없이 읽고 읽은 그대로 쓴다. 다만 block이나 document 행의 `parent`가 그 file의 어떤 행도 가리키지 않으면 `format.block`이다. 근거: 없는 행에는 유도할 target이 없고, 쓰기가 바꾸지 않은 target은 그 바이트를 유지해야 하며, 한 file 안의 계층은 저장 순서를 가지려면 완전해야 한다. 참조된 행의 key 갱신은 `FOREIGN_KEY`(restrict-only)이므로 target은 link 아래에서 움직이지 않는다.
 - `files` 행에 쓴 `parent`도 link다. block 행의 배치 foreign key는 쓰지 않는다.
 - 예: `comments/C5.flowmark.md` `files` 행은 자기 post를 `[P3](../posts/P3.flowmark.md)`로 link한다;
   `posts/P3.flowmark.md` 안의 block 댓글은 자기 작성자를 `[max](../people.flowmark.md)`로 link한다;
@@ -182,13 +182,13 @@ scalar 값은 dbspec literal이 아니라 읽을 수 있는 형식으로 쓴다.
 - BOM, 그리고 CR(단독이든 CRLF 줄 끝이든)은 P2 아래 유효한 입력이며 `format.noncanonical`이다: canonical 형식에는 둘 다 없으므로 P1이 성립하지 않는다. 읽을 때 값은 모든 줄 끝을 LF로 읽는다. 근거: multi-platform — `autocrlf`를 쓰는 Windows checkout은 Unix checkout과 같은 값을 읽어야 한다. 이 바이트를 없애는 것은 `flowmark canon`뿐이다.
 - UTF-8이 아닌 byte와 U+0000은 `format.encoding`이다: 그것들에서는 어떤 텍스트도 읽을 수 없다.
 - 문서는 정확히 LF 하나로 끝난다. 마지막 LF가 없거나 끝에 빈 줄이 있는 문서는 `format.noncanonical`이다. 근거: 문법에는 마지막 줄 뒤의 요소가 없으므로, 그 뒤의 줄 바꿈은 어떤 요소에도 속하지 않아 emit에서 사라진다.
-- `format.*` 진단이 있는 file을 다시 쓰는 logical write는 `CONSTRAINT`다, 면제를 제외하고. 다른 행의 validator 진단(`type`, `key.duplicate`, `reference.dangling`, `check`, `order`, `state.limit`, `history.gap`, `history.chain`)은 commit을 실패시키지 않되, `type` 진단은 commit의 제약 검사가 그 값을 평가해야 할 때 commit을 실패시키고, 바이트 단위로 같은 key를 가진 두 행은 그 table을 사용할 수 없게 한다([사용할 수 없는 table](#진단)); `format.*` 진단은 다시 쓰기 거절과 사용할 수 없는 table 상태([사용할 수 없는 table](#진단))가 정하는 경우에만 commit을 실패시킨다. file을 다시 써야 하는 commit — 행 자신의 file, 상세 섹션이 생기거나 사라지는 행으로의 link를 가진 file, `order`의 형제 — 은 그 file이 `format.*` 진단을 가지면 거절한다: `CONSTRAINT`이며 file과 진단을 밝히고, `format.noncanonical`이면 `flowmark canon`을 밝힌다. 세 commit은 면제된다: 대상에 대한 `flowmark canon`([operations](40-ops.ko.md#canon-연산)), 추가된 column이 일으킨 진단에 대한 add-column migration([migration](80-migration.ko.md)) — 그 진단은 그 migration에 대해 table을 사용할 수 없게 하지 않는다 —, `files` 행의 file 전체를 지우는 delete는 rewrite 거절에서만 면제되며, restrict 검사는 그 행을 참조할 수 있는 모든 table의 행을 여전히 필요로 하며(자신의 table을 `parent`로 하는 것, 자식 및 이력 block, 그 행으로의 foreign key를 가진 모든 table), 그 중 하나라도 사용할 수 없으면 그 delete는 `CONSTRAINT`다. install이 쓰는 `.gitattributes`가 없으면 Windows `autocrlf` checkout은 모든 값을 읽지만 `flowmark canon` 전까지 위의 면제를 뺀 기존 문서를 다시 쓰는 모든 쓰기를 거절한다. 근거: 쓰기는 사용자가 쓰지 않은 바이트를 바꾸면 안 되며, migration은 별도의 명시적 transaction이다.
+- `format.*` 진단이 있는 file을 다시 쓰는 logical write는 `CONSTRAINT`다, 면제를 제외하고. 다른 행의 validator 진단(`type`, `key.duplicate`, `reference.dangling`, `check`, `order`, `state.limit`, `history.gap`, `history.chain`, 여러 `files` file에 걸친 `parent.cycle`)은 commit을 실패시키지 않되, `type` 진단은 commit의 제약 검사가 그 값을 평가해야 할 때 commit을 실패시키고, 바이트 단위로 같은 key를 가진 두 행은 그 table을 사용할 수 없게 한다([사용할 수 없는 table](#진단)); `format.*` 진단은 다시 쓰기 거절과 사용할 수 없는 table 상태([사용할 수 없는 table](#진단))가 정하는 경우에만 commit을 실패시킨다. file을 다시 써야 하는 commit — 행 자신의 file, 상세 섹션이 생기거나 사라지는 행으로의 link를 가진 file, `order`의 형제 — 은 그 file이 `format.*` 진단을 가지면 거절한다: `CONSTRAINT`이며 file과 진단을 밝히고, `format.noncanonical`이면 `flowmark canon`을 밝힌다. 세 commit은 면제된다: 대상에 대한 `flowmark canon`([operations](40-ops.ko.md#canon-연산)), 추가된 column이 일으킨 진단에 대한 add-column migration([migration](80-migration.ko.md)) — 그 진단은 그 migration에 대해 table을 사용할 수 없게 하지 않는다 —, `files` 행의 file 전체를 지우는 delete는 rewrite 거절에서만 면제되며, restrict 검사는 그 행을 참조할 수 있는 모든 table의 행을 여전히 필요로 하며(자신의 table을 `parent`로 하는 것, 자식 및 이력 block, 그 행으로의 foreign key를 가진 모든 table), 그 중 하나라도 사용할 수 없으면 그 delete는 `CONSTRAINT`다. install이 쓰는 `.gitattributes`가 없으면 Windows `autocrlf` checkout은 모든 값을 읽지만 `flowmark canon` 전까지 위의 면제를 뺀 기존 문서를 다시 쓰는 모든 쓰기를 거절한다. 근거: 쓰기는 사용자가 쓰지 않은 바이트를 바꾸면 안 되며, migration은 별도의 명시적 transaction이다.
 - `flowmark install`은 `<corpus>/.gitattributes`에 `*.flowmark.md text eol=lf` 줄을 더하며, 파일이 없으면 만들고 다른 줄은 유지한다. 그래서 git checkout은 모든 플랫폼에서 LF를 유지한다([schema](30-schema.ko.md#install)).
 
 ## 진단
 
-위의 모든 규칙은 `{file, line, column, rule, message}`를 보고하며 규칙 이름은 `format.noncanonical`, `format.section`, `format.block`, `format.encoding`, 그리고 walk의 규칙 `corpus.walk`이며, 그 내용은 [document model](20-document-model.ko.md)에 적는다.
+위의 모든 규칙은 `{file, line, column, rule, message}`를 보고하며, `column`은 규칙이 이름 붙인 요소(glyph, key, 제목, field token, cell 내용, heading 텍스트)의 첫 글자의 1부터 세는 code point 열이다. 줄 전체의 결함은 열 1이다. 읽기 규칙 이름은 `format.noncanonical`, `format.section`, `format.block`, `format.encoding`, `parent.cycle`이고, walk의 규칙은 `corpus.walk`이며, 그 내용은 [document model](20-document-model.ko.md)에 적는다.
 
 - **읽기와 쓰기의 결함.** 읽기에서 다음은 `format.block`이다: 없는 non-null field나 section; 렌더링이 inline markdown을 넘어 텍스트와 다르게 보이는 한 줄 값([한 줄 자리](#한-줄-자리) 참조); `-` list 항목으로 시작하는 `files` body; field list 뒤에서 첫 줄이 두 column 이상(공백 또는 tab) 들여쓴 `files` body. 같은 결함은 쓰기에서 `CONSTRAINT`다. 렌더링이 한 줄 자리 둘레에서 떨어뜨리는 공백은 읽기에서 `format.noncanonical`이다. 근거: 읽기는 문서가 담은 것을 보고하고, 쓰기는 다시 읽을 수 없는 것을 만들어 내지 않는다.
-- **validator 규칙.** column의 type이 아닌 값은 `type`이고, dangling 외래 key는 `reference.dangling`이며, 대소문자를 무시하고 같은 table의 다른 key와 같은 key는 `key.duplicate`다. validator는 이것들을 corpus 전체에서 보고한다. 이것들은 file을 읽을 수 없게 하지 않는다. 근거: file의 읽을 수 있음은 다른 file에 의존하면 안 된다. 그렇지 않으면 부모 file을 지울 때 자식이 읽을 수도 고칠 수도 없게 된다. column의 type이 아닌 값의 쓰기는 `CONSTRAINT`이고, dangling 외래 key나 중복 key를 새로 만드는 쓰기는 각각 `FOREIGN_KEY`, `DUPLICATE_KEY`다. 커밋 거절은 [Encoding과 줄 구조](#encoding과-줄-구조)에 적는다. 열기, introspection, `flowmark validate`, `flowmark canon`은 행에 대한 요청이 아니므로 사용할 수 없는 table에서 결코 실패하지 않으며, canon의 링크 유도 거절은 예외다([operations](40-ops.ko.md#canon-연산)). validator는 모든 file의 `format.*` 진단과, `format.block`, `format.section`, `format.encoding`이 없는 file 안에서 읽을 수 있는 모든 행의 validator 규칙을 보고한다. `format.block`, `format.section`, `format.encoding`이 있는 file을 가진 table의 완전한 행을 필요로 하는 규칙 — 그 table로의 `reference.dangling`, `key.duplicate`, 그 안의 `order`와 `state.limit` — 은 그 table에 대해 보고하지 않으며, file 자신의 진단이 그것을 대신한다. 바이트 단위로 같은 key 때문에만 사용할 수 없는 table은 모든 규칙이 보고된다.
-- **사용할 수 없는 table.** table은 `format.block`, `format.section`, `format.encoding`이 있는 file을 가지거나 바이트 단위로 같은 key를 가진 두 행이 있으면 사용할 수 없다. 이때 요청은 두 번째 행의 file과 `key.duplicate`를 밝힌다. table은 그 storage가 이름을 정한 자리의 모든 corpus 문서를 가진다: `files` table은 모든 `<table>/<name>.flowmark.md`, `document` table은 `<table>.flowmark.md`, block table은 placement parent table이 가진 모든 file을 재귀적으로 가지므로 이력 block은 state table과 함께 사용할 수 없다. table은 `corpus.walk` 항목이 그 자리에, 또는 대소문자를 무시하고 그 자리와 같은 이름에 서 있는 동안에도 사용할 수 없다 — 읽을 수 없는 항목, symlink, symlink된 table 폴더, 또는 다른 대소문자의 suffix, 폴더, document 이름. 대소문자를 무시하고도 `.flowmark.md`로 끝나지 않는 file은 database 밖이며 table을 결코 사용할 수 없게 하지 않는다. 그 행 중 어떤 것이든 필요로 하는 모든 요청 — 키로 하는 point 조회를 포함한 읽기, table의 insert·update·delete, 그 위의 join, relation, subquery, 링크가 그 안에 있을 수 있을 때 행의 상세 섹션이 생기거나 사라지는 행으로의 링크 다시 쓰기, 그리고 그 위의 모든 제약 검사(primary나 unique key, 참조, 링크 target, `limit` 개수, `order` 형제 집합, `check`) — 은 file과 진단을 밝히며 `CONSTRAINT`로 실패한다. 요청은 다른 file들의 행만으로 결코 답하지 않는다. 키의 정식 텍스트가 아닌 이름을 가진 `files` file은 `format.block`이므로 그 table도 사용할 수 없다. 근거: 엔진이 읽지 못하는 행에 대한 답이나 검사는 그 사실을 말하지 않고 틀리게 되며, 요청은 바이트 단위로 같은 key를 가진 두 행 중 하나를 가리킬 수 없다. 엔진은 사용할 수 없는 table에 `flowmark canon`이 file에 하는 것 외에는 아무것도 쓰지 않는다([operations](40-ops.ko.md#canon-연산)): 사람이 corpus를 편집해 그 table을 사용할 수 없게 만드는 행이나 file을 고치고, 이름을 바꾸거나 지우면, 다음 읽기에서 table은 다시 사용할 수 있다. 근거: 요청은 바이트 단위로 같은 key를 가진 두 행 중 하나를 가리킬 수 없고, 엔진이 읽지 못하는 행은 그것을 통해 지울 수 없다.
+- **validator 규칙.** column의 type이 아닌 값은 `type`이고, dangling 외래 key는 `reference.dangling`이며, 대소문자를 무시하고 같은 table의 다른 key와 같은 key는 `key.duplicate`다. validator는 이것들을 corpus 전체에서 보고한다. 이것들은 file을 읽을 수 없게 하지 않는다. 다만 block이나 document 행의 `parent`가 그 file의 어떤 행도 가리키지 않으면 `format.block`이다([canonical format](#외래-key의-link)), 그리고 같은 file의 두 행이 공유하는 key를 가리키는 `parent` cell도 `format.block`이다([canonical format](#table-행)). 근거: file의 읽을 수 있음은 다른 file에 의존하면 안 된다. 그렇지 않으면 부모 file을 지울 때 자식이 읽을 수도 고칠 수도 없게 된다. column의 type이 아닌 값의 쓰기는 `CONSTRAINT`이고, dangling 외래 key나 중복 key를 새로 만드는 쓰기는 각각 `FOREIGN_KEY`, `DUPLICATE_KEY`다. 커밋 거절은 [Encoding과 줄 구조](#encoding과-줄-구조)에 적는다. 열기, introspection, `flowmark validate`, `flowmark canon`은 행에 대한 요청이 아니므로 사용할 수 없는 table에서 결코 실패하지 않으며, canon의 링크 유도 거절은 예외다([operations](40-ops.ko.md#canon-연산)). validator는 모든 file의 `format.*`와 `parent.cycle` 진단과, `format.block`, `format.section`, `format.encoding`이나 그 행 사이의 `parent.cycle`이 없는 file 안에서 읽을 수 있는 모든 행의 validator 규칙을 보고한다. `format.block`, `format.section`, `format.encoding`이나 그 행 사이의 `parent.cycle`이 있는 file을 가진 table의 완전한 행을 필요로 하는 규칙 — 그 table로의 `reference.dangling`, `key.duplicate`, 그 안의 `order`와 `state.limit` — 은 그 table에 대해 보고하지 않으며, file 자신의 진단이 그것을 대신한다. 바이트 단위로 같은 key 때문에만 사용할 수 없는 table은 모든 규칙이 보고된다.
+- **사용할 수 없는 table.** table은 `format.block`, `format.section`, `format.encoding`이나 그 행 사이의 `parent.cycle`이 있는 file을 가지거나 바이트 단위로 같은 key를 가진 두 행이 있으면 사용할 수 없다. 이때 요청은 두 번째 행의 file과 `key.duplicate`를 밝힌다. table은 그 storage가 이름을 정한 자리의 모든 corpus 문서를 가진다: `files` table은 모든 `<table>/<name>.flowmark.md`, `document` table은 `<table>.flowmark.md`, block table은 placement parent table이 가진 모든 file을 재귀적으로 가지므로 이력 block은 state table과 함께 사용할 수 없다. table은 `corpus.walk` 항목이 그 자리에, 또는 대소문자를 무시하고 그 자리와 같은 이름에 서 있는 동안에도 사용할 수 없다 — 읽을 수 없는 항목, symlink, symlink된 table 폴더, 또는 다른 대소문자의 suffix, 폴더, document 이름. 대소문자를 무시하고도 `.flowmark.md`로 끝나지 않는 file은 database 밖이며 table을 결코 사용할 수 없게 하지 않는다. 그 행 중 어떤 것이든 필요로 하는 모든 요청 — 키로 하는 point 조회를 포함한 읽기, table의 insert·update·delete, 그 위의 join, relation, subquery, 링크가 그 안에 있을 수 있을 때 행의 상세 섹션이 생기거나 사라지는 행으로의 링크 다시 쓰기, 그리고 그 위의 모든 제약 검사(primary나 unique key, 참조, 링크 target, `limit` 개수, `order` 형제 집합, `check`) — 은 file과 진단을 밝히며 `CONSTRAINT`로 실패한다. 요청은 다른 file들의 행만으로 결코 답하지 않는다. 키의 정식 텍스트가 아닌 이름을 가진 `files` file은 `format.block`이므로 그 table도 사용할 수 없다. 근거: 엔진이 읽지 못하는 행에 대한 답이나 검사는 그 사실을 말하지 않고 틀리게 되며, 요청은 바이트 단위로 같은 key를 가진 두 행 중 하나를 가리킬 수 없다. 엔진은 사용할 수 없는 table에 `flowmark canon`이 file에 하는 것 외에는 아무것도 쓰지 않는다([operations](40-ops.ko.md#canon-연산)): 사람이 corpus를 편집해 그 table을 사용할 수 없게 만드는 행이나 file을 고치고, 이름을 바꾸거나 지우면, 다음 읽기에서 table은 다시 사용할 수 있다. 근거: 요청은 바이트 단위로 같은 key를 가진 두 행 중 하나를 가리킬 수 없고, 엔진이 읽지 못하는 행은 그것을 통해 지울 수 없다.

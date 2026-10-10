@@ -92,6 +92,11 @@ func (l *loader) checkTable(d *document, t *dbspec.Table) (Storage, bool) {
 			report("table " + t.Name + ": list storage needs a title")
 		}
 	}
+	// A list row carries its state as its glyph, so a list storage of a state
+	// machine declares a checkbox; dbspec covers every state once one exists.
+	if sm := s.StateMachine; sm != nil && storage.Shape == ShapeList && len(s.Checkboxes) == 0 {
+		report("table " + t.Name + ": list storage of the state machine on column " + sm.Column + " declares no checkbox")
+	}
 	return storage, true
 }
 

@@ -1,8 +1,19 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 8da6ff7f25d080c4e7bea2ab92e878f9e011378bb4b9e9a0d01a88b435040c79 -->
+<!-- source-sha256: 3d0eecde662880897c53dbc670695352a92849501a52b3bef70727e01a5f9e87 -->
 # Changelog
 
 ## Unreleased
+
+- T12.1-5: spec이 `document` codec에 필요했던 판정을 적는다. `now`는 `datetime` 기본값에서 현재 시각을 뜻하는
+  keyword이며 저장되지 않는다: `now`로 쓰인 시간 값은 그 type이 아니며, 텍스트 `now`는 text다. 저장 순서를 벗어난
+  table 행은 `format.noncanonical`이고, file 안 행 사이의 `parent` 순환은 읽기에서 `parent.cycle`이며 그 file을
+  읽을 수 없게 한다. 같은 행의 두 번째 상세 섹션은 `format.block`이다. 제목 token `<column>\:`은 쓰기에서
+  `CONSTRAINT`다. table cell에서 각 `|`는 `\|`로만 쓰며, 읽을 때 `\` 뒤의 `|`는 cell 경계가 아니다. `order`는 읽기에서
+  형제 위치로 채우는 논리적 column이고, 쓰기는 형제 묶음의 값을 정확히 1..m(m은 쓰기 뒤의 묶음 크기)으로 받는다. codec은 저장 순서를 행의 집합에서
+  계산하며 정렬되지 않은 집합을 거절하지 않는다. 진단의 column은 규칙이 이름 붙인 요소의 1부터 세는 code point 열이다.
+  dangling 참조는 쓴 target을 간직하며, 두 행이 공유하는 key를 가리키는 `parent` cell은 `format.block`이다. markdown
+  값은 setext heading을 담지 않으며, fence나 HTML block을 열린 채로 남기면 뒤따르는 요소가 있을 때 `CONSTRAINT`다.
+  catalog는 checkbox가 없는 list storage의 state machine을 거절하며, nullable 상태 column은 dbspec이 이미 거절한다.
 
 - T12.1-4: spec이 상세 anchor, key, identity의 판정을 적는다. 상세 heading의 anchor는 heading의 렌더된 inline
   텍스트에 대한 두 fold로 file의 heading들과 대조한다. GitHub, GitLab, VS Code를 위한 F_G는 Unicode 범주가 letter나
