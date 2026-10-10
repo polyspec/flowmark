@@ -79,13 +79,21 @@ func Serve(in io.Reader, out io.Writer) {
 func run(root string, operation *operation) (string, error) {
 	switch operation.Operation {
 	case "schema.mermaid":
-		schema, err := app.SchemaFromMermaidBlock(root, firstFlowmarkFile(root))
+		file := firstFlowmarkFile(root)
+		if file == "" {
+			return "", fmt.Errorf("the corpus holds no markdown document")
+		}
+		schema, err := app.SchemaFromMermaidBlock(root, file)
 		if err != nil {
 			return "", fmt.Errorf("the corpus declares no state machine: %v", err)
 		}
 		return app.SchemaMermaid(schema), nil
 	case "schema":
-		schema, err := app.SchemaFromMermaidBlock(root, firstFlowmarkFile(root))
+		file := firstFlowmarkFile(root)
+		if file == "" {
+			return "", fmt.Errorf("the corpus holds no markdown document")
+		}
+		schema, err := app.SchemaFromMermaidBlock(root, file)
 		if err != nil {
 			return "", fmt.Errorf("the corpus declares no state machine: %v", err)
 		}
