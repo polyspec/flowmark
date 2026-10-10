@@ -6,6 +6,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/polyspec/flowmark/internal/unicodedcp"
 	"github.com/polyspec/orm/engine/dbspec"
 )
 
@@ -53,17 +54,45 @@ func readable(t dbspec.Type, v string) (string, bool) {
 // CommonMark drops around a heading and a paragraph.
 func trimWhite(s string) string { return strings.Trim(s, " \t") }
 
+// invisible reports whether r is an invisible character of the single-line places
+// under Unicode 17.0.0: a White_Space character other than U+1680, a control (Cc),
+// a format character (Cf) other than a Prepended_Concatenation_Mark, or a
+// Default_Ignorable_Code_Point. Such a character renders with no glyph. The
+// space and the tab are White_Space, so they are invisible too.
+func invisible(r rune) bool {
+	switch {
+	case r == 0x1680:
+		return false
+	case unicode.Is(unicode.White_Space, r), unicode.Is(unicode.Cc, r):
+		return true
+	case unicode.Is(unicode.Cf, r):
+		return !unicode.Is(unicode.Prepended_Concatenation_Mark, r)
+	}
+	return unicodedcp.DefaultIgnorable(r)
+}
+
+// invisibleAtEnd reports whether v is non-empty and its first or its last
+// character is invisible. A character inside v is not an end.
+func invisibleAtEnd(v string) bool {
+	if v == "" {
+		return false
+	}
+	first, _ := utf8.DecodeRuneInString(v)
+	last, _ := utf8.DecodeLastRuneInString(v)
+	return invisible(first) || invisible(last)
+}
+
 // singleLineFault names the single-line rule that v breaks, or "" when none: a
-// line break, a U+0000, leading or trailing white space, or raw HTML, which a
-// viewer would hide or alter.
+// line break, a U+0000, an invisible character at either end, or raw HTML, which
+// a viewer would hide or alter.
 func singleLineFault(v string) string {
 	switch {
 	case strings.ContainsAny(v, "\r\n"):
 		return "a line break"
 	case strings.ContainsRune(v, 0):
 		return "a U+0000"
-	case trimWhite(v) != v:
-		return "leading or trailing white space"
+	case invisibleAtEnd(v):
+		return "an invisible character at an end"
 	case strings.Contains(v, "<!") || strings.Contains(v, "</"):
 		return "raw HTML"
 	}
