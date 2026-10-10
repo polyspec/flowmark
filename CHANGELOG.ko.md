@@ -1,8 +1,16 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: dcff438ce1c8df1686d7d2d43ae8b8af61ba8cbfe97c3160cd8b157ca2a95a27 -->
+<!-- source-sha256: 97f426092d6e51c7c2d163c91ecac881f8bb8f8b5fba5789834aa271c075b597 -->
 # Changelog
 
 ## Unreleased
+
+- T8.4-4: `TestAddWithoutPathOnEmptyCorpus`가 매번 통과한다. 이 test는 add 응답이 watcher의 변경
+  event보다 먼저 온다고 가정했지만, 그 순서는 정해져 있지 않다: watcher는 add 자신의 쓰기를 보고하고,
+  sidecar는 변경 event를 언제든 밀어 보낼 수 있다. 이제 test는 문자열 응답 하나가 `T1 added`이고,
+  나머지 message는 모두 이 surface의 changed event임을 확인한다. `Serve`도 poll goroutine이 출력에
+  아직 쓸 수 있는 동안 반환하지 않는다: `stop`이 poll loop들을 기다리며, `go test -race`가 출력
+  buffer에서 보고한 data race를 없앤다. poll loop는 멈추면 두 poll 사이의 대기를 마저 채우지 않고
+  바로 끝난다.
 
 - T1.3-1: 참조 검사는 kit 검사처럼 kit의 `trackedFiles`로 Git이 무시하지 않는 checkout의 file을 읽는다.
   `.claude/worktrees/` 아래 agent worktree 같은 무시되는 directory가 더 이상 결과를 바꾸지 않는다.

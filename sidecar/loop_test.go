@@ -185,8 +185,25 @@ func TestAddWithoutPathOnEmptyCorpus(t *testing.T) {
 	input := `{"surface":1,"root":"` + root + `","body":{"operation":"add","id":"","title":"First issue"}}` + "\n"
 	var out bytes.Buffer
 	Serve(strings.NewReader(input), &out)
+	// The watcher reports the add's own write as a changed event, and a sidecar may push change
+	// events at any time, so an event may come before or after the answer. The answer is the one
+	// string body; every other message must be a changed event of this surface.
 	messages := lines(t, out.String())
-	if len(messages) != 1 || !strings.Contains(messages[0]["body"].(string), "T1 added") {
+	var answers []string
+	for _, message := range messages {
+		if message["surface"].(float64) != 1 {
+			t.Fatalf("messages: %v", messages)
+		}
+		if event, ok := message["body"].(map[string]any); ok && event["event"] == "changed" {
+			continue
+		}
+		body, ok := message["body"].(string)
+		if !ok {
+			t.Fatalf("messages: %v", messages)
+		}
+		answers = append(answers, body)
+	}
+	if len(answers) != 1 || !strings.Contains(answers[0], "T1 added") {
 		t.Fatalf("messages: %v", messages)
 	}
 	text, err := os.ReadFile(path)
@@ -230,7 +247,7 @@ func TestConcurrentWritesStayWholeLines(t *testing.T) {
 // built — so an edit made right after that answer is never taken for the baseline.
 func TestWatchTakesTheBaselineAtOnce(t *testing.T) {
 	root := corpusDir(t)
-	watcher := &corpusWatcher{surfaces: map[int]string{}, finger: map[string]string{}}
+	watcher := newCorpusWatcher()
 	defer watcher.stop()
 	watcher.watch(1, root, &stream{out: bufio.NewWriter(io.Discard)})
 	watcher.mu.Lock()
