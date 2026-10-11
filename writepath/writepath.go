@@ -127,6 +127,12 @@ func Open(ctx context.Context, cat *catalog.Catalog, j *journal.Corpus, wait tim
 	// The first read fills the tree: it reads every corpus document once, and later operations read only the files
 	// the notifications name.
 	_, err = c.read()
+	if err != nil {
+		// The corpus is not opened, so its watch is closed before the lock is released: on macOS the watch holds a
+		// descriptor for every folder and document, and releasing the lock opens the lock file, which a read that
+		// failed for lack of descriptors would leave unreleased.
+		err = errors.Join(err, c.Close())
+	}
 	if err = release(l, err); err != nil {
 		return nil, errors.Join(err, c.Close())
 	}
