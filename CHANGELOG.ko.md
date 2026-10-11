@@ -1,9 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 7efde6e12b2719a9afc03df3df17b5d2fb8084ca3f94a4ac262333aaf52be062 -->
+<!-- source-sha256: 6893ddd4781913b4c96e3d5d2c172fa802953b0af5ec72beef06ecb028f4c3b1 -->
 # Changelog
 
 ## Unreleased
 
+- T12.5-1: `flowmark canon <corpus> [file…]`가 지정한 file을, 지정하지 않으면 다시 쓸 수 있는 모든 corpus 문서를 lock 아래 journal을 남기는 transaction 하나로 canonical 형식으로 다시 쓴다. `format.block`, `format.section`, `format.encoding`, 행 사이의 `parent.cycle`, 또는 사용할 수 없는 block이나 document table로의 link가 있는 file을 이름으로 주면 `CONSTRAINT`로 거절하고 아무것도 쓰지 않는다. file을 주지 않으면 그런 file은 보고하고 그대로 둔다. 명령은 canon이 실행되면 0, 거절이나 실패면 1, 잘못된 명령줄이면 2로 끝난다.
 - T12.3-4: catalog는 배치 foreign key column이 nullable인 block table을 table 이름에서 거절한다. block 행은 그 key가 참조하는 행의 범위 안에 서며, NULL은 어떤 행도 참조하지 않는다. 이력 table의 저장 규칙은 이 하나의 규칙에 기대고, spec 30은 이력 행을 row column이 아닌 column으로 배치하는 setting 오류를 적는다.
 - T12.4: IR executor가 T12.4 판정을 반영한다. contains는 ASCII 대소문자를 접고 contains_binary는 code point로 비교한다. NULL은 오름차순에서 처음에 정렬된다. files table의 저장 순서는 전순서다. 시계는 쓸 때 자르고 여섯 자리로 비교한다. 범위 밖의 상대 시각은 NULL이다. join은 soft delete된 자식을 제외한다. flatten은 one relation으로 답한다. 읽을 수 없는 답 값은 INTERNAL이다. restrict는 쓰기 전의 행에 대해 성립한다. 거절된 쓰기는 결함을 한 순서로 보고하며, 행마다 중복 결함은 최대 하나다. insert는 자신이 해소하는 dangling link를 다시 쓴다. on_duplicate를 포함한 모든 key 검사는 A–Z만 접는다. 대소문자만 다른 key 둘을 가진 문서에 대한 쓰기가 commit된다. catalog는 그 밖의 이력 저장을 거절한다. spec 10, 20, 30, 40, 50, 60, 80과 plan은 모든 판정을 적고, orm을 기다리는 지점은 각자 orm 항목을 적는다. `scripts/go-test.mjs`는 재사용한 mount를 분리하지 않는다.
 - T12.5: write path가 IR executor와 journal을 잇는다. 모든 operation은 corpus lock을 잡고 중단된 commit을 먼저 복구한다. transaction 밖의 요청은 lock 아래 transaction 하나다. transaction과 savepoint는 lock을 잡고 자기 post-image를 읽는다. commit은 대상을 확인하고, lock 아래 다시 읽은 corpus가 바뀌었으면 쓰기를 그 위에서 다시 실행하며, journal로 쓴다. prepare 기록이 commit 시점이다. lock 기록은 획득마다 token을 가진다. panic이 나도 lock을 놓는다. format 진단이 있는 file을 다시 써야 하는 쓰기는 요청에서 거절되며, canon, add-column migration, file 전체 delete는 면제된다. flowmark history repair는 executor 쓰기다. commit은 validator의 evaluator로 check를 판정한다.
