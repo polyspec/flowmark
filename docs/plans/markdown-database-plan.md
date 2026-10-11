@@ -48,7 +48,8 @@ compatibility, no fallback, no hidden error, no trick; rules first.
   `{ir_version, manifest_hash, request, params, now}` per request; `params` use the runtime value
   model JSON (decimal as a string, bytes as base64, datetime as `YYYY-MM-DD HH:MM:SS.ffffff`
   UTC). Codec stages stay on the client, as for SQL. The executor answers a read with the rows
-  already assembled to the request's shape (joins, relations, `key_by`, `flatten`) and a write
+  assembled to the request's shape (joins, relations, `key_by`; a `flatten` relation is answered
+  as `one` and merged by the client model) and a write
   with `{affected, keys}` — `keys` lists the generated or given primary key of each inserted row
   in insert order — or with one error of `errors.yaml`. The orm protocol item adds
   `WRITE_CONFLICT` (a target changed since it was read, naming the file and line, never retried

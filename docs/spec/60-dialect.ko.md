@@ -1,5 +1,5 @@
 <!-- doc-id: spec-dialect -->
-<!-- source-sha256: 11d2ef5ed2c74347a1530f2ec12165b4d5f41299da1c0af728433d8bfe467069 -->
+<!-- source-sha256: 0fa5ab874a4ed3922124a85b38eaa5357f34661210c75008406adc1b0a67484f -->
 # Capability table
 
 [English](60-dialect.md)
@@ -38,7 +38,7 @@ surface가 corpus에서 무엇을 하는지 또는 orm 전통에 따라 `CAPABIL
 | `on_duplicate` | 충돌 대상 **모든 unique key**(MySQL 규칙)로 지원. unique key가 여럿인 table에서는 PostgreSQL과 SQLite의 대상 규칙과 다르며 그 차이를 여기 밝힌다 |
 | `lock` `update`, `share` | 문서화된 no-op으로 받는다: server transaction이 이미 corpus lock을 잡고 있다 |
 | `lock` `update_nowait`, `share_nowait` | `CAPABILITY_UNSUPPORTED` |
-| relation(`limit_per_parent`, `if_parent`, `flatten`, `key_by`, `no_cascade_delete`) | 지원. executor가 조립한다 |
+| relation(`limit_per_parent`, `if_parent`, `flatten`, `key_by`, `no_cascade_delete`) | 지원. executor가 조립하며, `flatten` relation은 `one` relation으로 답하고 client model이 그것을 부모의 array와 JSON 형태에 병합한다(orm의 규칙). `key_by`는 non-null column을 가리킨다(아니면 `IR_INVALID`). 근거: orm은 병합을 client model의 array와 JSON 형태에 두며, 부모가 가진 이름은 부모의 값을 유지한다. 병합된 답은 client에게 부모 자신의 column과 구별할 수 없는 행을 넘긴다. NULL collection key는 client 언어마다 다르게 답하므로, nullable `key_by`는 형태로 거절한다 |
 | subquery(`tuple_in`, `tuple_not_in`, scalar `Sub` aggregate) | 지원 |
 | `contains`(`Lk` 연산자) | 지원: column의 텍스트가 parameter의 텍스트를 substring으로 담으면 참이다. ASCII 문자 A–Z와 a–z는 대소문자를 가리지 않고, 그 밖의 문자는 code point로 비교한다. NULL column이나 parameter는 unknown이며, parameter의 `%`, `_`, `\`는 문자 그대로다. 근거: SQL parity — orm의 `COLLATE "C"` 아래 PostgreSQL `ILIKE`, SQLite `LIKE`, orm의 MySQL ASCII fold가 이 결과를 준다 |
 | `contains_binary`(`Lb` 연산자) | 지원: column의 텍스트가 parameter의 텍스트를 substring으로 담으면 참이며, code point로 비교한다. NULL column이나 parameter는 unknown이며, parameter의 `%`, `_`, `\`는 문자 그대로다. 근거: `utf8mb4_0900_bin` 아래 MySQL `LIKE`, `COLLATE "C"` 아래 PostgreSQL `LIKE`, SQLite `instr`가 일치한다 |

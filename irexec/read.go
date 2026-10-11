@@ -607,8 +607,9 @@ func keyText(t dbspec.Type, v cell) (string, bool) {
 // right keys equal the left keys of a parent row, without NULL keys; with if_parent
 // only the parents whose column equals the parameter; a one relation attaches the
 // first child row, a many relation the child rows in child order, keyed by key_by
-// when it is given (a repeated key keeps the last row); flatten merges the child's
-// outputs into the parent row. limit_per_parent keeps the first n child rows of each
+// when it is given (a repeated key keeps the last row). A flatten relation is
+// answered as a one relation, and the client model merges it into the parent's
+// array and JSON forms (spec 60 Surfaces, relations). limit_per_parent keeps the first n child rows of each
 // parent, by the child's order or else by its primary key, and a one relation with
 // an order keeps the first by that order, as the planner's ROW_NUMBER does.
 func (r *reader) relations(s *scope, bs []*built) *Error {
@@ -776,17 +777,6 @@ func (r *reader) relation(s *scope, bs []*built, rel *ir.Relation) *Error {
 			idx = byKey[p.key]
 		}
 		switch {
-		case rel.Kind == "one" && cq.Flatten:
-			if len(idx) == 0 {
-				return unspecified("the outputs of a flattened one relation " + rel.Rel + " that loads no row")
-			}
-			child := rows[idx[0]]
-			for _, n := range child.names {
-				if row.has(n) {
-					return unspecified("a flattened output " + n + " of the relation " + rel.Rel + " that the parent row holds")
-				}
-				row.set(n, child.values[n])
-			}
 		case rel.Kind == "one":
 			if len(idx) == 0 {
 				row.set(rel.Rel, nil)

@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database -->
-<!-- source-sha256: 4458b05ea9645454642cf478cf7dff8e92c1ec9788ca86e14fb788538e98d1f7 -->
+<!-- source-sha256: 6e069e77bf231082214684b86dbe62a842e4568957e9f425f0144290c3371c57 -->
 # markdown database 계획
 
 [English](markdown-database-plan.md)
@@ -44,8 +44,8 @@ NULL이 아니며 비어 있을 수 있고, view의 entity table은 둘 다 선�
   client는 요청을 검증(`ir.Validate`)하고 plan하지 않으며, 요청마다
   `{ir_version, manifest_hash, request, params, now}`를 보낸다. `params`는 runtime value model JSON을
   쓴다(decimal은 문자열, bytes는 base64, datetime은 UTC `YYYY-MM-DD HH:MM:SS.ffffff`). codec 단계는
-  SQL과 같이 client에 남는다. executor는 읽기에는 요청의 형태(join, relation, `key_by`, `flatten`)로
-  이미 조립된 행을, 쓰기에는 `{affected, keys}` — `keys`는 insert된 각 행의 생성되거나 주어진 primary
+  SQL과 같이 client에 남는다. executor는 읽기에는 요청의 형태(join, relation, `key_by`. `flatten` relation은
+  `one`으로 답하고 client model이 병합한다)로 조립된 행을, 쓰기에는 `{affected, keys}` — `keys`는 insert된 각 행의 생성되거나 주어진 primary
   key를 insert 순서로 담는다 — 를 답하거나, `errors.yaml`의 오류 하나로 답한다. orm protocol 항목은
   `WRITE_CONFLICT`(읽은 뒤 대상이 바뀜, file과 줄을 밝히며 client가 재시도하지 않음)를 추가한다.
   끝난 lock 대기는 SQLite의 `busy_timeout`처럼 `CANCELED`다. hash 불일치는 `SCHEMA_HASH_MISMATCH`,

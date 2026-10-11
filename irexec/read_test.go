@@ -363,9 +363,10 @@ func TestRelations(t *testing.T) {
 		f.want(f.msg("all", "notes", map[string]any{"columns": map[string]any{"mode": "none", "remove": []string{"parent"}}, "joins": []any{j}}),
 			`{"rows":[{"id":"N1","item":"T1","it":{"id":"T1","history":[{"id":1,"item":"T1","to_state":"doing"},{"id":2,"item":"T1","to_state":"done"}]}}]}`)
 	})
-	f.sub(t, "60#surfaces: a flattened one relation whose output the parent holds has no rule yet", func(f *fixture) {
-		rel := map[string]any{"rel": "who", "kind": "one", "keys": []any{map[string]any{"left": "owner", "right": "id"}}, "query": map[string]any{"entity": "people", "flatten": true}}
-		f.fails(f.msg("all", "items", map[string]any{"where": where(pred("id", "eq", p(0))), "relations": []any{rel}}, "T1"), "CAPABILITY_UNSUPPORTED")
+	f.sub(t, "60#surfaces: a flattened one relation is answered as a one relation, the parent's outputs kept", func(f *fixture) {
+		rel := map[string]any{"rel": "who", "kind": "one", "keys": []any{map[string]any{"left": "owner", "right": "id"}}, "query": map[string]any{"entity": "people", "flatten": true, "columns": map[string]any{"mode": "none", "add": []string{"name"}}}}
+		f.want(f.msg("all", "items", map[string]any{"columns": none, "where": where(pred("id", "in", map[string]any{"ps": []int{0, 1}})), "relations": []any{rel}}, "T1", "T2"),
+			`{"rows":[{"id":"T1","parent":null,"owner":"P1","who":{"id":"P1","name":"Ada"}},{"id":"T2","parent":"T1","owner":null,"who":null}]}`)
 	})
 	f.sub(t, "60#surfaces: a relation needs keys", func(f *fixture) {
 		rel := hist(nil)
