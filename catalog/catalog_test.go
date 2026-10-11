@@ -1359,6 +1359,94 @@ func TestLoadKeyColumnTypes(t *testing.T) {
 	}
 }
 
+// TestLoadViewTable pins spec 100's declaration of the view table: the table
+// views of the document named flowmark, the application schema, with its view
+// columns; a views table of another document is an ordinary table.
+func TestLoadViewTable(t *testing.T) {
+	cat, diags := catalog.Load(fixtureRoot)
+	if cat == nil || len(diags) > 0 {
+		t.Fatalf("fixture refused: %+v", diags)
+	}
+	views, _ := cat.Table("views")
+	want := &catalog.View{Kind: "kind", Entity: "entity", Filter: "filter", Sort: "sort", Group: "group_by"}
+	if !reflect.DeepEqual(views.View, want) {
+		t.Fatalf("views.View = %+v, want %+v", views.View, want)
+	}
+	if items, _ := cat.Table("items"); items.View != nil {
+		t.Fatalf("items.View = %+v, want nil", items.View)
+	}
+	if !reflect.DeepEqual(views.Codecs, map[string][]string{"filter": {"ordered_json"}, "sort": {"ordered_json"}}) {
+		t.Fatalf("views.Codecs = %v", views.Codecs)
+	}
+
+	root, _ := editedCorpus(t, [2]string{"dbspec 1 flowmark\n", "dbspec 1 tracker\n"})
+	cat, diags = catalog.Load(root)
+	if cat == nil || len(diags) > 0 {
+		t.Fatalf("refused: %+v", diags)
+	}
+	if views, _ := cat.Table("views"); views.View != nil {
+		t.Fatalf("a views table of the document tracker has View %+v, want nil", views.View)
+	}
+}
+
+// TestLoadViewColumns pins the shape spec 100 gives the view columns of the
+// application schema's views table; any other shape is a catalog error at the
+// table name.
+func TestLoadViewColumns(t *testing.T) {
+	const msg = "the view table views"
+	cases := []struct {
+		name string
+		edit [2]string
+	}{
+		{"an entity with a codec", [2]string{"    codec sort ordered_json\n", "    codec sort ordered_json\n    codec entity base64\n"}},
+		{"a nullable entity", [2]string{"  entity varchar(63)\n", "  entity varchar(63) null\n"}},
+		{"an entity of another type", [2]string{"  entity varchar(63)\n", "  entity i64\n"}},
+		{"a filter without a codec", [2]string{"    codec filter ordered_json\n", ""}},
+		{"a filter with a further stage", [2]string{"    codec filter ordered_json\n", "    codec filter ordered_json base64\n"}},
+		{"a nullable sort", [2]string{"  sort text\n", "  sort text null\n"}},
+		{"a group with a codec", [2]string{"    codec sort ordered_json\n", "    codec sort ordered_json\n    codec group_by base64\n"}},
+		{"a group of another type", [2]string{"  group_by varchar(63) null\n", "  group_by i32 null\n"}},
+		{"no group column", [2]string{"  group_by varchar(63) null\n", ""}},
+		{"a nullable kind", [2]string{"  kind varchar(16)\n  entity", "  kind varchar(16) null\n  entity"}},
+		{"a kind with a codec", [2]string{"    codec sort ordered_json\n", "    codec sort ordered_json\n    codec kind base64\n"}},
+	}
+	for _, c := range cases {
+		t.Run("100#views: "+c.name, func(t *testing.T) {
+			root, text := editedCorpus(t, c.edit)
+			cat, diags := catalog.Load(root)
+			expectRejected(t, cat, diags)
+			expectTableDiag(t, diags, text, "views", msg)
+			if len(diags) != 1 {
+				t.Fatalf("%d diagnostics, want the view error alone: %+v", len(diags), diags)
+			}
+		})
+	}
+	t.Run("100#views: a group that is not null loads", func(t *testing.T) {
+		root, _ := editedCorpus(t, [2]string{"  group_by varchar(63) null\n", "  group_by text\n"})
+		if cat, diags := catalog.Load(root); cat == nil || len(diags) > 0 {
+			t.Fatalf("refused: %+v", diags)
+		}
+	})
+}
+
+// TestLoadYAMLCodec pins spec 30's refusal of a yaml codec stage that is the
+// last stage: its encoder ends every value with a line feed, which no place of
+// the format holds; a later stage encodes the line feed away.
+func TestLoadYAMLCodec(t *testing.T) {
+	column := [2]string{"  name varchar(255)\n", "  name varchar(255)\n  meta text null\n"}
+	root, text := editedCorpus(t, column, [2]string{"    title name\n", "    title name\n    codec meta yaml\n"})
+	cat, diags := catalog.Load(root)
+	expectRejected(t, cat, diags)
+	expectTableDiag(t, diags, text, "people", "column meta ends its codec with the stage yaml")
+	if len(diags) != 1 {
+		t.Fatalf("%d diagnostics, want the yaml error alone: %+v", len(diags), diags)
+	}
+	root, _ = editedCorpus(t, column, [2]string{"    title name\n", "    title name\n    codec meta yaml base64\n"})
+	if cat, diags := catalog.Load(root); cat == nil || len(diags) > 0 {
+		t.Fatalf("yaml under base64 refused: %+v", diags)
+	}
+}
+
 // TestLoadIdentityKeyType pins that identity is allowed only on an i64 primary
 // key column: max+1 is an integer sequence, and dbspec allows identity only on
 // an i64 column, so any other key type is a located catalog diagnostic at the

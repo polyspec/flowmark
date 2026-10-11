@@ -43,6 +43,9 @@ func (l *loader) checkTable(d *document, t *dbspec.Table) (Storage, bool) {
 		if slices.Contains(c.Stages, "aes") {
 			report("column " + c.Column + " uses aes")
 		}
+		if len(c.Stages) > 0 && c.Stages[len(c.Stages)-1] == "yaml" {
+			report("column " + c.Column + " ends its codec with the stage yaml, whose encoder ends every value with a line feed")
+		}
 	}
 	if s.AESVersion != nil {
 		report("table " + t.Name + " has an aes_version setting")
@@ -266,6 +269,46 @@ func (l *loader) checkHistoryStorage() {
 		if !ok {
 			l.add(l.tableDiag(h.doc, h.table.Name, "table "+h.table.Name+": a history table is stored `block <row fk> table` under its state table or `document table`"))
 		}
+	}
+}
+
+// viewColumns is the view of the view table, its columns as spec 100 names them.
+var viewColumns = View{Kind: "kind", Entity: "entity", Filter: "filter", Sort: "sort", Group: "group_by"}
+
+// isViewTable reports whether a table is the view table: the table views of the
+// application schema's document (spec 100 Views).
+func isViewTable(r *tableRef) bool {
+	return r.doc.name == ApplicationDocument && r.table.Name == ViewTable
+}
+
+// checkViewTable reports, at the view table's name, a view column of another
+// shape than spec 100 gives it: kind and entity non-null varchar or text without
+// a codec; filter and sort non-null varchar or text with exactly the codec
+// ordered_json; group_by a varchar or text without a codec.
+func (l *loader) checkViewTable() {
+	for _, r := range l.order {
+		if !isViewTable(r) {
+			continue
+		}
+		stages := map[string][]string{}
+		if s := r.table.Settings; s != nil {
+			for _, c := range s.Codecs {
+				stages[c.Column] = c.Stages
+			}
+		}
+		check := func(name string, nullable bool, codec []string, want string) {
+			c := columnOf(r.table, name)
+			ok := c != nil && (c.Type.Kind == dbspec.TypeVarchar || c.Type.Kind == dbspec.TypeText) &&
+				(nullable || !c.Null) && slices.Equal(stages[name], codec)
+			if !ok {
+				l.add(l.tableDiag(r.doc, r.table.Name, "the view table "+r.table.Name+" declares "+name+" "+want))
+			}
+		}
+		check(viewColumns.Kind, false, nil, "as a non-null varchar or text without a codec")
+		check(viewColumns.Entity, false, nil, "as a non-null varchar or text without a codec")
+		check(viewColumns.Filter, false, []string{"ordered_json"}, "as a non-null varchar or text with exactly the codec ordered_json")
+		check(viewColumns.Sort, false, []string{"ordered_json"}, "as a non-null varchar or text with exactly the codec ordered_json")
+		check(viewColumns.Group, true, nil, "as a varchar or text without a codec")
 	}
 }
 

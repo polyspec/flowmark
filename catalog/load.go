@@ -44,6 +44,7 @@ func Load(root string) (*Catalog, []Diagnostic) {
 	l.checkNames()
 	l.checkHistoryMarks()
 	l.checkHistoryStorage()
+	l.checkViewTable()
 	if len(l.diags) > 0 {
 		return nil, l.diags
 	}
@@ -359,6 +360,16 @@ func buildTable(r *tableRef) *Table {
 	}
 	if sm := s.StateMachine; sm != nil {
 		out.StateMachine = stateMachine(sm, s.Checkboxes)
+	}
+	for _, c := range s.Codecs {
+		if out.Codecs == nil {
+			out.Codecs = map[string][]string{}
+		}
+		out.Codecs[c.Column] = slices.Clone(c.Stages)
+	}
+	if isViewTable(r) {
+		v := viewColumns
+		out.View = &v
 	}
 	return out
 }
