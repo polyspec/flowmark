@@ -48,7 +48,10 @@ behaviour.
 - **Rejected** on a corpus, each a schema error: a composite primary key; `aes`, `aes_version` and
   `blind_index` (the key never leaves the client); `audit` and `immutable` (markdown has no
   triggers; `state_machine … history` records transitions instead); `cascade` and `set_null`
-  actions; an external `use` document; a table without a `store` setting.
+  actions; an external `use` document; a table without a `store` setting; a `codec` whose last stage
+  is `yaml` — orm's encoder (go-yaml's `Marshal`) ends every value with a line feed, which no place of
+  the format holds, while a later stage encodes it away. A view table is declared by the
+  [application schema](100-checklist.md#views), not by a setting.
 - **Allowed**: `identity` only on an `i64` primary key column of a markdown table, allocated `max+1`
   under the lock. dbspec refuses `identity` on any other type (`an identity column has type i64`), so an
   `i16` or `i32` key cannot take it either. Grounding: `max+1` is an integer sequence, and a `bool`,

@@ -1,5 +1,5 @@
 <!-- doc-id: spec-schema -->
-<!-- source-sha256: d75c37438dd7353c643bf11958cd012f4795d9c7a5830c5d33f5a40deff51d42 -->
+<!-- source-sha256: ca273add2be52610b572bc06d9d0a479f2f7c36b028c9f89a3deb3e473da3fb7 -->
 # Schema
 
 [English](30-schema.md)
@@ -44,7 +44,9 @@ column을 이름 붙인다 — column 이름이 동작을 고르지 않는다.
 - **거절**: corpus에서 각각 schema 오류다 — composite primary key, `aes`·`aes_version`·`blind_index`
   (key는 client를 떠나지 않는다), `audit`와 `immutable`(markdown에는 trigger가 없고 대신
   `state_machine … history`가 전이를 기록한다), `cascade`와 `set_null` action, 외부 `use` 문서, `store`
-  setting 없는 table.
+  setting 없는 table, 마지막 stage가 `yaml`인 `codec` — orm의 encoder(go-yaml의 `Marshal`)는 모든 값을
+  line feed로 끝내며 형식의 어떤 자리도 그것을 담지 못한다. 그 뒤의 stage는 그것을 encode해 없앤다.
+  view table은 setting이 아니라 [응용 schema](100-checklist.ko.md#view)가 선언한다.
 - **허용**: markdown table의 `i64` primary key column에만 `identity`를 쓴다. lock 아래 `max+1`로 할당한다. dbspec은 그 밖의 type에 대한 `identity`를 거절하므로(`an identity column has type i64`), `i16`이나 `i32` key도 쓸 수 없다. 근거: `max+1`은 정수 순열이며, `bool`, `varchar`, `uuid`, `date` key에는 더할 최댓값이 없다.
 - **요구**: `state_machine`을 가진 table은 `history`와 적어도 하나의 `initial` 상태를 선언한다. `list`나
   `files` 저장은 `title`을 선언한다. state machine을 가진 `list` 저장은 `checkbox`를 적어도 하나 선언하며, dbspec이 그 뒤로 모든 상태를 덮도록 요구한다. dbspec은 checkbox가 하나도 없는 state machine을 받아들이므로 이 규칙은 flowmark의 것이다.

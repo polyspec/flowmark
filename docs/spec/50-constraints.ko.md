@@ -1,5 +1,5 @@
 <!-- doc-id: spec-constraints -->
-<!-- source-sha256: 23270fda5840002e3a36c339b06ec88abd511e7c968b1585b07a015fb1359ee4 -->
+<!-- source-sha256: f8e9e8efe3b09a178eb1dffa4a23c18c7bc644a322c8e526a3924deff633e1bc -->
 # Constraints
 
 [English](50-constraints.md)
@@ -68,6 +68,55 @@
 
 check는 commit에서 강제한다. 술어가 unknown(NULL)인 check는 SQL처럼 통과한다. validator는 table의 각 check를 읽을 수 있는 각 행에 대해 그 행의 논리 값 — 읽기가 돌려주는 대로의 모든 column, 그리고 부모 행의 key인 배치 foreign key — 으로 평가하고, 술어가 false이면 행의 첫 줄에서 check와 행을 밝혀 `check`를 보고한다. text와 `uuid`는 code point로(orm의 binary collation 하나), 수는 값으로, date, time, datetime은 시간순으로 비교한다. column의 type이 아닌 값은 `is [not] null`에서 NULL이 아니며, 그 값을 읽고 NULL operand가 없는 비교나 `in`은 한 번은 true로, 한 번은 false로 두 번 평가한다: dbspec 술어에는 `not`이 없으므로 이 atom들에 대해 단조이고, 첫 평가는 어떤 값이 줄 수 있는 가장 큰 결과, 둘째는 가장 작은 결과다. validator는 첫 평가가 false이면 — 그 값이 무엇이든 check가 false이면 — `check`를 보고하고, 나머지는 그 값의 `type`이 대신한다. commit은 첫 평가가 false이면 check를 밝히는 `CONSTRAINT`, 둘째만 false이면 check가 그 값을 필요로 하므로 `type` 진단을 밝히는 `CONSTRAINT`이고, 그 밖에는 통과한다. 근거: check는 자기 행의 술어이므로 행을 읽을 수 있는 곳이면 사용할 수 없는 table에서도 보고한다. SQL은 어긴 check를 column이 아니라 그 이름으로 밝힌다.
 
+## Codec 값
+
+`codec` setting을 가진 column은 encode된 값을 그 type의 readable 형태로 담는다
+([canonical format](10-canonical-format.ko.md#읽을-수-있는-값-형식)). validator는 type에 맞는 non-NULL 값마다
+orm의 Go codec package — stage `gz`, `base64`, `serialize`, `yaml`, `ordered_json`을 가진 `orm.Decode` —
+로 decode하며, `bytes` 값은 그 base64 텍스트에서 decode한다. stage가 거절하면 그 값의 요소에서 orm의
+message를 실어 `codec`을 보고한다. 그런 값을 할당하는 쓰기는 `CONSTRAINT`다. column의 type이 아닌 값은
+`type`만이다. host stage `hex`나 `ip`를 포함하는 column은 orm이 host decode를 공개할 때까지(orm `T74`)
+판정하지 않는다: `orm.Decode`는 host stage를 담은 모든 목록을 거절하므로, 판정하면 모든 값을 보고하게
+된다. 그때 목록 전체를 거꾸로 decode하며, host stage는 orm의 `HostDecode`로, 나머지는 `orm.Decode`로
+한다. 근거: 자기 stage가 decode할 수 없는 값은 그것을 읽는 어떤 client에게도 답이 없으므로, validator가
+밝히는 보이지 않는 데이터다. decode는 orm의 것이다. 값을 읽는 client가 그것으로 decode하기 때문이며,
+엔진은 어떤 stage도 다시 구현하지 않는다.
+
+## View
+
+view table은 응용 schema의 table `views`다([응용 schema](100-checklist.ko.md#view)). 그 행 하나하나가
+`kind`, `entity`, `filter`, `sort`, `group_by`를 가진 view다. validator는 읽을 수 있는 모든 행을 판정한다:
+
+- **Entity.** `entity`는 catalog에 대한 orm runtime model의 entity를 이름 붙인다. `kind`가 `kanban`,
+  `list`, `gantt`이면 그 entity의 table은 `title`과 `body`를 선언한다
+  ([document model](20-document-model.ko.md#제목과-body)). `kind`가 그 type의 값이 아니면 `entity`는
+  entity를 이름 붙이는지만 판정한다.
+- **Filter.** `filter`는 정확히 member `where`(IR `Group`)와 `params`(항목이 null, boolean, 수, 문자열인
+  배열)를 가진 JSON object 하나를 담는다. filter 없음은 `{"where":{"items":[]},"params":[]}`다. validator는
+  request `{ir_version, model의 manifest_hash, kind all, entity, where, n_params}`(n_params는 param의 수)에
+  orm의 `ir.Validate`를 실행하고 그것이 돌려준 code를 보고한다. 어떤 `p`나 `ps` index도 쓰지 않는 param은
+  결함이다.
+- **Sort.** `sort`는 IR `Order`의 JSON 배열을 담으며 `[]`는 정렬 없음이다. `{…, kind all, entity, order,
+  n_params 0}`에 `ir.Validate`로 검증한다.
+- **Group.** `group_by`는 grouping 없음이면 NULL이고, 아니면 `ir.OpAllowed(field, "eq")`가 허용하는
+  entity의 field를 이름 붙인다.
+- **모양.** 어느 깊이에서든 반복된 object member, 모르거나 빠진 member, 정수가 아닌 index, 그 밖의
+  다른 모양의 `filter`나 `sort`는 잘못된 형식이다.
+
+결함은 각각 그 column의 요소에 있는 `view`이며 column마다 보고 하나다. `entity`에 결함이 있으면
+`filter`, `sort`, `group_by`는 판정하지 않는다. view column의 `type`, `codec`, `check` 결함은 그것만으로
+서며, `kind`는 자기 `view`를 갖지 않는다. 이 규칙은 자기 행만 필요로 하므로 사용할 수 없는 table에서도
+보고한다. catalog 변경으로 유효하지 않게 된 view는 보고하며 읽기에서 거절하지 않는다. view를 유효하지
+않게 남기는 쓰기는 `CONSTRAINT`다. validator는 param을 그 쓰임의 type에 대해 판정하지 않는다: 그 type은
+orm의 planner가 계산하고 공개하지 않은 slot type이며(orm `T89`), executor의 parameter 검사도 같은 원천을
+기다린다. 다른 type의 param은 view를 실행하는 읽기가 거절하며, orm이 slot을 공개하면 validator는 각
+param을 모든 쓰임에 대해 판정한다. `ir.Validate`가 검사하는 것은 orm의 계약이다. 그 빈틈 — 해석하지
+않는 column 대 column `ref`와 group 첫 항목의 `conn`(orm `T73`) — 은 orm에서 닫힌다. 근거: view는 저장된
+request이므로 request를 판정하는 규칙이 현재 catalog에 대해 그것을 판정한다 — view는 데이터이고 catalog
+변경이 그것을 보이지 않게 고아로 만들면 안 되므로 manifest hash를 저장하지 않는다. 어떤 index도 쓰지 않는
+param은 보이지 않는 데이터다. grouping은 같은 값을 가진 행을 모으므로, 같음이 없는 field — codec이
+정확히 `ip`가 아닌 codec field이며, `aes`는 corpus에서 거절된다 — 에는 group이 없다.
+
 ## 계층과 순서
 
 - `parent` 순환은 쓰기에서 `CONSTRAINT`이고, 한 file의 행 사이의 순환은 읽기에서 `parent.cycle`이며 그 file을 읽을 수 없게 한다([document model](20-document-model.ko.md#계층)); 여러 `files` file의 행에 걸친 순환은 validator의 `parent.cycle`뿐이다. 행의 블록 밖 `parent`는 쓰기에서 `CONSTRAINT`, 읽기에서
@@ -118,7 +167,7 @@ check는 commit에서 강제한다. 술어가 unknown(NULL)인 check는 SQL처�
   않는 한 보고된다.
 - **Commit.** commit은 먼저 그 대상이 읽은 뒤 바뀌지 않았는지 검사한다: 바뀌었으면 `WRITE_CONFLICT`다.
   이력 빈틈(`history.gap`)을 포함한 constraint 검사는 잠금 아래에서 다시 읽은 corpus 위에서 실행한다.
-  다른 행의 validator 진단(`type`, `key.duplicate`, `reference.dangling`, `check`, `order`, `state.transition`, `state.required`, `state.limit`, `history.gap`, `history.chain`, 여러 `files` file에 걸친 `parent.cycle`)은 commit을 실패시키지 않되, `type` 진단은 commit의 제약 검사가 그 값을 평가해야 할 때 commit을 실패시키고, 바이트 단위로 같은 key를 가진 두 행은 그 table을 사용할 수 없게 한다([canonical format](10-canonical-format.md#diagnostics)); `format.*` 진단은 다시 쓰기 거절과 사용할 수 없는 table 상태([canonical format](10-canonical-format.ko.md#진단))가 정하는 경우에만 commit을 실패시킨다. file을 다시 써야 하는 commit — 행 자신의 file, 유도된 target이 바뀌는 행(상세 섹션이 생기거나 사라지거나, insert가 dangling link에 그 행을 주는 행)으로의 link를 가진 file, `order`의 형제 — 은 그 file이 `format.*` 진단을 가지면 거절한다: `CONSTRAINT`이며 file과 진단을 밝히고, `format.noncanonical`이면 `flowmark canon`을 밝힌다. 세 commit은 면제된다: 대상에 대한 `flowmark canon`([operations](40-ops.ko.md#canon-연산)), 추가된 column이 일으킨 진단에 대한 add-column migration([migration](80-migration.ko.md)) — 그 진단은 그 migration에 대해 table을 사용할 수 없게 하지 않는다 —, `files` 행의 file 전체를 지우는 delete는 rewrite 거절에서만 면제되며, restrict 검사는 그 행을 참조할 수 있는 모든 table의 행을 여전히 필요로 하며(자신의 table을 `parent`로 하는 것, 자식 block과 이력 행, 그 행으로의 foreign key를 가진 모든 table), 그 중 하나라도 사용할 수 없으면 그 delete는 `CONSTRAINT`다.
+  다른 행의 validator 진단(`type`, `key.duplicate`, `reference.dangling`, `check`, `codec`, `view`, `order`, `state.transition`, `state.required`, `state.limit`, `history.gap`, `history.chain`, 여러 `files` file에 걸친 `parent.cycle`)은 commit을 실패시키지 않되, `type` 진단은 commit의 제약 검사가 그 값을 평가해야 할 때 commit을 실패시키고, 바이트 단위로 같은 key를 가진 두 행은 그 table을 사용할 수 없게 한다([canonical format](10-canonical-format.md#diagnostics)); `format.*` 진단은 다시 쓰기 거절과 사용할 수 없는 table 상태([canonical format](10-canonical-format.ko.md#진단))가 정하는 경우에만 commit을 실패시킨다. file을 다시 써야 하는 commit — 행 자신의 file, 유도된 target이 바뀌는 행(상세 섹션이 생기거나 사라지거나, insert가 dangling link에 그 행을 주는 행)으로의 link를 가진 file, `order`의 형제 — 은 그 file이 `format.*` 진단을 가지면 거절한다: `CONSTRAINT`이며 file과 진단을 밝히고, `format.noncanonical`이면 `flowmark canon`을 밝힌다. 세 commit은 면제된다: 대상에 대한 `flowmark canon`([operations](40-ops.ko.md#canon-연산)), 추가된 column이 일으킨 진단에 대한 add-column migration([migration](80-migration.ko.md)) — 그 진단은 그 migration에 대해 table을 사용할 수 없게 하지 않는다 —, `files` 행의 file 전체를 지우는 delete는 rewrite 거절에서만 면제되며, restrict 검사는 그 행을 참조할 수 있는 모든 table의 행을 여전히 필요로 하며(자신의 table을 `parent`로 하는 것, 자식 block과 이력 행, 그 행으로의 foreign key를 가진 모든 table), 그 중 하나라도 사용할 수 없으면 그 delete는 `CONSTRAINT`다.
 - **Repair.** `flowmark history repair <table> <key> [--from <initial state>]`는 마지막 `to`에서 — 이력
   없는 행은 하나뿐인 초기 상태, 또는 초기 상태가 여럿이면 필수인 `--from`에서 — 현재 상태로 가는 이력
   행 하나를 insert한다. `at`은 엔진 시계이고 필수 column은 행에서 복사한다. 그 쌍이 선언된 전이가
@@ -148,7 +197,7 @@ database는 작성자 독점을 강제하지만 corpus에는 그것이 없다. �
 ## 진단
 
 모든 규칙은 `{file, line, column, rule, message}`를 보고하며, column은 [canonical format](10-canonical-format.ko.md#진단)이 정하는 대로다. 규칙 이름은 `catalog`, `type`,
-`key.duplicate`, `reference.dangling`, `check`, `parent.cycle`, `order`, `state.transition`,
+`key.duplicate`, `reference.dangling`, `check`, `codec`, `view`, `parent.cycle`, `order`, `state.transition`,
 `state.required`, `state.limit`, `history.gap`, `history.chain`, `corpus.walk`
 ([document model](20-document-model.md)의 walk 규칙), 그리고 canonical format의 `format.*` 규칙이다: `format.noncanonical`, `format.block`,
 `format.section`, `format.encoding`. 검증은 corpus 전체에 걸친다. 깨진 corpus 안의 깨끗한 file이 corpus를
