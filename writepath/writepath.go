@@ -129,27 +129,41 @@ func engineClock() time.Time { return time.Now().UTC().Truncate(time.Microsecond
 
 // acquire takes the corpus lock for session and recovers an interrupted commit before anything reads the corpus
 // (spec 40 Opening a corpus): a stage found under the lock is a commit of a holder that ended.
-func (c *Corpus) acquire(ctx context.Context, session string) (*journal.Lock, error) {
+// A recovery that fails, or panics, releases the lock.
+func (c *Corpus) acquire(ctx context.Context, session string) (_ *journal.Lock, err error) {
 	l, err := c.j.Acquire(ctx, session, c.wait)
 	if err != nil {
 		return nil, lockError(err)
 	}
-	if err := c.j.Recover(l); err != nil {
-		e := driverError("recovering the corpus", err)
-		if rerr := l.Release(); rerr != nil {
-			return nil, errors.Join(e, driverError("releasing the corpus lock", rerr))
+	recovered := false
+	defer func() {
+		if !recovered {
+			err = release(l, err)
 		}
-		return nil, e
+	}()
+	if err := c.j.Recover(l); err != nil {
+		return nil, driverError("recovering the corpus", err)
 	}
+	recovered = true
 	return l, nil
 }
 
 // release releases the lock l and joins its failure to err.
 func release(l *journal.Lock, err error) error {
-	if rerr := l.Release(); rerr != nil {
-		return errors.Join(err, driverError("releasing the corpus lock", rerr))
+	return releaseAfter(l, false, err)
+}
+
+// releaseAfter releases the lock l after an operation that wrote the corpus or not, and joins its failure to err. A
+// release that fails after a written commit says that the commit is written, so it is never taken for a failed one.
+func releaseAfter(l *journal.Lock, written bool, err error) error {
+	rerr := l.Release()
+	switch {
+	case rerr == nil:
+		return err
+	case written && err == nil:
+		return driverError("the commit is written; releasing the corpus lock after it failed, so remove the lock with flowmark unlock once this process has ended", rerr)
 	}
-	return err
+	return errors.Join(err, driverError("releasing the corpus lock", rerr))
 }
 
 // read reads the corpus as a request reads it.

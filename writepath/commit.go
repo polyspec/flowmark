@@ -24,15 +24,19 @@ import (
 //     one the transaction read, its writes were checked on it already.
 //  3. The journal stages and applies the post-image (steps 3 to 8).
 //
-// Nothing is written when the transaction changes no byte.
-func (c *Corpus) commit(t *tx) error {
+// Nothing is written when the transaction changes no byte. A journal commit that stops is recovered at once, under the
+// same lock: before its prepare record it wrote nothing, and its partial stage is discarded; from the prepare record on
+// the commit is decided, and recovery completes it, so the commit succeeds — or, when that recovery fails too, the
+// commit stays decided and completes at the next acquisition of the lock, which the failure says. It reports whether
+// the corpus was written.
+func (c *Corpus) commit(t *tx) (bool, error) {
 	net := netTargets(t.writes)
 	if len(net) == 0 {
-		return nil
+		return false, nil
 	}
 	now, err := c.read()
 	if err != nil {
-		return err
+		return false, err
 	}
 	if changed := t.base.Differs(now); len(changed) > 0 {
 		var conflicts []Conflict
@@ -42,28 +46,43 @@ func (c *Corpus) commit(t *tx) error {
 			}
 		}
 		if len(conflicts) > 0 {
-			return conflictError(conflicts, "changed since the transaction read it, and the commit never overwrites a change it did not read")
+			return false, conflictError(conflicts, "changed since the transaction read it, and the commit never overwrites a change it did not read")
 		}
 		diverged, err := c.recheck(t, now)
 		if err != nil {
-			return err
+			return false, err
 		}
 		if diverged {
 			conflicts := make([]Conflict, len(changed))
 			for i, p := range changed {
 				conflicts[i] = Conflict{File: p, Line: firstDiffLine(t.base.Data(p), now.Data(p))}
 			}
-			return conflictError(conflicts, "changed since the transaction read it, and the transaction's writes give another result on it")
+			return false, conflictError(conflicts, "changed since the transaction read it, and the transaction's writes give another result on it")
 		}
 	}
 	changes := make([]journal.Change, len(net))
 	for i, tg := range net {
 		changes[i] = journal.Change{Path: tg.Path, Data: tg.After, Delete: tg.After == nil}
 	}
-	if err := c.j.Commit(t.lock, changes); err != nil {
-		return driverError("committing through the journal", err)
+	err = c.j.Commit(t.lock, changes)
+	if err == nil {
+		return true, nil
 	}
-	return nil
+	var ce *journal.CommitError
+	prepared := errors.As(err, &ce) && ce.Prepared
+	rerr := c.j.Recover(t.lock)
+	switch {
+	case prepared && rerr == nil:
+		return true, nil
+	case prepared:
+		return false, &Error{Code: codeDriver, Face: codeDriver, Err: errors.Join(err, rerr),
+			Msg: fmt.Sprintf("the commit stopped after its prepare record: %v; recovering it under the lock failed: %v; the commit is prepared and decided, and it completes at the next acquisition of the lock — do not repeat it", err, rerr)}
+	case rerr != nil:
+		return false, &Error{Code: codeDriver, Face: codeDriver, Err: errors.Join(err, rerr),
+			Msg: fmt.Sprintf("the commit stopped before its prepare record, so nothing was written: %v; discarding its partial stage failed: %v, and the next acquisition of the lock discards it", err, rerr)}
+	}
+	return false, &Error{Code: codeDriver, Face: codeDriver, Err: err,
+		Msg: fmt.Sprintf("the commit stopped before its prepare record, so nothing was written, and its partial stage is discarded: %v", err)}
 }
 
 // recheck runs the writes of t again, in order, on the re-read corpus now (step 2). A write they refuse fails the
