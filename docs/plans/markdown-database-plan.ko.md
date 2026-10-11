@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database -->
-<!-- source-sha256: b687a045d528b1be52464867e7368d468995c0b54d43f763fb116821886065e0 -->
+<!-- source-sha256: 57d44e0dc67659d112e55410f98159c5f24bce98d380bdf7cd11974118c48f43 -->
 # markdown database 계획
 
 [English](markdown-database-plan.md)
@@ -527,6 +527,13 @@ repository마다 자기 checklist를 운영한다. orm과 plugin의 작업은 �
 | `sync/export.go` | `documents`와 `items` table, 손으로 렌더한 SQL |
 | `corpus/validate.go:51`, `**/*.md` | twin 접미사와 selection |
 | plugin `ui/board.js` | code 안 UI 문자열, 문장으로 맞추는 answer |
+
+목록의 grep은 test `tests/inventory`다. 목록의 각 file과 package가 없어야 하고, repository의 어느 Go
+file도 목록의 이름(`WIPHeadroom`, `taskIDLess`, `firstFlowmarkFile`, `ApplySchema`)을 쓰지 않아야
+하며, test 밖의 Go file은 WIP glyph literal, `@assignee` sigil, Mermaid, twin 접미사, `**/*.md`
+selection, 손으로 렌더한 SQL을 담지 않아야 하고, `sync/export.go`는 `documents`나 `items` table을
+이름으로 부르지 않아야 한다. plugin 행은 plugin repository의 항목 `T6`이 맡고 그 grep도 거기서
+돈다(plugin checklist).
 
 ## 검증
 
