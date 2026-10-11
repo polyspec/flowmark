@@ -8,7 +8,29 @@ import (
 	"testing"
 )
 
-const dataFile = "testdata/DerivedCoreProperties-17.0.0.txt"
+const (
+	dataFile    = "testdata/DerivedCoreProperties-17.0.0.txt"
+	licenseFile = "testdata/UNICODE-LICENSE.txt"
+)
+
+// TestUnicodeLicense requires the Unicode License v3, under which the data file is
+// distributed, to stand beside it in full: its copyright and permission notice must
+// appear with every copy.
+func TestUnicodeLicense(t *testing.T) {
+	src, err := os.ReadFile(licenseFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(src)
+	if !strings.HasPrefix(text, "UNICODE LICENSE V3\n") {
+		t.Fatalf("%s does not begin with the license title", licenseFile)
+	}
+	for _, want := range []string{"COPYRIGHT AND PERMISSION NOTICE", "Permission is hereby granted, free of charge,"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("%s lacks %q", licenseFile, want)
+		}
+	}
+}
 
 // TestTableIsFresh requires table.go to be the rendering of the data file, so a
 // table edited by hand, or left behind by a changed data file, fails here.
