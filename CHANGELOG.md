@@ -3,6 +3,7 @@
 
 ## Unreleased
 
+- T12.11.2: the board application runs on hyper's PHP server over orm and `markdown://`, in `examples/board/web`, with 1000 posts spread over the months January to October, 100 each: `posts` is sharded by the month of `created` in both board corpora, and `examples/board/seed` writes the posts through the engine.
 - T12.1-35: a `files` or `document` table can declare a time shard (`store ... shard <column> <year|month|day>`, orm T119): its rows stand in `<table>/<period>/<key>.flowmark.md` or its period document `<table>/<period>.flowmark.md`, an insert places a row in the file of its period, an update of the shard column moves the row and rewrites the links to it in the same write, a period without rows has no file, and the validator reports a row in another period's file as `shard.period`.
 - T12.7: the export to a database is done: a codec column keeps its stored cell, the host stages hex and ip at the end of its list are undone and orm applies them again, and only a host stage before a client stage is refused; with the identity keys and the `datetime(p)` bind of the earlier entries every table of the catalog exports.
 - T12.4: the IR executor is done: it answers every IR kind under the orm protocol with the rulings that need nothing from orm applied; the ten rulings that wait on an orm item are the sub-items T12.4-1 to T12.4-10, each applied after its orm bump.
