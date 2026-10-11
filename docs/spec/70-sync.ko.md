@@ -1,5 +1,5 @@
 <!-- doc-id: spec-sync -->
-<!-- source-sha256: 1c1d5b6dd58a8fef9b951d2490e8e61dfa671988ab249864559588a093b18d69 -->
+<!-- source-sha256: 531eda46374d63fcdbfe6197eb47f53cea39f185eceeeacc9aab84073e69eeb7 -->
 # Sync (범위를 정한 뼈대)
 
 [English](70-sync.md)
@@ -40,11 +40,13 @@
   insert되지 않은 행을 거절한다. 그런 cycle에서 서로 참조하는 행은 foreign key 검사를 미루는 database에만
   들어간다. export는 저장된 값과 다른 값을 써서 cycle을 끊지 않는다.
 - 같은 corpus는 매번 같은 statement를 낸다.
-- identity column이나 codec column이 있는 table은 export를 `CAPABILITY_UNSUPPORTED`로 실패시키며, 그 table과
-  column을 밝힌다. 근거: orm의 insert 규칙은 executor가 할당하는 identity column의 할당을 거절하고, orm은
-  PostgreSQL identity를 export가 넣은 key 너머로 옮기는 statement를 렌더하지 않으므로, export는 다른 행이
-  참조하는 key를 지킬 수 없다. codec column은 encode된 값을 저장하는데 orm의 insert는 decode된 값을 받아
-  encode하며, 엔진은 아직 저장된 값을 decode하지 않는다. 둘 다 orm을 기다린다(open question 6).
+- identity column이 있는 table은 orm의 `load` insert(identity column의 값을 받는다)로 저장된 key 그대로 행을
+  적재하고, 그 행 뒤에 orm의 `restart_identity` statement가 오며, 이 statement는 identity를 table의 가장 큰
+  key 너머로 옮긴다. 그래서 다른 행이 참조하는 key가 지켜지고 database가 다음에 생성하는 key는 그 뒤를
+  잇는다. 근거: key는 다른 행이 참조하는 행의 identity이며, 새 key를 생성하는 export는 그 참조를 깬다.
+- codec column이 있는 table은 export를 `CAPABILITY_UNSUPPORTED`로 실패시키며, 그 table과 column을 밝힌다.
+  근거: codec column은 encode된 값을 저장하는데 orm의 insert는 decode된 값을 받아 encode하며, 엔진은 아직
+  저장된 값을 decode하지 않는다. orm을 기다린다(open question 6).
 - parameter를 database driver에 bind하고 statement를 실행하는 일은 database executor의 일이며, orm은 이를
   client 안에 둔다. orm이 이를 드러내기 전까지 export는 statement에서 끝난다(open question 6).
 

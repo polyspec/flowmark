@@ -3,6 +3,7 @@
 
 ## Unreleased
 
+- T12.7 (in part): the export to a database keeps an identity table's keys: its rows load through orm's `load` insert and orm's identity restart follows, so the next generated key follows the largest loaded one; only codec tables are still refused.
 - T12.1-37: the detail-anchor collision rule reads each viewer's blocks: GitHub's and GitLab's footnote definitions, VS Code's math blocks, GitHub's footnote numbers and GitLab's wikilinks; GitLab's snippet prefix is stated as never applying to a corpus file.
 - T12.5-4: the codec's parse and render cost is linear in a file's bytes: about 48 and 35 ms per MB, allocating 50× and 39×, down from 2.1 s and 456× for parsing 1 MB.
 - T12.1-33: the collision rule reads raw HTML `<h1>`–`<h6>` headings, which GitHub anchors, and every heading element as GitHub's parser does, by recorded vectors; an element continuing into content the engine does not render takes an anchor its slug so far begins.
