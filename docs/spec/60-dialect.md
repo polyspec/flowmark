@@ -15,8 +15,21 @@ Go client implements it first and every other client is its own orm item.
 
 - **Request**: `{ir_version, manifest_hash, request, params, now}` per request. The client validates
   the request (`ir.Validate`) and does not plan it. `params` use the runtime value model JSON —
-  decimal as a string, bytes as base64, datetime as `YYYY-MM-DD HH:MM:SS.ffffff` UTC. Codec stages
-  are applied by the client, as for SQL.
+  decimal as a string, bytes as base64, datetime as `YYYY-MM-DD HH:MM:SS.ffffff` UTC and time as
+  `HH:MM:SS.ffffff`, whose digits past the column's precision p are zeros the value does not hold — a
+  parameter with another digit there is not a value of `datetime(p)` or `time(p)` (`CODEC_ENCODE`).
+  Codec stages are applied by the client, as for SQL. A parameter that is not a value of the type of
+  the slot it fills — the column it is compared with or assigned to, a column function's result,
+  `text` for `contains` and `contains_binary`, the `i32` or `f64` interval of a relative time
+  function — fails the request with `CODEC_ENCODE` before any row is read, naming the parameter index
+  and the type: its JSON kind, the type's range, a decimal's scale and precision, a time's or
+  datetime's precision, a `varchar`'s length, U+0000 in text, and a uuid's lower-case canonical form
+  are checked, as every orm client checks a bound value
+  ([orm protocol](https://github.com/polyspec/orm/blob/main/docs/protocol.md)). NULL is a value of
+  every slot except the assignment of a non-null column, where it is `CODEC_ENCODE`. Grounding:
+  orm's code for a bound value outside its slot is `CODEC_ENCODE`, and a check made before reading
+  makes the answer independent of the rows, as a bind failure is; `IR_INVALID` is structural, and
+  this request is well formed.
 - **Answer to a read**: `{"rows": [...]}` for `one`, `all` and `group_count`, `{"count": n}` for
   `count`, `{"value": v}` for `sum` and `avg`, `{"rows": [...], "count": n}` for `paginate`, `n`
   counting every matching row. A row is a JSON object: its outputs in projection order, then each join

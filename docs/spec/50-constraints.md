@@ -12,7 +12,7 @@ The failure codes are those of [operations](40-ops.md).
 - **Strict parse.** A line, block, section or key outside the [grammar](10-canonical-format.md) is
   a located diagnostic; there is no lenient mode and no invisible data.
 - **Types.** Every value follows its dbspec type in the readable form of the [canonical format](10-canonical-format.md); a value that fails
-  its type is the validator's `type`, and `CONSTRAINT` on a write that assigns it ([canonical format](10-canonical-format.md)).
+  its type is the validator's `type`, `CONSTRAINT` on a write the engine originates that assigns it, and `CODEC_ENCODE` for an orm parameter outside its type ([canonical format](10-canonical-format.md), [capability table](60-dialect.md#the-wire)).
 
 ## Keys and references
 
@@ -59,15 +59,15 @@ On write, each of the following is `CONSTRAINT`; the rule that states it is name
   ([canonical format](10-canonical-format.md));
 - a `files` body whose first line is a `-` list item or, after a field list, whose first line is indented by two or more columns (spaces, or a tab) ([canonical format](10-canonical-format.md));
 - an H1 title (of a `files` row) whose text ends in `\#` ([canonical format](10-canonical-format.md));
-- a text or `markdown` value that cannot be written byte for byte, and a typed value that `CanonicalLiteral` refuses (a decimal with more fraction digits than its scale, zeros included, or more integer digits than precision − scale; a time or datetime with more fraction digits than its precision) ([canonical format](10-canonical-format.md));
+- a text or `markdown` value that cannot be written byte for byte, and a typed value that `CanonicalLiteral` refuses (a decimal with more fraction digits than its scale, zeros included, or more integer digits than precision − scale; a time or datetime with more fraction digits than its precision); for an orm parameter, a typed value outside its type, U+0000 included, is `CODEC_ENCODE` instead ([canonical format](10-canonical-format.md));
 - a logical write that rewrites a file with a `format.*` diagnostic, naming the file and the diagnostic, and naming `flowmark canon` when it is `format.noncanonical`, apart from the exemptions of the commit ([canonical format](10-canonical-format.md)); a write never normalizes document bytes;
 - a `markdown` value holding a top-level heading of level ≤ L, by the CommonMark block structure
   ([canonical format](10-canonical-format.md));
 - a write that introduces a collision with a detail anchor (of a heading or an HTML `id` or `name`), located at the row and column whose written text holds the heading or id that takes the anchor — a `markdown` column's value, a `files` row's title for its H1, or, for a section or block heading, the row whose scope it opens, at the `markdown` column or child table it names — naming the detail heading whose anchor it takes: a
   title update, a payload write, a row insert, a key update, a move or the creation of a detail section, other than a duplicate key, which is `DUPLICATE_KEY`
   ([canonical format](10-canonical-format.md#detail-headings-and-anchors));
-- a date, time or datetime value written `now`, and a text longer than its column
-  ([canonical format](10-canonical-format.md));
+- a date, time or datetime value written `now`, and a text longer than its column (for an orm
+  parameter, `CODEC_ENCODE`) ([canonical format](10-canonical-format.md));
 - a list title token `<declared column>\:` ([canonical format](10-canonical-format.md#list-rows));
 - a `markdown` value holding a top-level setext heading, or leaving a fence or an HTML block open that the following
   element would be taken into, whichever write places that element ([canonical format](10-canonical-format.md#sections-and-their-values)).
