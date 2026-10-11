@@ -42,6 +42,10 @@ type docLayout struct {
 	// inFiles reports that the placement chain of the table reaches a files table, so
 	// that rows of the table lie in several files and a file holds only some of them.
 	inFiles bool
+	// nameList and requiredList are names and required, computed once with the layout,
+	// which every row reads.
+	nameList     []string
+	requiredList []dbspec.Column
 }
 
 // docLayoutOf returns the layout of table, which must be a document table of cat.
@@ -116,6 +120,8 @@ func layoutOfTable(cat *catalog.Catalog, tb *catalog.Table, placement string, in
 		return nil, err
 	}
 	lay.children = children
+	lay.nameList = lay.columnNames()
+	lay.requiredList = lay.requiredColumns()
 	return lay, nil
 }
 
@@ -173,8 +179,12 @@ func (l *docLayout) isField(name string) bool {
 }
 
 // required returns the columns whose value a row must have: a list's fields and
-// state, and a table's cells but its title, which the row holds as its title.
-func (l *docLayout) required() []dbspec.Column {
+// state, and a table's cells but its title, which the row holds as its title. The
+// caller does not change the slice.
+func (l *docLayout) required() []dbspec.Column { return l.requiredList }
+
+// requiredColumns computes required.
+func (l *docLayout) requiredColumns() []dbspec.Column {
 	var out []dbspec.Column
 	for _, c := range l.scalars {
 		switch {
@@ -643,8 +653,12 @@ func (p *docParser) nameBefore(line string, from, colon int) (string, int, bool)
 	return "", 0, false
 }
 
-// names returns the names of every column of the table, in column order.
-func (l *docLayout) names() []string {
+// names returns the names of every column of the table, in column order. The caller
+// does not change the slice.
+func (l *docLayout) names() []string { return l.nameList }
+
+// columnNames computes names.
+func (l *docLayout) columnNames() []string {
 	var out []string
 	out = append(out, l.key.Name)
 	for _, c := range l.scalars {
@@ -1075,6 +1089,7 @@ func (p *docParser) readDetails(lines []string, i, end int) {
 	if want := min(1, len(lines)-first); blank && (first-i != want || (want == 1 && lines[i] != "")) {
 		p.warn(i+1, 1, RuleNoncanonical, "one blank line separates the rows from the element after them")
 	}
+	byKey := recsByKey(p.recs)
 	for k := 0; k < len(heads); {
 		hd := heads[k]
 		next := k + 1
@@ -1086,7 +1101,7 @@ func (p *docParser) readDetails(lines []string, i, end int) {
 			stop = heads[next].at
 		}
 		if hd.level == h {
-			p.readDetail(lines, hd, heads[k+1:next], stop)
+			p.readDetail(lines, hd, heads[k+1:next], stop, byKey)
 		} else {
 			p.fail(hd.at+1, 1, RuleBlock, "content after the list or table is not a detail section")
 		}
@@ -1094,11 +1109,20 @@ func (p *docParser) readDetails(lines []string, i, end int) {
 	}
 }
 
+// recsByKey returns the rows of recs by their keys, each key's in their order.
+func recsByKey(recs []*docRec) map[string][]*docRec {
+	m := make(map[string][]*docRec, len(recs))
+	for _, rec := range recs {
+		m[rec.row.Key] = append(m[rec.row.Key], rec)
+	}
+	return m
+}
+
 // readDetail reads the detail section whose heading is h, with the headings sub
-// below it, up to end. The section names one row of p.recs; its body follows the
-// heading up to the first heading of the section level, and then its sections and
-// child blocks.
-func (p *docParser) readDetail(lines []string, h heading, sub []heading, end int) {
+// below it, up to end. The section names one row of p.recs, which byKey holds by key;
+// its body follows the heading up to the first heading of the section level, and then
+// its sections and child blocks.
+func (p *docParser) readDetail(lines []string, h heading, sub []heading, end int, byKey map[string][]*docRec) {
 	lay := p.lay
 	marks := strings.Repeat("#", h.level)
 	// The faults of the heading are at the first character of its text.
@@ -1120,12 +1144,7 @@ func (p *docParser) readDetail(lines []string, h heading, sub []heading, end int
 		return
 	}
 	p.details[text] = true
-	var match []*docRec
-	for _, rec := range p.recs {
-		if rec.row.Key == key {
-			match = append(match, rec)
-		}
-	}
+	match := byKey[key]
 	switch {
 	case len(match) == 0:
 		p.fail(h.at+1, col, RuleBlock, "the detail section names no row "+key)
@@ -1285,12 +1304,13 @@ func (p *docParser) checkScope(recs []*docRec) {
 		}
 	}
 	if lay.parent != "" {
+		byKey := recsByKey(recs)
 		for _, rec := range recs {
 			v := rec.row.Scalars[lay.parent]
 			if v == nil {
 				continue
 			}
-			switch n := countRows(recs, *v); {
+			switch n := len(byKey[*v]); {
 			case n == 0:
 				p.fail(rec.line, 1, RuleBlock, "the parent "+*v+" names no row of its block")
 			case n > 1:
@@ -1526,17 +1546,6 @@ func parentKey(lay *docLayout, r *Row) string {
 		}
 	}
 	return ""
-}
-
-// countRows returns the number of recs whose key is key.
-func countRows(recs []*docRec, key string) int {
-	n := 0
-	for _, rec := range recs {
-		if rec.row.Key == key {
-			n++
-		}
-	}
-	return n
 }
 
 // storageOrder returns the indexes of rows in storage order, the pre-order of the
