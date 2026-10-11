@@ -1,5 +1,5 @@
 <!-- doc-id: spec-ops -->
-<!-- source-sha256: f2d57e291744b8ec5ca2d63cdf95e77c2c5deb021f4de4cd6ea724a84f3a639c -->
+<!-- source-sha256: 38e0e5c3912eed43031484c2ab78e662295e06c8dcd2a07de9cfa5678410e681 -->
 # Operations
 
 [English](40-ops.md)
@@ -37,8 +37,8 @@
   lock 대기([잡기와 기다리기](#잡기와-기다리기))로, 기본값은 5000이고 0이면 곧바로 거절한다. `<corpus>`는 corpus
   root다. 다시 쓴 file마다 `[canon] rewrote <file>`, 보고한 file마다 `[canon] left <file>: <진단>`, 그리고
   둘의 개수를 출력한다. canon이 실행되면 보고한 file이 있어도 0으로, 거절되거나 실패하면 실패를 표준
-  오류에 쓰고 1로, 명령줄이 잘못되면 2로 끝난다. `T12.10`이 이 종료 코드를 CLI의 모든 명령으로
-  일반화한다.
+  오류에 쓰고 1로, 명령줄이 잘못되면 2로 끝난다 — CLI의 모든 명령의 종료 코드다
+  ([face](#face)).
 
 ## Server
 
@@ -82,6 +82,90 @@
   — read의 끝은 client의 close이고 server는 이를 half-close와 구별할 수 없으며, session은 그와 함께
   끝난다. `SIGINT`나 `SIGTERM`을 받으면 server는 listen을
   멈추고 모든 연결을 같은 방식으로 닫는다.
+
+## Face
+
+- CLI, MCP server, soksak sidecar는 write path의 얇은 face다. face의 각 operation은 session의
+  operation 하나 — IR-executor protocol의 요청, 이력 repair, rewrite, install — 이며, transaction 밖의
+  요청([transaction](#transaction))으로 face의 `--lock-wait-ms`를 가지고 lock 아래에서 실행한다. 요청
+  시계는 engine 시계다([시계](#시계)). 어떤 face도 corpus file을 직접 읽거나 쓰지 않는다. 근거: write
+  path 하나가 모든 규칙을 쥐므로, 어떤 face도 규칙을 달리 적용하거나 건너뛸 수 없다.
+- operation은 `operation`으로 이름을 주며 catalog의 어느 table에서나 동작한다: 어떤 face도 table,
+  column, 저장 방식의 이름을 갖지 않는다. 값 — `key`, `values`의 각 member, `position`, `parent`, 답하는
+  모든 값 — 은 protocol의 runtime value model JSON이다([capability table](60-dialect.ko.md#wire)).
+  `key`는 table의 primary key 값이다.
+
+| Operation | Member | 답 |
+| --- | --- | --- |
+| `schema` | — | `{"manifest_hash", "tables"}`: catalog — 각 table과 그 저장 방식, key, `title`, `body`, `order`, 계층 column, `markdown` column, column, foreign key, unique key, 상태기계 |
+| `rows` | `table` | `{"rows"}`: table의 모든 행을 저장 순서로, `columns` 없는 `all` 요청이 답하는 대로 |
+| `row.get` | `table`, `key` | `{"row"}`: key가 `key`인 행 |
+| `row.insert` | `table`, `values` | `{"affected", "keys", "rows"}` |
+| `row.update` | `table`, `key`, `values` | `{"affected", "keys", "rows"}` |
+| `row.move` | `table`, `key`, `position`, 선택 `parent` | `{"affected", "keys", "rows"}` |
+| `row.delete` | `table`, `key` | `{"affected", "keys", "rows"}` |
+| `transition` | `table`, `key`, `state`, 선택 `values` | `{"affected", "keys", "rows"}` |
+
+- `row.insert`는 `values`를 대입하는 `insert`이고, `row.update`는 key가 `key`인 행의 `update`로
+  `values`를 대입하며, `row.delete`는 그 행의 `delete`다. `row.move`는 그 행의 `update`로 `position`을
+  table의 `order` column에, `parent`가 주어지면 `parent`를 계층 column `parent`에 대입한다
+  ([document model](20-document-model.ko.md#순서)). `order`가 없는 table, 또는 계층이 없는 table의
+  `parent`는 `CONFIG`다. `transition`은 그 행의 `update`로 `state`를 table 상태기계의 column에, 함께
+  `values`를 대입하며 `values`는 전이가 요구하는 column을 담는다([constraints](50-constraints.ko.md#상태기계)).
+  상태기계가 없는 table은 `CONFIG`다. 각각은 그 종류의 요청과 똑같이 검사되고 commit된다. 어떤
+  face도 규칙을 더하거나 빼지 않는다.
+- 쓰기는 요청의 `{affected, keys}`와 함께, `rows`로 commit 직후 `rows`가 답하는 대로의 table 행을
+  답한다. 근거: view는 operation이 돌려준 행에서 다시 그리며, 결코 자기 추측에서 그리지 않는다
+  ([application schema](100-checklist.ko.md#view)).
+- `key`가 가리키는 행에 대한 operation이 어떤 행에도 맞지 않으면 — `row.get`, 또는 아무 행에도 영향이
+  없는 쓰기 — table과 key를 밝히며 한 행 읽기가 아무것도 맞추지 못했을 때의 orm code인 `NO_ROWS`다.
+  근거: 이름을 준 행에 대한 쓰기가 아무것도 바꾸지 않으면 조용한 누락이다.
+- 알 수 없는 `operation`, 빠진 member, operation이 받지 않는 member, object가 아닌 `values`는 그것을
+  밝히며 `CONFIG`다. catalog가 선언하지 않은 table이나 column은 요청의 `ENTITY_UNKNOWN`이나
+  `COLUMN_UNKNOWN`이다.
+- view operation — 저장된 filter와 sort를 통한 view의 행 — 은 `T12.3-1`을 기다린다: view table을
+  선언하는 setting이 없고, 저장된 filter는 그 parameter를 둘 곳이 없다. 그때까지 view 행은 다른 행과
+  똑같이 읽고 쓴다.
+- 실패는 `{"code", "error"}`로 답한다: [실패 어휘](#실패-어휘)의 face 이름 — 어휘가 나열하지 않는
+  code는 orm code — 와 메시지다.
+- **CLI.** 각 operation은 명령이다: `flowmark schema <corpus>`, `rows <corpus> <table>`,
+  `row.get <corpus> <table> <key>`, `row.insert <corpus> <table> [assignment…]`,
+  `row.update <corpus> <table> <key> [assignment…]`, `row.move <corpus> <table> <key> <position> [<parent>]`,
+  `row.delete <corpus> <table> <key>`, `transition <corpus> <table> <key> <state> [assignment…]`.
+  assignment는 `<column>=<text>`나 `<column>:=<json>`이고, 위치 값은 `<text>`나 `:=<json>`이다. text는
+  값의 읽을 수 있는 텍스트이며 column type의 wire 값으로 보낸다 — 정수와 float는 JSON number, `bool`은
+  JSON bool, 그 밖에는 JSON string. `:=`는 wire 값 자체를 받으며 `null`도 받는다. 모든 명령은
+  `--lock-wait-ms <n>`(기본값 5000, 0이면 곧바로 거절)을 받고, flag는 위치 인자의 앞에도 뒤에도 올 수
+  있다. 답은 표준 출력에 JSON 한 줄로 쓴다. 그 밖의 명령은 `flowmark canon`([canon 연산](#canon-연산)),
+  `flowmark install <corpus>`([schema](30-schema.ko.md#install)),
+  `flowmark history repair <corpus> <table> <key> [--from <state>]`
+  ([constraints](50-constraints.ko.md#엔진-밖에서-바뀐-상태)), `flowmark unlock <corpus>
+  [--holder <holder>]`([stale lock](#stale-lock))이다. 모든 명령은 실행되면 0으로, 거절되거나
+  실패하면 표준 오류에 `flowmark <command>: <code>: <message>`를 쓰고 1로, 명령줄이 잘못되면 2로
+  끝난다.
+- **`flowmark install`**은 lock 아래의 자기 transaction이며, canon처럼 열린 transaction 안에서는
+  `CONFIG`다. journal commit 하나로, file이 없는 각 `document` table의 file `<table>.flowmark.md` —
+  빈 table, `# <table>`과 LF 하나 — 와, 어느 줄도 `*.flowmark.md text eol=lf`가 아닐 때 그 줄을 마지막
+  줄 뒤에(마지막 줄에 LF가 없으면 LF와 함께) 덧붙인, 또는 새 file로 만든 `<corpus>/.gitattributes`를
+  쓴다. 그다음 같은 lock 아래에서 folder가 없는 각 `files` table의 folder를 만든다. table 자리의 경로에
+  다른 종류의 항목이 있거나 `.gitattributes`가 일반 file이 아니면 그것을 밝히며 install을 `CONFIG`로
+  거절하고 아무것도 쓰지 않는다. 만든 file이나 folder마다 `[install] created <path>`를, 줄을 더했으면
+  `[install] added the line *.flowmark.md text eol=lf to .gitattributes`를, 그리고 개수를 출력한다.
+  모든 것이 제자리에 있으면 아무것도 쓰지 않는다. 근거: install은 멱등이고, folder는 journal이 stage할
+  바이트를 갖지 않으므로 그 생성은 commit 뒤의 별도 멱등 단계다.
+- **MCP server.** `flowmark mcp [--lock-wait-ms <n>] <corpus>`는 표준 입출력으로 한 줄에 message
+  하나씩 JSON-RPC 2.0을 말하며 `initialize`, `tools/list`, `tools/call`을 갖는다. 각 operation은
+  `.`을 `_`로 바꾼 operation 이름의 tool 하나이며 그 인자는 operation의 member다. tool은 답의 JSON을
+  담은 text content 하나로, 또는 `isError`가 true인 실패의 JSON으로 답한다. 알 수 없는 method는
+  JSON-RPC 오류 -32601, JSON이 아닌 줄은 id가 null인 -32700이며, notification에는 답하지 않는다.
+- **Sidecar.** `flowmark sidecar [--lock-wait-ms <n>]`은 soksak core spec(`docs/spec/sidecars.md`)의
+  protocol v1을 말한다: 요청 `{"surface", "root", "body"}`는 root가 `root`인 corpus에서 body의
+  operation을 실행하고, 요청에 `cids`가 있으면 그것과 함께 `{"surface", "body"}`로 답한다. body의
+  `id`가 주어지면 답 body에 복사한다. 실패 body는 `{"id", "code", "error"}`이며, member `error`가
+  protocol이 읽는 대로 실패한 요청을 말한다. `closed` message에는 `{"surface", "closed": true}`로
+  답한다: surface는 아무 자원도 쥐지 않는다. 요청이 아닌 줄은 답할 surface를 밝히지 않으므로 표준
+  오류에 쓰며, host가 그것을 log에 남긴다. sidecar는 변경 event를 보내지 않는다: 운영체제 알림으로
+  움직이는 corpus watch는 `T12.5-2`의 오래 사는 corpus에 속하며, polling watch는 그 대체가 아니다.
 
 ## Lock
 
@@ -321,7 +405,7 @@ MySQL과 PostgreSQL은 `datetime(p)` column을 `NOW(6)`와 여섯 자리로 비�
 | `FOREIGN_KEY` | `FOREIGN_KEY` | 참조가 어떤 행도 가리키지 않거나, 참조된 행을 참조되는 동안 지우려 했다 |
 | `CONSTRAINT` | `CONSTRAINT` | catalog의 다른 규칙이 쓰기를 거절했다 — check, 제목, 전이, 필수 column, limit, 순서, 한 줄 자리. 규칙, 그리고 행과 column을 밝힌다([canonical format](10-canonical-format.ko.md#진단)); 비정규이거나 잘못된 문서를 다시 써야 하는 쓰기, 또는 사용할 수 없는 table의 행이 필요한 요청(읽기나 쓰기)은 file과 진단을 밝히며 `CONSTRAINT`다([canonical format](10-canonical-format.ko.md#진단)) |
 | `READ_ONLY` | `READ_ONLY` | 읽기 전용 transaction 안의 쓰기 |
-| `CONFIG` | `CONFIG` | session 상태가 허용하지 않는 control message([transaction](#transaction)), 또는 corpus 문서를 가리키지 않는 `flowmark canon` 경로([canon 연산](#canon-연산)) |
+| `CONFIG` | `CONFIG` | session 상태가 허용하지 않는 control message([transaction](#transaction)), corpus 문서를 가리키지 않는 `flowmark canon` 경로([canon 연산](#canon-연산)), 또는 알 수 없거나 member가 빠졌거나 table이 선언하지 않은 setting을 가리키는 face operation([face](#face)) |
 | 복구 거절 | `DRIVER` | 대상, 기록된 두 hash, 그 둘을 담은 stage file을 밝힌다. 해결될 때까지 열기와 lock을 잡는 모든 operation을 거절한다 — SQLite의 `SQLITE_CORRUPT`가 그렇듯 다른 code가 밝히지 않는 database 오류의 orm code인 `DRIVER`다. journal 아래 file system의 실패도 `DRIVER`다 |
 
 모든 실패 메시지는 원인과 고치는 방법을 밝힌다.
