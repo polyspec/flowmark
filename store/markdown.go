@@ -36,6 +36,14 @@ func (h heading) textCol(lines []string) int {
 	return 1 + utf8.RuneCountInString(l[:p])
 }
 
+// spelled reports whether h is spelled as the canonical heading of text: an ATX heading
+// on one line, its hashes, one space and text. A tab after the hashes, other white
+// space around or inside the text, and a setext underline are noncanonical spellings
+// of the same heading.
+func (h heading) spelled(text string) bool {
+	return h.last == h.at && !h.tab && h.text == text
+}
+
 // headingOf reads an ATX heading: up to three spaces, one to six '#', then a
 // space, a tab or the end of the line. The text is the rest of the line after that
 // one separator. tab reports whether the separator is a tab: the canonical

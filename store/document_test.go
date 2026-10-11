@@ -693,6 +693,46 @@ func TestSetextDetailHeading(t *testing.T) {
 	}
 }
 
+// TestDocumentSectionHeading requires that the faults of a section or block heading
+// of a detail section are located at the first character of the heading text, at
+// any level: a section of a block row's detail section is a level-5 heading.
+func TestDocumentSectionHeading(t *testing.T) {
+	cat := loadDocumentFixture(t)
+	lk := documentLinker()
+	cases := []struct {
+		name, text, rule, message string
+		line, col                 int
+	}{
+		{"10#diagnostics: an undeclared section heading is located at its text", itemsOf("- [ ] T1 Plan done:false", "", "## items row T1", "", "###  nope", "", "x"), RuleSection, "is not a section", 6, 6},
+		{"10#diagnostics: a noncanonical section heading is located at its text", itemsOf("- [ ] T1 Plan done:false", "", "## items row T1", "", "###  evidence", "", "x"), RuleNoncanonical, "section heading", 6, 6},
+		{"10#diagnostics: a section written twice is located at its text", itemsOf("- [ ] T1 Plan done:false", "", "## items row T1", "", "### evidence", "", "a", "", "###  evidence", "", "b"), RuleSection, "written twice", 10, 6},
+		{"10#diagnostics: a noncanonical block heading is located at its text", itemsOf("- [ ] T1 Plan done:false", "", "## items row T1", "", "###  item_checks", "- [x] C1 Plan done:true"), RuleNoncanonical, "block heading", 6, 6},
+		{"10#diagnostics: a section heading of a block row's detail section is located at its text", checkedOf("- [x] C1 Plan done:true", "", "#### item_checks row C1", "", "##### nope", "", "x"), RuleSection, "is not a section", 11, 7},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, diags, err := ParseDocument(cat, "items", "items.flowmark.md", []byte(c.text), lk)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !hasDiagAt(diags, c.rule, c.message, c.line, c.col) {
+				t.Fatalf("diagnostics %+v; want %s %q at %d:%d", diags, c.rule, c.message, c.line, c.col)
+			}
+		})
+	}
+}
+
+// hasDiagAt reports whether diags hold a diagnostic of rule whose message contains
+// message, at line and column.
+func hasDiagAt(diags []Diagnostic, rule, message string, line, col int) bool {
+	for _, d := range diags {
+		if d.Rule == rule && d.Line == line && d.Column == col && strings.Contains(d.Message, message) {
+			return true
+		}
+	}
+	return false
+}
+
 // TestTableRowWithoutTrailingPipe requires that a row without its last pipe keeps
 // its last cell whole, a final `\|` being a pipe of that cell, and that canon
 // writes the row with its last pipe.

@@ -189,12 +189,15 @@ and the column sections — are payload: the renderer moves them with their row 
   the row and column whose written text holds the heading or id that takes the anchor, and its message names
   the detail heading. Grounding: a column locates the text a rule names, and a block's first line can stand
   far from an attribute list on its last line or an `id` deep inside an HTML block.
-- A detail heading or section heading in a non-canonical spelling (a run of spaces or tabs other than the
+- A detail heading, section heading or block heading in a non-canonical spelling (a run of spaces or tabs other than the
   canonical single space — before its text, between its words or after it —, a tab after its hashes, a
   setext underline in place of the hashes, a case of the table name or of `row` other than the canonical
-  one) is `format.noncanonical`, so `flowmark canon` repairs it. The
+  one) is `format.noncanonical`, so `flowmark canon` repairs it. Its diagnostic is located at the first
+  character of its text ([Diagnostics](#diagnostics)). The
   canonical separator after the hashes is one space; a tab is never written, though CommonMark reads
-  `##` followed by a tab as the same heading. Grounding: the table name is fixed by the place of the
+  `##` followed by a tab as the same heading. Nor is a setext underline written, though CommonMark reads
+  a paragraph over a `-` underline as the same level-2 heading, and over a `=` underline as the same
+  level-1 heading (§4.3), so a setext section or block heading names the same section or block. Grounding: the table name is fixed by the place of the
   detail level and the word `row` by the grammar, and every named viewer lowercases both in the
   anchor, so a heading that differs from the canonical one only in their case names the same row
   under the same anchor. The two match when each equals its canonical text after lowercasing, as the viewers lowercase it: U+017F is not `s`, and U+212A lowercases to `k`.

@@ -154,6 +154,36 @@ func TestDefinitionBeforeSetextSection(t *testing.T) {
 	})
 }
 
+// TestFilesSectionHeading requires that the faults of a files row's section and block
+// headings are located at the first character of the heading text, and that a setext
+// underline in place of the hashes is a noncanonical spelling of either, reported by
+// the heading rule itself.
+func TestFilesSectionHeading(t *testing.T) {
+	cat := loadFixture(t)
+	lk := fixtureLinker()
+	cases := []struct {
+		name, text, rule, message string
+		line, col                 int
+	}{
+		{"10#diagnostics: an undeclared section heading is located at its text", withBase("##  nope", "", "x"), RuleSection, "is not a section", 5, 5},
+		{"10#diagnostics: a section heading of another level is located at its text", withBase("# nope", "", "x"), RuleSection, "is not a section", 5, 3},
+		{"10#diagnostics: a section written twice is located at its text", withBase("## evidence", "", "a", "", "## evidence", "", "b"), RuleSection, "written twice", 9, 4},
+		{"10#diagnostics: a noncanonical section heading is located at its text", withBase("##  evidence", "", "x"), RuleNoncanonical, "section heading", 5, 5},
+		{"10#diagnostics: a noncanonical block heading is located at its text", withBase("##  task_steps", "- S1 Draft done:true"), RuleNoncanonical, "block heading", 5, 5},
+		{"10#detail-headings-and-anchors: a setext section heading is a noncanonical section heading", withBase("evidence", "--------", "", "x"), RuleNoncanonical, "section heading", 5, 1},
+		{"10#detail-headings-and-anchors: a setext block heading is a noncanonical block heading", withBase("task_steps", "----------", "- S1 Draft done:true"), RuleNoncanonical, "block heading", 5, 1},
+		{"10#detail-headings-and-anchors: a section heading after a definition is located at its text", withBase("[r]: /u", "evidence", "--------", "", "x"), RuleNoncanonical, "section heading", 6, 1},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, diags := ParseFile(cat, "tasks", "tasks/T1.flowmark.md", []byte(c.text), lk)
+			if !hasDiagAt(diags, c.rule, c.message, c.line, c.col) {
+				t.Fatalf("diagnostics %+v; want %s %q at %d:%d", diags, c.rule, c.message, c.line, c.col)
+			}
+		})
+	}
+}
+
 // renderFileOf writes row as a file of table, failing the test when the table is not
 // a files table of the catalog.
 func renderFileOf(t testing.TB, cat *catalog.Catalog, table string, row *Row, lk Linker) ([]byte, []Refusal) {
