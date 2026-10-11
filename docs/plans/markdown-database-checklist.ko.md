@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database-checklist -->
-<!-- source-sha256: 633123100de7607389f306ff86b9443f2a2d5590da4f26b00fb5718dc29c2803 -->
+<!-- source-sha256: 74b5dd41d387462f385e4b20ea0fdf6b6812504927647306df645cb3b51c7ece -->
 # markdown database checklist
 
 ## T12 markdown database
@@ -38,11 +38,11 @@
 - [o] T12.1-17 list 표지 뒤의 space를 item 내용의 들여쓰기를 어떻게 옮기는지로 정한다. 원인: CommonMark에서 `-` 뒤의 space 둘에서 넷은 item 내용의 들여쓰기를 정하므로, space 둘로 들여 쓴 자식 행은 viewer에서 중첩되지 않지만 flowmark는 중첩한다. space 다섯 이상은 들여쓴 code block을 연다. codec은 그런 연속을 모두 `format.noncanonical`로 읽고, T12.1-12는 tab만 정했다. 완료 기준: T12.1-16과 같다 (T12.1-12 후속)
 - [o] T12.1-18 list나 table과 첫 상세 section 사이의 줄을 정한다. 원인: `store/document.go`의 상세 판독기는 빈 줄과 비교하므로, 거기서 space만 있는 줄은 CommonMark가 빈 줄로 읽는데도 `format.block`이다. 또 거기의 빈 줄을 적은 spec 문장이 없다. 완료 기준: T12.1-16과 같다 (T12.1-13 후속)
 - [o] T12.1-19 다른 대소문자로 쓴 document file의 H1을 정한다. 원인: `items.flowmark.md`의 `# Items`는 H1이 없다고 보고된 뒤 heading 검사를 거쳐 `format.block`이 된다. table 이름은 file이 정하는데도 그렇다. 완료 기준: T12.1-16과 같다 (T12.1-12 후속)
-- [ ] T12.1-20 한 행 scope에 두 번 쓴 `markdown` section에 spec 규칙이 있다. 원인: codec은 `format.section`을 보고하지만(`store/document.go`, `store/files.go`), spec 10은 두 번 쓴 자식 block에 대해서만 규칙을 적는다(T12.1-13). 완료 기준: 첫 round 전에 범위를 고정한 적대 검증을 거쳐 spec 10이 판정을 근거와 함께 적고, codec을 바꾸면 red 다음 green test가 있다 (T12.1-13 후속)
-- [ ] T12.1-21 두 block의 행이 바이트 단위로 공유하는 key로 가는 link는 규칙에 따라 target을 유도한다. 원인: `docParser.linkTarget`은 그 key를 가진 첫 행을 고르므로, 유도된 target이 상세 section 없는 행이 될 수 있고 올바른 link가 `format.noncanonical`로 읽힐 수 있다. table은 `key.duplicate`로 사용할 수 없지만, file 자신의 진단이 행 순서에 따라 달라져서는 안 된다. 완료 기준: T12.1-20과 같다 (T12.1-13 후속)
+- [o] T12.1-20 한 행 scope에 두 번 쓴 `markdown` section에 spec 규칙이 있다. 원인: codec은 `format.section`을 보고하지만(`store/document.go`, `store/files.go`), spec 10은 두 번 쓴 자식 block에 대해서만 규칙을 적는다(T12.1-13). 완료 기준: 첫 round 전에 범위를 고정한 적대 검증을 거쳐 spec 10이 판정을 근거와 함께 적고, codec을 바꾸면 red 다음 green test가 있다 (T12.1-13 후속)
+- [o] T12.1-21 두 block의 행이 바이트 단위로 공유하는 key로 가는 link는 규칙에 따라 target을 유도한다. 원인: `docParser.linkTarget`은 그 key를 가진 첫 행을 고르므로, 유도된 target이 상세 section 없는 행이 될 수 있고 올바른 link가 `format.noncanonical`로 읽힐 수 있다. table은 `key.duplicate`로 사용할 수 없지만, file 자신의 진단이 행 순서에 따라 달라져서는 안 된다. 완료 기준: T12.1-20과 같다 (T12.1-13 후속)
 - [ ] T12.1-22 anchor 규칙이 두 줄 setext 상세 heading과 정의 용어의 attribute list를 다룬다. 원인: Python-Markdown은 두 줄 setext heading을 문단과 수평선으로 렌더링하므로 canon 전까지 MkDocs에는 그 anchor가 없지만, T12.1-14는 그것을 noncanonical 상세 heading으로 읽는다. 또 MkDocs는 `def_list`를 켤 수 있고, attr_list는 그 용어를 읽는다. 완료 기준: T12.1-20과 같다 (T12.1-14 후속)
-- [ ] T12.1-23 쓰기 거절이 자식 block을 같은 방식으로 적고 중복을 한 번만 보고한다. 원인: `store/files.go`는 선언되지 않은 block을 빈 column으로 거절하지만 `store/document_render.go`는 block 이름을 적는다. 또 바이트가 같은 짝과 대소문자만 다른 짝을 함께 가진 key는 똑같은 `DUPLICATE_KEY` 거절을 두 번 받는다. 완료 기준: 첫 round 전에 범위를 고정한 적대 검증을 거쳐 spec 10의 Write faults 항목이 둘 다 적고, codec이 red 다음 green test와 함께 그것을 따른다 (T12.1-12 후속)
-- [ ] T12.1-24 history table의 저장 방식에 근거가 있다. 원인: spec 30은 history table을 근거 없이 `block <fk> table`로 저장하라고 요구하며, T12.1-15의 깊이 제한이 거기서 나온다. 완료 기준: 첫 round 전에 범위를 고정한 적대 검증을 거쳐 spec 30이 판정을 근거와 함께 적는다 (T12.1-15 후속)
+- [o] T12.1-23 쓰기 거절이 자식 block을 같은 방식으로 적고 중복을 한 번만 보고한다. 원인: `store/files.go`는 선언되지 않은 block을 빈 column으로 거절하지만 `store/document_render.go`는 block 이름을 적는다. 또 바이트가 같은 짝과 대소문자만 다른 짝을 함께 가진 key는 똑같은 `DUPLICATE_KEY` 거절을 두 번 받는다. 완료 기준: 첫 round 전에 범위를 고정한 적대 검증을 거쳐 spec 10의 Write faults 항목이 둘 다 적고, codec이 red 다음 green test와 함께 그것을 따른다 (T12.1-12 후속)
+- [o] T12.1-24 history table의 저장 방식에 근거가 있다. 원인: spec 30은 history table을 근거 없이 `block <fk> table`로 저장하라고 요구하며, T12.1-15의 깊이 제한이 거기서 나온다. 완료 기준: 첫 round 전에 범위를 고정한 적대 검증을 거쳐 spec 30이 판정을 근거와 함께 적는다 (T12.1-15 후속)
 - [ ] T12.1-25 test case가 적은 spec anchor가 모두 존재한다. 원인: test 이름은 고정하는 규칙을 `<spec>#<anchor>`로 적는데, 일부는 `10#order`, `10#storage-order`, `20#document-order`, `20#readable-values`처럼 어떤 spec에도 없는 anchor를 적으므로 그 test가 어떤 규칙을 고정하는지 알 수 없다. 완료 기준: 이름의 anchor가 그 spec의 heading이 아니면 실패하는 test가 있고, 모든 이름을 고치며, `go test ./...`가 통과한다 (T12.1-13 후속)
 - [o] T12.2.4-1 상태기계를 가진 table의 `list` 저장 block을 다룬다: checkbox glyph, 상태, 중첩 행을 가진 fixture block과 허용과 거절 사례, P1/P2 golden (T12.2.4 후속)
   - 완료 기준: fixture와 그 사례가 있고, fuzz target이 golden으로 seed되며, `go test -count=1 ./store/`가 통과한다.
@@ -78,7 +78,7 @@
 - [ ] T12.3 validator: key, foreign key, 순환, 제목, 블록 형식, 순서, limit, 이력 빈틈과 사슬, view. codec이 담은 값의 원문, 쓰인 target, 중복 행에 대한 `type`, `reference.dangling`, `key.duplicate`의 보고와 file을 가로지르는 `parent.cycle`을 포함한다 (T12.2 선행)
   - 완료 기준: 모든 규칙마다 허용과 거절 사례가 있고, parse와 emit은 golden seed로 fuzz한다.
 - [ ] T12.4 orm IR executor protocol 아래의 IR executor: params, 조립된 relation, 쓰기 답과 오류. orm `T61` 선행 (T12.3 선행)
-  - 완료 기준: 모든 규칙마다 허용과 거절 사례가 있고, parse와 emit은 golden seed로 fuzz한다. executor는 요청의 key 검사 두 가지 — 바이트 단위와 대소문자를 무시한 것 — 를 렌더링 전에 corpus에 대해 실행하며, 요청의 index와 함께 보고한다. codec에서 executor에 닿은 `DUPLICATE_KEY`는 INTERNAL이다.
+  - 완료 기준: 모든 규칙마다 허용과 거절 사례가 있고, parse와 emit은 golden seed로 fuzz한다. executor는 요청의 key 검사 두 가지 — 바이트 단위와 대소문자를 무시한 것 — 를 렌더링 전에 corpus에 대해 실행하며, 요청의 index와 함께 보고한다. codec에서 executor에 닿은 `DUPLICATE_KEY`는 INTERNAL이다. test는 다음을 포함한다: table에 `T1`이 있을 때 `T1`을 insert하면 table의 행을 가리키는 `{T1, -1, id}`가, `[T1, T1]`을 insert하면 table의 행을 가리키는 `{T1, 0, id}`와 index 0을 가리키는 `{T1, 1, id}`가 나온다 (T12.1-23).
 - [ ] T12.5 write path: portable lock, journal, transaction과 savepoint, 이력 행과 이력 repair, 순서 이동, `format.*` 진단이 있는 file을 다시 써야 하는 commit의 거절과 그 세 면제, 사용할 수 없는 table, 없는 folder나 file을 만드는 삽입, restrict 검사를 갖춘 file 전체 delete (T12.4 선행)
   - 완료 기준: 모든 규칙마다 허용과 거절 사례가 있고, parse와 emit은 golden seed로 fuzz한다.
 - [ ] T12.5-1 `flowmark canon <corpus> [file…]`: lock 아래 journal을 남기는 transaction 하나로 대상을 canonical 형식으로 다시 쓰며, 대상에 대해 commit 거절을 면제받고, `format.block`, `format.section`, `format.encoding`이 있는 file은 이름을 주면 거절하고 주지 않으면 보고하며, link 유도에 사용할 수 없는 table이 필요한 대상은 spec 40대로 거절하거나 보고한다. 그 거절에 관한 spec 40 문장의 문법을 바로잡는다 (T12.1-3 후속; T12.5 선행)

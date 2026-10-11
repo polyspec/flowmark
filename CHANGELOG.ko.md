@@ -1,9 +1,13 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 1ed8e07bdef1ee9ebceb0ef5b1cf959f4cee672352b7f260badf4895d18b26d6 -->
+<!-- source-sha256: 35f29fa886d9574419506f3df41dd896302e533c1ce200ff9a6d49be91638116 -->
 # Changelog
 
 ## Unreleased
 
+- T12.1-20: spec이 `markdown` column의 section은 행 scope 하나에 최대 한 번 선다고 적는다. 같은 column 이름의 두 번째 heading은 어떻게 적었든, 값이 같더라도 `format.section`이다. 두 값의 뜻은 확정적이지 않고, canon은 한 값의 바이트를 버려야만 고칠 수 있기 때문이다. codec은 이미 그렇게 했으며, test가 `files`와 document 행에서 이를 고정한다.
+- T12.1-21: 두 block의 행이 바이트 단위로 공유하는 key로의 link가 규칙으로 target을 유도한다. `parent`는 자기 block의 행에서 유도한다. 그 밖의 foreign key는 참조된 table의 두 행 이상이 그 key를 공유하면 유도된 target이 없으며, target 검사 없이 읽고 읽은 그대로 쓴다. 그래서 file의 진단이 더는 행의 순서에 달리지 않는다. 참조된 table의 배치 사슬이 `files` table에 닿으면 codec은 linker에 묻고, linker는 새 `ErrKeyShared`로 file 사이에서 공유된 key를 알린다. 그런 link에 target을 간직하지 않은 쓰기는 그 column에서 `CONSTRAINT`다.
+- T12.1-23: 쓰기 거절이 자식 block을 똑같이 이름 붙인다. `files` 행의 선언되지 않은 block은 document 행과 같이 그 block의 이름에서 거절된다. 행은 그 key column에 최대 하나의 `DUPLICATE_KEY`를 가진다. 바이트 단위로 같은 key를 가진 앞선 행 가운데 첫 행을 밝히고, 없으면 대소문자만 다른 행 가운데 byte 순서에서 가장 작은 key를 가진 행을 밝히며, 같은 key가 여럿이면 처음 준 행을 밝힌다.
+- T12.1-24: spec이 이력 table의 저장에 근거를 둔다. 이력 table은 상태 table 아래의 `block <fk> table`로, 또는 `document table`로 저장된다. 이력 규칙은 그 행과 foreign key 위에서 정해지며 그 자리 위에서 정해지지 않기 때문이다. block은 행의 이력을 행 곁에 둔다. document table은 어떤 깊이에서도 row scope 3을 가지므로, `markdown` column을 require하는 row scope 5의 block 상태기계도 그 이력이 document table이면 load된다.
 - T12.1-16: table header 행은 GFM이 읽듯 읽는다. 양 끝 pipe가 없거나(column 하나인 header는 둘 다 없어도 된다), tab 없이 세 칸까지 들여 쓰거나, 끝에 space, tab, 수직 탭, 폼 피드가 있으면 `format.noncanonical`이고, 네 column 들여쓰기는 `format.block`이다. 마지막 pipe가 없는 행은 마지막 `\|`까지 포함해 마지막 cell을 온전히 지키며 `format.noncanonical`이다. 전에는 1바이트가 조용히 잘렸다. 들여쓰기에 tab이 있는 delimiter 행은 `format.block`이다.
 - T12.1-17: list 표지 뒤의 연속은 column으로 재며 tab은 다음 4의 배수까지 나아가고, 그 너비의 space로 판정한다. 두에서 네 column은 `format.noncanonical`, 다섯 이상은 `format.block`이다. 더 넓은 행 아래 두 칸 들여 쓴 행은 CommonMark가 형제로 읽으므로 `format.block`이다. 두 칸 문법이 자리를 주지 않는, 그 행의 내용 들여쓰기에 선 행은 그 행의 자식이며 `format.noncanonical`이다. 이는 표지 뒤의 tab이 내용 들여쓰기를 옮기므로 `format.block`이라던 T12.1-12 판정을 대체한다. 그 근거는 모든 column에서 성립하지 않는다. column 2 mod 4의 tab은 너비가 한 column이라 아무것도 옮기지 않으며, column으로 재면 tab은 CommonMark가 읽는 그 space와 정확히 같게 판정된다.
 - T12.1-18: list나 table과 그 뒤 요소 사이에는 빈 줄이 정확히 하나 서며, file 끝에는 없다. 그 자리의 space와 tab만 있는 줄은 빈 줄이므로 더는 `format.block`이 아니다. 다른 개수, 또는 공백을 가진 빈 줄은 `format.noncanonical`이다.
