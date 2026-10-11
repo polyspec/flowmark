@@ -17,8 +17,17 @@ Go client implements it first and every other client is its own orm item.
   the request (`ir.Validate`) and does not plan it. `params` use the runtime value model JSON —
   decimal as a string, bytes as base64, datetime as `YYYY-MM-DD HH:MM:SS.ffffff` UTC. Codec stages
   are applied by the client, as for SQL.
-- **Answer to a read**: the rows assembled to the request's shape — joins, relations, `key_by`,
-  `flatten`.
+- **Answer to a read**: `{"rows": [...]}` for `one`, `all` and `group_count`, `{"count": n}` for
+  `count`, `{"value": v}` for `sum` and `avg`, `{"rows": [...], "count": n}` for `paginate`, `n`
+  counting every matching row. A row is a JSON object: its outputs in projection order, then each join
+  (a nested object, or null for a left join without a match) and each relation (a `one` relation an
+  object or null, a `many` relation an array, or an object keyed by `key_by`); a `flatten` relation is
+  answered as a `one` relation, and the client model merges it
+  ([orm protocol](https://github.com/polyspec/orm/blob/main/docs/protocol.md)). Values use the value
+  model of the parameters: a datetime `YYYY-MM-DD HH:MM:SS.ffffff` and a time `HH:MM:SS.ffffff`, a
+  decimal and bytes as strings, an integer or `f64` a JSON number, a `bool` a JSON bool, a date and a
+  uuid their readable text. A stored value the answer cannot write in that form is `INTERNAL`, never
+  answered as its stored text.
 - **Answer to a write**: `{affected, keys}`, where `keys` lists the generated or given primary key of
   each inserted row in insert order.
 - **Error**: one code of orm `errors.yaml`; a hash mismatch is `SCHEMA_HASH_MISMATCH`.

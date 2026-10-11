@@ -1,5 +1,5 @@
 <!-- doc-id: spec-dialect -->
-<!-- source-sha256: 0fa5ab874a4ed3922124a85b38eaa5357f34661210c75008406adc1b0a67484f -->
+<!-- source-sha256: b314fc5e6523dfe7aac38852dfdf11b1b955cdbb8d5cd5a7e1cfd98ca7909b54 -->
 # Capability table
 
 [English](60-dialect.md)
@@ -17,7 +17,15 @@ surface가 corpus에서 무엇을 하는지 또는 orm 전통에 따라 `CAPABIL
   검증(`ir.Validate`)하고 plan하지 않는다. `params`는 runtime value model JSON을 쓴다 — decimal은
   문자열, bytes는 base64, datetime은 UTC `YYYY-MM-DD HH:MM:SS.ffffff`. codec 단계는 SQL과 같이 client가
   적용한다.
-- **읽기의 답**: 요청의 형태 — join, relation, `key_by`, `flatten` — 로 조립된 행.
+- **읽기의 답**: `one`, `all`, `group_count`는 `{"rows": [...]}`, `count`는 `{"count": n}`, `sum`과
+  `avg`는 `{"value": v}`, `paginate`는 `{"rows": [...], "count": n}`이며 `n`은 일치하는 모든 행을 센다.
+  행은 JSON object다: projection 순서의 출력, 그다음 각 join(중첩 object, 또는 일치가 없는 left join이면
+  null)과 각 relation(`one` relation은 object나 null, `many` relation은 array, 또는 `key_by`로 key를 단
+  object). `flatten` relation은 `one` relation으로 답하고 client model이 병합한다
+  ([orm protocol](https://github.com/polyspec/orm/blob/main/docs/protocol.md)). 값은 parameter의 value
+  model을 쓴다: datetime은 `YYYY-MM-DD HH:MM:SS.ffffff`, time은 `HH:MM:SS.ffffff`, decimal과 bytes는
+  문자열, 정수나 `f64`는 JSON number, `bool`은 JSON bool, date와 uuid는 읽을 수 있는 텍스트. 답이 그
+  형태로 쓸 수 없는 저장 값은 `INTERNAL`이며, 저장된 텍스트로 답하지 않는다.
 - **쓰기의 답**: `{affected, keys}`. `keys`는 insert된 각 행의 생성되거나 주어진 primary key를 insert
   순서로 담는다.
 - **오류**: orm `errors.yaml`의 code 하나. hash 불일치는 `SCHEMA_HASH_MISMATCH`다.
