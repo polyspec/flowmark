@@ -110,14 +110,20 @@ func detailFields(s string) []string {
 }
 
 // layoutTable returns the name of the table of the layout that name names once both are
-// lowercased.
+// lowercased as the viewers lowercase them.
 func layoutTable(name string, tables map[string]int) (string, bool) {
 	for t := range tables {
-		if strings.ToLower(t) == strings.ToLower(name) {
+		if lowerAsViewers(t) == lowerAsViewers(name) {
 			return t, true
 		}
 	}
 	return "", false
+}
+
+// lowerAsViewers lowercases s by the full Unicode mapping, as JavaScript and Python
+// do: U+0130 lowercases to i and U+0307, where Go's simple mapping gives i alone.
+func lowerAsViewers(s string) string {
+	return strings.ToLower(strings.ReplaceAll(s, "İ", "i̇"))
 }
 
 // headingClashes returns the collisions of a heading that is not a detail heading: its
