@@ -144,7 +144,9 @@ func (r *reader) col(s *scope, ev *env, name string) (cell, dbspec.Type, *Error)
 func (r *reader) param(i int, t dbspec.Type) (cell, *Error) {
 	v, ok := decodeParam(r.cl.params[i], t)
 	if !ok {
-		return cell{}, errf(codeInternal, "parameter %d compared with a %s value is not a value of that type, which the check before reading refuses", i, t.String())
+		// An orm message's parameters are checked before any row is read; a face operation's are not, so a view
+		// filter's parameter outside its slot is refused here, as a bound value outside its slot is.
+		return cell{}, errf(codeCodecEncode, "parameter %d is not a value of %s", i, t.String())
 	}
 	return v, nil
 }

@@ -67,7 +67,7 @@ type call struct {
 // request (VERSION_MISMATCH, SCHEMA_HASH_MISMATCH), and the request is validated
 // with ir.Validate. params must hold n_params values, and now is the request clock
 // in the datetime wire form.
-func (e *Executor) decode(b []byte) (*call, *Error) {
+func (e *Executor) decode(b []byte, orm bool) (*call, *Error) {
 	var m message
 	dec := json.NewDecoder(bytes.NewReader(b))
 	dec.DisallowUnknownFields()
@@ -93,8 +93,12 @@ func (e *Executor) decode(b []byte) (*call, *Error) {
 	if len(m.Params) != req.NParams {
 		return nil, errf(codeIRInvalid, "params holds %d values for n_params %d", len(m.Params), req.NParams)
 	}
-	if err := e.checkParams(req, m.Params); err != nil {
-		return nil, err
+	// The parameters of an orm message are checked against their slots; the values of a face operation are the
+	// engine's own write, which the catalog's rules judge (spec 50 Types).
+	if orm {
+		if err := e.checkParams(req, m.Params); err != nil {
+			return nil, err
+		}
 	}
 	now, ok := datetimeOfWire(m.Now, 6)
 	if !ok || now.null {
@@ -139,8 +143,17 @@ type Result struct {
 // Execute runs the request message msg against the corpus c. A read answers its
 // rows; a write answers {affected, keys} with the post-image of the write, which
 // the write path commits. A failed request returns an *Error.
-func (e *Executor) Execute(c *Corpus, msg []byte) (*Result, error) {
-	cl, err := e.decode(msg)
+func (e *Executor) Execute(c *Corpus, msg []byte) (*Result, error) { return e.execute(c, msg, true) }
+
+// ExecuteFace runs the request message msg of a face operation, whose values are the engine's own write: the
+// parameters are not checked against their slots as an orm message's are, and the catalog's rules judge them
+// (spec 50 Types).
+func (e *Executor) ExecuteFace(c *Corpus, msg []byte) (*Result, error) {
+	return e.execute(c, msg, false)
+}
+
+func (e *Executor) execute(c *Corpus, msg []byte, orm bool) (*Result, error) {
+	cl, err := e.decode(msg, orm)
 	if err != nil {
 		return nil, err
 	}
