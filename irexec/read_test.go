@@ -182,6 +182,9 @@ func TestWhere(t *testing.T) {
 		{"60#surfaces: an unknown function", f.msg("all", "items", map[string]any{"where": where(pred("due", "eq", map[string]any{"p": 0, "fn": map[string]any{"name": "week"}}))}, 1), "FUNCTION_UNKNOWN"},
 		{"60#surfaces: a column function on a text column", f.msg("all", "items", map[string]any{"where": where(pred("title", "eq", map[string]any{"p": 0, "fn": map[string]any{"name": "year"}}))}, 1), "OPERATOR_NOT_ALLOWED"},
 		{"60#surfaces: a reference to a join the statement lacks", f.msg("all", "items", map[string]any{"where": where(pred("id", "eq_col", ref("nope", "id")))}), "ENTITY_NOT_JOINED"},
+		{"60#surfaces: two columns of different kinds do not meet", f.msg("all", "items", map[string]any{"where": where(pred("id", "eq_col", ref("", "position")))}), "OPERATOR_NOT_ALLOWED"},
+		{"60#surfaces: a column of a different kind does not meet an in subquery column", f.msg("all", "items", map[string]any{"where": where(pred("id", "in", map[string]any{"sub": map[string]any{"query": map[string]any{"entity": "people"}, "column": "age"}}))}), "OPERATOR_NOT_ALLOWED"},
+		{"60#surfaces: a column comparison of a bool by order", f.msg("all", "people", map[string]any{"where": where(pred("active", "gt_col", ref("", "active")))}), "OPERATOR_NOT_ALLOWED"},
 		{"60#surfaces: ^ outside a subquery", f.msg("all", "items", map[string]any{"where": where(pred("id", "eq_col", ref("^", "id")))}), "IR_INVALID"},
 		{"60#surfaces: a scalar subquery of several rows has no rule yet", f.msg("all", "people", map[string]any{"columns": map[string]any{"mode": "none", "sub": map[string]any{"any_item": map[string]any{"query": map[string]any{"entity": "items"}, "column": "id"}}}}), "CAPABILITY_UNSUPPORTED"},
 	}

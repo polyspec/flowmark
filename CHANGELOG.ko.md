@@ -1,9 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: e580fa2e6717ccaae17790df947fb3f1bbd15c11cf0fc36520f26f42c9b6229c -->
+<!-- source-sha256: 33fca172280ab74256d0130120b3f96f8cc0dd387d3549dc310fba3baa5ea8bf -->
 # Changelog
 
 ## Unreleased
 
+- T12.4-8: IR 실행기가 orm의 열 쌍 규칙을 따른다. 만나지 않는 두 컬럼과 컬럼의 type이나 codec이 허용하지 않는 열 비교 연산자는 orm의 validator에서 `OPERATOR_NOT_ALLOWED`로 답하며, 실행기 자체의 이전 답은 지웠다.
 - T12.4-7: IR 실행기가 orm의 key 갱신 규칙을 따른다. primary key나 identity 컬럼(`restore`는 soft delete 컬럼도)을 할당하는 `update`나 `restore`는 orm의 validator에서 `IR_INVALID`로 답하며, 그에 대한 실행기 자체의 이전 답은 지웠다.
 - T12.4-9: IR 실행기가 insert는 값이나 NULL로 할당한다는 orm의 규칙을 따른다. insert의 `set`에 있는 `plus_p`와 `minus_p`는 orm의 validator에서 `IR_INVALID`로 답하며, 실행기 자체의 이전 답은 지웠다.
 - T12.4-3: IR 실행기가 orm의 `key_by` 규칙을 따른다. nullable 컬럼으로 key를 정한 relation은 orm의 validator에서 `IR_INVALID`로 답하며, 그에 대한 실행기 자체의 이전 답은 지웠다.

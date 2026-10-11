@@ -151,8 +151,8 @@ func (r *reader) param(i int, t dbspec.Type) (cell, *Error) {
 }
 
 // cmpCells compares two values: unknown when either is NULL. Two values whose types
-// read as different kinds do not meet, which orm's validator refuses once it checks
-// column pairs (spec 60 Surfaces, column comparisons).
+// read as different kinds do not meet, which orm's validator refuses before the
+// executor reads a row (spec 60 Surfaces, column comparisons).
 func cmpCells(at dbspec.Type, a cell, bt dbspec.Type, b cell) (int, bool, *Error) {
 	if a.null || b.null {
 		return 0, true, nil
@@ -166,7 +166,7 @@ func cmpCells(at dbspec.Type, a cell, bt dbspec.Type, b cell) (int, bool, *Error
 		return 0, false, errf(codeInternal, "%q is not a readable %s", b.text, bt.String())
 	}
 	if sa.kind != sb.kind {
-		return 0, false, unspecified("a comparison of a " + at.String() + " value with a " + bt.String() + " value, OPERATOR_NOT_ALLOWED once ir.Validate refuses it (orm T96; the operator's allowance, orm T97)")
+		return 0, false, errf(codeInternal, "a %s value compared with a %s value, which ir.Validate refuses", at.String(), bt.String())
 	}
 	return compare(sa, sb), false, nil
 }
