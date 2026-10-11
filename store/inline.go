@@ -2,6 +2,8 @@ package store
 
 import (
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/polyspec/flowmark/internal/htmlentity"
 )
@@ -12,92 +14,172 @@ type htmlAttr struct {
 	name, value string
 }
 
-// inlineResult is the inline text of a heading or a paragraph as F_G reads it:
-// text, where an image keeps no text, and alt, where an image keeps its alt text; and
-// the attributes of each raw HTML open tag of the source, in order.
+// reading is the rendered text of a heading in one reading, split at its line breaks:
+// S_GH and S_VS join its lines with nothing, S_GL with a space (spec 10, Detail headings
+// and anchors). A line feed that a character reference writes is text, not a break.
+type reading []string
+
+// inlineResult is the rendered text of a heading or a paragraph: text, where an image
+// renders no text, and alt, where an image renders its alt text; and the attributes of
+// each raw HTML open tag of the source, in order.
 type inlineResult struct {
-	text, alt string
+	text, alt reading
 	tags      [][]htmlAttr
 	tagAt     []int // the offset in the source of the '<' of each tag
 }
 
-// inlineText returns the inline text of s, as F_G reads it. The reader follows the
-// precedence of CommonMark 0.31.2 where it decides what is text: a code span, an
-// autolink and a raw HTML tag bind tighter than a link bracket, and a link may not
-// contain another link, so the brackets around one turn inactive. A link keeps its text
-// and loses its target and title. An image keeps no text in text, since the text of an
-// img element is empty, and its alt text in alt. Markup that is not a letter or a digit,
-// such as emphasis markers and escapes, is kept as characters, which F_G drops. A
-// bracket pair that is followed by no inline target is a link when refs defines its
-// label: a full, a collapsed or a shortcut reference, which keeps its text. Otherwise
-// the brackets are text, and the text stays.
+// inlineText returns the text that CommonMark 0.31.2 renders from the inline content
+// s, the text of a heading's text nodes and code spans. A backslash escape renders the
+// escaped character, and a backslash or two or more spaces before a line ending a hard
+// line break; a line ending is a soft line break, without the spaces before it. A code
+// span renders its content normalized (§6.1): each line ending a space, and one space
+// stripped at each end when both ends are spaces and the content is not all spaces. A
+// character reference renders its character, a numeric one its code point (§2.5). An
+// autolink renders its text, a raw HTML construct nothing; an open tag is recorded. A
+// link renders its text without its target and title; a bracket pair followed by no
+// inline target is a link when refs defines its label, a full, a collapsed or a
+// shortcut reference. An image renders no text in text, since the text of an img
+// element is empty, and in alt the plain-text rendering of its description. Emphasis
+// and strong delimiters render nothing where the delimiter algorithm of §6.2 and the
+// appendix's process emphasis matches them, and are text elsewhere, as is every
+// bracket and delimiter that forms nothing.
 func inlineText(s string, refs linkRefs) inlineResult {
 	r := inlineReader{s: s, refs: refs}
 	r.run()
-	return inlineResult{text: string(r.plain), alt: string(r.out), tags: r.tags, tagAt: r.tagAt}
+	text, alt := r.readings()
+	return inlineResult{text: text, alt: alt, tags: r.tags, tagAt: r.tagAt}
 }
 
-// inlineReader holds the text kept so far, with and without the alt text of images, the
-// tags read and their offsets, the open brackets, and the link reference definitions that
-// F_G reads.
+// inlineReader holds the rendered pieces read so far, the stacks of emphasis
+// delimiters and of open brackets, the tags read and their offsets, and the link
+// reference definitions of the file.
 type inlineReader struct {
-	s     string
-	refs  linkRefs
-	out   []byte // the kept text with the alt text of each image
-	plain []byte // the kept text with no text of an image
-	tags  [][]htmlAttr
-	tagAt []int
-	open  []bracket
+	s      string
+	refs   linkRefs
+	nodes  []inlineNode
+	delims []delimiter
+	open   []bracket
+	tags   [][]htmlAttr
+	tagAt  []int
 }
 
-// keep keeps s as text, in both readings.
-func (r *inlineReader) keep(s string) {
-	r.out = append(r.out, s...)
-	r.plain = append(r.plain, s...)
+// inlineNode is a piece of the rendered text: a text, or a line break; image marks a
+// piece of an image's description, which the text reading drops.
+type inlineNode struct {
+	text  string
+	brk   bool
+	image bool
 }
 
-// bracket is an open link or image bracket: the length of the kept text in each reading
-// when it was read, the index of its '[' in the source, whether it opens an image, and
-// whether it may still open a link.
+// delimiter is a run of '*' or '_' that can open or close emphasis: the node that holds
+// its remaining characters, its character, the length of its run as read, whether it
+// can open and close, and whether it is still on the stack.
+type delimiter struct {
+	node              int
+	char              byte
+	length            int
+	canOpen, canClose bool
+	live              bool
+}
+
+// bracket is an open link or image bracket: the node of its "[" or "![", the index of
+// its '[' in the source, whether it opens an image, whether it may still open a link,
+// and the length of the delimiter stack when it was read, below which a link's
+// emphasis is not processed.
 type bracket struct {
-	pos, plainPos int
-	src           int
-	image         bool
-	active        bool
+	node   int
+	src    int
+	image  bool
+	active bool
+	bottom int
 }
 
-// run reads the whole of r.s, left to right.
+// text appends s to the rendered text.
+func (r *inlineReader) text(s string) {
+	r.nodes = append(r.nodes, inlineNode{text: s})
+}
+
+// run reads the whole of r.s, left to right, then processes the emphasis of the
+// delimiters left.
 func (r *inlineReader) run() {
 	s := r.s
 	for i := 0; i < len(s); {
 		c := s[i]
 		switch {
-		case c == '\\' && i+1 < len(s) && isASCIIPunct(s[i+1]):
+		case c == '\\' && i+1 < len(s) && s[i+1] == '\n':
+			r.nodes = append(r.nodes, inlineNode{brk: true})
 			i += 2
+		case c == '\\' && i+1 < len(s) && isASCIIPunct(s[i+1]):
+			r.text(s[i+1 : i+2])
+			i += 2
+		case c == '\n':
+			r.nodes = append(r.nodes, inlineNode{brk: true})
+			i++
+		case c == ' ':
+			j := i + runOf(s[i:], ' ')
+			if j == len(s) || s[j] != '\n' {
+				r.text(s[i:j])
+			}
+			i = j
 		case c == '`':
 			i = r.codeSpan(i)
 		case c == '<':
 			i = r.angle(i)
 		case c == '&':
 			i = r.reference(i)
+		case c == '*' || c == '_':
+			i = r.delimiterRun(i)
 		case c == '!' && i+1 < len(s) && s[i+1] == '[':
-			r.open = append(r.open, bracket{pos: len(r.out), plainPos: len(r.plain), src: i + 1, image: true, active: true})
+			r.open = append(r.open, bracket{node: len(r.nodes), src: i + 1, image: true, active: true, bottom: len(r.delims)})
+			r.text("![")
 			i += 2
 		case c == '[':
-			r.open = append(r.open, bracket{pos: len(r.out), plainPos: len(r.plain), src: i, active: true})
+			r.open = append(r.open, bracket{node: len(r.nodes), src: i, active: true, bottom: len(r.delims)})
+			r.text("[")
 			i++
 		case c == ']':
 			i = r.closeBracket(i)
 		default:
-			r.keep(s[i : i+1])
+			r.text(s[i : i+1])
 			i++
 		}
 	}
+	r.processEmphasis(0)
 }
 
-// codeSpan reads the code span that opens at i: a run of backticks, closed by the
-// next run of the same length, whose content is kept. An opening run with no closing
-// run is text.
+// readings returns the rendered text in its two readings: text without the
+// descriptions of images, and alt with them.
+func (r *inlineReader) readings() (reading, reading) {
+	var text, alt []strings.Builder
+	text, alt = make([]strings.Builder, 1), make([]strings.Builder, 1)
+	for _, n := range r.nodes {
+		if n.brk {
+			alt = append(alt, strings.Builder{})
+			if !n.image {
+				text = append(text, strings.Builder{})
+			}
+			continue
+		}
+		alt[len(alt)-1].WriteString(n.text)
+		if !n.image {
+			text[len(text)-1].WriteString(n.text)
+		}
+	}
+	return builtReading(text), builtReading(alt)
+}
+
+// builtReading returns the lines that the builders hold.
+func builtReading(b []strings.Builder) reading {
+	out := make(reading, len(b))
+	for i := range b {
+		out[i] = b[i].String()
+	}
+	return out
+}
+
+// codeSpan reads the code span that opens at i: a run of backticks, closed by the next
+// run of the same length, whose content renders normalized as §6.1 states. An opening
+// run with no closing run is text.
 func (r *inlineReader) codeSpan(i int) int {
 	s := r.s
 	n := runOf(s[i:], '`')
@@ -108,22 +190,33 @@ func (r *inlineReader) codeSpan(i int) int {
 		}
 		m := runOf(s[k:], '`')
 		if m == n {
-			r.keep(s[i+n : k])
+			r.text(codeContent(s[i+n : k]))
 			return k + m
 		}
 		k += m
 	}
-	r.keep(s[i : i+n])
+	r.text(s[i : i+n])
 	return i + n
 }
 
-// angle reads what begins with '<' at i: an autolink, whose text is kept, or a raw
-// HTML construct, which is not text and whose open tag is recorded. Any other '<' is
-// text.
+// codeContent returns the rendered content of a code span: each line ending a space,
+// then one space stripped from each end when both ends are spaces and the content is
+// not all spaces.
+func codeContent(c string) string {
+	c = strings.ReplaceAll(c, "\n", " ")
+	if len(c) >= 2 && c[0] == ' ' && c[len(c)-1] == ' ' && strings.Trim(c, " ") != "" {
+		return c[1 : len(c)-1]
+	}
+	return c
+}
+
+// angle reads what begins with '<' at i: an autolink, whose text renders, or a raw
+// HTML construct, which renders no text and whose open tag is recorded. Any other '<'
+// is text.
 func (r *inlineReader) angle(i int) int {
 	s := r.s[i:]
 	if n, text := autolinkAt(s); n > 0 {
-		r.keep(text)
+		r.text(text)
 		return i + n
 	}
 	if n, attrs, open := htmlMarkupAt(s); n > 0 {
@@ -133,33 +226,150 @@ func (r *inlineReader) angle(i int) int {
 		}
 		return i + n
 	}
-	r.keep("<")
+	r.text("<")
 	return i + 1
 }
 
-// reference reads the character reference at i, whose decoded text is kept. An
+// reference reads the character reference at i, which renders its decoded text. An
 // ampersand that begins no reference is text.
 func (r *inlineReader) reference(i int) int {
 	if text, n := htmlentity.Reference(r.s[i:]); n > 0 {
-		r.keep(text)
+		r.text(text)
 		return i + n
 	}
-	r.keep("&")
+	r.text("&")
 	return i + 1
 }
 
+// delimiterRun reads the run of '*' or '_' at i as text, and pushes it on the delimiter
+// stack when it can open or close emphasis by the flanking rules of §6.2: the start and
+// the end of the text count as white space.
+func (r *inlineReader) delimiterRun(i int) int {
+	s := r.s
+	c := s[i]
+	n := runOf(s[i:], c)
+	before, after := rune(-1), rune(-1)
+	if i > 0 {
+		before, _ = utf8.DecodeLastRuneInString(s[:i])
+	}
+	if i+n < len(s) {
+		after, _ = utf8.DecodeRuneInString(s[i+n:])
+	}
+	left := !cmSpace(after) && (!cmPunct(after) || cmSpace(before) || cmPunct(before))
+	right := !cmSpace(before) && (!cmPunct(before) || cmSpace(after) || cmPunct(after))
+	open, closes := left, right
+	if c == '_' {
+		open = left && (!right || cmPunct(before))
+		closes = right && (!left || cmPunct(after))
+	}
+	if open || closes {
+		r.delims = append(r.delims, delimiter{node: len(r.nodes), char: c, length: n, canOpen: open, canClose: closes, live: true})
+	}
+	r.text(s[i : i+n])
+	return i + n
+}
+
+// cmSpace reports whether r is Unicode white space as CommonMark 0.31.2 defines it, a
+// character of category Zs, a tab, a line feed, a form feed or a carriage return; -1,
+// the start or the end of the text, counts as white space.
+func cmSpace(r rune) bool {
+	switch r {
+	case -1, '\t', '\n', '\f', '\r':
+		return true
+	}
+	return unicode.Is(unicode.Zs, r)
+}
+
+// cmPunct reports whether r is Unicode punctuation as CommonMark 0.31.2 defines it, a
+// character of a category P or S.
+func cmPunct(r rune) bool {
+	return r >= 0 && unicode.In(r, unicode.P, unicode.S)
+}
+
+// processEmphasis matches the openers and closers of the delimiter stack above bottom,
+// as the delimiter algorithm of §6.2 and the appendix's process emphasis state: each
+// closer, left to right, takes the nearest opener of its character that the rule of
+// three allows, above the lowest one already known to have none; a
+// match removes one delimiter character from each, two when both runs have two, and
+// takes the delimiters between them off the stack. The delimiters above bottom then
+// leave the stack, and their remaining characters are text.
+func (r *inlineReader) processEmphasis(bottom int) {
+	type key struct {
+		char    byte
+		mod     int
+		canOpen bool
+	}
+	openersBottom := map[key]int{}
+	for cur := bottom; cur < len(r.delims); {
+		d := &r.delims[cur]
+		if !d.live || !d.canClose {
+			cur++
+			continue
+		}
+		k := key{d.char, d.length % 3, d.canOpen}
+		lower := bottom - 1
+		if v, ok := openersBottom[k]; ok && v > lower {
+			lower = v
+		}
+		found := -1
+		for o := cur - 1; o > lower; o-- {
+			od := &r.delims[o]
+			if !od.live || od.char != d.char || !od.canOpen {
+				continue
+			}
+			if (od.canClose || d.canOpen) && (od.length+d.length)%3 == 0 && (od.length%3 != 0 || d.length%3 != 0) {
+				continue
+			}
+			found = o
+			break
+		}
+		if found < 0 {
+			openersBottom[k] = cur - 1
+			if !d.canOpen {
+				d.live = false
+			}
+			cur++
+			continue
+		}
+		od := &r.delims[found]
+		opener, closer := &r.nodes[od.node].text, &r.nodes[d.node].text
+		use := 1
+		if len(*opener) >= 2 && len(*closer) >= 2 {
+			use = 2
+		}
+		*opener = (*opener)[:len(*opener)-use]
+		*closer = (*closer)[use:]
+		for m := found + 1; m < cur; m++ {
+			r.delims[m].live = false
+		}
+		if *opener == "" {
+			od.live = false
+		}
+		if *closer == "" {
+			d.live = false
+			cur++
+		}
+	}
+	for m := bottom; m < len(r.delims); m++ {
+		r.delims[m].live = false
+	}
+}
+
 // closeBracket reads the ']' at i. The nearest open bracket forms a link or an image
-// when an inline target or a reference that refs defines follows it; a link deactivates
-// the brackets of links before it, and an image drops the text it encloses. Otherwise
-// the bracket is text, its label kept.
+// when an inline target or a reference that refs defines follows it: the emphasis of
+// its text is processed, its brackets render nothing, a link deactivates the brackets
+// of links before it, and the description of an image leaves the text reading.
+// Otherwise the ']' is text, and an inactive bracket leaves the stack as text.
 func (r *inlineReader) closeBracket(i int) int {
 	n := len(r.open)
 	if n == 0 {
+		r.text("]")
 		return i + 1
 	}
 	o := r.open[n-1]
 	r.open = r.open[:n-1]
 	if !o.active {
+		r.text("]")
 		return i + 1
 	}
 	end, ok := inlineTail(r.s, i+1)
@@ -167,11 +377,15 @@ func (r *inlineReader) closeBracket(i int) int {
 		end, ok = r.refTail(o, i)
 	}
 	if !ok {
+		r.text("]")
 		return i + 1
 	}
+	r.processEmphasis(o.bottom)
+	r.nodes[o.node].text = ""
 	if o.image {
-		// The alt text stays in alt; the text of the image leaves the plain reading.
-		r.plain = r.plain[:o.plainPos]
+		for k := o.node + 1; k < len(r.nodes); k++ {
+			r.nodes[k].image = true
+		}
 	} else {
 		for k := range r.open {
 			if !r.open[k].image {

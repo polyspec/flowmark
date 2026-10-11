@@ -7,9 +7,10 @@ import (
 )
 
 // The collision rule of spec 10 (Detail headings and anchors): a heading that is not a
-// detail heading takes the anchor of a detail heading when its fold equals the anchor's
-// fold once a final run of digits is removed from each; an HTML id or name equal to an
-// anchor, in raw HTML as CommonMark 0.31.2 reads it, collides too. A detail heading is a
+// detail heading takes the anchor of a detail heading when one of its slugs, S_GH, S_VS
+// or S_GL, equals the anchor or is numbered to it (takesAnchor); an HTML id or name that
+// equals the anchor, or user-content- followed by it, once lowercased, in raw HTML as
+// CommonMark 0.31.2 reads it, collides too. A detail heading is a
 // top-level heading whose text is `<table> row <key>` at the detail level of its table,
 // the row scope level less one, which the layouts of the file give.
 
@@ -123,13 +124,7 @@ func anchorClashes(lines []string, tables map[string]int) []anchorClash {
 			others = append(others, h)
 		}
 	}
-	// A setext heading begins at the first line of its paragraph that is text.
-	setext := map[int]unit{}
-	for _, u := range sc.blocks {
-		if u.heading {
-			setext[u.at+textStart(u.lines)] = u
-		}
-	}
+	setext := setextStarts(sc.blocks)
 	var out []anchorClash
 	for _, h := range others {
 		out = append(out, headingClashes(lines, h, setext, anchors, g)...)
@@ -144,6 +139,18 @@ func anchorClashes(lines []string, tables map[string]int) []anchorClash {
 		return out[i].at < out[j].at
 	})
 	return out
+}
+
+// setextStarts returns the setext headings among the blocks by the line where each
+// begins: the first line of its paragraph that is text.
+func setextStarts(blocks []unit) map[int]unit {
+	setext := map[int]unit{}
+	for _, u := range blocks {
+		if u.heading {
+			setext[u.at+textStart(u.lines)] = u
+		}
+	}
+	return setext
 }
 
 // detailHeading reports whether h is a detail heading of one of the tables, and its
@@ -174,28 +181,23 @@ func detailFields(s string) []string {
 // lowercased as the viewers lowercase them.
 func layoutTable(name string, tables map[string]int) (string, bool) {
 	for t := range tables {
-		if lowerAsViewers(t) == lowerAsViewers(name) {
+		if lowerFull(t) == lowerFull(name) {
 			return t, true
 		}
 	}
 	return "", false
 }
 
-// lowerAsViewers lowercases s by the full Unicode mapping, as JavaScript does:
-// U+0130 lowercases to i and U+0307, where Go's simple mapping gives i alone.
-func lowerAsViewers(s string) string {
-	return strings.ToLower(strings.ReplaceAll(s, "İ", "i̇"))
-}
-
 // headingClashes returns the collisions of a heading that is not a detail heading: its
-// fold against each anchor, and the HTML tags of its text, read with the definitions of
-// the file.
+// slugs against each anchor, by its rendered text without the text of its images and by
+// its rendered text with their alt text, and the HTML tags of its text, read with the
+// definitions of the file.
 func headingClashes(lines []string, h heading, setext map[int]unit, anchors []detailAnchor, g linkRefs) []anchorClash {
 	e := headingElement(lines, h, setext)
 	read := inlineText(e.text, g)
 	var out []anchorClash
 	for _, a := range anchors {
-		if foldsCollide(read.text, read.alt, a.anchor) {
+		if slugsTake(read, a.anchor) {
 			out = append(out, e.clash(0, e.text, a))
 		}
 	}
@@ -204,12 +206,16 @@ func headingClashes(lines []string, h heading, setext map[int]unit, anchors []de
 }
 
 // headingElement returns the element of a heading of the file that its text is read
-// from: for an ATX heading its text, and for a setext heading the lines of its paragraph
-// without the definitions that CommonMark reads at the start of the paragraph.
+// from: for an ATX heading its content, and for a setext heading the lines of its
+// paragraph without the definitions that CommonMark reads at the start of the
+// paragraph, each without its leading spaces and tabs and the last also without its
+// trailing ones, as CommonMark forms a paragraph's raw content (§4.8). The spaces before
+// a line ending stay for the inline reader, which reads them as part of a line break.
 func headingElement(lines []string, h heading, setext map[int]unit) element {
 	u, ok := setext[h.at]
 	if h.last == h.at || !ok {
-		return newElement([]textPiece{{line: h.at, start: lineBase(lines[h.at], h.text), text: h.text}})
+		lead, content := atxContent(h.text)
+		return newElement([]textPiece{{line: h.at, start: lineBase(lines[h.at], h.text) + lead, text: content}})
 	}
 	_, cm := cmDefLines(u.lines)
 	var g []textPiece
@@ -217,11 +223,28 @@ func headingElement(lines []string, h heading, setext map[int]unit) element {
 		if cm[k] {
 			continue
 		}
-		t := strings.TrimRight(strings.TrimLeft(l, " \t"), " \t")
-		start := lineBase(lines[u.at+k], l) + len(l) - len(strings.TrimLeft(l, " \t"))
+		t := strings.TrimLeft(l, " \t")
+		start := lineBase(lines[u.at+k], l) + len(l) - len(t)
 		g = append(g, textPiece{line: u.at + k, start: start, text: t})
 	}
+	if n := len(g); n > 0 {
+		g[n-1].text = strings.TrimRight(g[n-1].text, " \t")
+	}
 	return newElementOr(g, h, lines)
+}
+
+// atxContent returns the content of an ATX heading whose text after the separator is
+// text, as CommonMark reads it (§4.2): without its leading and trailing spaces and tabs
+// and without a closing run of '#' that spaces or tabs precede or that is the whole
+// text, and the byte offset of the content in text.
+func atxContent(text string) (int, string) {
+	t := strings.TrimRight(text, " \t")
+	j := strings.TrimRight(t, "#")
+	if len(j) < len(t) && (j == "" || j[len(j)-1] == ' ' || j[len(j)-1] == '\t') {
+		t = strings.TrimRight(j, " \t")
+	}
+	lead := len(t) - len(strings.TrimLeft(t, " \t"))
+	return lead, t[lead:]
 }
 
 // newElementOr returns the element of pieces, or of the heading's own empty text when no
@@ -263,16 +286,13 @@ func unitClashes(lines []string, u unit, anchors []detailAnchor, g linkRefs) []a
 	return tagClashes(ge, r.tags, r.tagAt, anchors)
 }
 
-// foldsCollide reports whether the heading folds to the anchor under F_G once a final
-// run of digits is removed from each, by its text read with no text of an image or by
-// its text with the alt text of its images.
-func foldsCollide(text, alt, anchor string) bool {
-	a := stripDigits(foldG(anchor))
-	return stripDigits(foldG(text)) == a || stripDigits(foldG(alt)) == a
-}
-
 // tagClashes returns the collisions of the id and name attributes of the open tags with
-// the anchors, which compare without regard to case.
+// the anchors: a value that equals an anchor, or user-content- followed by it, once
+// lowercased by the full mapping, as VS Code compares a fragment with an id.
+// user-content- followed by the anchor is the form GitHub renders the heading's id in,
+// and a raw id or name too, unless it already begins with user-content-
+// (TestGitHubAttributes), and GitLab's form of the id; both compare exactly, so the
+// lowercased comparison covers them.
 func tagClashes(e element, tags [][]htmlAttr, at []int, anchors []detailAnchor) []anchorClash {
 	var out []anchorClash
 	for i, attrs := range tags {
@@ -280,8 +300,9 @@ func tagClashes(e element, tags [][]htmlAttr, at []int, anchors []detailAnchor) 
 			if attr.name != "id" && attr.name != "name" {
 				continue
 			}
+			v := lowerFull(attr.value)
 			for _, a := range anchors {
-				if strings.EqualFold(attr.value, a.anchor) {
+				if v == a.anchor || v == "user-content-"+a.anchor {
 					out = append(out, e.clash(at[i], attr.value, a))
 				}
 			}

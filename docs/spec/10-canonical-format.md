@@ -33,8 +33,8 @@ payload.
   following it would chase one implementation's deviations rather than a standard, and it is no
   criterion.
 - The specifications do not define the targets of a fragment. Anchors — heading slugs and the ids and
-  names of raw HTML that CommonMark reads outside code — are judged by GitHub, GitLab and VS Code (the
-  F_G fold for headings), because a link `[k](file#anchor)` must resolve in them. Every relation is a
+  names of raw HTML that CommonMark reads outside code — are judged by GitHub, GitLab and VS Code (their
+  slugs S_GH, S_VS and S_GL for headings), because a link `[k](file#anchor)` must resolve in them. Every relation is a
   link whose `#<anchor>` is the anchor that GitHub, GitLab and VS Code generate for the heading it
   names, by the rules of [detail headings and anchors](#detail-headings-and-anchors). Pandoc is not a
   viewer the claim is made for: its default does not rewrite relative link targets, so a link between
@@ -66,7 +66,7 @@ and the column sections — are payload: the renderer moves them with their row 
   ([Detail headings and anchors](#detail-headings-and-anchors)) — `# Items` in `items.flowmark.md` — is
   the file's H1 line in a non-canonical spelling and is `format.noncanonical`. Grounding: the file name
   fixes the table, so the H1 names it and carries no data; a viewer shows the rows under it alike, and
-  every named viewer lowercases a heading's anchor, so its anchor and its fold under the collision rule
+  every named viewer lowercases a heading's anchor, so its anchor and its slugs under the collision rule
   are those of `# <table>`; `flowmark canon` writes `# <table>`. A missing document file is an empty
   table ([document model](20-document-model.md#storage)); when its last row is deleted, the file keeps
   the H1 line and one LF. The list or table of its rows stands directly under the H1 line, with no
@@ -120,24 +120,67 @@ and the column sections — are payload: the renderer moves them with their row 
 - The anchor of a detail heading is `<table>-row-<lowercased key>`: the heading `## items row T2`
   has the anchor `items-row-t2`. The table is the anchor text before its first `-`, since a table
   name contains no `-`.
-- **The fold.** One fold of a heading's rendered inline text, F_G, decides a collision: the text as
-  GitHub slugs it (the text of a link without its target, emphasis markers removed, code span content
-  kept, entities decoded, raw HTML tags not text). The rendered inline text is the one CommonMark 0.31.2
-  parses, with the link reference definitions of the whole file: a definition is read where CommonMark
-  reads one, a block at the start of a paragraph, inside a container or not, wherever it stands. A
-  full, collapsed or shortcut reference link whose label matches such a definition counts by its link
-  text, and a bracketed text whose label matches none counts as its literal text, brackets and label
-  included. Grounding: GitHub, GitLab and VS Code parse CommonMark, where a link reference definition
-  is a block at the start of a paragraph, so a defined `[items row T1][r]` renders the text
-  `items row T1`. An image counts under F_G both by its alt text and by no text: a heading takes the
-  anchor when either reading collides. Grounding: VS Code's markdown language service builds a
-  heading's slug from the text of its inline tokens, an image's alt text included; GitHub and GitLab
-  take the heading's text, and reading F_G both ways covers them whichever they take. F_G removes every
-  character whose Unicode general category is not a letter (L) or a decimal digit (Nd), lowercases the
-  rest, decomposes it by Unicode compatibility (NFKD), drops the combining marks, and keeps only the
-  ASCII letters and digits that remain. Grounding: the anchors of GitHub, GitLab and VS Code keep
-  letters, digits, hyphens, underscores and spaces and remove other characters, superscript and
-  circled digits (category No) among them, which F_G removes. `café` folds to `cafe` under F_G.
+- **The rendered text.** A heading's slugs are computed from its rendered inline text: the text that
+  CommonMark 0.31.2 renders from the heading's content — the content of an ATX heading without its
+  leading and trailing spaces and tabs and its closing sequence (§4.2), or the paragraph of a setext
+  heading after the link reference definitions at its start — as its text nodes and code spans hold
+  it. A backslash escape is the escaped character, and a character reference its character: a numeric
+  reference its code point (§2.5), U+FFFD for zero, so `&#x83;` is the control U+0083, as GitHub and VS
+  Code render it, not the windows-1252 `ƒ` that the HTML standard reads in an attribute value. Emphasis
+  and strong delimiters are removed only where the delimiter algorithm of §6.2 and the appendix's
+  *process emphasis* matches them, and are text elsewhere (`_T1` keeps its `_`). A code span is its content normalized as §6.1 states: each line
+  ending a space, then one space stripped at each end when both ends are spaces and the content is
+  not all spaces. An autolink is its text, and raw HTML is no text. A link is its link text, without
+  its target and title; a bracket or a delimiter that forms nothing is text. The link reference
+  definitions are those of the whole file: a definition is read where CommonMark reads one, a block at
+  the start of a paragraph, inside a container or not, wherever it stands. A full, collapsed or
+  shortcut reference link whose label matches such a definition counts by its link text, and a
+  bracketed text whose label matches none counts as its literal text, brackets and label included.
+  Grounding: GitHub, GitLab and VS Code parse CommonMark, where a link reference definition is a block
+  at the start of a paragraph, so a defined `[items row T1][r]` renders the text `items row T1`; each
+  slugs the text of the rendered heading, which is what CommonMark renders, so a `_` that is no
+  emphasis, or an escaped `\_`, stays in the slug. An image is no text under S_GH and its alt text, the
+  plain-text rendering of its description, under S_VS and S_GL. Grounding: GitHub's ids leave an
+  image's alt text out (`a ![b c](/i.png) d` is `a--d`, the slug vectors below); VS Code's preview and
+  comrak build a heading's slug from the text of its inline nodes, an image's alt text included. A line
+  break, soft or hard, is nothing under S_GH and S_VS and a space under S_GL. Grounding: GitHub's ids
+  join the lines of a setext heading with nothing (the vectors), VS Code writes a softbreak or
+  hardbreak token as no text, and comrak's `collect_text` writes each as one space.
+- **The slugs.** A heading's slug under a viewer is computed from its rendered inline text as the
+  viewer computes it. **S_GH** (GitHub): the text lowercased by the Unicode full default lowercase
+  mapping without its conditional mappings (U+0130 becomes `i` followed by U+0307, U+212A becomes `k`,
+  and a final Σ is σ); every character kept that is a word character of Unicode Technical Standard
+  #18 (Annex C) in Unicode 17.0.0 — Alphabetic, a mark, a decimal number, connector punctuation or
+  Join_Control, so U+200D is kept — and the space and `-`, the others removed; each space then written
+  `-`. **S_VS** (VS Code): the text without the white space that JavaScript's `String.prototype.trim`
+  removes at its ends, lowercased by JavaScript's `toLowerCase` (the full mapping with its Final_Sigma
+  condition, so a final Σ is ς); every character removed that VS Code's expression
+  `githubSlugReplaceRegex` matches — the characters whose general category in Unicode 13.0.0 is No, Pd,
+  Ps, Pe, Pi, Pf, Po, Sm, Sc, Sk, So, Cc, Cf, Co, Cn, Zs, Zl or Zp, other than an Alphabetic character of
+  Unicode 13.0.0, the space and `-`, so a character assigned after Unicode 13.0.0 is removed; each
+  JavaScript white space character then written `-`, of which only the space is left. **S_GL**
+  (GitLab): the text lowercased as under S_GH; every character kept whose general category in Unicode
+  17.0.0 is a letter, a mark, a number or connector punctuation, and the space and `-`, the others
+  removed; each space then written `-`. None of them normalizes the text, trims hyphens or collapses
+  runs: `café` and `cafe` have different slugs, and so do `items row  T1` and `items row T1`. The
+  engine's Unicode data is that of Go's `unicode` package, 17.0.0, and, for S_VS's removal, a table
+  generated from the Unicode 13.0.0 data files. Grounding: the slug vectors, the ids the viewers
+  themselves render, recorded on 2026-10-11 by `make slug-vectors` (`scripts/record-slugs.mjs`) into
+  `store/testdata/slug`, which S_GH and S_VS reproduce exactly: for every code point but the
+  surrogates, a heading holding it as a numeric reference and as itself, and structural cases of
+  spaces, tabs, underscores, hyphens, references, escapes, emphasis, code spans, links, images, raw HTML,
+  line breaks and repeated headings. GitHub's are rendered by its own renderer, `POST /markdown` of the
+  REST API in mode `markdown`, which writes each heading anchor as `user-content-` and the id; they keep
+  U+107A5, U+1CCF0 and U+A7F2, assigned after Unicode 13.0.0, and match the word characters of Unicode
+  17.0.0 at every code point. VS Code's are rendered by running its own code at its latest stable
+  release, 1.141.0: `githubSlugifier` of `extensions/markdown-language-features/src/slugify.ts`, kept
+  with VS Code's MIT license in `store/testdata/slug`, whose expression the engine's Unicode 13.0.0
+  table equals at every code point, and the `#tokenToPlainText` method of `markdownEngine.ts`, on
+  markdown-it 14.3.2 as its `package-lock.json` pins. comrak 0.56.0's `Anchorizer` renders GitLab's
+  heading ids through gitlab-glfm-markdown 0.0.45, whose `Cargo.lock` pins finl_unicode 1.4.0, the
+  crate comrak reads the categories from, whose tables are those of Unicode 17.0.0. Re-recording is
+  `make slug-vectors`, with the network, an authenticated `gh` and npm; a viewer that changes shows as
+  a vector the slugs no longer reproduce.
 - **The collision rule.** A heading is every ATX heading, also after a block-quote or list-item marker,
   and every paragraph followed by a setext underline, the whole paragraph after the link reference
   definitions at its start being the heading, outside fenced blocks; a detail heading is one too. Those
@@ -145,21 +188,34 @@ and the column sections — are payload: the renderer moves them with their row 
   content before it, and definitions alone followed by an underline make no heading. Grounding: CommonMark 0.31.2
   reads the definitions at the start of a paragraph before it closes the paragraph as a setext heading
   (§4.3, §4.7), so `[r]: /u`, `people row P1`, `---` is a definition and the heading `people row P1`, as
-  commonmark.js, cmark-gfm and markdown-it read it. For this rule, a detail heading is a top-level heading at the detail level of a table of the file's layout — the level of its rows' detail headings, one less than their row scope — whose text, its spaces, tabs and the line endings of a setext heading aside, is that table's name and the word `row`, each equal to its canonical text once lowercased as the viewers lowercase it, and a key: the heading of a detail section, in its canonical or a non-canonical spelling. Every other heading is a payload heading, a `<table> row <key>` heading at another level or inside a block quote or list item included, and its fold is compared with every detail anchor. Grounding: a detail section is assigned by its place, so a heading elsewhere names no row and renders an anchor of its own, which a viewer numbers when it repeats a detail anchor. A heading H other than a detail heading takes the anchor
-  A of a detail heading when F_G(H) and F_G(A) are equal once a final run of decimal digits is removed
-  from each. Two detail headings collide only when their anchors are equal. Grounding: every named
-  viewer numbers a repeated id by appending `-<n>` (GitHub, GitLab and VS Code), so comparing the folds
-  without their final digits covers every numbering, whichever heading came first. The cost is that a
-  payload heading that differs from a detail heading only in its final number is refused too.
-  Accepted: keys `T1` and `T10` in one file never collide, since both are detail headings and only equal
-  anchors collide between them. Refused: a payload heading `items row T` beside the detail heading
-  `items row T-1`, since a second `items row T` is numbered `items-row-t-1`; a payload heading `Notes`
-  beside it is not refused. The check applies to every heading of a file, skeleton and payload alike.
-  It also refuses, anywhere in the file, the skeleton included, an HTML `id` or `name` whose value is A,
-  in raw HTML as CommonMark 0.31.2 reads it (a code span or code block holds none); all compare without
-  regard to case. Grounding: an HTML viewer reads `id` and `name` as anchors, whatever the text of the
-  heading; GitHub prefixes both a heading's id and a raw `id` or `name` with `user-content-`, so they
-  still collide, and VS Code keeps them as written. A `{#…}` is literal text in CommonMark and GFM, and
+  commonmark.js, cmark-gfm and markdown-it read it. For this rule, a detail heading is a top-level heading at the detail level of a table of the file's layout — the level of its rows' detail headings, one less than their row scope — whose text, its spaces, tabs and the line endings of a setext heading aside, is that table's name and the word `row`, each equal to its canonical text once lowercased as the viewers lowercase it, and a key: the heading of a detail section, in its canonical or a non-canonical spelling. Every other heading is a payload heading, a `<table> row <key>` heading at another level or inside a block quote or list item included, and its slugs are compared with every detail anchor. Grounding: a detail section is assigned by its place, so a heading elsewhere names no row and renders an anchor of its own, which a viewer numbers when it repeats a detail anchor. A heading H other than a detail heading takes the anchor
+  A of a detail heading when, for a slug S among S_GH, S_VS and S_GL of H's rendered text T as that
+  slug reads it, S(T) equals A, or A is S(T) followed by `-` and a decimal number n ≥ 1 written
+  without a leading zero (the numbering rule). Two detail headings collide only when their anchors are
+  equal. Grounding: every named viewer numbers a repeated slug by appending `-<n>`, n counting from 1,
+  so a heading whose slug is S(T) can be numbered A whichever heading came first, and no other number
+  is ever appended. GitHub skips a number an earlier id holds (`a-1`, `a`, `a` are `a-1`, `a`, `a-2`),
+  and numbers a heading whose slug is an earlier id (`a`, `a`, `a-1` are `a`, `a-1`, `a-1-1`); VS
+  Code's slug builder counts each slug alone and can repeat an id (`a-1`, `a`, `a` are `a-1`, `a`,
+  `a-1`) (the slug vectors); comrak's `Anchorizer` appends `-<n>` too. GitHub renders no anchor for
+  some headings whose slug is empty; no detail anchor is empty or begins with `-`. Accepted: keys `T1` and `T10` in one file never collide, since both
+  are detail headings and only equal anchors collide between them; a payload heading `items row T2`
+  beside the detail heading `items row T`, and `items row T` beside the detail heading
+  `items row T-01` or `items row T-0`, since no viewer writes those numbers. Refused: a payload heading
+  `items row T` beside the detail heading `items row T-1`, since a second `items row T` is numbered
+  `items-row-t-1`; a payload heading `Notes` beside it is not refused. The check applies to every
+  heading of a file, skeleton and payload alike. It also refuses, anywhere in the file, the skeleton
+  included, an HTML `id` or `name` that takes A, in raw HTML as CommonMark 0.31.2 reads it (a code
+  span or code block holds none): an id or name compares equal to A, or to `user-content-` followed
+  by A, once lowercased by the full default mapping, as VS Code compares a fragment with an id;
+  `user-content-` followed by A is the form GitHub renders a heading's id in and GitLab's form of the
+  id, and GitLab and GitHub compare exactly, so the lowercased comparison covers them. Grounding: an
+  HTML viewer reads `id` and `name` as anchors, whatever the text of the heading. GitHub keeps a raw
+  `id` or `name`, its case included, and writes `user-content-` before its value unless the value
+  already begins with exactly `user-content-` (`ITEMS` is `user-content-ITEMS`, `user-content-x` stays,
+  `User-Content-x` is `user-content-User-Content-x`), observed with the slug vectors, so a raw `id` or
+  `name` of A or of `user-content-` followed by A renders the heading's id. VS Code keeps them as
+  written. No viewer folds an id's case beyond lowercasing, so `items-row-ſ1` is not `items-row-s1`. A `{#…}` is literal text in CommonMark and GFM, and
   no criterion viewer reads an id from it.
 - A write that introduces a collision is `CONSTRAINT`, located at the row and column whose written text holds the heading or id that takes the anchor — a `markdown` column's value, a `files` row's title for its H1, or, for a section or block heading, the row whose scope it opens, at the `markdown` column or child table it names — naming the detail heading whose anchor it takes: a title update, a payload write, a row insert that creates a detail section, a key update, a move, or the creation of a detail section; except that a write giving a row a key equal, with or without regard to case, to another key of its table is `DUPLICATE_KEY`, the key rule of the [document model](20-document-model.md#keys). A row without a detail section has no anchor, so it collides with nothing. On read a collision is `format.block`, except between two detail headings whose keys differ only in case, which is `key.duplicate` alone. Two detail sections of one file under the same
   heading text collide, so they are `format.block`, since neither can be assigned to a row.
