@@ -1,9 +1,12 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 83d0d18b9fdeb7d1e541ef91081c5336dbcd7db0111324f3fa1eb870b7778ff7 -->
+<!-- source-sha256: 9495a8107458a1ebf27c738b4a422bda7cfdc46b9e95842cbca315ec187e6f50 -->
 # Changelog
 
 ## Unreleased
 
+- T12.5-2: operation이 더 이상 바뀌지 않은 file을 읽지 않는다. 열린 corpus는 운영체제의 file 알림(kqueue, inotify, ReadDirectoryChangesW)으로 최신을 유지하고, overflow면 전부 다시 읽으며, commit 대상은 언제나 lock 아래에서 다시 읽고, bytes와 link 대상이 그대로인 문서의 parse를 재사용한다. 10k 문서 읽기가 CPU 3.9초에서 68ms로 줄었고, 모든 face가 자기가 연 corpus를 닫는다.
+- T12.11: 하나의 dataset을 세 저장 방식(document list, document table, 행마다 file)으로 담은 issue tracker(`examples/tracker`). 엔진으로 같은 행을 읽어 낸다. 하드코딩 목록 grep은 test `tests/inventory`로 두었고 결과는 0건이다.
+- T12.11.1: board 예제(`examples/board`): 댓글과 답글이 달린 post. 댓글을 post file 안 block으로 두는 변형과 자기 file로 두는 변형이 있고, 엔진으로 만들고, 댓글과 답글을 달고, 고치고, 지우면 두 변형이 같은 행을 낸다.
 - T12.3-6: write path의 commit이 validator의 하나뿐인 view 판정으로 자기가 쓰는 행에 `codec`과 `view` 규칙을 판정한다. 쓰기가 할당한 decode할 수 없는 codec 값이나 유효하지 않게 남은 view 행은 그 column에서 규칙을 밝히는 `CONSTRAINT`다.
 - T12.10: CLI, MCP server, sidecar가 write path를 통해 어느 table에서나 schema, rows, row.get, row.insert, row.update, row.move, row.delete, transition, views를 실행하고 wire JSON과 `{code, error}` 실패로 답한다. views는 view table을, 또는 저장된 filter와 sort를 통한 view의 행을 답한다. `flowmark install`은 document file, files table folder, `.gitattributes` 줄 `*.flowmark.md text eol=lf`를 만든다. history repair와 unlock이 명령이 된다. 모든 명령은 0, 1, 2로 끝난다. 옛 codec, executor, corpus, app 경로와 `make validate`를 지웠다. 답은 더 이상 HTML escape하지 않는다.
 - T12.3-1: 응용 schema가 view table(문서 `flowmark`의 `views`)을 선언한다. validator는 entity, filter, sort, group이 유효하지 않은 view를 orm의 `ir.Validate`로 검사해 `view`로, stage가 decode할 수 없는 값을 `codec`으로 보고한다. 마지막 stage가 `yaml`인 codec은 거절한다.
