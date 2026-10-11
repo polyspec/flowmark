@@ -25,7 +25,7 @@ table items {
   check ck_items_due (due_on is null or due_at is null)
   settings {
     key_prefix 'T'
-    store document list
+    store files
     title title
     body body
     order position
@@ -73,7 +73,7 @@ table item_links {
   foreign key fk_item_links_to (to_item) references items (id) on delete restrict on update restrict
   check ck_item_links_kind (kind in ('blocks', 'relates', 'duplicates', 'supersedes'))
   settings {
-    store document table
+    store block fk_item_links_from table
   }
 }
 

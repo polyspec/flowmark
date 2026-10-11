@@ -23,9 +23,13 @@ links, two people and three views — in three corpora that differ in the store 
 | `tracker/aggregate-table` | `store document table` | one table row of `items.flowmark.md` |
 | `tracker/split-file` | `store files` | its own file `items/<key>.flowmark.md` |
 
-An item's body, its markdown columns and its history block are its detail section in the two
-aggregate corpora and the rest of its own file in the split one. The three corpora read back
-the same rows of every table, which a test checks.
+`tracker/split-file` is the application schema as spec 100 states it; the other two change
+that one line, which a test checks. An item's body, its markdown columns, its history block
+and the block of the links it starts are its detail section in the two aggregate corpora and
+the rest of its own file in the split one, whose `position` field holds the item's rank
+among its siblings (1000, 2000, …). The three corpora read back the same rows of every table,
+and in the split one a transition, a link and a move each write the item's own file alone;
+tests check both.
 
 ## The board
 

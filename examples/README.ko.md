@@ -1,5 +1,5 @@
 <!-- doc-id: examples -->
-<!-- source-sha256: 26c55a44d895479abfe8446bac71c9243350a7d4f296c29be510fda3672d3248 -->
+<!-- source-sha256: 8098c5b34d0359b2f9ee7b08814850fe9b96fbab6f791931c7bafc222d0ca517 -->
 # Examples
 
 [English](README.md)
@@ -23,9 +23,12 @@ view 세 개 — 를 세 corpus에 담는다. 세 corpus는 `items`의 store set
 | `tracker/aggregate-table` | `store document table` | `items.flowmark.md`의 table 행 하나 |
 | `tracker/split-file` | `store files` | 자기 파일 `items/<key>.flowmark.md` |
 
-item의 body, markdown column, history block은 두 aggregate corpus에서는 그 item의 detail
-section이고, split corpus에서는 그 item 파일의 나머지 부분이다. 세 corpus는 모든 table에서 같은
-행을 읽어 내며, test가 이를 확인한다.
+`tracker/split-file`은 spec 100이 정한 그대로의 응용 schema이고, 나머지 둘은 그 한 줄만 바꾸며
+test가 이를 확인한다. item의 body, markdown column, history block, 그 item이 시작하는 link의
+block은 두 aggregate corpus에서는 그 item의 detail section이고, split corpus에서는 그 item 파일의
+나머지 부분이며, split corpus의 `position` field는 형제 사이에서 item의 rank(1000, 2000, …)를
+담는다. 세 corpus는 모든 table에서 같은 행을 읽어 내고, split corpus에서 transition, link, move는
+각각 그 item 자신의 파일만 쓴다. test가 둘 다 확인한다.
 
 ## The board
 

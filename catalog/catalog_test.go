@@ -63,6 +63,17 @@ func editedCorpus(t *testing.T, edits ...[2]string) (string, string) {
 	return writeCorpus(t, map[string]string{"flowmark.dbs": text}), text
 }
 
+// itemsList stores the fixture's items as a document list, rows at row scope 3,
+// in place of the application schema's files storage (row scope 2), for the
+// tests whose list rules or heading arithmetic stand on a list of items.
+var itemsList = [2]string{"    store files\n", "    store document list\n"}
+
+// listCorpus is editedCorpus with items stored as a document list.
+func listCorpus(t *testing.T, edits ...[2]string) (string, string) {
+	t.Helper()
+	return editedCorpus(t, append([][2]string{itemsList}, edits...)...)
+}
+
 // tableLine is the 1-based line of the `table <name> {` declaration.
 func tableLine(t *testing.T, text, name string) int {
 	t.Helper()
@@ -129,7 +140,9 @@ func TestLoadFixtureCatalog(t *testing.T) {
 	if !ok {
 		t.Fatal("items missing")
 	}
-	if items.Storage != (catalog.Storage{Kind: catalog.StorageDocument, Shape: catalog.ShapeList}) {
+	// Spec 100 Tables: one file an item, its history and its outgoing links
+	// blocks of that file, so no file grows with the life of the project.
+	if items.Storage != (catalog.Storage{Kind: catalog.StorageFiles}) {
 		t.Fatalf("items storage = %+v", items.Storage)
 	}
 	if items.Key != "id" || items.Title != "title" || items.Body != "body" || items.Order != "position" {
@@ -138,8 +151,8 @@ func TestLoadFixtureCatalog(t *testing.T) {
 	if want := []string{"body", "evidence", "cause", "retry"}; !reflect.DeepEqual(items.Markdown, want) {
 		t.Fatalf("items markdown = %v, want %v", items.Markdown, want)
 	}
-	if items.RowScope != 3 {
-		t.Fatalf("items row scope = %d, want 3", items.RowScope)
+	if items.RowScope != 2 {
+		t.Fatalf("items row scope = %d, want 2", items.RowScope)
 	}
 	sm := items.StateMachine
 	if sm == nil {
@@ -184,8 +197,8 @@ func TestLoadFixtureCatalog(t *testing.T) {
 	if history.Storage != (catalog.Storage{Kind: catalog.StorageBlock, Shape: catalog.ShapeTable, ParentForeignKey: "fk_history_item", Parent: "items"}) {
 		t.Fatalf("item_history storage = %+v", history.Storage)
 	}
-	if history.RowScope != 5 {
-		t.Fatalf("item_history row scope = %d, want 5", history.RowScope)
+	if history.RowScope != 4 {
+		t.Fatalf("item_history row scope = %d, want 4", history.RowScope)
 	}
 	if want := []string{"evidence", "cause", "retry"}; !reflect.DeepEqual(history.Markdown, want) {
 		t.Fatalf("item_history markdown = %v, want %v", history.Markdown, want)
@@ -202,14 +215,14 @@ func TestLoadFixtureCatalog(t *testing.T) {
 	if !ok {
 		t.Fatal("item_links missing")
 	}
-	if links.Storage.Kind != catalog.StorageDocument || links.Key != "id" || links.StateMachine != nil {
+	if links.Storage != (catalog.Storage{Kind: catalog.StorageBlock, Shape: catalog.ShapeTable, ParentForeignKey: "fk_item_links_from", Parent: "items"}) || links.RowScope != 4 || links.Key != "id" || links.StateMachine != nil {
 		t.Fatalf("item_links = %+v", links)
 	}
 	views, ok := cat.Table("views")
 	if !ok {
 		t.Fatal("views missing")
 	}
-	if views.Title != "title" || views.Body != "body" || !reflect.DeepEqual(views.Markdown, []string{"body"}) {
+	if views.Storage != (catalog.Storage{Kind: catalog.StorageDocument, Shape: catalog.ShapeTable}) || views.Title != "title" || views.Body != "body" || !reflect.DeepEqual(views.Markdown, []string{"body"}) {
 		t.Fatalf("views = %+v", views)
 	}
 	if _, ok := cat.Table("missing"); ok {
@@ -295,7 +308,7 @@ func TestLoadRejectsCorpusWithoutDocument(t *testing.T) {
 }
 
 func TestLoadRejectsTableWithoutStore(t *testing.T) {
-	root, text := editedCorpus(t, [2]string{"    store document list\n", ""})
+	root, text := editedCorpus(t, [2]string{"    store files\n", ""})
 	cat, diags := catalog.Load(root)
 	expectRejected(t, cat, diags)
 	expectTableDiag(t, diags, text, "items", "no store setting")
@@ -436,8 +449,8 @@ func TestLoadRejectsStateMachineWithoutInitial(t *testing.T) {
 	expectTableDiag(t, diags, text, "items", "no initial state")
 }
 
-// checkboxLines are the five checkbox lines of the fixture's items table, which
-// is a list storage with a state machine.
+// checkboxLines are the five checkbox lines of the fixture's items table, a
+// state machine whose glyphs a list storage of items writes.
 const checkboxLines = "    checkbox state waiting ' '\n    checkbox state doing '~'\n    checkbox state done 'o'\n    checkbox state bypassed '!'\n    checkbox state impossible '-'\n"
 
 // TestLoadListStateRules pins that a list storage of a state machine declares
@@ -449,9 +462,10 @@ func TestLoadListStateRules(t *testing.T) {
 		edits [][2]string
 		msg   string // the rejection's message; empty for an accepted catalog
 	}{
-		{name: "accepts a list with checkboxes", edits: nil},
-		{name: "rejects a list without a checkbox", edits: [][2]string{{checkboxLines, ""}}, msg: "declares no checkbox"},
-		{name: "accepts a table without a checkbox", edits: [][2]string{{checkboxLines, ""}, {"    store document list\n", "    store document table\n"}}},
+		{name: "accepts a list with checkboxes", edits: [][2]string{itemsList}},
+		{name: "rejects a list without a checkbox", edits: [][2]string{itemsList, {checkboxLines, ""}}, msg: "declares no checkbox"},
+		{name: "accepts a table without a checkbox", edits: [][2]string{{checkboxLines, ""}, {"    store files\n", "    store document table\n"}}},
+		{name: "accepts files without a checkbox", edits: [][2]string{{checkboxLines, ""}}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -484,7 +498,7 @@ func TestLoadRejectsNullableStateColumn(t *testing.T) {
 }
 
 func TestLoadRejectsListWithoutTitle(t *testing.T) {
-	root, text := editedCorpus(t, [2]string{"    store document list\n    title title\n", "    store document list\n"})
+	root, text := listCorpus(t, [2]string{"    store document list\n    title title\n", "    store document list\n"})
 	cat, diags := catalog.Load(root)
 	expectRejected(t, cat, diags)
 	expectTableDiag(t, diags, text, "items", "list storage needs a title")
@@ -528,7 +542,7 @@ func TestLoadRejectsHeadingPastH6(t *testing.T) {
 }
 
 table views {`
-	root, text := editedCorpus(t, [2]string{"table views {", note})
+	root, text := listCorpus(t, [2]string{"table views {", note})
 	cat, diags := catalog.Load(root)
 	expectRejected(t, cat, diags)
 	expectTableDiag(t, diags, text, "item_note", "level 7")
@@ -561,7 +575,7 @@ func TestLoadHeadingPastH6IsNeeded(t *testing.T) {
 				"  primary key (id)\n  index ix_item_leaf_history (history)\n" +
 				"  foreign key fk_leaf_history (history) references item_history (id) on delete restrict on update restrict\n" +
 				"  settings {\n    store block fk_leaf_history table\n" + c.settings + "  }\n}\n\n" + c.child + "table views {"
-			root, text := editedCorpus(t, [2]string{"table views {", leaf})
+			root, text := listCorpus(t, [2]string{"table views {", leaf})
 			cat, diags := catalog.Load(root)
 			if !c.refused {
 				if cat == nil || len(diags) > 0 {
@@ -642,7 +656,7 @@ table views {`
 
 // requireSchema is the state table subtasks, whose machine requires column x,
 // and its history table subtask_history; both declare x with the type typ. A
-// block table stands under items, so its row scope is 5 and its history table's
+// block table stands under items, stored a document list (listCorpus), so its row scope is 5 and its history table's
 // is 7; a document table has row scope 3 and its history table scope 5. stateMark
 // and historyMark declare x markdown on the state table and on the history table.
 func requireSchema(block bool, typ string, stateMark, historyMark bool) string {
@@ -696,7 +710,7 @@ func TestLoadHistoryStorage(t *testing.T) {
 			if c.document {
 				schema = strings.Replace(schema, blockStore, "    store document table\n", 1)
 			}
-			root, text := editedCorpus(t, [2]string{"table views {", schema})
+			root, text := listCorpus(t, [2]string{"table views {", schema})
 			cat, diags := catalog.Load(root)
 			if !c.document {
 				expectRejected(t, cat, diags)
@@ -805,7 +819,7 @@ func TestLoadRequireOfMarkdownPastH6(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			root, text := editedCorpus(t, [2]string{"table views {", requireSchema(c.block, c.typ, c.stateMark, c.historyMark)})
+			root, text := listCorpus(t, [2]string{"table views {", requireSchema(c.block, c.typ, c.stateMark, c.historyMark)})
 			cat, diags := catalog.Load(root)
 			if c.refusedAt == "" {
 				if cat == nil || len(diags) > 0 {

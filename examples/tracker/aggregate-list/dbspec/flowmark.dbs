@@ -73,7 +73,7 @@ table item_links {
   foreign key fk_item_links_to (to_item) references items (id) on delete restrict on update restrict
   check ck_item_links_kind (kind in ('blocks', 'relates', 'duplicates', 'supersedes'))
   settings {
-    store document table
+    store block fk_item_links_from table
   }
 }
 
