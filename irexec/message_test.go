@@ -63,22 +63,26 @@ func TestMessage(t *testing.T) {
 	}
 }
 
-// TestTimeFormToday pins the time form the executor reads and answers until orm T91
-// fixes the time wire form HH:MM:SS.ffffff (spec 60 The wire; T12.4 rulings 5 and
-// 6): a time(p) parameter and answer are the readable form with exactly p digits,
-// so the six-digit wire form of a time(0) or time(3) value is refused today.
-func TestTimeFormToday(t *testing.T) {
-	t.Run("60#the-wire: a time is read and answered with its p digits until orm T91", func(t *testing.T) {
+// TestTimeWire pins the time form of an IR executor message (spec 60 The wire; T12.4 rulings 5 and 6): a time is
+// HH:MM:SS.ffffff in a parameter and in an answer, whatever the precision p of its column, and the digits past p of a
+// parameter are zeros. A time in another form, or with a non-zero digit past p, is not a value of time(p).
+func TestTimeWire(t *testing.T) {
+	t.Run("60#the-wire: a time is read and answered in the six-digit wire form", func(t *testing.T) {
 		f := fresh(t)
-		f.commit(f.want(f.msg("insert", "stamps", map[string]any{"set": sets("label", "opens", "closes")}, "one", "10:00:00", "10:00:00.100"), `{"affected":1,"keys":[1]}`))
-		f.want(f.msg("all", "stamps", map[string]any{"columns": map[string]any{"mode": "none", "add": []string{"opens", "closes"}}, "where": where(pred("opens", "eq", p(0)))}, "10:00:00"),
-			`{"rows":[{"id":1,"opens":"10:00:00","closes":"10:00:00.100"}]}`)
+		f.commit(f.want(f.msg("insert", "stamps", map[string]any{"set": sets("label", "opens", "closes")}, "one", "10:00:00.000000", "10:00:00.100000"), `{"affected":1,"keys":[1]}`))
+		f.want(f.msg("all", "stamps", map[string]any{"columns": map[string]any{"mode": "none", "add": []string{"opens", "closes"}}, "where": where(pred("opens", "eq", p(0)))}, "10:00:00.000000"),
+			`{"rows":[{"id":1,"opens":"10:00:00.000000","closes":"10:00:00.100000"}]}`)
 	})
 	f := baseFixture(t)
-	for _, c := range []struct{ col, v string }{{"opens", "10:00:00.000000"}, {"closes", "10:00:00.100000"}} {
-		f.sub(t, "60#the-wire: the six-digit time form waits on orm T91: "+c.col, func(f *fixture) {
-			err := f.fails(f.msg("insert", "stamps", map[string]any{"set": sets("label", c.col)}, "one", c.v), "CONSTRAINT")
-			wantFaults(f.t, err, []dupFault{{"stamps", "1", -1, c.col, "CONSTRAINT", c.col}})
+	for _, c := range []struct{ name, col, v string }{
+		{"the p-digit form of time(0)", "opens", "10:00:00"},
+		{"the p-digit form of time(3)", "closes", "10:00:00.100"},
+		{"a non-zero digit past p of time(0)", "opens", "10:00:00.500000"},
+		{"a non-zero digit past p of time(3)", "closes", "10:00:00.123456"},
+		{"a time that is no time", "opens", "25:00:00.000000"},
+	} {
+		f.sub(t, "60#the-wire: "+c.name, func(f *fixture) {
+			f.fails(f.msg("insert", "stamps", map[string]any{"set": sets("label", c.col)}, "one", c.v), "CODEC_ENCODE")
 		})
 	}
 }

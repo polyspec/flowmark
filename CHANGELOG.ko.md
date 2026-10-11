@@ -1,9 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 192443852564e4f50e65721e40661175a3d2b2964752019d1f47cf1fe6cd87b6 -->
+<!-- source-sha256: acaf33bfbbdc2e7d1731245f54eb44ace86e1e4c5928fe8a199fe29679e0bf9f -->
 # Changelog
 
 ## Unreleased
 
+- T12.4-6: `time`은 IR executor 메시지에서 컬럼의 precision과 무관하게 `HH:MM:SS.ffffff`라는 한 형식을 가진다. 실행기는 그 형식의 parameter(p 뒤는 0)를 읽고 time을 그 형식으로 답하며, p자리 형식과 p 뒤의 0이 아닌 자리는 `CODEC_ENCODE`로 거절한다(이전에는 p자리를 읽고 답했다).
 - T12.4-5 (수정): parameter 검사는 orm client의 메시지에만 적용한다. face 작업의 값은 엔진 자신의 쓰기이므로 catalog의 규칙이 판정하며, 틀린 type의 값을 쓰는 face 쓰기는 spec 50이 말하는 대로 다시 `CONSTRAINT`이다.
 - T12.4-5: IR 실행기가 row를 읽기 전에 모든 parameter를 그 slot의 type과 대조한다. slot의 type 밖의 값(JSON 종류, 정수 범위, decimal의 scale과 precision, 0001~9999 밖의 date, varchar의 길이, text의 U+0000, 문자열이 아닌 `contains` 값)과 non-null 컬럼에 할당하는 NULL은 `CODEC_ENCODE`로 답하며, 같은 입력에 대한 capability 오류와 write fault를 대신한다.
 - T12.4-2: IR 실행기가 orm의 스칼라 컬럼 subquery 규칙을 따른다. 한 행의 limit과 primary key를 포함한 order가 없는 스칼라 컬럼 subquery는 orm의 validator에서 `IR_INVALID`로 답하고, 실행기는 여러 행에 대한 자체의 이전 답 대신 subquery의 order의 첫 행을 취하며 일치하는 행이 없으면 NULL이다.

@@ -20,11 +20,12 @@ import (
 // other type a JSON string in its readable form.
 const datetimeWire = "2006-01-02 15:04:05.000000"
 
+// timeWire is the wire form of every time: HH:MM:SS.ffffff, whose digits past the column's precision are zeros.
+const timeWire = "15:04:05.000000"
+
 // decodeParam reads the parameter raw as a value of type t and returns its
 // canonical readable text, or null. ok is false when raw is not a value of t in
-// the runtime value model JSON. A time is read in its readable form with p digits:
-// its wire form HH:MM:SS.ffffff (spec 60 The wire) waits on orm T91, which fixes
-// that form for every client, so the executor reads it once T91 lands.
+// the runtime value model JSON.
 func decodeParam(raw json.RawMessage, t dbspec.Type) (cell, bool) {
 	raw = bytes.TrimSpace(raw)
 	if string(raw) == "null" {
@@ -66,6 +67,8 @@ func decodeParam(raw json.RawMessage, t dbspec.Type) (cell, bool) {
 	switch t.Kind {
 	case dbspec.TypeDatetime:
 		return datetimeOfWire(s, t.Precision)
+	case dbspec.TypeTime:
+		return timeOfWire(s, t.Precision)
 	case dbspec.TypeBytes:
 		b, err := base64.StdEncoding.DecodeString(s)
 		if err != nil {
@@ -89,6 +92,28 @@ func datetimeOfWire(s string, p int) (cell, bool) {
 		return cell{}, false
 	}
 	return cell{text: formatDatetime(tm, p)}, true
+}
+
+// timeOfWire reads a time in the wire form, whose six fraction digits are the form of every time on the wire, as a
+// value of time(p): the digits past p must be zeros, which the column does not hold.
+func timeOfWire(s string, p int) (cell, bool) {
+	tm, err := time.Parse(timeWire, s)
+	if err != nil || tm.Format(timeWire) != s {
+		return cell{}, false
+	}
+	if !tm.Equal(tm.Truncate(precisionUnit(p))) {
+		return cell{}, false
+	}
+	return cell{text: formatTime(tm, p)}, true
+}
+
+// formatTime writes tm as a readable time(p): HH:MM:SS with exactly p fraction digits.
+func formatTime(tm time.Time, p int) string {
+	layout := "15:04:05"
+	if p > 0 {
+		layout += "." + strings.Repeat("0", p)
+	}
+	return tm.Format(layout)
 }
 
 // precisionUnit is the duration of the last fraction digit of precision p.
@@ -118,8 +143,7 @@ func isJSONNumber(raw []byte) bool {
 // output returns the JSON value of a readable value of type t in the runtime value
 // model JSON. A datetime that does not read is INTERNAL: the corpus holds readable
 // values only, and an answer never carries a stored text in place of the wire form.
-// A time is answered in its readable form with p digits until orm T91 and T105 fix
-// its wire form HH:MM:SS.ffffff (spec 60 The wire) for every client.
+// A time is answered in the wire form HH:MM:SS.ffffff (spec 60 The wire).
 func output(t dbspec.Type, v cell) (any, *Error) {
 	if v.null {
 		return nil, nil
@@ -135,6 +159,12 @@ func output(t dbspec.Type, v cell) (any, *Error) {
 			return nil, errf(codeInternal, "%q is not a readable %s", v.text, t.String())
 		}
 		return tm.Format(datetimeWire), nil
+	case dbspec.TypeTime:
+		tm, err := time.Parse("15:04:05.999999999", v.text)
+		if err != nil {
+			return nil, errf(codeInternal, "%q is not a readable %s", v.text, t.String())
+		}
+		return tm.Format(timeWire), nil
 	}
 	return v.text, nil
 }
