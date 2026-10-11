@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database-checklist -->
-<!-- source-sha256: 1fd8a06f416daf7bf3e6f9485cadafc342661bd5c982c5ec218358223ad11946 -->
+<!-- source-sha256: a76d2f21d35a2d64de3bbdbacd7c9861d2f8d92764746013c685a3fa693ed9a3 -->
 # markdown database checklist
 
 ## T12 markdown database
@@ -50,6 +50,8 @@
 - [o] T12.1-28 setext 상세 heading 진단의 위치는 column 4가 아니라 그 텍스트의 첫 글자인 column 1이다. 원인: `-------------` 위의 `people row P1`이 column 4에서 `format.noncanonical`로 보고되는데, 이는 column이 요소의 첫 글자를 가리킨다는 spec 10 Diagnostics 규칙에 어긋난다. 완료 기준: red 다음 green test (T12.1-4-1 검증에서 발견)
 - [o] T12.1-29 setext 상세 heading 앞의 link reference definition은 CommonMark 0.31.2가 읽듯 그 텍스트에 속하지 않는다. 원인: `[r]: /u` / `people row P1` / `-------------`는 CommonMark에게 definition과 setext heading `people row P1`이지만, flowmark는 definition을 heading 텍스트에 접어 넣고 `format.block`을 보고한다. 완료 기준: red 다음 green test가 있고, 그 heading은 noncanonical 상세 heading으로 읽힌다 (T12.1-4-1 검증에서 발견)
 - [ ] T12.1-30 F_G fold는 GitHub, GitLab, VS Code의 slug를 따르며 그보다 더 접지 않는다. 원인: T12.1-4-1 검증에서 F_G의 NFKD와 결합 기호 제거가 `café`를 `cafe`로 접는데, 기준 viewer 어느 것도 그렇게 하지 않아 어떤 viewer에서도 충돌하지 않는 heading을 거절한다는 점이 드러났다. 완료 기준: 첫 round 전에 범위를 고정한 적대 검증을 거쳐 F_G의 각 단계가 기준 viewer의 slug 알고리즘에 근거하거나 제거되며, red 다음 green test가 있다 (T12.1-4-1 검증에서 발견)
+- [ ] T12.1-31 S_GL은 heading을 GitLab이 렌더하는 대로, math span까지 포함해 읽는다. 원인: GitLab은 comrak의 `math_dollars`와 `math_code`를 켜고 렌더하며, comrak의 `collect_text`는 math span의 원문을 그대로 취한다. 반면 slug 입력은 CommonMark가 렌더한 텍스트다. GitLab의 option을 준 comrak 0.56.0은 `# items row $T<b>1$`에 id `user-content-items-row-tb1`를 주는데, 규칙은 이를 key `Tb1`에 대해 거절하지 않는다. 또 `$T&#49;$`는 GitLab의 slug가 다른데도 거절된다. 완료 기준: S_GL의 입력이 GitLab의 math 확장을 따르고, 이는 GitLab의 option으로 gitlab-glfm-markdown을 실행해 허용과 거절 사례로 확인한다. red 다음 green. spec 10과 plan(EN과 ko)이 이를 적는다 (T12.1-30 검증에서 발견)
+- [ ] T12.1-32 vendor한 Unicode data가 license를 함께 싣는다. 원인: `internal/unicodedcp/testdata`와 T12.1-30이 vendor하는 Unicode data는 © header와 이용 약관 URL은 있지만 Unicode License v3 본문이 없다. 완료 기준: Unicode data를 담은 testdata 폴더마다 Unicode License v3 파일이 있고 `make documents-check`가 통과한다 (T12.1-30 검증에서 발견)
 - [o] T12.2.4-1 상태기계를 가진 table의 `list` 저장 block을 다룬다: checkbox glyph, 상태, 중첩 행을 가진 fixture block과 허용과 거절 사례, P1/P2 golden (T12.2.4 후속)
   - 완료 기준: fixture와 그 사례가 있고, fuzz target이 golden으로 seed되며, `go test -count=1 ./store/`가 통과한다.
 - [o] T12.2.2-5 codec이 CommonMark처럼 `#` 연속 뒤에 tab이 오는 ATX heading을 읽는다: `store/markdown.go`는 지금 space를 요구한다 (T12.2.2-3 후속)
