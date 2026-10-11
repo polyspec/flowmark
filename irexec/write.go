@@ -625,7 +625,7 @@ func (w *writer) onDuplicate(ps []*int) (bool, *Error) {
 			}
 			if equal {
 				if met != nil && met != x {
-					return false, unspecified("an insert with on_duplicate that meets two rows on different keys, IR_INVALID once ir.Validate refuses it (orm T87)")
+					return false, errf(codeInternal, "an insert with on_duplicate met two rows, which ir.Validate refuses by allowing one conflict key")
 				}
 				met = x
 			}

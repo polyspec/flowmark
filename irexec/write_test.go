@@ -124,15 +124,21 @@ func TestInsert(t *testing.T) {
 			t.Fatalf("tags:\n%s", f.file("tags.flowmark.md"))
 		}
 	})
+	// tickets has the primary key alone, so an upsert on it has exactly one conflict key.
+	ticketDocs := func(rows ...string) map[string]string {
+		docs := baseDocs()
+		docs["tickets.flowmark.md"] = lines(append([]string{"# tickets", "| id | state | title |", "| --- | --- | --- |"}, rows...)...)
+		return docs
+	}
 	upsert := func(f *fixture, id string) []byte {
-		return f.msg("insert", "people", map[string]any{"set": sets("id", "name"), "on_duplicate": []any{set("name", 1)}}, id, "Upserted")
+		return f.msg("insert", "tickets", map[string]any{"set": sets("id", "state", "title"), "on_duplicate": []any{set("title", 2)}}, id, "open", "Upserted")
 	}
 	t.Run("60#surfaces: on_duplicate meets the row whose primary key equals without regard to case, which keeps its key", func(t *testing.T) {
-		f := fresh(t)
-		res := f.want(upsert(f, "p1"), `{"affected":1,"keys":["P1"]}`)
+		f := catalogFixture(t, ticketDocs("| K1 | open | First |", "| K2 | open | Second |")).on(t)
+		res := f.want(upsert(f, "k1"), `{"affected":1,"keys":["K1"]}`)
 		f.commit(res)
-		f.want(f.msg("all", "people", map[string]any{"columns": map[string]any{"mode": "none", "add": []string{"name"}}}),
-			`{"rows":[{"id":"P1","name":"Upserted"},{"id":"P2","name":"Max"}]}`)
+		f.want(f.msg("all", "tickets", map[string]any{"columns": map[string]any{"mode": "none", "add": []string{"title"}}}),
+			`{"rows":[{"id":"K1","title":"Upserted"},{"id":"K2","title":"Second"}]}`)
 	})
 	t.Run("60#surfaces: on_duplicate meets the byte-equal key first, else the least in byte order", func(t *testing.T) {
 		// Two files whose names differ only in case: a case-sensitive root.
@@ -155,6 +161,9 @@ func TestInsert(t *testing.T) {
 			"| PX | Upper |  |  | true | 0.00 | 2026-10-01 09:00:00 |  |  |\n| px | Lower |  |  | true | 0.00 | 2026-10-01 09:00:00 |  |  |\n"
 		return docs
 	}
+	ticketCaseDocs := func() map[string]string {
+		return ticketDocs("| K1 | open | First |", "| k1 | open | Lower one |", "| KX | open | Upper |", "| kx | open | Lower |")
+	}
 	t.Run("50#a-state-changed-outside-the-engine: a write to a document holding keys equal without regard to case keeps both", func(t *testing.T) {
 		f := catalogFixture(t, caseDocs()).on(t)
 		res := f.want(f.msg("update", "people", map[string]any{"set": sets("name"), "where": where(pred("id", "eq", p(1)))}, "Renamed", "P2"), `{"affected":1,"keys":[]}`)
@@ -163,12 +172,12 @@ func TestInsert(t *testing.T) {
 		}
 	})
 	t.Run("60#surfaces: on_duplicate in a document holding case-only keys meets the byte-equal key", func(t *testing.T) {
-		f := catalogFixture(t, caseDocs()).on(t)
-		f.want(upsert(f, "P1"), `{"affected":1,"keys":["P1"]}`)
+		f := catalogFixture(t, ticketCaseDocs()).on(t)
+		f.want(upsert(f, "K1"), `{"affected":1,"keys":["K1"]}`)
 	})
 	t.Run("60#surfaces: on_duplicate in a document holding case-only keys meets the byte-least of them", func(t *testing.T) {
-		f := catalogFixture(t, caseDocs()).on(t)
-		f.want(upsert(f, "pX"), `{"affected":1,"keys":["PX"]}`)
+		f := catalogFixture(t, ticketCaseDocs()).on(t)
+		f.want(upsert(f, "kX"), `{"affected":1,"keys":["KX"]}`)
 	})
 	t.Run("60#surfaces: an insert without on_duplicate whose key equals without regard to case", func(t *testing.T) {
 		f := fresh(t)
@@ -528,6 +537,8 @@ func TestUpdate(t *testing.T) {
 		{"60#surfaces: an optimistic update that matches no row", f, f.msg("update", "people", map[string]any{"set": sets("name"), "where": where(pred("id", "eq", p(1))), "optimistic": map[string]any{"column": "score", "p": 2}}, "Ada L", "P1", "9.99"), "OPTIMISTIC_LOCK"},
 		{"20#order: an update that assigns the order matches exactly one row", f, f.msg("update", "notes", map[string]any{"set": sets("position"), "where": where(pred("parent", "is_null", nil))}, 1), "CONSTRAINT"},
 		{"60#surfaces: an update without where", f, f.msg("update", "notes", map[string]any{"set": sets("title")}, "x"), "IR_INVALID"},
+		{"60#surfaces: an upsert that two keys can meet", f, f.msg("insert", "people", map[string]any{"set": sets("id", "name"), "on_duplicate": []any{set("name", 1)}}, "P9", "Nine"), "IR_INVALID"},
+		{"60#surfaces: an upsert that does not assign its unique key", f, f.msg("insert", "people", map[string]any{"set": sets("name"), "on_duplicate": []any{set("name", 0)}}, "Nine"), "IR_INVALID"},
 		{"60#surfaces: an update of the key column", f, byID(f, "notes", sets("id"), "N3", "N7"), "IR_INVALID"},
 		{"60#surfaces: a restore that assigns the key column", f, f.msg("restore", "people", map[string]any{"set": sets("id"), "where": where(pred("id", "eq", p(1)))}, "P9", "P3"), "IR_INVALID"},
 		{"60#surfaces: a restore that assigns the soft delete column", f, f.msg("restore", "people", map[string]any{"set": sets("deleted_at"), "where": where(pred("id", "eq", p(1)))}, "2026-10-11 09:00:00", "P3"), "IR_INVALID"},
