@@ -91,7 +91,7 @@ func (e *Executor) write(c *Corpus, cl *call) (*Result, *Error) {
 
 // clone returns a deep copy of the corpus's rows, which a write changes.
 func (c *Corpus) clone() *Corpus {
-	n := &Corpus{cat: c.cat, files: map[string]*file{}, unavailable: c.unavailable}
+	n := &Corpus{cat: c.cat, files: map[string]*file{}, unavailable: c.unavailable, walk: c.walk}
 	for p, f := range c.files {
 		rows := make([]*store.Row, len(f.rows))
 		for i, r := range f.rows {
