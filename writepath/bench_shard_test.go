@@ -8,21 +8,22 @@ import (
 )
 
 // The benchmarks of a corpus of the same documents stored flat and sharded by month (spec 20 Time shards): the
-// events table of the shard golden holds benchEvents events, a tenth of them in each of ten months, once as a files
+// events table of the shard golden holds events events, a tenth of them in each of ten months, once as a files
 // table in one folder and once with its shard clause. A sharded table keeps the number of documents; what its folders
 // change is what the benchmarks show.
 
-// benchEvents is the number of events of a benchmark corpus.
-const benchEvents = 10000
+// benchFolderEvents are the numbers of events of the benchmark corpus that the folder benchmarks sweep: the files of
+// one folder.
+var benchFolderEvents = []int{5000, 10000, 20000}
 
 // benchMonths is the number of months the events are spread over.
 const benchMonths = 10
 
-// eventDocs returns benchEvents events in files: in one folder when sharded is false, in the folder of their month
+// eventDocs returns the given number of events in files: in one folder when sharded is false, in the folder of their month
 // when it is true. Event i is in month 1 + i%benchMonths of 2026.
-func eventDocs(sharded bool) map[string]string {
+func eventDocs(events int, sharded bool) map[string]string {
 	docs := map[string]string{}
-	for i := 0; i < benchEvents; i++ {
+	for i := 0; i < events; i++ {
 		month := 1 + i%benchMonths
 		at := fmt.Sprintf("2026-%02d-15 09:00:00.000000", month)
 		path := fmt.Sprintf("events/E%d.flowmark.md", i+1)
@@ -49,16 +50,19 @@ func eventCatalog(b testing.TB, sharded bool) string {
 	return strings.Replace(dbs, flat, "    store files\n", 1)
 }
 
-// shardLayouts runs bench for the flat and the sharded layout.
+// shardLayouts runs bench for the flat and the sharded layout, each at every number of events of
+// benchFolderEvents, so the files of a folder show as a sweep.
 func shardLayouts(b *testing.B, bench func(b *testing.B, f *fixture)) {
 	for _, sharded := range []bool{false, true} {
 		name := "flat"
 		if sharded {
 			name = "sharded"
 		}
-		b.Run(name, func(b *testing.B) {
-			bench(b, newFixture(b, eventCatalog(b, sharded), eventDocs(sharded)))
-		})
+		for _, events := range benchFolderEvents {
+			b.Run(fmt.Sprintf("%s/events=%d", name, events), func(b *testing.B) {
+				bench(b, newFixture(b, eventCatalog(b, sharded), eventDocs(events, sharded)))
+			})
+		}
 	}
 }
 

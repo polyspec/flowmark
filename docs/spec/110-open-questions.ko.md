@@ -1,5 +1,5 @@
 <!-- doc-id: spec-open-questions -->
-<!-- source-sha256: 2543fa70903888c9b69499732933e41a488be85274503e720f1a77e23898e214 -->
+<!-- source-sha256: 1e836ac320bc84aed86dbbc671e7e4cde7d5a36649fcc459583f2d820e37e8be -->
 # Open questions
 
 [English](110-open-questions.md)
@@ -10,7 +10,7 @@
 | # | 질문 | 권고 | 결정 조건 |
 | --- | --- | --- | --- |
 | 1 | 이 repository의 license | Apache-2.0 (schema 언어 파생물을 위한 특허 허여) | 첫 공개 push 전 |
-| 2 | corpus 규모(문서, 행)와 40-ops의 p95 지연 예산 | 문서 ≤10k / 행 ≤100k, command당 수백 millisecond | T12.4의 첫 엔진 benchmark |
+| 2 | corpus 규모(문서, 행)와 40-ops의 p95 지연 예산 | 결정됨: 문서 하나에 1 MiB, folder와 corpus에 문서 20,000개, command당 수백 millisecond([규모 한계](40-ops.ko.md#규모-한계)) | `T12.5-3`의 benchmark |
 | 3 | T12가 요구하는 orm 항목의 순서 | protocol의 IR executor와 `WRITE_CONFLICT`가 먼저, 그다음 markdown setting — setting 항목은 protocol 항목이 정의하는 executor 할당 column을 필요로 한다 | orm checklist의 등재 |
 | 4 | 사용자가 다음 kit release에 tag를 붙인 뒤 kit 재vendor | `make kit-sync KIT_TAG=<tag>`가 local path lock 기록을 대체한다 | kit release tag |
 | 5 | comment를 갖지 않게 된 document에서, adapter가 소유한 document의 sync provenance가 어디에 놓이는가 | 아직 기록된 권고가 없다. adapter 작업이 정한다 | database export 너머의 첫 adapter |

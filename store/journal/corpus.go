@@ -179,3 +179,10 @@ func randomHex(n int) string {
 	_, _ = rand.Read(b)
 	return hex.EncodeToString(b)
 }
+
+// Publish publishes e to the observer of the corpus, as the journal publishes its own events. The write path
+// publishes the events that only it knows, such as ScaleExceeded.
+func (c *Corpus) Publish(e Event) { c.obs.Observe(e) }
+
+// Abs returns the absolute path of the corpus path rel.
+func (c *Corpus) Abs(rel string) string { return c.abs(rel) }

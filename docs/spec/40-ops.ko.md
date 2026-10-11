@@ -1,5 +1,5 @@
 <!-- doc-id: spec-ops -->
-<!-- source-sha256: 49fc2716c897c4d9fd9a21b7c99be90ba348a1ab00d437b1411b75ed5d047fc8 -->
+<!-- source-sha256: 81809500ed140ffdfa6040e78c3b8c46a541382fdf3d6dab2e17782784d7eed6 -->
 # Operations
 
 [English](40-ops.md)
@@ -452,8 +452,8 @@ MySQL과 PostgreSQL은 `datetime(p)` column을 `NOW(6)`와 여섯 자리로 비�
   `TestKeptHeapBudget`이 지킨다(macOS에서 4.5 KB). 행이 많은 문서도 통째로 가진다. 그것을 parse할 때
   할당하는 것은 아래 codec의 비용이다.
 - 쓰기는 여전히 바뀐 대상마다 통째로 parse하고 render하며, executor의 post-image는 corpus의 행을
-  복사하므로 쓰기 비용은 대상 file과 행에 따라 커진다. 대상 file의 크기를 묶는 것은 `T12.5-3`의
-  것이며, 대상의 byte당 비용은 codec의 비용이다.
+  복사하므로 쓰기 비용은 대상 file과 행에 따라 커진다. 대상 file의 크기를 묶는 것은 [규모 한계](#규모-한계)이며,
+  대상의 byte당 비용은 codec의 비용이다.
 - **codec의 비용**은 file의 byte에 선형이다: 상세 섹션을 가진 행들의 document file에서, file의 parse와
   render는 각각 그 megabyte당 CPU 0.1초 이하가 들고 그 byte당 64 byte 이하를 할당한다. 어떤 pass도 각
   heading을 각 상세 anchor와, 또는 각 행을 각 행과 비교하지 않는다: heading의 slug는 자기가 가져가는
@@ -474,6 +474,37 @@ MySQL과 PostgreSQL은 `datetime(p)` column을 `NOW(6)`와 여섯 자리로 비�
   catalog가 바뀔 때 실행한다.
 - 오래 사는 face(sidecar, server)는 corpus를 지켜보다 host에 변경 event를 push할 수 있다. 쓰기는 여전히
   transaction protocol로만 간다.
+
+## 규모 한계
+
+엔진은 위의 지연 목표 안에서 제공하는 corpus의 크기를 밝히고, corpus가 그것을 넘으면 알린다.
+
+- **한계**는 문서 하나에 1 MiB, folder 하나에 문서 20,000개, corpus 하나에 문서 20,000개다.
+  `catalog.Envelope`가 이 세 수를 갖고, 명세와 code는 다른 수를 적지 않는다.
+- **측정**은 `writepath`의 benchmark(`BenchmarkFileSizeWrite`, `BenchmarkShardOpen`, `BenchmarkShardInsert`,
+  `BenchmarkShardRead`, `BenchmarkSessions`)이며 `T12.5-3` 시점의 macOS(11 core)에서 돌렸다:
+  - 문서의 행 하나를 갱신하면 32 KB에서 83 ms(p95), 340 KB에서 239 ms, 1.4 MB에서 757 ms가 들고 KB당
+    CPU 0.7 ms다. 쓰기가 대상을 통째로 parse하고 검사하고 렌더하기 때문이다. 1 MiB는 행 하나의 갱신이 아직
+    수백 millisecond 안에 드는 크기다.
+  - folder의 문서가 5,000개에서 20,000개일 때 열기는 336 ms, 697 ms, 1,245 ms(p95)이고 문서 삽입은 99 ms,
+    129 ms, 249 ms다. 문서당 0.06 ms다. 문서 20,000개에서 삽입이 지연 목표에 닿으며, 이것이 folder와 corpus의
+    수를 정한다.
+  - 달 단위 shard는 열기, 삽입, 읽기를 노이즈 안에 둔다. shard는 folder가 끝없이 커지지 않게 할 뿐 같은
+    문서의 corpus를 빠르게 하지 않는다.
+  - macOS에서 감시는 folder와 문서마다 descriptor 하나를 쥔다(문서 10,000개에서 20,009개). 문서의 수는 process가
+    필요로 하는 descriptor의 수이기도 하다. 그것을 얻지 못한 열기는 file을 밝혀 `DRIVER`로 실패하고 lock을
+    남기지 않는다.
+  - session은 제한하지 않는다. lock이 직렬화하므로 쓰기 하나의 시간은 같고, 동시에 쓰는 session 열여섯 중
+    마지막은 1.3초를 기다린다.
+- **한계를 넘으면** corpus는 전과 같이 읽고 쓴다. validator가 알린다: 1 MiB를 넘는 문서에 `scale.file`, 한계보다
+  문서가 많은 folder에 `scale.folder`, 그만큼 많은 corpus의 root에 `scale.corpus`이며, 각각 넘은 것과 그 크기,
+  table, 한계를 밝힌다. 문서를 1 MiB 넘게 쓴 commit은 file과 byte와 한계를 밝힌 `scale.exceeded` event를 낸다.
+  근거: 쓰기를 거절하는 한계는 그 한계를 넘어 자란 corpus를 크기의 실수로 쓸 수 없게 만든다. 비용은 사용자가
+  정할 일이므로 엔진은 알린다. 쓰기는 엔진이 올바르게 쥘 수 없는 것에만 거절한다. process가 얻지 못한 감시의
+  descriptor이며 `DRIVER`다.
+- 문서와 folder의 크기는 저장 선언의 문제다. 1 MiB를 넘어 자라는 document table은 `files`로 저장하거나 시간으로
+  샤드한다([시간 shard](20-document-model.ko.md#시간-shard)).
+- Linux와 Windows는 같은 benchmark로 잰다. macOS와 다른 수는 한계의 근거를 바꾸며 수단을 바꾸지 않는다.
 
 ## 실패 어휘
 

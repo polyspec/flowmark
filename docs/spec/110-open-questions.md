@@ -9,7 +9,7 @@ A decision promotes its entry into the owning specification and removes it here.
 | # | Question | Recommendation | Decided by |
 | --- | --- | --- | --- |
 | 1 | The license of this repository | Apache-2.0 (the patent grant, for a schema-language derivative) | before the first public push |
-| 2 | The corpus scale envelope (documents, rows) and the p95 latency budget of 40-ops | ≤10k documents / ≤100k rows; hundreds of milliseconds per command | the first engine benchmarks at T12.4 |
+| 2 | The corpus scale envelope (documents, rows) and the p95 latency budget of 40-ops | Decided: 1 MiB for a document, 20,000 documents for a folder and for a corpus, hundreds of milliseconds per command ([the scale envelope](40-ops.md#the-scale-envelope)) | the benchmarks of `T12.5-3` |
 | 3 | The order of the orm items that T12 requires | the protocol's IR executors and `WRITE_CONFLICT` first, then the markdown settings — the settings item needs the executor-assigned columns that the protocol item defines | the orm checklist entries |
 | 4 | Re-vendor kit after the user tags the next kit release | `make kit-sync KIT_TAG=<tag>` replaces the local-path lock record | the kit release tag |
 | 5 | Where the sync provenance of an adapter-owned document lives, now that a document carries no comment | None recorded; the adapter work decides it | the first adapter beyond the database export |
