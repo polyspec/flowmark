@@ -3,6 +3,7 @@
 
 ## Unreleased
 
+- T12.1-34: the standard application schema stores one file per item: `items` is `store files`, its history and the links it starts are blocks of its file, and `people` and `views` are one document each, so a transition, a link or a move of an item writes that item's file alone.
 - T12.1-36: `files` storage stores `order` as a sparse rank: a move, an insert or a parent change rewrites only the placed row's file unless no rank is free, then renumbers the group once, and a delete rewrites no sibling; reads still see 1-based positions, and the validator's `order` reports only a shared rank. An insert at position 1 among 1,000 siblings writes 1 file instead of 1,001.
 - T12.5-2: an operation no longer reads unchanged files: an opened corpus is kept current by the operating system's file notifications (kqueue, inotify, ReadDirectoryChangesW), re-reads everything on an overflow, always re-reads its commit targets under the lock, and reuses each document's parse while its bytes and link targets are unchanged; a read of 10k documents drops from 3.9 s to 68 ms of CPU, and every face closes the corpus it opens.
 - T12.11: the issue tracker as one dataset in three storages (`examples/tracker`: document list, document table, one file per row), which read back the same rows through the engine, and the hardcoding inventory grep as the test `tests/inventory`, at zero.
