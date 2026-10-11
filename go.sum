@@ -34,6 +34,8 @@ github.com/polyspec/orm v0.0.8-0.20261011155243-e1234ccb2dd5 h1:ZlIQ/TLRoKihscy7
 github.com/polyspec/orm v0.0.8-0.20261011155243-e1234ccb2dd5/go.mod h1:314mr3Vec2BaqX47jlp08NCe4MahZGSMSIZonfJ9Y6c=
 github.com/polyspec/orm v0.0.8-0.20261011155746-e5d059c2ae24 h1:W1QMhZtyopxCeUtFkFzTW65Ddn2owhF+OsnqrCfisnw=
 github.com/polyspec/orm v0.0.8-0.20261011155746-e5d059c2ae24/go.mod h1:314mr3Vec2BaqX47jlp08NCe4MahZGSMSIZonfJ9Y6c=
+github.com/polyspec/orm v0.0.8-0.20261011180106-4b22faf2713f h1:xnu31pMjJuVfLi3oAREmFOcT+O0Z13iY0pbj2iKtTDY=
+github.com/polyspec/orm v0.0.8-0.20261011180106-4b22faf2713f/go.mod h1:314mr3Vec2BaqX47jlp08NCe4MahZGSMSIZonfJ9Y6c=
 github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec h1:W09IVJc94icq4NjY3clb7Lk8O1qJ8BdBEF8z0ibU0rE=
 github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec/go.mod h1:qqbHyh8v60DhA7CoWK5oRCqLrMHRGoxYCSS9EjAz6Eo=
 go.yaml.in/yaml/v3 v3.0.5 h1:N6y/pJk8buWs9NY5ERU2HSMfm+IuD/OtfdAnq6kESPw=

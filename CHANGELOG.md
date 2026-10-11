@@ -3,6 +3,7 @@
 
 ## Unreleased
 
+- T12.4-1: the IR executor follows orm's `group_by` rule: a grouped row read, a grouped sum, a grouped subquery and a group order outside the group answer `IR_INVALID` from orm's validator, and the executor's own earlier answers for them are removed.
 - T12.1-38: the engine reads GFM tables as GitHub, GitLab and VS Code do: a header row, a delimiter row of as many cells and the body rows after it take in the lines that CommonMark reads as a paragraph, so a heading that no viewer reads is no heading of the engine and a setext underline after a body row underlines nothing; VS Code's markdown-it also takes a heading line as a header row and a pipeless delimiter row of one cell.
 - T12.5-3: the engine states its scale envelope — 1 MiB for a document, 20,000 documents for a folder and for a corpus — from benchmarks of the size of a file, the documents of a folder and a corpus, and the sessions under the lock; a corpus past it is reported by the validator (`scale.file`, `scale.folder`, `scale.corpus`) and a commit that writes a document past 1 MiB publishes `scale.exceeded`, and both are written all the same.
 - T12.5-6: opening one corpus from several processes at once no longer fails when two of them make the lock folder together: the folder is made first and judged after.
