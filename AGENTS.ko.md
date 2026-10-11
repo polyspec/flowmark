@@ -1,5 +1,5 @@
 <!-- doc-id: agents -->
-<!-- source-sha256: ac6e37f88d9e9e0671b0558567366c73e3ead2e154651ecdcea508c31bec8f76 -->
+<!-- source-sha256: b96d934cf25005b5f5d7aa453d343a35476c05ae21070649661098c063863bb5 -->
 # 개발 규칙
 
 [English](AGENTS.md)
@@ -64,7 +64,18 @@ GitHub, Jira), 응용 schema이고, [polyspec/orm](https://github.com/polyspec/o
 - 사용자 지시가 우선한다. `main`에서 직접 개발한다. branch는
   `{type}/{shortname}-{체크리스트 ID}`, worktree는 `{프로젝트}-{shortname}-{체크리스트 ID}`로,
   agent나 병렬 작업이 필요할 때 만들고 main에 병합되는 즉시 삭제한다 — 병합 후 남은 branch나
-  worktree는 용량을 차지하고 폴더를 파편화하며 병합 여부 확인에 혼란을 준다.
+  worktree는 용량을 차지하고 폴더를 파편화하며 병합 여부 확인에 혼란을 준다. agent tool이 만드는
+  worktree는 tool이 이름을 붙이므로 그 이름을 그대로 쓰며, 그 작업이 병합되는 즉시 branch와 함께
+  삭제한다.
+- 병렬 항목은 항목 하나나 판정 묶음 하나마다 별도 worktree에서 진행한다. worktree는 code, spec,
+  plan을 고친다. changelog와 checklist는 main에 병합하는 쪽만, 병합 다음 commit에서 쓰므로 병렬
+  작업이 그 파일에서 충돌하지 않는다. worktree branch는 병합 전에 main 위로 rebase하며, rebase 뒤에
+  모든 검사가 통과한다.
+- `make test`가 test의 owning command다. repository의 node test와 `scripts/go-test.mjs`를 실행하며,
+  이 script는 일부 Go test에 필요한 대소문자 구분 폴더를 마련하고(macOS에서는 `var/` 아래의
+  Case-sensitive APFS image, Windows에서는 `fsutil`, 그 밖에는 검사한 폴더) 그 폴더로
+  `go test ./...`를 실행한다. 대소문자를 접는 file system에서 맨 `go test ./...`는 그 test를 설계대로
+  실패시키며, 필요한 변수를 밝힌다.
 - main에 병합될 수준이 아닌 test code는 의미가 있으면 cherry-pick하고 아니면 폐기하며, 반드시
   commit 전에 처리한다. 바로 제거할 수 없으면 checklist 하위 항목에 제거 조건을 명시한다.
 - 지시는 먼저 분류한다: checklist 항목(작업), memory(사용자와 agent만 알아야 하는 것), AGENTS(업무

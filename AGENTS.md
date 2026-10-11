@@ -78,7 +78,18 @@ has its checklist in `docs/plans/`.
   `{type}/{shortname}-{checklist ID}` and a worktree `{project}-{shortname}-{checklist ID}`, used
   when agents or parallel work need one and deleted as soon as they merge into main — a merged
   branch or worktree left behind takes space, fragments the folders and confuses which branches
-  are merged.
+  are merged. A worktree that an agent tool creates keeps the name the tool gives it, since the
+  tool names it, and is deleted with its branch as soon as its work merges.
+- Parallel items run in separate worktrees, one item or one group of rulings each. A worktree
+  changes code, specifications and plans; the changelogs and the checklists are written only by
+  whoever merges into main, in the commit after the merge, so parallel work never conflicts in
+  them. A worktree branch is rebased onto main before it merges, and every check passes after
+  the rebase.
+- `make test` is the owning command of the tests: it runs the repository's node tests and
+  `scripts/go-test.mjs`, which provisions the case-sensitive folder some Go tests need (on macOS
+  a Case-sensitive APFS image under `var/`, on Windows `fsutil`, elsewhere a folder it probes)
+  and runs `go test ./...` with it. A bare `go test ./...` on a file system that folds case
+  fails those tests by design and names the variable they need.
 - Test code that cannot merge into main is cherry-picked when it is worth keeping and otherwise
   discarded, always before the commit. When it cannot be removed at once, a checklist sub-item
   states the condition of its removal.
