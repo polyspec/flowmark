@@ -11,13 +11,16 @@ import (
 
 // Holder is the record a lock file holds (spec 40, the lock): one line of JSON and a line feed. Host is the machine
 // identifier (with the PID namespace on Linux), Start the start of the process, and Hostname the host name for the
-// messages only. The holder is named `<pid>@<host>/<session>`.
+// messages only. Acquisition is the token of one acquisition — the 32 hex digits of its pending record's name — so two
+// acquisitions never write the same record, even of one session in one process. The holder is named
+// `<pid>@<host>/<session>`.
 type Holder struct {
-	PID      int    `json:"pid"`
-	Start    string `json:"start"`
-	Host     string `json:"host"`
-	Hostname string `json:"hostname"`
-	Session  string `json:"session"`
+	PID         int    `json:"pid"`
+	Start       string `json:"start"`
+	Host        string `json:"host"`
+	Hostname    string `json:"hostname"`
+	Session     string `json:"session"`
+	Acquisition string `json:"acquisition"`
 }
 
 func (h Holder) String() string {
@@ -57,7 +60,7 @@ func parseRecord(data []byte) (Holder, error) {
 	if _, err := dec.Token(); err != io.EOF {
 		return Holder{}, fmt.Errorf("holds more than one lock record: %q", data)
 	}
-	if h.PID <= 0 || h.Start == "" || h.Hostname == "" || checkPart("session", h.Session) != nil || checkPart("host", h.Host) != nil {
+	if h.PID <= 0 || h.Start == "" || h.Hostname == "" || checkPart("session", h.Session) != nil || checkPart("host", h.Host) != nil || !isHex(h.Acquisition, 32) {
 		return Holder{}, fmt.Errorf("holds an incomplete lock record: %q", data)
 	}
 	if !bytes.Equal(h.record(), data) {
@@ -66,7 +69,7 @@ func parseRecord(data []byte) (Holder, error) {
 	return h, nil
 }
 
-// self returns this process's holder for session.
+// self returns this process's holder for a new acquisition of session, with a fresh acquisition token.
 func (c *Corpus) self(session string) (Holder, error) {
 	if err := checkPart("session", session); err != nil {
 		return Holder{}, fmt.Errorf("journal: %w", err)
@@ -83,7 +86,7 @@ func (c *Corpus) self(session string) (Holder, error) {
 	if err != nil {
 		return Holder{}, fmt.Errorf("journal: the start of this process: %w", err)
 	}
-	return Holder{PID: os.Getpid(), Start: start, Host: host, Hostname: name, Session: session}, nil
+	return Holder{PID: os.Getpid(), Start: start, Host: host, Hostname: name, Session: session, Acquisition: randomHex(16)}, nil
 }
 
 // HolderState says whether the holder of a lock still runs.

@@ -35,16 +35,17 @@ func TestLockPathIsDeclared(t *testing.T) {
 	}
 }
 
-// The record is one line of JSON {pid, start, host, hostname, session}; the holder is named `<pid>@<host>/<session>`.
+// The record is one line of JSON {pid, start, host, hostname, session, acquisition}; the holder is named
+// `<pid>@<host>/<session>`, and the acquisition is the 32 hex digits of its pending record's name.
 func TestHolderRecordJSON(t *testing.T) {
 	root := t.TempDir()
 	c, _ := newCorpus(t, root)
 	l := acquire(t, c, "s1")
 	h := l.Holder()
-	if h.PID != os.Getpid() || h.Session != "s1" || h.Start == "" || h.Host == "" || h.Hostname == "" {
+	if h.PID != os.Getpid() || h.Session != "s1" || h.Start == "" || h.Host == "" || h.Hostname == "" || !isHex(h.Acquisition, 32) {
 		t.Fatalf("holder = %+v", h)
 	}
-	want := fmt.Sprintf(`{"pid":%d,"start":%q,"host":%q,"hostname":%q,"session":"s1"}`+"\n", h.PID, h.Start, h.Host, h.Hostname)
+	want := fmt.Sprintf(`{"pid":%d,"start":%q,"host":%q,"hostname":%q,"session":"s1","acquisition":%q}`+"\n", h.PID, h.Start, h.Host, h.Hostname, h.Acquisition)
 	data, err := os.ReadFile(lockFile(root))
 	if err != nil {
 		t.Fatal(err)
@@ -71,6 +72,9 @@ func TestHolderRecordJSON(t *testing.T) {
 		strings.Replace(want, fmt.Sprintf(`"pid":%d`, h.PID), `"pid":0`, 1),
 		strings.Replace(want, fmt.Sprintf(`"pid":%d`, h.PID), `"pid":-4`, 1),
 		strings.Replace(want, `"session":"s1"`, `"session":"a/b"`, 1),
+		strings.Replace(want, fmt.Sprintf(`,"acquisition":%q`, h.Acquisition), ``, 1),
+		strings.Replace(want, h.Acquisition, h.Acquisition[:31], 1),
+		strings.Replace(want, h.Acquisition, strings.ToUpper(h.Acquisition), 1),
 	} {
 		if _, err := parseRecord([]byte(bad)); err == nil {
 			t.Errorf("parseRecord(%q) accepted", bad)
@@ -184,14 +188,32 @@ func TestAcquireMalformedRecord(t *testing.T) {
 func TestAcquireLostReplyOwnRecord(t *testing.T) {
 	root := t.TempDir()
 	c, rec := newCorpus(t, root)
-	own := selfRecord(t, c, "s1")
-	plantRecord(t, root, LockPath, own)
+	// The link takes effect before the attempt's own link runs, as a link whose reply was lost: the attempt's link
+	// fails with EEXIST and finds its own record.
+	linked := false
+	c.SetFault(func(step string, _ int) error {
+		if step != "lock-attempt" || linked {
+			return nil
+		}
+		linked = true
+		entries, err := os.ReadDir(filepath.Join(root, ".flowmark"))
+		if err != nil {
+			return err
+		}
+		for _, e := range entries {
+			if pendingName.MatchString(e.Name()) {
+				return os.Link(filepath.Join(root, ".flowmark", e.Name()), lockFile(root))
+			}
+		}
+		return errors.New("no pending record to link")
+	})
 	l, err := c.Acquire(context.Background(), "s1", 0)
 	if err != nil {
 		t.Fatalf("Acquire = %v, want the lock held by its own record", err)
 	}
-	if l.Holder() != own {
-		t.Fatalf("holder = %+v", l.Holder())
+	data, _ := os.ReadFile(lockFile(root))
+	if !linked || string(data) != string(l.Holder().record()) {
+		t.Fatalf("lock = %q, holder %+v", data, l.Holder())
 	}
 	wantKinds(t, rec, LockAcquired)
 	if err := l.Release(); err != nil {

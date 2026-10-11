@@ -62,9 +62,12 @@ The order of the commit protocol is normative.
 
 ### The holder record
 
-- The lock file holds one line of JSON, `{"pid", "start", "host", "hostname", "session"}`, and a
-  line feed; the holder is named `<pid>@<host>/<session>`. A file that holds anything else is
-  never taken for a free lock.
+- The lock file holds one line of JSON, `{"pid", "start", "host", "hostname", "session",
+  "acquisition"}`, and a line feed; the holder is named `<pid>@<host>/<session>`. `acquisition` is
+  the token of one acquisition: 32 lowercase hex digits of 128 random bits from the OS random source,
+  which also name its pending record. A file that holds anything else is never taken for a free lock.
+  Grounding: a session may acquire again in its process, so only a token per acquisition keeps two
+  acquirers from writing byte-equal records, which the lost-reply rule below would take for one.
 - `start` is the start of the process: on Linux the boot of `/proc/sys/kernel/random/boot_id` with
   field 22 of `/proc/<pid>/stat`; on macOS `kp_proc.p_starttime` of sysctl `kern.proc.pid.<pid>`;
   on Windows the `GetProcessTimes` creation time.
@@ -87,12 +90,12 @@ The order of the commit protocol is normative.
 
 ### Acquiring and waiting
 
-- The record is written whole to `.flowmark/lock.<32 hex digits of 128 random bits>.pending`,
+- The record is written whole to `.flowmark/lock.<acquisition>.pending`,
   synced, and hard-linked to `.flowmark/lock`; the link fails when the lock exists, so the lock
   appears atomically with its whole record. A waiter writes its pending record once. A pending
   record takes no part in exclusion.
 - A try whose link fails with `EEXIST` reads the lock. A record byte-equal to the acquirer's own
-  (its session is unique) means the link took effect although its reply was lost (NFS), and the
+  (its acquisition token is unique) means the link took effect although its reply was lost (NFS), and the
   lock is held. A lock that disappears before it is read is tried again at once.
 - An operation that finds the lock held by a running holder, or by one on another host, waits for
   its release and fails with `LOCK_TIMEOUT`, naming the holder and its state, when its deadline
