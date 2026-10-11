@@ -16,10 +16,6 @@ test: ## Run the tests of the repository's own code and scripts; offline
 slug-vectors: ## Record the heading ids GitHub and VS Code render into store/testdata/slug; needs the network, gh and npm
 	node scripts/record-slugs.mjs
 
-.PHONY: validate
-validate: ## Validate the corpus: keys, references and the strict parse; offline
-	go run ./cmd/flowmark validate .
-
 .PHONY: build
 build: ## Build the executable that sidecar.json names
 	go build -o build/flowmark ./cmd/flowmark
