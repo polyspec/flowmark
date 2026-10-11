@@ -1,9 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: b9f6cf50014956428811759f7771f5326b4f55ded18247b9ff27e81000a71a9b -->
+<!-- source-sha256: 6485f9521980af73bdd651102b8819682415ac9952c1403da43e292766a29c1b -->
 # Changelog
 
 ## Unreleased
 
+- T12.11.2-1: board 애플리케이션이 hyper의 Node.js 서버에서도 orm의 TypeScript client와 `markdown://` 위에 `examples/board/web/node`로 돈다. PHP 서버와 Node.js 서버는 같은 행과 글 하나의 같은 페이지를 낸다.
 - T12.11.2: board 애플리케이션이 hyper의 PHP 서버 위에서 orm과 `markdown://`로 `examples/board/web`에서 돈다. 글 1000개를 1월부터 10월까지 달마다 100개씩 나누며, 두 board corpus 모두 `posts`는 `created`의 달로 샤드되고 `examples/board/seed`가 엔진으로 글을 쓴다.
 - T12.1-35: `files`나 `document` table이 시간 shard(`store ... shard <column> <year|month|day>`, orm T119)를 선언할 수 있다. 행은 `<table>/<period>/<key>.flowmark.md`나 기간 문서 `<table>/<period>.flowmark.md`에 서고, insert는 행을 자기 기간의 파일에 놓고, shard column 갱신은 행을 옮기며 그 행으로의 링크를 같은 쓰기에서 다시 쓰고, 행이 없는 기간에는 파일이 없으며, validator는 다른 기간의 파일에 있는 행을 `shard.period`로 보고한다.
 - T12.7: database로의 export가 완료되었다. codec column은 저장된 cell을 유지하고, list 끝의 host stage hex와 ip는 풀었다가 orm이 다시 적용하며, client stage 앞의 host stage만 거절한다. 앞선 항목의 identity key와 `datetime(p)` bind까지 합쳐 catalog의 모든 table이 export된다.

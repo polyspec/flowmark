@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database-checklist -->
-<!-- source-sha256: 9c17c93a14ff177f1c70f1fa139b9ba7b5a19aa6cc52a68addd95c2f73fdd328 -->
+<!-- source-sha256: c6aeb6b6b0ffc59dcc111111cdc8725f59f8bcc15ab5464a8a832825bb89d59d -->
 # markdown database checklist
 
 ## T12 markdown database
@@ -126,7 +126,7 @@
 - [o] T12.11.1 board 예제: 댓글과 답글을 가진 post를 block과 files 두 변형으로, engine을 통해 구동한다 (T12.10 선행)
   - 완료 기준: engine을 통해 post를 만들고, 댓글과 답글을 달고, 고치고 지우면 두 변형에서 같은 행을 다시 읽으며, 두 corpus가 P1/P2로 round-trip한다.
 - [o] T12.11.2 hyper PHP 서버 위의 board 앱: hyper(페이지)와 `markdown://` 위의 orm으로 만든 board를 `examples/board/web`에 두며, 글 1000개를 1월부터 10월까지 달마다 100개씩 나눈다(T12.9, T12.11.1, T12.1-35, orm `T64` 선행). 상태: `web/`은 hyper의 board 예제에서 data 계층을 corpus catalog로 생성한 orm model 위의 `src/Posts.php`로 바꾼 것이다. 두 board corpus 모두 `posts`는 `store files shard created month`이고, `examples/board/seed`는 달마다 원하는 수의 글을 엔진으로 쓴다. 글 1000개에서 PHP 내장 서버와 `flowmark serve`로 HTTP로 잰 값: 글 열 개의 페이지 23~55 ms, 글 하나 23 ms이고, 새 글(303과 목록 맨 위의 새 글)과 빈 form(422)은 hyper 예제와 같게 답하며 없는 글은 404다. data 계층만으로는 한 페이지 8 ms, 새 글 48 ms다. Node.js 변형과 crudui의 form, 목록, 검증은 T12.11.2-1과 T12.11.2-2이고, hyper의 Python 서버는 이 일의 범위 밖이다
-- [ ] T12.11.2-1 hyper Node.js 서버 위의 board 앱: 같은 애플리케이션을 orm의 TypeScript client와 `markdown://` 위에 둔다 (T12.11.2, orm `T67` 선행)
+- [o] T12.11.2-1 hyper Node.js 서버 위의 board 앱: 같은 애플리케이션을 orm의 TypeScript client와 `markdown://` 위에 둔다 (T12.11.2, orm `T67` 선행) 상태: `examples/board/web/node/`에 `main.ts`, `handlers.ts`, `posts.ts`가 있고, PHP 서버의 애플리케이션을 orm의 TypeScript client 위에 올린 것이다. `node/model/`은 corpus catalog에서 생성한 model이다(`orm-gen --scan`이 `posts.ts`가 부르는 조건과 join 메서드를 선언한다). hyper의 Node.js 서버는 loader와 action을 promise로 받으므로 orm의 비동기 client는 자기 쪽 변경이 필요 없다. 글 1000개에서 서버는 글 열 개의 페이지에 35~66 ms, 글 하나에 26 ms로 답하고, 새 글에는 303과 목록 맨 위의 새 글, 빈 form에는 422, 없는 글에는 404로 답한다. PHP 서버와 Node.js 서버는 확인한 모든 페이지의 행이 같고 글 하나의 byte가 같다. 애플리케이션이 설치하는 orm dist는 markdown executor 뒤에 빌드해야 한다(orm에서 `make typescript-build`). orm의 `dist`는 commit하지 않기 때문이다.
 - [ ] T12.11.2-2 crudui의 board form, 목록, 검증: crudui는 계약과 설정만 있고 code가 없으므로 그 code를 기다린다 (T12.11.2와 crudui library 선행)
   - 완료 기준: 각 server에서 form을 통해 post를 만들고, 댓글과 답글을 달고, 고치고 지우면 같은 corpus file이 바뀌며, 모든 페이지가 같은 행을 그리고, list와 post 페이지의 screenshot이 캡처된다.
 - [ ] T12.12 pseudo-version 대신 orm release를 요구한다: T12.11이 끝나면 flowmark의 go.mod는 `T61`과 `T62`를 담은 released orm tag를 요구한다 (T12.11 선행, orm release 항목 선행)

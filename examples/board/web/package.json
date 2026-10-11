@@ -10,10 +10,25 @@
   "dependencies": {
     "@polyspec/hyper-client": "file:../../../../polyspec/hyper/packages/hyper-client",
     "htmx.org": "4.0.0",
-    "@polyspec/template": "https://github.com/polyspec/template/releases/download/v0.0.6/polyspec-template-npm-0.0.6.tgz"
+    "@polyspec/template": "https://github.com/polyspec/template/releases/download/v0.0.6/polyspec-template-npm-0.0.6.tgz",
+    "@polyspec/hyper-server": "file:../../../../polyspec/hyper/packages/hyper-server-node",
+    "@polyspec/orm": "file:../../../../polyspec/orm/packages/orm-npm",
+    "@polyspec/ordered-json": "https://github.com/polyspec/ordered-json/releases/download/v0.0.8/polyspec-ordered-json-npm-0.0.8.tgz"
   },
   "overrides": {
     "@polyspec/hyper-client": "file:../../../../polyspec/hyper/packages/hyper-client",
-    "@polyspec/template": "https://github.com/polyspec/template/releases/download/v0.0.6/polyspec-template-npm-0.0.6.tgz"
+    "@polyspec/template": "https://github.com/polyspec/template/releases/download/v0.0.6/polyspec-template-npm-0.0.6.tgz",
+    "@polyspec/hyper-server": "file:../../../../polyspec/hyper/packages/hyper-server-node",
+    "@polyspec/orm": "file:../../../../polyspec/orm/packages/orm-npm",
+    "@polyspec/ordered-json": "https://github.com/polyspec/ordered-json/releases/download/v0.0.8/polyspec-ordered-json-npm-0.0.8.tgz"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.5",
+    "esbuild": "0.28.2",
+    "typescript": "7.0.2"
+  },
+  "scripts": {
+    "typecheck": "node node_modules/typescript/lib/tsc.js -p node/tsconfig.json",
+    "build:node": "./node_modules/esbuild/bin/esbuild node/main.ts --bundle --platform=node --format=esm --target=node26 --banner:js=\"import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);\" --outfile=build/node/server.mjs"
   }
 }

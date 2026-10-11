@@ -37,6 +37,20 @@ The paths below are relative to the repository; `<flowmark>` is a built `flowmar
    FLOWMARK_DSN='markdown://127.0.0.1:<port>/board?token=<token>' php -S 127.0.0.1:8090 -t public public/index.php
    ```
 
+## Run it on the Node.js server
+
+The same application runs on hyper's Node.js server, over orm's TypeScript client: `node/` holds its `main.ts`,
+`handlers.ts` and `posts.ts` (the same five methods, asynchronous) and the models in `node/model/`, generated from the
+same catalog (`orm-gen gen --schema ../block/dbspec/board.dbs --out node/model --scan node/posts.ts`; `--scan` makes it
+declare the condition and join methods that `posts.ts` calls). After `npm install` in this folder and the steps 1 and 2
+above, `npm run build:node` bundles the server, and the DSN of the corpus goes in the environment:
+
+```sh
+FLOWMARK_DSN='markdown://127.0.0.1:<port>/board?token=<token>' BOARD_SESSIONS=<session folder> BOARD_PORT=8091 node build/node/server.mjs
+```
+
+Both servers answer the same: the rows of every page of the list and the page of a post come out the same.
+
 The models in `src/Model/` are generated from the corpus catalog (`orm-gen gen --out src/Model --namespace
 'Flowmark\Board\Model' examples/board/block/dbspec/board.dbs`); a catalog change that changes its hash needs them
 generated again, and the server refuses a model of another hash (`SCHEMA_HASH_MISMATCH`).
