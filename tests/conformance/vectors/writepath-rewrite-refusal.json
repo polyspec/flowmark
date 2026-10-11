@@ -1,0 +1,74 @@
+{
+  "name": "writepath-rewrite-refusal",
+  "storage": "document table",
+  "catalog": "workflow",
+  "corpus": {
+    "cards/C1.flowmark.md": [
+      "# One"
+    ],
+    "cards/C2.flowmark.md": [
+      "# Two"
+    ],
+    "events.flowmark.md": [
+      "# events",
+      "| id | label |",
+      "| --- | --- |",
+      "| 1 | opened |"
+    ],
+    "items.flowmark.md": [
+      "# items",
+      "- [ ] T1 First item",
+      "- [~] T2 Second item",
+      "- [ ] T3 Third item",
+      "",
+      "## items row T2",
+      "",
+      "### item_history",
+      "| id | from_state | to_state | at |",
+      "| --- | --- | --- | --- |",
+      "| 1 | waiting | doing | 2026-10-01 08:00:00.000000 |"
+    ],
+    "pins.flowmark.md": [
+      "# pins",
+      "| id | card |",
+      "| --- | --- |",
+      "| X1 | [C1](cards/C1.flowmark.md) |"
+    ],
+    "tags.flowmark.md": [
+      "# tags",
+      "| id | label | kind |",
+      "| --- | --- | --- |",
+      "| 1 | go | topic |",
+      "| 2 | ops | area |",
+      ""
+    ]
+  },
+  "diagnostics": {
+    "tags.flowmark.md": [
+      "format.noncanonical"
+    ]
+  },
+  "request": {
+    "entity": "tags",
+    "kind": "insert",
+    "set": [
+      {
+        "column": "label",
+        "p": 0
+      },
+      {
+        "column": "kind",
+        "p": 1
+      }
+    ]
+  },
+  "params": [
+    "web",
+    "area"
+  ],
+  "now": "2026-10-11 09:00:00.000000",
+  "expect": {
+    "error": "CONSTRAINT",
+    "diagnostic": "format.noncanonical"
+  }
+}

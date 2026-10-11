@@ -34,11 +34,13 @@ table item_history {
   from_state varchar(16)
   to_state varchar(16)
   at datetime(6)
+  evidence text null
   primary key (id)
   index ix_item_history_item (item)
   foreign key fk_history_item (item) references items (id) on delete restrict on update restrict
   settings {
     store block fk_history_item table
+    markdown evidence
   }
 }
 
