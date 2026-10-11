@@ -1,9 +1,11 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: d7808135b5d3d5d908670c1e7ab94e8e7e696b87f3e86c2a0114560f6603cba9 -->
+<!-- source-sha256: 80ae0236137d537589b88b05f2a5d90bc63ac1d2b6d3e87d68b20ba9ed87cbff -->
 # Changelog
 
 ## Unreleased
 
+- T12.1-37: 상세 anchor 충돌 규칙이 각 viewer의 block을 읽는다. GitHub과 GitLab의 footnote 정의, VS Code의 math block, GitHub의 footnote 번호, GitLab의 wikilink다. GitLab의 snippet prefix는 corpus file에 적용되지 않음을 명시한다.
+- T12.5-4: codec의 parse와 render 비용이 file byte에 선형이다. MB당 약 48 ms와 35 ms, 할당 50배와 39배다(전에는 1 MB parse에 2.1초, 456배).
 - T12.1-33: 충돌 규칙이 GitHub이 anchor를 주는 raw HTML `<h1>`–`<h6>` heading을 읽고, 모든 heading element를 기록된 vector대로 GitHub의 parser처럼 읽는다. 엔진이 렌더하지 않는 내용으로 이어지는 element는 지금까지의 slug가 시작하는 anchor를 차지하는 것으로 본다.
 - T12.1-31: S_GL은 math span을 GitLab이 렌더하는 대로(글자 그대로의 source) 읽고, 끝의 Σ를 ς로, footnote 참조를 comrak처럼 읽는다. S_VS는 VS Code의 기본 markdown-math처럼 math span을 텍스트로 보지 않는다. slug vector는 고정된 gitlab-glfm-markdown을 GitLab의 option으로 build해 GitLab도 기록한다.
 - T12.1-32: vendor한 Unicode data folder가 Unicode License v3 원문을 함께 담으며, package 문서가 이를 밝히고 test가 요구한다.
