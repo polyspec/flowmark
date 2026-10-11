@@ -1,5 +1,5 @@
 <!-- doc-id: execution-checklist -->
-<!-- source-sha256: 86067097cad84d022a2814470e2e3d05db7b866e8acf5bc30ddc94a002728e9f -->
+<!-- source-sha256: 3dde121895d6559d2724751f75bc2c97af8b039d3e8ac433aec7ef0c11bcc833 -->
 # 실행 체크리스트
 
 ## T1a 설계 session
@@ -102,3 +102,5 @@
   - 완료 기준: plugin repository의 `git ls-files`에 `example/example`이 나오지 않고 재빌드해도 `git status`가 깨끗하다.
 - [o] T11 항목에 사람과 날짜: 항목 title이 `@assignee`와 마감 date·datetime(`YYYY-MM-DD`, `YYYY-MM-DDTHH:MM[:SS]`, zone 선택)으로 끝날 수 있고 문서가 사람 table(`id`/`name` header)을 선언된 사람의 registry로 가지며 빈 담당자는 self다 — 이름을 추측하지 않는다 — items·people surface가 이들을 노출한다 (T4.3 선행)
   - 완료 기준: codec이 끝 token들을 title에서 분리하고 시간이 붙은 마감도 받으며 `All("items")`이 list·table 항목 모두에 assignee·due를 실고 `All("people")`이 사람 행을 반환하며 sidecar의 items answer가 assignee·due column을 얻고 `people` answer를 가진다.
+- [o] T13 Git이 모든 commit message와 push를 검사한다: `config/checklist.json`이 hook `pre-push`와 `commit-msg`를 나열하고, `.githooks/commit-msg`가 message에 kit의 `check-commits.mjs`를 실행하며, `make hooks`가 `core.hooksPath`를 설정한다. 원인: hook이 설치된 적이 없고 `commit-msg`가 나열되지 않아, commit 5b983ec가 subject에 필요한 `(#task)` 없이 들어갔다. `check-commits.mjs`를 실행하면 그 subject를 거절한다
+  - 완료 기준: `make hooks-check`가 통과하고, `config/commits.json`을 어기는 subject의 commit을 hook이 거절한다.

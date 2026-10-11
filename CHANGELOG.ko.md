@@ -1,9 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 0398f5d9d4ced36ba36f9d1ebdd9a2acc6b4f9b6e02797607b4e2f9bfa176bed -->
+<!-- source-sha256: 456d7fe5c5e07449ddbd965a7dc570c689ff68591d8ae545ed375ee336f1656c -->
 # Changelog
 
 ## Unreleased
 
+- T13: Git이 `config/commits.json`을 어기는 message를 거절하는 `commit-msg` hook과 `pre-push` push gate를 실행한다. `config/checklist.json`이 둘을 나열하고 `make hooks`가 설치한다.
 - T12.3-2: validator는 type이 아닌 값이 무엇이든(그런 atom을 true로, 이어 false로 평가해) 행의 논리 값에 대해 check 술어가 false이면 `check`를 보고하고, 같은 판정을 commit용으로 export한다. `history.chain`은 연속성만, `state.transition`은 선언되지 않은 이력 쌍을, `state.required`는 필수 값이 없는 선언된 쌍을 보고하며, type이 아닌 상태, `from`, `to`는 `type`만이고, 행 자신의 `from`은 여전히 앞 행에 대해 판정한다.
 - T12.3-3: unique key는 orm의 binary collation처럼 바이트 단위로 비교한다. primary key는 file 이름이자 anchor이기 때문에만 대소문자를 무시한다. `key.duplicate`는 key가 바이트 단위로 같으면 그 행을 밝혀 바이트 단위로 같다고 말하고, 그렇지 않으면 대소문자를 무시하고 같은 첫 key를 밝힌다.
 - T12.4(일부): IR executor(`irexec`)를 추가한다. orm request message를 decode하고, store 행 위에서 IR Where, join, relation, aggregate, pagination으로 읽기에 답하며, 사용할 수 없는 table이 필요한 요청을 거부하고, 렌더링 전에 요청의 key 검사를 corpus에 대해 실행하며, 쓰기에는 `{affected, keys}`와 write path가 commit할 post-image로 답한다. spec이 아직 정하지 않은 질문은 판정될 때까지 `CAPABILITY_UNSUPPORTED`로 답한다.
