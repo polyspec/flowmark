@@ -225,13 +225,13 @@ func TestIntegerKeysAndMandatorySection(t *testing.T) {
 	}
 	t.Run("the integer key writes its canonical name", func(t *testing.T) {
 		row := &Row{Table: "notes", Key: "007", Title: "Seven", Sections: map[string]*string{"summary": sp("x\n")}}
-		if _, diags := RenderFile(cat, "notes", row, lk); len(diags) == 0 || diags[0].Rule != RuleConstraint {
+		if _, diags := renderFileOf(t, cat, "notes", row, lk); len(diags) == 0 || diags[0].Rule != RuleConstraint {
 			t.Fatalf("a key 007 is refused on write; diagnostics %+v", diags)
 		}
 	})
 	t.Run("a non-null section is written", func(t *testing.T) {
 		row := &Row{Table: "notes", Key: "7", Title: "Seven", Sections: map[string]*string{}}
-		if _, diags := RenderFile(cat, "notes", row, lk); len(diags) == 0 || diags[0].Rule != RuleConstraint {
+		if _, diags := renderFileOf(t, cat, "notes", row, lk); len(diags) == 0 || diags[0].Rule != RuleConstraint {
 			t.Fatalf("a missing non-null section is refused on write; diagnostics %+v", diags)
 		}
 	})

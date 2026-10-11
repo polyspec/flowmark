@@ -76,7 +76,7 @@ func detailHeading(h heading, tables map[string]int) (string, string, bool) {
 		return "", "", false
 	}
 	parts := strings.Fields(h.text)
-	if len(parts) != 3 || tables[parts[0]] != h.level || !strings.EqualFold(parts[1], "row") {
+	if len(parts) != 3 || tables[parts[0]] != h.level || strings.ToLower(parts[1]) != "row" {
 		return "", "", false
 	}
 	return parts[0], parts[2], true
@@ -213,12 +213,14 @@ func rawTags(text string) [][]htmlAttr {
 	return tags
 }
 
-// anchorRefusals returns the CONSTRAINT diagnostics of a write: one for each collision
-// of the written file rel with a detail anchor.
-func anchorRefusals(rel string, out []byte, tables map[string]int) []Diagnostic {
-	var diags []Diagnostic
+// anchorRefusals returns the CONSTRAINT refusals of a write: one for each collision
+// of the written bytes out with a detail anchor. Each is located at the row and the
+// column whose text holds the colliding heading, which origins records for each line.
+func anchorRefusals(origins []origin, out []byte, tables map[string]int) []Refusal {
+	var rf []Refusal
 	for _, c := range anchorClashes(splitLines(string(out)), tables) {
-		diags = append(diags, Diagnostic{File: rel, Line: c.line, Column: 1, Rule: RuleConstraint, Message: c.message()})
+		o := origins[c.line-1]
+		rf = append(rf, o.row.refusal(o.column, RuleConstraint, c.message()))
 	}
-	return diags
+	return rf
 }

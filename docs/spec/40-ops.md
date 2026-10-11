@@ -92,9 +92,9 @@ microseconds.
 | --- | --- | --- |
 | `LOCK_TIMEOUT` | `CANCELED` | the lock wait ended; names the holder — `CANCELED`, as a SQLite `busy_timeout` is |
 | `CORPUS_CONFLICT` | `WRITE_CONFLICT` | a target changed since it was read; names the file and line |
-| `DUPLICATE_KEY` | `DUPLICATE_KEY` | a primary or unique key value already exists; names both places |
+| `DUPLICATE_KEY` | `DUPLICATE_KEY` | a primary or unique key value already exists; names both rows (table and key) |
 | `FOREIGN_KEY` | `FOREIGN_KEY` | a reference names no row, or a referenced row is deleted while referenced |
-| `CONSTRAINT` | `CONSTRAINT` | any other rule of the catalog refused the write — a check, a title, a transition, a required column, a limit, an order, a single-line place, a non-canonical or malformed document that the write would rewrite; names the rule and the place; or a request, read or write, that needs the rows of an unavailable table ([canonical format](10-canonical-format.md#diagnostics)), naming the file and the diagnostic |
+| `CONSTRAINT` | `CONSTRAINT` | any other rule of the catalog refused the write — a check, a title, a transition, a required column, a limit, an order, a single-line place; names the rule, and the row and column ([canonical format](10-canonical-format.md#diagnostics)); or a write that must rewrite a non-canonical or malformed document, or a request, read or write, that needs the rows of an unavailable table ([canonical format](10-canonical-format.md#diagnostics)), naming the file and the diagnostic |
 | recovery refusal | — | names the target and both recorded hashes; opening refuses until resolved |
 
 Every failure message names the cause and the fix.

@@ -99,15 +99,41 @@ func TestAnchorClashNamesOther(t *testing.T) {
 	}
 }
 
+// located is a fault of either codec: a read's rule and line, or a write's rule and
+// the column of the row it refuses.
+type located struct {
+	rule   string
+	line   int
+	column string
+}
+
+func readLocated(diags []Diagnostic) []located {
+	out := make([]located, 0, len(diags))
+	for _, d := range diags {
+		out = append(out, located{rule: d.Rule, line: d.Line})
+	}
+	return out
+}
+
+func writeLocated(rf []Refusal) []located {
+	out := make([]located, 0, len(rf))
+	for _, r := range rf {
+		out = append(out, located{rule: r.Rule, column: r.Column})
+	}
+	return out
+}
+
 // anchorCodecCase is one codec input of the collision rule: the read of a file or
 // document through a parser, or the write of a row set through a renderer, with the
-// rule its diagnostic carries and the line of it.
+// rule its first fault carries, and the line of a read's fault or the column of a
+// write's.
 type anchorCodecCase struct {
-	name  string
-	run   func(t *testing.T) []Diagnostic
-	rule  string
-	line  int
-	clean bool // the input is accepted
+	name   string
+	run    func(t *testing.T) []located
+	rule   string
+	line   int
+	column string
+	clean  bool // the input is accepted
 }
 
 // TestAnchorCodecs requires both codecs to refuse a collision: a read as format.block
@@ -117,34 +143,34 @@ func TestAnchorCodecs(t *testing.T) {
 	cat := loadFixture(t)
 	docs := loadDocumentFixture(t)
 	lk := fixtureLinker()
-	readFile := func(text string) func(t *testing.T) []Diagnostic {
-		return func(t *testing.T) []Diagnostic {
+	readFile := func(text string) func(t *testing.T) []located {
+		return func(t *testing.T) []located {
 			_, diags := ParseFile(cat, "tasks", "tasks/T1.flowmark.md", []byte(text), lk)
-			return diags
+			return readLocated(diags)
 		}
 	}
-	writeFile := func(row *Row) func(t *testing.T) []Diagnostic {
-		return func(t *testing.T) []Diagnostic {
-			_, diags := RenderFile(cat, "tasks", row, lk)
-			return diags
+	writeFile := func(row *Row) func(t *testing.T) []located {
+		return func(t *testing.T) []located {
+			_, rf := renderFileOf(t, cat, "tasks", row, lk)
+			return writeLocated(rf)
 		}
 	}
-	readDoc := func(text string) func(t *testing.T) []Diagnostic {
-		return func(t *testing.T) []Diagnostic {
+	readDoc := func(text string) func(t *testing.T) []located {
+		return func(t *testing.T) []located {
 			_, diags, err := ParseDocument(docs, "people", "people.flowmark.md", []byte(text), lk)
 			if err != nil {
 				t.Fatal(err)
 			}
-			return diags
+			return readLocated(diags)
 		}
 	}
-	writeDoc := func(rows []*Row) func(t *testing.T) []Diagnostic {
-		return func(t *testing.T) []Diagnostic {
-			_, diags, err := RenderDocument(docs, "people", rows, lk)
+	writeDoc := func(rows []*Row) func(t *testing.T) []located {
+		return func(t *testing.T) []located {
+			_, rf, err := RenderDocument(docs, "people", rows, lk)
 			if err != nil {
 				t.Fatal(err)
 			}
-			return diags
+			return writeLocated(rf)
 		}
 	}
 	steps := func(title string) *Row {
@@ -162,8 +188,8 @@ func TestAnchorCodecs(t *testing.T) {
 		{name: "files read: title takes the anchor of a child detail", run: readFile(strings.Replace(stepsFile, "# Title", "# task steps row S1", 1)), rule: RuleBlock, line: 1},
 		{name: "files read: title with an attribute list", run: readFile(strings.Replace(stepsFile, "# Title", "# Title {#task_steps-row-s1}", 1)), rule: RuleBlock, line: 1},
 		{name: "files read: canonical file with a child detail is accepted", run: readFile(stepsFile), clean: true},
-		{name: "files write: title takes the anchor of a child detail", run: writeFile(steps("task steps row S1")), rule: RuleConstraint, line: 1},
-		{name: "files write: title with an attribute list", run: writeFile(steps("Title {#task_steps-row-s1}")), rule: RuleConstraint, line: 1},
+		{name: "files write: title takes the anchor of a child detail", run: writeFile(steps("task steps row S1")), rule: RuleConstraint, column: "title"},
+		{name: "files write: title with an attribute list", run: writeFile(steps("Title {#task_steps-row-s1}")), rule: RuleConstraint, column: "title"},
 		{name: "files write: canonical row is accepted", run: writeFile(steps("Title")), clean: true},
 		{name: "document read: a heading in a detail section takes the anchor", run: readDoc("# people\n" +
 			peopleHeader + "\n" + peopleDelim + "\n" + row("P1", "", "Ada", "lead", "true", "", "", "", "", "", "", "", "", "") + "\n" +
@@ -171,8 +197,8 @@ func TestAnchorCodecs(t *testing.T) {
 		{name: "document read: a canonical detail section is accepted", run: readDoc("# people\n" +
 			peopleHeader + "\n" + peopleDelim + "\n" + row("P1", "", "Ada", "lead", "true", "", "", "", "", "", "", "", "", "") + "\n" +
 			"\n## people row P1\n\n### bio\n\nNotes.\n"), clean: true},
-		{name: "document write: a heading in a detail section takes the anchor", run: writeDoc([]*Row{personBio("#### people row P\n\nx\n")}), rule: RuleConstraint, line: 10},
-		{name: "document write: an attribute list in a detail section", run: writeDoc([]*Row{personBio("Text\n{#people-row-p1}\n")}), rule: RuleConstraint, line: 10},
+		{name: "document write: a heading in a detail section takes the anchor", run: writeDoc([]*Row{personBio("#### people row P\n\nx\n")}), rule: RuleConstraint, column: "bio"},
+		{name: "document write: an attribute list in a detail section", run: writeDoc([]*Row{personBio("Text\n{#people-row-p1}\n")}), rule: RuleConstraint, column: "bio"},
 		{name: "document write: a duplicate key is DUPLICATE_KEY before the collision", run: writeDoc([]*Row{
 			peopleRow("P1", "Ada", nil), peopleRow("p1", "Ben", nil)}), rule: RuleDuplicateKey},
 	}
@@ -188,11 +214,14 @@ func TestAnchorCodecs(t *testing.T) {
 			if len(diags) == 0 {
 				t.Fatalf("no diagnostic; want %s", c.rule)
 			}
-			if diags[0].Rule != c.rule {
+			if diags[0].rule != c.rule {
 				t.Fatalf("diagnostic %+v; want rule %s", diags[0], c.rule)
 			}
-			if c.line != 0 && diags[0].Line != c.line {
-				t.Fatalf("first diagnostic at line %d; want %d: %+v", diags[0].Line, c.line, diags[0])
+			if c.line != 0 && diags[0].line != c.line {
+				t.Fatalf("first diagnostic at line %d; want %d: %+v", diags[0].line, c.line, diags[0])
+			}
+			if c.column != "" && diags[0].column != c.column {
+				t.Fatalf("first diagnostic at column %q; want %q: %+v", diags[0].column, c.column, diags[0])
 			}
 		})
 	}

@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database-checklist -->
-<!-- source-sha256: 20e215f0bd7ea1efa7e5061c45dc8063d04033c33c75a4ccd21f28028ab4d9ca -->
+<!-- source-sha256: d0a6f1b254e1a62191ca1050f7557b80f951dbe012a274bba02afc107e2787f4 -->
 # markdown database checklist
 
 ## T12 markdown database
@@ -27,7 +27,7 @@
   - 완료 기준: spec 10과 그 twin이 규칙을 근거와 함께 적고, 더 좁은 T12.1-6과 T12.1-8의 문장이 그것으로 바뀌며, 이 항목의 문구를 범위로 한 적대 검증을 거치고, `make documents-check`와 `make refs-check`가 통과한다.
 - [o] T12.1-11 spec 10이 열린 block의 읽기 쪽을 있는 그대로 적는다: 열린 채 남은 fence나 HTML block이 흡수한 줄은 CommonMark block 구조에서 경계가 아니고 viewer도 그 block 안에 보여 주므로 읽기에서 값의 텍스트다. 그런 block 뒤에 요소를 두는 쓰기만 `CONSTRAINT`다. T12.1-8이 적고 T12.1-10이 남긴 읽기의 `format.block` 구절은 어떤 reader도 관찰할 수 없는 결함을 가리키므로 철회한다. 원인: T12.2.2-3 codec이 그 읽기 쪽이 비어 있음을 찾았다 (T12.1-10, T12.2.2-3 후속)
   - 완료 기준: spec 10, 50, plan과 그 twin이 규칙을 근거와 함께 적고, 이 항목의 문구를 범위로 한 적대 검증을 거치며, `make documents-check`와 `make refs-check`가 통과한다.
-- [ ] T12.1-12 spec이 `document` codec이 규칙 없이 내린 판단을 적는다: document file의 행은 H1 줄 바로 아래에 빈 줄 하나를 두고 서며 다른 개수는 `format.noncanonical`이다. table의 구분 행은 column마다 `---`이며 다른 정렬 형식은 `format.noncanonical`, 그 밖은 `format.block`이다. 다른 table을 가리키는 상세 heading은 `format.block`이고 `row`의 대소문자 차이는 `format.noncanonical`이다. 두 행이 함께 가진 key의 상세 섹션은 하나만 상세 섹션을 가져도 섹션을 배정할 수 없으므로 `format.block`이다. 제목 token은 접두가 아니라 token 전체로 `<선언된 column>:`과 맞춘다. field 앞에서 list 제목을 끝내는 tab은 `format.block`이고, token 사이의 그 밖의 여분 space나 tab은 `format.noncanonical`이다. 쓰기 거절의 위치는 저장 순서의 그 행이다. 원인: T12.2.3 codec이 spec 10이 말하지 않는 곳에서 이것들을 골랐다 (T12.2.3 후속)
+- [o] T12.1-12 spec이 `document` codec이 규칙 없이 내린 판단을 적는다: document file의 행은 H1 줄 바로 아래에 빈 줄 없이 서며 그 자리의 빈 줄은 `format.noncanonical`이다. table의 구분 행은 column마다 `---`이며 다른 정렬 형식은 `format.noncanonical`, 그 밖은 `format.block`이다. 소문자로 만든 뒤 비교하여 다른 table을 가리키는 상세 heading은 `format.block`이고, table 이름이나 `row`의 대소문자 차이는 `format.noncanonical`이다. 두 행이 함께 가진 key의 상세 섹션은 하나만 상세 섹션을 가져도 섹션을 배정할 수 없으므로 `format.block`이다. 제목 token은 `<선언된 column>:`으로 시작하면 맞는다(접두 일치). field 앞에서 list 제목을 끝내는 tab은 `format.noncanonical`이고, list 토큰 앞의 space나 tab의 그 밖의 연속도 space 하나가 아니면 `format.noncanonical`이다. 쓰기 거절의 위치는 요청의 table, key, column으로 정해진다. 원인: T12.2.3 codec이 spec 10이 말하지 않는 곳에서 이것들을 골랐다 (T12.2.3 후속)
   - 완료 기준: spec 10과 그 twin이 각 판정을 근거와 함께 적고, 이 항목의 문구를 범위로 한 적대 검증을 거치며, document codec 테스트가 사례마다 고정하는 spec 규칙을 밝히고, `make documents-check`와 `make refs-check`가 통과한다.
 - [o] T12.1-13 spec이 block codec이 규칙 없이 내린 판단을 적는다: `parent`가 행을 가리켜야 하는 범위(spec 10은 "그 file의", spec 20은 "행의 block 밖"이라 말한다: 하나의 범위, 즉 block으로 판정한다), block heading 뒤 list나 table 앞의 빈 줄, 한 행 아래 두 번 쓰인 child table의 block, 서로 다른 block의 두 행이 함께 가진 key의 상세 섹션을 그 중 하나만 가질 때, block 행에서 자기 `files` file의 행으로 가는 link의 유도. 원인: T12.2.4 codec이 spec이 말하지 않거나 서로 다른 곳에서 이것들을 골랐다 (T12.2.4 후속)
   - 완료 기준: spec 10, 20과 그 twin이 각 판정을 근거와 함께 적고 더는 서로 다르지 않으며, 이 항목의 문구를 범위로 한 적대 검증을 거치고, codec 테스트가 사례마다 고정하는 규칙을 밝히며, `make documents-check`와 `make refs-check`가 통과한다.
@@ -68,7 +68,7 @@
 - [ ] T12.3 validator: key, foreign key, 순환, 제목, 블록 형식, 순서, limit, 이력 빈틈과 사슬, view. codec이 담은 값의 원문, 쓰인 target, 중복 행에 대한 `type`, `reference.dangling`, `key.duplicate`의 보고와 file을 가로지르는 `parent.cycle`을 포함한다 (T12.2 선행)
   - 완료 기준: 모든 규칙마다 허용과 거절 사례가 있고, parse와 emit은 golden seed로 fuzz한다.
 - [ ] T12.4 orm IR executor protocol 아래의 IR executor: params, 조립된 relation, 쓰기 답과 오류. orm `T61` 선행 (T12.3 선행)
-  - 완료 기준: 모든 규칙마다 허용과 거절 사례가 있고, parse와 emit은 golden seed로 fuzz한다.
+  - 완료 기준: 모든 규칙마다 허용과 거절 사례가 있고, parse와 emit은 golden seed로 fuzz한다. executor는 요청의 key 검사 두 가지 — 바이트 단위와 대소문자를 무시한 것 — 를 렌더링 전에 corpus에 대해 실행하며, 요청의 index와 함께 보고한다. codec에서 executor에 닿은 `DUPLICATE_KEY`는 INTERNAL이다.
 - [ ] T12.5 write path: portable lock, journal, transaction과 savepoint, 이력 행과 이력 repair, 순서 이동, `format.*` 진단이 있는 file을 다시 써야 하는 commit의 거절과 그 세 면제, 사용할 수 없는 table, 없는 folder나 file을 만드는 삽입, restrict 검사를 갖춘 file 전체 delete (T12.4 선행)
   - 완료 기준: 모든 규칙마다 허용과 거절 사례가 있고, parse와 emit은 golden seed로 fuzz한다.
 - [ ] T12.5-1 `flowmark canon <corpus> [file…]`: lock 아래 journal을 남기는 transaction 하나로 대상을 canonical 형식으로 다시 쓰며, 대상에 대해 commit 거절을 면제받고, `format.block`, `format.section`, `format.encoding`이 있는 file은 이름을 주면 거절하고 주지 않으면 보고하며, link 유도에 사용할 수 없는 table이 필요한 대상은 spec 40대로 거절하거나 보고한다. 그 거절에 관한 spec 40 문장의 문법을 바로잡는다 (T12.1-3 후속; T12.5 선행)

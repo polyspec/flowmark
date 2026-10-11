@@ -70,6 +70,76 @@ func doc(lines ...string) string {
 // raw joins lines as a file, keeping every line, the trailing empty one too.
 func raw(lines ...string) string { return strings.Join(lines, "\n") + "\n" }
 
+// TestReadRefusalPosition requires a refusal that the writer makes of a row read
+// from a file to be located where the parser read the element it names: a title
+// fault at the title of the H1 line, a field fault at the field's item, and a
+// whole-row fault at the row's first line, column 1. The refusals name the
+// elements as the writer would, since the reader accepts the file.
+func TestReadRefusalPosition(t *testing.T) {
+	cat := loadFixture(t)
+	lk := fixtureLinker()
+	const rel = "tasks/T1.flowmark.md"
+	row, diags := ParseFile(cat, "tasks", rel, []byte("# Title\n- position: 1\n- done: true\n"), lk)
+	if len(diags) > 0 || row == nil {
+		t.Fatalf("the fixture file is refused on read: %+v", diags)
+	}
+	rf := []Refusal{
+		{Table: "tasks", Key: "T1", Index: -1, Column: "title", Rule: RuleConstraint, Message: "title fault"},
+		{Table: "tasks", Key: "T1", Index: -1, Column: "done", Rule: RuleConstraint, Message: "field fault"},
+		{Table: "tasks", Key: "T1", Index: -1, Column: "", Rule: RuleConstraint, Message: "row fault"},
+	}
+	got := readDiagnostics(rel, rf, []*Row{row})
+	want := []struct{ line, col int }{{1, 3}, {3, 3}, {1, 1}}
+	if len(got) != len(want) {
+		t.Fatalf("%d diagnostics; want %d: %+v", len(got), len(want), got)
+	}
+	for k, w := range want {
+		if got[k].Line != w.line || got[k].Column != w.col {
+			t.Fatalf("diagnostic %d at %d:%d; want %d:%d: %+v", k, got[k].Line, got[k].Column, w.line, w.col, got[k])
+		}
+	}
+}
+
+// TestReadRefusalPositionDocument requires the same of a list row of a document file:
+// a title fault at the title, a field fault at the field's token, and a whole-row
+// fault at the row's line, column 1.
+func TestReadRefusalPositionDocument(t *testing.T) {
+	cat := loadDocumentFixture(t)
+	lk := documentLinker()
+	const rel = "items.flowmark.md"
+	rows, diags, err := ParseDocument(cat, "items", rel, []byte(itemsOf("- [ ] T1 Plan done:false", "- [ ] T2 Other done:true")), lk)
+	if err != nil || len(diags) > 0 || len(rows) != 2 {
+		t.Fatalf("the fixture file is refused on read: %v %+v", err, diags)
+	}
+	rf := []Refusal{
+		{Table: "items", Key: "T2", Index: -1, Column: "title", Rule: RuleConstraint, Message: "title fault"},
+		{Table: "items", Key: "T1", Index: -1, Column: "done", Rule: RuleConstraint, Message: "field fault"},
+		{Table: "items", Key: "T1", Index: -1, Column: "", Rule: RuleConstraint, Message: "row fault"},
+	}
+	got := readDiagnostics(rel, rf, rows)
+	// Line 2 is the first row, line 3 the second; "- [ ] T2 Other" puts the title at column 10.
+	want := []struct{ line, col int }{{3, 10}, {2, 15}, {2, 1}}
+	if len(got) != len(want) {
+		t.Fatalf("%d diagnostics; want %d: %+v", len(got), len(want), got)
+	}
+	for k, w := range want {
+		if got[k].Line != w.line || got[k].Column != w.col {
+			t.Fatalf("diagnostic %d at %d:%d; want %d:%d: %+v", k, got[k].Line, got[k].Column, w.line, w.col, got[k])
+		}
+	}
+}
+
+// renderFileOf writes row as a file of table, failing the test when the table is not
+// a files table of the catalog.
+func renderFileOf(t testing.TB, cat *catalog.Catalog, table string, row *Row, lk Linker) ([]byte, []Refusal) {
+	t.Helper()
+	out, rf, err := RenderFile(cat, table, row, lk)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return out, rf
+}
+
 // withBase is the canonical tasks row with its two non-null fields, followed by
 // lines after one blank line when there are any.
 func withBase(lines ...string) string {
@@ -355,17 +425,17 @@ func TestParseFileRules(t *testing.T) {
 // without a diagnostic, and that the row emits the same bytes again.
 func checkP2(t *testing.T, cat *catalog.Catalog, row *Row, lk Linker) []byte {
 	t.Helper()
-	out, diags := RenderFile(cat, row.Table, row, lk)
-	if len(diags) > 0 {
-		t.Fatalf("the row is refused on write: %+v", diags)
+	out, rf := renderFileOf(t, cat, row.Table, row, lk)
+	if len(rf) > 0 {
+		t.Fatalf("the row is refused on write: %+v", rf)
 	}
 	rel := row.Table + "/" + row.Key + ".flowmark.md"
 	back, diags := ParseFile(cat, row.Table, rel, out, lk)
 	if len(diags) > 0 || back == nil {
 		t.Fatalf("emitted file does not parse cleanly: %+v\n%s", diags, out)
 	}
-	again, diags := RenderFile(cat, row.Table, back, lk)
-	if len(diags) > 0 || !bytes.Equal(again, out) {
+	again, rf := renderFileOf(t, cat, row.Table, back, lk)
+	if len(rf) > 0 || !bytes.Equal(again, out) {
 		t.Fatalf("P2: emit(parse(emit(d))) != emit(d)\n got: %q\nwant: %q", again, out)
 	}
 	return out
@@ -382,9 +452,9 @@ func TestGoldenP1(t *testing.T) {
 			if len(diags) > 0 || row == nil {
 				t.Fatalf("golden file has diagnostics: %+v", diags)
 			}
-			out, diags := RenderFile(cat, table, row, lk)
-			if len(diags) > 0 || !bytes.Equal(out, data) {
-				t.Fatalf("P1 failed: %+v\n got: %q\nwant: %q", diags, out, data)
+			out, rf := renderFileOf(t, cat, table, row, lk)
+			if len(rf) > 0 || !bytes.Equal(out, data) {
+				t.Fatalf("P1 failed: %+v\n got: %q\nwant: %q", rf, out, data)
 			}
 		})
 	}
@@ -488,9 +558,9 @@ func TestNoncanonicalEmitsGolden(t *testing.T) {
 					t.Fatalf("unexpected diagnostic %+v", d)
 				}
 			}
-			out, diags := RenderFile(cat, table, row, lk)
-			if len(diags) > 0 || !bytes.Equal(out, c.golden) {
-				t.Fatalf("emit = %q, %+v; want the golden %q", out, diags, c.golden)
+			out, rf := renderFileOf(t, cat, table, row, lk)
+			if len(rf) > 0 || !bytes.Equal(out, c.golden) {
+				t.Fatalf("emit = %q, %+v; want the golden %q", out, rf, c.golden)
 			}
 		})
 	}
@@ -511,11 +581,11 @@ func TestRenderRules(t *testing.T) {
 	cat := loadFixture(t)
 	lk := fixtureLinker()
 	type rc struct {
-		name string
-		mut  func(r *Row)
-		rule string // empty accepts
-		line int
-		out  string // the bytes of an accepted row
+		name   string
+		mut    func(r *Row)
+		rule   string // empty accepts
+		column string // the column the first refusal names; "" for a fault of the whole row
+		out    string // the bytes of an accepted row
 	}
 	baseOut := withBase()
 	cases := []rc{
@@ -524,37 +594,37 @@ func TestRenderRules(t *testing.T) {
 		{name: "10#single-line-places: title that is only a hash", mut: func(r *Row) { r.Title = "#" }, out: doc(`# \#`, "- position: 1", "- done: true", "")},
 		{name: "10#single-line-places: title that is only two hashes", mut: func(r *Row) { r.Title = "##" }, out: doc(`# #\#`, "- position: 1", "- done: true", "")},
 		{name: "10#single-line-places: title that ends in a tab and a hash", mut: func(r *Row) { r.Title = "a\t#" }, out: doc("# a\t\\#", "- position: 1", "- done: true", "")},
-		{name: "10#single-line-places: title that reads back as another", mut: func(r *Row) { r.Title = `a \#` }, rule: RuleConstraint, line: 1},
-		{name: "10#single-line-places: title that ends in a backslash hash", mut: func(r *Row) { r.Title = `a\#` }, rule: RuleConstraint, line: 1},
-		{name: "10#single-line-places: empty title", mut: func(r *Row) { r.Title = "" }, rule: RuleConstraint, line: 1},
-		{name: "10#single-line-places: title with a line feed", mut: func(r *Row) { r.Title = "a\nb" }, rule: RuleConstraint, line: 1},
-		{name: "10#single-line-places: title with a leading space", mut: func(r *Row) { r.Title = " a" }, rule: RuleConstraint, line: 1},
-		{name: "10#single-line-places: title with raw HTML", mut: func(r *Row) { r.Title = "a <!b" }, rule: RuleConstraint, line: 1},
-		{name: "10#single-line-places: title that is not UTF-8", mut: func(r *Row) { r.Title = "a\xff" }, rule: RuleConstraint, line: 1},
-		{name: "10#encoding-and-line-structure: title with a U+0000", mut: func(r *Row) { r.Title = "a\x00b" }, rule: RuleConstraint, line: 1},
-		{name: "20#keys: key CON", mut: func(r *Row) { r.Key = "CON" }, rule: RuleConstraint, line: 1},
-		{name: "20#keys: key with a double dash", mut: func(r *Row) { r.Key = "a--b" }, rule: RuleConstraint, line: 1},
-		{name: "20#keys: key with a dash before an underscore", mut: func(r *Row) { r.Key = "a-_b" }, rule: RuleConstraint, line: 1},
+		{name: "10#single-line-places: title that reads back as another", mut: func(r *Row) { r.Title = `a \#` }, rule: RuleConstraint, column: "title"},
+		{name: "10#single-line-places: title that ends in a backslash hash", mut: func(r *Row) { r.Title = `a\#` }, rule: RuleConstraint, column: "title"},
+		{name: "10#single-line-places: empty title", mut: func(r *Row) { r.Title = "" }, rule: RuleConstraint, column: "title"},
+		{name: "10#single-line-places: title with a line feed", mut: func(r *Row) { r.Title = "a\nb" }, rule: RuleConstraint, column: "title"},
+		{name: "10#single-line-places: title with a leading space", mut: func(r *Row) { r.Title = " a" }, rule: RuleConstraint, column: "title"},
+		{name: "10#single-line-places: title with raw HTML", mut: func(r *Row) { r.Title = "a <!b" }, rule: RuleConstraint, column: "title"},
+		{name: "10#single-line-places: title that is not UTF-8", mut: func(r *Row) { r.Title = "a\xff" }, rule: RuleConstraint, column: "title"},
+		{name: "10#encoding-and-line-structure: title with a U+0000", mut: func(r *Row) { r.Title = "a\x00b" }, rule: RuleConstraint, column: "title"},
+		{name: "20#keys: key CON", mut: func(r *Row) { r.Key = "CON" }, rule: RuleConstraint, column: "id"},
+		{name: "20#keys: key with a double dash", mut: func(r *Row) { r.Key = "a--b" }, rule: RuleConstraint, column: "id"},
+		{name: "20#keys: key with a dash before an underscore", mut: func(r *Row) { r.Key = "a-_b" }, rule: RuleConstraint, column: "id"},
 		{name: "20#keys: key that ends with a dash", mut: func(r *Row) { r.Key = "a-" }, out: baseOut},
-		{name: "20#keys: key with a space", mut: func(r *Row) { r.Key = "a b" }, rule: RuleConstraint, line: 1},
-		{name: "20#keys: key longer than the varchar", mut: func(r *Row) { r.Key = strings.Repeat("a", 33) }, rule: RuleConstraint, line: 1},
-		{name: "10#document-order: row of another table", mut: func(r *Row) { r.Table = "memos" }, rule: RuleConstraint, line: 1},
-		{name: "10#readable-values: non-null column without a value", mut: func(r *Row) { delete(r.Scalars, "position") }, rule: RuleConstraint, line: 2},
+		{name: "20#keys: key with a space", mut: func(r *Row) { r.Key = "a b" }, rule: RuleConstraint, column: "id"},
+		{name: "20#keys: key longer than the varchar", mut: func(r *Row) { r.Key = strings.Repeat("a", 33) }, rule: RuleConstraint, column: "id"},
+		{name: "10#document-order: row of another table", mut: func(r *Row) { r.Table = "memos" }, rule: RuleConstraint, column: ""},
+		{name: "10#readable-values: non-null column without a value", mut: func(r *Row) { delete(r.Scalars, "position") }, rule: RuleConstraint, column: "position"},
 		{name: "10#readable-values: integer with leading zero is written canonically", mut: func(r *Row) { r.Scalars["position"] = sp("01") }, out: baseOut},
-		{name: "10#readable-values: integer that is not one", mut: func(r *Row) { r.Scalars["position"] = sp("x") }, rule: RuleConstraint, line: 2},
+		{name: "10#readable-values: integer that is not one", mut: func(r *Row) { r.Scalars["position"] = sp("x") }, rule: RuleConstraint, column: "position"},
 		{name: "10#readable-values: decimal is padded to its scale", mut: func(r *Row) { r.Scalars["estimate"] = sp("1.5") }, out: doc("# Title", "- position: 1", "- estimate: 1.50", "- done: true", "")},
 		{name: "10#readable-values: f64 is written in its shortest form", mut: func(r *Row) { r.Scalars["score"] = sp("0.50") }, out: doc("# Title", "- position: 1", "- done: true", "- score: 0.5", "")},
 		{name: "10#readable-values: bytes are written padded", mut: func(r *Row) { r.Scalars["blob"] = sp("AAEC/w") }, out: doc("# Title", "- position: 1", "- done: true", "- blob: AAEC/w==", "")},
 		{name: "10#readable-values: text now is text", mut: func(r *Row) { r.Scalars["note"] = sp("now") }, out: doc("# Title", "- position: 1", "- done: true", "- note: now", "")},
-		{name: "10#readable-values: decimal that CanonicalLiteral refuses", mut: func(r *Row) { r.Scalars["estimate"] = sp("12.555") }, rule: RuleConstraint, line: 3},
-		{name: "10#readable-values: bool with a capital", mut: func(r *Row) { r.Scalars["done"] = sp("True") }, rule: RuleConstraint, line: 3},
+		{name: "10#readable-values: decimal that CanonicalLiteral refuses", mut: func(r *Row) { r.Scalars["estimate"] = sp("12.555") }, rule: RuleConstraint, column: "estimate"},
+		{name: "10#readable-values: bool with a capital", mut: func(r *Row) { r.Scalars["done"] = sp("True") }, rule: RuleConstraint, column: "done"},
 		{name: "10#readable-values: now is refused", mut: func(r *Row) {
 			r.Scalars["seen_on"] = sp("2026-10-11")
 			r.Scalars["seen_at"] = sp("now")
-		}, rule: RuleConstraint, line: 5},
-		{name: "10#single-line-places: text with a line feed", mut: func(r *Row) { r.Scalars["owner"] = sp("a\nb") }, rule: RuleConstraint, line: 3},
-		{name: "10#single-line-places: text with a leading space", mut: func(r *Row) { r.Scalars["owner"] = sp(" a") }, rule: RuleConstraint, line: 3},
-		{name: "10#readable-values: text past the varchar", mut: func(r *Row) { r.Scalars["owner"] = sp(strings.Repeat("x", 33)) }, rule: RuleConstraint, line: 3},
+		}, rule: RuleConstraint, column: "seen_at"},
+		{name: "10#single-line-places: text with a line feed", mut: func(r *Row) { r.Scalars["owner"] = sp("a\nb") }, rule: RuleConstraint, column: "owner"},
+		{name: "10#single-line-places: text with a leading space", mut: func(r *Row) { r.Scalars["owner"] = sp(" a") }, rule: RuleConstraint, column: "owner"},
+		{name: "10#readable-values: text past the varchar", mut: func(r *Row) { r.Scalars["owner"] = sp(strings.Repeat("x", 33)) }, rule: RuleConstraint, column: "owner"},
 		{name: "10#readable-values: empty text of a nullable column", mut: func(r *Row) { r.Scalars["note"] = sp("") }, out: doc("# Title", "- position: 1", "- done: true", "- note:", "")},
 		{name: "10#readable-values: absent nullable column", mut: func(r *Row) { r.Scalars["owner"] = nil }, out: baseOut},
 		{name: "10#readable-values: raw value kept as read", mut: func(r *Row) {
@@ -564,10 +634,10 @@ func TestRenderRules(t *testing.T) {
 		{name: "10#readable-values: raw value changed by the write", mut: func(r *Row) {
 			r.Scalars["seen_on"] = sp("2026-02-31")
 			r.Raw = map[string]string{"seen_on": "2026-02-30"}
-		}, rule: RuleConstraint, line: 4},
-		{name: "10#the-field-list-of-a-files-row: column of another table", mut: func(r *Row) { r.Scalars["nope"] = sp("x") }, rule: RuleConstraint, line: 1},
-		{name: "10#the-field-list-of-a-files-row: the key column as a scalar", mut: func(r *Row) { r.Scalars["id"] = sp("T1") }, rule: RuleConstraint, line: 1},
-		{name: "10#foreign-keys-as-links: a foreign key to a row that is not there", mut: func(r *Row) { r.Scalars["parent"] = sp("T9") }, rule: RuleForeignKey, line: 2},
+		}, rule: RuleConstraint, column: "seen_on"},
+		{name: "10#the-field-list-of-a-files-row: column of another table", mut: func(r *Row) { r.Scalars["nope"] = sp("x") }, rule: RuleConstraint, column: "nope"},
+		{name: "10#the-field-list-of-a-files-row: the key column as a scalar", mut: func(r *Row) { r.Scalars["id"] = sp("T1") }, rule: RuleConstraint, column: "id"},
+		{name: "10#foreign-keys-as-links: a foreign key to a row that is not there", mut: func(r *Row) { r.Scalars["parent"] = sp("T9") }, rule: RuleForeignKey, column: "parent"},
 		{name: "10#foreign-keys-as-links: a dangling foreign key keeps its written target", mut: func(r *Row) {
 			r.Scalars["parent"] = sp("T9")
 			r.Dangling = map[string]DanglingLink{"parent": {Key: "T9", Target: "../x/T9.flowmark.md"}}
@@ -575,33 +645,33 @@ func TestRenderRules(t *testing.T) {
 		{name: "10#foreign-keys-as-links: a written target of another key is not kept", mut: func(r *Row) {
 			r.Scalars["parent"] = sp("T9")
 			r.Dangling = map[string]DanglingLink{"parent": {Key: "T8", Target: "../x/T8.flowmark.md"}}
-		}, rule: RuleForeignKey, line: 2},
+		}, rule: RuleForeignKey, column: "parent"},
 		{name: "10#foreign-keys-as-links: a foreign key to a row", mut: func(r *Row) { r.Scalars["parent"] = sp("T2") }, out: doc("# Title", "- parent: [T2](T2.flowmark.md)", "- position: 1", "- done: true", "")},
-		{name: "10#sections-and-their-values: body without a line feed", mut: func(r *Row) { r.Body = "x" }, rule: RuleConstraint, line: 5},
-		{name: "10#the-field-list-of-a-files-row: body that begins with a list item", mut: func(r *Row) { r.Body = "- x\n" }, rule: RuleConstraint, line: 5},
-		{name: "10#the-field-list-of-a-files-row: body indented by two spaces after the fields", mut: func(r *Row) { r.Body = "  x\n" }, rule: RuleConstraint, line: 5},
-		{name: "10#the-field-list-of-a-files-row: body indented by a tab after the fields", mut: func(r *Row) { r.Body = "\tx\n" }, rule: RuleConstraint, line: 5},
-		{name: "10#sections-and-their-values: body with a leading blank line", mut: func(r *Row) { r.Body = "\nx\n" }, rule: RuleConstraint, line: 5},
-		{name: "10#sections-and-their-values: body with a trailing blank line", mut: func(r *Row) { r.Body = "x\n\n" }, rule: RuleConstraint, line: 6},
-		{name: "10#sections-and-their-values: body with a leading white space line", mut: func(r *Row) { r.Body = "  \nx\n" }, rule: RuleConstraint, line: 5},
-		{name: "10#sections-and-their-values: body with a level-2 heading", mut: func(r *Row) { r.Body = "x\n## y\n" }, rule: RuleConstraint, line: 6},
+		{name: "10#sections-and-their-values: body without a line feed", mut: func(r *Row) { r.Body = "x" }, rule: RuleConstraint, column: "body"},
+		{name: "10#the-field-list-of-a-files-row: body that begins with a list item", mut: func(r *Row) { r.Body = "- x\n" }, rule: RuleConstraint, column: "body"},
+		{name: "10#the-field-list-of-a-files-row: body indented by two spaces after the fields", mut: func(r *Row) { r.Body = "  x\n" }, rule: RuleConstraint, column: "body"},
+		{name: "10#the-field-list-of-a-files-row: body indented by a tab after the fields", mut: func(r *Row) { r.Body = "\tx\n" }, rule: RuleConstraint, column: "body"},
+		{name: "10#sections-and-their-values: body with a leading blank line", mut: func(r *Row) { r.Body = "\nx\n" }, rule: RuleConstraint, column: "body"},
+		{name: "10#sections-and-their-values: body with a trailing blank line", mut: func(r *Row) { r.Body = "x\n\n" }, rule: RuleConstraint, column: "body"},
+		{name: "10#sections-and-their-values: body with a leading white space line", mut: func(r *Row) { r.Body = "  \nx\n" }, rule: RuleConstraint, column: "body"},
+		{name: "10#sections-and-their-values: body with a level-2 heading", mut: func(r *Row) { r.Body = "x\n## y\n" }, rule: RuleConstraint, column: "body"},
 		{name: "10#sections-and-their-values: body with a heading inside a list item", mut: func(r *Row) { r.Body = "Body.\n\n- a\n  ## x\n" }, out: withBase("Body.", "", "- a", "  ## x")},
 		{name: "10#sections-and-their-values: body with a heading inside a block quote", mut: func(r *Row) { r.Body = "Body.\n\n> ## x\n" }, out: withBase("Body.", "", "> ## x")},
-		{name: "10#sections-and-their-values: body with a top-level heading after a block quote", mut: func(r *Row) { r.Body = "Body.\n\n> a\n## x\n" }, rule: RuleConstraint, line: 8},
-		{name: "10#sections-and-their-values: body with a level-1 heading", mut: func(r *Row) { r.Body = "# y\n" }, rule: RuleConstraint, line: 5},
+		{name: "10#sections-and-their-values: body with a top-level heading after a block quote", mut: func(r *Row) { r.Body = "Body.\n\n> a\n## x\n" }, rule: RuleConstraint, column: "body"},
+		{name: "10#sections-and-their-values: body with a level-1 heading", mut: func(r *Row) { r.Body = "# y\n" }, rule: RuleConstraint, column: "body"},
 		{name: "10#sections-and-their-values: body with a deeper heading", mut: func(r *Row) { r.Body = "### y\n" }, out: withBase("### y")},
 		{name: "10#sections-and-their-values: body with a heading inside a fence", mut: func(r *Row) { r.Body = "```\n## y\n```\n" }, out: withBase("```", "## y", "```")},
 		{name: "10#sections-and-their-values: body with an open fence before a section", mut: func(r *Row) {
 			r.Body = "```\n"
 			r.Sections["evidence"] = sp("x\n")
-		}, rule: RuleConstraint, line: 5},
-		{name: "10#sections-and-their-values: body with a setext H2 underline", mut: func(r *Row) { r.Body = "x\n---\n" }, rule: RuleConstraint, line: 6},
-		{name: "10#sections-and-their-values: body with a setext H1 underline", mut: func(r *Row) { r.Body = "x\n===\n" }, rule: RuleConstraint, line: 6},
+		}, rule: RuleConstraint, column: "body"},
+		{name: "10#sections-and-their-values: body with a setext H2 underline", mut: func(r *Row) { r.Body = "x\n---\n" }, rule: RuleConstraint, column: "body"},
+		{name: "10#sections-and-their-values: body with a setext H1 underline", mut: func(r *Row) { r.Body = "x\n===\n" }, rule: RuleConstraint, column: "body"},
 		{name: "10#sections-and-their-values: body with a thematic break after a blank line", mut: func(r *Row) { r.Body = "x\n\n---\n" }, out: withBase("x", "", "---")},
 		{name: "10#sections-and-their-values: body with an open HTML comment before a section", mut: func(r *Row) {
 			r.Body = "<!--\n"
 			r.Sections["evidence"] = sp("x\n")
-		}, rule: RuleConstraint, line: 5},
+		}, rule: RuleConstraint, column: "body"},
 		{name: "10#sections-and-their-values: body with a closed HTML comment before a section", mut: func(r *Row) {
 			r.Body = "<!-- c -->\n"
 			r.Sections["evidence"] = sp("x\n")
@@ -630,17 +700,17 @@ func TestRenderRules(t *testing.T) {
 		{name: "10#sections-and-their-values: section with an open HTML comment before the next section", mut: func(r *Row) {
 			r.Sections["evidence"] = sp("<!--\n")
 			r.Sections["cause"] = sp("c\n")
-		}, rule: RuleConstraint, line: 7},
-		{name: "10#encoding-and-line-structure: body with a bare CR", mut: func(r *Row) { r.Body = "a\rb\n" }, rule: RuleConstraint, line: 5},
-		{name: "10#encoding-and-line-structure: body with CRLF", mut: func(r *Row) { r.Body = "a\r\nb\n" }, rule: RuleConstraint, line: 5},
-		{name: "10#encoding-and-line-structure: body with a U+0000", mut: func(r *Row) { r.Body = "a\x00b\n" }, rule: RuleConstraint, line: 5},
-		{name: "10#encoding-and-line-structure: body that is not UTF-8", mut: func(r *Row) { r.Body = "\xff\n" }, rule: RuleConstraint, line: 5},
-		{name: "10#sections-and-their-values: section without a line feed", mut: func(r *Row) { r.Sections["evidence"] = sp("x") }, rule: RuleConstraint, line: 7},
-		{name: "10#sections-and-their-values: section with a level-2 heading", mut: func(r *Row) { r.Sections["evidence"] = sp("## x\n") }, rule: RuleConstraint, line: 7},
-		{name: "10#sections-and-their-values: section with a setext underline", mut: func(r *Row) { r.Sections["evidence"] = sp("a\n===\n") }, rule: RuleConstraint, line: 8},
-		{name: "10#sections-and-their-values: section with a leading blank line", mut: func(r *Row) { r.Sections["evidence"] = sp("\nx\n") }, rule: RuleConstraint, line: 7},
-		{name: "10#sections-and-their-values: section that is not declared", mut: func(r *Row) { r.Sections["nope"] = sp("x\n") }, rule: RuleConstraint, line: 1},
-		{name: "10#sections-and-their-values: body given as a section", mut: func(r *Row) { r.Sections["body"] = sp("x\n") }, rule: RuleConstraint, line: 1},
+		}, rule: RuleConstraint, column: "evidence"},
+		{name: "10#encoding-and-line-structure: body with a bare CR", mut: func(r *Row) { r.Body = "a\rb\n" }, rule: RuleConstraint, column: "body"},
+		{name: "10#encoding-and-line-structure: body with CRLF", mut: func(r *Row) { r.Body = "a\r\nb\n" }, rule: RuleConstraint, column: "body"},
+		{name: "10#encoding-and-line-structure: body with a U+0000", mut: func(r *Row) { r.Body = "a\x00b\n" }, rule: RuleConstraint, column: "body"},
+		{name: "10#encoding-and-line-structure: body that is not UTF-8", mut: func(r *Row) { r.Body = "\xff\n" }, rule: RuleConstraint, column: "body"},
+		{name: "10#sections-and-their-values: section without a line feed", mut: func(r *Row) { r.Sections["evidence"] = sp("x") }, rule: RuleConstraint, column: "evidence"},
+		{name: "10#sections-and-their-values: section with a level-2 heading", mut: func(r *Row) { r.Sections["evidence"] = sp("## x\n") }, rule: RuleConstraint, column: "evidence"},
+		{name: "10#sections-and-their-values: section with a setext underline", mut: func(r *Row) { r.Sections["evidence"] = sp("a\n===\n") }, rule: RuleConstraint, column: "evidence"},
+		{name: "10#sections-and-their-values: section with a leading blank line", mut: func(r *Row) { r.Sections["evidence"] = sp("\nx\n") }, rule: RuleConstraint, column: "evidence"},
+		{name: "10#sections-and-their-values: section that is not declared", mut: func(r *Row) { r.Sections["nope"] = sp("x\n") }, rule: RuleConstraint, column: "nope"},
+		{name: "10#sections-and-their-values: body given as a section", mut: func(r *Row) { r.Sections["body"] = sp("x\n") }, rule: RuleConstraint, column: "body"},
 		{name: "10#sections-and-their-values: present empty section", mut: func(r *Row) { r.Sections["cause"] = sp("") }, out: withBase("## cause")},
 		{name: "10#sections-and-their-values: section with its value", mut: func(r *Row) { r.Sections["evidence"] = sp("Obs.\n") }, out: withBase("## evidence", "", "Obs.")},
 	}
@@ -648,7 +718,7 @@ func TestRenderRules(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			row := validRow()
 			c.mut(row)
-			out, diags := RenderFile(cat, row.Table, row, lk)
+			out, diags := renderFileOf(t, cat, "tasks", row, lk)
 			if c.rule == "" {
 				if len(diags) > 0 {
 					t.Fatalf("refused: %+v", diags)
@@ -667,8 +737,9 @@ func TestRenderRules(t *testing.T) {
 					t.Fatalf("diagnostic %+v; want rule %s", d, c.rule)
 				}
 			}
-			if diags[0].Line != c.line {
-				t.Fatalf("first refusal at line %d; want %d: %+v", diags[0].Line, c.line, diags[0])
+			if diags[0].Column != c.column || diags[0].Table != row.Table || diags[0].Key != row.Key || diags[0].Index != -1 {
+				t.Fatalf("first refusal at column %q of %s/%s (index %d); want column %q of %s/%s (index -1): %+v",
+					diags[0].Column, diags[0].Table, diags[0].Key, diags[0].Index, c.column, row.Table, row.Key, diags[0])
 			}
 		})
 	}
@@ -748,7 +819,7 @@ func TestInvisibleEdges(t *testing.T) {
 				edge := end != "interior"
 				t.Run(pl.name+" "+end+" "+c.name, func(t *testing.T) {
 					// Write: an invisible character at an end is CONSTRAINT; any other is written as it is.
-					out, diags := RenderFile(cat, "tasks", pl.row(v), lk)
+					out, diags := renderFileOf(t, cat, "tasks", pl.row(v), lk)
 					if c.invisible && edge {
 						if out != nil || len(diags) == 0 {
 							t.Fatalf("written %q; want CONSTRAINT", out)

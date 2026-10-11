@@ -1,5 +1,5 @@
 <!-- doc-id: spec-constraints -->
-<!-- source-sha256: cd75bd91370d6084b97cbe0cd1e71e1f66c35766af1d42975b820437878af002 -->
+<!-- source-sha256: 668c0f9c4afe70dc137f2eea16ca9878bcbe2e2a023d27d6378415538b56d774 -->
 # Constraints
 
 [English](50-constraints.md)
@@ -35,7 +35,7 @@
 - **예약 이름.** 대소문자를 무시하고 `CON`, `PRN`, `AUX`, `NUL`, `COM0`–`COM9`, `LPT0`–`LPT9`와 같은
   key는 쓰기에서 `CONSTRAINT`다([schema](30-schema.md)는 table 이름을 거절한다).
 - **길이.** 243 byte를 넘는 `files` key는 쓰기에서 `CONSTRAINT`다.
-- **대소문자 무시 유일성.** 대소문자를 무시하고 table의 다른 key와 같은 key는 그것을 새로 만드는 쓰기에서 `DUPLICATE_KEY`이며, 첫 key를 밝힌다. validator의 `key.duplicate`이기도 하다. 충돌은 key의 file 이름과 anchor가 중복된 것이며, file을 읽을 수 없게 하지 않는다. 다만 같은 file 안에서 바이트 단위로 같은 key를 가진 두 행은, 둘 다 상세 섹션을 가지면 두 섹션이 같은 heading 텍스트를 가지므로([canonical format](10-canonical-format.md#detail-headings-and-anchors)), 또는 그 file의 `parent` cell이 그 key를 가리키면 부모를 배정할 수 없으므로([canonical format](10-canonical-format.md#table-rows)) `format.block`이다; 바이트 단위로 같은 key를 가진 두 행은 그 table을 사용할 수 없게 한다([canonical format](10-canonical-format.md#diagnostics)).
+- **대소문자 무시 유일성.** 대소문자를 무시하고 table의 다른 key와 같은 key는 그것을 새로 만드는 쓰기에서 `DUPLICATE_KEY`이며, 다른 행을 밝힌다. validator의 `key.duplicate`이기도 하다. 충돌은 key의 file 이름과 anchor가 중복된 것이며, file을 읽을 수 없게 하지 않는다. 다만 같은 file 안에서 바이트 단위로 같은 key를 가진 두 행은, 둘 다 상세 섹션을 가지면 두 섹션이 같은 heading 텍스트를 가지므로([canonical format](10-canonical-format.md#detail-headings-and-anchors)), 또는 그 file의 `parent` cell이 그 key를 가리키면 부모를 배정할 수 없으므로([canonical format](10-canonical-format.md#table-rows)) `format.block`이다; 바이트 단위로 같은 key를 가진 두 행은 그 table을 사용할 수 없게 한다([canonical format](10-canonical-format.md#diagnostics)).
 - **정식 file 이름.** key 타입의 정식 텍스트가 아닌 `files` file 이름은 읽기에서 `format.block`이다
   ([document model](20-document-model.md)).
 
@@ -51,7 +51,7 @@
 - `format.*` 진단이 있는 file을 다시 쓰는 logical write는 file과 진단을 밝히며 `CONSTRAINT`다. 그 진단이 `format.noncanonical`이면 `flowmark canon`을 밝힌다(commit의 면제를 제외하고)([canonical format](10-canonical-format.md)). 쓰기는 문서 바이트를 정규화하지 않는다;
 - CommonMark block 구조에서 최상위 level ≤ L heading을 가진 `markdown` 값([canonical format](10-canonical-format.md));
 - 상세 anchor와 heading의 충돌을 새로 만드는 쓰기 — 제목 갱신, payload 쓰기, 행 삽입, key 갱신, 이동,
-  상세 섹션의 생성 — 는 다른 heading을 밝히며 `CONSTRAINT`다. 다만 중복 key는 `DUPLICATE_KEY`다([canonical format](10-canonical-format.md#detail-headings-and-anchors));
+  상세 섹션의 생성 — 는 anchor를 차지하는 heading이나 id를 쓴 행과 column — `markdown` column의 값, `files` 행의 제목(H1에 대해), 또는 section이나 block heading에 대해서는 그것이 여는 행 scope의 행, 그 heading이 이름 붙인 `markdown` column이나 자식 table — 에 위치하며, 차지한 anchor의 상세 heading을 밝히는 `CONSTRAINT`다. 다만 중복 key는 `DUPLICATE_KEY`다([canonical format](10-canonical-format.md#detail-headings-and-anchors));
 - date, time 또는 datetime 값으로 쓴 `now`(그 type이 아니다), 그리고 column 길이를 넘는 text([canonical format](10-canonical-format.md));
 - list 제목 token `<declared column>\:`([canonical format](10-canonical-format.md#list-rows));
 - 최상위 setext heading을 담거나, 뒤따르는 요소가 그 안으로 흡수되는 fence나 HTML block을 열린 채로 둔 `markdown` 값. 그 요소를 어느 쓰기가 놓든 마찬가지다([canonical format](10-canonical-format.md#sections-and-their-values)).

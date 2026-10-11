@@ -1,5 +1,5 @@
 <!-- doc-id: spec-ops -->
-<!-- source-sha256: 29298ffd3a587254b17637c6ecd9f95b5b3f9465ed90ed8a6f5ebd1ae0f65a46 -->
+<!-- source-sha256: 17e53c36c909e43ccba0d268429801c42e8369329d351ccc2589d73035e75c28 -->
 # Operations
 
 [English](40-ops.md)
@@ -85,9 +85,9 @@
 | --- | --- | --- |
 | `LOCK_TIMEOUT` | `CANCELED` | lock 대기가 끝났다. holder를 밝힌다 — SQLite의 `busy_timeout`이 그렇듯 `CANCELED`다 |
 | `CORPUS_CONFLICT` | `WRITE_CONFLICT` | 읽은 뒤 대상이 바뀌었다. file과 줄을 밝힌다 |
-| `DUPLICATE_KEY` | `DUPLICATE_KEY` | primary나 unique key 값이 이미 있다. 두 자리를 밝힌다 |
+| `DUPLICATE_KEY` | `DUPLICATE_KEY` | primary나 unique key 값이 이미 있다. 두 행(table과 key)을 밝힌다 |
 | `FOREIGN_KEY` | `FOREIGN_KEY` | 참조가 어떤 행도 가리키지 않거나, 참조된 행을 참조되는 동안 지우려 했다 |
-| `CONSTRAINT` | `CONSTRAINT` | catalog의 다른 규칙이 쓰기를 거절했다 — check, 제목, 전이, 필수 column, limit, 순서, 한 줄 자리, 쓰기가 다시 쓸 비정규 또는 잘못된 문서. 규칙과 자리를 밝힌다; 사용할 수 없는 table의 행이 필요한 요청(읽기나 쓰기)도 file과 진단을 밝히며 `CONSTRAINT`다([canonical format](10-canonical-format.ko.md#진단)) |
+| `CONSTRAINT` | `CONSTRAINT` | catalog의 다른 규칙이 쓰기를 거절했다 — check, 제목, 전이, 필수 column, limit, 순서, 한 줄 자리. 규칙, 그리고 행과 column을 밝힌다([canonical format](10-canonical-format.ko.md#진단)); 비정규이거나 잘못된 문서를 다시 써야 하는 쓰기, 또는 사용할 수 없는 table의 행이 필요한 요청(읽기나 쓰기)은 file과 진단을 밝히며 `CONSTRAINT`다([canonical format](10-canonical-format.ko.md#진단)) |
 | 복구 거절 | — | 대상과 기록된 두 hash를 밝힌다. 해결될 때까지 열기를 거절한다 |
 
 모든 실패 메시지는 원인과 고치는 방법을 밝힌다.

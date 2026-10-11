@@ -160,8 +160,8 @@ func renderGolden(t testing.TB, c equivCorpus, rel string, data []byte) []byte {
 		lk := equivLinker()
 		row, diags := ParseFile(cat, "entries", rel, data, lk)
 		mustClean(t, rel, diags)
-		out, diags := RenderFile(cat, "entries", row, lk)
-		mustClean(t, rel, diags)
+		out, rf := renderFileOf(t, cat, "entries", row, lk)
+		mustClean(t, rel, rf)
 		return out
 	case kindDocument:
 		lk := equivDocLinker("entries.flowmark.md")
@@ -170,18 +170,18 @@ func renderGolden(t testing.TB, c equivCorpus, rel string, data []byte) []byte {
 			t.Fatal(err)
 		}
 		mustClean(t, rel, diags)
-		out, diags, err := RenderDocument(cat, "entries", rows, lk)
+		out, rf, err := RenderDocument(cat, "entries", rows, lk)
 		if err != nil {
 			t.Fatal(err)
 		}
-		mustClean(t, rel, diags)
+		mustClean(t, rel, rf)
 		return out
 	default:
 		lk := equivBlockLinker()
 		row, diags := ParseFile(cat, "plans", rel, data, lk)
 		mustClean(t, rel, diags)
-		out, diags := RenderFile(cat, "plans", row, lk)
-		mustClean(t, rel, diags)
+		out, rf := renderFileOf(t, cat, "plans", row, lk)
+		mustClean(t, rel, rf)
 		return out
 	}
 }
@@ -195,7 +195,7 @@ func equivCatalog(t testing.TB, root string) *catalog.Catalog {
 	return cat
 }
 
-func mustClean(t testing.TB, what string, diags []Diagnostic) {
+func mustClean[T Diagnostic | Refusal](t testing.TB, what string, diags []T) {
 	t.Helper()
 	if len(diags) > 0 {
 		t.Fatalf("%s: %+v", what, diags)
