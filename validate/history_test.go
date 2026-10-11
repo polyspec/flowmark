@@ -87,7 +87,7 @@ func historyRows(rows ...[4]string) string {
 	return s
 }
 
-// TestDocumentTableHistory pins history.gap and history.chain for a history table
+// TestDocumentTableHistory pins history.gap, history.chain and state.transition for a history table
 // stored as a document table: a state row's history rows are the rows of the
 // history table whose foreign key names it, in corpus order.
 func TestDocumentTableHistory(t *testing.T) {
@@ -118,7 +118,10 @@ func TestDocumentTableHistory(t *testing.T) {
 				"tickets.flowmark.md":        ticketRows([2]string{"K1", "closed"}),
 				"ticket_history.flowmark.md": historyRows([4]string{"1", "K1", "open", "doing"}, [4]string{"2", "K1", "open", "closed"}),
 			},
-			want: []string{"ticket_history.flowmark.md:5 history.chain"}},
+			want: []string{
+				"ticket_history.flowmark.md:5 history.chain",
+				"ticket_history.flowmark.md:5 state.transition ~ from open to closed",
+			}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
