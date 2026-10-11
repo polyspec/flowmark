@@ -327,7 +327,9 @@ func TestKeyChecks(t *testing.T) {
 // fault that needs a rendered file only when no key or value fault stands, and the
 // code that of the first fault.
 func TestFaultOrder(t *testing.T) {
-	f := baseFixture(t)
+	docs := baseDocs()
+	docs["tickets.flowmark.md"] = lines("# tickets", "| id | state | title |", "| --- | --- | --- |", "| K1 | open | First |")
+	f := catalogFixture(t, docs)
 	const dup, fk, con = "DUPLICATE_KEY", "FOREIGN_KEY", "CONSTRAINT"
 	people := func(rows ...[]any) []byte {
 		var params []any
@@ -360,6 +362,10 @@ func TestFaultOrder(t *testing.T) {
 			[]dupFault{{"items", "T1", -1, "id", dup, "items.flowmark.md"}}},
 		{"10#diagnostics: a FOREIGN_KEY fault alone is the code", f.msg("insert", "items", map[string]any{"set": sets("id", "title", "body", "owner")}, "T8", "A", "", "P9"), fk,
 			[]dupFault{{"items", "T8", -1, "owner", fk, "P9"}}},
+		{"20#keys: a key outside A-Z, a-z, 0-9, _ and - is a value fault, folded by A-Z alone", f.msg("insert", "tickets", map[string]any{"set": sets("id", "state", "title")}, "K1", "open", "X"), con,
+			[]dupFault{{"tickets", "K1", -1, "id", con, "the key: "}}},
+		{"20#keys: on_duplicate meets no row for a key that folds to another only beyond A-Z", f.msg("insert", "tickets", map[string]any{"set": sets("id", "state", "title"), "on_duplicate": []any{set("title", 2)}}, "K1", "open", "X"), con,
+			[]dupFault{{"tickets", "K1", -1, "id", con, "the key: "}}},
 		{"10#diagnostics: a row has at most one duplicate fault, its key's before a unique key's", f.msg("insert", "people", map[string]any{"set": sets("id", "name", "email")}, "P1", "X", "ada@x.io"), dup,
 			[]dupFault{{"people", "P1", -1, "id", dup, "people.flowmark.md"}}},
 		{"10#diagnostics: a files row placed nowhere for its key still has its check judged", f.msg("insert", "notes", map[string]any{"set": sets("id", "title", "body", "weight")}, "N1", "X", "", -1), con,

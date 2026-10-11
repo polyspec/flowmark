@@ -112,7 +112,7 @@ func (c *corpus) duplicates(tb *catalog.Table, rows []placed) {
 	byBytes := map[string]placed{}
 	byFold := map[string]placed{}
 	for _, p := range rows {
-		fold := strings.ToLower(p.row.Key)
+		fold := store.FoldKey(p.row.Key)
 		if f, ok := byBytes[p.row.Key]; ok {
 			c.report(p, tb.Key, ruleDuplicate, fmt.Sprintf("the key %s equals the key %s of %s byte for byte", p.row.Key, f.row.Key, f.file))
 			continue

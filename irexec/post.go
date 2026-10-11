@@ -122,6 +122,13 @@ func (w *writer) values() *Error {
 		placement = placementColumn(tb)
 	}
 	for _, g := range w.given {
+		// A key is written only by an insert, since a key is never updated; its shape
+		// is a value of the row, so its fault precedes the row's key fault.
+		if g.inserted && g.row.Key != "" {
+			if msg := store.KeyFault(g.row.Key); msg != "" {
+				w.fault(g, tb.Name, tb.Key, codeConstraint, "the key: "+msg)
+			}
+		}
 		for _, c := range tb.Columns {
 			col := c.Name
 			if !g.inserted && !g.assigned[col] {
@@ -220,7 +227,7 @@ func (w *writer) keyChecks() []fault {
 		var leastGiven *given
 		var leastRow *rec
 		consider := func(o string) bool {
-			return o != k && strings.EqualFold(o, k) && (least == "" || o < least)
+			return o != k && store.FoldKey(o) == store.FoldKey(k) && (least == "" || o < least)
 		}
 		for _, o := range ins {
 			if o.row.Key < k && consider(o.row.Key) {
