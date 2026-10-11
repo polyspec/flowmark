@@ -27,11 +27,57 @@ The order of the commit protocol is normative.
   which completes the commit; the edit is then made again as a new change. Until then every open
   refuses the same way. A stage removed by hand leaves the commit half-applied, so the refusal
   never names that as a resolution.
-- Opening loads the catalog, walks the corpus, parses the documents and derives the indexes. Each
-  operation reads the corpus again under the lock; how an operation avoids reading unchanged files —
-  a long-lived corpus kept current by the operating system's file notifications, with the commit
-  targets always re-read under the lock — is owned by `T12.5-2`. A cache keyed by file content hash
-  does not do it, since hashing reads every file.
+- Opening loads the catalog, walks the corpus, parses the documents and derives the indexes: the
+  first full read, which reads and parses every document once. An opened corpus is kept in memory,
+  current by the operating system's file notifications, and each operation reads under the lock
+  only what changed since the operation before it:
+  - A folder or a document is watched before it is read, so no change after its read is missed. On
+    macOS kqueue `EVFILT_VNODE` with `EV_CLEAR` on each folder (`NOTE_WRITE | NOTE_DELETE |
+    NOTE_RENAME | NOTE_REVOKE`) and each document (those and `NOTE_EXTEND | NOTE_ATTRIB`), each
+    opened with `O_EVTONLY`, one descriptor apiece; a folder stays watched until it goes away, so its
+    rename always drops what lies under it. On Linux inotify, one instance per opened corpus, on each
+    folder (`IN_CREATE | IN_DELETE | IN_MOVED_FROM | IN_MOVED_TO | IN_MODIFY | IN_CLOSE_WRITE |
+    IN_ATTRIB` and the folder's own events) and each document (`IN_MODIFY | IN_CLOSE_WRITE |
+    IN_ATTRIB` and its own events), so a write through another hard link of a document is seen; two
+    paths of one inode share its watch. On Windows one overlapped `ReadDirectoryChangesW` over the
+    root and its subtree (`FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_DIR_NAME |
+    FILE_NOTIFY_CHANGE_LAST_WRITE | FILE_NOTIFY_CHANGE_SIZE`); a short (8.3) name it reports is
+    resolved to its long name, and one that cannot be resolved is taken as an overflow. It names the
+    path written, so a write through a hard link outside the corpus is not seen there until the
+    document is a commit target or the corpus is opened again; a corpus document with such a link is
+    not supported on Windows. These are the primitives of the lock wait
+    ([the lock](#acquiring-and-waiting)).
+  - Each operation, under the lock and before it reads, takes every notification queued since the
+    operation before it, without waiting, and drops what each names: the bytes of a changed file, the
+    entries of a changed folder, and, for a name that appeared, disappeared or was renamed, also what
+    lies under it and the entries of its folder. The read then reads those paths from the disk again.
+    Nothing runs between operations and no timer exists: the kernel keeps the notifications until the
+    next operation takes them. Each drop is published as `corpus.changed`, and each folder or file read
+    from the disk as `corpus.read`.
+  - On macOS and Linux the kernel queues a notification in the system call that makes the change, so
+    an operation sees every change completed before it took the lock. `ReadDirectoryChangesW` reports
+    a write when the file system records the write time, which may be later.
+  - A notification that reports lost events — `IN_Q_OVERFLOW`; zero bytes, an unreadable buffer or
+    `ERROR_NOTIFY_ENUM_DIR` — drops everything, and the next read reads the whole corpus again,
+    published as `corpus.overflow`: the notification contract requires this path. kqueue keeps one
+    state per registration and loses no event, so it has no overflow. A failure while taking the
+    notifications loses those it took, so it drops everything too and fails the operation as
+    `DRIVER`, naming the cause.
+  - A commit reads its targets from the disk under the lock whatever the notifications say, with the
+    entries of every folder above them, and drops them again once it has written, so step 1 of the
+    [commit protocol](#the-commit-protocol) never depends on the latency of a notification.
+  - A document is parsed again only when its bytes changed or when a link target its parse derived
+    from another file changed — a row whose detail section appeared or disappeared, a key that became
+    shared, a dangling link whose row appeared. The rows of the other documents are kept between
+    operations and never changed; a write changes copies of them.
+  - A watch that cannot be armed fails the operation as `DRIVER`, naming the cause: on macOS the
+    limit of open files (`ulimit -n`, `kern.maxfilesperproc`), on Linux
+    `fs.inotify.max_user_watches`.
+
+  Grounding: an operation that read the whole corpus spent 86% of its time opening and reading files
+  (2.7–4.4 s for a read of 10k notes); a cache keyed by file content hash does not avoid that, since
+  hashing reads every file. FSEvents is not used on macOS: it needs cgo and a run loop or a dispatch
+  queue, while kqueue is already the primitive of the lock wait.
 
 ## The canon operation
 
@@ -455,8 +501,26 @@ and MySQL and PostgreSQL compare a `datetime(p)` column with `NOW(6)` at six dig
 
 - A per-command p95 latency target is declared here (hundreds of milliseconds at the corpus
   envelope of [open questions](110-open-questions.md)).
-- The read cost of an operation, which today re-reads every corpus document, is owned by `T12.5-2`
-  ([opening a corpus](#opening-a-corpus)). The commit checks every constraint whose
+- An operation on an opened corpus reads from the disk only what changed and parses only the
+  documents whose parse can differ ([opening a corpus](#opening-a-corpus)); it still walks the rows
+  of the corpus in memory, so its cost grows with the rows, not with the bytes. The benchmarks
+  `BenchmarkOpen`, `BenchmarkRead` and `BenchmarkWrite` of `writepath` measure it at the envelope,
+  10k one-row documents beside a small corpus, reporting the CPU time of each operation and the
+  95th percentile of its wall time. On macOS (Apple M3 Pro, `T12.5-2`) a read takes 68 ms of CPU and
+  a write — one transaction under the lock, committed through the journal — 216 ms, within the
+  budget; their wall-time p95, 273 ms and 1.1 s, was measured on a machine whose load average was
+  near 100 on 11 cores, so the wall-time p95 is measured again on an idle machine with Linux and
+  Windows in `T12.13`. The first full read when a corpus is opened takes 1.2 s of CPU.
+- The first full read is the startup cost of an opened corpus: it reads and parses every document
+  and arms the watch of every folder and document, once.
+- The corpus kept in memory holds each document's bytes, the parses of both read passes of the
+  executor and the document's watch: its budget is 8 KB of heap per row at one row a document, the
+  most a row costs, and `TestKeptHeapBudget` holds it (4.5 KB measured on macOS). A document of many
+  rows is held whole; the heap that parsing a large document allocates is `T12.5-4`'s.
+- A write still parses and renders each changed target whole, and the executor's post-image copies
+  the rows of the corpus, so a write's cost grows with its target files and with the rows; bounding
+  the size of a target file is `T12.5-3`'s and `T12.5-4`'s.
+- The commit checks every constraint whose
   outcome the transaction can change: the keys, references, checks, order, limits, transitions and
   `history.gap` of the target rows, and the rows they reference or that reference them, evaluated
   on the corpus re-read under the lock. Full `flowmark validate` runs on demand and on catalog

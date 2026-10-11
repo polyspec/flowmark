@@ -103,6 +103,13 @@ compatibility, no fallback, no hidden error, no trick; rules first.
 - The write path retries a single-operation write once after a re-read under the same lock, for
   every face; a server transaction is never retried by the server, and the orm client receives
   `WRITE_CONFLICT`.
+- An opened corpus is kept in memory, current by the operating system's file notifications — kqueue
+  on macOS, inotify on Linux, `ReadDirectoryChangesW` on Windows, the primitives of the lock wait —
+  so an operation reads from the disk only the files that changed and parses only the documents
+  whose bytes or derived link targets changed. Each operation takes the queued notifications under
+  the lock before it reads; an overflow reads the whole corpus again; a commit reads its targets
+  from the disk under the lock whatever the notifications say. Spec 40 states the mechanism and its
+  budget (Opening a corpus, Cost model).
 
 ### The catalog
 
