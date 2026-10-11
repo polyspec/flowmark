@@ -455,6 +455,13 @@ func TestRewriteRefusal(t *testing.T) {
 		}(), func(f *fixture) []byte {
 			return f.msg("update", "items", map[string]any{"set": sets(0, "body"), "where": whereID(1)}, "Now a body.", "T3")
 		}, "notes/N3.flowmark.md"},
+		{"10#encoding-and-line-structure: a file holding a dangling link to the row an insert gives", func() map[string]string {
+			docs := baseDocs()
+			docs["notes/N3.flowmark.md"] = lines("# Second root", "- item: [T9](x.md)", "- position: 2") + "\n"
+			return docs
+		}(), func(f *fixture) []byte {
+			return f.msg("insert", "items", map[string]any{"set": sets(0, "id", "title", "body")}, "T9", "Ninth", "")
+		}, "notes/N3.flowmark.md"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
