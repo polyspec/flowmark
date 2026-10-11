@@ -44,7 +44,7 @@ func (c *corpus) rules() error {
 			c.types(tb, p)
 			c.dangling(p)
 			c.checks(tb, p)
-			if err := c.views(tb, p, c.codecs(tb, p)); err != nil {
+			if err := c.judgeRow(tb, p); err != nil {
 				return err
 			}
 		}

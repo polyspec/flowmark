@@ -34,6 +34,131 @@ func gaugesCatalog(t testing.TB) string {
 	return dir
 }
 
+// viewsCatalog writes a catalog with the view table and a table of codec columns,
+// one of whose stages hold the host stage hex, and returns its corpus root.
+func viewsCatalog(t testing.TB) string {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "dbspec"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	dbs := lines(
+		"dbspec 1 flowmark",
+		"",
+		"table views {",
+		"  id varchar(8)",
+		"  title varchar(255)",
+		"  kind varchar(16)",
+		"  entity varchar(63)",
+		"  filter text",
+		"  sort text",
+		"  group_by varchar(63) null",
+		"  primary key (id)",
+		"  settings {",
+		"    store document table",
+		"    title title",
+		"    codec filter ordered_json",
+		"    codec sort ordered_json",
+		"  }",
+		"}",
+		"",
+		"table memos {",
+		"  id varchar(8)",
+		"  title varchar(255)",
+		"  body text",
+		"  rank i16 null",
+		"  doc text null",
+		"  hexed varchar(255) null",
+		"  primary key (id)",
+		"  settings {",
+		"    store document table",
+		"    title title",
+		"    body body",
+		"    markdown body",
+		"    codec doc ordered_json",
+		"    codec hexed ordered_json hex",
+		"  }",
+		"}",
+	)
+	if err := os.WriteFile(filepath.Join(dir, "dbspec", "flowmark.dbs"), []byte(dbs), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+// TestViewAndCodecJudgement pins the commit's judgement of the view and codec
+// rules (spec 50 Codec values, Views): the validator's judgement runs over each
+// row the write writes, a view over the whole row and a codec over the values the
+// write assigns, and a fault is CONSTRAINT at its column naming its rule. A stage
+// list with a host stage waits on orm T74, as the validator does.
+func TestViewAndCodecJudgement(t *testing.T) {
+	const noFilter = `{"where":{"items":[]},"params":[]}`
+	clean := func(t *testing.T) *fixture { return newFixture(t, viewsCatalog(t), nil).on(t) }
+	// stored holds the view V1 of an entity the catalog does not declare and the
+	// view V3 whose filter its codec cannot decode.
+	stored := func(t *testing.T) *fixture {
+		return newFixture(t, viewsCatalog(t), map[string]string{
+			"views.flowmark.md": lines(
+				"# views",
+				"| id | title | kind | entity | filter | sort | group_by |",
+				"| --- | --- | --- | --- | --- | --- | --- |",
+				"| V1 | Ghosts | list | ghosts | "+noFilter+" | [] |  |",
+				`| V3 | Broken | list | memos | {"where": | [] |  |`,
+			),
+		}).on(t)
+	}
+	insertView := func(f *fixture, entity, filter, sort string) []byte {
+		return f.msg("insert", "views", map[string]any{"set": sets("id", "title", "kind", "entity", "filter", "sort")}, "V2", "Memos", "list", entity, filter, sort)
+	}
+	insertMemo := func(f *fixture, col, value string) []byte {
+		return f.msg("insert", "memos", map[string]any{"set": sets("id", "title", "body", col)}, "N2", "Two", "Text.", value)
+	}
+	t.Run("50#views: a valid view is written", func(t *testing.T) {
+		f := clean(t)
+		f.commit(f.want(insertView(f, "memos", `{"where":{"items":[{"pred":{"column":"rank","op":"gt","p":0}}]},"params":[1]}`, `[{"column":"title"}]`), `{"affected":1,"keys":["V2"]}`))
+	})
+	t.Run("50#views: a view of an entity the catalog does not declare is refused at entity", func(t *testing.T) {
+		f := clean(t)
+		err := f.fails(insertView(f, "ghosts", noFilter, `[]`), "CONSTRAINT")
+		wantFaults(t, err, []dupFault{{"views", "V2", -1, "entity", "CONSTRAINT", "view: the entity ghosts"}})
+	})
+	t.Run("50#views: a faulty filter and a faulty sort are two faults", func(t *testing.T) {
+		f := clean(t)
+		err := f.fails(insertView(f, "memos", `{"where":{"items":[{"pred":{"column":"rank","op":"gt","p":0}}]},"params":[1,2]}`, `[{"column":"color"}]`), "CONSTRAINT")
+		wantFaults(t, err, []dupFault{
+			{"views", "V2", -1, "filter", "CONSTRAINT", "view: the filter holds param 1"},
+			{"views", "V2", -1, "sort", "CONSTRAINT", "view: the sort"},
+		})
+	})
+	t.Run("50#views: a write that leaves a stored view invalid is refused", func(t *testing.T) {
+		f := stored(t)
+		err := f.fails(f.msg("update", "views", map[string]any{"set": sets("title"), "where": where(pred("id", "eq", p(1)))}, "Spooks", "V1"), "CONSTRAINT")
+		wantFaults(t, err, []dupFault{{"views", "V1", -1, "entity", "CONSTRAINT", "view: the entity ghosts"}})
+	})
+	t.Run("50#views: a filter its codec cannot decode is codec alone", func(t *testing.T) {
+		f := clean(t)
+		err := f.fails(insertView(f, "memos", `{"where":`, `[]`), "CONSTRAINT")
+		wantFaults(t, err, []dupFault{{"views", "V2", -1, "filter", "CONSTRAINT", "codec: filter holds a value its codec"}})
+	})
+	t.Run("50#codec-values: a value its stages decode is written", func(t *testing.T) {
+		f := clean(t)
+		f.commit(f.want(insertMemo(f, "doc", `{"a":[1,2]}`), `{"affected":1,"keys":["N2"]}`))
+	})
+	t.Run("50#codec-values: a value its stages cannot decode is refused at its column", func(t *testing.T) {
+		f := clean(t)
+		err := f.fails(insertMemo(f, "doc", `{"a":`), "CONSTRAINT")
+		wantFaults(t, err, []dupFault{{"memos", "N2", -1, "doc", "CONSTRAINT", "codec: doc holds a value its codec"}})
+	})
+	t.Run("50#codec-values: a write that does not assign an undecodable value leaves it", func(t *testing.T) {
+		f := stored(t)
+		f.want(f.msg("update", "views", map[string]any{"set": sets("title"), "where": where(pred("id", "eq", p(1)))}, "Mended", "V3"), `{"affected":1,"keys":[]}`)
+	})
+	t.Run("50#codec-values: a stage list with the host stage hex waits on orm T74", func(t *testing.T) {
+		f := clean(t)
+		f.commit(f.want(insertMemo(f, "hexed", "zz"), `{"affected":1,"keys":["N2"]}`))
+	})
+}
+
 // TestCheckJudgement pins the commit's judgement of a check (spec 50 Checks): the
 // validator's evaluator judges it over the written row, a value not of its column
 // type evaluated once true and once false. The check passes when it is not false
