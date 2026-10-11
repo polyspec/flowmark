@@ -6,8 +6,8 @@ import (
 	"golang.org/x/text/cases"
 )
 
-// The link reference definitions that decide the text of a heading under F_G (spec 10,
-// Detail headings and anchors), read as CommonMark 0.31.2 reads them: a block that
+// The link reference definitions that decide the rendered text of a heading, whose
+// slugs decide a detail-anchor collision (spec 10, Detail headings and anchors), read as CommonMark 0.31.2 reads them: a block that
 // starts a paragraph, inside a container or not, and that never interrupts one. A label
 // is compared by CommonMark's case folding once its white space is collapsed.
 
@@ -22,14 +22,14 @@ func (r linkRefs) defined(label string) bool {
 	if r.keys == nil || strings.IndexByte(label, '[') >= 0 {
 		return false
 	}
-	return r.keys[foldLabelG(label)]
+	return r.keys[foldLabel(label)]
 }
 
 // collapseSpace makes each run of white space of s one space, and trims the ends.
 func collapseSpace(s string) string { return strings.Join(strings.Fields(s), " ") }
 
-// foldLabelG is CommonMark's case folding of a label, its white space collapsed.
-func foldLabelG(s string) string { return cases.Fold().String(collapseSpace(s)) }
+// foldLabel is CommonMark's case folding of a label, its white space collapsed.
+func foldLabel(s string) string { return cases.Fold().String(collapseSpace(s)) }
 
 // lineStarts returns the byte offset of the start of each line of lines joined by line feeds.
 func lineStarts(lines []string) []int {
@@ -201,7 +201,7 @@ func linkDefs(blocks []unit) linkRefs {
 		}
 		cm, _ := cmDefLines(u.lines)
 		for _, label := range cm {
-			g.keys[foldLabelG(label)] = true
+			g.keys[foldLabel(label)] = true
 		}
 	}
 	return g

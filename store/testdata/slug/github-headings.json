@@ -1,0 +1,599 @@
+{
+ "viewer": "GitHub",
+ "recorded": "2026-10-11",
+ "request": "POST https://api.github.com/markdown, mode \"markdown\"; ids without user-content-",
+ "rerecord": "make slug-vectors (scripts/record-slugs.mjs)",
+ "cases": [
+  {
+   "name": "spaces",
+   "markdown": "# a b  c   d",
+   "ids": [
+    "a-b--c---d"
+   ]
+  },
+  {
+   "name": "leading and trailing spaces by reference",
+   "markdown": "# &#32;a b&#32;",
+   "ids": [
+    "-a-b-"
+   ]
+  },
+  {
+   "name": "tabs",
+   "markdown": "# a\tb\t\tc",
+   "ids": [
+    "abc"
+   ]
+  },
+  {
+   "name": "tabs by reference",
+   "markdown": "# &#9;a&#9;b&#9;",
+   "ids": [
+    "ab"
+   ]
+  },
+  {
+   "name": "no-break and ideographic spaces",
+   "markdown": "# a b　c d",
+   "ids": [
+    "abcd"
+   ]
+  },
+  {
+   "name": "line feed by reference",
+   "markdown": "# a&#10;b",
+   "ids": [
+    "ab"
+   ]
+  },
+  {
+   "name": "underscores",
+   "markdown": "# a_b __c__ _d_ snake_case_",
+   "ids": [
+    "a_b-c-d-snake_case_"
+   ]
+  },
+  {
+   "name": "hyphens",
+   "markdown": "# -a--b- - -",
+   "ids": [
+    "-a--b-----"
+   ]
+  },
+  {
+   "name": "ASCII punctuation",
+   "markdown": "# a!\"#$%&'()*+,./:;<=>?@[\\\\]^`{|}~b",
+   "ids": [
+    "ab"
+   ]
+  },
+  {
+   "name": "character references",
+   "markdown": "# a&amp;b &copy; &#x41; &#65; &nbsp; &ouml;",
+   "ids": [
+    "ab--a-a--ö"
+   ]
+  },
+  {
+   "name": "backslash escapes",
+   "markdown": "# \\*a\\* \\_b\\_ \\# \\\\",
+   "ids": [
+    "a-_b_--"
+   ]
+  },
+  {
+   "name": "emphasis",
+   "markdown": "# *a* **b** _c_ __d__ ***e***",
+   "ids": [
+    "a-b-c-d-e"
+   ]
+  },
+  {
+   "name": "unmatched delimiters",
+   "markdown": "# *a _b c* d_",
+   "ids": [
+    "a-_b-c-d_"
+   ]
+  },
+  {
+   "name": "intraword underscore",
+   "markdown": "# foo_bar_baz",
+   "ids": [
+    "foo_bar_baz"
+   ]
+  },
+  {
+   "name": "strikethrough",
+   "markdown": "# ~~a~~ ~b~",
+   "ids": [
+    "a-b"
+   ]
+  },
+  {
+   "name": "code spans",
+   "markdown": "# `a  b` `` c`d `` ` e `",
+   "ids": [
+    "a--b-cd-e"
+   ]
+  },
+  {
+   "name": "code span of spaces",
+   "markdown": "# x`  `y",
+   "ids": [
+    "x--y"
+   ]
+  },
+  {
+   "name": "inline link",
+   "markdown": "# [a b](/u \"t\") c",
+   "ids": [
+    "a-b-c"
+   ]
+  },
+  {
+   "name": "reference link",
+   "markdown": "# [a][r] [r] [r][]\n\n[r]: /u",
+   "ids": [
+    "a-r-r"
+   ]
+  },
+  {
+   "name": "undefined reference",
+   "markdown": "# [a][nope] [b]",
+   "ids": [
+    "anope-b"
+   ]
+  },
+  {
+   "name": "autolinks",
+   "markdown": "# <https://x.y/z> <a@b.c>",
+   "ids": [
+    "httpsxyz-abc"
+   ]
+  },
+  {
+   "name": "extended autolinks",
+   "markdown": "# www.example.com https://x.y/z a@b.co",
+   "ids": [
+    "wwwexamplecom-httpsxyz-abco"
+   ]
+  },
+  {
+   "name": "image",
+   "markdown": "# a ![b c](/i.png) d",
+   "ids": [
+    "a--d"
+   ]
+  },
+  {
+   "name": "image with emphasis in its description",
+   "markdown": "# ![*b* `c`](/i.png)",
+   "ids": [
+    ""
+   ]
+  },
+  {
+   "name": "image in a link",
+   "markdown": "# [![b](/i.png) c](/u)",
+   "ids": [
+    "-c"
+   ]
+  },
+  {
+   "name": "inline HTML",
+   "markdown": "# a <span id=\"q\">b</span> <!-- c --> d",
+   "ids": [
+    "a-b--d"
+   ]
+  },
+  {
+   "name": "HTML entity in inline HTML",
+   "markdown": "# a<b title=\"&amp;\">c</b>",
+   "ids": [
+    "ac"
+   ]
+  },
+  {
+   "name": "emoji shortcode",
+   "markdown": "# a :smile: b",
+   "ids": [
+    "a-smile-b"
+   ]
+  },
+  {
+   "name": "footnote reference",
+   "markdown": "# a[^1]\n\n[^1]: n",
+   "ids": [
+    "a1"
+   ]
+  },
+  {
+   "name": "mention and issue reference",
+   "markdown": "# @octocat #1 GH-1",
+   "ids": [
+    "octocat-1-gh-1"
+   ]
+  },
+  {
+   "name": "setext heading with a soft break",
+   "markdown": "a\nb\n===",
+   "ids": [
+    "ab"
+   ]
+  },
+  {
+   "name": "setext heading with a hard break by spaces",
+   "markdown": "a  \nb\n===",
+   "ids": [
+    "ab"
+   ]
+  },
+  {
+   "name": "setext heading with a hard break by backslash",
+   "markdown": "a\\\nb\n===",
+   "ids": [
+    "ab"
+   ]
+  },
+  {
+   "name": "setext heading after a definition",
+   "markdown": "[r]: /u\na [r]\n---",
+   "ids": [
+    "a-r"
+   ]
+  },
+  {
+   "name": "ATX closing sequence",
+   "markdown": "# a # b ##",
+   "ids": [
+    "a--b"
+   ]
+  },
+  {
+   "name": "empty heading",
+   "markdown": "#\n\n#",
+   "ids": [
+    null,
+    null
+   ]
+  },
+  {
+   "name": "heading of punctuation only",
+   "markdown": "# !!!\n\n# ???",
+   "ids": [
+    "",
+    "-1"
+   ]
+  },
+  {
+   "name": "capitals and dotted I",
+   "markdown": "# ABC İ K Ω",
+   "ids": [
+    "abc-i̇-k-ω"
+   ]
+  },
+  {
+   "name": "final sigma",
+   "markdown": "# ΑΣ ΣΑ Σ ΟΔΟΣ",
+   "ids": [
+    "ασ-σα-σ-οδοσ"
+   ]
+  },
+  {
+   "name": "decomposed and composed",
+   "markdown": "# café café",
+   "ids": [
+    "café-café"
+   ]
+  },
+  {
+   "name": "marks and numbers",
+   "markdown": "# x́ ² Ⅳ ١ ½",
+   "ids": [
+    "x́--ⅳ-١-"
+   ]
+  },
+  {
+   "name": "symbols",
+   "markdown": "# © ™ € → 😀",
+   "ids": [
+    "----"
+   ]
+  },
+  {
+   "name": "format characters",
+   "markdown": "# a​b‍c­d﻿e",
+   "ids": [
+    "ab‍cde"
+   ]
+  },
+  {
+   "name": "duplicates",
+   "markdown": "# a\n\n# a\n\n# a",
+   "ids": [
+    "a",
+    "a-1",
+    "a-2"
+   ]
+  },
+  {
+   "name": "duplicates after a numbered heading",
+   "markdown": "# a-1\n\n# a\n\n# a",
+   "ids": [
+    "a-1",
+    "a",
+    "a-2"
+   ]
+  },
+  {
+   "name": "a numbered heading between duplicates",
+   "markdown": "# a\n\n# a-1\n\n# a",
+   "ids": [
+    "a",
+    "a-1",
+    "a-2"
+   ]
+  },
+  {
+   "name": "a numbered heading after duplicates",
+   "markdown": "# a\n\n# a\n\n# a-1",
+   "ids": [
+    "a",
+    "a-1",
+    "a-1-1"
+   ]
+  },
+  {
+   "name": "duplicates of a numbered heading",
+   "markdown": "# a-1\n\n# a-1\n\n# a",
+   "ids": [
+    "a-1",
+    "a-1-1",
+    "a"
+   ]
+  },
+  {
+   "name": "duplicates under different cases",
+   "markdown": "# A\n\n# a\n\n# A",
+   "ids": [
+    "a",
+    "a-1",
+    "a-2"
+   ]
+  },
+  {
+   "name": "duplicates of empty headings",
+   "markdown": "#\n\n#\n\n# -1",
+   "ids": [
+    null,
+    null,
+    "-1"
+   ]
+  },
+  {
+   "name": "empty slugs after an empty heading",
+   "markdown": "#\n\n# !\n\n# ?",
+   "ids": [
+    "",
+    "-1",
+    null
+   ]
+  },
+  {
+   "name": "duplicates of empty slugs",
+   "markdown": "# !\n\n# ?\n\n# a",
+   "ids": [
+    "",
+    "-1",
+    "a"
+   ]
+  },
+  {
+   "name": "ten duplicates",
+   "markdown": "# a\n\n# a\n\n# a\n\n# a\n\n# a\n\n# a\n\n# a\n\n# a\n\n# a\n\n# a\n\n# a",
+   "ids": [
+    "a",
+    "a-1",
+    "a-2",
+    "a-3",
+    "a-4",
+    "a-5",
+    "a-6",
+    "a-7",
+    "a-8",
+    "a-9",
+    "a-10"
+   ]
+  },
+  {
+   "name": "a heading equal to a later number",
+   "markdown": "# a-2\n\n# a\n\n# a\n\n# a",
+   "ids": [
+    "a-2",
+    "a",
+    "a-1",
+    "a-3"
+   ]
+  },
+  {
+   "name": "duplicates in a block quote and a list",
+   "markdown": "> # a\n\n- # a\n\n# a",
+   "ids": [
+    "a",
+    "a-1",
+    "a-2"
+   ]
+  },
+  {
+   "name": "detail heading shape",
+   "markdown": "## items row T1\n\n## items row T1\n\n## Items Row T1",
+   "ids": [
+    "items-row-t1",
+    "items-row-t1-1",
+    "items-row-t1-2"
+   ]
+  }
+ ],
+ "attributes": [
+  {
+   "name": "id",
+   "markdown": "<a id=\"items-row-t1\"></a>",
+   "values": [
+    {
+     "attr": "id",
+     "value": "user-content-items-row-t1"
+    }
+   ]
+  },
+  {
+   "name": "name",
+   "markdown": "<a name=\"items-row-t1\"></a>",
+   "values": [
+    {
+     "attr": "name",
+     "value": "user-content-items-row-t1"
+    }
+   ]
+  },
+  {
+   "name": "id in capitals",
+   "markdown": "<a id=\"ITEMS-ROW-T1\"></a>",
+   "values": [
+    {
+     "attr": "id",
+     "value": "user-content-ITEMS-ROW-T1"
+    }
+   ]
+  },
+  {
+   "name": "name in capitals",
+   "markdown": "<a name=\"Items-Row-T1\"></a>",
+   "values": [
+    {
+     "attr": "name",
+     "value": "user-content-Items-Row-T1"
+    }
+   ]
+  },
+  {
+   "name": "id with the prefix",
+   "markdown": "<a id=\"user-content-items-row-t1\"></a>",
+   "values": [
+    {
+     "attr": "id",
+     "value": "user-content-items-row-t1"
+    }
+   ]
+  },
+  {
+   "name": "name with the prefix",
+   "markdown": "<a name=\"user-content-items-row-t1\"></a>",
+   "values": [
+    {
+     "attr": "name",
+     "value": "user-content-items-row-t1"
+    }
+   ]
+  },
+  {
+   "name": "id with the prefix in capitals",
+   "markdown": "<a id=\"User-Content-items-row-t1\"></a>",
+   "values": [
+    {
+     "attr": "id",
+     "value": "user-content-User-Content-items-row-t1"
+    }
+   ]
+  },
+  {
+   "name": "name with the prefix in capitals",
+   "markdown": "<a name=\"USER-CONTENT-items-row-t1\"></a>",
+   "values": [
+    {
+     "attr": "name",
+     "value": "user-content-USER-CONTENT-items-row-t1"
+    }
+   ]
+  },
+  {
+   "name": "id with the prefix twice",
+   "markdown": "<a id=\"user-content-user-content-x\"></a>",
+   "values": [
+    {
+     "attr": "id",
+     "value": "user-content-user-content-x"
+    }
+   ]
+  },
+  {
+   "name": "id with a character reference",
+   "markdown": "<a id=\"items-row-&#x54;1\"></a>",
+   "values": [
+    {
+     "attr": "id",
+     "value": "user-content-items-row-T1"
+    }
+   ]
+  },
+  {
+   "name": "unquoted id",
+   "markdown": "<span id=items-row-t1>x</span>",
+   "values": [
+    {
+     "attr": "id",
+     "value": "user-content-items-row-t1"
+    }
+   ]
+  },
+  {
+   "name": "single-quoted name",
+   "markdown": "<a name='items-row-t1'>x</a>",
+   "values": [
+    {
+     "attr": "name",
+     "value": "user-content-items-row-t1"
+    }
+   ]
+  },
+  {
+   "name": "id of an HTML block",
+   "markdown": "<div id=\"items-row-t1\">\nx\n</div>",
+   "values": [
+    {
+     "attr": "id",
+     "value": "user-content-items-row-t1"
+    }
+   ]
+  },
+  {
+   "name": "id in a heading",
+   "markdown": "# x <a id=\"items-row-t1\"></a>",
+   "values": [
+    {
+     "attr": "id",
+     "value": "user-content-items-row-t1"
+    }
+   ]
+  },
+  {
+   "name": "id with a long s",
+   "markdown": "<a id=\"items-row-ſ1\"></a>",
+   "values": [
+    {
+     "attr": "id",
+     "value": "user-content-items-row-ſ1"
+    }
+   ]
+  },
+  {
+   "name": "id with a Kelvin sign",
+   "markdown": "<a id=\"items-row-K1\"></a>",
+   "values": [
+    {
+     "attr": "id",
+     "value": "user-content-items-row-K1"
+    }
+   ]
+  }
+ ]
+}

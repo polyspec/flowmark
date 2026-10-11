@@ -123,7 +123,7 @@ compatibility, no fallback, no hidden error, no trick; rules first.
   tables and task-list items: the specifications that GitHub (cmark-gfm), GitLab and VS Code
   (markdown-it) implement. The specifications do not define the targets of a fragment. Anchors —
   heading slugs and the ids and names of raw HTML that CommonMark reads outside code — are judged by
-  GitHub, GitLab and VS Code (the F_G fold for headings), because a link `[k](file#anchor)` must
+  GitHub, GitLab and VS Code (their slugs S_GH, S_VS and S_GL for headings), because a link `[k](file#anchor)` must
   resolve in them. Grounding: a specification is one fixed measure that these viewers follow; an
   implementation that follows neither specification has its own list, setext, fence,
   reference-definition and extension behaviour, which changes with its releases and extensions, so
@@ -238,20 +238,33 @@ reimplements them.
   `## items row T2` has the anchor `items-row-t2`; the table is the anchor text before its first
   `-`, as table names hold no `-`. The collision rule: a heading of the file — every ATX heading, also after a block-quote or list-item
   marker, and every paragraph followed by a setext underline (its whole text), outside fences, skeleton
-  and payload alike — other than a detail heading takes the anchor A of a detail heading when, under
-  the fold F_G of its rendered inline text, F_G of the heading and F_G(A) are equal once a final run of
-  decimal digits is removed from each. F_G removes every character not of Unicode category L or Nd,
-  lowercases, decomposes by NFKD, drops the combining marks and keeps the ASCII letters and digits; it
-  takes the text as GitHub slugs it (link text without its target, emphasis markers removed, code span
-  content kept, entities decoded). F_G covers GitHub, GitLab and VS Code; Pandoc is not claimed. The
-  rule covers every numbering: every named viewer numbers a repeated id by appending `-<n>` (GitHub,
-  GitLab and VS Code), so comparing the folds without their final digits covers every numbering,
-  whichever heading came first, at the cost that a payload heading differing from a detail heading only
-  in its final number is refused. Refused: a payload heading `items row T` beside the detail heading
-  `items row T-1`, since a second `items row T` is numbered `items-row-t-1`; a payload heading `Notes`
-  beside it is not refused. Two detail headings collide only when their anchors are equal. An HTML `id`
-  or `name` equal to A, without regard to case, in raw HTML as CommonMark 0.31.2 reads it (a code span
-  or code block holds none), collides too. A write that introduces a collision — a title update, a payload write, a row insert, a key update, a move or the creation of a detail section — is `CONSTRAINT`, naming the other heading, except a write giving a row a key equal (with or without regard to case) to another key of its table, which is `DUPLICATE_KEY`, the key rule; on read it is `format.block`, except between the detail headings of two rows whose keys differ only in case, which is `key.duplicate` alone. A detail heading in a
+  and payload alike — other than a detail heading takes the anchor A of a detail heading when, for a
+  slug S among S_GH, S_VS and S_GL of its rendered inline text (the text CommonMark 0.31.2 renders) as
+  that slug reads it, S of the heading equals A, or A is S of the heading followed by `-` and a
+  decimal number n ≥ 1 without a leading zero. S_GH is GitHub's slug (the text lowercased by the full
+  mapping without its conditions, the word characters of Unicode 17.0.0 — Alphabetic, marks, decimal
+  numbers, connector punctuation and Join_Control — the space and `-` kept, each space then `-`; an
+  image is no text), S_VS is VS Code's (the trimmed text lowercased by JavaScript's `toLowerCase`,
+  the characters that its `slugify.ts` expression matches removed — those of the Unicode 13.0.0
+  categories No, Pd, Ps, Pe, Pi, Pf, Po, S, Cc, Cf, Co, Cn and Z other than an Alphabetic character
+  of Unicode 13.0.0, the space and `-` — each white space then `-`; an image is its alt text) and
+  S_GL is comrak 0.56.0's, which GitLab uses (the text lowercased, the letters, marks, numbers and
+  connector punctuation of Unicode 17.0.0, the space and `-` kept, each space then `-`; an image is
+  its alt text); a line break is nothing under S_GH and S_VS and a space under S_GL. S_GH and S_VS are
+  grounded in the ids the viewers themselves render, recorded on 2026-10-11 by `make slug-vectors`
+  into `store/testdata/slug` — GitHub's `POST /markdown` in mode `markdown`, and VS Code 1.141.0's own
+  `slugify.ts` and `markdownEngine.ts` run on markdown-it 14.3.2 — for every code point and for
+  structural cases, which the slugs reproduce exactly; re-recording is `make slug-vectors`. No slug
+  normalizes the text; the [canonical format](../spec/10-canonical-format.md#detail-headings-and-anchors)
+  states them with their grounding. Pandoc is not claimed. The rule covers every numbering: every
+  named viewer numbers a repeated slug by appending `-<n>`, n counting from 1, whichever heading came
+  first. Refused: a payload heading `items row T` beside the detail heading `items row T-1`, since a
+  second `items row T` is numbered `items-row-t-1`; a payload heading `Notes` beside it is not
+  refused. Two detail headings collide only when their anchors are equal. An HTML `id` or `name` that
+  equals A, or `user-content-` followed by A, once lowercased by the full mapping, in raw HTML as
+  CommonMark 0.31.2 reads it (a code span or code block holds none), collides too: VS Code compares
+  a fragment with an id lowercased, and GitHub renders a raw id or name, its case kept, with
+  `user-content-` before it unless it already begins so, the form of its heading ids. A write that introduces a collision — a title update, a payload write, a row insert, a key update, a move or the creation of a detail section — is `CONSTRAINT`, naming the other heading, except a write giving a row a key equal (with or without regard to case) to another key of its table, which is `DUPLICATE_KEY`, the key rule; on read it is `format.block`, except between the detail headings of two rows whose keys differ only in case, which is `key.duplicate` alone. A detail heading in a
   non-canonical spelling (extra spaces, a wrong case of `row`) is `format.noncanonical`, which
   `flowmark canon` repairs. A detail section whose key names no row of its block is `format.block`, and so is a second detail section of the same row, whatever its spelling: its body and sections cannot be assigned.
 - A `markdown` column is always a section of the row scope — never a field or a cell — in every

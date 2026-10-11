@@ -301,7 +301,7 @@ func (p *docParser) run(lay *docLayout, lines []string) []*docRec {
 	i := 0
 	if len(lines) > 0 {
 		// The H1 names the table once lowercased as the viewers lowercase it.
-		if level, text, tab, ok := headingOf(lines[0]); ok && level == 1 && lowerAsViewers(trimWhite(text)) == lay.table {
+		if level, text, tab, ok := headingOf(lines[0]); ok && level == 1 && lowerFull(trimWhite(text)) == lay.table {
 			if text != lay.table || tab {
 				p.warn(1, 3, RuleNoncanonical, "the H1 is written `# "+lay.table+"`")
 			}
@@ -1104,7 +1104,7 @@ func (p *docParser) readDetail(lines []string, h heading, sub []heading, end int
 	// The faults of the heading are at the first character of its text.
 	col := h.textCol(lines)
 	parts := detailFields(h.text)
-	if len(parts) != 3 || lowerAsViewers(parts[0]) != lowerAsViewers(lay.table) || strings.ToLower(parts[1]) != "row" || parts[2] == "" {
+	if len(parts) != 3 || lowerFull(parts[0]) != lowerFull(lay.table) || strings.ToLower(parts[1]) != "row" || parts[2] == "" {
 		p.fail(h.at+1, col, RuleBlock, "a detail section is `"+marks+" "+lay.table+" row <key>`")
 		return
 	}

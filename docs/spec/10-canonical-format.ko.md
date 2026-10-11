@@ -1,5 +1,5 @@
 <!-- doc-id: spec-canonical-format -->
-<!-- source-sha256: bbd742491dee8a6e321b74fae8318f1ca5a4c728198981048a068ba777a60fe1 -->
+<!-- source-sha256: a04eac6d75e1a8f0d29271d5a5ddd56e5d2d7de67e4e6d265f23a8fbf256bf2f -->
 # Canonical format
 
 [English](10-canonical-format.md)
@@ -28,7 +28,7 @@ idempotency 명제, readable 문서, skeleton, 문서 순서, 상세 heading과 
   따르지 않는 구현은 list, setext, fence, reference definition, 확장에 대해 자기만의 동작을 가지며 그것은 릴리스와 확장에
   따라 바뀐다. 그것을 따르면 표준이 아니라 한 구현의 일탈을 쫓게 되므로, 그런 구현은 기준이 아니다.
 - spec은 fragment의 target을 정의하지 않는다. anchor — heading slug와, CommonMark가 code 밖에서 읽는 raw HTML의 id와
-  name — 는 GitHub, GitLab, VS Code로 판단하며(heading에는 F_G fold), 그 근거는 link `[k](file#anchor)`가 그 viewer들에서
+  name — 는 GitHub, GitLab, VS Code로 판단하며(heading에는 그 slug S_GH, S_VS, S_GL), 그 근거는 link `[k](file#anchor)`가 그 viewer들에서
   풀려야 한다는 것이다. 모든 관계는 GitHub, GitLab, VS Code가
   그 heading에 대해 만드는 anchor인 `#<anchor>`를 가진 link다([상세 heading과 anchor](10-canonical-format.md#detail-headings-and-anchors)의 규칙에 따른다).
   Pandoc은 주장 대상이 아니다: 기본 설정은 상대 경로 link target을 다시 쓰지 않으므로, corpus file 사이의 link가
@@ -49,7 +49,7 @@ column 섹션 — 은 payload다: renderer는 이를 행과 함께 옮기고 그
 ## 문서 순서
 
 - **`files` 행**은 `<table>/<key>.flowmark.md` file이며, 차례로: H1 줄 `# <title>`, 저장되는 scalar 값의 field list(있을 때), body, 행 scope의 level-2 섹션을 가진다. 이 요소들 사이의 빈 줄은 field list와 값의 framing에서 정한다.
-- **`document` file** `<table>.flowmark.md`는: H1 줄 `# <table>`, H1 바로 아래 행들의 list나 table, level 2의 상세 섹션을 가진다. 텍스트를 소문자로 만들면 table 이름과 같은 H1 — 상세 heading의 table 이름과 같은 방식으로 비교한다([상세 heading과 anchor](#상세-heading과-anchor)), 예컨대 `items.flowmark.md`의 `# Items` — 은 정식이 아닌 표기로 쓴 file의 H1 줄이며 `format.noncanonical`이다. 근거: file 이름이 table을 정하므로 H1은 그것을 이름 붙일 뿐 데이터를 담지 않는다. viewer는 그 아래 행들을 같게 보여 주며, 이름 붙은 모든 viewer가 heading의 anchor를 소문자로 만들므로 그 anchor와 충돌 규칙의 fold는 `# <table>`의 것과 같다. `flowmark canon`은 `# <table>`을 쓴다. 없는 document file은 빈 table이다([document model](20-document-model.ko.md#저장)). 마지막 행을 지우면 file은 H1 줄과 LF 하나를 남긴다. list나 table은 행들의 H1 줄 바로 아래에 빈 줄 없이 서며, 그 자리의 빈 줄 하나 이상(space와 tab만 있는 줄을 빈 줄이라 한다)은 `format.noncanonical`이다. 근거: ATX heading은 한 줄이므로 CommonMark 0.31.2와 GFM은 그 뒤의 list나 table을 빈 줄이 있든 없든 같게 읽으며, 모든 viewer가 둘을 같게 보여 준다. 행들은 H1이 이름 붙이는 것이며, block의 행이 그 heading이 이름 붙이는 것인 것과 같이 둘 다 heading 바로 아래에 서고, 빈 줄은 두 요소, 즉 행들과 첫 상세 섹션을 나눈다.
+- **`document` file** `<table>.flowmark.md`는: H1 줄 `# <table>`, H1 바로 아래 행들의 list나 table, level 2의 상세 섹션을 가진다. 텍스트를 소문자로 만들면 table 이름과 같은 H1 — 상세 heading의 table 이름과 같은 방식으로 비교한다([상세 heading과 anchor](#상세-heading과-anchor)), 예컨대 `items.flowmark.md`의 `# Items` — 은 정식이 아닌 표기로 쓴 file의 H1 줄이며 `format.noncanonical`이다. 근거: file 이름이 table을 정하므로 H1은 그것을 이름 붙일 뿐 데이터를 담지 않는다. viewer는 그 아래 행들을 같게 보여 주며, 이름 붙은 모든 viewer가 heading의 anchor를 소문자로 만들므로 그 anchor와 충돌 규칙의 slug는 `# <table>`의 것과 같다. `flowmark canon`은 `# <table>`을 쓴다. 없는 document file은 빈 table이다([document model](20-document-model.ko.md#저장)). 마지막 행을 지우면 file은 H1 줄과 LF 하나를 남긴다. list나 table은 행들의 H1 줄 바로 아래에 빈 줄 없이 서며, 그 자리의 빈 줄 하나 이상(space와 tab만 있는 줄을 빈 줄이라 한다)은 `format.noncanonical`이다. 근거: ATX heading은 한 줄이므로 CommonMark 0.31.2와 GFM은 그 뒤의 list나 table을 빈 줄이 있든 없든 같게 읽으며, 모든 viewer가 둘을 같게 보여 준다. 행들은 H1이 이름 붙이는 것이며, block의 행이 그 heading이 이름 붙이는 것인 것과 같이 둘 다 heading 바로 아래에 서고, 빈 줄은 두 요소, 즉 행들과 첫 상세 섹션을 나눈다.
 - **상세 섹션**은 heading `<h> <table> row <key>` — table 이름, 공백 하나, `row`, 공백 하나, key — 이며 제목 사본은 없다. 그 뒤에 행의 body가 오고, level h + 1의 행 scope 섹션이 뒤따른다. 상세 행의 scope는 level h + 1이다. 중첩된 list 행의 상세 섹션은 평평한 형제다.
 - **블록 섹션**은 부모 행 scope 안에서 자식 table 이름을 가진 level b heading이다. list나 table은 heading 바로 다음 줄에 서며, 그 행들의 상세 섹션이 level b + 1로 뒤따른다. heading과 list나 table 사이의 빈 줄(space와 tab만 있는 줄)은 개수와 무관하게 `format.noncanonical`이다. 근거: ATX heading은 그 줄에서 끝나므로 CommonMark와 GFM은 그 뒤의 list나 table을 빈 줄이 있든 없든 같게 읽으며, 뜻은 확정적이다. list나 table은 heading 고유의 요소이고, document file의 행이 H1 바로 아래에, `files` 행의 field list가 H1 바로 아래에 서듯 heading 바로 아래에 서므로, 형식은 하나뿐이다(P1).
 - 한 list나 table의 행들 — document file의 것이든 블록 섹션 하나의 것이든 — 은 하나의 **block**이며, document file은 block 하나를 가진다. block이나 document 행의 `parent`는 그 자신의 block의 행을 가리킨다: 그 밖의 것을 정하는 쓰기는 `CONSTRAINT`이며, 읽을 때 `parent`가 그 block의 행을 가리키지 않으면(file의 다른 block의 행을 포함해서) `format.block`이다. 근거: `parent`는 자기 자신을 가리키는 self foreign key이며, 형제 행은 배치 부모와 `parent`를 공유하므로([document model](20-document-model.ko.md#순서)), 다른 block의 부모는 자식에게 저장 순서의 자리를 주지 못한다. list는 `parent`를 들여쓰기로 쓰며 그것은 다른 block에 닿을 수 없으므로, 더 넓은 scope는 table이 list 형식으로 표현할 수 없는 계층을 담게 한다. 이는 같은 행을 두 형식 중 어느 것으로도 저장할 수 있다는 규칙([document model](20-document-model.ko.md#저장))에 어긋난다.
@@ -67,30 +67,69 @@ column 섹션 — 은 payload다: renderer는 이를 행과 함께 옮기고 그
 
 - 상세 섹션의 anchor는 `<table>-row-<소문자 key>`다: heading `## items row T2`의 anchor는
   `items-row-t2`다. table은 anchor 텍스트에서 첫 `-` 앞이며, table 이름에는 `-`가 없다.
-- **fold.** heading의 렌더된 inline 텍스트에 대한 fold 하나, F_G가 충돌을 정한다. 텍스트는 GitHub이 slug를 만드는
-  방식을 따른다(link의 target을 뺀 link 텍스트, 강조 표지 제거, code span 내용 유지, entity 해석, raw HTML 태그는
-  텍스트가 아님을 포함한다). 렌더된 inline 텍스트는 file 전체의 link reference definition을 가지고 CommonMark 0.31.2가
-  해석하는 것이다: definition은 CommonMark가 읽는 곳에서, 즉 문단의 시작에 있는 block으로, 컨테이너 안이든 밖이든,
-  그 자리를 가리지 않고 읽는다. label이 그런 definition과 맞는 full, collapsed 또는 shortcut reference link는 그 link
-  텍스트로 센다. 어떤 definition과도 맞지 않는 bracket 텍스트는 label과 bracket을 포함해 글자 그대로의 텍스트로 센다.
-  근거: GitHub, GitLab, VS Code는 CommonMark를 해석하며, 거기서 link reference definition은
-  문단의 시작에 있는 block이므로, 정의된 `[items row T1][r]`은 `items row T1` 텍스트로 렌더된다. image는 F_G에서 alt 텍스트로도,
-  텍스트 없이도 센다. heading은 두 읽기 가운데 하나라도 충돌하면 anchor를 가져간다. 근거: VS Code의
-  markdown language service는 heading의 slug를 inline token의 텍스트로 만들며, 거기에는 image의 alt 텍스트가 포함된다.
-  GitHub과 GitLab은 heading의 텍스트를
-  취하며, F_G를 두 방식으로 읽으면 어느 쪽이든 덮인다. F_G는 Unicode 일반 범주가 letter(L)나 십진 숫자(Nd)가 아닌 모든 문자를 지우고,
-  나머지를 소문자로 바꾸고, NFKD로 분해하고, 결합 기호를 버리며, 남은 ASCII 문자와 숫자만 남긴다. 근거: GitHub, GitLab,
-  VS Code의 anchor는 글자, 숫자, `-`, `_`, 공백을 남기고 나머지를 지우며, 그 가운데 위첨자와 원 숫자(범주 No)도
-  지운다. F_G가 그것을 지운다. `café`는 F_G에서 `cafe`가 된다.
+- **렌더된 텍스트.** heading의 slug는 그 렌더된 inline 텍스트로 계산한다: CommonMark 0.31.2가 heading의 내용 —
+  ATX heading이면 앞뒤의 공백과 tab, 닫는 sequence를 뺀 내용(§4.2), setext heading이면 앞머리의 link reference
+  definition을 뺀 문단 — 에서 렌더하는 텍스트로, 그 text node와 code span이 가진 것이다. backslash escape는 escape된
+  문자이고, character reference는 그 문자다: numeric reference는 그 code point이며(§2.5) 0은 U+FFFD이므로,
+  `&#x83;`은 GitHub과 VS Code가 렌더하는 대로 control U+0083이고, HTML 표준이 attribute 값에서 읽는 windows-1252의
+  `ƒ`가 아니다. 강조와 강한 강조의 구분자는 §6.2와 부록의 process emphasis 구분자 알고리즘이 짝지은 곳에서만
+  지워지며, 그 밖에서는 텍스트다(`_T1`은 `_`를 남긴다). code span은 §6.1이 정하는 대로 정규화한 내용이다: 줄 바꿈은
+  각각 공백이 되고, 양 끝이 모두 공백이며 내용이 공백만이 아니면 양 끝의 공백 하나씩을 지운다. autolink는 그 텍스트이고
+  raw HTML은 텍스트가 아니다. link는 target과 title을 뺀 link 텍스트다. 아무것도 이루지 않는 bracket이나 구분자는
+  텍스트다. link reference definition은 file 전체의 것이다: definition은 CommonMark가 읽는 곳에서, 즉 문단의 시작에
+  있는 block으로, 컨테이너 안이든 밖이든, 그 자리를 가리지 않고 읽는다. label이 그런 definition과 맞는 full,
+  collapsed 또는 shortcut reference link는 그 link 텍스트로 센다. 어떤 definition과도 맞지 않는 bracket 텍스트는 label과
+  bracket을 포함해 글자 그대로의 텍스트로 센다. 근거: GitHub, GitLab, VS Code는 CommonMark를 해석하며, 거기서 link
+  reference definition은 문단의 시작에 있는 block이므로, 정의된 `[items row T1][r]`은 `items row T1` 텍스트로
+  렌더된다. 각 viewer는 렌더된 heading의 텍스트, 곧 CommonMark가 렌더하는 것으로 slug를 만들므로, 강조가 아닌 `_`나
+  escape된 `\_`는 slug에 남는다. image는 S_GH에서는 텍스트가 아니고, S_VS와 S_GL에서는 그 alt 텍스트, 곧 설명의
+  plain-text 렌더다. 근거: GitHub의 id는 image의 alt 텍스트를 넣지 않으며(`a ![b c](/i.png) d`는 `a--d`, 아래의 slug
+  vector), VS Code의 preview와 comrak은 heading의 slug를 inline node의 텍스트로 만들며, 거기에는 image의 alt 텍스트가
+  포함된다. 줄 바꿈은 soft든 hard든 S_GH와 S_VS에서는 아무것도 아니고 S_GL에서는 공백이다. 근거: GitHub의 id는
+  setext heading의 줄을 아무것도 없이 잇고(vector), VS Code는 softbreak와 hardbreak token을 텍스트 없이 쓰며,
+  comrak의 `collect_text`는 각각을 공백 하나로 쓴다.
+- **slug.** 한 viewer에서 heading의 slug는 그 렌더된 inline 텍스트로부터 그 viewer가 계산하는 대로 계산한다.
+  **S_GH**(GitHub): 텍스트를 Unicode의 full default lowercase mapping으로, 조건부 mapping 없이 소문자로 바꾸고(U+0130은
+  `i`와 U+0307이, U+212A는 `k`가, 끝의 Σ는 σ가 된다), Unicode 17.0.0에서 Unicode Technical Standard #18(Annex C)의
+  word 문자 — Alphabetic, mark, decimal number, connector punctuation, Join_Control이므로 U+200D는 남는다 — 와 공백,
+  `-`를 남기고 나머지를 지우며, 그다음 각 공백을 `-`로 쓴다. **S_VS**(VS Code): 텍스트의 양 끝에서 JavaScript의
+  `String.prototype.trim`이 지우는 white space를 빼고, JavaScript의 `toLowerCase`(Final_Sigma 조건을 갖춘 full
+  mapping이므로 끝의 Σ는 ς)로 소문자로 바꾸며, VS Code의 식 `githubSlugReplaceRegex`가 맞추는 모든 문자 — Unicode
+  13.0.0의 일반 범주가 No, Pd, Ps, Pe, Pi, Pf, Po, Sm, Sc, Sk, So, Cc, Cf, Co, Cn, Zs, Zl, Zp인 문자 가운데 Unicode
+  13.0.0의 Alphabetic 문자, 공백, `-`가 아닌 것이므로, Unicode 13.0.0 이후에 배정된 문자는 지워진다 — 를 지우고,
+  그다음 각 JavaScript white space 문자를 `-`로 쓴다. 남는 것은 공백뿐이다. **S_GL**(GitLab): S_GH처럼 소문자로
+  바꾸고, Unicode 17.0.0의 일반 범주가 letter, mark, number, connector punctuation인 문자와 공백, `-`를 남기고 나머지를
+  지우며, 그다음 각 공백을 `-`로 쓴다. 어느 것도 텍스트를 정규화하거나, hyphen을 잘라내거나, run을 줄이지 않는다:
+  `café`와 `cafe`는 slug가 다르며, `items row  T1`과 `items row T1`도 그렇다. engine의 Unicode data는 Go `unicode`
+  package의 것인 17.0.0이며, S_VS가 지우는 집합에는 Unicode 13.0.0 data file로 생성한 table을 쓴다. 근거: slug
+  vector, 곧 viewer 자신이 렌더하는 id로, 2026-10-11에 `make slug-vectors`(`scripts/record-slugs.mjs`)가
+  `store/testdata/slug`에 기록했으며 S_GH와 S_VS가 그대로 재현한다: surrogate를 뺀 모든 code point마다 그것을 numeric
+  reference로, 그리고 그 문자 자체로 담은 heading, 그리고 공백, tab, underscore, hyphen, reference, escape, 강조, code
+  span, link, image, raw HTML, 줄 바꿈, 반복된 heading의 구조 case다. GitHub의 것은 자신의 renderer, 곧 REST API의
+  `POST /markdown`을 mode `markdown`으로 불러 렌더하며, 이 mode는 각 heading anchor를 `user-content-`와 id로 쓴다. 그
+  id는 Unicode 13.0.0 이후에 배정된 U+107A5, U+1CCF0, U+A7F2를 남기며, 모든 code point에서 Unicode 17.0.0의 word
+  문자와 맞는다. VS Code의 것은 최신 stable release 1.141.0의 자기 code를 실행해 렌더한다:
+  `extensions/markdown-language-features/src/slugify.ts`의 `githubSlugifier` — VS Code의 MIT license와 함께
+  `store/testdata/slug`에 두며, 그 식은 engine의 Unicode 13.0.0 table과 모든 code point에서 같다 — 와
+  `markdownEngine.ts`의 `#tokenToPlainText` method를, 그 `package-lock.json`이 고정하는 markdown-it 14.3.2 위에서다.
+  comrak 0.56.0의 `Anchorizer`는 gitlab-glfm-markdown 0.0.45를 거쳐 GitLab의 heading id를 렌더하며, 그 gem의
+  `Cargo.lock`은 comrak이 범주를 읽는 crate인 finl_unicode 1.4.0을 고정하고, 그 table은 Unicode 17.0.0의 것이다. 다시
+  기록하려면 network, 인증된 `gh`, npm을 갖추고 `make slug-vectors`를 실행한다. viewer가 바뀌면 slug가 더는 재현하지
+  못하는 vector로 드러난다.
 - **충돌 규칙.** heading은 모든 ATX heading(block-quote나 list-item 표지 뒤의 것을 포함)과, fence 밖에서
-  setext 밑줄이 뒤따르는 모든 문단이다. 그 문단 전체에서 앞머리의 link reference definition을 뺀 것이 heading이다. 상세 heading도 heading이다. 그 definition은 heading의 일부가 아니다: setext heading은 definition이 남긴 첫 줄에서 시작하고, definition은 heading 앞의 내용이며, definition만 있고 밑줄이 뒤따르면 heading이 아니다. 근거: CommonMark 0.31.2는 문단을 setext heading으로 닫기 전에 그 앞머리의 definition을 먼저 읽으므로(§4.3, §4.7), `[r]: /u`, `people row P1`, `---`는 definition 하나와 heading `people row P1`이며, commonmark.js, cmark-gfm, markdown-it이 그렇게 읽는다. 이 규칙에서 상세 heading은 file의 layout에 있는 한 table의 상세 level — 그 행들의 상세 heading의 level, 행 scope보다 한 단계 얕은 — 에 있는 최상위 heading이며, 그 텍스트가 공백, tab, 그리고 setext heading의 줄 바꿈을 뺀 것으로 그 table의 이름과 `row`(각각 viewer가 하듯 소문자로 만든 뒤 정식 텍스트와 같은 것)와 key이다. 즉 상세 섹션의 heading이며, 정식 또는 비정식 철자로 쓰인다. 그 밖의 모든 heading은 payload heading이며, 다른 level이나 block quote, list 항목 안에 있는 `<table> row <key>` heading을 포함해, 그 fold가 모든 상세 anchor와 비교된다. 근거: 상세 섹션은 자리로 배정되므로, 다른 곳의 heading은 어느 행도 가리키지 않으며 자기 anchor를 가지는데, viewer는 그것이 상세 anchor와 반복될 때 번호를 매긴다. 상세 heading이 아닌
-  heading H는 F_G(H)와 F_G(A)가 각각의 끝 십진 숫자 run을 뺀 뒤 같으면 상세 heading의 anchor A를
-  가져간다. 두 상세 heading은 anchor가 같을 때에만
-  충돌한다. 근거: 명명된 모든 viewer는 반복된 id에 `-<n>`을 덧붙여 번호 매긴다(GitHub, GitLab, VS Code).
-  그래서 끝 숫자를 뺀 fold를 비교하면 어느 heading이 먼저 왔든 모든 번호 매기기를 다룬다. 그 비용은 상세 heading과
-  끝 숫자만 다른 payload heading도 거절된다는 것이다. 허용되는 예: 한 file의 key `T1`과 `T10`은 둘 다 상세 heading이므로
-  결코 충돌하지 않는다. 거절되는 예: `items row T-1` 상세 heading 옆의 payload heading `items row T`는 거절된다. 두 번째 `items row T`가 `items-row-t-1`로 번호 매겨지기 때문이다. `Notes`는
-  그렇지 않다. 이 검사는 file의 모든 heading — 골격과 payload 모두 — 에 적용한다. file 어디서든, 골격까지 포함해, CommonMark 0.31.2가 읽는 raw HTML에서(code span이나 code block에는 없다) 값이 A인 HTML `id` 또는 `name`을 거절하며, 모두 대소문자를 무시하고 비교한다. 근거: HTML viewer는 `id`와 `name`을 heading의 텍스트와 무관하게 anchor로 읽는다. GitHub은 heading의 id와 raw `id`나 `name`에 모두 `user-content-`를 앞에 붙이므로 둘은 여전히 충돌하며, VS Code는 그것들을 쓰인 그대로 둔다. `{#…}`는 CommonMark와 GFM에서 글자 그대로의 텍스트이며, 어느 기준 viewer도 그것에서 id를 읽지 않는다.
+  setext 밑줄이 뒤따르는 모든 문단이다. 그 문단 전체에서 앞머리의 link reference definition을 뺀 것이 heading이다. 상세 heading도 heading이다. 그 definition은 heading의 일부가 아니다: setext heading은 definition이 남긴 첫 줄에서 시작하고, definition은 heading 앞의 내용이며, definition만 있고 밑줄이 뒤따르면 heading이 아니다. 근거: CommonMark 0.31.2는 문단을 setext heading으로 닫기 전에 그 앞머리의 definition을 먼저 읽으므로(§4.3, §4.7), `[r]: /u`, `people row P1`, `---`는 definition 하나와 heading `people row P1`이며, commonmark.js, cmark-gfm, markdown-it이 그렇게 읽는다. 이 규칙에서 상세 heading은 file의 layout에 있는 한 table의 상세 level — 그 행들의 상세 heading의 level, 행 scope보다 한 단계 얕은 — 에 있는 최상위 heading이며, 그 텍스트가 공백, tab, 그리고 setext heading의 줄 바꿈을 뺀 것으로 그 table의 이름과 `row`(각각 viewer가 하듯 소문자로 만든 뒤 정식 텍스트와 같은 것)와 key이다. 즉 상세 섹션의 heading이며, 정식 또는 비정식 철자로 쓰인다. 그 밖의 모든 heading은 payload heading이며, 다른 level이나 block quote, list 항목 안에 있는 `<table> row <key>` heading을 포함해, 그 slug가 모든 상세 anchor와 비교된다. 근거: 상세 섹션은 자리로 배정되므로, 다른 곳의 heading은 어느 행도 가리키지 않으며 자기 anchor를 가지는데, viewer는 그것이 상세 anchor와 반복될 때 번호를 매긴다. 상세 heading이 아닌
+  heading H는, S_GH, S_VS, S_GL 가운데 한 slug S와 그 slug가 읽는 대로 렌더된 H의 텍스트 T에 대해 S(T)가 A와 같거나,
+  A가 S(T) 뒤에 `-`와 앞자리 0 없이 쓴 십진수 n ≥ 1을 붙인 것이면(번호 규칙) 상세 heading의 anchor A를 가져간다. 두
+  상세 heading은 anchor가 같을 때에만 충돌한다. 근거: 명명된 모든 viewer는 반복된 slug에 1부터 세는 `-<n>`을 덧붙여
+  번호 매기므로, slug가 S(T)인 heading은 어느 heading이 먼저 왔든 A로 번호 매겨질 수 있으며, 다른 번호는 결코 붙지
+  않는다. GitHub은 앞선 id가 가진 번호를 건너뛰고(`a-1`, `a`, `a`는 `a-1`, `a`, `a-2`), slug가 앞선 id인 heading에
+  번호를 매긴다(`a`, `a`, `a-1`은 `a`, `a-1`, `a-1-1`). VS Code의 slug builder는 각 slug를 따로 세므로 id를 되풀이할
+  수 있다(`a-1`, `a`, `a`는 `a-1`, `a`, `a-1`)(slug vector). comrak의 `Anchorizer`도 `-<n>`을 덧붙인다. GitHub은
+  slug가 빈 heading 일부에 anchor를 렌더하지 않는다. 상세 anchor는 비어 있거나 `-`로 시작하지 않는다. 허용되는 예: 한 file의 key `T1`과 `T10`은 둘 다 상세 heading이므로
+  결코 충돌하지 않는다. 상세 heading `items row T` 옆의 payload heading `items row T2`, 그리고 상세 heading
+  `items row T-01`이나 `items row T-0` 옆의 `items row T`도 허용된다. 어느 viewer도 그런 번호를 쓰지 않기 때문이다.
+  거절되는 예: `items row T-1` 상세 heading 옆의 payload heading `items row T`는 거절된다. 두 번째 `items row T`가 `items-row-t-1`로 번호 매겨지기 때문이다. `Notes`는
+  그렇지 않다. 이 검사는 file의 모든 heading — 골격과 payload 모두 — 에 적용한다. file 어디서든, 골격까지 포함해, CommonMark 0.31.2가 읽는 raw HTML에서(code span이나 code block에는 없다) A를 가져가는 HTML `id` 또는 `name`을 거절한다: id나 name은 full default mapping으로 소문자로 바꾼 뒤 A와 같거나 `user-content-` 뒤에 A를 붙인 것과 같으면 같다. VS Code가 fragment를 id와 비교하는 방식이다. `user-content-` 뒤에 A를 붙인 것은 GitHub이 heading의 id를 렌더하는 형태이자 GitLab의 id 형태이며, GitLab과 GitHub은 정확히 비교하므로 소문자로 바꾼 비교가 그것들을 덮는다. 근거: HTML viewer는 `id`와 `name`을 heading의 텍스트와 무관하게 anchor로 읽는다. GitHub은 raw `id`나 `name`을 대소문자까지 그대로 남기고, 값이 정확히 `user-content-`로 시작하지 않으면 그 앞에 `user-content-`를 쓴다(`ITEMS`는 `user-content-ITEMS`, `user-content-x`는 그대로, `User-Content-x`는 `user-content-User-Content-x`). 이는 slug vector와 함께 관측했으며, 따라서 A나 `user-content-` 뒤에 A를 붙인 raw `id`나 `name`은 heading의 id로 렌더된다. VS Code는 그것들을 쓰인 그대로 둔다. 어느 viewer도 id의 대소문자를 소문자로 바꾸는 것 너머로 접지 않으므로 `items-row-ſ1`은 `items-row-s1`이 아니다. `{#…}`는 CommonMark와 GFM에서 글자 그대로의 텍스트이며, 어느 기준 viewer도 그것에서 id를 읽지 않는다.
 - 충돌을 새로 만드는 쓰기는 `CONSTRAINT`이며, anchor를 차지하는 heading이나 id를 쓴 행과 column — `markdown` column의 값, `files` 행의 제목(H1에 대해), 또는 section이나 block heading에 대해서는 그것이 여는 행 scope의, 이름 붙인 `markdown` column이나 자식 table — 에 위치하고, 차지한 anchor의 상세 heading을 밝힌다: 제목 갱신, payload 쓰기, 상세 섹션을 만드는 행
   삽입, key 갱신, 이동, 상세 섹션의 생성. 다만 행에 같은 table의 다른 key와 대소문자를 무시하고 같은 key를 주는 쓰기는
   `DUPLICATE_KEY`이며, 그것이 key 규칙이다([document model](20-document-model.md#keys)). 상세 섹션이 없는 행은 anchor가

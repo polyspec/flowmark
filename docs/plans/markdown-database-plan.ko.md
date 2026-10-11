@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database -->
-<!-- source-sha256: 440886aff643cb8b3223ba6b66a04b724bda6988e59eb581bf5cd966ba0c1e02 -->
+<!-- source-sha256: a51254988e90f206e76ccb35e273526480c1b8a0c021d9487980825e87055f81 -->
 # markdown database 계획
 
 [English](markdown-database-plan.md)
@@ -111,7 +111,7 @@ NULL이 아니며 비어 있을 수 있고, view의 entity table은 둘 다 선�
 - **readability의 기준은 spec이다.** 구조 — block, inline, 무엇이 code인지, 무엇이 heading인지, 무엇이 table인지 — 는
   CommonMark 0.31.2로, table과 task-list 항목은 GFM 0.29로 판단한다: GitHub(cmark-gfm), GitLab, VS Code(markdown-it)가
   구현하는 spec이다. spec은 fragment의 target을 정의하지 않는다. anchor — heading slug와, CommonMark가 code 밖에서 읽는
-  raw HTML의 id와 name — 는 GitHub, GitLab, VS Code로 판단하며(heading에는 F_G fold), 그 근거는 link `[k](file#anchor)`가
+  raw HTML의 id와 name — 는 GitHub, GitLab, VS Code로 판단하며(heading에는 그 slug S_GH, S_VS, S_GL), 그 근거는 link `[k](file#anchor)`가
   그 viewer들에서 풀려야 한다는 것이다. 근거: spec은 이 viewer들이 따르는 고정된 하나의 기준이다. 어느 spec도 따르지 않는
   구현은 list, setext, fence, reference definition, 확장에 대해 자기만의 동작을 가지며 그것은 릴리스와 확장에 따라 바뀐다.
   그것을 따르면 표준이 아니라 한 구현의 일탈을 쫓게 되므로 그런 구현은 기준이 아니다. 어떤 요구도 다른 viewer를 이름 붙이지
@@ -189,16 +189,26 @@ markdown 전용 선언은 모두 dbspec **manifest setting**이며 `markdown <co
 - **상세 heading은 `<h> <table> row <key>`다** — table 이름, 공백 하나, `row`, 공백 하나, key이며 제목 사본은
   결코 아니다 — 그 anchor는 `<table>-row-<소문자 key>`다(`## items row T2`의 anchor는 `items-row-t2`).
   table은 anchor 텍스트에서 첫 `-` 앞이며 table 이름에는 `-`가 없다. 충돌 규칙: 골격과 payload를 가리지 않고 file의 모든 heading — 모든 ATX heading(block-quote나 list-item 표지 뒤의 것을
-  포함)과 fence 밖에서 setext 밑줄이 뒤따르는 모든 문단(그 문단 전체가 heading) — 은, 상세 heading이 아니면서 렌더된 inline 텍스트의
-  fold F_G 아래에서 heading의 F_G와 F_G(A)가 각각의 끝 십진 숫자 run을 뺀 뒤 같을 때, 다른 상세 heading의
-  anchor A와 충돌한다. F_G는 Unicode 범주가 L이나 Nd가 아닌 문자를 모두 지우고, 소문자로 바꾸고, NFKD로 분해하고, 결합
-  기호를 버리며, ASCII 문자와 숫자만 남긴다. F_G는 GitHub이 slug를 만드는 방식의 텍스트를 취한다(link의 target을 뺀 link 텍스트, 강조 표지 제거,
-  code span 내용 유지, entity 해석). F_G는 GitHub, GitLab, VS Code를 다룬다. Pandoc은 주장하지 않는다. 모든
-  번호 매기기를 다루는 근거: 명명된 모든 viewer는 반복된 id에 `-<n>`을 덧붙여 번호 매기므로(GitHub, GitLab, VS Code),
-  끝 숫자를 뺀 fold를 비교하면 어느 heading이 먼저 왔든 모든 번호를 다루며,
-  그 비용은 상세 heading과 끝 숫자만 다른 payload heading의 거절이다. 거절되는 예: `items row T-1` 상세 heading 옆의 payload heading
+  포함)과 fence 밖에서 setext 밑줄이 뒤따르는 모든 문단(그 문단 전체가 heading) — 은, 상세 heading이 아니면서 S_GH,
+  S_VS, S_GL 가운데 한 slug S와 그 slug가 읽는 대로의 렌더된 inline 텍스트(CommonMark 0.31.2가 렌더하는 텍스트)에
+  대해, heading의 S가 A와 같거나 A가 heading의 S 뒤에 `-`와 앞자리 0 없는 십진수 n ≥ 1을 붙인 것일 때, 다른 상세
+  heading의 anchor A와 충돌한다. S_GH는 GitHub의 slug(조건 없는 full mapping으로 소문자로 바꾸고, Unicode 17.0.0의
+  word 문자 — Alphabetic, mark, decimal number, connector punctuation, Join_Control — 와 공백, `-`를 남기며, 각 공백을
+  `-`로 쓴다. image는 텍스트가 아니다), S_VS는 VS Code의 것(trim한 텍스트를 JavaScript의 `toLowerCase`로 소문자로
+  바꾸고, 그 `slugify.ts` 식이 맞추는 문자 — Unicode 13.0.0 범주 No, Pd, Ps, Pe, Pi, Pf, Po, S, Cc, Cf, Co, Cn, Z의 문자
+  가운데 Unicode 13.0.0의 Alphabetic 문자, 공백, `-`가 아닌 것 — 를 지우며, 각 white space를 `-`로 쓴다. image는 그 alt
+  텍스트다), S_GL은 GitLab이 쓰는 comrak 0.56.0의 것(소문자로 바꾸고 Unicode 17.0.0의 letter, mark, number, connector
+  punctuation과 공백, `-`를 남기며, 각 공백을 `-`로 쓴다. image는 그 alt 텍스트다)이다. 줄 바꿈은 S_GH와 S_VS에서
+  아무것도 아니고 S_GL에서 공백이다. S_GH와 S_VS의 근거는 viewer 자신이 렌더하는 id로, 2026-10-11에
+  `make slug-vectors`가 `store/testdata/slug`에 기록했다 — GitHub의 `POST /markdown`(mode `markdown`), 그리고
+  markdown-it 14.3.2 위에서 실행한 VS Code 1.141.0 자신의 `slugify.ts`와 `markdownEngine.ts` — 모든 code point와 구조
+  case에 대해서이며, slug가 그것을 그대로 재현한다. 다시 기록하려면 `make slug-vectors`를 실행한다. 어느 slug도
+  텍스트를 정규화하지 않는다.
+  [canonical format](../spec/10-canonical-format.ko.md#상세-heading과-anchor)이 그 근거와 함께 정한다. Pandoc은
+  주장하지 않는다. 모든 번호 매기기를 다루는 근거: 명명된 모든 viewer는 반복된 slug에 1부터 세는 `-<n>`을 덧붙여
+  번호 매기며, 어느 heading이 먼저 왔든 그렇다. 거절되는 예: `items row T-1` 상세 heading 옆의 payload heading
   `items row T`는 거절된다. 두 번째 `items row T`가 `items-row-t-1`로 번호 매겨지기 때문이다. `Notes`는 그렇지 않다. 두 상세 heading은 anchor가 같을 때에만 충돌한다.
-  CommonMark 0.31.2가 읽는 raw HTML에서(code span이나 code block에는 없다) `id` 또는 `name`이 A와 같은 것(대소문자 무시)도 충돌한다. 충돌을 새로 만드는 쓰기 — 제목 갱신, payload 쓰기, 행 삽입, key 갱신, 이동, 상세 섹션의 생성 — 는 다른 heading을 밝히며 `CONSTRAINT`다. 다만 행에 같은 table의 다른 key와 대소문자를 무시하고 같은 key를 주는 쓰기는 `DUPLICATE_KEY`이며, 그것이 key 규칙이다. 읽기에서는 `format.block`이다. 다만 key가 대소문자만 다른 두 행의 상세 heading
+  CommonMark 0.31.2가 읽는 raw HTML에서(code span이나 code block에는 없다) full mapping으로 소문자로 바꾼 `id` 또는 `name`이 A나 `user-content-` 뒤에 A를 붙인 것과 같은 것도 충돌한다: VS Code는 fragment를 소문자로 바꾼 id와 비교하고, GitHub은 raw id나 name을 대소문자를 남긴 채, 이미 그렇게 시작하지 않으면 앞에 `user-content-`를 붙여 렌더하며, 그것은 그 heading id의 형태다. 충돌을 새로 만드는 쓰기 — 제목 갱신, payload 쓰기, 행 삽입, key 갱신, 이동, 상세 섹션의 생성 — 는 다른 heading을 밝히며 `CONSTRAINT`다. 다만 행에 같은 table의 다른 key와 대소문자를 무시하고 같은 key를 주는 쓰기는 `DUPLICATE_KEY`이며, 그것이 key 규칙이다. 읽기에서는 `format.block`이다. 다만 key가 대소문자만 다른 두 행의 상세 heading
   사이는 `key.duplicate`뿐이며(쓰기에서는 `DUPLICATE_KEY`다). 공백이 더 있거나 `row`의 대소문자가 다른 상세 heading은
   `format.noncanonical`이며, `flowmark canon`이 고친다. 블록의 어떤 행도 가리키지 않는 key의 상세 섹션은 `format.block`이다. 같은 행의 두 번째 상세 섹션도 표기와 무관하게 `format.block`이다: 그 본문과 섹션을 배정할 수 없기 때문이다.
 - `markdown` column은 모든 저장에서 언제나 행 scope의 섹션이다 — field나 cell이 아니다.

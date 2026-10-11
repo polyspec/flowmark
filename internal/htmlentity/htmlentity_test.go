@@ -55,8 +55,9 @@ func TestReference(t *testing.T) {
 		{"hexadecimal of six digits", "&#x10FFFF;", "\U0010FFFF", 10},
 		{"hexadecimal of seven digits", "&#x1234567;", "", 0},
 		{"zero is replaced", "&#0;", "�", 4},
-		{"C1 control is replaced by windows-1252", "&#x80;", "€", 6},
-		{"C1 control 0x81 is not replaced", "&#x81;", "\u0081", 6},
+		{"C1 control is its code point, not windows-1252", "&#x80;", "\u0080", 6},
+		{"C1 control 0x83 is its code point", "&#131;", "\u0083", 6},
+		{"C1 control 0x81 is its code point", "&#x81;", "\u0081", 6},
 		{"surrogate is replaced", "&#xD800;", "�", 8},
 		{"code point above U+10FFFF is replaced", "&#x110000;", "�", 10},
 		{"empty numeric", "&#;", "", 0},
@@ -82,6 +83,8 @@ func TestExpand(t *testing.T) {
 		{"&eacute;t&eacute;", "été"},
 		{"&nope; &#x41;", "&nope; A"},
 		{"&amp", "&amp"},
+		{"&#x80;&#x83;&#x81;", "€ƒ\u0081"},
+		{"&#0;&#xD800;", "��"},
 	}
 	for _, c := range cases {
 		if got := Expand(c[0]); got != c[1] {
