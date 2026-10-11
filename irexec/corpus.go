@@ -293,14 +293,7 @@ func columnOf(tb *catalog.Table, col string) dbspec.Column {
 }
 
 // parentColumn returns the self foreign key "parent" of tb, "" when it has none.
-func parentColumn(tb *catalog.Table) string {
-	for _, fk := range tb.ForeignKeys {
-		if fk.Table == tb.Name && len(fk.Columns) == 1 && fk.Columns[0] == "parent" {
-			return "parent"
-		}
-	}
-	return ""
-}
+func parentColumn(tb *catalog.Table) string { return tb.Hierarchy() }
 
 // rows returns the rows of table in storage order (spec 20 Order): the pre-order of
 // the tree of parents, each row's children in sibling order, and the rows of

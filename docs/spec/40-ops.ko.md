@@ -1,5 +1,5 @@
 <!-- doc-id: spec-ops -->
-<!-- source-sha256: 38e0e5c3912eed43031484c2ab78e662295e06c8dcd2a07de9cfa5678410e681 -->
+<!-- source-sha256: 1dfed238005dc50abcb5e9c9d71130a324d960eff1d919bde9f7ef2340d951c1 -->
 # Operations
 
 [English](40-ops.md)
@@ -120,8 +120,8 @@
 - `key`가 가리키는 행에 대한 operation이 어떤 행에도 맞지 않으면 — `row.get`, 또는 아무 행에도 영향이
   없는 쓰기 — table과 key를 밝히며 한 행 읽기가 아무것도 맞추지 못했을 때의 orm code인 `NO_ROWS`다.
   근거: 이름을 준 행에 대한 쓰기가 아무것도 바꾸지 않으면 조용한 누락이다.
-- 알 수 없는 `operation`, 빠진 member, operation이 받지 않는 member, object가 아닌 `values`는 그것을
-  밝히며 `CONFIG`다. catalog가 선언하지 않은 table이나 column은 요청의 `ENTITY_UNKNOWN`이나
+- 알 수 없는 `operation`, 빠진 member, operation이 받지 않는 member, object가 아닌 `values`, 그리고
+  `state`가 주는 상태 column을 대입하는 `transition`의 `values`는 그것을 밝히며 `CONFIG`다. catalog가 선언하지 않은 table이나 column은 요청의 `ENTITY_UNKNOWN`이나
   `COLUMN_UNKNOWN`이다.
 - view operation — 저장된 filter와 sort를 통한 view의 행 — 은 `T12.3-1`을 기다린다: view table을
   선언하는 setting이 없고, 저장된 filter는 그 parameter를 둘 곳이 없다. 그때까지 view 행은 다른 행과

@@ -474,14 +474,7 @@ func orderValue(r *store.Row, column string) (int64, bool) {
 
 // parentColumn returns the self foreign key that holds a row's parent, "" when the
 // table has none.
-func parentColumn(tb *catalog.Table) string {
-	for _, fk := range tb.ForeignKeys {
-		if fk.Table == tb.Name && len(fk.Columns) == 1 && fk.Columns[0] == "parent" {
-			return "parent"
-		}
-	}
-	return ""
-}
+func parentColumn(tb *catalog.Table) string { return tb.Hierarchy() }
 
 // fkTable returns the table that the one-column foreign key on col references, "".
 func fkTable(tb *catalog.Table, col string) string {
