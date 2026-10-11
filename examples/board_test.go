@@ -91,7 +91,7 @@ func TestBoardVariants(t *testing.T) {
 func boardPage(t *testing.T, kind catalog.StorageKind, root string) {
 	t.Helper()
 	files := snapshot(t, root)
-	post := files["posts/P3.flowmark.md"]
+	post := files["posts/2026-10/P3.flowmark.md"]
 	if !strings.HasPrefix(post, "# Release notes, week 41\n") {
 		t.Errorf("%s: the post P3 does not open with its title:\n%s", root, post)
 	}
@@ -104,7 +104,7 @@ func boardPage(t *testing.T, kind catalog.StorageKind, root string) {
 		}
 	case catalog.StorageFiles:
 		for _, key := range []string{"C5", "C6", "C7"} {
-			if c := files["comments/"+key+".flowmark.md"]; !strings.Contains(c, "../posts/P3.flowmark.md") {
+			if c := files["comments/"+key+".flowmark.md"]; !strings.Contains(c, "../posts/2026-10/P3.flowmark.md") {
 				t.Errorf("%s: the comment %s does not link to its post:\n%s", root, key, c)
 			}
 		}

@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database-checklist -->
-<!-- source-sha256: 860127517144783c168c9e6f6f118502d343ab9af7b19f8f06f2bc2ebf1f9c43 -->
+<!-- source-sha256: 9c17c93a14ff177f1c70f1fa139b9ba7b5a19aa6cc52a68addd95c2f73fdd328 -->
 # markdown database checklist
 
 ## T12 markdown database
@@ -125,7 +125,9 @@
 - [o] T12.11 하나의 dataset을 세 저장 방식으로 둔 demo와 계획의 하드코딩 목록 0 (T12.10 선행)
 - [o] T12.11.1 board 예제: 댓글과 답글을 가진 post를 block과 files 두 변형으로, engine을 통해 구동한다 (T12.10 선행)
   - 완료 기준: engine을 통해 post를 만들고, 댓글과 답글을 달고, 고치고 지우면 두 변형에서 같은 행을 다시 읽으며, 두 corpus가 P1/P2로 round-trip한다.
-- [ ] T12.11.2 board 앱: hyper(페이지), crudui(form, 목록, 검증)와 `markdown://` 위의 orm으로 만든 board를 `examples/board`에서 hyper의 PHP, Node.js, Python server 위에서 실행한다 (T12.9, T12.11.1, orm `T64`, `T65`, `T67` 선행)
+- [o] T12.11.2 hyper PHP 서버 위의 board 앱: hyper(페이지)와 `markdown://` 위의 orm으로 만든 board를 `examples/board/web`에 두며, 글 1000개를 1월부터 10월까지 달마다 100개씩 나눈다(T12.9, T12.11.1, T12.1-35, orm `T64` 선행). 상태: `web/`은 hyper의 board 예제에서 data 계층을 corpus catalog로 생성한 orm model 위의 `src/Posts.php`로 바꾼 것이다. 두 board corpus 모두 `posts`는 `store files shard created month`이고, `examples/board/seed`는 달마다 원하는 수의 글을 엔진으로 쓴다. 글 1000개에서 PHP 내장 서버와 `flowmark serve`로 HTTP로 잰 값: 글 열 개의 페이지 23~55 ms, 글 하나 23 ms이고, 새 글(303과 목록 맨 위의 새 글)과 빈 form(422)은 hyper 예제와 같게 답하며 없는 글은 404다. data 계층만으로는 한 페이지 8 ms, 새 글 48 ms다. Node.js 변형과 crudui의 form, 목록, 검증은 T12.11.2-1과 T12.11.2-2이고, hyper의 Python 서버는 이 일의 범위 밖이다
+- [ ] T12.11.2-1 hyper Node.js 서버 위의 board 앱: 같은 애플리케이션을 orm의 TypeScript client와 `markdown://` 위에 둔다 (T12.11.2, orm `T67` 선행)
+- [ ] T12.11.2-2 crudui의 board form, 목록, 검증: crudui는 계약과 설정만 있고 code가 없으므로 그 code를 기다린다 (T12.11.2와 crudui library 선행)
   - 완료 기준: 각 server에서 form을 통해 post를 만들고, 댓글과 답글을 달고, 고치고 지우면 같은 corpus file이 바뀌며, 모든 페이지가 같은 행을 그리고, list와 post 페이지의 screenshot이 캡처된다.
 - [ ] T12.12 pseudo-version 대신 orm release를 요구한다: T12.11이 끝나면 flowmark의 go.mod는 `T61`과 `T62`를 담은 released orm tag를 요구한다 (T12.11 선행, orm release 항목 선행)
   - 완료 기준: go.mod가 tag된 orm 버전을 요구하고, `go build ./...`와 `go test ./...`가 통과한다.

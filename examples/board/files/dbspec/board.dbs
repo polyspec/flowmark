@@ -22,7 +22,7 @@ table posts {
   foreign key fk_posts_author (author) references people (id) on delete restrict on update restrict
   settings {
     key_prefix 'P'
-    store files
+    store files shard created month
     title title
     body body
     markdown body

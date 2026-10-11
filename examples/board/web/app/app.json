@@ -1,0 +1,25 @@
+{
+  "layout": "layout.tpl",
+  "title": "title.tpl",
+  "regions": [
+    { "name": "left", "template": "left.tpl", "uses": ["posts", "path"] },
+    { "name": "content", "page": true }
+  ],
+  "routes": [
+    { "name": "home", "path": "/", "title": "홈", "template": "home.tpl" },
+    {
+      "name": "board.list", "path": "/board", "title": "게시판", "template": "board/list.tpl",
+      "regions": [
+        { "name": "notice", "template": "board/notice.tpl", "keep": { "notice.closed": "server" } },
+        { "name": "rows", "template": "board/rows.tpl", "keep": { "sort": "localStorage", "compact": "sessionStorage" } }
+      ]
+    },
+    { "name": "board.create", "path": "/board/create", "title": "글쓰기", "template": "board/create.tpl", "post": true },
+    {
+      "name": "board.show", "path": "/board/{id}", "title": "게시글", "template": "board/show.tpl",
+      "regions": [
+        { "name": "reader", "template": "board/reader.tpl", "keep": { "large": "cookie" } }
+      ]
+    }
+  ]
+}
