@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
@@ -97,15 +98,35 @@ func cpForm(cp rune, raw bool) string {
 	return string(cp)
 }
 
-// viewerSlug is a viewer's slug of a heading's rendered text, as the collision rule
-// reads it: ghSlug, vsSlug or glSlug.
-type viewerSlug func(inlineResult) string
+// viewerRefs are the definitions of a file in the reading of each viewer.
+type viewerRefs struct {
+	gh, vs, gl linkRefs
+}
+
+// viewerSlug is a viewer's slug of a heading's inline content s, as the collision rule
+// reads it with the definitions refs: ghSlug, vsSlug or glSlug.
+type viewerSlug func(s string, refs viewerRefs) string
+
+// ghSlug is S_GH of a heading's content when nothing ends its element early: without
+// the text of images, a line break read as nothing, a tag of the tagfilter as text.
+func ghSlug(s string, refs viewerRefs) string {
+	return slugGH(strings.Join(inlineText(s, refs.gh).text, ""))
+}
+
+// vsSlug is S_VS of a heading's content: with the alt text of images and VS Code's math,
+// a line break read as nothing.
+func vsSlug(s string, refs viewerRefs) string { return slugVS(strings.Join(vsText(s, refs.vs), "")) }
+
+// glSlug is S_GL of a heading's content: with the alt text of images and GitLab's math,
+// footnotes and wikilinks, a line break read as a space.
+func glSlug(s string, refs viewerRefs) string { return slugGL(strings.Join(glText(s, refs.gl), " ")) }
 
 // checkCodePoints requires slug to give, for every code point of the file in each of
 // its forms, the heading -c- the id -t-, t the code point's recorded id.
 func checkCodePoints(t *testing.T, file string, slug viewerSlug) {
 	var bad []string
 	n := 0
+	refs := testRefs()
 	for _, v := range readCodePoints(t, file) {
 		for cp := v.lo; cp <= v.hi; cp++ {
 			if cp >= 0xD800 && cp <= 0xDFFF {
@@ -120,7 +141,7 @@ func checkCodePoints(t *testing.T, file string, slug viewerSlug) {
 				}
 				_, content := atxContent("-" + cpForm(cp, form.raw) + "-")
 				want := "-" + cpID(t, cp, form.spec) + "-"
-				if got := slug(viewerText(content, linkRefs{})); got != want {
+				if got := slug(content, refs); got != want {
 					n++
 					if len(bad) < 12 {
 						bad = append(bad, fmt.Sprintf("%U raw=%v: %+q, want %+q", cp, form.raw, got, want))
@@ -149,17 +170,26 @@ func TestGitLabCodePoints(t *testing.T) {
 	checkCodePoints(t, "testdata/slug/gitlab-codepoints.txt", glSlug)
 }
 
-// headingFile is a heading file: the structural cases, each a document and the id of
-// each of its headings in order, null where the viewer renders no anchor; and, for
-// GitHub, the id and name attributes it renders for raw HTML.
+// headingCase is a structural case: a document and the id of each of its headings in the
+// order the viewer renders them, null where the viewer renders no anchor.
+type headingCase struct {
+	Name     string    `json:"name"`
+	Markdown string    `json:"markdown"`
+	IDs      []*string `json:"ids"`
+}
+
+// headingFile is a heading file: the structural cases; for GitHub, the id and name
+// attributes it renders for raw HTML; for GitLab, the cases of a snippet, rendered with
+// the heading slug prefix GitLab gives a snippet's file.
 type headingFile struct {
-	Viewer   string `json:"viewer"`
-	Recorded string `json:"recorded"`
-	Cases    []struct {
-		Name     string    `json:"name"`
-		Markdown string    `json:"markdown"`
-		IDs      []*string `json:"ids"`
-	} `json:"cases"`
+	Viewer   string        `json:"viewer"`
+	Recorded string        `json:"recorded"`
+	Cases    []headingCase `json:"cases"`
+	Snippet  struct {
+		File   string        `json:"file"`
+		Prefix string        `json:"prefix"`
+		Cases  []headingCase `json:"cases"`
+	} `json:"snippet"`
 	Attributes []struct {
 		Name     string `json:"name"`
 		Markdown string `json:"markdown"`
@@ -183,67 +213,131 @@ func readHeadingFile(t *testing.T, file string) headingFile {
 	return h
 }
 
-// headingReadings returns the rendered text of every heading of a document, in order,
-// as the collision rule reads it.
-func headingReadings(lines []string) []inlineResult {
-	sc := scanHeadings(lines, 0)
-	g := linkDefs(sc.blocks)
-	setext := setextStarts(sc.blocks)
-	var out []inlineResult
-	for _, h := range sc.all {
-		out = append(out, viewerText(headingElement(lines, h, setext).text, g))
+// viewer names the viewer whose reading a test reads: its heading file's viewer field.
+type viewer string
+
+const (
+	gitHub viewer = "GitHub"
+	vsCode viewer = "VS Code"
+	gitLab viewer = "GitLab"
+)
+
+// viewerSlugs returns the slug of every heading that the viewer anchors in a document,
+// as the collision rule reads it, in the order the viewer renders them: the viewer's
+// reading of the blocks (readViewers), without the headings of a footnote definition it
+// drops, and those of one it renders at the end after the others, by the definitions'
+// numbers.
+func viewerSlugs(lines []string, v viewer) []string {
+	r := readViewers(lines, scanHeadings(lines, 0))
+	rd := map[viewer]viewerReading{gitHub: r.gh, vsCode: r.vs, gitLab: r.gl}[v]
+	setext := setextStarts(rd.sc.blocks)
+	type placed struct {
+		moved, at int
+		slug      string
 	}
-	return out
+	var out []placed
+	for _, h := range rd.sc.all {
+		moved, shown := 0, true
+		if h.note != nil && rd.refs.notes != nil {
+			moved, shown = rd.refs.notes.home(h.note)
+		}
+		if !shown {
+			continue
+		}
+		text := headingElement(lines, h, setext).text
+		refs := viewerRefs{gh: rd.refs, vs: rd.refs, gl: rd.refs}
+		slug := map[viewer]viewerSlug{gitHub: ghSlug, vsCode: vsSlug, gitLab: glSlug}[v]
+		out = append(out, placed{moved, h.at, slug(text, refs)})
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if (out[i].moved > 0) != (out[j].moved > 0) {
+			return out[j].moved > 0
+		}
+		return out[i].moved < out[j].moved
+	})
+	slugs := make([]string, len(out))
+	for i, p := range out {
+		slugs[i] = p.slug
+	}
+	return slugs
 }
 
-// checkHeadings requires slug to reproduce the recorded id of every heading of the
-// structural cases: a heading that has no anchor has the empty slug; an id is the
-// slug or the slug numbered by the numbering rule (takesAnchor); and the id of a
-// heading whose slug no earlier heading had as its slug or its id is the slug.
-func checkHeadings(t *testing.T, file string, slug viewerSlug) {
+// checkIDs requires the slugs to reproduce the recorded ids, each without prefix: a
+// heading that has no anchor has the empty slug; an id is the slug or the slug numbered
+// by the numbering rule (takesAnchor); and the id of a heading whose slug no earlier
+// heading had as its slug or its id is the slug.
+func checkIDs(t *testing.T, v viewer, slugs []string, ids []*string, prefix string) {
+	t.Helper()
+	if len(slugs) != len(ids) {
+		t.Fatalf("%d headings; %s recorded %d", len(slugs), v, len(ids))
+	}
+	seen := map[string]bool{}
+	for i, s := range slugs {
+		id := ids[i]
+		if id != nil {
+			rest, ok := strings.CutPrefix(*id, prefix)
+			if !ok {
+				t.Fatalf("heading %d: %s renders %q, without the prefix %q", i+1, v, *id, prefix)
+			}
+			id = &rest
+		}
+		switch {
+		case id == nil:
+			if s != "" {
+				t.Fatalf("heading %d: slug %q; %s renders no anchor", i+1, s, v)
+			}
+		case !seen[s] && *id != s:
+			t.Fatalf("heading %d: slug %q; %s renders %q", i+1, s, v, *id)
+		case !takesAnchor(s, *id):
+			t.Fatalf("heading %d: slug %q does not take %s's id %q", i+1, s, v, *id)
+		}
+		seen[s] = true
+		if id != nil {
+			seen[*id] = true
+		}
+	}
+}
+
+// checkHeadings requires the viewer's slug to reproduce the recorded id of every heading
+// of the structural cases (checkIDs).
+func checkHeadings(t *testing.T, file string) {
 	h := readHeadingFile(t, file)
 	for _, c := range h.Cases {
 		t.Run(c.Name, func(t *testing.T) {
-			reads := headingReadings(strings.Split(c.Markdown, "\n"))
-			if len(reads) != len(c.IDs) {
-				t.Fatalf("%d headings; %s recorded %d", len(reads), h.Viewer, len(c.IDs))
-			}
-			seen := map[string]bool{}
-			for i, r := range reads {
-				s := slug(r)
-				id := c.IDs[i]
-				switch {
-				case id == nil:
-					if s != "" {
-						t.Fatalf("heading %d: slug %q; %s renders no anchor", i+1, s, h.Viewer)
-					}
-				case !seen[s] && *id != s:
-					t.Fatalf("heading %d: slug %q; %s renders %q", i+1, s, h.Viewer, *id)
-				case !takesAnchor(s, *id):
-					t.Fatalf("heading %d: slug %q does not take %s's id %q", i+1, s, h.Viewer, *id)
-				}
-				seen[s] = true
-				if id != nil {
-					seen[*id] = true
-				}
-			}
+			checkIDs(t, viewer(h.Viewer), viewerSlugs(strings.Split(c.Markdown, "\n"), viewer(h.Viewer)), c.IDs, "")
 		})
 	}
 }
 
 // TestGitHubHeadings requires S_GH to reproduce GitHub's structural cases.
 func TestGitHubHeadings(t *testing.T) {
-	checkHeadings(t, "testdata/slug/github-headings.json", ghSlug)
+	checkHeadings(t, "testdata/slug/github-headings.json")
 }
 
 // TestVSCodeHeadings requires S_VS to reproduce VS Code's structural cases.
 func TestVSCodeHeadings(t *testing.T) {
-	checkHeadings(t, "testdata/slug/vscode-headings.json", vsSlug)
+	checkHeadings(t, "testdata/slug/vscode-headings.json")
 }
 
 // TestGitLabHeadings requires S_GL to reproduce GitLab's structural cases.
 func TestGitLabHeadings(t *testing.T) {
-	checkHeadings(t, "testdata/slug/gitlab-headings.json", glSlug)
+	checkHeadings(t, "testdata/slug/gitlab-headings.json")
+}
+
+// TestGitLabSnippetPrefix requires GitLab's heading slug prefix of a snippet to stand
+// before the id of every heading alike, numbered by the slug without it, so that headings
+// take one another's ids in a snippet exactly as in a repository file: the collision rule
+// reads a corpus file, which GitLab renders without the prefix (spec 10).
+func TestGitLabSnippetPrefix(t *testing.T) {
+	h := readHeadingFile(t, "testdata/slug/gitlab-headings.json")
+	if h.Snippet.Prefix == "" || len(h.Snippet.Cases) == 0 {
+		t.Fatal("no snippet cases recorded")
+	}
+	for _, c := range h.Snippet.Cases {
+		t.Run(c.Name, func(t *testing.T) {
+			checkIDs(t, gitLab, viewerSlugs(strings.Split(c.Markdown, "\n"), gitLab), c.IDs, h.Snippet.Prefix)
+		})
+	}
 }
 
 // TestGitHubAttributes requires the collision rule to refuse every raw HTML id or name

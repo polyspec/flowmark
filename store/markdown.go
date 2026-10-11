@@ -16,8 +16,42 @@ import (
 type heading struct {
 	at, last, level int
 	text            string
-	tab             bool // the separator after the hashes is a tab, a noncanonical spelling
-	nested          bool // the heading is inside a block quote or a list item
+	tab             bool     // the separator after the hashes is a tab, a noncanonical spelling
+	nested          bool     // the heading is inside a block quote, a list item or a footnote definition
+	note            *noteDef // the innermost footnote definition that holds the heading, under blockSyntax.notes
+}
+
+// noteDef is a footnote definition that a reading with blockSyntax.notes opens: its label
+// as written, and the footnote definition that holds it.
+type noteDef struct {
+	label  string
+	parent *noteDef
+}
+
+// outermost returns the footnote definition that holds d and is held by none.
+func (d *noteDef) outermost() *noteDef {
+	for d.parent != nil {
+		d = d.parent
+	}
+	return d
+}
+
+// blockSyntax is the block syntax that a viewer reads besides CommonMark 0.31.2, which
+// changes the lines that are headings (spec 10, Detail headings and anchors). The zero
+// value reads CommonMark alone.
+type blockSyntax struct {
+	// notes reads the footnote definitions of cmark-gfm and comrak 0.56.0, as GitHub and
+	// GitLab render with footnotes: a line that begins, after at most three spaces, with
+	// "[^", a label of no ']', space, tab or line ending, and "]:", then any spaces and
+	// tabs, opens a container, also where it interrupts a paragraph; the container goes on
+	// over a line indented four columns or more, whose first four it takes, and over a
+	// line that is empty, and its paragraph lazily over any line that opens no other block.
+	notes bool
+	// math reads the math_block rule of @vscode/markdown-it-katex 1.1.2, as VS Code renders
+	// with its markdown-math extension (mathOpens): a line that begins, after at most three
+	// spaces, with "$$" opens a block that takes in every line up to the next that holds
+	// "$$", or to the end of its container, whose next line it also takes in.
+	math bool
 }
 
 // textCol returns the 1-based column, in code points, of the first character of the
@@ -169,6 +203,7 @@ type block struct {
 	quote  bool
 	indent int
 	empty  bool
+	note   *noteDef // a footnote definition, under blockSyntax.notes
 }
 
 // leafKind is the leaf block that is open in the innermost container.
@@ -179,6 +214,7 @@ const (
 	leafPara
 	leafFence
 	leafHTML
+	leafMath // a math block, under blockSyntax.math
 )
 
 // scanner reads the block structure of lines one at a time, as CommonMark's
@@ -187,12 +223,17 @@ const (
 // a container or not, and a top-level heading is the one a section boundary is;
 // a fence holds no heading, and an HTML block holds no heading either.
 type scanner struct {
+	syn   blockSyntax
 	stack []block
 	leaf  leafKind
-	fence fenceMark // the open fence, when leaf is leafFence
-	html  int       // the kind of the open HTML block, when leaf is leafHTML
-	units []unit    // the paragraphs and HTML blocks read so far
-	cur   int       // the index in units of the open paragraph or HTML block
+	fence fenceMark  // the open fence, when leaf is leafFence
+	html  int        // the kind of the open HTML block, when leaf is leafHTML
+	units []unit     // the paragraphs and HTML blocks read so far
+	cur   int        // the index in units of the open paragraph or HTML block
+	notes []*noteDef // the footnote definitions read so far
+	// blank is whether the last line read was blank inside every container it continued,
+	// which ends a block quote before a lazy line under blockSyntax.math.
+	blank bool
 }
 
 // unit is the text of a paragraph or of an HTML block: its lines without the markers
@@ -203,6 +244,7 @@ type unit struct {
 	html    bool
 	lines   []string
 	heading bool
+	note    *noteDef // the innermost footnote definition that holds it, under blockSyntax.notes
 }
 
 // scan is the block structure of a run of lines from some index on.
@@ -216,14 +258,20 @@ type scan struct {
 	// such a block takes in everything after it, so a value that leaves one open
 	// is followed by no element of its own.
 	open bool
+	// notes is every footnote definition, in the order they open, under blockSyntax.notes.
+	notes []*noteDef
 }
 
 // scanHeadings reads the block structure of lines from index from on. A setext
 // heading is the paragraph before its underline after the link reference definitions
 // at its start; a fence or an HTML block hides the lines it holds, headings included.
-func scanHeadings(lines []string, from int) scan {
+func scanHeadings(lines []string, from int) scan { return scanWith(lines, from, blockSyntax{}) }
+
+// scanWith reads the block structure of lines from index from on, with the block
+// syntax syn besides CommonMark's.
+func scanWith(lines []string, from int, syn blockSyntax) scan {
 	var sc scan
-	var s scanner
+	s := scanner{syn: syn}
 	for i := from; i < len(lines); i++ {
 		if h, ok := s.feed(lines, i); ok {
 			sc.all = append(sc.all, h)
@@ -239,7 +287,18 @@ func scanHeadings(lines []string, from int) scan {
 		}
 	}
 	sc.open = len(s.stack) == 0 && (s.leaf == leafFence || s.leaf == leafHTML)
+	sc.notes = s.notes
 	return sc
+}
+
+// innerNote returns the innermost footnote definition open, or nil.
+func (s *scanner) innerNote() *noteDef {
+	for k := len(s.stack) - 1; k >= 0; k-- {
+		if s.stack[k].note != nil {
+			return s.stack[k].note
+		}
+	}
+	return nil
 }
 
 // addLine adds the text of a line to the open paragraph or HTML block.
@@ -276,7 +335,7 @@ func (s *scanner) feed(lines []string, i int) (heading, bool) {
 	rest, col := expandLead(lines[i], 0), 0
 	m := 0
 	for ; m < len(s.stack); m++ {
-		r, c, ok := s.stack[m].match(rest, col)
+		r, c, ok := s.stack[m].match(rest, col, lines[i])
 		if !ok {
 			break
 		}
@@ -287,16 +346,27 @@ func (s *scanner) feed(lines []string, i int) (heading, bool) {
 			s.stack[k].empty = false
 		}
 	}
+	blank := s.blank
+	s.blank = m == len(s.stack) && isBlank(rest)
 	if m < len(s.stack) {
 		// Only a paragraph continues lazily into a container that did not match.
-		if s.leaf == leafPara && lazyText(rest) {
+		if s.leaf == leafPara && s.syn.lazyText(rest) {
 			s.addLine(rest)
+			return heading{}, false
+		}
+		if s.leaf == leafMath {
+			s.mathEnd(m, rest, blank)
 			return heading{}, false
 		}
 		s.stack = s.stack[:m]
 		s.leaf = leafNone
 	}
 	switch s.leaf {
+	case leafMath:
+		if strings.Contains(rest, "$$") {
+			s.leaf = leafNone
+		}
+		return heading{}, false
 	case leafFence:
 		if closesFence(rest, s.fence) {
 			s.leaf = leafNone
@@ -315,6 +385,73 @@ func (s *scanner) feed(lines []string, i int) (heading, bool) {
 		return heading{}, false
 	}
 	return s.start(lines, i, rest, col)
+}
+
+// mathEnd reads a line, rest, on which the containers from the m-th on do not continue
+// while a math block is open, as markdown-it-katex 1.1.2's math_block reads it inside
+// markdown-it's containers. A block quote takes the line in lazily when the quote's last
+// line was not blank and the line opens no block that ends a quote: the line is then a
+// line of the math block. Otherwise the container ends before the line, and the math
+// block takes the line in all the same — the rule sets state.line one past the line at
+// which it stops — so it ends there: a block quote closes with what it holds, while a
+// list item, which a line indented less than its content ends, stays open for the lines
+// after.
+func (s *scanner) mathEnd(m int, rest string, blank bool) {
+	if s.stack[m].quote && !blank && s.syn.lazyText(rest) {
+		if strings.Contains(rest, "$$") {
+			s.leaf = leafNone
+		}
+		return
+	}
+	s.leaf = leafNone
+	if s.stack[m].quote {
+		s.stack = s.stack[:m]
+	} else {
+		s.stack = s.stack[:m+1]
+	}
+}
+
+// mathOpens reads the line rest, which is indented less than four columns, as
+// math_block of @vscode/markdown-it-katex 1.1.2 does: it opens a math block when it
+// begins with "$$", after its indent, and the text after that holds no second "$$" past
+// one; the block is that line alone when the text after the "$$" holds one "$$", at its
+// end. A line whose text after the first "$$" holds two or more opens none.
+func mathOpens(rest string) (open, oneLine bool) {
+	t := rest[indentOf(rest):]
+	if !strings.HasPrefix(t, "$$") {
+		return false, false
+	}
+	first := t[2:]
+	switch n := strings.Count(first, "$$"); {
+	case n > 1:
+		return false, false
+	case n == 1 && strings.Index(first, "$$") == len(first)-2:
+		return true, true
+	}
+	return true, false
+}
+
+// noteStart reads the start of a footnote definition at the start of s, which is
+// indented less than four columns (blockSyntax.notes): it returns the length of the
+// marker, the spaces and tabs after it included, and the label.
+func noteStart(s string) (int, string, bool) {
+	p := indentOf(s)
+	if !strings.HasPrefix(s[p:], "[^") {
+		return 0, "", false
+	}
+	q := p + 2
+	for q < len(s) && s[q] != ']' && s[q] != ' ' && s[q] != '\t' && s[q] != '\r' && s[q] != '\n' {
+		q++
+	}
+	if q == p+2 || q+1 >= len(s) || s[q] != ']' || s[q+1] != ':' {
+		return 0, "", false
+	}
+	label := s[p+2 : q]
+	q += 2
+	for q < len(s) && (s[q] == ' ' || s[q] == '\t') {
+		q++
+	}
+	return q, label, true
 }
 
 // start reads the block starts of a line that no leaf block takes, from the text
@@ -347,22 +484,31 @@ func (s *scanner) start(lines []string, i int, rest string, col int) (heading, b
 				if k := textStart(u.lines); k < len(u.lines) {
 					u.heading = true
 					s.leaf = leafNone
-					return heading{at: u.at + k, last: i, level: level, text: paraText(u.lines[k:]), nested: !top}, true
+					return heading{at: u.at + k, last: i, level: level, text: paraText(u.lines[k:]), nested: !top, note: u.note}, true
 				}
 			}
 		}
 		if level, text, tab, ok := headingOf(rest); ok {
 			s.leaf = leafNone
-			return heading{at: i, last: i, level: level, text: text, tab: tab, nested: !top}, true
+			return heading{at: i, last: i, level: level, text: text, tab: tab, nested: !top, note: s.innerNote()}, true
 		}
 		if f, ok := fenceOpenAt(rest); ok {
 			s.leaf, s.fence = leafFence, f
 			return heading{}, false
 		}
+		if s.syn.math {
+			if open, oneLine := mathOpens(rest); open {
+				s.leaf = leafMath
+				if oneLine {
+					s.leaf = leafNone
+				}
+				return heading{}, false
+			}
+		}
 		if k := htmlStart(rest); k != 0 && (k != 7 || s.leaf != leafPara) {
 			s.leaf = leafNone
 			s.cur = len(s.units)
-			s.units = append(s.units, unit{at: i, html: true, lines: []string{rest}})
+			s.units = append(s.units, unit{at: i, html: true, lines: []string{rest}, note: s.innerNote()})
 			if !htmlEnds(k, rest) {
 				s.leaf, s.html = leafHTML, k
 			}
@@ -380,6 +526,17 @@ func (s *scanner) start(lines []string, i int, rest string, col int) (heading, b
 			top = false
 			continue
 		}
+		if s.syn.notes {
+			if n, label, ok := noteStart(rest); ok {
+				d := &noteDef{label: label, parent: s.innerNote()}
+				s.notes = append(s.notes, d)
+				s.leaf = leafNone
+				s.stack = append(s.stack, block{note: d})
+				rest, col = rest[n:], col+n
+				top = false
+				continue
+			}
+		}
 		if it, ok := listStart(rest, col); ok && (s.leaf != leafPara || interruptsPara(it)) {
 			s.leaf = leafNone
 			s.stack = append(s.stack, block{indent: it.indent, empty: it.empty})
@@ -389,7 +546,7 @@ func (s *scanner) start(lines []string, i int, rest string, col int) (heading, b
 		}
 		if s.leaf == leafNone {
 			s.cur = len(s.units)
-			s.units = append(s.units, unit{at: i, lines: []string{rest}})
+			s.units = append(s.units, unit{at: i, lines: []string{rest}, note: s.innerNote()})
 			s.leaf = leafPara
 		} else {
 			s.addLine(rest)
@@ -398,11 +555,23 @@ func (s *scanner) start(lines []string, i int, rest string, col int) (heading, b
 	}
 }
 
-// match reports whether the container continues on a line whose text is s, at
-// column col, and returns the text that the container passes on. A block quote
-// continues on a line that opens with its marker; a list item continues on a line
-// indented at least as far as its content, and on a blank line unless it is empty.
-func (b block) match(s string, col int) (string, int, bool) {
+// match reports whether the container continues on the line full, whose text is s at
+// column col after the containers outside this one, and returns the text that the
+// container passes on. A block quote continues on a line that opens with its marker; a
+// list item continues on a line indented at least as far as its content, and on a blank
+// line unless it is empty; a footnote definition continues on a line indented four
+// columns or more, passing on the text after them, and on a line that is empty as a
+// whole, as cmark-gfm's and comrak's parse_footnote_definition_block_prefix read it.
+func (b block) match(s string, col int, full string) (string, int, bool) {
+	if b.note != nil {
+		switch {
+		case full == "":
+			return s, col, true
+		case indentOf(s) >= 4:
+			return s[4:], col + 4, true
+		}
+		return s, col, false
+	}
 	if b.quote {
 		if !isQuoteStart(s) {
 			return s, col, false
@@ -425,16 +594,27 @@ func (b block) match(s string, col int) (string, int, bool) {
 // is not held back here: CommonMark applies the rule on a list item's start only
 // to a paragraph that is in the innermost matched container, which a lazy line
 // is not, so a list item that opens on such a line closes the containers.
-func lazyText(rest string) bool {
-	return !isBlank(rest) && !opensInterrupt(rest)
+func (y blockSyntax) lazyText(rest string) bool {
+	return !isBlank(rest) && !y.opensInterrupt(rest)
 }
 
 // opensInterrupt reports whether line opens a block that interrupts a paragraph:
 // an ATX heading, a fence, an HTML block of types 1 to 6, a thematic break, a
-// block quote, or a list item. An HTML block of type 7 does not.
-func opensInterrupt(line string) bool {
+// block quote, or a list item, and the footnote definition and the math block of the
+// syntax y. An HTML block of type 7 does not.
+func (y blockSyntax) opensInterrupt(line string) bool {
 	if indentOf(line) >= 4 {
 		return false
+	}
+	if y.notes {
+		if _, _, ok := noteStart(line); ok {
+			return true
+		}
+	}
+	if y.math {
+		if open, _ := mathOpens(line); open {
+			return true
+		}
 	}
 	if _, _, _, ok := headingOf(line); ok {
 		return true

@@ -273,10 +273,16 @@ reimplements them.
   and VS Code and GitLab do not, is a heading under S_GH, and S_GH reads every heading element as
   GitHub's parser does — its text from its start tag to where a later tag or block ends it, as the
   slug vectors record — and, where the element continues into content the engine does not render,
-  takes A when its slug so far begins A. S_GH is GitHub's slug (the text lowercased by the full
+  takes A when its slug so far begins A. Each slug reads the headings of its viewer's blocks:
+  CommonMark's, with the footnote definitions of GitHub and GitLab — containers that interrupt a
+  paragraph and whose content renders at the end of the document when referenced, or not at all —
+  and with VS Code's math blocks, which take in the lines up to a closing `$$`; the detail headings are
+  CommonMark's. GitLab's snippet prefix is read nowhere: GitLab sets it for a snippet's file alone,
+  and a corpus file is a repository's. S_GH is GitHub's slug (the text lowercased by the full
   mapping without its conditions, the word characters of Unicode 17.0.0 — Alphabetic, marks, decimal
   numbers, connector punctuation and Join_Control — the space and `-` kept, each space then `-`; an
-  image is no text), S_VS is VS Code's (the trimmed text lowercased by JavaScript's `toLowerCase`,
+  image is no text; a footnote reference is the number of its definition by first reference),
+  S_VS is VS Code's (the trimmed text lowercased by JavaScript's `toLowerCase`,
   the characters that its `slugify.ts` expression matches removed — those of the Unicode 13.0.0
   categories No, Pd, Ps, Pe, Pi, Pf, Po, S, Cc, Cf, Co, Cn and Z other than an Alphabetic character
   of Unicode 13.0.0, the space and `-` — each white space then `-`; an image is its alt text; a math
@@ -284,7 +290,8 @@ reimplements them.
   uses (the text lowercased by Rust's `to_lowercase`, so a final Σ is ς, the letters, marks, numbers
   and connector punctuation of Unicode 17.0.0, the space and `-` kept, each space then `-`; an image
   is its alt text; a math span of `math_dollars` or `math_code` is its literal source; a footnote
-  reference that a footnote definition defines is no text); a line break is nothing under S_GH and
+  reference that a footnote definition defines is no text; a wikilink is its title); a line break is
+  nothing under S_GH and
   S_VS and a space under S_GL. The slugs are grounded in the ids the viewers themselves render,
   recorded on 2026-10-11 by `make slug-vectors` into `store/testdata/slug` — GitHub's `POST /markdown`
   in mode `markdown`; VS Code 1.141.0's own `slugify.ts` and `markdownEngine.ts` run on markdown-it

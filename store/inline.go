@@ -2,6 +2,7 @@ package store
 
 import (
 	"regexp"
+	"strconv"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -20,13 +21,12 @@ type htmlAttr struct {
 // and anchors). A line feed that a character reference writes is text, not a break.
 type reading []string
 
-// inlineResult is the rendered text of a heading or a paragraph: text, where an image
-// renders no text, and alt, where an image renders its alt text; and the attributes of
-// each raw HTML open tag of the source, in order. vs and gl are the alt readings with
-// the math of VS Code and of GitLab (mathSyntax), which viewerText fills.
+// inlineResult is the rendered text of a heading or a paragraph as GitHub renders it:
+// text, where an image renders no text, and alt, where an image renders its alt text;
+// and the attributes of each raw HTML open tag of the source, in order. vsText and
+// glText read the text as VS Code and GitLab render it.
 type inlineResult struct {
 	text, alt reading
-	vs, gl    reading
 	tags      [][]htmlAttr
 	tagAt     []int // the offset in the source of the '<' of each tag
 }
@@ -39,7 +39,7 @@ const (
 	noMath mathSyntax = iota
 	// glMath reads comrak 0.56.0's math_dollars and math_code, which GitLab enables:
 	// a math span renders its literal source, which comrak's collect_text writes into
-	// the heading's text.
+	// the heading's text. It is GitLab's reading, its footnotes and wikilinks with it.
 	glMath
 	// vsMath reads the math of @vscode/markdown-it-katex 1.1.2, which VS Code's
 	// markdown-math extension contributes by default: a math span renders no text,
@@ -47,19 +47,25 @@ const (
 	vsMath
 )
 
-// viewerText returns inlineText of s with the readings of VS Code and GitLab, each
-// with its viewer's math.
-func viewerText(s string, refs linkRefs) inlineResult {
-	res := inlineText(s, refs)
+// vsText returns the rendered text of s as VS Code reads it, with the alt text of images
+// and VS Code's math. A first reading finds the links, whose opening brackets end the
+// guard of the math plugin in the second.
+func vsText(s string, refs linkRefs) reading {
 	first := inlineReader{s: s, refs: refs, math: vsMath, links: map[int]bool{}}
 	first.run()
 	vs := inlineReader{s: s, refs: refs, math: vsMath, linkAt: first.links}
 	vs.run()
-	_, res.vs = vs.readings()
-	gl := inlineReader{s: s, refs: refs.glRefs(), math: glMath}
+	_, alt := vs.readings()
+	return alt
+}
+
+// glText returns the rendered text of s as GitLab reads it, with the alt text of images,
+// GitLab's math, footnotes and wikilinks.
+func glText(s string, refs linkRefs) reading {
+	gl := inlineReader{s: s, refs: refs, math: glMath}
 	gl.run()
-	_, res.gl = gl.readings()
-	return res
+	_, alt := gl.readings()
+	return alt
 }
 
 // inlineText returns the text that CommonMark 0.31.2 renders from the inline content
@@ -77,7 +83,8 @@ func viewerText(s string, refs linkRefs) inlineResult {
 // and strong delimiters render nothing where the delimiter algorithm of §6.2 and the
 // appendix's process emphasis matches them, and are text elsewhere, as is every
 // bracket and delimiter that forms nothing. A tag of GFM's tagfilter renders as text,
-// as GitHub escapes it, and its attributes are still recorded.
+// as GitHub escapes it, and its attributes are still recorded. A footnote reference
+// renders as GitHub renders it (ghFootnote).
 func inlineText(s string, refs linkRefs) inlineResult {
 	r := inlineReader{s: s, refs: refs, gh: true}
 	r.run()
@@ -237,6 +244,20 @@ func (r *inlineReader) run() {
 			i = r.reference(i)
 		case c == '*' || c == '_':
 			i = r.delimiterRun(i)
+		case c == '!' && strings.HasPrefix(s[i+1:], "[^") && (r.gh || r.math == glMath):
+			// cmark-gfm and comrak open no image at "![^", where a footnote reference may
+			// follow the '!'.
+			r.text("!")
+			i++
+		case c == '[' && r.math == glMath && len(r.open) == 0 && strings.HasPrefix(s[i:], "[["):
+			if end, text, ok := wikilinkAt(s, i); ok {
+				r.other(text)
+				i = end
+				continue
+			}
+			r.push(bracket{node: len(r.nodes), src: i, active: true, bottom: len(r.delims)})
+			r.text("[")
+			i++
 		case c == '!' && i+1 < len(s) && s[i+1] == '[':
 			if r.linkAt[i+1] {
 				r.token()
@@ -694,6 +715,9 @@ func (r *inlineReader) closeBracket(i int) int {
 	if !ok && r.math == glMath && r.glFootnote(o) {
 		return i + 1
 	}
+	if !ok && r.gh && r.ghFootnote(o, i) {
+		return i + 1
+	}
 	if !ok {
 		r.text("]")
 		return i + 1
@@ -727,8 +751,7 @@ func (r *inlineReader) closeBracket(i int) int {
 // joined, the name, are more than the '^'. The delimiters above o then open no
 // emphasis. A name that a footnote definition of the file defines renders no text,
 // since comrak's collect_text writes a footnote reference as nothing; any other is
-// restored as text: '[', each literal, a raw HTML construct's included, and ']', the
-// '!' of an image's bracket dropped.
+// restored as text: '[', each literal, a raw HTML construct's included, and ']'.
 func (r *inlineReader) glFootnote(o bracket) bool {
 	if o.after || o.node+1 >= len(r.nodes) || !r.nodes[o.node+1].plain || !strings.HasPrefix(r.nodes[o.node+1].text, "^") {
 		return false
@@ -748,7 +771,7 @@ func (r *inlineReader) glFootnote(o bracket) bool {
 			r.delims[m].live = false
 		}
 	}
-	if r.refs.footnote(name.String()[1:]) {
+	if r.refs.notes != nil && r.refs.notes.ref(name.String()[1:]) > 0 {
 		for k := o.node; k < len(r.nodes); k++ {
 			r.nodes[k] = inlineNode{}
 		}
@@ -760,6 +783,105 @@ func (r *inlineReader) glFootnote(o bracket) bool {
 	}
 	r.nodes = append(r.nodes, inlineNode{text: "]"})
 	return true
+}
+
+// ghFootnote reads the bracket o, which the ']' at i closes with no link, as a footnote
+// reference of cmark-gfm, as GitHub renders it, and reports whether it is one: its '['
+// is followed by '^' and a label of one character or more, the source up to the ']'. The
+// nodes after the '[' are dropped, their emphasis and raw HTML with them. A label that a
+// footnote definition defines (noteRefs.ref) renders as the number of its definition, in
+// <sup><a>, which GitHub writes; any other renders as the text "[^", the label as
+// written, and "]".
+func (r *inlineReader) ghFootnote(o bracket, i int) bool {
+	if o.image || r.refs.notes == nil || i <= o.src+2 || r.s[o.src+1] != '^' {
+		return false
+	}
+	label := r.s[o.src+2 : i]
+	r.delims = r.delims[:o.bottom]
+	k := len(r.marks)
+	for k > 0 && r.marks[k-1].node > o.node {
+		k--
+	}
+	r.marks = r.marks[:k]
+	r.nodes = r.nodes[:o.node]
+	n := r.refs.notes.ref(label)
+	if n == 0 {
+		r.text("[^" + label + "]")
+		return true
+	}
+	at := o.src
+	r.marks = append(r.marks, tagMark{name: "sup", at: at, node: len(r.nodes)}, tagMark{name: "a", at: at, node: len(r.nodes)})
+	r.text(strconv.Itoa(n))
+	r.marks = append(r.marks, tagMark{name: "a", end: true, at: at, node: len(r.nodes)}, tagMark{name: "sup", end: true, at: at, node: len(r.nodes)})
+	return true
+}
+
+// wikilinkAt reads the wikilink that begins with the "[[" at i, as comrak 0.56.0 reads
+// one with wikilinks_title_before_pipe where no bracket is open: "[[", a component, and
+// either "]]" or '|', a second component and "]]". A component is a run of characters
+// other than '[', ']' and '|', a backslash taking the ASCII punctuation character after
+// it, of at most a thousand bytes. The wikilink renders its first component, without the
+// spaces, tabs and line endings at its ends, its character references decoded and then
+// its backslash escapes. It returns the index after the wikilink and its text.
+func wikilinkAt(s string, i int) (int, string, bool) {
+	p, ok := wikiComponent(s, i+1)
+	if !ok {
+		return 0, "", false
+	}
+	title := s[i+2 : p]
+	switch {
+	case strings.HasPrefix(s[p:], "]]"):
+		return p + 2, wikiText(title), true
+	case p < len(s) && s[p] == '|':
+		q, ok := wikiComponent(s, p)
+		if ok && strings.HasPrefix(s[q:], "]]") {
+			return q + 2, wikiText(title), true
+		}
+	}
+	return 0, "", false
+}
+
+// wikiComponent returns the end of the wikilink component after the '[' or '|' at p.
+func wikiComponent(s string, p int) (int, bool) {
+	q := p + 1
+	for q < len(s) && s[q] != '[' && s[q] != ']' && s[q] != '|' {
+		if s[q] == '\\' && q+1 < len(s) && isASCIIPunct(s[q+1]) {
+			q++
+		}
+		q++
+		if q-p-1 > 1000 {
+			return 0, false
+		}
+	}
+	return q, true
+}
+
+// wikiText returns the text a wikilink's title renders: trimmed of spaces, tabs and line
+// endings as comrak's trim_slice trims, its character references decoded as in text, and
+// then each backslash before an ASCII punctuation character dropped.
+func wikiText(title string) string {
+	title = strings.Trim(title, " \t\n\r")
+	var b strings.Builder
+	for i := 0; i < len(title); {
+		if title[i] == '&' {
+			if text, n := htmlentity.Reference(title[i:]); n > 0 {
+				b.WriteString(text)
+				i += n
+				continue
+			}
+		}
+		b.WriteByte(title[i])
+		i++
+	}
+	t := b.String()
+	b.Reset()
+	for i := 0; i < len(t); i++ {
+		if t[i] == '\\' && i+1 < len(t) && isASCIIPunct(t[i+1]) {
+			i++
+		}
+		b.WriteByte(t[i])
+	}
+	return b.String()
 }
 
 // refTail reads the reference that follows the ']' at i, which closes the bracket o:

@@ -8,7 +8,8 @@ import (
 
 // The collision rule of spec 10 (Detail headings and anchors): a heading that is not a
 // detail heading takes the anchor of a detail heading when one of its slugs, S_GH, S_VS
-// or S_GL, equals the anchor or is numbered to it (takesAnchor), S_GH reading the heading
+// or S_GL, equals the anchor or is numbered to it (takesAnchor), each slug reading the
+// headings of its viewer's blocks (readViewers) and S_GH reading the heading
 // element as GitHub parses it, a raw HTML heading included (ghReadings); an HTML id or name that
 // equals the anchor, or user-content- followed by it, once lowercased, in raw HTML as
 // CommonMark 0.31.2 reads it, collides too. A detail heading is a
@@ -111,44 +112,218 @@ func tableLevels(table string, level int, children []*docLayout) map[string]int 
 }
 
 // anchorClashes returns the collisions of the file lines with the anchors of its detail
-// headings, in line order. Two detail headings never collide here: their anchors are
-// equal only when their keys differ in case, which the read reports as key.duplicate.
+// headings, in line order. The detail headings are those of the file's CommonMark
+// reading; every other heading that a viewer anchors, in that viewer's reading of the
+// file's blocks (readViewers), is compared under that viewer's slug. Two detail headings
+// never collide here: their anchors are equal only when their keys differ in case, which
+// the read reports as key.duplicate. A file without a detail heading has no anchor to
+// take.
 func anchorClashes(lines []string, tables map[string]int) []anchorClash {
 	sc := scanHeadings(lines, 0)
-	g := linkDefs(sc.blocks)
 	var anchors []detailAnchor
-	var others []heading
+	details := map[int]heading{}
 	for _, h := range sc.all {
 		if table, key, ok := detailHeading(h, tables); ok {
 			anchors = append(anchors, detailAnchor{text: h.text, anchor: DetailAnchor(table, key)})
-		} else {
-			others = append(others, h)
+			details[h.at] = h
 		}
 	}
-	setext := setextStarts(sc.blocks)
-	gh := map[int]ghRead{}
+	if len(anchors) == 0 {
+		return nil
+	}
+	// isDetail reports whether a viewer's heading is a detail heading of the file: the
+	// heading of the same line, level and text.
+	isDetail := func(h heading) bool {
+		d, ok := details[h.at]
+		return ok && d.level == h.level && d.text == h.text
+	}
+	v := readViewers(lines, sc)
 	var out []anchorClash
-	for _, r := range ghReadings(lines, sc, g) {
-		if r.head != nil {
-			gh[r.head.at] = r
-			continue
+	ghSetext := setextStarts(v.gh.sc.blocks)
+	for _, r := range ghReadings(lines, v.gh.sc, v.gh.refs) {
+		switch {
+		case r.head == nil:
+			if r.anchored {
+				out = append(out, rawHeadingClashes(r, anchors)...)
+			}
+		case !isDetail(*r.head):
+			out = append(out, slugClashes(headingElement(lines, *r.head, ghSetext), r.takes, anchors)...)
 		}
-		if r.anchored {
-			out = append(out, rawHeadingClashes(r, anchors)...)
+	}
+	vsSetext := setextStarts(v.vs.sc.blocks)
+	for _, h := range v.vs.sc.all {
+		if !isDetail(h) {
+			e := headingElement(lines, h, vsSetext)
+			s := slugVS(strings.Join(vsText(e.text, v.vs.refs), ""))
+			out = append(out, slugClashes(e, func(a string) bool { return takesAnchor(s, a) }, anchors)...)
 		}
 	}
-	for _, h := range others {
-		out = append(out, headingClashes(lines, h, setext, anchors, g, gh[h.at])...)
+	for _, h := range v.gl.sc.all {
+		if !isDetail(h) && v.gl.refs.shows(h.note) {
+			e := headingElement(lines, h, ghSetext)
+			s := slugGL(strings.Join(glText(e.text, v.gl.refs), " "))
+			out = append(out, slugClashes(e, func(a string) bool { return takesAnchor(s, a) }, anchors)...)
+		}
 	}
-	for _, u := range sc.units {
-		out = append(out, unitClashes(lines, u, anchors, g)...)
+	out = append(out, v.gh.tagClashes(lines, anchors, v.gl.refs)...)
+	if v.math {
+		out = append(out, v.vs.tagClashes(lines, anchors, v.vs.refs)...)
 	}
+	return sortedClashes(out)
+}
+
+// sortedClashes returns the distinct collisions of out in line order, then in the order
+// of their offsets: a heading that more than one viewer's slug takes the same anchor by
+// is one collision.
+func sortedClashes(out []anchorClash) []anchorClash {
 	sort.SliceStable(out, func(i, j int) bool {
 		if out[i].line != out[j].line {
 			return out[i].line < out[j].line
 		}
 		return out[i].at < out[j].at
 	})
+	kept := out[:0]
+	seen := map[anchorClash]bool{}
+	for _, c := range out {
+		if !seen[c] {
+			seen[c] = true
+			kept = append(kept, c)
+		}
+	}
+	return kept
+}
+
+// slugClashes returns the collisions of the heading element e with the anchors that
+// takes reports its slug taking.
+func slugClashes(e element, takes func(string) bool, anchors []detailAnchor) []anchorClash {
+	var out []anchorClash
+	for _, a := range anchors {
+		if takes(a.anchor) {
+			out = append(out, e.clash(0, e.text, a))
+		}
+	}
+	return out
+}
+
+// viewerReading is a viewer's reading of the blocks of a file and its definitions.
+type viewerReading struct {
+	sc   scan
+	refs linkRefs
+}
+
+// viewerReadings are the readings of a file by GitHub, VS Code and GitLab, each of the
+// blocks its viewer reads (spec 10, Detail headings and anchors): GitHub and GitLab read
+// footnote definitions, VS Code math blocks, besides CommonMark. A reading is a scan of
+// its own only when a line of the file may open its construct; otherwise it is the
+// CommonMark reading, which it then equals, and notes and math are false.
+type viewerReadings struct {
+	gh, vs, gl  viewerReading
+	notes, math bool
+}
+
+// readViewers returns the viewers' readings of the file lines, whose CommonMark reading
+// is cm. GitHub's and GitLab's footnote definitions are numbered by their first
+// reference in the document (numberNotes).
+func readViewers(lines []string, cm scan) viewerReadings {
+	var v viewerReadings
+	refs := linkDefs(cm.blocks)
+	notes := viewerReading{sc: cm, refs: refs}
+	if mayOpen(lines, "[^", "]:") {
+		v.notes = true
+		notes.sc = scanWith(lines, 0, blockSyntax{notes: true})
+		notes.refs = linkDefs(notes.sc.blocks)
+	}
+	v.gh, v.gl = notes, notes
+	v.gh.refs.notes = newNoteRefs(notes.sc.notes, true)
+	v.gl.refs.notes = newNoteRefs(notes.sc.notes, false)
+	if len(notes.sc.notes) > 0 {
+		numberNotes(lines, v.gh.sc, v.gh.refs, true)
+		numberNotes(lines, v.gl.sc, v.gl.refs, false)
+	}
+	v.vs = viewerReading{sc: cm, refs: refs}
+	if mayOpen(lines, "$$") {
+		v.math = true
+		v.vs.sc = scanWith(lines, 0, blockSyntax{math: true})
+		v.vs.refs = linkDefs(v.vs.sc.blocks)
+	}
+	return v
+}
+
+// mayOpen reports whether a line of the file holds every one of marks, which a line
+// that opens the construct holds: a reading of that construct differs from CommonMark's
+// only where such a line stands.
+func mayOpen(lines []string, marks ...string) bool {
+	for _, l := range lines {
+		all := true
+		for _, m := range marks {
+			all = all && strings.Contains(l, m)
+		}
+		if all {
+			return true
+		}
+	}
+	return false
+}
+
+// numberNotes reads the inline content of the scan sc, its headings and paragraphs, in
+// document order, as GitHub (gh) or GitLab reads it with refs, so that refs.notes numbers
+// each footnote definition by its first reference, as cmark-gfm's and comrak's
+// process_footnotes number them over the whole document, a definition's content and an
+// image's description included.
+func numberNotes(lines []string, sc scan, refs linkRefs, gh bool) {
+	setext := setextStarts(sc.blocks)
+	type content struct {
+		at   int
+		text string
+	}
+	var all []content
+	for _, h := range sc.all {
+		all = append(all, content{h.at, headingElement(lines, h, setext).text})
+	}
+	for _, u := range sc.units {
+		if !u.html {
+			_, cm := cmDefLines(u.lines)
+			all = append(all, content{u.at, linesElement(lines, u, cm).text})
+		}
+	}
+	sort.SliceStable(all, func(i, j int) bool { return all[i].at < all[j].at })
+	for _, c := range all {
+		r := inlineReader{s: c.text, refs: refs, gh: gh}
+		if !gh {
+			r.math = glMath
+		}
+		r.run()
+	}
+}
+
+// shows reports whether the viewer of refs renders the content of the footnote
+// definition d, none for content outside every definition (noteRefs.home).
+func (r linkRefs) shows(d *noteDef) bool {
+	if d == nil || r.notes == nil {
+		return true
+	}
+	_, shown := r.notes.home(d)
+	return shown
+}
+
+// tagClashes returns the collisions of the HTML tags of the reading's headings and
+// paragraphs and HTML blocks with the anchors, but those of the footnote definitions
+// that neither the reading's viewer nor the viewer of other renders.
+func (v viewerReading) tagClashes(lines []string, anchors []detailAnchor, other linkRefs) []anchorClash {
+	setext := setextStarts(v.sc.blocks)
+	var out []anchorClash
+	for _, h := range v.sc.all {
+		if v.refs.shows(h.note) || other.shows(h.note) {
+			e := headingElement(lines, h, setext)
+			r := inlineText(e.text, v.refs)
+			out = append(out, tagClashes(e, r.tags, r.tagAt, anchors)...)
+		}
+	}
+	for _, u := range v.sc.units {
+		if v.refs.shows(u.note) || other.shows(u.note) {
+			out = append(out, unitClashes(lines, u, anchors, v.refs)...)
+		}
+	}
 	return out
 }
 
@@ -197,23 +372,6 @@ func layoutTable(name string, tables map[string]int) (string, bool) {
 		}
 	}
 	return "", false
-}
-
-// headingClashes returns the collisions of a heading that is not a detail heading: its
-// slugs against each anchor — S_GH by GitHub's reading of its element (gh), S_VS and
-// S_GL by its rendered text as each reads it — and the HTML tags of its text, read with
-// the definitions of the file.
-func headingClashes(lines []string, h heading, setext map[int]unit, anchors []detailAnchor, g linkRefs, gh ghRead) []anchorClash {
-	e := headingElement(lines, h, setext)
-	read := viewerText(e.text, g)
-	var out []anchorClash
-	for _, a := range anchors {
-		if gh.takes(a.anchor) || slugsTake(read, a.anchor) {
-			out = append(out, e.clash(0, e.text, a))
-		}
-	}
-	out = append(out, tagClashes(e, read.tags, read.tagAt, anchors)...)
-	return out
 }
 
 // rawHeadingClashes returns the collisions of a raw HTML heading that GitHub anchors:

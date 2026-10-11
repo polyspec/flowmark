@@ -2,7 +2,7 @@
 // headings and the splitting of their ids, the treatments and their compression, and the reading of GitHub's HTML.
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { compress, forms, githubAttributes, githubIds, gitlabIds, glfmArgs, groupSize, headingIdAttrs, headingsOf, katexOptions, methodSource, splitIds, treatment } from '../scripts/record-slugs.mjs';
+import { compress, forms, githubAttributes, githubIds, gitlabIds, glfmArgs, groupSize, headingIdAttrs, headingsOf, katexOptions, methodSource, snippetPrefix, splitIds, treatment } from '../scripts/record-slugs.mjs';
 
 test('a code point has a reference form and a raw form, escaped when it is ASCII punctuation', () => {
   assert.deepEqual(forms(0x41), { ref: '&#x41;', raw: 'A', htmlRef: '&#x41;', htmlRaw: 'A' });
@@ -96,4 +96,10 @@ test("GitLab's heading ids are read per heading, the prefix removed, raw HTML wi
   assert.deepEqual(gitlabIds(html), ['a&b', 'hh', '']);
   assert.deepEqual(gitlabIds('<h2>g</h2>'), [null]);
   assert.throws(() => gitlabIds('<h1 data-sourcepos="1:1-1:1">x</h1>'));
+});
+
+test("a snippet's heading slug prefix is its anchorized base name and a hyphen, as Gitlab::HeadingSlug makes it", () => {
+  assert.equal(snippetPrefix('items.flowmark.md'), 'itemsflowmark-');
+  assert.equal(snippetPrefix('docs/My Notes.md'), 'my-notes-');
+  assert.equal(snippetPrefix('dir/!!!.md'), '');
 });

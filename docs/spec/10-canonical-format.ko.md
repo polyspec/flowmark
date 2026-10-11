@@ -1,5 +1,5 @@
 <!-- doc-id: spec-canonical-format -->
-<!-- source-sha256: a7df00c391c72ee91bc73b3178ba41fe7f9bf8fca7e938d3f2e9b8bb21630dd9 -->
+<!-- source-sha256: fe8cea61e11ea62ab7232710fc2e69ee820b29953a57a6509501b23d23048fe6 -->
 # Canonical format
 
 [English](10-canonical-format.md)
@@ -108,15 +108,56 @@ column 섹션 — 은 payload다: renderer는 이를 행과 함께 옮기고 그
   `collect_text`는 math node의 literal을 쓰고, VS Code의 `#tokenToPlainText`는 math token을 텍스트 없이 쓰며, slug
   vector가 둘 다 기록한다: `# items row $T<b>1$`은 GitLab에서 `items-row-tb1`, VS Code에서 `items-row`, GitHub에서
   `items-row-t1`이다.
-- **S_GL의 footnote.** GitLab은 comrak의 footnotes로 렌더하므로, S_GL은 정의와 참조를 comrak처럼 읽는다. 공백 셋
-  이하 뒤에 `[^`, `]`, 공백, tab, 줄 바꿈이 없는 label, `]:`로 시작하는 줄은 footnote definition이며, 거기서 link
-  reference definition을 시작하지 않는다. `]`가 link 없이 닫는 bracket으로, 그 위에 다른 bracket이 열리지 않았고,
-  텍스트가 `^`로 시작하며 텍스트와 raw HTML만, `^`보다 많이 담은 것은 footnote reference이며, 그 구분자는 강조를 열지
-  않는다: footnote definition이 그 label을 — link label처럼 비교해 — 정의하는 것은 텍스트를 렌더하지 않고, 그 밖의
-  것은 텍스트로 되돌린다 — `[`, 각 raw HTML 구성 요소를 쓰인 그대로 둔 그 텍스트, `]`이며, image bracket의 `!`는
-  빠진다. S_GH와 S_VS는 bracket을 CommonMark처럼 읽는다. 근거: comrak의 `collect_text`는 footnote reference를 아무것도
-  쓰지 않고, 그 `process_footnotes`는 정의되지 않은 것을 text node로 되돌린다(slug vector: `[^1]: n` 옆의 `# a[^1]`은
-  GitLab에서 `a`).
+- **S_VS의 math block.** VS Code의 math plugin은 math block도 읽으며, 그것은 다른 viewer가 자기 block으로 읽는 줄들을,
+  heading을 포함해, 받아들이므로 S_VS는 VS Code의 block의 heading을 읽는다(충돌 규칙). 네 column 미만으로 들여쓴
+  줄로 그 텍스트가 `$$`로 시작하는 것은, 문단을 끊거나 block quote의 lazy 연속을 끝내는 자리에서도, 그 `$$` 뒤의
+  텍스트가 `$$`를 두 번 이상 담지 않으면 math block을 연다. 그 텍스트가 `$$`를 한 번, 그 끝에 담으면 block은 그 줄
+  하나다. 그 밖에는 block이 뒤따르는 모든 줄을, 빈 줄을 포함해, `$$`를 담은 첫 줄까지 그 줄과 함께, 또는 file의
+  끝까지 받아들인다. block quote 안에서는 quote의 lazy 줄 — 빈 줄이 아니었던 quote 줄 뒤의, 문단을 끊는 block을 열지
+  않는 줄 — 도 받아들이며, container 안에서는 container가 끝나는 곳에서 끝나고 container가 끝나는 그 줄도 받아들인다:
+  block quote는 거기서 닫히고, 내용보다 덜 들여쓴 줄이 끝내는 list 항목은 뒤의 줄들을 위해 열린 채로 남는다. math
+  block은 heading도 HTML도 담지 않는다. 근거: `@vscode/markdown-it-katex` 1.1.2의 `math_block` rule로, markdown-it의
+  list, reference, HTML block, heading보다 먼저 실행되고 문단, block quote, list를 끊으며, 빈 줄과 무관하게 닫는 줄까지
+  훑고, 멈춘 줄의 하나 뒤로 `state.line`을 둔다. slug vector가 각 case를 기록한다(`$$`, `# a`, 빈 줄, `# b`, `$$`,
+  `# c`는 VS Code에서 `c`만이고, `- $$`, `  x`, `y`, `  # e`는 항목 안의 `e`다). GitHub과 GitLab은 math block을 읽지
+  않는다: 거기서 `$$` 줄은 텍스트이며, vector는 그 heading이 바뀌지 않음을 보인다.
+- **S_GH와 S_GL의 footnote.** GitHub과 GitLab은 cmark-gfm과 comrak 0.56.0의 footnote로 렌더하므로, S_GH와 S_GL은
+  block과 참조를 그 viewer처럼 읽는다. VS Code는 footnote를 렌더하지 않으며, S_VS는 bracket과 줄을 CommonMark처럼
+  읽는다. 네 column 미만으로 들여쓴 줄로 `[^`, `]`, 공백, tab, 줄 바꿈이 없는 label, `]:`, 그리고 몇 개든 공백과
+  tab으로 시작하는 것은 footnote definition을 연다 — 어느 container 안에서든, 문단을 끊는 자리에서도, 그리고 결코 link
+  reference definition으로가 아니다. definition은 container다: 그 줄의 나머지가 첫 내용이며, 네 column 이상 들여쓴
+  줄 — 그 처음 네 column을 가져간다 — 과 빈 줄에서 이어지고, 그 문단은 다른 block을 열지 않는 줄에서 lazy하게
+  이어진다. 그 밖의 줄은 그것을 끝낸다. 그 내용은 선 자리에서 렌더되지 않는다. GitHub에서는 label의 첫 definition이,
+  어느 깊이에서든, 그것을 정의한다. 참조가 이름 붙인 label을 정의하는 definition은 문서의 끝에 렌더되고, 그 밖의
+  definition은 무엇이 담든 그 내용과 함께 버려진다. GitLab에서는 다른 것이 담지 않은 definition만이 label을 정의하며,
+  그 label의 마지막 것이다. label을 정의하는 것은 참조가 이름 붙이면 끝에 렌더되고 아무것도 이름 붙이지 않으면
+  버려지며, 아무것도 정의하지 않는 definition은 제자리에 남고, 다른 것 안의 definition은 바깥 것의 내용이다. 버려진
+  내용의 heading이나 raw HTML은 anchor도 id도 없다. 렌더된 내용의 heading은 payload heading이다. footnote reference는
+  `[` 뒤에 `^`와 한 문자 이상의 label이 오고, link 없이 그것을 닫는 `]`까지인 bracket이다 — inline link나 정의된
+  reference link를 먼저 읽는다. GitHub에서 그 label은 `^`와 `]` 사이의 source다. definition이 그 label을 — link label
+  처럼 비교해 — 정의하는 참조는 그 definition의 번호를 렌더하며, 번호는 문서 전체 — 그 heading, 문단, table cell,
+  image 설명, 그리고 선 자리의 모든 definition의 내용이며, code와 HTML block은 아니다 — 에서 각 definition의 첫 참조의
+  순서로 1부터 센다. 따라서 되풀이한 참조는 같은 번호를 렌더한다. 그 밖의 것은 텍스트 `[^`, 쓰인 그대로의 label,
+  `]`로 렌더한다. 어느 쪽이든 bracket이 담은 것 — 강조, code, raw HTML — 은 markup이 아니다. GitLab에서는 그 위에 다른
+  bracket이 열리지 않았고, 텍스트가 `^`로 시작하며 텍스트와 raw HTML만, `^`보다 많이 담은 bracket이 footnote
+  reference이며, 그 구분자는 강조를 열지 않는다: definition이 그 label을 정의하는 것은 텍스트를 렌더하지 않고, 그 밖의
+  것은 텍스트로 되돌린다 — `[`, 각 raw HTML 구성 요소를 쓰인 그대로 둔 그 텍스트, `]`이다. 둘 다에서 `![^`는 `!`와
+  bracket이며, 결코 image가 아니다. 근거: cmark-gfm과 comrak의 block parser는 footnote definition을 list 항목보다 먼저
+  열고, 연속 줄은 네 column 들여썼거나 줄 끝 하나뿐일 때만 받아들인다(`parse_footnote_definition_block_prefix`). 그
+  `process_footnotes`는 문서 전체를 걸어 definition에 번호를 매기고, 참조된 것을 그 순서로 끝으로 옮기고 나머지를
+  버리며, cmark-gfm은 label의 첫 definition을, comrak은 마지막 바깥 것을 남긴다. GitHub은 참조를 `<sup><a>n</a></sup>`
+  로 쓰고 그 heading id는 그 텍스트를 읽으며, comrak의 `collect_text`는 그것을 아무것도 쓰지 않는다. slug vector가 각
+  case를 기록한다: `note`와 `q`의 definition 옆의 `# a[^note] b[^Q] c[^x] d`는 GitHub에서 `a1-b2-cx-d`, GitLab에서
+  `a-b-cx-d`이다. `items row T1`, `[^n]: x`, `---`는 어느 쪽에서도 heading이 아니다. 참조된 definition 안에 들여쓴
+  heading은 문서의 heading들 뒤에 anchor를 받고, 참조되지 않은 것 안의 것은 받지 않는다.
+- **S_GL의 wikilink.** GitLab은 pipe 앞에 제목을 두는 comrak의 wikilink로 렌더하므로, S_GL은 열린 bracket이 없는
+  곳에서 wikilink를 읽는다: `[[`, 구성 요소 하나, 그다음 `]]`, 또는 `|`, 둘째 구성 요소, `]]`이다. 구성 요소는 `[`,
+  `]`, `|`가 아닌 문자의 run이며, backslash는 그 뒤의 ASCII 구두점 문자를 가져가고, 천 byte를 넘지 않는다. wikilink는
+  첫 구성 요소 — 그 제목, 또는 pipe가 뒤따르지 않으면 target — 를 공백, tab, 줄 바꿈을 양 끝에서 잘라내고, character
+  reference를 decode한 다음 backslash escape를 풀어 렌더하며, 그 markup은 아무것도 렌더하지 않는다: `[[T1|x]]`는 `T1`
+  이고 `[[*a* $b$|c]]`는 `*a* $b$`이다. GitHub과 VS Code는 bracket을 CommonMark처럼 읽는다. 근거: GitLab의
+  `wikilinks_title_before_pipe`가 설정하는 `WikiLinksMode::TitleFirst`에서의 comrak `handle_wikilink`, 그리고 slug
+  vector: `# items row [[T1|x]]`는 GitLab에서 `items-row-t1`, GitHub과 VS Code에서 `items-row-t1x`이다.
 - **S_GH의 HTML heading.** GitHub은 자신이 렌더한 HTML에서 다른 heading element가 담지 않은 모든 heading element
   `<h1>`–`<h6>`에, raw HTML의 것에도, 그 element의 텍스트로 anchor를 주며, 그것을 parse된 HTML에서 계산한다: S_GH는
   element를 GitHub의 parser처럼 읽는다. VS Code와 GitLab은 raw HTML heading에 anchor를 주지 않으며, 그 slug는 markdown
@@ -172,7 +213,8 @@ column 섹션 — 은 payload다: renderer는 이를 행과 함께 옮기고 그
   vector, 곧 viewer 자신이 렌더하는 id로, 2026-10-11에 `make slug-vectors`(`scripts/record-slugs.mjs`)가
   `store/testdata/slug`에 기록했으며 S_GH, S_VS, S_GL이 그대로 재현한다: surrogate를 뺀 모든 code point마다 그것을
   numeric reference로, 그리고 그 문자 자체로 담은 heading, 그리고 공백, tab, underscore, hyphen, reference, escape,
-  강조, code span, link, image, raw HTML, 줄 바꿈, math span, footnote reference, 반복된 heading의 구조 case다. GitHub의 것은 자신의 renderer, 곧 REST API의
+  강조, code span, link, image, raw HTML, 줄 바꿈, math span과 block, footnote definition과 reference, wikilink, 반복된
+  heading의 구조 case다. GitHub의 것은 자신의 renderer, 곧 REST API의
   `POST /markdown`을 mode `markdown`으로 불러 렌더하며, 이 mode는 각 heading anchor를 `user-content-`와 id로 쓴다. 그
   id는 Unicode 13.0.0 이후에 배정된 U+107A5, U+1CCF0, U+A7F2를 남기며, 모든 code point에서 Unicode 17.0.0의 word
   문자와 맞는다. VS Code의 것은 최신 stable release 1.141.0의 자기 code를 실행해 렌더한다:
@@ -187,8 +229,16 @@ column 섹션 — 은 payload다: renderer는 이를 행과 함께 옮기고 그
   읽는 crate인 finl_unicode 1.4.0을 고정하고, 그 table은 Unicode 17.0.0의 것이다. 다시 기록하려면 network, 인증된
   `gh`, npm, cargo를 갖추고 `make slug-vectors`를 실행한다. viewer가 바뀌면 slug가 더는 재현하지 못하는 vector로
   드러난다.
+- **GitLab의 snippet prefix.** GitLab은 snippet에서만 heading의 id 앞에 그 file의 이름을 붙인다: 그 markup blob
+  viewer는 blob의 container가 snippet일 때만 `use_filename_in_anchor`를 설정하며, 그때 그 `GlfmMarkdown` engine이 file
+  base name의 slug와 `-`를 heading slug prefix로 넘긴다. corpus file은 repository의 file이며, GitLab은 그것을 prefix
+  없이 렌더하고, 상세 anchor는 그 렌더링의 anchor이므로 규칙은 prefix를 읽지 않는다. snippet에서 prefix는 모든
+  heading의 id 앞에 똑같이 서며, 번호는 prefix 없는 slug로 매기므로, 거기서 heading들은 repository에서와 똑같이 서로의
+  id를 가져간다. 근거: GitLab의 `app/models/blob_viewer/markup.rb`, `lib/banzai/filter/markdown_engines/glfm_markdown.rb`,
+  `lib/gitlab/heading_slug.rb` — recorder가 읽고 그것이 바뀌면 실패한다 — 그리고 `items.flowmark.md`의 prefix
+  `itemsflowmark-`를 붙인 snippet의 id를 기록하는 slug vector(`gitlab-headings.json`의 `snippet`)다.
 - **충돌 규칙.** heading은 모든 ATX heading(block-quote나 list-item 표지 뒤의 것을 포함)과, fence 밖에서
-  setext 밑줄이 뒤따르는 모든 문단이다. 그 문단 전체에서 앞머리의 link reference definition을 뺀 것이 heading이다. 상세 heading도 heading이다. GitHub이 anchor를 주는 raw HTML heading도 S_GH에서만 heading이며, 그 start tag의 `<`에 위치한다(S_GH의 HTML heading). 그 definition은 heading의 일부가 아니다: setext heading은 definition이 남긴 첫 줄에서 시작하고, definition은 heading 앞의 내용이며, definition만 있고 밑줄이 뒤따르면 heading이 아니다. 근거: CommonMark 0.31.2는 문단을 setext heading으로 닫기 전에 그 앞머리의 definition을 먼저 읽으므로(§4.3, §4.7), `[r]: /u`, `people row P1`, `---`는 definition 하나와 heading `people row P1`이며, commonmark.js, cmark-gfm, markdown-it이 그렇게 읽는다. 이 규칙에서 상세 heading은 file의 layout에 있는 한 table의 상세 level — 그 행들의 상세 heading의 level, 행 scope보다 한 단계 얕은 — 에 있는 최상위 heading이며, 그 텍스트가 공백, tab, 그리고 setext heading의 줄 바꿈을 뺀 것으로 그 table의 이름과 `row`(각각 viewer가 하듯 소문자로 만든 뒤 정식 텍스트와 같은 것)와 key이다. 즉 상세 섹션의 heading이며, 정식 또는 비정식 철자로 쓰인다. 그 밖의 모든 heading은 payload heading이며, 다른 level이나 block quote, list 항목 안에 있는 `<table> row <key>` heading을 포함해, 그 slug가 모든 상세 anchor와 비교된다. 근거: 상세 섹션은 자리로 배정되므로, 다른 곳의 heading은 어느 행도 가리키지 않으며 자기 anchor를 가지는데, viewer는 그것이 상세 anchor와 반복될 때 번호를 매긴다. 상세 heading이 아닌
+  setext 밑줄이 뒤따르는 모든 문단이다. 그 문단 전체에서 앞머리의 link reference definition을 뺀 것이 heading이다. 상세 heading도 heading이다. GitHub이 anchor를 주는 raw HTML heading도 S_GH에서만 heading이며, 그 start tag의 `<`에 위치한다(S_GH의 HTML heading). 각 slug는 그 viewer의 block의 heading을 읽는다: CommonMark의 것에, S_GH와 S_GL에서는 GitHub과 GitLab의 footnote definition을(S_GH와 S_GL의 footnote), S_VS에서는 VS Code의 math block을(S_VS의 math block) 더하고, 그 각각이 렌더하는 raw HTML을 더한 것이다. 상세 heading은 CommonMark의 block의 것이며, 같은 줄, level, 텍스트의 viewer heading이 그 상세 heading이다. viewer가 anchor를 주는 그 밖의 heading은 그 slug에서 payload heading이다. 근거: 행으로의 link가 따르는 anchor는 각 viewer가 자기가 읽는 heading에서 렌더하는 것이므로, 한 viewer만 읽는 heading은 거기서 anchor를 가져갈 수 있고, viewer가 읽지 않는 heading은 거기서 아무것도 가져가지 않는다. 그 definition은 heading의 일부가 아니다: setext heading은 definition이 남긴 첫 줄에서 시작하고, definition은 heading 앞의 내용이며, definition만 있고 밑줄이 뒤따르면 heading이 아니다. 근거: CommonMark 0.31.2는 문단을 setext heading으로 닫기 전에 그 앞머리의 definition을 먼저 읽으므로(§4.3, §4.7), `[r]: /u`, `people row P1`, `---`는 definition 하나와 heading `people row P1`이며, commonmark.js, cmark-gfm, markdown-it이 그렇게 읽는다. 이 규칙에서 상세 heading은 file의 layout에 있는 한 table의 상세 level — 그 행들의 상세 heading의 level, 행 scope보다 한 단계 얕은 — 에 있는 최상위 heading이며, 그 텍스트가 공백, tab, 그리고 setext heading의 줄 바꿈을 뺀 것으로 그 table의 이름과 `row`(각각 viewer가 하듯 소문자로 만든 뒤 정식 텍스트와 같은 것)와 key이다. 즉 상세 섹션의 heading이며, 정식 또는 비정식 철자로 쓰인다. 그 밖의 모든 heading은 payload heading이며, 다른 level이나 block quote, list 항목 안에 있는 `<table> row <key>` heading을 포함해, 그 slug가 모든 상세 anchor와 비교된다. 근거: 상세 섹션은 자리로 배정되므로, 다른 곳의 heading은 어느 행도 가리키지 않으며 자기 anchor를 가지는데, viewer는 그것이 상세 anchor와 반복될 때 번호를 매긴다. 상세 heading이 아닌
   heading H는, S_GH, S_VS, S_GL 가운데 한 slug S와 그 slug가 읽는 대로 렌더된 H의 텍스트 T에 대해 S(T)가 A와 같거나,
   A가 S(T) 뒤에 `-`와 앞자리 0 없이 쓴 십진수 n ≥ 1을 붙인 것이면(번호 규칙) 상세 heading의 anchor A를 가져간다. 두
   상세 heading은 anchor가 같을 때에만 충돌한다. 근거: 명명된 모든 viewer는 반복된 slug에 1부터 세는 `-<n>`을 덧붙여

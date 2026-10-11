@@ -7,8 +7,8 @@
 // extensions/markdown-language-features, at the release tag, with the markdown-it version its package-lock.json pins,
 // configured as the preview configures it by default, and the markdown-it-katex plugin that its markdown-math
 // extension contributes by default; GitLab is run: the gitlab-glfm-markdown gem that GitLab's Gemfile.lock pins, built
-// from its own sources, with the options of GitLab's engine. It needs the network, an authenticated gh, npm and cargo;
-// `make slug-vectors` runs it.
+// from its own sources, with the options of GitLab's engine, and also with the heading slug prefix GitLab gives a
+// snippet's blob alone. It needs the network, an authenticated gh, npm and cargo; `make slug-vectors` runs it.
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -216,15 +216,71 @@ export const structuralCases = [
   ['math in emphasis and links', '# *a $b*$ c*\n\n# [a $]$](/u) b\n\n# ![a $b$](/i.png) c'],
   ['math across a line', 'a $b\nc$ d\n===\n\na $$b\nc$$ d\n==='],
   ['math after inline HTML', '# <span class="x">a $b$ c</span>\n\n# <b>a $b$ c</b>\n\n# <span class="x">*a* $b$</span>'],
+  // Footnotes: GitHub and GitLab read footnote definitions and references; GitHub renders a reference as its number.
+  ['footnote references by label', '# a[^note] b[^Q] c[^x] d\n\n[^note]: n\n\n[^q]:\n\n[r]: /u'],
+  ['footnote references with markup', '# a[^b<i>c] d[^e*f*] g[^h i] ![^note]\n\n[^note]: n'],
+  ['footnote numbers by first reference', '# a[^b] c[^a] d[^b]\n\n[^a]: x\n\n[^b]: y'],
+  ['footnote numbers from an earlier paragraph', 'x[^b]\n\n# a[^a] c[^b]\n\n[^a]: x\n\n[^b]: y'],
+  ['footnote numbers from a definition', '[^a]: has [^b]\n\n# h[^a] g[^b]\n\n[^b]: y'],
+  ['footnote numbers from an image and a link', '# a ![y[^m]](/i.png) [x[^n]](/u) [^n]\n\n[^n]: x\n\n[^m]: y'],
+  ['footnote labels folded', '# a[^N] b[^n] c[^ss] d[^ß] e[^ n]\n\n[^n]: x\n\n[^ß]: y'],
+  ['footnote references beside links', '# a[^n] [^n]x [^n](u) [^n][r] [b [^n]] [^n [c]] [[^n]]\n\n[^n]: x\n\n[r]: /v'],
+  ['footnote reference that is a link', '# a[^x y] b[^n]\n\n[^x y]: /u\n\n[^n]: y'],
+  ['footnote references in code and HTML', '`[^q]`\n\n<div>\n[^q]\n</div>\n\n# a[^n] b[^q]\n\n[^n]: x\n\n[^q]: y'],
+  ['footnote definition interrupting a paragraph', 'items row T1\n[^n]: x\n---'],
+  ['footnote definition before a setext underline', '[^n]: x\nitems row T1\n---'],
+  ['heading in a referenced footnote definition', '# z[^n]\n\n[^n]: x\n\n    # items row T1\n\n# y'],
+  ['heading in an unreferenced footnote definition', '[^n]: x\n\n    # items row T1'],
+  ['heading on a footnote definition line', '# z[^n]\n\n[^n]: # items row T1'],
+  ['setext heading in a footnote definition', '# z[^n]\n\n[^n]: x\n    items row T1\n    ---'],
+  ['footnote definition closed by a short indent', '# z[^n]\n\n[^n]: x\n  \n    # h1'],
+  ['footnote definitions in containers', '# a[^n] b[^m]\n\n> [^n]: x\n\n- [^m]: y\n\n      # h1'],
+  ['footnote definition nested in a referenced one', '# z[^n]\n\n[^n]: x\n    [^m]: # h1'],
+  ['footnote definition nested in an unreferenced one', '# z[^m]\n\n[^n]: x\n    [^m]: # h1'],
+  ['duplicate footnote definitions', '# z[^n]\n\n[^n]: # h1\n\n[^n]: # h2'],
+  ['duplicate unreferenced footnote definitions', '# z\n\n[^n]: # h1\n\n[^n]: # h2'],
+  // Wikilinks: GitLab reads [[title|url]] and [[url]] with wikilinks_title_before_pipe.
+  ['wikilinks', '# items row [[T1|x]]\n\n# items row [[T2]]\n\n# a [[ b | c ]] d\n\n# a [[b|c|d]] e'],
+  ['wikilinks with markup', '# a [[*b*|c]] d\n\n# e [[f\\|g|h]] i\n\n# j [[k&amp;l|m]] n\n\n# o [[p&#92;*|q]] r\n\n# s [[$t$|u]] v\n\n# w [[x`y`|z]] a'],
+  ['wikilinks that open nothing', '# a [x [[b|c]]] e\n\n# f ![[g|h]] i\n\n# j [[k]l]] m\n\n# n \\[[o|p]] q\n\n# r [[s|t] u'],
+  ['empty wikilinks', '# a [[|c]] e\n\n# f [[g|]] h\n\n# i [[]] j\n\n# k [[ ]] l'],
+  ['wikilink across a line', 'a [[b\nc|d]] e\n==='],
+  ['wikilinks in emphasis and footnotes', '# a *[[b*|c]]* e\n\n# f [[^n]] g\n\n[^n]: x'],
+  // Math blocks: VS Code's markdown-it-katex reads a line that begins with $$ as a math block.
+  ['math block', '$$\n# a\n\n# b\n$$\n# c'],
+  ['math block to the end', '$$\n# a\n\n# b'],
+  ['one-line math blocks', '$$x$$\n# a\n\n$$$$\n# b\n\n$$a$$b$$\n# c'],
+  ['math block opened by a line with one inner delimiter', '$$a $$ b\n# a\n$$\n# b'],
+  ['math block interrupting a paragraph', 'items row T1\n$$\nx $$\n---\n\na\n$$x$$\n---\n\nb\n$$c$$d$$\n---'],
+  ['paragraph after a math block', '$$\nx $$\nitems row T1\n---'],
+  ['indented math blocks', '   $$\n# a\n$$\n# b\n\n    $$\n# c\n$$\n# d'],
+  ['math block and a fence', '$$\n```\n$$\n# a\n```\n# b\n\n```\n$$\n```\n# c\n$$\n# d'],
+  ['math block in a block quote', '> $$\n> # a\n# b\n\n# c\n\n> $$\nx\ny $$\n# d\n\n> $$\n>\nx\n# e'],
+  ['math block ending a block quote', '> a\n$$\n# b\n$$\n# c'],
+  ['math block in a list item', '- $$\n  # a\n# b\n# c\n$$\n# d\n\n- $$\n  x\ny\n  # e\n# f'],
+  ['math block in nested containers', '- > $$\n  > x\n  y\n  # a\n# b\n\n> - $$\n>   x\n> y\n> # c\n# d'],
+  ['math block closed inside a line', '$$\n# a\nx$$y\n# b'],
+  ['math block after an HTML block', '<div>\n$$\n</div>\n\n# a\n$$\n# b'],
 ];
 
 /**
- * The structural cases of GitLab alone: footnote references by label, which S_GL reads as comrak's footnotes do. GitHub
- * renders a footnote reference as its number, which S_GH does not read, so these are not cases of GitHub or VS Code.
+ * The file a GitLab snippet case is rendered as, and GitLab's heading slug prefix of it: GitLab renders a snippet's
+ * markdown blob with use_filename_in_anchor, and Gitlab::HeadingSlug.prefix_from_file_path makes the prefix from the
+ * file's base name without its extension, anchorized as comrak anchorizes, and a hyphen.
  */
-export const gitlabCases = [
-  ['footnote references by label', '# a[^note] b[^Q] c[^x] d\n\n[^note]: n\n\n[^q]:\n\n[r]: /u'],
-  ['footnote references with markup', '# a[^b<i>c] d[^e*f*] g[^h i] ![^note]\n\n[^note]: n'],
+export const snippetFile = 'items.flowmark.md';
+
+/** Gitlab::HeadingSlug.prefix_from_file_path of file: the anchorized base name without its extension, and '-'. */
+export function snippetPrefix(file) {
+  const base = path.basename(file, path.extname(file));
+  const slug = base.toLowerCase().replace(/[^\p{L}\p{M}\p{N}\p{Pc} -]/gu, '').replaceAll(' ', '-');
+  return slug === '' ? '' : `${slug}-`;
+}
+
+/** The cases of a GitLab snippet: documents rendered with the heading slug prefix of snippetFile. */
+export const snippetCases = [
+  ['detail heading shape in a snippet', '## items row T1\n\n## items row T1\n\n# a\n\n# a-1\n\n# a'],
+  ['snippet prefix in a heading', `# ${snippetPrefix(snippetFile).slice(0, -1)} items row T1\n\n## items row T1`],
 ];
 
 /**
@@ -741,7 +797,17 @@ async function recordGitLab() {
   if (!lock) throw new Error("no gitlab-glfm-markdown checksum in GitLab's Gemfile.lock");
   const [, version, sha256] = lock;
   const engineFile = 'lib/banzai/filter/markdown_engines/glfm_markdown.rb';
-  const args = glfmArgs(await raw(engineFile));
+  const engine = await raw(engineFile);
+  const args = glfmArgs(engine);
+  // GitLab prefixes heading slugs with the file name only where its render context sets use_filename_in_anchor, which
+  // its markup blob viewer sets for a snippet's blob alone; a change of either shows here.
+  const viewerFile = 'app/models/blob_viewer/markup.rb';
+  const viewer = await raw(viewerFile);
+  if (!/^\s*h\[:use_filename_in_anchor\] = true if blob\.container\.is_a\?\(Snippet\)$/m.test(viewer)) throw new Error(`${viewerFile} no longer sets use_filename_in_anchor for a snippet alone`);
+  if (!/header_slug_prefix: filename_prefix/.test(engine) || !/return unless context\[:use_filename_in_anchor\]/.test(engine)) throw new Error(`${engineFile} no longer prefixes slugs by use_filename_in_anchor alone`);
+  const headingSlug = await raw('lib/gitlab/heading_slug.rb');
+  if (!headingSlug.includes('name = File.basename(file_path, File.extname(file_path))') || !headingSlug.includes('"#{slug}-"')) throw new Error('lib/gitlab/heading_slug.rb no longer makes the prefix of the base name');
+  const prefix = snippetPrefix(snippetFile);
   const work = mkdtempSync(path.join(tmpdir(), 'record-slugs-'));
   try {
     const bin = await buildGlfm(version, sha256, work);
@@ -762,8 +828,18 @@ async function recordGitLab() {
       recorded: today(),
       request: `gitlab-glfm-markdown ${version} (GitLab ${commit}), ${options}; ids without user-content-`,
       rerecord: 'make slug-vectors (scripts/record-slugs.mjs)',
-      cases: [...structuralCases, ...gitlabCases].map(([name, markdown]) => ({ name, markdown, ids: render(markdown + '\n') })),
+      cases: structuralCases.map(([name, markdown]) => ({ name, markdown, ids: render(markdown + '\n') })),
       rawHeadings: rawHeadingCases.map(([name, markdown]) => ({ name, markdown, ids: render(markdown + '\n') })),
+      snippet: {
+        file: snippetFile,
+        prefix,
+        grounding: `${viewerFile} sets use_filename_in_anchor only for a snippet's blob; ${engineFile} then passes header_slug_prefix`,
+        cases: snippetCases.map(([name, markdown]) => ({
+          name,
+          markdown,
+          ids: gitlabIds(execFileSync(bin, [...args, '--header-slug-prefix', prefix], { input: markdown + '\n', maxBuffer: 1 << 30 }).toString('utf8')),
+        })),
+      },
     };
     writeFileSync(path.join(vectorDir, 'gitlab-headings.json'), JSON.stringify(file, null, 1) + '\n');
   } finally {
