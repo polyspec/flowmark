@@ -1,5 +1,5 @@
 <!-- doc-id: spec-document-model -->
-<!-- source-sha256: d59f1da4916a49b049e54864a2eaf53cb6f4e2e471d28521d78b0dddfa063b80 -->
+<!-- source-sha256: d75b66466fbf3c4ed9c92300eea8213b59350757900076802c14f139950d68a2 -->
 # 문서 모델
 
 [English](20-document-model.md)
@@ -121,7 +121,15 @@ aggregate냐 split이냐는 저장 선언이다. 논리 관계는 모든 저장�
   따른다. 다른 줄 순서는 `format.noncanonical`이다. `order` column이 있으면 형제는 그 값의 순서로 서며, 읽기가 그 값을 줄 순서에서 채우므로 형제 순서는 `format.noncanonical`이 아니다.
 - **저장 순서**는 tree의 전위 순회다: 각 행, 그다음 형제 순서의 자식. 다른 배치 부모의 행은 부모의
   저장 순서를 따른다. IR `order` 없는 읽기는 저장 순서를 돌려주고, order column에 대한 IR `order`는
-  그 값으로 정렬하며 동률은 저장 순서다.
+  그 값으로 정렬하며 동률은 저장 순서다. 저장 순서는 읽을 수 있는 모든 table에서 전순서다. `files`
+  저장에서 `parent`가 NULL이거나 그 table의 어떤 행도 가리키지 않는 행은 root다. root는 형제 묶음별로
+  선다 — `parent`가 NULL인 묶음이 먼저, 그다음 `parent`가 어떤 행도 가리키지 않는 각 묶음이 그
+  `parent` 값의 key 순서로 — 각 묶음은 형제 순서로, 각 root 뒤에는 그 subtree가 전위 순회로 온다.
+  어떤 root도 닿지 않는 행 — `parent`가 그 column의 type이 아닌 행, 여러 file에 걸친 parent 순환 위의
+  행, 그리고 그 아래의 모든 행 — 은 닿은 모든 행 뒤에 corpus 순서로 온다. `order` column이 있는 형제
+  사이에서 값을 공유하는 행은 corpus 순서로 서며, 값이 그 type이 아닌 행은 다른 행 뒤에 corpus
+  순서로 선다. 근거: 읽기는 다른 행의 validator 진단 때문에 실패하지 않으므로, 진단을 가진 corpus의
+  저장 순서는 corpus 순서처럼 corpus만의 함수여야 한다.
 
 ## 관계
 

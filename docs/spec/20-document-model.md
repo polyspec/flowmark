@@ -145,7 +145,16 @@ so the same rows can be stored either way.
 - **Storage order** is the pre-order of the tree: each row, then its children in sibling order;
   rows of different placement parents follow their parents' storage order. A read without an IR
   `order` returns storage order; an IR `order` on the order column sorts by its value with ties
-  in storage order.
+  in storage order. Storage order is total for every readable table. In `files` storage a row
+  whose `parent` is NULL or names no row of its table is a root. The roots stand by sibling group
+  — the group whose `parent` is NULL first, then each group whose `parent` names no row, by that
+  `parent` value in key order — each group in its sibling order, and each root is followed by its
+  subtree in pre-order. The rows no root reaches — a row whose `parent` is not of its column's
+  type, a row on a cycle of parents across files, and every row under one of them — follow every
+  reached row, in corpus order. Among siblings with an `order` column, rows sharing a value stand
+  in corpus order, and rows whose value is not of its type stand after the others in corpus order.
+  Grounding: a read never fails on a validator diagnostic of another row, so the storage order of a
+  corpus that has one must be a function of the corpus alone, as corpus order is.
 
 ## Relations
 
