@@ -79,6 +79,23 @@ func (e *RecoveryRefusal) Error() string {
 		e.Path, current, e.state(e.Pre), e.state(e.Post), e.Path)
 }
 
+// CommitError is a commit that stopped. Prepared says whether its prepare record is in its stage: before it the commit
+// wrote no target and recovery discards its stage; from it on the commit is decided, and recovery completes it (spec 40
+// The commit protocol). Err is the cause.
+type CommitError struct {
+	Prepared bool
+	Err      error
+}
+
+func (e *CommitError) Error() string {
+	if e.Prepared {
+		return e.Err.Error() + " (the prepare record is written: the commit is decided, and recovery completes it)"
+	}
+	return e.Err.Error() + " (before the prepare record: no target was written, and recovery discards the stage)"
+}
+
+func (e *CommitError) Unwrap() error { return e.Err }
+
 func (c *Corpus) txDir() string { return c.abs(txRel) }
 
 // sum is the SHA-256 of raw bytes as 64 lowercase hex digits (raw-file-bytes hashing).
@@ -171,8 +188,17 @@ func writeDurable(dir, name string, data []byte) error {
 // new stage once, content-addressed, with a copy per rename; every pre-image content-addressed; the prepare record;
 // the renames; the commit record; and the stage is collected. The caller has run steps 1 and 2. A target folder, or a
 // folder to create, on another file system than the journal refuses before anything is staged. A stage left by an
-// interrupted commit refuses a new commit until Recover has run.
+// interrupted commit refuses a new commit until Recover has run. A commit that stops returns a *CommitError saying
+// whether its prepare record is written.
 func (c *Corpus) Commit(l *Lock, changes []Change) error {
+	prepared := false
+	if err := c.commit(l, changes, &prepared); err != nil {
+		return &CommitError{Prepared: prepared, Err: err}
+	}
+	return nil
+}
+
+func (c *Corpus) commit(l *Lock, changes []Change, prepared *bool) error {
 	if err := c.checkHeld(l); err != nil {
 		return err
 	}
@@ -260,8 +286,11 @@ func (c *Corpus) Commit(l *Lock, changes []Change) error {
 		return fmt.Errorf("journal: %w", err)
 	}
 	if err := writeDurable(stage, prepareName, append(record, '\n')); err != nil {
+		// A record renamed into place before its folder sync failed is in the stage, and recovery completes it.
+		*prepared, _ = regularExists(filepath.Join(stage, prepareName))
 		return err
 	}
+	*prepared = true
 	c.obs.Observe(Event{Kind: Prepared, Path: stage})
 	if err := c.step("prepare", 0); err != nil {
 		return err
