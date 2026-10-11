@@ -93,6 +93,9 @@ func (e *Executor) decode(b []byte) (*call, *Error) {
 	if len(m.Params) != req.NParams {
 		return nil, errf(codeIRInvalid, "params holds %d values for n_params %d", len(m.Params), req.NParams)
 	}
+	if err := e.checkParams(req, m.Params); err != nil {
+		return nil, err
+	}
 	now, ok := datetimeOfWire(m.Now, 6)
 	if !ok || now.null {
 		return nil, errf(codeIRInvalid, "now %q is not a datetime in the form YYYY-MM-DD HH:MM:SS.ffffff", m.Now)

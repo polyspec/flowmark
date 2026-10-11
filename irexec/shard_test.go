@@ -44,10 +44,7 @@ func TestShardInsert(t *testing.T) {
 	})
 	t.Run("20#time-shards: a value that is no time is refused before the row is placed", func(t *testing.T) {
 		f := goldenFixture(t, "shard")
-		err := f.fails(f.msg("insert", "events", map[string]any{"set": sets("title", "at")}, "Bad", "soon"), "CONSTRAINT")
-		if len(err.Faults) != 1 || err.Faults[0].Column != "at" {
-			t.Fatalf("faults %+v; want the one fault of the column at", err.Faults)
-		}
+		f.fails(f.msg("insert", "events", map[string]any{"set": sets("title", "at")}, "Bad", "soon"), "CODEC_ENCODE")
 	})
 	t.Run("20#time-shards: a row without its shard column is refused as a required column is", func(t *testing.T) {
 		f := goldenFixture(t, "shard")

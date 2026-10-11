@@ -176,7 +176,7 @@ func TestWhere(t *testing.T) {
 		code string
 	}{
 		{"60#surfaces: an operator the column type does not take", f.msg("all", "people", map[string]any{"where": where(pred("active", "gt", p(0)))}, true), "OPERATOR_NOT_ALLOWED"},
-		{"60#surfaces: a parameter not of the compared type has no rule yet", f.msg("all", "items", map[string]any{"where": where(pred("state", "eq", p(0)))}, 5), "CAPABILITY_UNSUPPORTED"},
+		{"60#surfaces: a parameter not of the compared type", f.msg("all", "items", map[string]any{"where": where(pred("state", "eq", p(0)))}, 5), "CODEC_ENCODE"},
 		{"60#surfaces: a group may not start with or", f.msg("all", "items", map[string]any{"where": where(map[string]any{"pred": map[string]any{"conn": "or", "column": "id", "op": "eq", "p": 0}})}, "T1"), "OR_AT_GROUP_START"},
 		{"60#surfaces: an empty in", f.msg("all", "items", map[string]any{"where": where(pred("id", "in", map[string]any{"ps": []int{}}))}), "EMPTY_IN"},
 		{"60#surfaces: an unknown function", f.msg("all", "items", map[string]any{"where": where(pred("due", "eq", map[string]any{"p": 0, "fn": map[string]any{"name": "week"}}))}, 1), "FUNCTION_UNKNOWN"},

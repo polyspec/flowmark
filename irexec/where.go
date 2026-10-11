@@ -1,7 +1,6 @@
 package irexec
 
 import (
-	"fmt"
 	"math"
 	"strconv"
 	"strings"
@@ -145,7 +144,7 @@ func (r *reader) col(s *scope, ev *env, name string) (cell, dbspec.Type, *Error)
 func (r *reader) param(i int, t dbspec.Type) (cell, *Error) {
 	v, ok := decodeParam(r.cl.params[i], t)
 	if !ok {
-		return cell{}, unspecified(fmt.Sprintf("parameter %d compared with a %s value is not a value of that type, CODEC_ENCODE once ir.ParamUses lists its slot (orm T89; for a contains or contains_binary value, orm T80)", i, t.String()))
+		return cell{}, errf(codeInternal, "parameter %d compared with a %s value is not a value of that type, which the check before reading refuses", i, t.String())
 	}
 	return v, nil
 }
