@@ -112,7 +112,12 @@ compatibility, no fallback, no hidden error, no trick; rules first.
   through orm over `markdown://` is `CAPABILITY_UNSUPPORTED`.
 - Introspection validates every document against the catalog and returns the catalog; a document
   that fails is a located diagnostic. A tool that drafts a catalog from a corpus without one is
-  not part of this plan.
+  not part of this plan. The catalog returned is each `dbspec/` document in dbspec canonical form
+  (orm's `Emit`) with its corpus path and name, and the manifest hash; it is returned with every
+  validator diagnostic whenever it loads, since rows never change the schema, and a catalog that
+  does not load returns only its `catalog` diagnostics. `flowmark introspect <corpus>` prints the
+  answer as one JSON object and exits 0 with no diagnostic, 1 with one or on failure, 2 for a wrong
+  command line (spec 30 Introspection).
 - **T8.5 is withdrawn**: a Mermaid block inside a document is no authority. `ParseMermaid`,
   `ApplySchema`, the `schema.mermaid` operation and the board's diagram strip are removed.
   Mermaid views (orm's `erDiagram` included) are not a present requirement.

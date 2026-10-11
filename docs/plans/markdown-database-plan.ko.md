@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database -->
-<!-- source-sha256: 4d2fad0caf6a347d499cd3ac0295787e16a07614c067bbcabd3b58f993d30ee8 -->
+<!-- source-sha256: 20521cc9373d7c5ad237cfad1b9c2d92abfde674038184beecc794ed149b797a -->
 # markdown database 계획
 
 [English](markdown-database-plan.md)
@@ -100,7 +100,12 @@ NULL이 아니며 비어 있을 수 있고, view의 entity table은 둘 다 선�
   빈 블록은 쓰이지 않으므로 블록 섹션은 없다 — 를 `CREATE TABLE`이 저장소를 만들듯 만든다. `markdown://`에 대한 orm의 schema install은
   `CAPABILITY_UNSUPPORTED`다.
 - introspection은 모든 문서를 catalog에 대해 검증하고 catalog를 돌려준다. 실패한 문서는 위치가 있는
-  진단이다. catalog 없는 corpus에서 catalog 초안을 만드는 도구는 이 계획에 속하지 않는다.
+  진단이다. catalog 없는 corpus에서 catalog 초안을 만드는 도구는 이 계획에 속하지 않는다. 돌려주는
+  catalog는 각 `dbspec/` 문서의 dbspec canonical form(orm의 `Emit`)과 그 corpus path와 이름, 그리고
+  manifest hash다. 행은 schema를 바꾸지 않으므로 catalog가 load되면 validator의 모든 진단과 함께 돌려주고,
+  load되지 않는 catalog는 그 `catalog` 진단만 돌려준다. `flowmark introspect <corpus>`는 답을 JSON 객체
+  하나로 쓰며, 진단이 없으면 0, 진단이 있거나 실패하면 1, 잘못된 명령줄이면 2로 끝난다(spec 30
+  Introspection).
 - **T8.5를 철회한다**: 문서 안 Mermaid 블록은 authority가 아니다. `ParseMermaid`, `ApplySchema`,
   `schema.mermaid` operation, 보드의 diagram 띠를 제거한다. Mermaid view(orm의 `erDiagram` 포함)는
   현재 요구가 아니다.
