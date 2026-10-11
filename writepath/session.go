@@ -100,6 +100,13 @@ func (c *Corpus) Session(name string) (*Session, error) {
 // Name returns the session's name, which the lock names as the holder's session.
 func (s *Session) Name() string { return s.name }
 
+// InTransaction reports whether a transaction is open in the session; it waits for a request in progress.
+func (s *Session) InTransaction() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.tx != nil
+}
+
 // Exec runs one request message of the IR-executor protocol. Outside a transaction it is one transaction under the
 // lock, and a write that meets a conflict at its commit is run once more on the corpus read again (spec 40
 // Transactions). Inside a transaction it reads and changes the transaction's post-image; a failed request changes

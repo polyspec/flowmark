@@ -202,6 +202,32 @@ func TestTransaction(t *testing.T) {
 	})
 }
 
+// TestInTransaction pins what the server's idle bound reads: whether a transaction is open, from its begin to its end
+// by commit, rollback, a failed commit or Close.
+func TestInTransaction(t *testing.T) {
+	f := baseFixture(t)
+	s := f.session("server")
+	ctx := context.Background()
+	open := func(want bool) {
+		t.Helper()
+		if got := s.InTransaction(); got != want {
+			t.Fatalf("InTransaction() = %v, want %v", got, want)
+		}
+	}
+	open(false)
+	must(t, s.Begin(ctx, false))
+	open(true)
+	must(t, s.Commit())
+	open(false)
+	must(t, s.Begin(ctx, true))
+	open(true)
+	must(t, s.Rollback())
+	open(false)
+	must(t, s.Begin(ctx, false))
+	must(t, s.Close())
+	open(false)
+}
+
 // TestTransactionControlMisuse pins the refusals of the control messages (spec 40 Transactions): CONFIG, orm's code of
 // a transaction misuse.
 func TestTransactionControlMisuse(t *testing.T) {
