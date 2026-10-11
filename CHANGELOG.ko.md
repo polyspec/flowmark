@@ -1,9 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 456d7fe5c5e07449ddbd965a7dc570c689ff68591d8ae545ed375ee336f1656c -->
+<!-- source-sha256: 1f41499c2626d52cfbbcf773131bb05a01f5691c427440b151df40a5260f458e -->
 # Changelog
 
 ## Unreleased
 
+- T12.1-30: 상세 anchor 충돌 규칙이 접은 형태 대신 각 viewer의 정확한 slug를 따른다. S_GH는 GitHub의 heading id(Unicode 17.0.0 word 문자, alt 텍스트 없음)를, S_VS는 VS Code의 것(그 slugify.ts, Unicode 13.0.0 집합, Final_Sigma, alt 텍스트)을 재현하며, 둘 다 `make slug-vectors`가 viewer에서 모든 code point에 대해 기록한 id와 대조한다. S_GL은 GitLab이 고정한 comrak 0.56.0의 것을 재현한다. slug 입력은 CommonMark 0.31.2가 렌더한 텍스트다. 텍스트의 numeric character reference는 그 code point다. HTML id나 name은 소문자로 바꾼 뒤, GitHub의 `user-content-` 형태로도 비교한다.
 - T13: Git이 `config/commits.json`을 어기는 message를 거절하는 `commit-msg` hook과 `pre-push` push gate를 실행한다. `config/checklist.json`이 둘을 나열하고 `make hooks`가 설치한다.
 - T12.3-2: validator는 type이 아닌 값이 무엇이든(그런 atom을 true로, 이어 false로 평가해) 행의 논리 값에 대해 check 술어가 false이면 `check`를 보고하고, 같은 판정을 commit용으로 export한다. `history.chain`은 연속성만, `state.transition`은 선언되지 않은 이력 쌍을, `state.required`는 필수 값이 없는 선언된 쌍을 보고하며, type이 아닌 상태, `from`, `to`는 `type`만이고, 행 자신의 `from`은 여전히 앞 행에 대해 판정한다.
 - T12.3-3: unique key는 orm의 binary collation처럼 바이트 단위로 비교한다. primary key는 file 이름이자 anchor이기 때문에만 대소문자를 무시한다. `key.duplicate`는 key가 바이트 단위로 같으면 그 행을 밝혀 바이트 단위로 같다고 말하고, 그렇지 않으면 대소문자를 무시하고 같은 첫 key를 밝힌다.
