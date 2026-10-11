@@ -1,5 +1,5 @@
 <!-- doc-id: spec-ops -->
-<!-- source-sha256: 226d26be15f1185cb76f25f17ef3722316ae2c36eea3626b01c7c9edd8f20bd3 -->
+<!-- source-sha256: 502fa390cdc38ee9e8d8b3f6c69ac35dde9b6a9eed4124c868984c2c54f71d2a -->
 # Operations
 
 [English](40-ops.md)
@@ -163,8 +163,14 @@
   열린 동안의 `begin`, transaction 없는 `commit`, `rollback`, `savepoint`, `release`, `rollback_to`, 이름
   없는 savepoint, transaction의 어떤 savepoint도 갖지 않은 이름의 `release`나 `rollback_to`. 근거: 이
   corpus lock이 따르는 단일 writer lock의 SQLite는 중첩된 `BEGIN`과 모르는 savepoint를 거절한다.
-- 실패한 commit은 아무것도 쓰지 않고 transaction을 끝내며 lock을 푼다. 실패한 SQL `COMMIT`이
-  transaction을 rollback하는 것과 같다.
+- prepare record 전에 실패한 commit은 아무것도 쓰지 않는다: transaction을 끝내고, 같은 lock 아래에서
+  부분 stage를 버리며, lock을 푼다. 실패한 SQL `COMMIT`이 transaction을 rollback하는 것과 같다. prepare
+  record부터 commit은 결정된다: 그 뒤에 실패한 단계에는 같은 lock 아래 복구가 이어져 commit을 완료하며,
+  commit은 성공한다. 그 복구도 실패하면 commit은 prepare되었고 다음 lock 획득에서 완료되며 반복하면 안
+  된다고 밝히는 `DRIVER`다. 쓰인 commit 뒤에 lock을 풀지 못하면 그 실패는 commit이 쓰였다고 밝힌다. 근거:
+  prepare record는 write-ahead log의 지속된 commit record처럼 journal의 commit 시점이므로, 그 뒤의 실패를
+  복구가 적용할 commit인데도 일어나지 않은 commit으로 답하지 않는다. lock은 panic을 포함해 operation의
+  모든 출구에서 풀린다.
 - write path는 단일 operation 쓰기 — transaction 밖의 쓰기, 이력 repair, rewrite, 모든 face에서, transaction
   밖의 server 요청을 포함해 — 를 그 commit이 `CORPUS_CONFLICT`를 만나면 한 번 재시도한다: 같은 lock 아래에서
   corpus를 다시 읽고 operation을 다시 실행한다. server transaction은 server가 재시도하지 않으며 orm client는

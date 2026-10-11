@@ -27,6 +27,44 @@ func crashAt(step string, index int) func(string, int) error {
 	}
 }
 
+// crashOnce returns a fault seam that fails at one step of the journal the first time it is reached, as a crash of
+// one commit that the recovery after it does not meet again.
+func crashOnce(step string, index int) func(string, int) error {
+	fired := false
+	return func(s string, i int) error {
+		if s == step && i == index && !fired {
+			fired = true
+			return errCrash
+		}
+		return nil
+	}
+}
+
+// TestDecidedCommitRecoveryFails pins a commit stopped after its prepare record whose recovery under the same lock
+// fails too: DRIVER saying the commit is prepared, completes at the next acquisition and must not be repeated; the
+// next acquisition completes it.
+func TestDecidedCommitRecoveryFails(t *testing.T) {
+	f := baseFixture(t)
+	s := f.session("server")
+	must(t, s.Begin(context.Background(), false))
+	for _, m := range crashTx(f) {
+		if _, err := s.Exec(context.Background(), m); err != nil {
+			t.Fatal(err)
+		}
+	}
+	f.j.SetFault(crashAt("renames", 0))
+	err := s.Commit()
+	fails(t, err, "DRIVER", "prepared", "next acquisition", "do not repeat")
+	f.j.SetFault(nil)
+	f.rec.reset()
+	want(t, f.session("cli"), f.countTags(), `{"count":3}`)
+	f.rec.wantKinds(t, journal.LockAcquired, journal.Applied, journal.Collected, journal.Replayed, journal.LockReleased)
+	if got := snapshot(t, f.root); !reflect.DeepEqual(got, afterCrashTx(t)) {
+		t.Fatalf("corpus = %v", got)
+	}
+	f.clean()
+}
+
 // crashPoint is a step of the commit with the state recovery must give: before the prepare record the stage is
 // discarded (the old state); from it on it is completed (the new state).
 type crashPoint struct {
@@ -106,9 +144,9 @@ func afterCrashTx(t *testing.T) map[string]string {
 	return snapshot(t, f.root)
 }
 
-// TestRecoveryOnAcquisition pins recovery at every acquisition of the lock (spec 40 Opening a corpus): a commit stopped
-// at any step of the journal leaves a stage, and the next operation of any session completes or discards it before it
-// reads, so it reads the old state or the new one, never a mix.
+// TestRecoveryOnAcquisition pins a commit stopped at each step of the journal (spec 40 The commit protocol): before its
+// prepare record it writes nothing and fails DRIVER, its partial stage discarded; from the prepare record on it is
+// decided, and recovery under the same lock completes it, so the commit succeeds. Never a mix.
 func TestRecoveryOnAcquisition(t *testing.T) {
 	after := afterCrashTx(t)
 	for _, cp := range crashPoints {
@@ -122,19 +160,27 @@ func TestRecoveryOnAcquisition(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			f.j.SetFault(crashAt(cp.step, cp.index))
+			f.j.SetFault(crashOnce(cp.step, cp.index))
 			err := s.Commit()
-			fails(t, err, "DRIVER", "simulated crash")
-			if !errors.Is(err, errCrash) {
-				t.Fatalf("Commit = %v, want the crash as its cause", err)
+			if cp.new {
+				// From the prepare record on the commit is decided: recovery under the same lock completes it.
+				if err != nil {
+					t.Fatalf("Commit = %v, want the commit completed under its lock", err)
+				}
+			} else {
+				fails(t, err, "DRIVER", "simulated crash", "nothing was written")
+				if !errors.Is(err, errCrash) {
+					t.Fatalf("Commit = %v, want the crash as its cause", err)
+				}
 			}
 			f.j.SetFault(nil)
-			f.rec.reset()
-			want(t, f.session("cli"), f.countTags(), map[bool]string{false: `{"count":2}`, true: `{"count":3}`}[cp.new])
 			kinds := f.rec.kinds()
 			if len(kinds) < 3 || kinds[0] != journal.LockAcquired || kinds[len(kinds)-2] != cp.event || kinds[len(kinds)-1] != journal.LockReleased {
 				t.Fatalf("events = %v, want the lock, then %s, then the release", kinds, cp.event)
 			}
+			f.rec.reset()
+			want(t, f.session("cli"), f.countTags(), map[bool]string{false: `{"count":2}`, true: `{"count":3}`}[cp.new])
+			f.rec.wantKinds(t, opened...)
 			wantSnap := before
 			if cp.new {
 				wantSnap = after
@@ -160,7 +206,8 @@ func TestOpenRecovers(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		f.j.SetFault(crashAt("prepare", 0))
+		// A fault that recovery meets again leaves the decided commit's stage for the next acquisition.
+		f.j.SetFault(crashAt("renames", 0))
 		if err := s.Commit(); !errors.Is(err, errCrash) {
 			t.Fatalf("Commit = %v", err)
 		}
@@ -226,16 +273,17 @@ func TestOpenRecovers(t *testing.T) {
 	t.Run("40#the-commit-protocol: a create whose folder is missing, stopped after the folder", func(t *testing.T) {
 		f := newFixture(t, executorCatalog(t), nil)
 		s := f.session("cli")
+		// The recovery after the stop finds the folder in place and completes the create.
 		f.j.SetFault(crashAt("folder", 0))
-		_, err := s.Exec(context.Background(), f.msg("insert", "notes", map[string]any{"set": sets(0, "id", "title", "body")}, "N1", "First", ""))
-		fails(t, err, "DRIVER", "simulated crash")
+		want(t, s, f.msg("insert", "notes", map[string]any{"set": sets(0, "id", "title", "body")}, "N1", "First", ""), `{"affected":1,"keys":["N1"]}`)
 		f.j.SetFault(nil)
-		entries, err := os.ReadDir(filepath.Join(f.root, "notes"))
-		if err != nil || len(entries) != 0 {
-			t.Fatalf("notes/ = %v, %v; want the empty folder of the interruption", entries, err)
+		kinds := f.rec.kinds()
+		if kinds[len(kinds)-2] != journal.Replayed {
+			t.Fatalf("events = %v, want the replay of the stopped commit", kinds)
 		}
-		f.rec.reset()
-		want(t, f.session("cli"), f.msg("count", "notes", nil), `{"count":1}`)
+		if f.file("notes/N1.flowmark.md") == "" {
+			t.Fatal("the create did not land")
+		}
 		f.clean()
 	})
 }

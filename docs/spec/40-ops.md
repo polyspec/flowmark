@@ -183,8 +183,16 @@ The order of the commit protocol is normative.
   `rollback_to` without one; a savepoint without a name; `release` or `rollback_to` of a name no
   savepoint of the transaction has. Grounding: SQLite, whose single writer lock this corpus lock follows,
   refuses a nested `BEGIN` and an unknown savepoint.
-- A commit that fails writes nothing, ends the transaction and releases the lock, as a failed SQL
-  `COMMIT` rolls the transaction back.
+- A commit that fails before its prepare record writes nothing: it ends the transaction, its partial
+  stage is discarded under the same lock, and the lock is released, as a failed SQL `COMMIT` rolls the
+  transaction back. From the prepare record on the commit is decided: a step that fails after it is
+  followed, under the same lock, by recovery, which completes the commit, and the commit succeeds;
+  when that recovery fails too, the commit is `DRIVER` saying that it is prepared, completes at the
+  next acquisition of the lock and must not be repeated. A failure to release the lock after a
+  written commit says that the commit is written. Grounding: the prepare record is the commit point
+  of the journal, as a durable commit record is in a write-ahead log, so a failure after it is never
+  answered as a commit that did not happen while recovery would apply it. The lock is released on
+  every way out of an operation, a panic included.
 - The write path retries a single-operation write — a write, a history repair or a rewrite outside a
   transaction, on every face, a server request outside a transaction included — once when its commit
   meets `CORPUS_CONFLICT`: under the same lock, it reads the corpus again and runs the operation again.

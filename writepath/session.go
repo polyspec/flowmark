@@ -186,51 +186,57 @@ func (s *Session) do(ctx context.Context, o op) (*irexec.Answer, error) {
 
 // single runs an operation as one transaction under the lock. A write whose commit meets WRITE_CONFLICT runs once more
 // on the corpus read again, still under the lock; a second conflict is returned (spec 40 Transactions).
-func (s *Session) single(ctx context.Context, o op) (*irexec.Answer, error) {
+// The lock is released on every way out, a panic included.
+func (s *Session) single(ctx context.Context, o op) (a *irexec.Answer, err error) {
 	l, err := s.c.acquire(ctx, s.name)
 	if err != nil {
 		return nil, err
 	}
-	a, err := s.c.runSingle(l, o)
-	if err = release(l, err); err != nil {
-		return nil, err
-	}
-	return a, nil
+	written := false
+	defer func() {
+		if err = releaseAfter(l, written, err); err != nil {
+			a = nil
+		}
+	}()
+	a, written, err = s.c.runSingle(l, o)
+	return a, err
 }
 
-func (c *Corpus) runSingle(l *journal.Lock, o op) (*irexec.Answer, error) {
+// runSingle runs an operation under the held lock l and reports whether it wrote the corpus.
+func (c *Corpus) runSingle(l *journal.Lock, o op) (*irexec.Answer, bool, error) {
 	for attempt := 0; ; attempt++ {
 		base, err := c.read()
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		if c.readHook != nil {
 			c.readHook(attempt)
 		}
 		res, err := o.run(base)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		if res.Post == nil {
-			return res.Answer, nil
+			return res.Answer, false, nil
 		}
 		if err := c.refuseRewrite(res.Post.Targets, o.exempt); err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		t := &tx{lock: l, base: base, writes: []*write{{run: o.run, exempt: o.exempt, answer: res.Answer, targets: res.Post.Targets}}}
-		err = c.commit(t)
+		written, err := c.commit(t)
 		if err == nil {
-			return res.Answer, nil
+			return res.Answer, written, nil
 		}
 		if attempt > 0 || !isConflict(err) {
-			return nil, err
+			return nil, written, err
 		}
 	}
 }
 
 // Begin opens a transaction: it takes the lock, waiting as the corpus's operations wait, and reads the corpus. A
-// read-only transaction takes the lock too and refuses every write as READ_ONLY.
-func (s *Session) Begin(ctx context.Context, readOnly bool) error {
+// read-only transaction takes the lock too and refuses every write as READ_ONLY. A begin that does not open the
+// transaction, by an error or a panic, releases the lock.
+func (s *Session) Begin(ctx context.Context, readOnly bool) (err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed {
@@ -243,9 +249,14 @@ func (s *Session) Begin(ctx context.Context, readOnly bool) error {
 	if err != nil {
 		return err
 	}
+	defer func() {
+		if s.tx == nil {
+			err = release(l, err)
+		}
+	}()
 	base, err := s.c.read()
 	if err != nil {
-		return release(l, err)
+		return err
 	}
 	s.tx = &tx{lock: l, readOnly: readOnly, base: base, cur: base}
 	return nil
@@ -256,8 +267,10 @@ func (s *Session) noTx(what string) error {
 	return newError(codeConfig, "%s: no transaction is open in the session %s; begin one first", what, s.name)
 }
 
-// Commit commits the transaction and releases the lock. A failed commit writes nothing and ends the transaction.
-func (s *Session) Commit() error {
+// Commit commits the transaction and releases the lock, on every way out, a panic included. A commit that fails
+// before its prepare record writes nothing; from the prepare record on it is decided (see commit). Either way the
+// transaction ends.
+func (s *Session) Commit() (err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	t := s.tx
@@ -265,7 +278,10 @@ func (s *Session) Commit() error {
 		return s.noTx("commit")
 	}
 	s.tx = nil
-	return release(t.lock, s.c.commit(t))
+	written := false
+	defer func() { err = releaseAfter(t.lock, written, err) }()
+	written, err = s.c.commit(t)
+	return err
 }
 
 // Rollback discards the transaction and releases the lock.
