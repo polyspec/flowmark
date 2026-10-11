@@ -509,16 +509,21 @@ reimplements them.
   item from from_state to to_state at at`. `item_history(id i64 identity, item varchar(32),
   from_state, to_state, at, evidence, cause, retry)` declares the same three `markdown` columns
   and has `foreign key fk_history_item (item) references items (id)` with its index. A
-  multi-line evidence is a section (`items.flowmark.md` H1, `## items row T1`, `### item_history`,
-  `#### item_history row <id>`, `##### evidence` — within H6).
+  multi-line evidence is a section (`items/T1.flowmark.md` with the title as H1, `## evidence`;
+  its history copy `## item_history`, `### item_history row <id>`, `#### evidence` — within H6).
 - `flowmark.dbs` declares no `limit`: the owner's WIP rule — completion before starting, with
   independent items allowed in parallel — is a working rule that no count expresses, and a
   number would be invented. The `limit` setting stays for a schema that names one. The engine
   enforces no WIP rule: the relative gate (`app/apply.go:40,178`) is removed, the owner's rule
   stays a working rule in AGENTS, and spec 100's WIP-gate ruling and design-plan §9's "column
   limit" are corrected in T12.1.
-- Storages of `flowmark.dbs`: `items` `store document list`; `people`, `item_links` and `views`
-  `store document table`; `item_history` `store block fk_history_item table`.
+- Storages of `flowmark.dbs` (T12.1-34): `items` `store files`, one file an item;
+  `item_history` `store block fk_history_item table` and `item_links`
+  `store block fk_item_links_from table`, both in the item's file; `people` and `views`
+  `store document table`, bounded by the team and its saved views. So no file grows with the
+  life of the project: a write, a transition, a link and a move of an item write its file alone
+  (`position` holds the sparse rank of T12.1-36), and each file's size is observed by T12.5-3,
+  never assumed (spec 100 Files and links).
 - A view is data: `views(id i64 identity, title varchar(255), body text, kind varchar(16),
   entity varchar(63), filter text, sort text, group_by varchar(63) null)` with
   `check ck_views_kind (kind in ('kanban', 'list', 'gantt'))`, `codec filter ordered_json`,

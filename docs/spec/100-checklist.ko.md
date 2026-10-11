@@ -1,5 +1,5 @@
 <!-- doc-id: spec-checklist -->
-<!-- source-sha256: 455cb380a423626d0d94da1f7a2a66bb86a70c55919279cb12efa063591a857a -->
+<!-- source-sha256: 9e010325bbfba5a07e7beba72724982589047ce7e816e77ae713238c27e605de -->
 # 응용 schema
 
 [English](100-checklist.md)
@@ -12,10 +12,10 @@
 
 | Table | 저장 | Column과 setting |
 | --- | --- | --- |
-| `items` | `store document list`, file `items.flowmark.md` | `id varchar(32)`와 `key_prefix 'T'`, `parent varchar(32) null` → items, `state varchar(16)`, `title varchar(255)`와 `title title`, `body text`와 `markdown body`·`body body`, `assignee varchar(32) null` → people, `start_on date null`·`start_at datetime(0) null`·`due_on date null`·`due_at datetime(0) null`, `priority i16 null`, `position i32`와 `order position`, `evidence text null`·`cause text null`·`retry text null`(각각 `markdown`) |
+| `items` | `store files`, item 하나에 file `items/<key>.flowmark.md` 하나 | `id varchar(32)`와 `key_prefix 'T'`, `parent varchar(32) null` → items, `state varchar(16)`, `title varchar(255)`와 `title title`, `body text`와 `markdown body`·`body body`, `assignee varchar(32) null` → people, `start_on date null`·`start_at datetime(0) null`·`due_on date null`·`due_at datetime(0) null`, `priority i16 null`, `position i32`와 `order position`, `evidence text null`·`cause text null`·`retry text null`(각각 `markdown`) |
 | `people` | `store document table`, file `people.flowmark.md` | `id varchar(32)`와 `key_prefix 'P'`, `name varchar(255)`와 `title name` |
-| `item_links` | `store document table`, file `item_links.flowmark.md` | `id i64 identity`, `from_item varchar(32)` → items, `to_item varchar(32)` → items, `kind varchar(16)` |
-| `item_history` | `store block fk_history_item table`, 자기 item의 상세 섹션 안 | `id i64 identity`, `fk_history_item`으로 items를 가리키는 `item varchar(32)`, `state`와 같은 type의 `from_state`·`to_state`, `at datetime(6)`, items와 같은 `evidence`·`cause`·`retry`(각각 `markdown`) |
+| `item_links` | `store block fk_item_links_from table`, 자기 `from_item`의 file 안 | `id i64 identity`, `from_item varchar(32)` → items, `to_item varchar(32)` → items, `kind varchar(16)` |
+| `item_history` | `store block fk_history_item table`, 자기 item의 file 안 | `id i64 identity`, `fk_history_item`으로 items를 가리키는 `item varchar(32)`, `state`와 같은 type의 `from_state`·`to_state`, `at datetime(6)`, items와 같은 `evidence`·`cause`·`retry`(각각 `markdown`) |
 | `views` | `store document table`, file `views.flowmark.md` | `id i64 identity`, `title varchar(255)`와 `title title`, `body text`와 `markdown body`·`body body`, `kind varchar(16)`, `entity varchar(63)`, `filter text`와 `sort text`(`codec filter ordered_json`과 `codec sort ordered_json`), `group_by varchar(63) null` |
 
 모든 foreign key는 선행 index를 갖는다. check는 `start_on is null or start_at is null`,
@@ -31,17 +31,40 @@
 
 ## 파일과 link
 
-- `items`, `people`, `item_links`, `views`의 행은 각각 이름으로 정해지는 document file 하나의 행이다
-  (`items.flowmark.md`, `people.flowmark.md`, `item_links.flowmark.md`, `views.flowmark.md`).
-  `item_history`
-  행은 자기 item의 상세 섹션 안에 있는 block 행이다. key는 [document model](20-document-model.md)의 key
-  규칙을 따른다: `T1`과 `P1`은 각각 `items`와 `people` table의 key다.
-- 외래 key는 [canonical format](10-canonical-format.md)이 정한 대로 link다. 담당자 `P1`을 가진 진행 중인
-  `items`의 list 행은 `- [~] T1 Write the spec assignee:[P1](people.flowmark.md)`로 쓴다: 사람 행은
-  상세 섹션이 없으므로 target에 anchor가 없다.
-- `item_links`의 table cell에서 `from_item`과 `to_item`은 `[T1](items.flowmark.md#items-row-t1)` 같은 link다.
-  anchor는 item이 상세 섹션을 가질 때에만 있다.
-- 여러 줄 evidence는 section이다: `items.flowmark.md` H1, `## items row T1`, `### item_history`, `#### item_history row <id>`, `##### evidence` — H6 안에 든다. `require` 목록이 이름 붙인 column `evidence`·`cause`·`retry`는 `items`와 `item_history` 양쪽의 `markdown` column이므로, 값이 있는 이력 행은 상세 section을 갖는다. `items`는 `document list`로 저장되며 그 행은 row scope 3에 서고, 이력 section은 H5에 선다. 블록 table에서 row scope 5 이상으로 같은 기계를 두면 H7이 필요하며, 그 이력 table이 `document table`로 저장되지 않는 한 schema 오류다([schema](30-schema.md#the-history-table)). column을 더하는 것은 `items`의 저장을 결코 바꾸지 않는다.
+- item은 자기 file `items/<key>.flowmark.md`다: H1인 title, field, body, `markdown` column, 그다음
+  transition들의 block `## item_history`와 그 item이 시작하는 link들의 block `## item_links`.
+  [document model](20-document-model.ko.md#저장)이 `files` 행과 그 child block을 저장하는 그대로다.
+  `people`과 `views`의 행은 각각 document file 하나, `people.flowmark.md`와 `views.flowmark.md`의
+  행이다. key는 document model의 key 규칙을 따른다: `T1`과 `P1`은 각각 `items`와 `people` table의
+  key다.
+- **어떤 file도 project의 수명과 함께 자라지 않는다.** item에 대한 쓰기, transition — 그 이력 행을
+  item의 block에 쓴다 —, item이 시작하는 link, item의 move는 그 item의 file만 쓰므로, 서로 다른
+  item의 transition과 link는 서로 다른 file을 건드리고, item의 이력과 나가는 link는 item과 함께
+  읽힌다. 두 document file은 팀과 그 저장된 view로 한정되며, 이는 한 일의 양과 함께 자라지 않는다.
+  근거: 모든 item과 그 이력과 link를 담는 document file은 쓰기마다 통째로 parse되고 다시 쓰이므로
+  ([비용 모델](40-ops.ko.md#비용-모델)) 그 비용과 git merge 충돌이 project와 함께 자란다. 이력을
+  `document table`로 저장하면 table의 모든 transition이 한 file에 쌓이며, 이력 table의 저장은 그것을
+  block의 깊이와 맞바꾼다([schema](30-schema.ko.md#이력-table)). 각 file의 크기는 가정하지 않고
+  관측한다: file을 재는 envelope와 그것을 넘은 진단은 `T12.5-3`의 몫이다.
+- `item_links`는 `from_item`으로 놓인다(`store block fk_item_links_from table`): link는 자기가
+  시작하는 item에 속하고, `to_item`과 `kind`가 block의 cell이며, block 행의 `from_item`은 그 배치이지
+  cell이 아니다. item으로 들어오는 link는 `to_item`이 그 item을 가리키는 행이며, 다른 모든 foreign
+  key처럼 table에 대한 query로 읽는다.
+- `position`은 같은 `parent`를 가진 item들 사이에서 item의 위치가 아니라 **rank**를 담는다: 읽기는
+  column을 1부터 세는 위치로 채우고, move는 item에 새 이웃 사이의 rank를 주며, 그런 rank가 있는 한
+  그 file만 쓴다([document model](20-document-model.ko.md#순서)). 형제 사이에 덧붙는 item은 마지막
+  rank보다 1000 큰 rank를 받으므로, 엔진이 쓴 corpus는 `position: 1000`, `position: 2000`, …로 읽힌다.
+- 외래 key는 [canonical format](10-canonical-format.md)이 정한 대로 link다. 담당자가 `P1`인 item의
+  field는 `- assignee: [P1](../people.flowmark.md)`로 쓴다: 사람 행은 상세 섹션이 없으므로 target에
+  anchor가 없다. link block의 `to_item` cell은 item의 file을 `[T3](T3.flowmark.md)`로 link하며,
+  `parent` field도 부모의 file을 같은 방식으로 link한다.
+- 여러 줄 evidence는 section이다: item의 title을 H1으로 가진 `items/T1.flowmark.md`, `## evidence`.
+  이력 행 안의 그 사본은 `## item_history`, `### item_history row <id>`, `#### evidence` — H6 안에
+  든다. `require` 목록이 이름 붙인 column `evidence`·`cause`·`retry`는 `items`와 `item_history` 양쪽의
+  `markdown` column이므로, 값이 있는 이력 행은 상세 section을 갖는다. `items`는 `files`로 저장되며 그
+  행은 row scope 2에 서고, 이력 section은 H4에 선다. 블록 table에서 row scope 5 이상으로 같은 기계를
+  두면 H7이 필요하며, 그 이력 table이 `document table`로 저장되지 않는 한 schema 오류다
+  ([schema](30-schema.ko.md#이력-table)). column을 더하는 것은 `items`의 저장을 결코 바꾸지 않는다.
 
 ## 상태기계
 
@@ -58,7 +81,10 @@
 | history | `history item_history row item from from_state to to_state at at` |
 
 - checkbox glyph는 정확히 한 글자이며 list 행의 대괄호 사이에 쓴다: list 행은 대괄호 사이에 glyph를 쓰므로
-  `waiting`은 `- [ ] T1 …`, `doing`은 `- [~] T1 …`, `done`은 `- [o] T1 …`로 읽힌다.
+  `waiting`은 `- [ ] T1 …`, `doing`은 `- [~] T1 …`, `done`은 `- [o] T1 …`로 읽힌다. 표준 저장은
+  상태를 item file의 field `- state: doing`으로 쓴다. glyph는 `items`를 list로 저장하는 corpus를 위해
+  기계를 온전히 유지하며, 그런 corpus는 glyph가 필요하다
+  ([schema](30-schema.ko.md#dbspec-구성에-대한-corpus-규칙)). `schema` operation은 glyph를 답한다.
 - 완료된 항목은 다시 열지 않는다: 그와 관련된 새 이슈는 kind `supersedes`의 `item_links` 행을 가진 새
   항목이다.
 - **WIP limit는 선언하지 않는다.** 사용자의 규칙 — 시작보다 완료, 독립 항목은 병렬 허용 — 은 어떤 개수로도

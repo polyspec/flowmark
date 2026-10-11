@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database -->
-<!-- source-sha256: 8919067f7f0f0206e2cf8c80055ac8056061705af6e68a3cc939c211a1fd8ce7 -->
+<!-- source-sha256: b78099314f356605cefa430c96393b96855586ac86bb9ebf562fe07ebc08ae17 -->
 # markdown database 계획
 
 [English](markdown-database-plan.md)
@@ -416,15 +416,19 @@ markdown 전용 선언은 모두 dbspec **manifest setting**이며 `markdown <co
   대괄호 사이에 쓴다), `history item_history row item from from_state to to_state at at`. `item_history(id
   i64 identity, item varchar(32), from_state, to_state, at, evidence, cause, retry)`는 같은 세
   `markdown` column을 선언하고 `foreign key fk_history_item (item) references items (id)`와 그 index를 갖는다.
-  여러 줄 evidence는 섹션이다(`items.flowmark.md` H1, `## items row T1`, `### item_history`, `#### item_history row <id>`,
-  `##### evidence` — H6 안).
+  여러 줄 evidence는 섹션이다(title을 H1으로 가진 `items/T1.flowmark.md`, `## evidence`. 그 이력 사본은
+  `## item_history`, `### item_history row <id>`, `#### evidence` — H6 안).
 - `flowmark.dbs`는 `limit`를 선언하지 않는다: 사용자의 WIP 규칙 — 시작보다 완료, 독립 항목은 병렬
   허용 — 은 어떤 개수로도 표현되지 않는 작업 규칙이며 숫자는 지어낸 것이 된다. `limit` setting은 숫자를
   정하는 schema를 위해 남는다. 엔진은 WIP 규칙을 강제하지 않는다: 상대 gate(`app/apply.go:40,178`)는
   제거하고, 사용자의 규칙은 AGENTS의 작업 규칙으로 남으며, spec 100의 WIP gate 판정과 design plan §9의
   "column limit"은 T12.1에서 정정한다.
-- `flowmark.dbs`의 저장: `items`는 `store document list`, `people`, `item_links`, `views`는
-  `store document table`, `item_history`는 `store block fk_history_item table`.
+- `flowmark.dbs`의 저장(T12.1-34): `items`는 `store files`로 item 하나에 file 하나,
+  `item_history`는 `store block fk_history_item table`, `item_links`는
+  `store block fk_item_links_from table`로 둘 다 item의 file 안, `people`과 `views`는
+  `store document table`로 팀과 그 저장된 view로 한정된다. 그래서 어떤 file도 project의 수명과 함께
+  자라지 않는다: item의 쓰기, transition, link, move는 그 file만 쓰며(`position`은 T12.1-36의 sparse
+  rank를 담는다), 각 file의 크기는 가정하지 않고 T12.5-3이 관측한다(spec 100 파일과 link).
 - view는 데이터다: `views(id i64 identity, title varchar(255), body text, kind varchar(16),
   entity varchar(63), filter text, sort text, group_by varchar(63) null)`와
   `check ck_views_kind (kind in ('kanban', 'list', 'gantt'))`, `codec filter ordered_json`,
