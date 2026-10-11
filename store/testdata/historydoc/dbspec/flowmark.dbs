@@ -1,0 +1,41 @@
+dbspec 1 flowmark
+
+table items {
+  id varchar(32)
+  state varchar(16)
+  title varchar(255)
+  body text
+  position i32
+  evidence text null
+  primary key (id)
+  settings {
+    store document list
+    title title
+    body body
+    order position
+    markdown body
+    markdown evidence
+    checkbox state waiting ' '
+    checkbox state done 'x'
+    state_machine state initial waiting
+    state_machine state waiting -> done require (evidence)
+    state_machine state terminal done
+    state_machine state history item_history row item from from_state to to_state at at
+  }
+}
+
+table item_history {
+  id i64 identity
+  item varchar(32)
+  from_state varchar(16)
+  to_state varchar(16)
+  at datetime(6)
+  evidence text null
+  primary key (id)
+  index ix_item_history_item (item)
+  foreign key fk_history_item (item) references items (id) on delete restrict on update restrict
+  settings {
+    store document table
+    markdown evidence
+  }
+}

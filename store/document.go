@@ -2,6 +2,7 @@ package store
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"path"
 	"regexp"
@@ -37,6 +38,9 @@ type docLayout struct {
 	glyphs    map[string]string // state -> glyph of a list
 	states    map[string]string // glyph -> state of a list
 	children  []*docLayout      // the block tables stored in the row scope of this table, by table name
+	// inFiles reports that the placement chain of the table reaches a files table, so
+	// that rows of the table lie in several files and a file holds only some of them.
+	inFiles bool
 }
 
 // docLayoutOf returns the layout of table, which must be a document table of cat.
@@ -48,15 +52,16 @@ func docLayoutOf(cat *catalog.Catalog, table string) (*docLayout, error) {
 	if tb.Storage.Kind != catalog.StorageDocument {
 		return nil, fmt.Errorf("table %s is not a document table", table)
 	}
-	return layoutOfTable(cat, tb, "")
+	return layoutOfTable(cat, tb, "", false)
 }
 
 // layoutOfTable returns the layout of the list or table tb, whose placement foreign
-// key is placement, "" for a document table. Its child blocks are laid out in turn.
-func layoutOfTable(cat *catalog.Catalog, tb *catalog.Table, placement string) (*docLayout, error) {
+// key is placement, "" for a document table; inFiles reports that its placement
+// chain reaches a files table. Its child blocks are laid out in turn.
+func layoutOfTable(cat *catalog.Catalog, tb *catalog.Table, placement string, inFiles bool) (*docLayout, error) {
 	table := tb.Name
 	lay := &docLayout{
-		table: table, list: tb.Storage.Shape == catalog.ShapeList, scope: tb.RowScope, placement: placement,
+		table: table, list: tb.Storage.Shape == catalog.ShapeList, scope: tb.RowScope, placement: placement, inFiles: inFiles,
 		title: tb.Title, body: tb.Body, order: tb.Order,
 		fks: map[string]string{}, glyphs: map[string]string{}, states: map[string]string{},
 	}
@@ -103,7 +108,7 @@ func layoutOfTable(cat *catalog.Catalog, tb *catalog.Table, placement string) (*
 			lay.fields = append(lay.fields, c)
 		}
 	}
-	children, err := childLayouts(cat, table)
+	children, err := childLayouts(cat, table, inFiles)
 	if err != nil {
 		return nil, err
 	}
@@ -112,8 +117,9 @@ func layoutOfTable(cat *catalog.Catalog, tb *catalog.Table, placement string) (*
 }
 
 // childLayouts returns the layouts of the block tables whose placement parent is
-// table, in table name order, which is the order of their sections in a row scope.
-func childLayouts(cat *catalog.Catalog, table string) ([]*docLayout, error) {
+// table, in table name order, which is the order of their sections in a row scope;
+// inFiles reports that the placement chain of table reaches a files table.
+func childLayouts(cat *catalog.Catalog, table string, inFiles bool) ([]*docLayout, error) {
 	var out []*docLayout
 	for _, t := range cat.Tables {
 		if t.Storage.Kind != catalog.StorageBlock || t.Storage.Parent != table {
@@ -123,7 +129,7 @@ func childLayouts(cat *catalog.Catalog, table string) ([]*docLayout, error) {
 		if err != nil {
 			return nil, err
 		}
-		child, err := layoutOfTable(cat, t, placement)
+		child, err := layoutOfTable(cat, t, placement, inFiles)
 		if err != nil {
 			return nil, err
 		}
@@ -204,13 +210,15 @@ func (l *docLayout) sectionOf(name string) (section, bool) {
 
 // docRec is a row of a list or table: its row, its layout, the line of the row, and
 // whether the row has a detail section. seen holds the names of the sections and
-// child blocks that its detail section has read.
+// child blocks that its detail section has read; block numbers the scope, the
+// document's list or table or one child block, that holds the row.
 type docRec struct {
 	row    *Row
 	lay    *docLayout
 	line   int
 	detail bool
 	seen   map[string]bool
+	block  int
 }
 
 // docLink is a foreign key value whose target is resolved once every detail
@@ -238,6 +246,7 @@ type docParser struct {
 	recs    []*docRec
 	all     []*docRec
 	links   []docLink
+	blocks  int             // the number of scopes checked, which numbers the block of each row
 	details map[string]bool // the heading text of each detail section read: two of one text collide
 	// ownTable and ownKey name the files row this file holds; empty for a document file.
 	ownTable, ownKey string
@@ -769,7 +778,7 @@ func newRow(table, key, title string) *Row {
 	return &Row{
 		Table: table, Key: key, Title: title,
 		Scalars: map[string]*string{}, Sections: map[string]*string{},
-		Raw: map[string]string{}, Dangling: map[string]DanglingLink{},
+		Raw: map[string]string{}, Dangling: map[string]DanglingLink{}, Shared: map[string]DanglingLink{},
 	}
 }
 
@@ -1234,9 +1243,14 @@ func setBlock(r *Row, table string, rows []*Row) {
 // checkScope checks the rows of one scope once their detail sections are read: the
 // non-null sections and values are present, the order is stated by the line order,
 // the parents name rows of the scope, and the parents form no cycle. The rows then
-// belong to the rows of the file, where a link finds them.
+// belong to the rows of the file, where a link finds them, each stamped with the
+// number of its block.
 func (p *docParser) checkScope(recs []*docRec) {
 	lay := p.lay
+	p.blocks++
+	for _, rec := range recs {
+		rec.block = p.blocks
+	}
 	for _, rec := range recs {
 		for _, s := range lay.sections {
 			if !s.nullable && rec.row.Sections[s.name] == nil {
@@ -1319,22 +1333,32 @@ func uniqueRow(rows []*Row, key string) int {
 }
 
 // resolveLinks checks each foreign key of the file against the row it names, once
-// every row of the file is known: a key that names no row keeps its written target,
-// and a target other than the derived one is noncanonical.
+// every row of the file is known: a key that names no row, or that two or more rows
+// share byte for byte, has no derived target and keeps its written target; a target
+// other than the derived one is noncanonical. A parent that names no row of its
+// block, or one that two rows of its block share, is reported by checkScope.
 func (p *docParser) resolveLinks() {
 	for _, l := range p.links {
-		want, ok := p.linkTarget(l.table, l.key)
-		if !ok {
-			if l.column != l.rec.lay.parent {
-				l.rec.row.Dangling[l.column] = DanglingLink{Key: l.key, Target: l.target}
-			}
-			continue
-		}
-		if want != l.target {
+		want, found := p.linkTarget(l)
+		parent := l.column == l.rec.lay.parent
+		switch {
+		case found == linkNone && !parent:
+			l.rec.row.Dangling[l.column] = DanglingLink{Key: l.key, Target: l.target}
+		case found == linkShared && !parent:
+			l.rec.row.Shared[l.column] = DanglingLink{Key: l.key, Target: l.target}
+		case found == linkOne && want != l.target:
 			p.warn(l.line, l.col, RuleNoncanonical, "the link target is "+want)
 		}
 	}
 }
+
+// The outcomes of the derivation of a link's target: the key names one row, which
+// gives the target; it names no row; or two or more rows share it byte for byte.
+const (
+	linkOne = iota
+	linkNone
+	linkShared
+)
 
 // recRows returns the rows of recs, in their order.
 func recRows(recs []*docRec) []*Row {
@@ -1356,20 +1380,45 @@ func sortedRows(lay *docLayout, recs []*docRec) []*Row {
 	return out
 }
 
-// linkTarget derives the target of a link to the row key of table: for a row of
-// this file, the file's name with the anchor of the row's detail section when it
-// has one; otherwise the linker's target. It reports false when no row has the key.
-func (p *docParser) linkTarget(table, key string) (string, bool) {
-	if table == p.ownTable && key == p.ownKey {
-		return path.Base(p.rel), true
+// linkTarget derives the target of the link l from the one row its key names. A
+// parent names a row of its own block, so its target is derived from that row. Any
+// other key names the row of this file that holds it — the file's name with the
+// anchor of the row's detail section when it has one — or else the row the linker
+// finds. A key that two or more rows of the table share byte for byte, in this file
+// or, when the table's placement chain reaches a files table, in the corpus, names
+// no one row and has no derived target.
+func (p *docParser) linkTarget(l docLink) (string, int) {
+	if l.table == p.ownTable && l.key == p.ownKey {
+		return path.Base(p.rel), linkOne
 	}
+	parent := l.column == l.rec.lay.parent
+	var match []*docRec
 	for _, rec := range p.all {
-		if rec.row.Table == table && rec.row.Key == key {
-			return localLink(rec.lay, p.rel, rec.row), true
+		if rec.row.Table == l.table && rec.row.Key == l.key && (!parent || rec.block == l.rec.block) {
+			match = append(match, rec)
 		}
 	}
-	target, err := p.lk.Target(p.rel, table, key)
-	return target, err == nil
+	switch {
+	case len(match) > 1:
+		return "", linkShared
+	case len(match) == 1:
+		if match[0].lay.inFiles && !parent {
+			if _, err := p.lk.Target(p.rel, l.table, l.key); errors.Is(err, ErrKeyShared) {
+				return "", linkShared
+			}
+		}
+		return localLink(match[0].lay, p.rel, match[0].row), linkOne
+	case parent:
+		return "", linkNone
+	}
+	target, err := p.lk.Target(p.rel, l.table, l.key)
+	switch {
+	case errors.Is(err, ErrKeyShared):
+		return "", linkShared
+	case err != nil:
+		return "", linkNone
+	}
+	return target, linkOne
 }
 
 // docFileName is the file name of the document table, <table>.flowmark.md.

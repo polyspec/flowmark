@@ -1,5 +1,5 @@
 <!-- doc-id: spec-checklist -->
-<!-- source-sha256: 8d783b9eb0f74a2023dd6a7dda46297489cf80f3e1bf885d3332add9b9c44e57 -->
+<!-- source-sha256: 4ef2a42bb00ab4ea63e70ae94242f5deb6aa9f8fa7bd7db343f10373cfc9644f -->
 # 응용 schema
 
 [English](100-checklist.md)
@@ -41,7 +41,7 @@
   상세 섹션이 없으므로 target에 anchor가 없다.
 - `item_links`의 table cell에서 `from_item`과 `to_item`은 `[T1](items.flowmark.md#items-row-t1)` 같은 link다.
   anchor는 item이 상세 섹션을 가질 때에만 있다.
-- 여러 줄 evidence는 section이다: `items.flowmark.md` H1, `## items row T1`, `### item_history`, `#### item_history row <id>`, `##### evidence` — H6 안에 든다. `require` 목록이 이름 붙인 column `evidence`·`cause`·`retry`는 `items`와 `item_history` 양쪽의 `markdown` column이므로, 값이 있는 이력 행은 상세 section을 갖는다. `items`는 `document list`로 저장되며 그 행은 row scope 3에 서고, 이력 section은 H5에 선다. 블록 table에서 row scope 5 이상으로 같은 기계를 두면 H7이 필요하며 schema 오류다([schema](30-schema.md#the-history-table)). column을 더하는 것은 `items`의 저장을 결코 바꾸지 않는다.
+- 여러 줄 evidence는 section이다: `items.flowmark.md` H1, `## items row T1`, `### item_history`, `#### item_history row <id>`, `##### evidence` — H6 안에 든다. `require` 목록이 이름 붙인 column `evidence`·`cause`·`retry`는 `items`와 `item_history` 양쪽의 `markdown` column이므로, 값이 있는 이력 행은 상세 section을 갖는다. `items`는 `document list`로 저장되며 그 행은 row scope 3에 서고, 이력 section은 H5에 선다. 블록 table에서 row scope 5 이상으로 같은 기계를 두면 H7이 필요하며, 그 이력 table이 `document table`로 저장되지 않는 한 schema 오류다([schema](30-schema.md#the-history-table)). column을 더하는 것은 `items`의 저장을 결코 바꾸지 않는다.
 
 ## 상태기계
 

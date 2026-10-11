@@ -222,6 +222,7 @@ func documentParseCases() []docCase {
 		docReject("10#detail-headings-and-anchors: a level-2 heading that is no detail section", RuleBlock, 4, itemsOf("- [ ] T1 Plan done:false", "", "## Notes", "", "x")),
 		docReject("10#sections-and-their-values: an undeclared section", RuleSection, 6, itemsOf("- [ ] T1 Plan done:false", "", "## items row T1", "", "### nope", "", "x")),
 		docReject("10#sections-and-their-values: a section written twice", RuleSection, 10, itemsOf("- [ ] T1 Plan done:false", "", "## items row T1", "", "### evidence", "", "a", "", "### evidence", "", "b")),
+		docReject("10#sections-and-their-values: a section written twice with equal values", RuleSection, 10, itemsOf("- [ ] T1 Plan done:false", "", "## items row T1", "", "### evidence", "", "a", "", "### evidence", "", "a")),
 		noncanonicalDoc("10#detail-headings-and-anchors: a detail heading with a wrong case of row", 4, itemsOf("- [ ] T1 Plan done:false", "", "## items Row T1", "", "A.")),
 		noncanonicalDoc("10#detail-headings-and-anchors: a detail heading with a wrong case of the table name", 4, itemsOf("- [ ] T1 Plan done:false", "", "## Items row T1", "", "A.")),
 		noncanonicalDoc("10#detail-headings-and-anchors: a detail heading with the table name and row in capitals", 4, itemsOf("- [ ] T1 Plan done:false", "", "## ITEMS ROW T1", "", "A.")),

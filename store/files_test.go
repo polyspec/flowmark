@@ -351,6 +351,8 @@ func parseCases() []parseCase {
 		reject("10#sections-and-their-values: section of a non-markdown column", RuleSection, 5, withBase("## seen_on", "", "x")),
 		reject("10#sections-and-their-values: undeclared section", RuleSection, 5, withBase("## nope", "", "x")),
 		reject("10#sections-and-their-values: duplicate section", RuleSection, 9, withBase("## evidence", "", "a", "", "## evidence", "", "b")),
+		reject("10#sections-and-their-values: a section written twice with equal values", RuleSection, 9, withBase("## cause", "", "A.", "", "## cause", "", "A.")),
+		reject("10#sections-and-their-values: a section written twice under another spelling of its heading", RuleSection, 9, withBase("## cause", "", "A.", "", "##  cause", "", "B.")),
 		noncanonical("10#sections-and-their-values: present empty section with a trailing blank", 6, withBase("## cause", "")),
 		noncanonical("10#sections-and-their-values: sections out of column order", 5, withBase("## cause", "", "c", "", "## evidence", "", "e")),
 		noncanonical("10#sections-and-their-values: section heading with a trailing space", 5, withBase("## evidence ", "", "x")),

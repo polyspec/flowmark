@@ -1,0 +1,87 @@
+dbspec 1 flowmark
+
+table items {
+  id varchar(32)
+  title varchar(255)
+  body text
+  position i32
+  primary key (id)
+  settings {
+    store document list
+    title title
+    body body
+    order position
+    markdown body
+  }
+}
+
+table steps {
+  id varchar(16)
+  item varchar(32)
+  parent varchar(16) null
+  body text
+  primary key (id)
+  index ix_steps_item (item)
+  index ix_steps_parent (parent)
+  foreign key fk_steps_item (item) references items (id) on delete restrict on update restrict
+  foreign key fk_steps_parent (parent) references steps (id) on delete restrict on update restrict
+  settings {
+    store block fk_steps_item table
+    body body
+    markdown body
+  }
+}
+
+table refs {
+  id varchar(16)
+  item varchar(32)
+  step varchar(16)
+  primary key (id)
+  index ix_refs_item (item)
+  index ix_refs_step (step)
+  foreign key fk_refs_item (item) references items (id) on delete restrict on update restrict
+  foreign key fk_refs_step (step) references steps (id) on delete restrict on update restrict
+  settings {
+    store block fk_refs_item table
+  }
+}
+
+table tasks {
+  id varchar(32)
+  title varchar(255)
+  body text
+  primary key (id)
+  settings {
+    store files
+    title title
+    body body
+    markdown body
+  }
+}
+
+table task_steps {
+  id varchar(16)
+  task varchar(32)
+  title varchar(255)
+  primary key (id)
+  index ix_task_steps_task (task)
+  foreign key fk_task_steps_task (task) references tasks (id) on delete restrict on update restrict
+  settings {
+    store block fk_task_steps_task list
+    title title
+  }
+}
+
+table task_refs {
+  id varchar(16)
+  task varchar(32)
+  step varchar(16)
+  primary key (id)
+  index ix_task_refs_task (task)
+  index ix_task_refs_step (step)
+  foreign key fk_task_refs_task (task) references tasks (id) on delete restrict on update restrict
+  foreign key fk_task_refs_step (step) references task_steps (id) on delete restrict on update restrict
+  settings {
+    store block fk_task_refs_task table
+  }
+}
