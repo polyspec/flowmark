@@ -1,5 +1,5 @@
 <!-- doc-id: spec-dialect -->
-<!-- source-sha256: f3a32803e29542ecc650e35c345fd74bc070ea2b2784396e870b76d278d646df -->
+<!-- source-sha256: 6e141022f64d60d005a09e6b7596c99bcba4c53364f4c67130e8bd760fb3a2de -->
 # Capability table
 
 [English](60-dialect.md)
@@ -15,8 +15,18 @@ surface가 corpus에서 무엇을 하는지 또는 orm 전통에 따라 `CAPABIL
 
 - **요청**: 요청마다 `{ir_version, manifest_hash, request, params, now}`. client는 요청을
   검증(`ir.Validate`)하고 plan하지 않는다. `params`는 runtime value model JSON을 쓴다 — decimal은
-  문자열, bytes는 base64, datetime은 UTC `YYYY-MM-DD HH:MM:SS.ffffff`. codec 단계는 SQL과 같이 client가
-  적용한다.
+  문자열, bytes는 base64, datetime은 UTC `YYYY-MM-DD HH:MM:SS.ffffff`, time은 `HH:MM:SS.ffffff`이며, column의
+  정밀도 p 너머의 자리는 값이 갖지 않는 0이다 — 그 자리에 다른 숫자를 가진 parameter는 `datetime(p)`나
+  `time(p)`의 값이 아니다(`CODEC_ENCODE`). codec 단계는 SQL과 같이 client가 적용한다. 채우는 slot의
+  type — 비교하거나 할당하는 column, column 함수의 결과, `contains`와 `contains_binary`의 `text`, 상대
+  시각 함수의 `i32`나 `f64` 간격 — 의 값이 아닌 parameter는 어떤 행도 읽기 전에 `CODEC_ENCODE`로 요청을
+  실패시키며, parameter index와 type을 밝힌다: JSON 종류, type의 범위, decimal의 scale과 precision,
+  time이나 datetime의 정밀도, `varchar`의 길이, 텍스트의 U+0000, uuid의 소문자 정준 형태를 검사하며, 모든
+  orm client가 bind 값을 검사하는 것과 같다
+  ([orm protocol](https://github.com/polyspec/orm/blob/main/docs/protocol.md)). NULL은 모든 slot의
+  값이지만, non-null column의 할당에서는 `CODEC_ENCODE`다. 근거: slot 밖의 bind 값에 대한 orm의 code는
+  `CODEC_ENCODE`이며, 읽기 전의 검사는 bind 실패처럼 답을 행과 무관하게 한다. `IR_INVALID`는 구조의
+  code이고, 이 요청은 형태가 올바르다.
 - **읽기의 답**: `one`, `all`, `group_count`는 `{"rows": [...]}`, `count`는 `{"count": n}`, `sum`과
   `avg`는 `{"value": v}`, `paginate`는 `{"rows": [...], "count": n}`이며 `n`은 일치하는 모든 행을 센다.
   행은 JSON object다: projection 순서의 출력, 그다음 각 join(중첩 object, 또는 일치가 없는 left join이면
