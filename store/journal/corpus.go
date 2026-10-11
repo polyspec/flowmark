@@ -154,12 +154,13 @@ func (c *Corpus) ensureDir(rel string) error {
 	cur := c.root
 	for _, part := range strings.Split(rel, "/") {
 		cur = filepath.Join(cur, part)
+		// The folder is made first and judged after: another process of the corpus may make it between a look and
+		// the making, and a name that exists now is judged as one that existed before.
+		if err := mkdirDurable(cur); err != nil && !errors.Is(err, fs.ErrExist) {
+			return err
+		}
 		fi, err := os.Lstat(cur)
 		switch {
-		case errors.Is(err, fs.ErrNotExist):
-			if err := mkdirDurable(cur); err != nil {
-				return err
-			}
 		case err != nil:
 			return err
 		case fi.Mode()&fs.ModeSymlink != 0:
