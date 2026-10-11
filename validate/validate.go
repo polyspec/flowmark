@@ -18,13 +18,16 @@ import (
 // Corpus validates the corpus at root against cat and returns its diagnostics,
 // sorted by file, line, column, rule and message. A diagnostic that a rule reports
 // over an unavailable table is not returned; the table's own diagnostic stands for
-// it. An error is returned only when the corpus root cannot be read.
+// it. An error is returned only when the corpus root cannot be read, or when orm
+// builds no runtime model of the loaded catalog that the view rule needs.
 func Corpus(cat *catalog.Catalog, root string) ([]catalog.Diagnostic, error) {
 	c, err := load(cat, root)
 	if err != nil {
 		return nil, err
 	}
-	c.rules()
+	if err := c.rules(); err != nil {
+		return nil, err
+	}
 	sortDiags(c.diags)
 	return c.diags, nil
 }
