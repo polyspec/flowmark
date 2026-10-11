@@ -18,6 +18,7 @@ import (
 
 	"github.com/polyspec/flowmark/catalog"
 	"github.com/polyspec/flowmark/irexec"
+	"github.com/polyspec/flowmark/store"
 	"github.com/polyspec/flowmark/store/journal"
 )
 
@@ -172,7 +173,7 @@ func releaseAfter(l *journal.Lock, written bool, err error) error {
 
 // read reads the corpus as a request reads it.
 func (c *Corpus) read() (*irexec.Corpus, error) {
-	cur, err := irexec.Open(c.cat, c.root)
+	cur, err := irexec.Open(c.cat, store.DirFS(c.root))
 	if err != nil {
 		return nil, driverError("reading the corpus", err)
 	}

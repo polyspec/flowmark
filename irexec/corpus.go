@@ -55,10 +55,11 @@ type rec struct {
 	tb     *catalog.Table
 }
 
-// Open reads the corpus at root as a request reads it. An error is returned only
-// when the corpus root cannot be read.
-func Open(cat *catalog.Catalog, root string) (*Corpus, error) {
-	s, err := validate.Read(cat, root)
+// Open reads the corpus fsys as a request reads it: the corpus folder itself
+// (store.DirFS), or the write path's mirror of it. An error is returned only when
+// the corpus root cannot be read.
+func Open(cat *catalog.Catalog, fsys store.FS) (*Corpus, error) {
+	s, err := validate.Read(cat, fsys)
 	if err != nil {
 		return nil, err
 	}

@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/polyspec/flowmark/catalog"
+	"github.com/polyspec/flowmark/store"
 	"github.com/polyspec/flowmark/validate"
 )
 
@@ -202,7 +203,7 @@ func (f *fixture) sub(t *testing.T, name string, fn func(f *fixture)) {
 // reopen reads the corpus of the fixture again.
 func (f *fixture) reopen() {
 	f.t.Helper()
-	c, err := Open(f.cat, f.root)
+	c, err := Open(f.cat, store.DirFS(f.root))
 	if err != nil {
 		f.t.Fatal(err)
 	}
