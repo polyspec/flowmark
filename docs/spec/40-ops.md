@@ -140,8 +140,9 @@ The order of the commit protocol is normative.
 - An operation on the row named by `key` that matches no row — `row.get`, or a write that affects
   none — is `NO_ROWS`, naming the table and the key, orm's code of a one-row read that matched none.
   Grounding: a write to a named row that changes nothing would be a silent drop.
-- An unknown `operation`, a missing member, a member the operation does not take, and `values` that
-  is not an object are `CONFIG`, naming it; a table or column the catalog does not declare is the
+- An unknown `operation`, a missing member, a member the operation does not take, `values` that is
+  not an object, and `values` of `transition` that assign the state column, which `state` gives, are
+  `CONFIG`, naming it; a table or column the catalog does not declare is the
   request's `ENTITY_UNKNOWN` or `COLUMN_UNKNOWN`.
 - A view operation — the rows of a view through its stored filter and sort — waits on `T12.3-1`: no
   setting declares a view table, and a stored filter has nowhere to keep its parameters. Until

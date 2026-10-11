@@ -127,6 +127,27 @@ type Limit struct {
 	Count int64
 }
 
+// Hierarchy returns the hierarchy column of the table — `parent`, when a foreign key of the table references the
+// table itself through the one column `parent` (spec 20 Hierarchy) — or "" when the table has none.
+func (t *Table) Hierarchy() string {
+	for _, fk := range t.ForeignKeys {
+		if fk.Table == t.Name && len(fk.Columns) == 1 && fk.Columns[0] == "parent" {
+			return "parent"
+		}
+	}
+	return ""
+}
+
+// Column returns the named column of the table.
+func (t *Table) Column(name string) (dbspec.Column, bool) {
+	for _, c := range t.Columns {
+		if c.Name == name {
+			return c, true
+		}
+	}
+	return dbspec.Column{}, false
+}
+
 // Table returns the named table of the catalog.
 func (c *Catalog) Table(name string) (*Table, bool) {
 	for _, t := range c.Tables {
