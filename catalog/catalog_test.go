@@ -720,6 +720,9 @@ func TestLoadHistoryStorage(t *testing.T) {
 // setting error at the history table's name.
 func TestLoadHistoryStorageKind(t *testing.T) {
 	const blockStore = "    store block fk_history_item table\n"
+	// statesTable is a table keyed by the state column's type, which a history
+	// row's from or to can reference.
+	const statesTable = "table states {\n  id varchar(16)\n  primary key (id)\n  settings {\n    store document table\n  }\n}\n\n"
 	const msg = "a history table is stored `block <row fk> table` under its state table or `document table`"
 	cases := []struct {
 		name    string
@@ -735,6 +738,27 @@ func TestLoadHistoryStorageKind(t *testing.T) {
 				"  foreign key fk_history_item (item) references items (id) on delete restrict on update restrict\n  foreign key fk_history_person (item) references people (id) on delete restrict on update restrict\n"},
 			{blockStore, "    store block fk_history_person table\n"},
 		}, true},
+		// T12.3-5: a non-null placement key other than the row column places a
+		// history row in the scope of a row other than the one whose trail it
+		// records: by from or to under a table keyed by the states, or by the
+		// identity key under a table keyed like it.
+		{"30#the-history-table: block of another table placed by from", [][2]string{
+			{"  foreign key fk_history_item (item) references items (id) on delete restrict on update restrict\n",
+				"  index ix_history_from (from_state)\n  foreign key fk_history_item (item) references items (id) on delete restrict on update restrict\n  foreign key fk_history_from (from_state) references states (id) on delete restrict on update restrict\n"},
+			{blockStore, "    store block fk_history_from table\n"},
+			{"table views {", statesTable + "table views {"},
+		}, true},
+		{"30#the-history-table: block of another table placed by to", [][2]string{
+			{"  foreign key fk_history_item (item) references items (id) on delete restrict on update restrict\n",
+				"  index ix_history_to (to_state)\n  foreign key fk_history_item (item) references items (id) on delete restrict on update restrict\n  foreign key fk_history_to (to_state) references states (id) on delete restrict on update restrict\n"},
+			{blockStore, "    store block fk_history_to table\n"},
+			{"table views {", statesTable + "table views {"},
+		}, true},
+		{"30#the-history-table: block of another table placed by the identity key", [][2]string{
+			{"  foreign key fk_history_item (item) references items (id) on delete restrict on update restrict\n",
+				"  foreign key fk_history_item (item) references items (id) on delete restrict on update restrict\n  foreign key fk_history_link (id) references item_links (id) on delete restrict on update restrict\n"},
+			{blockStore, "    store block fk_history_link table\n"},
+		}, true},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -748,6 +772,11 @@ func TestLoadHistoryStorageKind(t *testing.T) {
 			}
 			expectRejected(t, cat, diags)
 			expectTableDiag(t, diags, text, "item_history", msg)
+			// A block placement breaks no other rule, so the storage error stands
+			// alone; files and a list also lack the title their storage needs.
+			if strings.Contains(c.name, "block") && len(diags) != 1 {
+				t.Fatalf("%d diagnostics, want the storage error alone: %+v", len(diags), diags)
+			}
 		})
 	}
 }
