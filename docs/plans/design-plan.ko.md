@@ -1,5 +1,5 @@
 <!-- doc-id: plans-design-plan -->
-<!-- source-sha256: 1979c0f2aa248765c3d6fe29939004e96fa285130e5bd874fa9e7f577cc23ff5 -->
+<!-- source-sha256: 887effee2ee68cb1bccc86b18c7407b7aeaf4e6d1bb4c0375a9e7d83ceb67286 -->
 # flowmark 설계 계획
 
 Revision 2 — 3개 lane의 적대 감사 결과(engine core, orm 통합, 운영)와 multi-platform 지시를 아래 판정에 접는다. 감사의 blocker는 전부 판정이 되었고, 부수지 못한 주장은 문서 끝에 남긴다.
@@ -99,7 +99,7 @@ flowmark = the markdown database engine (one Go binary)
 - Strict parse, type/PK/UNIQUE/FK(exact byte match; 대소문자 무시 시 key 유일), CHECK. soft-delete된 row는 unique key를 계속 차지하고 FK를 계속 만족한다(SQL 동등성 — soft delete가 가짜 판정을 일으키지 않게 명시). `aes`, `aes_version`, `blind_index`는 corpus에서 schema 오류다: key는 orm client를 떠나지 않는다(Revision 3).
 - **state machine은 dbspec-level manifest setting**(전이, terminal, 필수 column, 그리고 — Revision 3 — `initial`, `history`, `limit`)이다. 모든 엔진 전이는 이력 행을 쓰고, 엔진 밖에서 바뀐 상태는 이력 빈틈이나 끊긴 사슬로 보고하며 repair command가 있다. 응용 schema는 완료된 항목을 `supersedes` link로 대체한다. 엔진은 WIP 규칙을 강제하지 않는다 — 상대 gate는 제거하고 사용자의 규칙은 작업 규칙으로 남는다.
 - **사람의 write는 DB의 writer 독점 전제를 무효화한다; 각 기능은 그에 대한 판정을 갖는다**: FK action은 **restrict만 허용**(`cascade`/`set_null`은 catalog를 읽을 때 거부 — 엔진을 우회하는 writer에게 구현 불가능하므로); `audit`와 `immutable`은 corpus에서 schema 오류이며 상태 이력이 대신한다(Revision 3); 모든 non-null column은 쓰며 엔진이 insert에서 기본값을 쓴다.
-- **Capability table**(`60-dialect.md`)은 IR executor wire 아래의 통합 계약이다: `update|share` lock은 문서화된 no-op, `*_nowait`는 거부; `isolation`/`timeoutMs`는 `CAPABILITY_UNSUPPORTED`, `fulltext`/`Lb`는 `OPERATOR_NOT_ALLOWED`; `on_duplicate` 충돌 대상은 그 갈라짐과 함께 적는다; 바뀐 대상은 `WRITE_CONFLICT`로 실패; `getQuery`, statement event, `subscribe`, `force_index`는 `CAPABILITY_UNSUPPORTED`; savepoint는 중첩 stage.
+- **Capability table**(`60-dialect.md`)은 IR executor wire 아래의 통합 계약이다: `update|share` lock은 문서화된 no-op, `*_nowait`는 거부; `isolation`/`timeoutMs`는 `CAPABILITY_UNSUPPORTED`, `fulltext`는 `OPERATOR_NOT_ALLOWED`; `on_duplicate` 충돌 대상은 그 갈라짐과 함께 적는다; 바뀐 대상은 `WRITE_CONFLICT`로 실패; `getQuery`, statement event, `subscribe`, `force_index`는 `CAPABILITY_UNSUPPORTED`; savepoint는 중첩 stage.
 - markdown plan lifecycle(orm의 dbplan/apply/recover 장치)은 **v1 범위 밖**: v1은 corpus 생성과 additive column 추가를 지원하고, markdown corpus의 dbplan chain은 거부한다(80-migration이 범위와 이유를 서술).
 
 ### 7. Sync와 adapter (옵션, `70-sync.md`)

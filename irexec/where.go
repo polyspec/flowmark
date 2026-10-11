@@ -255,10 +255,8 @@ func (r *reader) item(s *scope, ev *env, it *ir.Item) (tri, string, *Error) {
 // pred evaluates one predicate of s.
 func (r *reader) pred(s *scope, ev *env, p *ir.Pred) (tri, *Error) {
 	switch p.Op {
-	case "contains_binary":
-		return tFalse, errf(codeOpNotAllowed, "contains_binary (the Lb operator) is not allowed on a corpus")
-	case "contains":
-		return tFalse, unspecified("the comparison that contains makes on a corpus (case and collation)")
+	case "contains", "contains_binary":
+		return r.contains(s, ev, p)
 	case "tuple_in", "tuple_not_in":
 		return r.tupleIn(s, ev, p)
 	}
@@ -300,6 +298,44 @@ func (r *reader) pred(s *scope, ev *env, p *ir.Pred) (tri, *Error) {
 		return cmp3(p.Op, t, v, rt, rv)
 	}
 	return r.compareParams(p, t, v)
+}
+
+// contains evaluates contains (the Lk operator) and contains_binary (the Lb
+// operator): true when the column's text holds the parameter's text as a substring
+// (spec 60 Surfaces). contains compares the ASCII letters A-Z and a-z without regard
+// to case and every other character by code point, as PostgreSQL ILIKE under
+// COLLATE "C", SQLite LIKE and orm's MySQL ASCII fold do; contains_binary compares
+// every character by code point. A NULL column or parameter is unknown, and %, _ and
+// \ in the parameter are literal. On valid UTF-8 a byte match is a code point match,
+// and no byte of a multi-byte sequence lies in A-Z, so folding those bytes alone
+// folds the ASCII letters alone.
+func (r *reader) contains(s *scope, ev *env, p *ir.Pred) (tri, *Error) {
+	v, _, err := r.col(s, ev, p.Column)
+	if err != nil {
+		return tFalse, err
+	}
+	pv, err := r.param(*p.P, dbspec.Type{Kind: dbspec.TypeText})
+	if err != nil {
+		return tFalse, err
+	}
+	if v.null || pv.null {
+		return tUnknown, nil
+	}
+	if p.Op == "contains" {
+		return bool3(strings.Contains(foldASCII(v.text), foldASCII(pv.text))), nil
+	}
+	return bool3(strings.Contains(v.text, pv.text)), nil
+}
+
+// foldASCII lower-cases the bytes A-Z of s and keeps every other byte.
+func foldASCII(s string) string {
+	b := []byte(s)
+	for i, c := range b {
+		if 'A' <= c && c <= 'Z' {
+			b[i] = c + ('a' - 'A')
+		}
+	}
+	return string(b)
 }
 
 // compareParams evaluates a comparison, in, not_in or between of the value v of

@@ -41,6 +41,8 @@ Go client implements it first and every other client is its own orm item.
 | `lock` `update_nowait`, `share_nowait` | `CAPABILITY_UNSUPPORTED` |
 | relations (`limit_per_parent`, `if_parent`, `flatten`, `key_by`, `no_cascade_delete`) | Supported; assembled by the executor |
 | subqueries (`tuple_in`, `tuple_not_in`, scalar `Sub` aggregates) | Supported |
+| `contains` (the `Lk` operator) | Supported: true when the column's text holds the parameter's text as a substring, the ASCII letters A–Z and a–z compared without regard to case and every other character by code point; a NULL column or parameter is unknown, and `%`, `_` and `\` in the parameter are literal. Grounding: SQL parity — PostgreSQL `ILIKE` under orm's `COLLATE "C"`, SQLite `LIKE` and orm's MySQL ASCII fold give this result |
+| `contains_binary` (the `Lb` operator) | Supported: true when the column's text holds the parameter's text as a substring, compared by code point; a NULL column or parameter is unknown, and `%`, `_` and `\` in the parameter are literal. Grounding: MySQL `LIKE` under `utf8mb4_0900_bin`, PostgreSQL `LIKE` under `COLLATE "C"` and SQLite `instr` agree |
 | `now`, `default now`, `updated`, `soft_delete` | The request's `now`, under the orm clock rule |
 | codec columns | Applied by the client on an orm request; a write the engine originates (CLI, MCP, sidecar, history) applies the codec through orm's Go codec package, and validation decodes with the same package; the stored value is the encoded one, a byte-producing stage as base64 |
 | indexes | Accepted; derived in memory |
@@ -54,7 +56,7 @@ Go client implements it first and every other client is its own orm item.
 | `isolation`, `timeoutMs` options | `CAPABILITY_UNSUPPORTED` |
 | `getQuery()`, statement events, `subscribe()` | `CAPABILITY_UNSUPPORTED` — there is no SQL text |
 | `force_index` | `CAPABILITY_UNSUPPORTED` — indexes are derived, not named |
-| `fulltext`, the `Lb` operator | `OPERATOR_NOT_ALLOWED` |
+| `fulltext` | `OPERATOR_NOT_ALLOWED`: SQLite has no full-text index on a table (orm dialects.md) |
 | lock, local-setting, privilege and AES-rotation utilities | `CAPABILITY_UNSUPPORTED` |
 | schema install, dbplan chains | `CAPABILITY_UNSUPPORTED`; `flowmark install` creates a corpus ([schema](30-schema.md)), and evolution follows [migration](80-migration.md) |
 | an unavailable table (a file with `format.block`, `format.section`, `format.encoding` or a `parent.cycle` among its rows, two rows with byte-for-byte equal keys, or a `corpus.walk` entry at its place) | every request that needs its rows, read or write, fails `CONSTRAINT`, naming the file and the diagnostic; no answer comes from the other files' rows alone ([canonical format](10-canonical-format.md#diagnostics)) |
