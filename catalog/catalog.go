@@ -26,7 +26,8 @@ type Table struct {
 	Document     string
 	Columns      []dbspec.Column
 	ForeignKeys  []dbspec.ForeignKey
-	Uniques      [][]string // the columns of each unique key, in declaration order
+	Uniques      [][]string     // the columns of each unique key, in declaration order
+	Checks       []dbspec.Check // the checks, in declaration order, each predicate with its literals in canonical form
 	Storage      Storage
 	RowScope     int
 	Key          string

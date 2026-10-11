@@ -74,6 +74,7 @@ table entry_steps {
   index ix_entry_steps_parent (parent)
   foreign key fk_steps_entry (entry) references entries (id) on delete restrict on update restrict
   foreign key fk_steps_parent (parent) references entry_steps (id) on delete restrict on update restrict
+  check ck_steps_entry (entry <> 'E9')
   settings {
     store block fk_steps_entry table
     state_machine state initial open
@@ -212,5 +213,72 @@ table item_history {
   foreign key fk_history_item (item) references items (id) on delete restrict on update restrict
   settings {
     store block fk_history_item table
+  }
+}
+
+table measures {
+  id varchar(16)
+  title varchar(255)
+  low i32 null
+  high i32 null
+  price decimal(6,2) null
+  ratio f64 null
+  starts datetime(0) null
+  ends datetime(0) null
+  label varchar(4) null
+  code varchar(4) null
+  primary key (id)
+  check ck_measures_range (low <= high)
+  check ck_measures_positive (low > 0 and high > 0 or low is null)
+  check ck_measures_price (price >= 2)
+  check ck_measures_ratio (ratio < 1.5)
+  check ck_measures_span (starts < ends)
+  check ck_measures_label (label in ('a', 'b', 'B') or label is null)
+  check ck_measures_code (code >= 'a' or code is null)
+  settings {
+    store files
+    title title
+  }
+}
+
+table tasks {
+  id varchar(16)
+  state varchar(16)
+  title varchar(255)
+  body text
+  owner varchar(16) null
+  evidence text null
+  primary key (id)
+  settings {
+    store document list
+    title title
+    body body
+    markdown body
+    markdown evidence
+    checkbox state waiting ' '
+    checkbox state doing '~'
+    checkbox state done 'x'
+    state_machine state initial waiting
+    state_machine state waiting -> doing require (owner)
+    state_machine state doing -> done
+    state_machine state terminal done require (evidence)
+    state_machine state history task_history row task from from_state to to_state at at
+  }
+}
+
+table task_history {
+  id i64 identity
+  task varchar(16)
+  from_state varchar(16)
+  to_state varchar(16)
+  at datetime(6)
+  owner varchar(16) null
+  evidence text null
+  primary key (id)
+  index ix_task_history_task (task)
+  foreign key fk_task_history (task) references tasks (id) on delete restrict on update restrict
+  settings {
+    store block fk_task_history table
+    markdown evidence
   }
 }

@@ -6,4 +6,4 @@
 ### item_history
 | id | from_state | to_state | at |
 | --- | --- | --- | --- |
-| 1 | done | done | 2026-10-01 08:00:00.000000 |
+| 1 | doing | done | 2026-10-01 08:00:00.000000 |

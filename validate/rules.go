@@ -21,6 +21,8 @@ const (
 	ruleLimit        = "state.limit"
 	ruleHistoryGap   = "history.gap"
 	ruleHistoryChain = "history.chain"
+	ruleTransition   = "state.transition"
+	ruleRequired     = "state.required"
 )
 
 // report appends a diagnostic of rule at the element of column of the row p.
@@ -41,6 +43,7 @@ func (c *corpus) rules() {
 		for _, p := range rows {
 			c.types(tb, p)
 			c.dangling(p)
+			c.checks(tb, p)
 		}
 		if !c.isBlocked(tb.Name) {
 			c.duplicates(tb, rows)
@@ -101,17 +104,25 @@ func (c *corpus) dangling(p placed) {
 // duplicates reports each row whose key equals the key of an earlier row of the
 // table without regard to case, a byte-equal key being one of them, over every
 // block of every file that holds the table: rows is in corpus order, so the fault
-// is at each occurrence after the first, naming the first.
+// is at each occurrence after the first. A row whose key equals an earlier key
+// byte for byte names the first such row and says byte for byte; any other names
+// the first row whose key equals its key without regard to case. A row has one
+// key.duplicate.
 func (c *corpus) duplicates(tb *catalog.Table, rows []placed) {
-	first := map[string]placed{}
+	byBytes := map[string]placed{}
+	byFold := map[string]placed{}
 	for _, p := range rows {
-		k := strings.ToLower(p.row.Key)
-		f, ok := first[k]
-		if !ok {
-			first[k] = p
+		fold := strings.ToLower(p.row.Key)
+		if f, ok := byBytes[p.row.Key]; ok {
+			c.report(p, tb.Key, ruleDuplicate, fmt.Sprintf("the key %s equals the key %s of %s byte for byte", p.row.Key, f.row.Key, f.file))
 			continue
 		}
-		c.report(p, tb.Key, ruleDuplicate, fmt.Sprintf("the key %s equals the key %s of %s without regard to case", p.row.Key, f.row.Key, f.file))
+		byBytes[p.row.Key] = p
+		if f, ok := byFold[fold]; ok {
+			c.report(p, tb.Key, ruleDuplicate, fmt.Sprintf("the key %s equals the key %s of %s without regard to case", p.row.Key, f.row.Key, f.file))
+			continue
+		}
+		byFold[fold] = p
 	}
 }
 
@@ -286,49 +297,50 @@ func (c *corpus) parentCycles(tb *catalog.Table, rows []placed) {
 	}
 }
 
-// history reports the history gap of each row of a state table, and the chain
-// of each of its history rows: the first from is an initial state, each from is
-// the to before it, and each pair is a declared transition.
+// history reports the history gap of each row of a state table, and over each of
+// its history rows the chain (the first from is an initial state, each other from
+// is the to before it), the transition (its pair is declared) and the required
+// columns (a declared pair records a value in each column that the transition's
+// require list or the to-terminal's names). A state, from or to not of its column
+// type is its type fault alone: no rule is judged on it.
 func (c *corpus) history(tb *catalog.Table, rows []placed) {
 	sm := tb.StateMachine
 	if sm == nil || sm.History.Table == "" {
 		return
 	}
+	ht, found := c.cat.Table(sm.History.Table)
 	of, ok := c.historyOf(tb, sm)
-	if !ok {
+	if !found || !ok {
 		return
 	}
 	for _, p := range rows {
-		s := p.row.Scalars[sm.Column]
-		if s == nil {
-			continue
-		}
-		state := *s
-		var hist []*store.Row
-		var files []string
-		for _, h := range of(p) {
-			hist = append(hist, h.row)
-			files = append(files, h.file)
-		}
-		if len(hist) == 0 {
-			if !slices.Contains(sm.Initial, state) {
-				c.report(p, "", ruleHistoryGap, fmt.Sprintf("the state %s of %s has no history row and is not an initial state", state, p.row.Key))
-			}
-		} else if last := text(hist[len(hist)-1], sm.History.To); last != state {
-			c.report(p, "", ruleHistoryGap, fmt.Sprintf("the state %s of %s differs from the to %s of its last history row", state, p.row.Key, last))
-		}
-		for i, h := range hist {
-			from, to := text(h, sm.History.From), text(h, sm.History.To)
-			var follows bool
-			if i == 0 {
-				follows = slices.Contains(sm.Initial, from)
-			} else {
-				follows = from == text(hist[i-1], sm.History.To)
-			}
-			if follows && declared(sm, from, to) {
+		hist := of(p)
+		c.gap(sm, p, hist)
+		for i, hp := range hist {
+			h := hp.row
+			from, okFrom := readable(h, sm.History.From)
+			to, okTo := readable(h, sm.History.To)
+			if !okFrom || !okTo {
 				continue
 			}
-			c.report(placed{row: h, file: files[i]}, "", ruleHistoryChain, fmt.Sprintf("the history row %s goes from %s to %s, which does not follow the row before it or is not a declared transition", h.Key, from, to))
+			if i == 0 {
+				if !slices.Contains(sm.Initial, from) {
+					c.report(hp, "", ruleHistoryChain, fmt.Sprintf("the history row %s goes from %s, which is not an initial state", h.Key, from))
+				}
+			} else if prev, ok := readable(hist[i-1].row, sm.History.To); ok && from != prev {
+				c.report(hp, "", ruleHistoryChain, fmt.Sprintf("the history row %s goes from %s, which differs from the to %s of the row before it", h.Key, from, prev))
+			}
+			t, ok := transition(sm, from, to)
+			if !ok {
+				c.report(hp, "", ruleTransition, fmt.Sprintf("the history row %s goes from %s to %s, which is not a declared transition", h.Key, from, to))
+				continue
+			}
+			values := RowOperands(ht, h, hp.parent)
+			for _, col := range required(sm, t) {
+				if v := values(col); v.Null || (!v.Raw && v.Text == "") {
+					c.report(hp, col, ruleRequired, fmt.Sprintf("the history row %s goes from %s to %s, which requires %s, and %s holds no value", h.Key, from, to, col, col))
+				}
+			}
 		}
 	}
 }
@@ -350,7 +362,7 @@ func (c *corpus) historyOf(tb *catalog.Table, sm *catalog.StateMachine) (func(pl
 		return func(p placed) []placed {
 			var out []placed
 			for _, h := range p.row.Blocks[ht.Name] {
-				out = append(out, placed{row: h, file: p.file})
+				out = append(out, placed{row: h, file: p.file, parent: p.row})
 			}
 			return out
 		}, true
@@ -380,14 +392,61 @@ func placementOf(tb *catalog.Table) string {
 	return ""
 }
 
-// declared reports whether the transition from -> to is declared by the machine.
-func declared(sm *catalog.StateMachine, from, to string) bool {
+// gap reports the history gap of the row p of a state table, whose history rows
+// are hist: its state differs from the to of its last history row, or, without
+// history rows, is not an initial state. A state or a last to not of its column
+// type, or a NULL state, leaves no gap to judge.
+func (c *corpus) gap(sm *catalog.StateMachine, p placed, hist []placed) {
+	state, ok := readable(p.row, sm.Column)
+	if !ok || p.row.Scalars[sm.Column] == nil {
+		return
+	}
+	if len(hist) == 0 {
+		if !slices.Contains(sm.Initial, state) {
+			c.report(p, "", ruleHistoryGap, fmt.Sprintf("the state %s of %s has no history row and is not an initial state", state, p.row.Key))
+		}
+		return
+	}
+	last, ok := readable(hist[len(hist)-1].row, sm.History.To)
+	if ok && last != state {
+		c.report(p, "", ruleHistoryGap, fmt.Sprintf("the state %s of %s differs from the to %s of its last history row", state, p.row.Key, last))
+	}
+}
+
+// readable returns the readable text of the scalar column of row r, "" when it is
+// NULL, and false when it is not a value of its column type.
+func readable(r *store.Row, column string) (string, bool) {
+	if _, raw := r.Raw[column]; raw {
+		return "", false
+	}
+	return text(r, column), true
+}
+
+// transition returns the declared transition from -> to of the machine.
+func transition(sm *catalog.StateMachine, from, to string) (catalog.Transition, bool) {
 	for _, t := range sm.Transitions {
 		if t.From == from && t.To == to {
-			return true
+			return t, true
 		}
 	}
-	return false
+	return catalog.Transition{}, false
+}
+
+// required returns the columns that the transition t records: its require list,
+// then the require list of its to when that is a terminal state, each once.
+func required(sm *catalog.StateMachine, t catalog.Transition) []string {
+	out := slices.Clone(t.Require)
+	for _, term := range sm.Terminals {
+		if term.State != t.To {
+			continue
+		}
+		for _, col := range term.Require {
+			if !slices.Contains(out, col) {
+				out = append(out, col)
+			}
+		}
+	}
+	return out
 }
 
 // text returns the readable text of the scalar column of row r, "" when it is NULL.

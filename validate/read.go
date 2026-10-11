@@ -12,11 +12,13 @@ import (
 	"github.com/polyspec/flowmark/store"
 )
 
-// placed is a row with the corpus file that holds it: a block row is held by the
-// file of its placement row.
+// placed is a row with the corpus file that holds it and, for a block row, its
+// placement parent row, nil for any other row: a block row is held by the file of
+// its placement row, and its placement foreign key is that row's key.
 type placed struct {
-	row  *store.Row
-	file string
+	row    *store.Row
+	file   string
+	parent *store.Row
 }
 
 // corpus is the corpus read under one link target function.
@@ -77,7 +79,7 @@ func read(cat *catalog.Catalog, root string, lk store.Linker) (*corpus, error) {
 				if f := c.files[path]; f != nil {
 					f.Rows = append(f.Rows, r)
 				}
-				c.place(r, path)
+				c.place(r, path, nil)
 			}
 		case catalog.StorageDocument:
 			file := tb.Name + docSuffix
@@ -96,7 +98,7 @@ func read(cat *catalog.Catalog, root string, lk store.Linker) (*corpus, error) {
 			c.diags = append(c.diags, ds...)
 			c.files[file] = &File{Table: tb.Name, Data: data, Rows: rows}
 			for _, r := range rows {
-				c.place(r, file)
+				c.place(r, file, nil)
 			}
 		}
 	}
@@ -124,9 +126,10 @@ func regularListed(entries []fs.DirEntry, name string) bool {
 	return false
 }
 
-// place records row r and its block rows, held by file, in their tables.
-func (c *corpus) place(r *store.Row, file string) {
-	c.rows[r.Table] = append(c.rows[r.Table], placed{row: r, file: file})
+// place records row r, whose placement parent row is parent (nil for none), and
+// its block rows, held by file, in their tables.
+func (c *corpus) place(r *store.Row, file string, parent *store.Row) {
+	c.rows[r.Table] = append(c.rows[r.Table], placed{row: r, file: file, parent: parent})
 	names := make([]string, 0, len(r.Blocks))
 	for name := range r.Blocks {
 		names = append(names, name)
@@ -134,7 +137,7 @@ func (c *corpus) place(r *store.Row, file string) {
 	sort.Strings(names)
 	for _, name := range names {
 		for _, child := range r.Blocks[name] {
-			c.place(child, file)
+			c.place(child, file, r)
 		}
 	}
 }

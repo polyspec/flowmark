@@ -119,9 +119,9 @@ func TestCorpusRules(t *testing.T) {
 				"entries/E1.flowmark.md:2 reference.dangling",
 			}},
 		{name: "50#key-rules: keys equal without regard to case in a document table", dir: "key-dup-document-reject",
-			want: []string{"items.flowmark.md:3 key.duplicate"}},
+			want: []string{"items.flowmark.md:3 key.duplicate ~ the key t1 equals the key T1 of items.flowmark.md without regard to case"}},
 		{name: "50#key-rules: keys equal byte for byte in a document table", dir: "key-dup-byte-reject",
-			want: []string{"items.flowmark.md:3 key.duplicate"}},
+			want: []string{"items.flowmark.md:3 key.duplicate ~ the key T1 equals the key T1 of items.flowmark.md byte for byte"}},
 		{name: "20#hierarchy: a cycle through two files is the validator's parent.cycle at each", dir: "parent-cycle-reject",
 			want: []string{
 				"entries/A.flowmark.md:2:3 parent.cycle",
@@ -150,10 +150,13 @@ func TestCorpusRules(t *testing.T) {
 			want: []string{"items.flowmark.md:2 history.gap"}},
 		{name: "50#a-state-changed-outside-the-engine: a first from that is not initial", dir: "history-chain-first",
 			want: []string{"items.flowmark.md:9 history.chain"}},
-		{name: "50#a-state-changed-outside-the-engine: a from that differs from the previous to", dir: "history-chain-prev",
-			want: []string{"items.flowmark.md:10 history.chain"}},
-		{name: "50#a-state-changed-outside-the-engine: a pair that is not a declared transition", dir: "history-chain-pair",
-			want: []string{"items.flowmark.md:9 history.chain"}},
+		{name: "50#a-state-changed-outside-the-engine: a from that differs from the previous to and a pair not declared are two faults", dir: "history-chain-prev",
+			want: []string{
+				"items.flowmark.md:10 history.chain ~ differs from the to doing",
+				"items.flowmark.md:10 state.transition ~ from waiting to done",
+			}},
+		{name: "50#a-state-changed-outside-the-engine: a pair that is not a declared transition is state.transition", dir: "history-chain-pair",
+			want: []string{"items.flowmark.md:9 state.transition ~ from waiting to done, which is not a declared transition"}},
 		{name: "50#diagnostics: a document with an unreadable row gives no rows to the history rules", dir: "history-under-blocked",
 			want: []string{"items.flowmark.md format.block"}},
 	}
@@ -235,6 +238,24 @@ func doingItems(keys ...string) string {
 // card returns a cards row in the state open at position, then its other fields.
 func card(title, position string, fields ...string) string {
 	return "# " + title + "\n- state: open\n- position: " + position + "\n" + strings.Join(append(fields, ""), "\n")
+}
+
+// measure returns a measures row with its title, then its field items.
+func measure(title string, fields ...string) string {
+	return "# " + title + "\n" + strings.Join(append(fields, ""), "\n")
+}
+
+// tasks returns the tasks document with the one row key in the state of glyph,
+// whose task_history block holds the table rows, then any further lines of the
+// row's scope.
+func tasks(key, glyph string, lines ...string) string {
+	var b strings.Builder
+	b.WriteString("# tasks\n- [" + glyph + "] " + key + " Task " + key + "\n\n## tasks row " + key + "\n\n")
+	b.WriteString("### task_history\n| id | from_state | to_state | at | owner |\n| --- | --- | --- | --- | --- |\n")
+	for _, l := range lines {
+		b.WriteString(l + "\n")
+	}
+	return b.String()
 }
 
 // longKey is a key of 40 characters, longer than the varchar(16) of a parent.
@@ -516,6 +537,137 @@ func TestValidatorRules(t *testing.T) {
 				"plans/P1.flowmark.md":   planOne,
 				"entries/E1.flowmark.md": entry("First", "", "2", steps("S1 - open")...),
 				"entries/E2.flowmark.md": entry("Second", "", "1", steps("S2 - open")...),
+			}},
+		{name: "50#keys-and-references: a unique value and a NULL are distinct",
+			files: map[string]string{
+				"cards/A.flowmark.md": card("A", "1", "- code: ab"),
+				"cards/B.flowmark.md": card("B", "2"),
+			}},
+		{name: "50#keys-and-references: unique values ab and AB are distinct, as the binary collation compares them",
+			files: map[string]string{
+				"cards/A.flowmark.md": card("A", "1", "- code: ab"),
+				"cards/B.flowmark.md": card("B", "2", "- code: AB"),
+			}},
+		{name: "50#keys-and-references: unique values ab and ab are a duplicate",
+			files: map[string]string{
+				"cards/A.flowmark.md": card("A", "1", "- code: ab"),
+				"cards/B.flowmark.md": card("B", "2", "- code: ab"),
+			},
+			want: []string{"cards/B.flowmark.md:4:3 key.duplicate ~ (code) of B equals that of A"}},
+
+		// key.duplicate of the primary key: byte for byte, else without regard to case.
+		{name: "50#key-rules: a byte-equal key is a duplicate byte for byte",
+			files: map[string]string{"tickets.flowmark.md": tickets("T1 - open", "T1 - open")},
+			want:  []string{"tickets.flowmark.md:5:3 key.duplicate ~ the key T1 equals the key T1 of tickets.flowmark.md byte for byte"}},
+		{name: "50#key-rules: a key equal in case only is a duplicate without regard to case",
+			files: map[string]string{"tickets.flowmark.md": tickets("T1 - open", "t1 - open")},
+			want:  []string{"tickets.flowmark.md:5:3 key.duplicate ~ the key t1 equals the key T1 of tickets.flowmark.md without regard to case"}},
+		{name: "50#key-rules: each later key names the first row it equals, byte for byte before without regard to case",
+			files: map[string]string{"tickets.flowmark.md": tickets("t1 - open", "T1 - open", "T1 - open")},
+			want: []string{
+				"tickets.flowmark.md:5:3 key.duplicate ~ the key T1 equals the key t1 of tickets.flowmark.md without regard to case",
+				"tickets.flowmark.md:6:3 key.duplicate ~ the key T1 equals the key T1 of tickets.flowmark.md byte for byte",
+				"tickets.flowmark.md format.noncanonical",
+			}},
+
+		// check: false over the row's logical values; unknown passes.
+		{name: "50#checks: a row whose checks hold is accepted",
+			files: map[string]string{"measures/M1.flowmark.md": measure("M1", "- low: 9", "- high: 10", "- price: 10.00", "- ratio: 0.5",
+				"- starts: 2026-10-01 23:59:59", "- ends: 2026-10-02 00:00:00", "- label: B", "- code: b")}},
+		{name: "50#checks: a row of NULLs leaves every check unknown, so it passes",
+			files: map[string]string{"measures/M1.flowmark.md": measure("M1")}},
+		{name: "50#checks: integers compare by value",
+			files: map[string]string{"measures/M1.flowmark.md": measure("M1", "- low: 10", "- high: 9")},
+			want:  []string{"measures/M1.flowmark.md:1:1 check ~ the check ck_measures_range is false for M1"}},
+		{name: "50#checks: decimals compare by value",
+			files: map[string]string{"measures/M1.flowmark.md": measure("M1", "- price: 1.99")},
+			want:  []string{"measures/M1.flowmark.md:1:1 check ~ ck_measures_price"}},
+		{name: "50#checks: f64 values compare by value",
+			files: map[string]string{"measures/M1.flowmark.md": measure("M1", "- ratio: 10")},
+			want:  []string{"measures/M1.flowmark.md:1:1 check ~ ck_measures_ratio"}},
+		{name: "50#checks: datetimes compare chronologically",
+			files: map[string]string{"measures/M1.flowmark.md": measure("M1", "- starts: 2026-10-02 00:00:00", "- ends: 2026-10-01 23:59:59")},
+			want:  []string{"measures/M1.flowmark.md:1:1 check ~ ck_measures_span"}},
+		{name: "50#checks: text compares by code point",
+			files: map[string]string{"measures/M1.flowmark.md": measure("M1", "- code: B")},
+			want:  []string{"measures/M1.flowmark.md:1:1 check ~ ck_measures_code"}},
+		{name: "50#checks: two false checks are two reports",
+			files: map[string]string{"measures/M1.flowmark.md": measure("M1", "- low: 10", "- high: 9", "- label: c")},
+			want: []string{
+				"measures/M1.flowmark.md:1:1 check ~ ck_measures_range",
+				"measures/M1.flowmark.md:1:1 check ~ ck_measures_label",
+			}},
+		{name: "50#checks: a check false whatever a raw value is stands beside its type",
+			files: map[string]string{"measures/M1.flowmark.md": measure("M1", "- low: x", "- high: -1")},
+			want: []string{
+				"measures/M1.flowmark.md:2:3 type",
+				"measures/M1.flowmark.md:1:1 check ~ ck_measures_positive",
+			}},
+		{name: "50#checks: a check that a raw value decides is type alone",
+			files: map[string]string{"measures/M1.flowmark.md": measure("M1", "- low: x", "- high: 1", "- label: toolong")},
+			want: []string{
+				"measures/M1.flowmark.md:2:3 type",
+				"measures/M1.flowmark.md:4:3 type",
+			}},
+		{name: "50#checks: a check is reported in an unavailable table",
+			files: map[string]string{
+				"measures/M1.flowmark.md":   measure("M1", "- low: 10", "- high: 9"),
+				"measures/_bad.flowmark.md": "# Bad key\n",
+			},
+			want: []string{
+				"measures/M1.flowmark.md:1:1 check ~ ck_measures_range",
+				"measures/_bad.flowmark.md:1 format.block",
+			}},
+		{name: "50#checks: a check reads the placement foreign key as the key of the parent row",
+			files: map[string]string{
+				"plans/P1.flowmark.md":   planOne,
+				"entries/E1.flowmark.md": entry("First", "", "1", steps("S1 - open")...),
+				"entries/E9.flowmark.md": entry("Ninth", "", "2", steps("S9 - open")...),
+			},
+			want: []string{"entries/E9.flowmark.md:10 check ~ the check ck_steps_entry is false for S9"}},
+
+		// history.chain, state.transition and state.required over the history rows.
+		{name: "50#a-state-changed-outside-the-engine: a history whose pairs record their required columns is accepted",
+			files: map[string]string{"tasks.flowmark.md": tasks("T1", "x", "| 1 | waiting | doing | 2026-10-01 08:00:00.000000 | ann |",
+				"| 2 | doing | done | 2026-10-01 09:00:00.000000 |  |", "", "#### task_history row 2", "", "##### evidence", "", "Proof.")}},
+		{name: "50#a-state-changed-outside-the-engine: a NULL required cell, which holds no element, is state.required at the row",
+			files: map[string]string{"tasks.flowmark.md": tasks("T1", "~", "| 1 | waiting | doing | 2026-10-01 08:00:00.000000 |  |")},
+			want:  []string{"tasks.flowmark.md:9:1 state.required ~ requires owner, and owner holds no value"}},
+		{name: "50#a-state-changed-outside-the-engine: an empty required cell is state.required at the cell",
+			files: map[string]string{"tasks.flowmark.md": tasks("T1", "~", `| 1 | waiting | doing | 2026-10-01 08:00:00.000000 | "" |`)},
+			want:  []string{"tasks.flowmark.md:9:54 state.required ~ owner"}},
+		{name: "50#a-state-changed-outside-the-engine: an absent required section of the terminal is state.required at the row",
+			files: map[string]string{"tasks.flowmark.md": tasks("T1", "x", "| 1 | waiting | doing | 2026-10-01 08:00:00.000000 | ann |",
+				"| 2 | doing | done | 2026-10-01 09:00:00.000000 |  |")},
+			want: []string{"tasks.flowmark.md:10:1 state.required ~ requires evidence"}},
+		{name: "50#a-state-changed-outside-the-engine: a present empty required section is state.required at the section",
+			files: map[string]string{"tasks.flowmark.md": tasks("T1", "x", "| 1 | waiting | doing | 2026-10-01 08:00:00.000000 | ann |",
+				"| 2 | doing | done | 2026-10-01 09:00:00.000000 |  |", "", "#### task_history row 2", "", "##### evidence")},
+			want: []string{"tasks.flowmark.md:14:7 state.required ~ requires evidence"}},
+		{name: "50#a-state-changed-outside-the-engine: a required value not of its type is type alone",
+			files: map[string]string{"tasks.flowmark.md": tasks("T1", "~", "| 1 | waiting | doing | 2026-10-01 08:00:00.000000 | abcdefghijklmnopqrs |")},
+			want:  []string{"tasks.flowmark.md:9 type"}},
+		{name: "50#a-state-changed-outside-the-engine: an undeclared pair is state.transition, with no state.required",
+			files: map[string]string{"tasks.flowmark.md": tasks("T1", "x", "| 1 | waiting | done | 2026-10-01 08:00:00.000000 |  |")},
+			want:  []string{"tasks.flowmark.md:9 state.transition ~ from waiting to done"}},
+		{name: "50#a-state-changed-outside-the-engine: a to not of its type is type alone",
+			files: map[string]string{"items.flowmark.md": "# items\n- [x] T1 First item\n\n## items row T1\n\n### item_history\n| id | from_state | to_state | at |\n| --- | --- | --- | --- |\n" +
+				"| 1 | waiting | abcdefghijklmnopqrs | 2026-10-01 08:00:00.000000 |\n| 2 | doing | done | 2026-10-01 09:00:00.000000 |\n"},
+			want: []string{"items.flowmark.md:9 type"}},
+		{name: "50#a-state-changed-outside-the-engine: a last to not of its type leaves no gap to judge",
+			files: map[string]string{"items.flowmark.md": "# items\n- [x] T1 First item\n\n## items row T1\n\n### item_history\n| id | from_state | to_state | at |\n| --- | --- | --- | --- |\n" +
+				"| 1 | waiting | abcdefghijklmnopqrs | 2026-10-01 08:00:00.000000 |\n"},
+			want: []string{"items.flowmark.md:9 type"}},
+		{name: "50#a-state-changed-outside-the-engine: a from not of its type is type alone",
+			files: map[string]string{"items.flowmark.md": "# items\n- [x] T1 First item\n\n## items row T1\n\n### item_history\n| id | from_state | to_state | at |\n| --- | --- | --- | --- |\n" +
+				"| 1 | abcdefghijklmnopqrs | done | 2026-10-01 08:00:00.000000 |\n"},
+			want: []string{"items.flowmark.md:9 type"}},
+		{name: "50#a-state-changed-outside-the-engine: a state not of its type is type alone, and its history rows are still judged",
+			files: map[string]string{"jobs/1.flowmark.md": "# One\n- state: abcdefghijklmnopqrs\n\n## job_history\n| id | from_state | to_state | at |\n| --- | --- | --- | --- |\n" +
+				"| 1 | open | open | 2026-10-01 08:00:00.000000 |\n"},
+			want: []string{
+				"jobs/1.flowmark.md:2:3 type",
+				"jobs/1.flowmark.md:7 state.transition ~ from open to open",
 			}},
 	}
 	for _, tc := range cases {
