@@ -633,6 +633,13 @@ cover one item.
 | `corpus/validate.go:51`, `**/*.md` | the twin suffix and the selection |
 | plugin `ui/board.js` | UI strings in code, answers matched by sentence |
 
+The grep of the inventory is the test `tests/inventory`: each file and package of the table is
+absent, no Go file of the repository names an identifier of the table (`WIPHeadroom`,
+`taskIDLess`, `firstFlowmarkFile`, `ApplySchema`), no Go file outside the tests holds a WIP
+glyph literal, the `@assignee` sigil, Mermaid, the twin suffix, the `**/*.md` selection or
+hand-rendered SQL, and `sync/export.go` names neither the `documents` nor the `items` table. The
+plugin row is the plugin repository's item `T6`, and its grep runs there (the plugin checklist).
+
 ## Verification
 
 - orm: the dbspec rule tests and the IR-executor protocol tests pass; the Go executor passes the
