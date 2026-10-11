@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database -->
-<!-- source-sha256: befb09c6d1f20e85aa7f0f045a81bf01b9a973c623e2a8cfff28a5fc7c0f3786 -->
+<!-- source-sha256: 23fdf6419ef897aa5dc349138495705a3613cad62e5e691db97037c60288ef3f -->
 # markdown database 계획
 
 [English](markdown-database-plan.md)
@@ -132,7 +132,7 @@ markdown 전용 선언은 모두 dbspec **manifest setting**이며 `markdown <co
 
 - table마다 정확히 하나, 없으면 schema 오류:
   - `store files` — corpus root 아래의 `<table>/<key>.flowmark.md`에 행마다 file 하나. file 이름이
-    key이며, key가 바뀌면 같은 transaction에서 file 이름을 바꾼다.
+    key이며, key는 결코 갱신되지 않으므로(`IR_INVALID`) 쓰기가 file 이름을 바꾸는 일은 없다.
   - `store document list` / `store document table` — 모든 행이 corpus root의 file
     `<table>.flowmark.md` 하나에 있다: `# <table>`, 그 바로 아래 H1 밑의 list나 table, H2의 상세 섹션.
   - `store block <fk> list` / `store block <fk> table` — 이름 붙은 foreign key가 참조하는 부모 행의
@@ -156,7 +156,6 @@ markdown 전용 선언은 모두 dbspec **manifest setting**이며 `markdown <co
   — Windows에서 이 이름들은 예약된 file 이름이기 때문이다. `files` key는 최대 243 byte이므로 file 이름이
   255 안에 든다. key의 정규 문자열이 아닌 file 이름(정수 key의 `007.flowmark.md`)은 `format.block`이다.
   key 모양을 깨는 file 이름은 읽을 때 `format.block`이다.
-  대소문자만 다른 key 변경은 journal된 transaction 안에서 중간 이름을 거쳐 이름을 바꾼다.
 - `identity`는 `i64` primary key column에만 허용된다: key를 생략한 insert는 lock 아래 할당된 `max+1`을
   받으며, git을 되감은 뒤의 재사용은 받아들이고 명시한다. `key_prefix <p>`를 가진 문자 key는
   `<p><n + 1>`로 할당되며, n은 `<p><n>` 꼴 key 가운데 선행 0 없는 가장 큰 10진 접미사다. orm은 이런
@@ -208,7 +207,7 @@ markdown 전용 선언은 모두 dbspec **manifest setting**이며 `markdown <co
   주장하지 않는다. 모든 번호 매기기를 다루는 근거: 명명된 모든 viewer는 반복된 slug에 1부터 세는 `-<n>`을 덧붙여
   번호 매기며, 어느 heading이 먼저 왔든 그렇다. 거절되는 예: `items row T-1` 상세 heading 옆의 payload heading
   `items row T`는 거절된다. 두 번째 `items row T`가 `items-row-t-1`로 번호 매겨지기 때문이다. `Notes`는 그렇지 않다. 두 상세 heading은 anchor가 같을 때에만 충돌한다.
-  CommonMark 0.31.2가 읽는 raw HTML에서(code span이나 code block에는 없다) full mapping으로 소문자로 바꾼 `id` 또는 `name`이 A나 `user-content-` 뒤에 A를 붙인 것과 같은 것도 충돌한다: VS Code는 fragment를 소문자로 바꾼 id와 비교하고, GitHub은 raw id나 name을 대소문자를 남긴 채, 이미 그렇게 시작하지 않으면 앞에 `user-content-`를 붙여 렌더하며, 그것은 그 heading id의 형태다. 충돌을 새로 만드는 쓰기 — 제목 갱신, payload 쓰기, 행 삽입, key 갱신, 이동, 상세 섹션의 생성 — 는 다른 heading을 밝히며 `CONSTRAINT`다. 다만 행에 같은 table의 다른 key와 대소문자를 무시하고 같은 key를 주는 쓰기는 `DUPLICATE_KEY`이며, 그것이 key 규칙이다. 읽기에서는 `format.block`이다. 다만 key가 대소문자만 다른 두 행의 상세 heading
+  CommonMark 0.31.2가 읽는 raw HTML에서(code span이나 code block에는 없다) full mapping으로 소문자로 바꾼 `id` 또는 `name`이 A나 `user-content-` 뒤에 A를 붙인 것과 같은 것도 충돌한다: VS Code는 fragment를 소문자로 바꾼 id와 비교하고, GitHub은 raw id나 name을 대소문자를 남긴 채, 이미 그렇게 시작하지 않으면 앞에 `user-content-`를 붙여 렌더하며, 그것은 그 heading id의 형태다. 충돌을 새로 만드는 쓰기 — 제목 갱신, payload 쓰기, 행 삽입, 이동, 상세 섹션의 생성 — 는 다른 heading을 밝히며 `CONSTRAINT`다. 다만 행에 같은 table의 다른 key와 대소문자를 무시하고 같은 key를 주는 쓰기는 `DUPLICATE_KEY`이며, 그것이 key 규칙이다. 읽기에서는 `format.block`이다. 다만 key가 대소문자만 다른 두 행의 상세 heading
   사이는 `key.duplicate`뿐이며(쓰기에서는 `DUPLICATE_KEY`다). 공백이 더 있거나 `row`의 대소문자가 다른 상세 heading은
   `format.noncanonical`이며, `flowmark canon`이 고친다. 블록의 어떤 행도 가리키지 않는 key의 상세 섹션은 `format.block`이다. 같은 행의 두 번째 상세 섹션도 표기와 무관하게 `format.block`이다: 그 본문과 섹션을 배정할 수 없기 때문이다.
 - `markdown` column은 모든 저장에서 언제나 행 scope의 섹션이다 — field나 cell이 아니다.
@@ -281,8 +280,8 @@ markdown 전용 선언은 모두 dbspec **manifest setting**이며 `markdown <co
   플랫폼에서 `/`)에, 그 행이 상세 섹션을 가질 때에만 `#<anchor>`를 붙인다. 참조된 행 자신의 file 안의 link는
   `#<anchor>`만이며, 행이 anchor를 갖지 않으면 그 file 이름이다. 행의 상세 섹션을 추가하거나 제거하는 쓰기는
   같은 transaction에서 그 행을 가리키는 모든 link를 다시 쓴다. 유도된 것과 다른 target은
-  `format.noncanonical`이고, 존재하지 않는 key를 가리키는 것은 dangling 참조이며, validator의 `reference.dangling`이고 그것을 새로 만드는 쓰기는 `FOREIGN_KEY`다. file을 읽을 수 없게 하지 않는다. 쓴 target은 그대로 간직한다: 유도할 target이 없으므로 target 검사 없이 읽고 읽은 그대로 쓴다. 다만 block이나 document 행의 `parent`가 그 file의 어떤 행도 가리키지 않으면 `format.block`이다. 참조된 행의 key 변경은
-  `FOREIGN_KEY`(restrict)이므로 target은 link 아래에서 결코 움직이지 않는다. `files` 행에 쓴 `parent`도
+  `format.noncanonical`이고, 존재하지 않는 key를 가리키는 것은 dangling 참조이며, validator의 `reference.dangling`이고 그것을 새로 만드는 쓰기는 `FOREIGN_KEY`다. file을 읽을 수 없게 하지 않는다. 쓴 target은 그대로 간직한다: 유도할 target이 없으므로 target 검사 없이 읽고 읽은 그대로 쓴다. 다만 block이나 document 행의 `parent`가 그 file의 어떤 행도 가리키지 않으면 `format.block`이다. key는 결코 갱신되지
+  않으므로 target은 link 아래에서 결코 움직이지 않는다. `files` 행에 쓴 `parent`도
   link이며, block 행의 배치 foreign key는 결코 쓰지 않는다. 예: `comments/C5.flowmark.md` 행은 자신의 post를
   `[P3](../posts/P3.flowmark.md)`로 link하고, `posts/P3.flowmark.md` 안의 block comment는 자신의 author를
   `[max](../people.flowmark.md)`로 link하며, 루트의 `items.flowmark.md`는 같은 file 안에 상세 섹션을 가진 행을

@@ -21,8 +21,10 @@ The failure codes are those of [operations](40-ops.md).
 - **Foreign keys** resolve by exact byte match with the referenced key; a reference that names no
   row is a dangling reference: `FOREIGN_KEY` on a write that introduces it, and the validator's
   `reference.dangling` at the reference's place; it never makes a file unreadable, except a `parent` of a block or document row that names no row of its file, which is `format.block` ([canonical format](10-canonical-format.md#foreign-keys-as-links)).
-- **Key update of a referenced row** is `FOREIGN_KEY` (restrict-only), so a link target never moves
-  under a link.
+- **Keys are never updated.** An update or a restore that assigns the primary key is `IR_INVALID`
+  (orm's rule on every database), so a link target never moves under a link; a key changes by
+  inserting the row under the new key, pointing the referencing rows at it and deleting the old row,
+  in one transaction.
 - **Referential actions are restrict-only.** `cascade` and `set_null` are rejected at catalog load:
   they are unimplementable for a writer that bypasses the engine. Deleting a referenced row —
   including a row that has history rows — is `FOREIGN_KEY`. Restrict holds against the rows before
@@ -64,7 +66,7 @@ On write, each of the following is `CONSTRAINT`; the rule that states it is name
 - a `markdown` value holding a top-level heading of level ≤ L, by the CommonMark block structure
   ([canonical format](10-canonical-format.md));
 - a write that introduces a collision with a detail anchor (of a heading or an HTML `id` or `name`), located at the row and column whose written text holds the heading or id that takes the anchor — a `markdown` column's value, a `files` row's title for its H1, or, for a section or block heading, the row whose scope it opens, at the `markdown` column or child table it names — naming the detail heading whose anchor it takes: a
-  title update, a payload write, a row insert, a key update, a move or the creation of a detail section, other than a duplicate key, which is `DUPLICATE_KEY`
+  title update, a payload write, a row insert, a move or the creation of a detail section, other than a duplicate key, which is `DUPLICATE_KEY`
   ([canonical format](10-canonical-format.md#detail-headings-and-anchors));
 - a date, time or datetime value written `now`, and a text longer than its column (for an orm
   parameter, `CODEC_ENCODE`) ([canonical format](10-canonical-format.md));

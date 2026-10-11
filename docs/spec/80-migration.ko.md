@@ -1,5 +1,5 @@
 <!-- doc-id: spec-migration -->
-<!-- source-sha256: 3aab0a0164679c39240e8512e9cf9189bb6131d0f2d49f824bfc2588ba47b8be -->
+<!-- source-sha256: 88cffda0d1c71c81cee6b2247ab20ff820b78caaa3fe3fd4bb9a0a659dfedc9c -->
 # Migration (범위를 정한 뼈대)
 
 [English](80-migration.md)
@@ -19,8 +19,10 @@
 - **추가 우선**: 이름 변경은 명시적인 단계이며 "새로 추가하고 옛것을 지우기"가 아니다.
 - **저장 변경은 transaction이다**: table을 한 저장에서 다른 저장으로 옮기면 모든 행을 transaction 하나로
   다시 쓰며, 행은 전후로 같게 읽힌다; `format.*` 진단이 있는 file은 거절하며 file을 밝힌다.
-- **key는 불투명하다.** 그래서 prose의 참조를 고쳐 쓰는 key codemod는 없다. key 변경은 어떤 행이든 그 key를
-  참조하는 동안 거절한다. 참조하는 행들은 먼저, 같은 transaction에서 호출자가 갱신한다.
+- **key는 불투명하다.** 그래서 prose의 참조를 고쳐 쓰는 key codemod는 없다. key는 결코
+  갱신되지 않는다([document model](20-document-model.ko.md#key)): key는 새 key로 행을 insert하고,
+  참조하는 행이 그것을 가리키게 하고, 옛 행을 지우는 것으로 호출자가 한 transaction에서 바꾼다. 어떤
+  행이든 옛 key를 아직 참조하는 동안 그 delete는 `FOREIGN_KEY`다([constraints](50-constraints.ko.md#key와-참조)).
 
 ## 나중을 위해 열어 둔 것
 
