@@ -81,6 +81,60 @@ On read, the walk reports `corpus.walk` and the format rules report `format.*`, 
 
 A check is enforced at commit; a check whose predicate is unknown (NULL) passes, as in SQL. The validator evaluates each check of a table over each row it can read, with the row's logical values — every column as a read returns it, the placement foreign key as the key of the parent row — and reports `check` when the predicate is false, at the row's first line, naming the check and the row. Text and `uuid` compare by code point (orm's one binary collation), numbers by value, and dates, times and datetimes chronologically. A value not of its column type is not NULL for `is [not] null`, and a comparison or an `in` that reads it, with no NULL operand, is evaluated twice, once true and once false: a dbspec predicate has no `not`, so it is monotone in these atoms, and the first evaluation is the greatest result any value could give and the second the least. The validator reports `check` when the first is false — the check is false whatever that value is — and the value's `type` stands for the rest; a commit is `CONSTRAINT` naming the check when the first is false, `CONSTRAINT` naming the `type` diagnostic when only the second is, since the check then needs that value, and passes otherwise. Grounding: a check is a predicate of its own row, so it is reported wherever the row is readable, in an unavailable table too; SQL names a violated check by its name, not by a column.
 
+## Codec values
+
+A column with a `codec` setting holds the encoded value in its type's readable form
+([canonical format](10-canonical-format.md#readable-values)). The validator decodes each non-NULL
+value of its type with orm's Go codec package — `orm.Decode`, which holds the stages `gz`, `base64`,
+`serialize`, `yaml` and `ordered_json` — a `bytes` value from its base64 text, and reports `codec` at
+the value's element when the stages refuse it, carrying orm's message; a write that assigns such a
+value is `CONSTRAINT`. A value not of its column type is `type` alone. A column whose stages include
+the host stage `hex` or `ip` is not judged until orm exports its host decode (orm `T74`):
+`orm.Decode` refuses every list that holds a host stage, so judging it would report every value;
+the whole list is then decoded in reverse, the host stages by orm's `HostDecode` and the others by
+`orm.Decode`. Grounding: a value its own stages cannot decode has no answer for any client that
+reads it, so it is invisible data the validator names; the decode is orm's, since the client that
+reads the value decodes with it, and the engine reimplements no stage.
+
+## Views
+
+The view table is the table `views` of the application schema
+([application schema](100-checklist.md#views)); each of its rows is a view with its `kind`,
+`entity`, `filter`, `sort` and `group_by`. The validator judges every row of it that it can read:
+
+- **Entity.** `entity` names an entity of orm's runtime model of the catalog; when `kind` is
+  `kanban`, `list` or `gantt`, that entity's table declares `title` and `body`
+  ([document model](20-document-model.md#title-and-body)). When `kind` is not a value of its type,
+  `entity` is judged only as naming an entity.
+- **Filter.** `filter` holds one JSON object with exactly the members `where`, an IR `Group`, and
+  `params`, an array whose items are null, a boolean, a number or a string; no filter is
+  `{"where":{"items":[]},"params":[]}`. The validator runs orm's `ir.Validate` on the request
+  `{ir_version, manifest_hash of the model, kind all, entity, where, n_params}`, n_params being the
+  number of params, and reports the code it returns; a param that no `p` or `ps` index uses is a
+  fault.
+- **Sort.** `sort` holds a JSON array of IR `Order`, `[]` for no sort, validated with `ir.Validate`
+  on `{…, kind all, entity, order, n_params 0}`.
+- **Group.** `group_by` is NULL for no grouping, or names a field of the entity that
+  `ir.OpAllowed(field, "eq")` admits.
+- **Shape.** A repeated object member at any depth, an unknown or missing member, a non-integer
+  index and any other shape of `filter` or `sort` is malformed.
+
+Each fault is `view`, at the element of its column, one report per column; when `entity` is faulty,
+`filter`, `sort` and `group_by` are not judged. A `type`, `codec` or `check` fault on a view column
+stands alone, and `kind` carries no `view` of its own. The rule needs only its own row, so it is
+reported in an unavailable table too. A view made invalid by a catalog change is reported and never
+refused on a read; a write that leaves a view invalid is `CONSTRAINT`. The validator does not judge a
+param against the type of its use: that type is the slot type that orm's planner computes and has not
+published (orm `T89`), the source the executor's parameter check waits on too; a param of another
+type is refused by the read that runs the view, and the validator judges each param against every
+use once orm publishes the slots. What `ir.Validate` checks is orm's contract; its gaps — a
+column-to-column `ref` it does not resolve and a `conn` on a group's first item (orm `T73`) — close
+in orm. Grounding: a view is a stored request, so the rules that judge a request judge it, against
+the current catalog — no manifest hash is stored, since a view is data and a catalog change must not
+orphan it unseen; a param no index uses is invisible data; and grouping gathers rows with equal
+values, so a field without equality — a codec field whose codec is not exactly `ip`, `aes` being
+refused on a corpus — has no groups.
+
 ## Hierarchy and order
 
 - A `parent` cycle is `CONSTRAINT` on write, and `parent.cycle` on read for a cycle among a file's rows,
@@ -142,7 +196,7 @@ A check is enforced at commit; a check whose predicate is unknown (NULL) passes,
   reported, unless a human forges a consistent history.
 - **Commit.** A commit first checks that its targets are unchanged since they were read, else
   `WRITE_CONFLICT`. The constraint checks, `history.gap` included, then run on the corpus re-read
-  under the lock. A validator diagnostic on another row (`type`, `key.duplicate`, `reference.dangling`, `check`, `order`, `state.transition`, `state.required`, `state.limit`, `history.gap`, `history.chain`, and the validator's `parent.cycle` across several `files` files) never fails the commit, except that a `type` diagnostic fails it when a constraint check of the commit must evaluate that value ([canonical format](10-canonical-format.md#readable-values)), and two rows with byte-for-byte equal keys make their table unavailable ([canonical format](10-canonical-format.md#diagnostics)); a `format.*` diagnostic fails it only as the rewrite refusal and the unavailable table state ([canonical format](10-canonical-format.md#diagnostics)). A commit that must rewrite a file — the row's own file, a file holding a link to a row whose derived target changes (its detail section appears or disappears, or an insert gives a dangling link its row), an `order` sibling — is refused when that file has a `format.*` diagnostic: `CONSTRAINT`, naming the file and the diagnostic, and naming `flowmark canon` when it is `format.noncanonical`. Three commits are exempt: `flowmark canon` for its targets ([operations](40-ops.md#the-canon-operation)); the add-column migration, for the diagnostics the added column causes, which do not make its table unavailable to that migration ([migration](80-migration.md)); and a delete that removes a `files` row's whole file from the rewrite refusal only — its restrict check still needs the rows of every table that may reference the row (its own table through `parent`, its child blocks and its history rows, and every table with a foreign key to it), so such a delete is `CONSTRAINT` when any of them is unavailable.
+  under the lock. A validator diagnostic on another row (`type`, `key.duplicate`, `reference.dangling`, `check`, `codec`, `view`, `order`, `state.transition`, `state.required`, `state.limit`, `history.gap`, `history.chain`, and the validator's `parent.cycle` across several `files` files) never fails the commit, except that a `type` diagnostic fails it when a constraint check of the commit must evaluate that value ([canonical format](10-canonical-format.md#readable-values)), and two rows with byte-for-byte equal keys make their table unavailable ([canonical format](10-canonical-format.md#diagnostics)); a `format.*` diagnostic fails it only as the rewrite refusal and the unavailable table state ([canonical format](10-canonical-format.md#diagnostics)). A commit that must rewrite a file — the row's own file, a file holding a link to a row whose derived target changes (its detail section appears or disappears, or an insert gives a dangling link its row), an `order` sibling — is refused when that file has a `format.*` diagnostic: `CONSTRAINT`, naming the file and the diagnostic, and naming `flowmark canon` when it is `format.noncanonical`. Three commits are exempt: `flowmark canon` for its targets ([operations](40-ops.md#the-canon-operation)); the add-column migration, for the diagnostics the added column causes, which do not make its table unavailable to that migration ([migration](80-migration.md)); and a delete that removes a `files` row's whole file from the rewrite refusal only — its restrict check still needs the rows of every table that may reference the row (its own table through `parent`, its child blocks and its history rows, and every table with a foreign key to it), so such a delete is `CONSTRAINT` when any of them is unavailable.
 - **Repair.** `flowmark history repair <table> <key> [--from <initial state>]` inserts one history
   row from the last `to` — for a row without history, the one initial state, or `--from`, required
   when the machine has several — to the current state, with `at` from the engine clock and the
@@ -177,7 +231,7 @@ A database enforces a writer monopoly; a corpus does not have one. Per feature:
 ## Diagnostics
 
 Every rule reports `{file, line, column, rule, message}`, with the column as the [canonical format](10-canonical-format.md#diagnostics) states; the rule names are `catalog`, `type`,
-`key.duplicate`, `reference.dangling`, `check`, `parent.cycle`, `order`, `state.transition`,
+`key.duplicate`, `reference.dangling`, `check`, `codec`, `view`, `parent.cycle`, `order`, `state.transition`,
 `state.required`, `state.limit`, `history.gap`, `history.chain`, `corpus.walk` (the walk of the
 [document model](20-document-model.md)) and the `format.*` rules of the canonical format:
 `format.noncanonical`, `format.block`, `format.section` and `format.encoding`. Validation is

@@ -1,5 +1,5 @@
 <!-- doc-id: spec-checklist -->
-<!-- source-sha256: 4ef2a42bb00ab4ea63e70ae94242f5deb6aa9f8fa7bd7db343f10373cfc9644f -->
+<!-- source-sha256: 455cb380a423626d0d94da1f7a2a66bb86a70c55919279cb12efa063591a857a -->
 # 응용 schema
 
 [English](100-checklist.md)
@@ -67,9 +67,21 @@
 
 ## View
 
-- view는 `views`의 행이다. `filter`는 IR `Group`을, `sort`는 IR `Order` 목록을 담으며, 쓰기와 validate에서
-  runtime model에 대해 `ir.Validate`로 검증한다. catalog 변경으로 무효가 된 view는 위치가 있는 진단이다.
-  GUI에서 저장한 filter는 catalog를 고치지 않는다.
+- view table은 이름이 `flowmark`인 catalog 문서 — 이 응용 schema — 의 table `views`이며, 어떤 manifest
+  setting도 그것을 선언하지 않는다. 그 view column은 각각 codec 없는 non-null `varchar`나 `text`인 `kind`와
+  `entity`, 각각 정확히 `codec <column> ordered_json`을 가진 non-null `varchar`나 `text`인 `filter`와
+  `sort`, codec 없는 `varchar`나 `text`인 `group_by`다. 다른 모양은 table 이름에서 catalog 오류다. 이름이
+  `flowmark`인 문서가 없거나 그 `flowmark` 문서가 `views`를 선언하지 않는 catalog에는 view table이 없다.
+  근거: view는 SQL database에 아무 뜻이 없고, orm은 셋 모두에서 같은 뜻으로 render되는 setting만
+  받아들이므로 orm은 view table을 선언하지 않는다. view는 보드가 읽는 응용 데이터이므로, view를 정의하는
+  응용이 그 table을 이름 붙인다. 응용이 자기 schema가 선언한 table에 묶이는 것과 같다. column 이름이 동작을
+  고르지 않는다는 schema 규칙([schema](30-schema.ko.md#markdown-setting))은 모든 catalog에 적용되는 저장
+  setting을 다스린다. 이 선언은 이 spec이 소유하는 한 문서의 한 table을 이름 붙인다.
+- view는 `views`의 행이다. `filter`는 `{"where": <IR Group>, "params": [<value>, …]}`를 담으며 filter
+  없음은 `{"where":{"items":[]},"params":[]}`다. `sort`는 IR `Order` 목록을 담으며 `[]`는 정렬 없음이다.
+  `group_by`는 view가 묶는 field를 이름 붙이며 없으면 NULL이다. 이것들은 [constraints](50-constraints.ko.md#view)가
+  정하는 대로 쓰기와 validate에서 runtime model에 대해 `ir.Validate`로 검증한다. catalog 변경으로 무효가
+  된 view는 위치가 있는 진단이다. GUI에서 저장한 filter는 catalog를 고치지 않는다.
 - 칸반, 목록, 간트 view는 entity table이 `title`과 `body`를 선언할 것을 요구한다. `flowmark.dbs`는
   `items`에 둘 다 선언한다.
 - 칸반 drop은 view에 `sort`가 없고(저장 순서) 양쪽 이웃이 card의 parent를 공유할 때만 `order`를 정한다.

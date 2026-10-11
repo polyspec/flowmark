@@ -69,9 +69,24 @@ Every foreign key has its leading index. The checks are `start_on is null or sta
 
 ## Views
 
-- A view is a row of `views`. `filter` holds an IR `Group` and `sort` an IR `Order` list, validated
-  with `ir.Validate` against the runtime model on write and on validate; a view made invalid by a
-  catalog change is a located diagnostic. A filter saved in a GUI never edits the catalog.
+- The view table is the table `views` of the catalog document named `flowmark` — this application
+  schema — and no manifest setting declares it. Its view columns are `kind` and `entity`, each a
+  non-null `varchar` or `text` without a codec; `filter` and `sort`, each a non-null `varchar` or
+  `text` with exactly `codec <column> ordered_json`; and `group_by`, a `varchar` or `text` without a
+  codec. Another shape is a catalog error at the table name; a catalog without a document named
+  `flowmark`, or whose `flowmark` document declares no `views`, has no view table. Grounding: a view
+  means nothing to the SQL databases, and orm adopts a setting only when it renders with the same
+  meaning on all three, so orm declares no view table; a view is application data that the boards
+  read, so the application that defines views names their table, as an application binds to the
+  tables its own schema declares. The schema's rule that a column's name selects no behaviour
+  ([schema](30-schema.md#markdown-settings)) governs the storage settings, which apply to every
+  catalog; this declaration names one table of the one document this specification owns.
+- A view is a row of `views`. `filter` holds `{"where": <IR Group>, "params": [<value>, …]}`, no
+  filter being `{"where":{"items":[]},"params":[]}`, and `sort` an IR `Order` list, `[]` for no sort;
+  `group_by` names the field the view groups by, NULL for none. They are validated with
+  `ir.Validate` against the runtime model on write and on validate, as the
+  [constraints](50-constraints.md#views) state; a view made invalid by a catalog change is a located
+  diagnostic. A filter saved in a GUI never edits the catalog.
 - A kanban, list or gantt view requires its entity table to declare `title` and `body`;
   `flowmark.dbs` declares both on `items`.
 - A kanban drop sets `order` only when the view has no `sort` (storage order) and both neighbours
