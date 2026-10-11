@@ -12,7 +12,7 @@ type htmlAttr struct {
 	name, value string
 }
 
-// inlineResult is the inline text of a heading or a paragraph as the folds read it:
+// inlineResult is the inline text of a heading or a paragraph as F_G reads it:
 // text, where an image keeps no text, and alt, where an image keeps its alt text; and
 // the attributes of each raw HTML open tag of the source, in order.
 type inlineResult struct {
@@ -21,13 +21,13 @@ type inlineResult struct {
 	tagAt     []int // the offset in the source of the '<' of each tag
 }
 
-// inlineText returns the inline text of s, as the folds read it. The reader follows the
+// inlineText returns the inline text of s, as F_G reads it. The reader follows the
 // precedence of CommonMark 0.31.2 where it decides what is text: a code span, an
 // autolink and a raw HTML tag bind tighter than a link bracket, and a link may not
 // contain another link, so the brackets around one turn inactive. A link keeps its text
 // and loses its target and title. An image keeps no text in text, since the text of an
 // img element is empty, and its alt text in alt. Markup that is not a letter or a digit,
-// such as emphasis markers and escapes, is kept as characters, which the folds drop. A
+// such as emphasis markers and escapes, is kept as characters, which F_G drops. A
 // bracket pair that is followed by no inline target is a link when refs defines its
 // label: a full, a collapsed or a shortcut reference, which keeps its text. Otherwise
 // the brackets are text, and the text stays.
@@ -39,7 +39,7 @@ func inlineText(s string, refs linkRefs) inlineResult {
 
 // inlineReader holds the text kept so far, with and without the alt text of images, the
 // tags read and their offsets, the open brackets, and the link reference definitions that
-// the fold reads.
+// F_G reads.
 type inlineReader struct {
 	s     string
 	refs  linkRefs
@@ -186,15 +186,11 @@ func (r *inlineReader) closeBracket(i int) int {
 // a full reference with a label, a collapsed one with an empty label, which reads the
 // link text as its label, or a shortcut that is no label at all. A full or collapsed
 // reference is read when its label is defined; a shortcut is read when the link text is.
-// Under F_M one white space may stand before the label. It returns the index after the
-// reference, and false when none is defined.
+// It returns the index after the reference, and false when none is defined.
 func (r *inlineReader) refTail(o bracket, i int) (int, bool) {
 	s := r.s
 	text := s[o.src+1 : i]
 	p := i + 1
-	if r.refs.space && p+1 < len(s) && (s[p] == ' ' || s[p] == '\t' || s[p] == '\n') && s[p+1] == '[' {
-		p++
-	}
 	if p < len(s) && s[p] == '[' {
 		if q := strings.IndexByte(s[p+1:], ']'); q >= 0 {
 			label := s[p+1 : p+1+q]

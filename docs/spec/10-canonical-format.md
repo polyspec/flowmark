@@ -24,10 +24,20 @@ payload.
   [document model](20-document-model.md) states the criterion.
 - A corpus document is a complete markdown document. A reader who does not know flowmark reads it
   as it is: it carries no comment, no marker, no frontmatter and no hidden field.
-- Its structure is ordinary markdown: headings, lists, tables and a field list. Every relation is a
-  link whose `#<anchor>` is the anchor that GitHub, GitLab, VS Code and MkDocs generate for the heading
-  it names, by the rules of [detail headings and anchors](#detail-headings-and-anchors). Pandoc is not
-  a viewer the claim is made for: its default does not rewrite relative link targets, so a link between
+- Its structure is ordinary markdown: headings, lists, tables and a field list. Structure — the blocks,
+  the inlines, what is code, what is a heading, what is a table — is judged by CommonMark 0.31.2, and by
+  GFM 0.29 for tables and task-list items: the specifications that GitHub (cmark-gfm), GitLab and VS
+  Code (markdown-it) implement. Grounding: a specification is one fixed measure that these viewers
+  follow; an implementation that follows neither specification has its own list, setext, fence,
+  reference-definition and extension behaviour, which changes with its releases and extensions, so
+  following it would chase one implementation's deviations rather than a standard, and it is no
+  criterion.
+- The specifications do not define the targets of a fragment. Anchors — heading slugs and the ids and
+  names of raw HTML that CommonMark reads outside code — are judged by GitHub, GitLab and VS Code (the
+  F_G fold for headings), because a link `[k](file#anchor)` must resolve in them. Every relation is a
+  link whose `#<anchor>` is the anchor that GitHub, GitLab and VS Code generate for the heading it
+  names, by the rules of [detail headings and anchors](#detail-headings-and-anchors). Pandoc is not a
+  viewer the claim is made for: its default does not rewrite relative link targets, so a link between
   corpus files is not claimed to be followed in its output.
 - Grounding: the documents are the database's only storage, so they must stay readable documents.
   What only the machine needs belongs to the catalog (`dbspec/`) or to `.flowmark/`.
@@ -56,7 +66,7 @@ and the column sections — are payload: the renderer moves them with their row 
   ([Detail headings and anchors](#detail-headings-and-anchors)) — `# Items` in `items.flowmark.md` — is
   the file's H1 line in a non-canonical spelling and is `format.noncanonical`. Grounding: the file name
   fixes the table, so the H1 names it and carries no data; a viewer shows the rows under it alike, and
-  every named viewer lowercases a heading's anchor, so its anchor and its folds under the collision rule
+  every named viewer lowercases a heading's anchor, so its anchor and its fold under the collision rule
   are those of `# <table>`; `flowmark canon` writes `# <table>`. A missing document file is an empty
   table ([document model](20-document-model.md#storage)); when its last row is deleted, the file keeps
   the H1 line and one LF. The list or table of its rows stands directly under the H1 line, with no
@@ -110,38 +120,24 @@ and the column sections — are payload: the renderer moves them with their row 
 - The anchor of a detail heading is `<table>-row-<lowercased key>`: the heading `## items row T2`
   has the anchor `items-row-t2`. The table is the anchor text before its first `-`, since a table
   name contains no `-`.
-- **The folds.** Two folds of a heading's rendered inline text decide a collision: the text as GitHub
-  slugs it (the text of a link without its target, emphasis markers removed, code span content kept,
-  entities decoded, raw HTML tags not text). The rendered inline text is the one CommonMark 0.31.2
+- **The fold.** One fold of a heading's rendered inline text, F_G, decides a collision: the text as
+  GitHub slugs it (the text of a link without its target, emphasis markers removed, code span content
+  kept, entities decoded, raw HTML tags not text). The rendered inline text is the one CommonMark 0.31.2
   parses, with the link reference definitions of the whole file: a definition is read where CommonMark
   reads one, a block at the start of a paragraph, inside a container or not, wherever it stands. A
   full, collapsed or shortcut reference link whose label matches such a definition counts by its link
   text, and a bracketed text whose label matches none counts as its literal text, brackets and label
-  included. Under F_M the definitions are the ones Python-Markdown reads: a line outside a code block of
-  at most three spaces, `[label]:` with no bracket in the label, then a destination, on that line or the next, and at most a title in quotes
-  or parentheses after it, nothing else following on its line, wherever the line stands in a block, inside
-  a paragraph or a container included; its label, without the white space at its ends, is lowercased. A full,
-  collapsed or shortcut reference counts by its link text when its label, its runs of white space made
-  one space and then lowercased, matches such a definition, and the link text may be followed by at most
-  one white space character, a line ending included, before the label. Grounding: GitHub, GitLab and VS
-  Code parse CommonMark, where a link reference definition is a block at the start of a paragraph, so a
-  defined `[items row T1][r]` renders the text `items row T1`; Python-Markdown's reference processor
-  searches every line of a block for `^[ ]{0,3}\[([^\[\]]*)\]:` and lowercases the id, and its inline
-  reference allows one white space character between `]` and `[` and leaves an undefined reference as
-  text. An image counts under F_G both by its alt text and by no text, and under F_M by no text: a
-  heading takes the anchor when any of the three readings collides. Grounding: VS Code's markdown
-  language service builds a heading's slug from the text of its inline tokens, an image's alt text
-  included; Python-Markdown's toc strips the tags from the heading's HTML, which drops an `img` and its
-  `alt`; GitHub and GitLab take the heading's text, and reading F_G both ways covers them whichever they
-  take. F_G removes every character whose Unicode general
-  category is not a letter (L) or a decimal digit (Nd), lowercases the rest, decomposes it by Unicode
-  compatibility (NFKD), drops the combining marks, and keeps only the ASCII letters and digits that
-  remain. F_M lowercases the text, decomposes it by NFKD, drops the combining marks, and keeps only the
+  included. Grounding: GitHub, GitLab and VS Code parse CommonMark, where a link reference definition
+  is a block at the start of a paragraph, so a defined `[items row T1][r]` renders the text
+  `items row T1`. An image counts under F_G both by its alt text and by no text: a heading takes the
+  anchor when either reading collides. Grounding: VS Code's markdown language service builds a
+  heading's slug from the text of its inline tokens, an image's alt text included; GitHub and GitLab
+  take the heading's text, and reading F_G both ways covers them whichever they take. F_G removes every
+  character whose Unicode general category is not a letter (L) or a decimal digit (Nd), lowercases the
+  rest, decomposes it by Unicode compatibility (NFKD), drops the combining marks, and keeps only the
   ASCII letters and digits that remain. Grounding: the anchors of GitHub, GitLab and VS Code keep
   letters, digits, hyphens, underscores and spaces and remove other characters, superscript and
-  circled digits (category No) among them, which F_G removes. MkDocs keeps the ASCII letters and digits
-  of the NFKD form of the text, which F_M keeps; F_G does not, so both folds are used. `café` folds to
-  `cafe` under both.
+  circled digits (category No) among them, which F_G removes. `café` folds to `cafe` under F_G.
 - **The collision rule.** A heading is every ATX heading, also after a block-quote or list-item marker,
   and every paragraph followed by a setext underline, the whole paragraph after the link reference
   definitions at its start being the heading, outside fenced blocks; a detail heading is one too. Those
@@ -149,46 +145,31 @@ and the column sections — are payload: the renderer moves them with their row 
   content before it, and definitions alone followed by an underline make no heading. Grounding: CommonMark 0.31.2
   reads the definitions at the start of a paragraph before it closes the paragraph as a setext heading
   (§4.3, §4.7), so `[r]: /u`, `people row P1`, `---` is a definition and the heading `people row P1`, as
-  commonmark.js, cmark-gfm and markdown-it read it. For this rule, a detail heading is a top-level heading at the detail level of a table of the file's layout — the level of its rows' detail headings, one less than their row scope — whose text, its spaces, tabs and the line endings of a setext heading aside, is that table's name and the word `row`, each equal to its canonical text once lowercased as the viewers lowercase it, and a key: the heading of a detail section, in its canonical or a non-canonical spelling. Every other heading is a payload heading, a `<table> row <key>` heading at another level or inside a block quote or list item included, and its folds are compared with every detail anchor. Grounding: a detail section is assigned by its place, so a heading elsewhere names no row and renders an anchor of its own, which a viewer numbers when it repeats a detail anchor. A heading H other than a detail heading takes the anchor
-  A of a detail heading when, under F = F_G or under F = F_M, F(H) and F(A) are equal once a final run
-  of decimal digits is removed from each. The fold of an anchor is the same under both folds, since its
-  letters and digits are ASCII. Two detail headings collide only when their anchors are equal.
-  Grounding: every named viewer numbers a repeated or taken id only by appending a number or by
-  replacing a final number (GitHub, GitLab and VS Code append `-<n>`; MkDocs appends `_<n>` or raises a
-  final `_<n>`, and it counts ids that attribute lists set as taken), so comparing the folds without
-  their final digits covers every numbering, whichever heading or id came first. The cost is that a
+  commonmark.js, cmark-gfm and markdown-it read it. For this rule, a detail heading is a top-level heading at the detail level of a table of the file's layout — the level of its rows' detail headings, one less than their row scope — whose text, its spaces, tabs and the line endings of a setext heading aside, is that table's name and the word `row`, each equal to its canonical text once lowercased as the viewers lowercase it, and a key: the heading of a detail section, in its canonical or a non-canonical spelling. Every other heading is a payload heading, a `<table> row <key>` heading at another level or inside a block quote or list item included, and its fold is compared with every detail anchor. Grounding: a detail section is assigned by its place, so a heading elsewhere names no row and renders an anchor of its own, which a viewer numbers when it repeats a detail anchor. A heading H other than a detail heading takes the anchor
+  A of a detail heading when F_G(H) and F_G(A) are equal once a final run of decimal digits is removed
+  from each. Two detail headings collide only when their anchors are equal. Grounding: every named
+  viewer numbers a repeated id by appending `-<n>` (GitHub, GitLab and VS Code), so comparing the folds
+  without their final digits covers every numbering, whichever heading came first. The cost is that a
   payload heading that differs from a detail heading only in its final number is refused too.
   Accepted: keys `T1` and `T10` in one file never collide, since both are detail headings and only equal
   anchors collide between them. Refused: a payload heading `items row T` beside the detail heading
-  `items row T_1`; a payload heading `Notes` beside it is not refused. The check applies to every
-  heading of a file, skeleton and payload alike. It also refuses, anywhere in the file, the skeleton
-  included, an HTML `id` or `name` whose value is A, and an id A that an attribute list sets, code spans and
-  code blocks included; all compare without regard to case. An attribute list is a `{` that no odd run of
-  backslashes precedes, an optional `:`, optional spaces, then tokens separated by spaces up to a `}` on the
-  same line, its first token beginning with neither a space nor `}`; a tab counts as a space. A token
-  `key="…"` or `key='…'` holds every character up to its closing quote before the last `}` of its line, spaces and `}` included; a quote that no such quote closes is an ordinary character of its token. A token `#A`
-  sets the key `id` to A, and a token whose key is `id` or `name` in any case (bare, `"…"` or `'…'`) sets that
-  key; for each key, its spelling as written, the last token wins, and the value of each such key is compared.
-  Every such list counts, whatever element it stands in or beside and whether or not attr_list attaches it.
-  Grounding: Python-Markdown's attr_list extension, which MkDocs enables on request, sets an id only from such
-  a list — it matches `{…}` on one line after Python-Markdown expands tabs, applies the tokens in order, and
-  reads no `{` that a backslash escapes — so refusing every such list never misses an id it sets. Which lists
-  it attaches depends on Python-Markdown's own block and inline parsing, which differs from CommonMark's even
-  on what is code (an indented block in a list item, an unclosed fence) and may change with its releases, so
-  the rule does not follow its positions. The cost is that a list Python-Markdown leaves as text is refused
-  too: a writer keeps such text by escaping its `{` outside code, and a code span or block that shows a detail
-  anchor of its own file as an attribute list is refused. A title, a list field and a cell are text a user
-  writes, so the skeleton can set an id too. An HTML viewer reads `id` and `name` as anchors, whatever the text
-  of the heading.
-- A write that introduces a collision is `CONSTRAINT`, located at the row and column whose written text holds the heading or id that takes the anchor — a `markdown` column's value, a `files` row's title for its H1, a title, field or cell of a list or table row, or an item of a `files` row's field list, at the column whose text holds the attribute list's `{` or the tag's `<`, or, for a section or block heading, the row whose scope it opens, at the `markdown` column or child table it names — naming the detail heading whose anchor it takes: a title update, a payload write, a row insert that creates a detail section, a key update, a move, or the creation of a detail section; except that a write giving a row a key equal, with or without regard to case, to another key of its table is `DUPLICATE_KEY`, the key rule of the [document model](20-document-model.md#keys). A row without a detail section has no anchor, so it collides with nothing. On read a collision is `format.block`, except between two detail headings whose keys differ only in case, which is `key.duplicate` alone. Two detail sections of one file under the same
+  `items row T-1`, since a second `items row T` is numbered `items-row-t-1`; a payload heading `Notes`
+  beside it is not refused. The check applies to every heading of a file, skeleton and payload alike.
+  It also refuses, anywhere in the file, the skeleton included, an HTML `id` or `name` whose value is A,
+  in raw HTML as CommonMark 0.31.2 reads it (a code span or code block holds none); all compare without
+  regard to case. Grounding: an HTML viewer reads `id` and `name` as anchors, whatever the text of the
+  heading; GitHub prefixes both a heading's id and a raw `id` or `name` with `user-content-`, so they
+  still collide, and VS Code keeps them as written. A `{#…}` is literal text in CommonMark and GFM, and
+  no criterion viewer reads an id from it.
+- A write that introduces a collision is `CONSTRAINT`, located at the row and column whose written text holds the heading or id that takes the anchor — a `markdown` column's value, a `files` row's title for its H1, or, for a section or block heading, the row whose scope it opens, at the `markdown` column or child table it names — naming the detail heading whose anchor it takes: a title update, a payload write, a row insert that creates a detail section, a key update, a move, or the creation of a detail section; except that a write giving a row a key equal, with or without regard to case, to another key of its table is `DUPLICATE_KEY`, the key rule of the [document model](20-document-model.md#keys). A row without a detail section has no anchor, so it collides with nothing. On read a collision is `format.block`, except between two detail headings whose keys differ only in case, which is `key.duplicate` alone. Two detail sections of one file under the same
   heading text collide, so they are `format.block`, since neither can be assigned to a row.
 - On read, a collision is located at the element that collides ([Diagnostics](#diagnostics)): a heading at
-  the first line of its text and the first character of its text; an
-  attribute list at its `{`; an HTML `id` or `name` at the `<` of its tag. This is the read location only: a
+  the first line of its text and the first character of its text;
+  an HTML `id` or `name` at the `<` of its tag. This is the read location only: a
   write that introduces a collision is located as [Write faults](#diagnostics) and the clause above state, at
   the row and column whose written text holds the heading or id that takes the anchor, and its message names
   the detail heading. Grounding: a column locates the text a rule names, and a block's first line can stand
-  far from an attribute list on its last line or an `id` deep inside an HTML block.
+  far from an `id` deep inside an HTML block.
 - A detail heading, section heading or block heading in a non-canonical spelling (a run of spaces or tabs other than the
   canonical single space — before its text, between its words or after it —, a tab after its hashes, a
   setext underline in place of the hashes, a case of the table name or of `row` other than the canonical
@@ -322,14 +303,15 @@ catalog.
   indentation is canonical only two spaces under the parent: where the two-space grammar and
   CommonMark both place a row and disagree, the file has two readings and is `format.block`, so a
   separator never re-parents a row silently; where only CommonMark places it, the meaning is certain
-  and only its indentation is non-canonical. Python-Markdown is no measure of nesting: it nests no list
-  under fewer than four spaces, the canonical one included.
+  and only its indentation is non-canonical. CommonMark 0.31.2 is the only measure of nesting, as of all
+  structure ([The readable document](#the-readable-document)): an implementation that nests otherwise
+  does not decide it.
 - The placement foreign key and `parent` are never written as fields of a block list row; writing one is
   `format.block`.
 
 ## Table rows
 
-- The header row names the stored scalar columns and is written `| <key column> | <column> | … |`. Every stored scalar column has a header; a missing header, or a header that names no column, is `format.block`. The key is the first cell, under a header named by the key column; the stored scalar columns follow in column order. A line that GFM reads as the header row of these columns in another shape is `format.noncanonical`: indented by at most three spaces with no tab before its first character, the `|` at either end optional (a one-column header may hold none), spaces and tabs around a cell, and any of space, tab, vertical tab (U+000B) and form feed (U+000C) at the end of the line. A line indented by four columns or more, a tab in its indent advancing to the next multiple of four, is `format.block`. Grounding: GFM reads the header as a row whose pipes at either end are optional, ending in the white space its delimiter row allows (GFM 0.29, Tables), on a paragraph line, from which CommonMark 0.31.2 removes up to three spaces of indent (§4.8), while four columns open an indented code block (§4.4), a tab advancing to the next tab stop (§2.2); every such header gives the same table, so `flowmark canon` rewrites it. GFM is the measure of a table, as for the delimiter row: VS Code's markdown-it reads no table from a header without `|`, and Python-Markdown none from a header without a leading `|` or with a vertical tab or form feed at its end, and neither decides.
+- The header row names the stored scalar columns and is written `| <key column> | <column> | … |`. Every stored scalar column has a header; a missing header, or a header that names no column, is `format.block`. The key is the first cell, under a header named by the key column; the stored scalar columns follow in column order. A line that GFM reads as the header row of these columns in another shape is `format.noncanonical`: indented by at most three spaces with no tab before its first character, the `|` at either end optional (a one-column header may hold none), spaces and tabs around a cell, and any of space, tab, vertical tab (U+000B) and form feed (U+000C) at the end of the line. A line indented by four columns or more, a tab in its indent advancing to the next multiple of four, is `format.block`. Grounding: GFM reads the header as a row whose pipes at either end are optional, ending in the white space its delimiter row allows (GFM 0.29, Tables), on a paragraph line, from which CommonMark 0.31.2 removes up to three spaces of indent (§4.8), while four columns open an indented code block (§4.4), a tab advancing to the next tab stop (§2.2); every such header gives the same table, so `flowmark canon` rewrites it. GFM 0.29 is the measure of a table, as for the delimiter row, since structure is judged by the specification ([The readable document](#the-readable-document)): VS Code's markdown-it reads no table from a header without `|`, and that deviation does not decide it.
 - The delimiter row is `---` for each column, written `| --- | --- |`. A line that GFM reads as the header's delimiter row is `format.noncanonical`: indented by at most three spaces with no tab before its first character, its cells separated by `|`, each cell one or more hyphens with at most one colon at either end and around them any of space, tab, vertical tab (U+000B) and form feed (U+000C), the `|` at either end optional and any of those four characters after it, with as many cells as the header — except a line without a leading `|` that CommonMark reads first as another block: a line of only hyphens and trailing spaces or tabs (a setext underline, which makes the header a heading), or a line whose first character after its indent is a `-` followed by a space or a tab (a list item). An alignment colon is therefore noncanonical. Any other line in its place is `format.block`. Grounding: the delimiter row is skeleton, and no column states an alignment, so a write cannot keep one and one form is canonical; GFM's delimiter row allows these four white space characters around its cells, so every such row reads as the same table and `flowmark canon` rewrites it; the white space of the delimiter row is skeleton, not a single-line place; a tab in the indent reaches the fourth column, so CommonMark reads the line as indented, which continues the header's paragraph and opens no table (§2.2, §4.4). A line that GFM does not read as a delimiter row leaves no table, and a viewer shows the header and the rows as paragraph text.
 - A declared title is a cell under its column's header, in column order.
 - In a block table the placement foreign key is never a cell; `parent` is a cell. A `parent` cell that
@@ -356,10 +338,7 @@ character (general category Cf, such as U+FEFF) other than a Prepended_Concatena
 U+034F and the variation selectors); the Unicode properties are those of Unicode 17.0.0, the version of
 the `unicode` package of Go that the engine is built with. The edge rules of this section refuse an invisible character at
 either end of a value; a character inside a value is not an edge. Inside a separator the canonical
-white space is the space (U+0020). Grounding: such a character renders with no glyph, so a reader cannot see it; U+1680 and the prepended concatenation marks render with a glyph and are text. The viewers strip
-different sets of them at the edges (Python-Markdown strips U+001C to U+001F, which are not White_Space),
-so refusing every invisible character at an end keeps the value's text and what any viewer shows the same,
-whatever the viewer's version. CommonMark 0.31.2 strips the space and the tab from the ends of a paragraph
+white space is the space (U+0020). Grounding: such a character renders with no glyph, so a reader cannot see it; U+1680 and the prepended concatenation marks render with a glyph and are text. Refusing every invisible character at an end keeps the value's text and what a reader sees the same. CommonMark 0.31.2 strips the space and the tab from the ends of a paragraph
 and of an ATX heading's content, so these two are part of the set.
 
 - On write, a value there that contains a line feed or a CR, that begins or ends with an invisible character,

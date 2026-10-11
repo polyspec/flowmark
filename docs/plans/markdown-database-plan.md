@@ -115,9 +115,21 @@ compatibility, no fallback, no hidden error, no trick; rules first.
 - **Every corpus document is a complete markdown document** that a reader who does not know
   flowmark reads as it is: no comment, no marker, no hidden field. Its structure is ordinary
   markdown — headings, lists, tables, a field list — and every relation is a link the reader can
-  follow in GitHub, GitLab, VS Code or MkDocs, whose anchors are the heading anchors of their rules. Pandoc is not a viewer the claim is made for: its default does not rewrite relative link targets. Grounding: the documents are the database's only storage, so
+  follow in GitHub, GitLab or VS Code, whose anchors are the heading anchors of their rules. Pandoc is not a viewer the claim is made for: its default does not rewrite relative link targets. Grounding: the documents are the database's only storage, so
   they must stay a readable document; what only the machine needs belongs to the catalog
   (`dbspec/`) or to `.flowmark/`.
+- **The readability criterion is the specification.** Structure — the blocks, the inlines, what is
+  code, what is a heading, what is a table — is judged by CommonMark 0.31.2, and by GFM 0.29 for
+  tables and task-list items: the specifications that GitHub (cmark-gfm), GitLab and VS Code
+  (markdown-it) implement. The specifications do not define the targets of a fragment. Anchors —
+  heading slugs and the ids and names of raw HTML that CommonMark reads outside code — are judged by
+  GitHub, GitLab and VS Code (the F_G fold for headings), because a link `[k](file#anchor)` must
+  resolve in them. Grounding: a specification is one fixed measure that these viewers follow; an
+  implementation that follows neither specification has its own list, setext, fence,
+  reference-definition and extension behaviour, which changes with its releases and extensions, so
+  following it would chase one implementation's deviations rather than a standard, and it is no
+  criterion; no requirement names any other viewer, and the simplest implementation that fully
+  satisfies the requirements claims none.
 - Encoding: UTF-8 without a BOM, LF, exactly one final LF; a line ending is LF, CRLF or a bare CR, as CommonMark reads it; a BOM, a CR in any line ending, a missing final LF and a trailing blank line are `format.noncanonical`; invalid UTF-8 and U+0000 are `format.encoding`; a value never begins or ends with a line feed or with a line of only spaces and tabs (a blank line, as CommonMark reads it); a logical write that rewrites a file with a `format.*` diagnostic is `CONSTRAINT`, naming `flowmark canon` for `format.noncanonical`; a delete that removes a `files` row's whole file is exempt from the rewrite refusal, but its restrict check still needs the rows of every table that may reference the row (its own table through `parent`, its child blocks and its history rows, and every table with a foreign key to it), so such a delete is `CONSTRAINT` when any of them is unavailable. A table that holds a file with `format.block`, `format.section`, `format.encoding` or a `parent.cycle` among its rows, or two rows with byte-for-byte equal keys, is unavailable: every request or check that needs its rows fails as `CONSTRAINT`, naming the file and the diagnostic; a block table holds its placement parent's files, recursively. Opening a corpus, introspection, `flowmark validate` and `flowmark canon` never fail on an unavailable table, and an export that needs one fails and writes nothing.
 
 - Withdrawn with this ruling: the `<!-- doc-id -->` header, the provenance comment, the
@@ -158,8 +170,8 @@ reimplements them.
 - **Every key is a file name, a URL path segment and part of a heading anchor at once**: it
   consists of `A`–`Z`, `a`–`z`, `0`–`9`, `_` and `-` only — ASCII, since the comparison and the
   lowercased anchor are defined for these letters alone — begins with a letter or a digit (a leading
-  `_` would render as emphasis and alter both the shown key and its anchor), holds no `--` or `-_` (the MkDocs viewer collapses hyphen runs and would alter the
-  anchor; a `_` after punctuation, as in `-_`, can open emphasis),
+  `_` would render as emphasis and alter both the shown key and its anchor), holds no `-_` (a `_`
+  after punctuation, as in `-_`, can open emphasis),
   and is unique within
   its table without regard to case (case-insensitive file systems and lowercased anchors would
   otherwise collide); a key equal to another key of its table without regard to case is `DUPLICATE_KEY` on a write that introduces it and `key.duplicate` in the validator. A foreign key matches the referenced key byte for byte; a link text that
@@ -227,19 +239,19 @@ reimplements them.
   `-`, as table names hold no `-`. The collision rule: a heading of the file — every ATX heading, also after a block-quote or list-item
   marker, and every paragraph followed by a setext underline (its whole text), outside fences, skeleton
   and payload alike — other than a detail heading takes the anchor A of a detail heading when, under
-  either of two folds of its rendered inline text, the fold of the heading and F(A) are equal once a
-  final run of decimal digits is removed from each. F_G removes every character not of Unicode category
-  L or Nd, lowercases, decomposes by NFKD, drops the combining marks and keeps the ASCII letters and
-  digits; F_M lowercases, decomposes by NFKD, drops the combining marks and keeps the ASCII letters and
-  digits. The folds take the text as GitHub slugs it (link text without its target, emphasis markers
-  removed, code span content kept, entities decoded). F_G covers GitHub, GitLab and VS Code, and F_M
-  covers MkDocs; Pandoc is not claimed. The rule covers every numbering: GitHub, GitLab and VS Code
-  append `-<n>`, and MkDocs appends `_<n>` or raises a final `_<n>`, counting ids that attribute lists
-  set as taken; comparing without the final digits covers all of them whichever heading or id came
-  first, at the cost that a payload heading differing from a detail heading only in its final number is
-  refused. Two detail headings collide only when their anchors are equal. A payload attribute list
-  `{…}`, with or without a leading `:`, that sets the id A by `#A` or by `id=` followed by A bare or in single or double quotes, and a payload
-  HTML `id` or `name` equal to A, without regard to case, collide too. A write that introduces a collision — a title update, a payload write, a row insert, a key update, a move or the creation of a detail section — is `CONSTRAINT`, naming the other heading, except a write giving a row a key equal (with or without regard to case) to another key of its table, which is `DUPLICATE_KEY`, the key rule; on read it is `format.block`, except between the detail headings of two rows whose keys differ only in case, which is `key.duplicate` alone. A detail heading in a
+  the fold F_G of its rendered inline text, F_G of the heading and F_G(A) are equal once a final run of
+  decimal digits is removed from each. F_G removes every character not of Unicode category L or Nd,
+  lowercases, decomposes by NFKD, drops the combining marks and keeps the ASCII letters and digits; it
+  takes the text as GitHub slugs it (link text without its target, emphasis markers removed, code span
+  content kept, entities decoded). F_G covers GitHub, GitLab and VS Code; Pandoc is not claimed. The
+  rule covers every numbering: every named viewer numbers a repeated id by appending `-<n>` (GitHub,
+  GitLab and VS Code), so comparing the folds without their final digits covers every numbering,
+  whichever heading came first, at the cost that a payload heading differing from a detail heading only
+  in its final number is refused. Refused: a payload heading `items row T` beside the detail heading
+  `items row T-1`, since a second `items row T` is numbered `items-row-t-1`; a payload heading `Notes`
+  beside it is not refused. Two detail headings collide only when their anchors are equal. An HTML `id`
+  or `name` equal to A, without regard to case, in raw HTML as CommonMark 0.31.2 reads it (a code span
+  or code block holds none), collides too. A write that introduces a collision — a title update, a payload write, a row insert, a key update, a move or the creation of a detail section — is `CONSTRAINT`, naming the other heading, except a write giving a row a key equal (with or without regard to case) to another key of its table, which is `DUPLICATE_KEY`, the key rule; on read it is `format.block`, except between the detail headings of two rows whose keys differ only in case, which is `key.duplicate` alone. A detail heading in a
   non-canonical spelling (extra spaces, a wrong case of `row`) is `format.noncanonical`, which
   `flowmark canon` repairs. A detail section whose key names no row of its block is `format.block`, and so is a second detail section of the same row, whatever its spelling: its body and sections cannot be assigned.
 - A `markdown` column is always a section of the row scope — never a field or a cell — in every
@@ -270,7 +282,7 @@ reimplements them.
   value whose written form differs from its canonical form is `format.noncanonical` on read; a value not of its column type is the validator's `type`, and `CONSTRAINT` on write. On write, a number, `true`/`false`, a date, a time, a datetime or a uuid is written as `CanonicalLiteral` gives it (`1.5` into `decimal(4,2)` is `1.50`; a float in fixed notation with the fewest digits that round-trip, zero as `0`), and a value `CanonicalLiteral` refuses is `CONSTRAINT` (a decimal with more fraction digits than its scale, zeros included, or more integer digits than precision − scale; a time or datetime with more fraction digits than its precision); bytes are written as padded standard base64 (RFC 4648 §4), and on read any other text in a bytes column is `type`; a text or `markdown` value is written byte for byte, apart from its place's escapes, and one that cannot be is `CONSTRAINT`; a request that evaluates such a value fails as `CONSTRAINT`. A write never normalizes document bytes.
 - **Single-line places** are a title (in a list row, an H1 or a cell), a list field, a field-list
   value and a table cell. Its invisible characters are as spec 10 defines them (white space other than U+1680, a control, a format
-  character other than a Prepended_Concatenation_Mark, or a Default_Ignorable_Code_Point). Grounding: such a character renders with no glyph, so a reader cannot see it; U+1680 and the prepended concatenation marks render with a glyph and are text. Viewers strip different sets of them at the edges (Python-Markdown strips U+001C to U+001F); CommonMark 0.31.2 strips the space and the tab. A value there with a line feed, with an invisible character at either end, or
+  character other than a Prepended_Concatenation_Mark, or a Default_Ignorable_Code_Point). Grounding: such a character renders with no glyph, so a reader cannot see it; U+1680 and the prepended concatenation marks render with a glyph and are text. CommonMark 0.31.2 strips the space and the tab. A value there with a line feed, with an invisible character at either end, or
   containing `<` followed by `!`, `/` or a letter (raw HTML would hide or alter it) is `CONSTRAINT` on write. On read, a single-line value that renders differently from its text (a quoted list field or quoted cell (`"…"`) with an invisible character at either end inside its quotes, or `<` followed by `!`, `/` or a letter) is `format.block`, a space or a tab at an end of a single-line place where CommonMark strips it at the ends of a line's content (or GFM at the ends of a cell) is `format.noncanonical`; a space before a following list token is a separator; a tab that ends a list title before a following token is `format.block`; any other invisible character at an end is `format.block`, since the write rule cannot produce it again. Each place has one canonical separator (`# ` after the H1 marker, `: ` after a field-list column or nothing for the empty text, one space between list tokens, `| v |` in a cell); any other space or tab there is `format.noncanonical`. A single-line value is inline markdown as written and is never escaped except as stated.
 - `files`: a field list right after the H1 — one item `- <column>: <value>` per non-null stored
   scalar value, in column order, followed by a blank line when a non-empty body or a section follows it. NULL is an absent item; the empty text
@@ -480,7 +492,8 @@ reimplements them.
   the post's file; in the other they are `store files` rows whose field list links to their post.
   Both variants run the same create, read, update and delete operations through the engine and
   yield the same rows, and every document reads as an ordinary board page — the post, its fields
-  as links, its comments — in GitHub, GitLab, VS Code or MkDocs; Pandoc is not claimed.
+  as links, its comments — in GitHub, GitLab or VS Code, the viewers that implement CommonMark 0.31.2
+  and GFM 0.29 and whose anchors the links resolve in; Pandoc is not claimed.
 - **The board app** is the same board built with the polyspec stack — hyper renders the list and
   the post-with-comments pages, crudui defines the post and comment forms, lists and validation,
   and orm reaches the corpus through `markdown://`. It runs on hyper's PHP, Node.js and Python

@@ -107,9 +107,9 @@ func singleLineFault(v string) string {
 }
 
 // keyFault names the key rule that key breaks, or "" when none. A key holds no
-// "--" and no "-_", since the MkDocs viewer collapses hyphen runs and an
-// underscore after a dash can open emphasis; a trailing dash is accepted, as no
-// viewer strips it from an anchor.
+// "-_", since an underscore after punctuation is left-flanking and can open
+// emphasis (CommonMark 0.31.2, 6.2), which would alter the shown key and its
+// anchor; a trailing dash is accepted, as no viewer strips it from an anchor.
 func keyFault(key string) string {
 	switch {
 	case key == "":
@@ -118,8 +118,6 @@ func keyFault(key string) string {
 		return "the key is longer than 243 bytes"
 	case !isAlnum(key[0]):
 		return "the key does not begin with a letter or a digit"
-	case strings.Contains(key, "--"):
-		return "the key holds a double dash"
 	case strings.Contains(key, "-_"):
 		return "the key holds a dash before an underscore"
 	case reservedName(key):

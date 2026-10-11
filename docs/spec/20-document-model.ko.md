@@ -1,5 +1,5 @@
 <!-- doc-id: spec-document-model -->
-<!-- source-sha256: 90f67bc483e17a59a366c18834426e0b8706bc03fd85207414d6be7f7a7ba969 -->
+<!-- source-sha256: d59f1da4916a49b049e54864a2eaf53cb6f4e2e471d28521d78b0dddfa063b80 -->
 # 문서 모델
 
 [English](20-document-model.md)
@@ -60,8 +60,8 @@ aggregate냐 split이냐는 저장 선언이다. 논리 관계는 모든 저장�
 - 모든 key는 동시에 file 이름, URL path 조각, heading anchor의 일부다. key는 `A`–`Z`, `a`–`z`, `0`–`9`,
   `_`, `-`로 이루어지며 문자나 숫자로 시작한다: 선행 `_`는 강조로 렌더되어 보이는 key와 그 anchor를
   모두 바꾸기 때문이다. key의 모양은 ASCII다: 이 문자들이 key의 알파벳 전부이며 다른 문자는 key 문자가 아니다. 대소문자 비교와
-  소문자 anchor가 이 글자들에 대해서만 정의되기 때문이다. key는 `--`나 `-_`를 담지 않는다:
-  연속 hyphen을 접는 MkDocs viewer가 anchor를 바꾸며, `-_`처럼 구두점 뒤의 `_`는 강조를 열 수 있기 때문이다.
+  소문자 anchor가 이 글자들에 대해서만 정의되기 때문이다. key는 `-_`를 담지 않는다:
+  구두점 뒤의 `_`는 left-flanking이어서 강조를 열 수 있으므로(CommonMark 0.31.2 §6.2), key `a-_b_`는 `a-`와 강조된 `b`로 렌더되어 보이는 key와 그 anchor를 모두 바꾸기 때문이다.
 - key는 대소문자를 무시하고 table 안에서 유일하다. 대소문자를 구분하지 않는 file system과 소문자로 된
   anchor가 그렇지 않으면 충돌하기 때문이다. 대소문자를 무시하고 같은 table의 다른 key와 겹치는 key는 그것을 새로 만드는 쓰기에서 `DUPLICATE_KEY`이고, validator의 `key.duplicate`다. file을 읽을 수 없게 하지 않는다. 다만 같은 file 안에서 바이트 단위로 같은 key를 가진 두 행은, 둘 다 상세 섹션을 가지면 두 섹션이 같은 heading 텍스트를 가지므로([canonical format](10-canonical-format.md#detail-headings-and-anchors)), 그리고 둘이 한 block에 있을 때 상세 섹션이 그 key를 가리키거나 그 block의 `parent` cell이 그 key를 가리키면 섹션이나 부모를 배정할 수 없으므로([canonical format](10-canonical-format.md#document-order)) `format.block`이다; 서로 다른 block의 행은 block이 배정한다; 바이트 단위로 같은 key를 가진 두 행은 그 table을 사용할 수 없게 한다([canonical format](10-canonical-format.md#diagnostics)).
 - 외래 key는 참조된 key와 byte 단위로 맞는다. key와 대소문자만 다른 link 텍스트는 dangling 참조다.
@@ -128,7 +128,7 @@ aggregate냐 split이냐는 저장 선언이다. 논리 관계는 모든 저장�
 - 모든 foreign key는 restrict-only다([constraints](50-constraints.md)). `cascade`와 `set_null`은 catalog를
   읽을 때 거절한다([schema](30-schema.md)).
 - 외래 key 값은 link다. link의 텍스트는 참조된 key이고, target은 참조된 행에서 유도된다. 정식 형식은
-  [canonical format](10-canonical-format.md)이 정한다. block 행에서 그 행을 담은 `files` 행으로 가는 link는 그 file의 이름이며, 그 file 자신의 key에서 유도된다([canonical format](10-canonical-format.md#foreign-keys-as-links)). 참조된 key가 없는 dangling 외래 key는 validator의 `reference.dangling`이며, 그것을 새로 만드는 쓰기는 `FOREIGN_KEY`다. file을 읽을 수 없게 하지 않는다. 다만 block이나 document 행의 `parent`가 그 block의 어떤 행도 가리키지 않으면 `format.block`이다([canonical format](10-canonical-format.md#foreign-keys-as-links)). 모든 관계는 `#<anchor>`가 GitHub, GitLab, VS Code, MkDocs가 그 heading에 대해 만드는 anchor인 link다([canonical format](10-canonical-format.md#detail-headings-and-anchors)가 정한다). Pandoc은 주장 대상이 아니다: 기본 설정은 상대 경로 link target을 다시 쓰지 않으므로, corpus file 사이의 link가 그 출력에서 따라가진다고 주장하지 않는다.
+  [canonical format](10-canonical-format.md)이 정한다. block 행에서 그 행을 담은 `files` 행으로 가는 link는 그 file의 이름이며, 그 file 자신의 key에서 유도된다([canonical format](10-canonical-format.md#foreign-keys-as-links)). 참조된 key가 없는 dangling 외래 key는 validator의 `reference.dangling`이며, 그것을 새로 만드는 쓰기는 `FOREIGN_KEY`다. file을 읽을 수 없게 하지 않는다. 다만 block이나 document 행의 `parent`가 그 block의 어떤 행도 가리키지 않으면 `format.block`이다([canonical format](10-canonical-format.md#foreign-keys-as-links)). 모든 관계는 `#<anchor>`가 GitHub, GitLab, VS Code가 그 heading에 대해 만드는 anchor인 link다([canonical format](10-canonical-format.md#detail-headings-and-anchors)가 정한다). Pandoc은 주장 대상이 아니다: 기본 설정은 상대 경로 link target을 다시 쓰지 않으므로, corpus file 사이의 link가 그 출력에서 따라가진다고 주장하지 않는다.
 - file 간 one-to-many는 자식 table을 `store files`로 두고 foreign key를 그 field list에 쓴다. file 안의
   one-to-many는 자식 table을 `store block`으로 둔다.
 - 다대다는 `identity` key를 가진 link table이다.

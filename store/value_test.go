@@ -212,7 +212,7 @@ func TestKeyRules(t *testing.T) {
 		{"_a", false},
 		{"-a", false},
 		{"-7", false},
-		{"a--b", false},
+		{"a--b", true},
 		{"a-_b", false},
 		{"a_-b", true},
 		{"a-", true},
