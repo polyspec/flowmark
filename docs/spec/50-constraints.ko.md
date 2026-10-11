@@ -1,5 +1,5 @@
 <!-- doc-id: spec-constraints -->
-<!-- source-sha256: b7403334c3cc43d2d7b85202c5bb4a2cbd2bac49f9dc364eefc00c6d5e0b1ff2 -->
+<!-- source-sha256: 630d2e5434a58b9e0770f591b3bfe0a2b8ca8573249ad3804e20c4ce9df6e109 -->
 # Constraints
 
 [English](50-constraints.md)
@@ -122,7 +122,8 @@ check는 commit에서 강제한다. 술어가 unknown(NULL)인 check는 SQL처�
   상태가 NULL인 행 — 을 상태 column에서 `CONSTRAINT`로 거절한다. 일어나지 않은 전이의 이력 행을
   insert하면 흔적을 위조하기 때문이다. 이력 행이 있는 행에 준 `--from`(repair는 마지막 `to`에서 간다),
   초기 상태가 아닌 `--from`, 초기 상태가 여럿인 기계에서 빠진 `--from`, 이력을 가진 상태기계가 없는
-  table은 `CONFIG`로 거절한다. 어떤 행도 바이트 단위로 가리키지 않는 key는 한 행 읽기가 아무 행도
+  table은 `CONFIG`로 거절한다. catalog가 선언하지 않은 table은 schema에 없는 이름의 orm code인
+  `ENTITY_UNKNOWN`으로 거절한다. 어떤 행도 바이트 단위로 가리키지 않는 key는 한 행 읽기가 아무 행도
   맞추지 못했을 때의 orm code인 `NO_ROWS`로 거절한다. transaction 밖에서는 lock 아래 transaction 하나로,
   열린 transaction 안에서는 다른 쓰기처럼 실행한다. 그 `at`은 repair마다 한 번 읽은 엔진 시계이므로,
   commit이 그것을 다시 실행해도 같은 행을 쓴다([operations](40-ops.ko.md#commit-protocol)).

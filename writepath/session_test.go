@@ -225,6 +225,12 @@ func TestTransactionControlMisuse(t *testing.T) {
 	if err := s.Rollback(); err != nil {
 		t.Fatal(err)
 	}
+	// In a read-only transaction a rewrite is CONFIG, never READ_ONLY: it never runs in a transaction it did not
+	// begin.
+	must(t, s.Begin(ctx, true))
+	_, err = s.Rewrite(ctx, func(*irexec.Corpus) ([]Rewrite, error) { return nil, nil }, nil)
+	fails(t, err, "CONFIG", "own transaction")
+	must(t, s.Rollback())
 	_, err = f.c.Session("a/b")
 	fails(t, err, "CONFIG", "a/b")
 }
