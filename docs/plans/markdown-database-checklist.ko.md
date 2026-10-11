@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database-checklist -->
-<!-- source-sha256: df1908500cfe8e3295448a9740cd9fef39f1dc65b99f0d1f7bff79a88f4ab101 -->
+<!-- source-sha256: a18fa0f08467a108fe37108dd58ddddc0914df12d5ef8f164e54ac99fe9ece8e -->
 # markdown database checklist
 
 ## T12 markdown database
@@ -71,7 +71,7 @@
   - 완료 기준: `go test ./store/...`에 list 항목 안의 body `##` 줄은 섹션이 아니라는 수용 사례와 최상위 줄은 경계라는 거부 사례가 있고, `make documents-check`와 `make refs-check`가 통과한다.
 - [o] T12.1-3 spec이 `files` codec에 필요했던 판정을 적는다: 읽을 때 없는 non-null field 또는 section, 렌더링이 inline markdown을 넘어 텍스트와 다르게 보이는 한 줄 값, `-` item으로 시작하는 `files` body와 field list 뒤에서 첫 줄이 두 column 이상(공백 또는 tab) 들여쓴 body는 `format.block`이며 같은 결함은 쓰기에서 `CONSTRAINT`다. column type이 아닌 값, dangling 외래 key, 대소문자를 무시하고 겹치는 key 충돌은 validator 규칙(`type`, `reference.dangling`, `key.duplicate`)이며, dangling 외래 key나 중복 key를 새로 만드는 쓰기는 각각 `FOREIGN_KEY`, `DUPLICATE_KEY`다. 렌더링이 한 줄 자리 둘레에서 떨어뜨리는 공백은 `format.noncanonical`이다. 본문이 아닌 non-null `markdown` column은 언제나 있는 section이다. `#`뿐인 제목, 또는 끝의 `#` 연속이 공백이나 tab 뒤에 오는 제목은 마지막 `#`을 `\#`로 쓰고, `\#`로 끝나는 제목은 `CONSTRAINT`다. field list 뒤의 빈 줄은 비어 있지 않은 body나 section 앞에서만 서며, 문서는 LF 하나로 끝난다. markdown 값은 줄 바꿈으로 시작하거나 끝나지 않는다. BOM이나 CR은 `format.noncanonical`이다. table folder가 없으면 빈 table이다. 쓰기는 typed 값을 canonical 형식으로 쓰며, `format.*` 진단이 있는 file을 다시 쓰는 logical write는 `CONSTRAINT`로 거절하며 `format.noncanonical`이면 `flowmark canon`을 밝힌다. 거절은 `flowmark canon`의 대상, 추가된 column이 일으킨 진단에 대한 add-column migration, `files` 행의 file 전체를 지우는 delete를 면제하며, `format.block`, `format.section`, `format.encoding`이 있는 file을 가진 table은 그 행이 필요한 요청과 검사에 사용할 수 없다; table은 행이 있을 수 있는 모든 file을 가지며 block table은 placement parent의 file을 포함하고, 바이트 단위로 같은 key를 가진 두 행은 table을 사용할 수 없게 하며, 잘못된 type의 값을 평가하는 요청은 `CONSTRAINT`로 실패하고, 사용할 수 없는 table이 필요한 export는 실패하며 아무것도 쓰지 않는다; `corpus.walk` 항목이 table의 자리에 있거나 다른 대소문자의 suffix가 있으면 사람이 corpus를 고치기 전까지 그 table은 사용할 수 없고, `type` 진단은 제약 검사가 그 값을 평가해야 할 때에만 commit을 실패시키며, 그 값을 읽는 export는 실패한다 (T12.2.2 후속)
   - 완료 기준: spec 10, 20, 30, 40, 50, 60, 70, 80과 plan, 그리고 그 twin이 각 판정을 근거와 함께 적고, `files` codec 테스트가 사례마다 고정하는 spec 규칙을 밝히며, `make documents-check`와 `make refs-check`가 통과한다.
-- [ ] T12.2 저장 codec: `files`, `document`, `block` 저장을 list와 table 형식으로 parse·render하고 모든 저장의 P1/P2를 갖는다. orm `T62` 선행 (T12.1 선행)
+- [o] T12.2 저장 codec: `files`, `document`, `block` 저장을 list와 table 형식으로 parse·render하고 모든 저장의 P1/P2를 갖는다. orm `T62` 선행 (T12.1 선행)
 - [o] T12.2.1 catalog를 적재한다: corpus root의 `dbspec/*.dbs` 집합을 orm의 `engine/dbspec`으로, `dbspec/flowmark.json`(번역)을 함께 읽는다. catalog 없음, `store` 없는 table, 복합 key, `aes`/`aes_version`/`blind_index`, `audit`/`immutable`, `cascade`/`set_null`, 외부 `use`, state machine의 `history` 또는 `initial` 없음, list 또는 files 저장의 `title` 없음, H6을 넘는 제목 깊이를 각각 위치가 정해진 진단으로 거절한다 (orm `T62` 선행)
   - 완료 기준: 거절마다 테스트 하나와 적재된 fixture catalog 하나.
 - [o] T12.2.1-1 catalog는 `.dbs` 집합만 읽는다: `dbspec/flowmark.json`과 그 번역은 제거하며, `dbspec/`의 다른 file은 모두 catalog 진단이다 (T12.2.1 후속; T12.1-1 선행)
