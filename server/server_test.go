@@ -145,6 +145,11 @@ func start(t testing.TB, idle, wait time.Duration) *fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() {
+		if err := c.Close(); err != nil {
+			t.Errorf("closing the corpus: %v", err)
+		}
+	})
 	token, err := Token(root, false)
 	if err != nil {
 		t.Fatal(err)

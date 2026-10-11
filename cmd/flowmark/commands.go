@@ -12,7 +12,7 @@ import (
 
 // install runs `flowmark install [--lock-wait-ms <n>] <corpus>` (spec 30 Install, spec 40 The faces): it prints each
 // file or folder it created, the .gitattributes line when it added it, and a count.
-func install(out, errOut io.Writer, args []string) int {
+func install(out, errOut io.Writer, args []string) (code int) {
 	cmd := newCommand("install", errOut, true)
 	pos, ok := cmd.parse(args)
 	if !ok {
@@ -26,6 +26,7 @@ func install(out, errOut io.Writer, args []string) int {
 	if err != nil {
 		return fail(errOut, "install", err)
 	}
+	defer closeCorpus(errOut, "install", c, &code)
 	s, err := c.Session("cli")
 	if err != nil {
 		return fail(errOut, "install", err)
@@ -49,7 +50,7 @@ func install(out, errOut io.Writer, args []string) int {
 
 // history runs `flowmark history repair [--lock-wait-ms <n>] <corpus> <table> <key> [--from <state>]` (spec 50 A state
 // changed outside the engine): it prints the answer of the repair as one line of JSON.
-func history(out, errOut io.Writer, args []string) int {
+func history(out, errOut io.Writer, args []string) (code int) {
 	if len(args) == 0 || args[0] != "repair" {
 		return usage(errOut, "history: the only history command is history repair")
 	}
@@ -67,6 +68,7 @@ func history(out, errOut io.Writer, args []string) int {
 	if err != nil {
 		return fail(errOut, "history repair", err)
 	}
+	defer closeCorpus(errOut, "history repair", c, &code)
 	s, err := c.Session("cli")
 	if err != nil {
 		return fail(errOut, "history repair", err)

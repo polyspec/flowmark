@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -33,10 +34,13 @@ func canonTo(out, errOut io.Writer, args []string) int {
 	}
 	s, err := c.Session("cli")
 	if err != nil {
-		return fail(errOut, "canon", err)
+		return fail(errOut, "canon", errors.Join(err, c.Close()))
 	}
 	res, err := s.Canon(ctx, files)
 	if cerr := s.Close(); err == nil {
+		err = cerr
+	}
+	if cerr := c.Close(); err == nil {
 		err = cerr
 	}
 	if err != nil {

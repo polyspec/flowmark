@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -196,7 +197,7 @@ func call(root string, wait time.Duration, params json.RawMessage) (any, *rpcErr
 }
 
 // runOp opens the corpus and runs the operation op with its members, answering its JSON.
-func runOp(root string, wait time.Duration, op string, members map[string]json.RawMessage) (string, error) {
+func runOp(root string, wait time.Duration, op string, members map[string]json.RawMessage) (_ string, err error) {
 	r, err := ops.Parse(op, members)
 	if err != nil {
 		return "", err
@@ -206,6 +207,12 @@ func runOp(root string, wait time.Duration, op string, members map[string]json.R
 	if err != nil {
 		return "", err
 	}
+	// The corpus holds the watch of its tree; it is closed on every way out, and a failure to close it fails the call.
+	defer func() {
+		if cerr := c.Close(); cerr != nil {
+			err = errors.Join(err, cerr)
+		}
+	}()
 	a, err := c.Run(ctx, "mcp", r)
 	if err != nil {
 		return "", err

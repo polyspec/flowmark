@@ -49,7 +49,7 @@ func valueArg(s string) (arg, bool) {
 }
 
 // face runs the command of the operation name.
-func face(out, errOut io.Writer, name string, args []string) int {
+func face(out, errOut io.Writer, name string, args []string) (code int) {
 	spec := faceCommands[name]
 	cmd := newCommand(name, errOut, true)
 	pos, ok := cmd.parse(args)
@@ -117,6 +117,7 @@ func face(out, errOut io.Writer, name string, args []string) int {
 	if err != nil {
 		return fail(errOut, name, err)
 	}
+	defer closeCorpus(errOut, name, c, &code)
 	table := positional["table"].text
 	tb, _ := c.Catalog().Table(table)
 	if name == "views" {
