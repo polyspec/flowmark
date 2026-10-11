@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database-checklist -->
-<!-- source-sha256: 654757958aee8785035dad41ec01d5bd716104a7debe91665e3ed7029714d54c -->
+<!-- source-sha256: e4fa64cb081a472e3a79a87e9f4051280dcdabdd0431fd05e8bf84577222c4e1 -->
 # markdown database checklist
 
 ## T12 markdown database
@@ -103,7 +103,7 @@
 - [ ] T12.5-2 operation은 바뀌지 않은 file을 읽지 않는다. 원인: 모든 operation이 `irexec.Open`으로 corpus 전체를 다시 읽고, 바뀐 commit은 한 번 더 읽는다. write path로 note 10k개를 재면 읽기가 2.7–4.4초, 쓰기가 5.1–8.1초이며 그중 86%가 file open과 read다. spec 40의 예산은 문서 10k개까지 수백 밀리초다. spec 40이 적었던 content hash 기반 parsed-row cache는 hash를 내려면 모든 file을 읽어야 하므로 예산을 맞출 수 없다. 완료 기준: 운영체제의 file 알림(FSEvents나 kqueue, inotify, ReadDirectoryChangesW)으로 최신을 유지하는 장수 corpus를 두고, 알림이 넘치면 전체를 다시 읽으며, commit 대상은 lock 아래에서 늘 다시 읽어 알림 지연이 있어도 1단계가 정확하다. spec 40과 plan(EN과 ko)이 그 구조와 예산을 적는다. 오래된 상태, 알림 넘침, commit과 겨루는 손 편집에 대해 red 다음 green test를 두고, macOS, Linux, Windows(T12.13)에서 문서 10k개 benchmark가 예산 안에 든다 (T12.5 검증에서 발견; T12.5 선행)
 - [ ] T12.5-3 엔진이 자기 규모 envelope을 밝히고, 그것을 넘으면 관측되게 한다. 원인: 쓰기는 대상 file을 통째로 parse, 검사, render하고, journal은 대상마다 durable 쓰기를 세 번 한다(`store/journal/journal.go` 3–4단계). 그래서 비용이 대상과 함께 커진다. 9687b39에서 macOS로 잰 결과, 0.96MB 문서 삽입은 CPU 1.2초, 4.9MB 문서는 6.2초가 들었다. codec이 지배하며(MB당 약 0.4초 CPU, 4.9MB를 열 때 2GB 할당), journal(1MB durable 쓰기 약 25ms, 10MB 약 60ms)보다 크다. spec 110 질문 2는 아무 benchmark도 정하지 않은 envelope을 적고 있다. 완료 기준: T12.5-2와 T12.5-4 뒤, spec 40이 적은 기준 하드웨어에서 macOS, Linux, Windows(T12.13) benchmark가 대상 file 하나의 byte, corpus의 행과 문서 수, folder 하나의 file 수, lock 하나 아래 동시 session 수에 대한 읽기와 쓰기의 p95를 잰다. spec 40(EN과 ko)이 잰 envelope을 적고 spec 110 질문 2를 닫는다. envelope을 넘은 file, folder, corpus는 그것, 크기, table, envelope을 적은 validator 진단이다. file을 envelope 너머로 키우는 쓰기는 성공하고, 그것들을 적은 event를 발행한다. 쓰기는 엔진이 정확히 지킬 수 없는 hard limit에서만 `DRIVER`(SQLite의 `SQLITE_TOOBIG`, `SQLITE_FULL`에 대한 orm code)로 거절하며, 한계, file, table을 적는다. red 다음 green. 크기에 따른 자동 분할과 corpus 옆의 index file은 두지 않는다 (T12.5-2와 T12.5-4 선행)
 - [ ] T12.5-4 codec 비용은 읽는 byte의 작은 배수다. 원인: 4.9MB 문서를 열 때 2,031MB를 할당하고 MB당 약 0.4초 CPU가 든다. `anchorClashes`, `unitClashes`, `inlineText`가 CPU의 35%를 차지하고 할당과 GC가 나머지 대부분이다. 그래서 쓰기의 상한을 정하는 것은 journal이 아니라 codec이다(독립 감사에서 발견). 완료 기준: 할당 횟수를 포함한 MB당 parse와 render benchmark를 둔다. profile에 따른 수정이 golden fixture, P1/P2, fuzz corpus를 바꾸지 않는다. spec 40(EN과 ko)이 MB당 목표를 근거와 함께 적는다 (T12.5 선행)
-- [ ] T12.6 introspection: 모든 문서를 catalog에 대해 검증하고 catalog를 돌려준다 (T12.3 선행)
+- [o] T12.6 introspection: 모든 문서를 catalog에 대해 검증하고 catalog를 돌려준다 (T12.3 선행)
 - [ ] T12.7 runtime model 위의 sync: export는 orm의 SQL dialect renderer로 렌더한다 (T12.4 선행)
 - [ ] T12.8 저장 문법에 맞게 다시 쓴 conformance vector (T12.5 선행)
 - [ ] T12.9 server: `flowmark serve`, token, session control message. orm `T61` 선행 (T12.5 선행)
