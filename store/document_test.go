@@ -955,12 +955,10 @@ func writeCases() []writeCase {
 		{name: "10#diagnostics: a key shared byte for byte is refused at each later row, with its index", rows: []*Row{
 			item("T1", "First", "waiting", "1", done), item("T1", "Second", "waiting", "2", done)},
 			rule: RuleDuplicateKey, alone: true, at: []locus{{key: "T1", index: 1, column: "id"}}},
-		{name: "10#diagnostics: a key that is equal only without regard to case refuses the greater key", rows: []*Row{
-			item("T1", "First", "waiting", "1", done), item("t1", "Second", "waiting", "2", done)},
-			rule: RuleDuplicateKey, alone: true, at: []locus{{key: "t1", index: -1, column: "id"}}},
-		{name: "10#diagnostics: a case-insensitive pair refuses the same row in either request order", rows: []*Row{
-			item("t1", "Second", "waiting", "2", done), item("T1", "First", "waiting", "1", done)},
-			rule: RuleDuplicateKey, alone: true, at: []locus{{key: "t1", index: -1, column: "id"}}},
+		{name: "10#diagnostics: keys equal only without regard to case are written, the executor's key checks owning that rule", rows: []*Row{
+			item("T1", "First", "waiting", "1", done), item("t1", "Second", "waiting", "2", done)}},
+		{name: "10#diagnostics: a case-insensitive pair is written in either request order", rows: []*Row{
+			item("t1", "Second", "waiting", "2", done), item("T1", "First", "waiting", "1", done)}},
 		{name: "10#diagnostics: a sibling order shared by two rows faults each row at order", rows: []*Row{
 			item("T1", "A", "waiting", "1", done), item("T2", "B", "waiting", "1", done)},
 			rule: RuleConstraint, alone: false, at: []locus{{key: "T1", index: -1, column: "position"}, {key: "T2", index: -1, column: "position"}}},
@@ -1010,14 +1008,12 @@ func writeCases() []writeCase {
 			withBlock(item("T1", "Plan", "waiting", "1", done), "item_checks", checkOf("C1", "A")),
 			withBlock(item("T2", "Other", "waiting", "2", done), "item_checks", checkOf("C1", "B"))},
 			rule: RuleDuplicateKey},
-		{name: "10#diagnostics: keys equal without regard to case in two blocks of one table are DUPLICATE_KEY", rows: []*Row{
+		{name: "10#diagnostics: keys equal without regard to case in two blocks of one table are written", rows: []*Row{
 			withBlock(item("T1", "Plan", "waiting", "1", done), "item_checks", checkOf("C1", "A")),
-			withBlock(item("T2", "Other", "waiting", "2", done), "item_checks", checkOf("c1", "B"))},
-			rule: RuleDuplicateKey},
-		{name: "10#diagnostics: keys equal without regard to case, each with a detail section, are DUPLICATE_KEY", rows: []*Row{
+			withBlock(item("T2", "Other", "waiting", "2", done), "item_checks", checkOf("c1", "B"))}},
+		{name: "10#diagnostics: keys equal without regard to case, each with a detail section, are written", rows: []*Row{
 			withBlock(item("T1", "Plan", "waiting", "1", done), "item_checks", withBody(checkOf("C1", "A"), "Body A.\n")),
-			withBlock(item("T2", "Other", "waiting", "2", done), "item_checks", withBody(checkOf("c1", "B"), "Body B.\n"))},
-			rule: RuleDuplicateKey},
+			withBlock(item("T2", "Other", "waiting", "2", done), "item_checks", withBody(checkOf("c1", "B"), "Body B.\n"))}},
 		{name: "10#list-rows: a done row has the done glyph", rows: []*Row{item("T1", "Plan", "done", "1", doneTrue)},
 			out: "# items\n- [x] T1 Plan done:true\n"},
 		{name: "10#list-rows: a child row two spaces deeper", rows: []*Row{
@@ -1084,9 +1080,8 @@ func writeCases() []writeCase {
 				"\n## people row P1\n\n### bio\n\nNotes.\n"},
 		{name: "10#list-rows: a key with a dash before an underscore", rows: []*Row{
 			item("T-_1", "Plan", "waiting", "1", done)}, rule: RuleConstraint},
-		{name: "10#list-rows: two rows with keys equal without regard to case", rows: []*Row{
-			item("T1", "Plan", "waiting", "1", done), item("t1", "Other", "waiting", "2", done)},
-			rule: RuleDuplicateKey},
+		{name: "10#list-rows: two rows with keys equal without regard to case are written", rows: []*Row{
+			item("T1", "Plan", "waiting", "1", done), item("t1", "Other", "waiting", "2", done)}},
 		{name: "20#order: siblings with the same value", rows: []*Row{
 			item("T1", "Plan", "waiting", "1", done), item("T2", "Other", "waiting", "1", done)}, rule: RuleConstraint},
 		{name: "20#order: a row without an order value", rows: []*Row{
@@ -1174,9 +1169,9 @@ func writeCases() []writeCase {
 		{name: "10#list-rows: a block of list rows whose order has a gap", rows: []*Row{
 			withBlock(item("T1", "Plan", "waiting", "1", done), "item_notes",
 				noteRow("N1", "", "A", "1", nil), noteRow("N2", "", "B", "3", nil))}, rule: RuleConstraint},
-		{name: "10#list-rows: two block rows with keys equal without regard to case", rows: []*Row{
+		{name: "10#list-rows: two block rows with keys equal without regard to case are written", rows: []*Row{
 			withBlock(item("T1", "Plan", "waiting", "1", done), "item_notes",
-				noteRow("N1", "", "A", "1", nil), noteRow("n1", "", "B", "2", nil))}, rule: RuleDuplicateKey},
+				noteRow("N1", "", "A", "1", nil), noteRow("n1", "", "B", "2", nil))}},
 		{name: "20#hierarchy: a block row whose parent names no row of its block", rows: []*Row{
 			withBlock(item("T1", "Plan", "waiting", "1", done), "item_notes",
 				noteRow("N1", "N9", "A", "1", nil))}, rule: RuleConstraint, alone: true},

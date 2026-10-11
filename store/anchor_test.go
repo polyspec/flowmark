@@ -326,7 +326,7 @@ func TestAnchorCodecs(t *testing.T) {
 			"\n## people row P1\n\n### bio\n\nNotes.\n"), clean: true},
 		{name: "document write: a heading in a detail section takes the anchor", run: writeDoc([]*Row{personBio("#### people row P1\n\nx\n")}), rule: RuleConstraint, column: "bio"},
 		{name: "document write: a duplicate key is DUPLICATE_KEY before the collision", run: writeDoc([]*Row{
-			peopleRow("P1", "Ada", nil), peopleRow("p1", "Ben", nil)}), rule: RuleDuplicateKey},
+			peopleRow("P1", "Ada", nil), peopleRow("P1", "Ben", nil)}), rule: RuleDuplicateKey},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

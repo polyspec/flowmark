@@ -143,6 +143,27 @@ func TestInsert(t *testing.T) {
 			t.Fatalf("targets %+v", tg)
 		}
 	})
+	caseDocs := func() map[string]string {
+		docs := baseDocs()
+		docs["people.flowmark.md"] += "| p1 | Lower one |  |  | true | 0.00 | 2026-10-01 09:00:00 |  |  |\n" +
+			"| PX | Upper |  |  | true | 0.00 | 2026-10-01 09:00:00 |  |  |\n| px | Lower |  |  | true | 0.00 | 2026-10-01 09:00:00 |  |  |\n"
+		return docs
+	}
+	t.Run("50#a-state-changed-outside-the-engine: a write to a document holding keys equal without regard to case keeps both", func(t *testing.T) {
+		f := catalogFixture(t, caseDocs()).on(t)
+		res := f.want(f.msg("update", "people", map[string]any{"set": sets("name"), "where": where(pred("id", "eq", p(1)))}, "Renamed", "P2"), `{"affected":1,"keys":[]}`)
+		if tg := res.Post.Targets; len(tg) != 1 || !strings.Contains(string(tg[0].After), "| P1 | Ada |") || !strings.Contains(string(tg[0].After), "| p1 | Lower one |") || !strings.Contains(string(tg[0].After), "| P2 | Renamed |") {
+			t.Fatalf("targets %+v", tg)
+		}
+	})
+	t.Run("60#surfaces: on_duplicate in a document holding case-only keys meets the byte-equal key", func(t *testing.T) {
+		f := catalogFixture(t, caseDocs()).on(t)
+		f.want(upsert(f, "P1"), `{"affected":1,"keys":["P1"]}`)
+	})
+	t.Run("60#surfaces: on_duplicate in a document holding case-only keys meets the byte-least of them", func(t *testing.T) {
+		f := catalogFixture(t, caseDocs()).on(t)
+		f.want(upsert(f, "pX"), `{"affected":1,"keys":["PX"]}`)
+	})
 	t.Run("60#surfaces: an insert without on_duplicate whose key equals without regard to case", func(t *testing.T) {
 		f := fresh(t)
 		err := f.fails(f.msg("insert", "people", map[string]any{"set": sets("id", "name")}, "p1", "X"), "DUPLICATE_KEY")

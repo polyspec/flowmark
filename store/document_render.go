@@ -163,16 +163,13 @@ func (dw *docWriter) rows(lay *docLayout, rows []*Row) {
 }
 
 // duplicates refuses the rows given for one table, over all the blocks of the file,
-// whose keys equal another's without regard to case. A row has at most one duplicate
-// fault, at its key column: when a row given before it shares its key byte for byte,
-// the fault names the first such row; otherwise it names, of the rows whose keys
-// equal its key only without regard to case and whose pair places the fault at it,
-// the one whose key is least in byte order, the first given when several rows hold
-// that key. This check cannot tell a row the write introduces from an existing one,
-// so it places the fault of such a pair at the row whose key is greater in byte
-// order, as for two rows the write introduces: it is the codec's backstop; the
-// executor checks the keys of a request against the corpus before the codec runs,
-// and a DUPLICATE_KEY that reaches the codec is then internal.
+// whose keys equal another's byte for byte: such a key has no row of its own, so no
+// file can hold the rows (a table with byte-equal keys is unavailable). The fault is
+// at the key column of each such row after the first, naming the first. Keys equal
+// only without regard to case are not refused here: the codec cannot tell a row the
+// write introduces from one a human edit left, and a key.duplicate on another row
+// never fails a write; the executor's key checks own the case-only rule and run on
+// the request before the codec, so a DUPLICATE_KEY that reaches the codec is internal.
 func (dw *docWriter) duplicates(list []tabled) {
 	w := dw.w
 	first := map[string]int{}
@@ -186,24 +183,7 @@ func (dw *docWriter) duplicates(list []tabled) {
 		w.enter(rowRefOf(r, dw.shared[r]), t.lay.key.Name)
 		if j := first[r.Key]; j < i {
 			w.refuseRule(RuleDuplicateKey, t.lay.key.Name, "the key "+r.Key+" equals the key of the row at index "+strconv.Itoa(j)+" of the rows given")
-			continue
 		}
-		least := -1
-		for j, o := range list {
-			k := o.row.Key
-			if k < r.Key && strings.ToLower(k) == strings.ToLower(r.Key) && (least < 0 || k < list[least].row.Key) {
-				least = j
-			}
-		}
-		if least < 0 {
-			continue
-		}
-		o := list[least].row
-		named := "the key " + o.Key + " of another row"
-		if dw.shared[o] >= 0 {
-			named = "the key " + o.Key + " of the row at index " + strconv.Itoa(least) + " of the rows given"
-		}
-		w.refuseRule(RuleDuplicateKey, t.lay.key.Name, "the key "+r.Key+" equals "+named+" without regard to case")
 	}
 }
 

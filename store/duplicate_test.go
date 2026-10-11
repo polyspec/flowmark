@@ -31,10 +31,10 @@ func expectFaults(t *testing.T, out []byte, rf []Refusal, want []dupFault) {
 }
 
 // TestDuplicateFaultOnce requires that a row given to a write has at most one
-// duplicate fault, at its key column: it names the first row given before it with
-// its key byte for byte, or else, of the rows whose keys equal its key only without
-// regard to case and whose pair places the fault at it, the one whose key is least
-// in byte order, the first given when several rows hold that key.
+// duplicate fault, at its key column, naming the first row given before it with its
+// key byte for byte. Keys equal only without regard to case are written: the codec
+// cannot tell a row the write introduces from one a human edit left, and the
+// executor's key checks own that rule (spec 10 Diagnostics, "Write faults").
 func TestDuplicateFaultOnce(t *testing.T) {
 	cat := loadDocumentFixture(t)
 	lk := documentLinker()
@@ -54,17 +54,11 @@ func TestDuplicateFaultOnce(t *testing.T) {
 	}{
 		{"10#diagnostics: a byte-equal pair is one fault at the later row", []string{"T1", "T1"}, []dupFault{
 			{"items", "T1", 1, "id", dup, "index 0"}}},
-		{"10#diagnostics: a byte-equal twin and a case-only twin fault each later row once", []string{"T1", "T1", "t1"}, []dupFault{
-			{"items", "T1", 1, "id", dup, "index 0"},
-			{"items", "t1", -1, "id", dup, "the key T1 of the row at index 0"}}},
-		{"10#diagnostics: a case-only twin before a byte-equal pair faults each of the pair once", []string{"t1", "t1", "T1"}, []dupFault{
-			{"items", "t1", 0, "id", dup, "the key T1 "},
+		{"10#diagnostics: a byte-equal twin beside a case-only twin is the one fault", []string{"T1", "T1", "t1"}, []dupFault{
+			{"items", "T1", 1, "id", dup, "index 0"}}},
+		{"10#diagnostics: a case-only twin before a byte-equal pair faults the later of the pair", []string{"t1", "t1", "T1"}, []dupFault{
 			{"items", "t1", 1, "id", dup, "index 0"}}},
-		{"10#diagnostics: of three case-only keys each greater key names the least", []string{"AB", "Ab", "ab"}, []dupFault{
-			{"items", "Ab", -1, "id", dup, "the key AB "},
-			{"items", "ab", -1, "id", dup, "the key AB "}}},
-		{"10#diagnostics: a case-only fault names the first given of the rows holding the least key", []string{"t1", "T1", "T1"}, []dupFault{
-			{"items", "t1", -1, "id", dup, "the key T1 of the row at index 1"},
+		{"10#diagnostics: a byte-equal pair after a case-only twin names the first of the pair", []string{"t1", "T1", "T1"}, []dupFault{
 			{"items", "T1", 2, "id", dup, "index 1"}}},
 	}
 	for _, c := range cases {
@@ -76,10 +70,16 @@ func TestDuplicateFaultOnce(t *testing.T) {
 			expectFaults(t, out, rf, c.want)
 		})
 	}
+	t.Run("10#diagnostics: keys equal only without regard to case are written", func(t *testing.T) {
+		out, rf, err := RenderDocument(cat, "items", items("AB", "Ab", "ab"), lk)
+		if err != nil || len(rf) > 0 || out == nil {
+			t.Fatalf("written %q with refusals %+v, %v", out, rf, err)
+		}
+	})
 }
 
 // TestDuplicateFaultOnceInFilesBlock requires the same of the rows of a block of a
-// files row: a byte-equal pair and a case-only twin give one fault each.
+// files row: a byte-equal pair gives one fault, and a case-only twin none.
 func TestDuplicateFaultOnceInFilesBlock(t *testing.T) {
 	cat := loadFixture(t)
 	lk := fixtureLinker()
@@ -89,10 +89,9 @@ func TestDuplicateFaultOnceInFilesBlock(t *testing.T) {
 		stepRow("s1", "Three", "3", "true", "", nil),
 	}
 	out, rf := renderFileOf(t, cat, "tasks", taskWithBlocks(map[string][]*Row{"task_steps": steps}), lk)
-	t.Run("10#diagnostics: a block of a files row faults each later row once", func(t *testing.T) {
+	t.Run("10#diagnostics: a block of a files row faults the later of a byte-equal pair once", func(t *testing.T) {
 		expectFaults(t, out, rf, []dupFault{
-			{"task_steps", "S1", 1, "id", RuleDuplicateKey, "index 0"},
-			{"task_steps", "s1", -1, "id", RuleDuplicateKey, "the key S1 of the row at index 0"}})
+			{"task_steps", "S1", 1, "id", RuleDuplicateKey, "index 0"}})
 	})
 }
 
