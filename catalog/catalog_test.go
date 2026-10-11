@@ -798,10 +798,71 @@ func TestLoadRequireOfMarkdownPastH6(t *testing.T) {
 	}
 }
 
+// TestLoadBlockPlacementNonNull pins spec 30's block placement rule: the column
+// of a block table's placement foreign key is non-null, since a block row stands
+// inside the scope of the row that key references and NULL references none; a
+// nullable one is a schema error at the block table's name. A history table is a
+// block table like any other, so the same rule refuses a nullable row column and
+// a placement by a copied column, which the history line requires nullable.
+func TestLoadBlockPlacementNonNull(t *testing.T) {
+	const msg = "is placed by foreign key"
+	copied := requireSchema(false, "varchar(32)", false, false)
+	copiedEdits := [][2]string{
+		{"  foreign key fk_subtask_history_subtask (subtask)", "  index ix_subtask_history_x (x)\n  foreign key fk_subtask_history_x (x) references items (id) on delete restrict on update restrict\n  foreign key fk_subtask_history_subtask (subtask)"},
+		{"    store block fk_subtask_history_subtask table\n", "    store block fk_subtask_history_x table\n"},
+	}
+	for _, e := range copiedEdits {
+		if strings.Count(copied, e[0]) != 1 {
+			t.Fatalf("edit anchor %q is not in the history schema once", e[0])
+		}
+		copied = strings.Replace(copied, e[0], e[1], 1)
+	}
+	cases := []struct {
+		name    string
+		edits   [][2]string
+		table   string // the table the diagnostic names, or empty when accepted
+		message string // the whole message, when it is pinned
+	}{
+		{"30#corpus-rules-on-dbspec-constructs: a non-null placement column loads", [][2]string{{"table views {", childBlock("item_steps")}}, "", ""},
+		{"30#corpus-rules-on-dbspec-constructs: a nullable placement column is refused", [][2]string{{"table views {", strings.Replace(childBlock("item_steps"), "  item varchar(32)\n", "  item varchar(32) null\n", 1)}}, "item_steps",
+			"block table item_steps is placed by foreign key fk_item_steps_item, whose column item is nullable"},
+		{"30#the-history-table: a nullable row column of a block history is refused", [][2]string{{"  item varchar(32)\n  from_state", "  item varchar(32) null\n  from_state"}}, "item_history",
+			"block table item_history is placed by foreign key fk_history_item, whose column item is nullable"},
+		{"30#the-history-table: a block history placed by a copied column is refused", [][2]string{{"table views {", copied}}, "subtask_history",
+			"block table subtask_history is placed by foreign key fk_subtask_history_x, whose column x is nullable"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			root, text := editedCorpus(t, c.edits...)
+			cat, diags := catalog.Load(root)
+			if c.table == "" {
+				if cat == nil || len(diags) > 0 {
+					t.Fatalf("refused: %+v", diags)
+				}
+				return
+			}
+			expectRejected(t, cat, diags)
+			expectTableDiag(t, diags, text, c.table, msg)
+			n := 0
+			for _, d := range diags {
+				if strings.Contains(d.Message, msg) {
+					n++
+					if d.Message != c.message {
+						t.Fatalf("message %q, want %q", d.Message, c.message)
+					}
+				}
+			}
+			if n != 1 {
+				t.Fatalf("%d placement diagnostics, want one: %+v", n, diags)
+			}
+		})
+	}
+}
+
 func TestLoadRejectsBlockCycle(t *testing.T) {
 	node := `table node {
   id varchar(32)
-  parent varchar(32) null
+  parent varchar(32)
   primary key (id)
   index ix_node_parent (parent)
   foreign key fk_node_parent (parent) references node (id) on delete restrict on update restrict
