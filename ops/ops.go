@@ -350,7 +350,7 @@ func (c *Corpus) write(ctx context.Context, s *writepath.Session, tb *catalog.Ta
 
 // exec runs one request message in the session.
 func (c *Corpus) exec(ctx context.Context, s *writepath.Session, msg []byte) (*irexec.Answer, error) {
-	return s.Exec(ctx, msg)
+	return s.ExecFace(ctx, msg)
 }
 
 // noRow is the failure of an operation on a named row that matches none.

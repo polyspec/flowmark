@@ -1,9 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 72671f1df2f23a21d1a6298acfa47b721c7f00be5b3fba13d9435b9153f2eb65 -->
+<!-- source-sha256: 192443852564e4f50e65721e40661175a3d2b2964752019d1f47cf1fe6cd87b6 -->
 # Changelog
 
 ## Unreleased
 
+- T12.4-5 (수정): parameter 검사는 orm client의 메시지에만 적용한다. face 작업의 값은 엔진 자신의 쓰기이므로 catalog의 규칙이 판정하며, 틀린 type의 값을 쓰는 face 쓰기는 spec 50이 말하는 대로 다시 `CONSTRAINT`이다.
 - T12.4-5: IR 실행기가 row를 읽기 전에 모든 parameter를 그 slot의 type과 대조한다. slot의 type 밖의 값(JSON 종류, 정수 범위, decimal의 scale과 precision, 0001~9999 밖의 date, varchar의 길이, text의 U+0000, 문자열이 아닌 `contains` 값)과 non-null 컬럼에 할당하는 NULL은 `CODEC_ENCODE`로 답하며, 같은 입력에 대한 capability 오류와 write fault를 대신한다.
 - T12.4-2: IR 실행기가 orm의 스칼라 컬럼 subquery 규칙을 따른다. 한 행의 limit과 primary key를 포함한 order가 없는 스칼라 컬럼 subquery는 orm의 validator에서 `IR_INVALID`로 답하고, 실행기는 여러 행에 대한 자체의 이전 답 대신 subquery의 order의 첫 행을 취하며 일치하는 행이 없으면 NULL이다.
 - T12.4-4: IR 실행기가 orm의 upsert 규칙을 따른다. 둘 이상의 key가 만날 수 있거나 충돌 key를 다 할당하지 않는 `on_duplicate` insert는 orm의 validator에서 `IR_INVALID`로 답하며, 실행기 자체의 이전 답은 지웠다. upsert의 `affected`는 계속 1이다.

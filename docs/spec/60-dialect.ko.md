@@ -1,5 +1,5 @@
 <!-- doc-id: spec-dialect -->
-<!-- source-sha256: b2dae8a34b4dc320b1e1777d2f5bc5b98c5734ab01bc672771efea047970dba1 -->
+<!-- source-sha256: 6b4f9866e1fce917574db4b22e9aeb930985e7bae17fe2cc09ddf24d04365247 -->
 # Capability table
 
 [English](60-dialect.md)
@@ -26,7 +26,7 @@ surface는 `CAPABILITY_UNSUPPORTED`, 그리고 orm의 규칙이 모든 backend�
   orm client가 bind 값을 검사하는 것과 같다
   ([orm protocol](https://github.com/polyspec/orm/blob/main/docs/protocol.md)). NULL은 모든 slot의
   값이지만, non-null column의 할당에서는 `CODEC_ENCODE`다. 근거: slot 밖의 bind 값에 대한 orm의 code는
-  `CODEC_ENCODE`이며, 읽기 전의 검사는 bind 실패처럼 답을 행과 무관하게 한다. `IR_INVALID`는 구조의
+  `CODEC_ENCODE`이며, 읽기 전의 검사는 bind 실패처럼 답을 행과 무관하게 한다. face 작업의 값은 엔진 자신의 쓰기이므로 이렇게 검사하지 않으며, catalog의 규칙이 판정하고 `CONSTRAINT`로 거절한다([constraints](50-constraints.md)). `IR_INVALID`는 구조의
   code이고, 이 요청은 형태가 올바르다.
 - **읽기의 답**: `one`, `all`, `group_count`는 `{"rows": [...]}`, `count`는 `{"count": n}`, `sum`과
   `avg`는 `{"value": v}`, `paginate`는 `{"rows": [...], "count": n}`이며 `n`은 일치하는 모든 행을 센다.

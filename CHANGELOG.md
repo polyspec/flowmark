@@ -3,6 +3,7 @@
 
 ## Unreleased
 
+- T12.4-5 (fix): the parameter check applies to the messages of orm clients only; the values of a face operation are the engine's own write, which the catalog's rules judge, so a face write with a value of the wrong type is `CONSTRAINT` again, as spec 50 says.
 - T12.4-5: the IR executor checks every parameter against the type of its slot before it reads a row: a value outside the slot's type (a JSON kind, an integer range, a decimal's scale and precision, a date outside 0001 to 9999, a varchar's length, U+0000 in text, a non-string `contains` value) and NULL assigned to a non-null column answer `CODEC_ENCODE`, which replaces a capability error and a write fault for the same inputs.
 - T12.4-2: the IR executor follows orm's scalar column subquery rule: a scalar column subquery without a limit of one row and an order that includes the primary key answers `IR_INVALID` from orm's validator, and the executor takes the first row of the subquery's order, NULL when none matches, instead of its own earlier answer for several rows.
 - T12.4-4: the IR executor follows orm's upsert rules: an insert with `on_duplicate` that more than one key can meet, or whose conflict key it does not assign in full, answers `IR_INVALID` from orm's validator, and the executor's own earlier answer is removed; `affected` stays 1 for an upsert.

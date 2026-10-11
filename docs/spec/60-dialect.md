@@ -29,7 +29,7 @@ Go client implements it first and every other client is its own orm item.
   ([orm protocol](https://github.com/polyspec/orm/blob/main/docs/protocol.md)). NULL is a value of
   every slot except the assignment of a non-null column, where it is `CODEC_ENCODE`. Grounding:
   orm's code for a bound value outside its slot is `CODEC_ENCODE`, and a check made before reading
-  makes the answer independent of the rows, as a bind failure is; `IR_INVALID` is structural, and
+  makes the answer independent of the rows, as a bind failure is; the values of a face operation are the engine's own write and are not checked so — the catalog's rules judge them and refuse with `CONSTRAINT` ([constraints](50-constraints.md)); `IR_INVALID` is structural, and
   this request is well formed.
 - **Answer to a read**: `{"rows": [...]}` for `one`, `all` and `group_count`, `{"count": n}` for
   `count`, `{"value": v}` for `sum` and `avg`, `{"rows": [...], "count": n}` for `paginate`, `n`

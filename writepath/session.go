@@ -116,6 +116,13 @@ func (s *Session) Exec(ctx context.Context, msg []byte) (*irexec.Answer, error) 
 	return s.do(ctx, op{write: irexec.IsWrite(msg), run: func(c *irexec.Corpus) (*irexec.Result, error) { return s.c.exec.Execute(c, msg) }})
 }
 
+// ExecFace runs one request message that a face operation formed, as Exec runs one of an orm client; the values
+// are the engine's own write, so their parameters are not checked as an orm client's are.
+func (s *Session) ExecFace(ctx context.Context, msg []byte) (*irexec.Answer, error) {
+	msg = bytes.Clone(msg)
+	return s.do(ctx, op{write: irexec.IsWrite(msg), run: func(c *irexec.Corpus) (*irexec.Result, error) { return s.c.exec.ExecuteFace(c, msg) }})
+}
+
 // Repair runs the history repair of the row of table whose key is key (spec 50 Repair), from the initial state from
 // when it is given, at the engine clock: a write, inside or outside a transaction.
 func (s *Session) Repair(ctx context.Context, table, key, from string) (*irexec.Answer, error) {
