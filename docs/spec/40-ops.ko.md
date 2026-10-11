@@ -1,5 +1,5 @@
 <!-- doc-id: spec-ops -->
-<!-- source-sha256: 8b85e030cb9132b965695124bf88632311e1e45bc57a962d60d83d4053a9ef73 -->
+<!-- source-sha256: d1eb0d66baf613f54a41238c98b7bbf59dbbd95779cdfcc4fa68fec109a342c8 -->
 # Operations
 
 [English](40-ops.md)
@@ -78,7 +78,9 @@
   기본값과 같아서, 쉬는 transaction은 다른 operation이 기본으로 기다리는 시간보다 오래 lock을 잡지 않는다.
   idle 상한이 timer인 까닭은 쉼이 event의 부재이기 때문이며, session의 유일한 timer다.
 - 닫힌 연결은 열린 transaction을 rollback하고 lock을 풀며 요청의 lock 대기를 끝낸다. server는 요청이
-  실행되는 동안에도 도는 연결의 read로 이를 안다. `SIGINT`나 `SIGTERM`을 받으면 server는 listen을
+  실행되는 동안에도 도는 연결의 read로 이를 알며, 받았지만 답하기 시작하지 않은 message는 실행하지 않는다
+  — read의 끝은 client의 close이고 server는 이를 half-close와 구별할 수 없으며, session은 그와 함께
+  끝난다. `SIGINT`나 `SIGTERM`을 받으면 server는 listen을
   멈추고 모든 연결을 같은 방식으로 닫는다.
 
 ## Lock
