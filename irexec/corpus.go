@@ -1,6 +1,7 @@
 package irexec
 
 import (
+	"bytes"
 	"fmt"
 	"slices"
 	"sort"
@@ -127,6 +128,49 @@ func (c *Corpus) Diagnostics(path string) []catalog.Diagnostic {
 		return slices.Clone(f.diags)
 	}
 	return nil
+}
+
+// Data returns a copy of the bytes the corpus document path was read with, nil when
+// the corpus holds no document there: the write path checks a target against them
+// and reads a file it rewrites outside the executor from them.
+func (c *Corpus) Data(path string) []byte {
+	if f := c.files[path]; f != nil && f.data != nil {
+		return slices.Clone(f.data)
+	}
+	return nil
+}
+
+// Differs returns, sorted, the corpus paths at which o differs from c: each corpus
+// document that one holds and the other does not or that the two hold with other
+// bytes, and the file named by the diagnostic of each table whose unavailability
+// differs — a walk entry has no bytes in the corpus, so its table's diagnostic stands
+// for it. The write path reads it to know whether a corpus re-read under the lock is
+// the one a transaction read, and to name a change that landed.
+func (c *Corpus) Differs(o *Corpus) []string {
+	set := map[string]bool{}
+	for p, f := range c.files {
+		if g := o.files[p]; g == nil || !bytes.Equal(f.data, g.data) || (f.data == nil) != (g.data == nil) {
+			set[p] = true
+		}
+	}
+	for p := range o.files {
+		if c.files[p] == nil {
+			set[p] = true
+		}
+	}
+	for _, tb := range c.cat.Tables {
+		a, aok := c.unavailable[tb.Name]
+		b, bok := o.unavailable[tb.Name]
+		if aok != bok || a != b {
+			if aok {
+				set[a.File] = true
+			}
+			if bok {
+				set[b.File] = true
+			}
+		}
+	}
+	return sortedTables(set)
 }
 
 // cell is the value of a column of a row: NULL, or its canonical readable text.
