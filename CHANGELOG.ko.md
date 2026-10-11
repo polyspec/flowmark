@@ -1,9 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 35f29fa886d9574419506f3df41dd896302e533c1ce200ff9a6d49be91638116 -->
+<!-- source-sha256: 845044b286e697fb5e58c82acd5781a0b4ed1278b858c0f209fdd449364d6417 -->
 # Changelog
 
 ## Unreleased
 
+- T12.1-25: `<spec>#<anchor>: …` 꼴의 test case 이름이 그 spec의 heading이 아닌 anchor를 적으면 test가 실패한다. anchor는 GitHub와 같은 방식으로 계산한다. 없는 anchor(`10#order`, `10#storage-order`, `20#document-order`, `20#readable-values`)를 적던 case 이름 13개는 이제 각자 고정하는 규칙을 적는다.
 - T12.1-20: spec이 `markdown` column의 section은 행 scope 하나에 최대 한 번 선다고 적는다. 같은 column 이름의 두 번째 heading은 어떻게 적었든, 값이 같더라도 `format.section`이다. 두 값의 뜻은 확정적이지 않고, canon은 한 값의 바이트를 버려야만 고칠 수 있기 때문이다. codec은 이미 그렇게 했으며, test가 `files`와 document 행에서 이를 고정한다.
 - T12.1-21: 두 block의 행이 바이트 단위로 공유하는 key로의 link가 규칙으로 target을 유도한다. `parent`는 자기 block의 행에서 유도한다. 그 밖의 foreign key는 참조된 table의 두 행 이상이 그 key를 공유하면 유도된 target이 없으며, target 검사 없이 읽고 읽은 그대로 쓴다. 그래서 file의 진단이 더는 행의 순서에 달리지 않는다. 참조된 table의 배치 사슬이 `files` table에 닿으면 codec은 linker에 묻고, linker는 새 `ErrKeyShared`로 file 사이에서 공유된 key를 알린다. 그런 link에 target을 간직하지 않은 쓰기는 그 column에서 `CONSTRAINT`다.
 - T12.1-23: 쓰기 거절이 자식 block을 똑같이 이름 붙인다. `files` 행의 선언되지 않은 block은 document 행과 같이 그 block의 이름에서 거절된다. 행은 그 key column에 최대 하나의 `DUPLICATE_KEY`를 가진다. 바이트 단위로 같은 key를 가진 앞선 행 가운데 첫 행을 밝히고, 없으면 대소문자만 다른 행 가운데 byte 순서에서 가장 작은 key를 가진 행을 밝히며, 같은 key가 여럿이면 처음 준 행을 밝힌다.
