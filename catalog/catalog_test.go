@@ -817,6 +817,24 @@ func TestLoadBlockPlacementNonNull(t *testing.T) {
 		}
 		copied = strings.Replace(copied, e[0], e[1], 1)
 	}
+	edit := func(text, old, new string) string {
+		t.Helper()
+		if strings.Count(text, old) != 1 {
+			t.Fatalf("edit anchor %q is not in the text once", old)
+		}
+		return strings.Replace(text, old, new, 1)
+	}
+	nullableSteps := edit(childBlock("item_steps"), "  item varchar(32)\n", "  item varchar(32) null\n")
+	// nested is item_steps under items, placed by a nullable item, and
+	// item_step_notes under item_steps, placed by a non-null step.
+	nested := edit(nullableSteps, "table views {", "table item_step_notes {\n  id i64 identity\n  step i64\n  primary key (id)\n  index ix_item_step_notes_step (step)\n  foreign key fk_item_step_notes_step (step) references item_steps (id) on delete restrict on update restrict\n  settings {\n    store block fk_item_step_notes_step table\n  }\n}\n\ntable views {")
+	// composite is slot placed under grid by its composite foreign key, whose
+	// column gy is nullable; the composite key is refused by its own rule too.
+	composite := edit(edit(gridTables, "  gy varchar(32)\n", "  gy varchar(32) null\n"),
+		"on update restrict\n  settings {\n    store document table\n", "on update restrict\n  settings {\n    store block fk_slot_grid table\n")
+	// otherNullable is item_steps with a nullable foreign key that does not place it.
+	otherNullable := edit(edit(childBlock("item_steps"), "  label varchar(64)\n", "  label varchar(64)\n  person varchar(32) null\n"),
+		"  primary key (id)\n", "  primary key (id)\n  index ix_item_steps_person (person)\n  foreign key fk_item_steps_person (person) references people (id) on delete restrict on update restrict\n")
 	cases := []struct {
 		name    string
 		edits   [][2]string
@@ -824,8 +842,13 @@ func TestLoadBlockPlacementNonNull(t *testing.T) {
 		message string // the whole message, when it is pinned
 	}{
 		{"30#corpus-rules-on-dbspec-constructs: a non-null placement column loads", [][2]string{{"table views {", childBlock("item_steps")}}, "", ""},
-		{"30#corpus-rules-on-dbspec-constructs: a nullable placement column is refused", [][2]string{{"table views {", strings.Replace(childBlock("item_steps"), "  item varchar(32)\n", "  item varchar(32) null\n", 1)}}, "item_steps",
+		{"30#corpus-rules-on-dbspec-constructs: a nullable placement column is refused", [][2]string{{"table views {", nullableSteps}}, "item_steps",
 			"block table item_steps is placed by foreign key fk_item_steps_item, whose column item is nullable"},
+		{"30#corpus-rules-on-dbspec-constructs: a nullable middle placement of two nested blocks is refused at the middle table only", [][2]string{{"table views {", nested}}, "item_steps",
+			"block table item_steps is placed by foreign key fk_item_steps_item, whose column item is nullable"},
+		{"30#corpus-rules-on-dbspec-constructs: a composite placement key with one nullable column is refused naming that column", [][2]string{{"table views {", composite}}, "slot",
+			"block table slot is placed by foreign key fk_slot_grid, whose column gy is nullable"},
+		{"30#corpus-rules-on-dbspec-constructs: a nullable foreign key that does not place the block loads", [][2]string{{"table views {", otherNullable}}, "", ""},
 		{"30#the-history-table: a nullable row column of a block history is refused", [][2]string{{"  item varchar(32)\n  from_state", "  item varchar(32) null\n  from_state"}}, "item_history",
 			"block table item_history is placed by foreign key fk_history_item, whose column item is nullable"},
 		{"30#the-history-table: a block history placed by a copied column is refused", [][2]string{{"table views {", copied}}, "subtask_history",
