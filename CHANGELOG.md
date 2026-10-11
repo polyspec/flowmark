@@ -3,6 +3,8 @@
 
 ## Unreleased
 
+- T12.1-37: the detail-anchor collision rule reads each viewer's blocks: GitHub's and GitLab's footnote definitions, VS Code's math blocks, GitHub's footnote numbers and GitLab's wikilinks; GitLab's snippet prefix is stated as never applying to a corpus file.
+- T12.5-4: the codec's parse and render cost is linear in a file's bytes: about 48 and 35 ms per MB, allocating 50× and 39×, down from 2.1 s and 456× for parsing 1 MB.
 - T12.1-33: the collision rule reads raw HTML `<h1>`–`<h6>` headings, which GitHub anchors, and every heading element as GitHub's parser does, by recorded vectors; an element continuing into content the engine does not render takes an anchor its slug so far begins.
 - T12.1-31: S_GL reads math spans as GitLab renders them (their literal source), its final Σ as ς, and its footnote references as comrak does; S_VS reads math spans as no text, as VS Code's default markdown-math does. The slug vectors record GitLab, built from the pinned gitlab-glfm-markdown with GitLab's options.
 - T12.1-32: the vendored Unicode data folders ship the Unicode License v3 text, which the package documentation names and a test requires.
