@@ -1,5 +1,5 @@
 <!-- doc-id: spec-document-model -->
-<!-- source-sha256: b37d9a5abc985df380cb0f26be65880f7157303eb997876058972d14c4ac8d3e -->
+<!-- source-sha256: 92b133d71c72a8748f5ebc0b149ae43c9016df54fc97e2b5910924d7c50716d9 -->
 # 문서 모델
 
 [English](20-document-model.md)
@@ -51,6 +51,44 @@
 
 aggregate냐 split이냐는 저장 선언이다. 논리 관계는 모든 저장에서 같으므로 같은 행을 어느 쪽으로든
 저장할 수 있다.
+
+## 시간 shard
+
+`store` setting에 `shard <column> <period>`를 가진 `files` 또는 `document` table은 기간마다 행을 따로
+저장한다. column은 non-null `date` 또는 `datetime`이고 period는 `year`, `month`, `day`다(setting과 그
+오류는 orm의 것이다, T119). 소유하는 행이 없고 시간에 따라 쌓이는 table — 이벤트 로그, 시간 기록 — 은
+그렇지 않으면 파일 하나(`document`)나 folder 하나(`files`)가 끝없이 커진다.
+
+- **기간 이름.** 행의 기간 이름은 column 값을 grain에서 자른 것이다: `2026`, `2026-10`, `2026-10-11`.
+  `datetime`은 저장된 UTC 값으로 세고 `date`는 쓰인 대로다. 12를 넘는 달처럼 날짜가 아닌 값에는 기간이
+  없으며, 쓰기는 그 행을 거절하고 읽기는 `type`으로 보고한다.
+- **경로.** 샤드된 `files` table은 행을 `<table>/<period>/<key>.flowmark.md`에, 샤드된 `document`
+  table은 한 기간의 행을 `<table>/<period>.flowmark.md`에 저장하며 그 H1 줄은 `# <table>`이다. 행이 없는
+  기간에는 파일도 folder도 없다. 빈 table에 없는 것과 같다.
+- **walk.** 샤드된 table의 folder는 기간의 folder(files)나 문서(document)를 shard의 grain으로 이름 붙여
+  담고, 그 밖의 문서는 담지 않는다. 샤드된 `files` table의 folder 바로 아래 문서, 다른 grain이나 기간이
+  아닌 이름의 folder와 문서, 기간 folder 아래의 문서는 `corpus.walk`다.
+- **저장 순서.** shard는 행이 서는 곳을 바꿀 뿐 table이 읽히는 순서를 바꾸지 않는다. 논리 관계는 어느
+  저장에서나 같기 때문이다. `files` table은 기간과 무관하게 자기 순서(spec 20 순서, orm이 샤드된 table에
+  계층과 order column을 허용하지 않으므로 key 순서)를 유지한다. `document` table은 기간을 오름차순으로,
+  각 문서를 자기 순서로 읽는다.
+- **Key.** key, `identity` 값, `key_prefix` 할당은 모든 기간에 걸쳐 유일하다. 모든 기간의 행이 table
+  하나이며 엔진이 메모리에 유지하는 corpus에서 읽고, corpus 옆에 index 파일을 두지 않는다. 근거: table의
+  key 검사는 table의 행을 읽고, shard는 행이 어디에 서는지를 바꿀 뿐 table이 어떤 행을 갖는지는 바꾸지
+  않는다.
+- **다른 기간의 파일에 있는 행.** column 값이 자기를 담은 파일의 기간과 다른 기간을 가리키는 행은
+  validator의 행 위치 `shard.period`이고, 그 행의 다음 쓰기가 기간의 파일로 옮긴다.
+- **column 갱신**은 행을 새 기간의 파일로 옮기고, 같은 transaction에서 그 행으로 링크한 모든 파일을 다시
+  쓴다. 샤드된 행으로의 링크는 그 기간의 경로를 담기 때문이다. 근거: 링크는 행이 서는 곳에서 파생되므로
+  (spec 10) 이동은 링크를 바꾼다.
+- **절 변경**은 table의 shard를 더하거나 뺀다. 저장 변경이다(spec 80).
+- **방식 하나와 적용 범위.** shard 방식은 시간 shard 하나이며 기간은 `year`, `month`, `day`다. 이것은
+  database의 파티션이 아니라 markdown corpus의 저장에 대한 선언이다. SQL backend(MySQL, PostgreSQL,
+  SQLite)는 orm이 정한 대로 이 절을 무시하므로(orm `docs/dbspec.md`, T119) database export(spec 70)는
+  샤드된 table에 table 하나를 만들고 모든 기간의 행을 table이 읽히는 순서로 insert한다. 절은 `files`와
+  `document` 저장에 적용되며, orm은 `block` table, 자기 참조 외래 key가 있는 table, `order`가 있는
+  table에서 거절하고 catalog는 이력 table에서 거절한다. key 범위, hash, 목록에 의한 shard와 column
+  둘 이상의 shard는 정의하지 않는다.
 
 ## Key
 

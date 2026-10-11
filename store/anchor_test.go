@@ -331,7 +331,7 @@ func TestAnchorCodecs(t *testing.T) {
 	}
 	writeDoc := func(rows []*Row) func(t *testing.T) []located {
 		return func(t *testing.T) []located {
-			_, rf, err := RenderDocument(docs, "people", rows, lk)
+			_, rf, err := RenderDocument(docs, "people", docPath("people"), rows, lk)
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -17,12 +17,12 @@ import (
 // child blocks, which the file writes in the row's detail section. A row set the
 // writer refuses returns no bytes and its refusals, located in the rows given: two
 // rows whose keys are equal without regard to case are DUPLICATE_KEY.
-func RenderDocument(cat *catalog.Catalog, table string, rows []*Row, lk Linker) ([]byte, []Refusal, error) {
+func RenderDocument(cat *catalog.Catalog, table, rel string, rows []*Row, lk Linker) ([]byte, []Refusal, error) {
 	lay, err := docLayoutOf(cat, table)
 	if err != nil {
 		return nil, nil, err
 	}
-	out, lines, rf := renderDocument(lay, rows, lk, true)
+	out, lines, rf := renderDocument(lay, rel, rows, lk, true)
 	if len(rf) > 0 {
 		return nil, rf, nil
 	}
@@ -33,8 +33,8 @@ func RenderDocument(cat *catalog.Catalog, table string, rows []*Row, lk Linker) 
 // each line, or with the refusals of the rows when the writer refuses them. A write
 // refuses two rows whose keys are equal without regard to case; the read check of
 // ParseDocument does not, since the validator reports those keys.
-func renderDocument(lay *docLayout, rows []*Row, lk Linker, write bool) ([]byte, [][]colSpan, []Refusal) {
-	w := &writer{rel: docFileName(lay)}
+func renderDocument(lay *docLayout, rel string, rows []*Row, lk Linker, write bool) ([]byte, [][]colSpan, []Refusal) {
+	w := &writer{rel: rel}
 	dw := newDocWriter(w, lk, write, "", "")
 	dw.index(lay, rows)
 	dw.prepare()

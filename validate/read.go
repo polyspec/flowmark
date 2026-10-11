@@ -77,13 +77,30 @@ func read(cat *catalog.Catalog, fsys store.FS, lk store.Linker, memo *store.Memo
 				c.files[path] = &File{Table: tb.Name, Data: b}
 			}
 			for _, r := range rows {
-				path := tb.Name + "/" + r.Key + docSuffix
+				path := r.Path
 				if f := c.files[path]; f != nil {
 					f.Rows = append(f.Rows, r)
 				}
 				c.place(r, path, nil)
 			}
 		case catalog.StorageDocument:
+			if tb.Storage.Shard != nil {
+				if !listed(entries, tb.Name) {
+					continue
+				}
+				docs, ds, err := store.ParseDocumentTable(cat, fsys, tb.Name, lk, memo)
+				if err != nil {
+					return nil, err
+				}
+				c.diags = append(c.diags, ds...)
+				for _, d := range docs {
+					c.files[d.Path] = &File{Table: tb.Name, Data: d.Data, Rows: d.Rows}
+					for _, r := range d.Rows {
+						c.place(r, d.Path, nil)
+					}
+				}
+				continue
+			}
 			file := tb.Name + docSuffix
 			if !regularListed(entries, file) {
 				continue
@@ -178,13 +195,14 @@ func tableAt(cat *catalog.Catalog, file string) (string, bool) {
 			return t, true
 		}
 		for _, tb := range cat.Tables {
-			if tb.Storage.Kind == catalog.StorageFiles && strings.EqualFold(tb.Name, file) {
+			if folderTable(tb) && strings.EqualFold(tb.Name, file) {
 				return tb.Name, true
 			}
 		}
-	case 2:
+	case 2, 3:
+		// A files row stands one folder deeper in a sharded table, in the folder of its period.
 		for _, tb := range cat.Tables {
-			if tb.Storage.Kind == catalog.StorageFiles && strings.EqualFold(tb.Name, parts[0]) {
+			if folderTable(tb) && strings.EqualFold(tb.Name, parts[0]) && (len(parts) == 2 || tb.Storage.Shard != nil) {
 				return tb.Name, true
 			}
 		}

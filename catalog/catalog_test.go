@@ -746,6 +746,7 @@ func TestLoadHistoryStorageKind(t *testing.T) {
 		{"30#the-history-table: block of its row foreign key under its state table", nil, false},
 		{"30#the-history-table: document table", [][2]string{{blockStore, "    store document table\n"}}, false},
 		{"30#the-history-table: files", [][2]string{{blockStore, "    store files\n"}}, true},
+		{"30#the-history-table: document table sharded by time", [][2]string{{blockStore, "    store document table shard at month\n"}}, true},
 		{"30#the-history-table: document list", [][2]string{{blockStore, "    store document list\n"}}, true},
 		{"30#the-history-table: block of another table", [][2]string{
 			{"  foreign key fk_history_item (item) references items (id) on delete restrict on update restrict\n",
@@ -1484,4 +1485,74 @@ func TestLoadIdentityKeyType(t *testing.T) {
 			}
 		})
 	}
+}
+
+// shardedPeople stores people as a document table sharded by the month of a joined time.
+var shardedPeople = [][2]string{
+	{"  name varchar(255)\n  primary key (id)\n  settings {\n    key_prefix 'P'\n    store document table\n",
+		"  name varchar(255)\n  joined datetime(6)\n  primary key (id)\n  settings {\n    key_prefix 'P'\n    store document table shard joined month\n"},
+}
+
+func TestLoadReadsStoreShard(t *testing.T) {
+	root, _ := editedCorpus(t, shardedPeople...)
+	cat, diags := catalog.Load(root)
+	if len(diags) != 0 || cat == nil {
+		t.Fatalf("diagnostics for a sharded table: %+v", diags)
+	}
+	people, ok := cat.Table("people")
+	if !ok {
+		t.Fatal("no table people")
+	}
+	if want := (&catalog.Shard{Column: "joined", Period: catalog.PeriodMonth}); !reflect.DeepEqual(people.Storage.Shard, want) {
+		t.Fatalf("people shard = %+v, want %+v", people.Storage.Shard, want)
+	}
+	items, _ := cat.Table("items")
+	if items.Storage.Shard != nil {
+		t.Fatalf("items has no shard clause, got %+v", items.Storage.Shard)
+	}
+}
+
+// TestRowPath pins the corpus path of a row and of a document (spec 20 Time shards): the file of a files
+// row or the document of a document table, with the folder or the file of its period when the storage is
+// sharded; a datetime counts at its stored UTC value, and a value that is no time has no path.
+func TestRowPath(t *testing.T) {
+	cases := []struct {
+		name    string
+		storage catalog.Storage
+		key     string
+		value   string // the stored value of the shard column
+		want    string
+		fault   string // a text the error holds, "" for none
+	}{
+		{name: "files", storage: catalog.Storage{Kind: catalog.StorageFiles}, key: "T1", want: "items/T1.flowmark.md"},
+		{name: "document", storage: catalog.Storage{Kind: catalog.StorageDocument}, want: "items.flowmark.md"},
+		{name: "files by year", storage: sharded(catalog.StorageFiles, catalog.PeriodYear), key: "T1", value: "2026-10-11 09:30:00.000000", want: "items/2026/T1.flowmark.md"},
+		{name: "files by month", storage: sharded(catalog.StorageFiles, catalog.PeriodMonth), key: "T1", value: "2026-10-11 09:30:00.000000", want: "items/2026-10/T1.flowmark.md"},
+		{name: "files by day", storage: sharded(catalog.StorageFiles, catalog.PeriodDay), key: "T1", value: "2026-10-11 09:30:00.000000", want: "items/2026-10-11/T1.flowmark.md"},
+		{name: "files by month of a date", storage: sharded(catalog.StorageFiles, catalog.PeriodMonth), key: "T1", value: "2026-10-11", want: "items/2026-10/T1.flowmark.md"},
+		{name: "document by month", storage: sharded(catalog.StorageDocument, catalog.PeriodMonth), value: "2026-10-31 23:59:59", want: "items/2026-10.flowmark.md"},
+		{name: "document by year", storage: sharded(catalog.StorageDocument, catalog.PeriodYear), value: "2026-01-01", want: "items/2026.flowmark.md"},
+		{name: "a value that is no time", storage: sharded(catalog.StorageFiles, catalog.PeriodMonth), key: "T1", value: "soon", fault: "not a date or datetime"},
+		{name: "a month past 12", storage: sharded(catalog.StorageFiles, catalog.PeriodMonth), key: "T1", value: "2026-13-01", fault: "not a date or datetime"},
+		{name: "a day past the month", storage: sharded(catalog.StorageFiles, catalog.PeriodDay), key: "T1", value: "2026-02-30", fault: "not a date or datetime"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tb := &catalog.Table{Name: "items", Storage: tc.storage}
+			got, err := tb.RowPath(tc.key, tc.value)
+			if tc.fault != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.fault) {
+					t.Fatalf("RowPath = %q, %v; want an error holding %q", got, err, tc.fault)
+				}
+				return
+			}
+			if err != nil || got != tc.want {
+				t.Fatalf("RowPath = %q, %v; want %q", got, err, tc.want)
+			}
+		})
+	}
+}
+
+func sharded(kind catalog.StorageKind, period catalog.Period) catalog.Storage {
+	return catalog.Storage{Kind: kind, Shard: &catalog.Shard{Column: "at", Period: period}}
 }

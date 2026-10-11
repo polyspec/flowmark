@@ -177,9 +177,9 @@ func (c *Corpus) canonical(p string, lk *linker) ([]byte, *Error) {
 		if len(f.rows) != 1 {
 			return nil, errf(codeInternal, "the files document %s was read with %d rows, not one", p, len(f.rows))
 		}
-		out, rf, err = store.CanonicalFile(c.cat, f.table, f.rows[0], lk)
+		out, rf, err = store.CanonicalFile(c.cat, f.table, p, f.rows[0], lk)
 	} else {
-		out, rf, err = store.CanonicalDocument(c.cat, f.table, f.rows, lk)
+		out, rf, err = store.CanonicalDocument(c.cat, f.table, p, f.rows, lk)
 	}
 	switch {
 	case err != nil:

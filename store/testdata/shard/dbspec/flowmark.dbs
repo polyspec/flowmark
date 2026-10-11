@@ -1,0 +1,39 @@
+dbspec 1 shard
+
+table events {
+  id varchar(32)
+  title varchar(255)
+  at datetime(6)
+  primary key (id)
+  settings {
+    key_prefix 'E'
+    store files shard at month
+    title title
+  }
+}
+
+table notes {
+  id varchar(32)
+  title varchar(255)
+  written date
+  primary key (id)
+  settings {
+    key_prefix 'N'
+    store document table shard written year
+    title title
+  }
+}
+
+table refs {
+  id varchar(32)
+  title varchar(255)
+  event varchar(32)
+  primary key (id)
+  index ix_refs_event (event)
+  foreign key fk_refs_event (event) references events (id) on delete restrict on update restrict
+  settings {
+    key_prefix 'R'
+    store files
+    title title
+  }
+}

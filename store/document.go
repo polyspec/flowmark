@@ -288,7 +288,7 @@ func ParseDocument(cat *catalog.Catalog, table, rel string, data []byte, lk Link
 		return nil, p.diags, nil
 	}
 	rows := sortedRows(lay, recs)
-	out, _, rf := renderDocument(lay, rows, lk, false)
+	out, _, rf := renderDocument(lay, rel, rows, lk, false)
 	if len(rf) > 0 {
 		return nil, append(p.diags, readDiagnostics(rel, rf, rows)...), nil
 	}
@@ -1450,9 +1450,6 @@ func (p *docParser) linkTarget(l docLink) (string, int) {
 	}
 	return target, linkOne
 }
-
-// docFileName is the file name of the document table, <table>.flowmark.md.
-func docFileName(lay *docLayout) string { return lay.table + fileSuffix }
 
 // localLink returns the link from the document file to row r of its own table: its
 // anchor when the row has a detail section, or the file's name when it has none.

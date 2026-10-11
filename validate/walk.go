@@ -85,18 +85,29 @@ func walkDiag(file, msg string) catalog.Diagnostic {
 // of a document table's file, the places the root holds.
 func hasTableNamed(cat *catalog.Catalog, name string) bool {
 	for _, tb := range cat.Tables {
-		if tb.Storage.Kind == catalog.StorageFiles && tb.Name == name {
+		if folderTable(tb) && tb.Name == name {
 			return true
 		}
 	}
 	return false
 }
 
+// folderTable reports whether the place of table tb is a folder of its name: a files table, or a document
+// table sharded by time, whose documents stand in the folder by period (spec 20 Time shards).
+func folderTable(tb *catalog.Table) bool {
+	return tb.Storage.Kind == catalog.StorageFiles || (tb.Storage.Kind == catalog.StorageDocument && tb.Storage.Shard != nil)
+}
+
+// fileTable reports whether the place of table tb is the one document <table>.flowmark.md.
+func fileTable(tb *catalog.Table) bool {
+	return tb.Storage.Kind == catalog.StorageDocument && tb.Storage.Shard == nil
+}
+
 // docPlaceOf returns the document table whose file name, <table>.flowmark.md
 // without regard to case, is name.
 func docPlaceOf(cat *catalog.Catalog, name string) (string, bool) {
 	for _, tb := range cat.Tables {
-		if tb.Storage.Kind == catalog.StorageDocument && strings.EqualFold(tb.Name+docSuffix, name) {
+		if fileTable(tb) && strings.EqualFold(tb.Name+docSuffix, name) {
 			return tb.Name, true
 		}
 	}
@@ -108,12 +119,12 @@ func docPlaceOf(cat *catalog.Catalog, name string) (string, bool) {
 // files table in another case, or the file of a document table in another case.
 func foldedPlace(cat *catalog.Catalog, name string) (string, bool) {
 	for _, tb := range cat.Tables {
-		switch tb.Storage.Kind {
-		case catalog.StorageFiles:
+		switch {
+		case folderTable(tb):
 			if strings.EqualFold(tb.Name, name) {
 				return tb.Name, true
 			}
-		case catalog.StorageDocument:
+		case fileTable(tb):
 			if strings.EqualFold(tb.Name+docSuffix, name) {
 				return tb.Name, true
 			}

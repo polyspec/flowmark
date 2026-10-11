@@ -17,7 +17,7 @@ specification is written when evolution beyond the v1 scope starts.
 ## Settled rulings
 
 - **Additive-first**: a rename is an explicit step, never "add new and drop old".
-- **A storage change is a transaction**: moving a table from one storage to another rewrites every
+- **A storage change is a transaction**: moving a table from one storage to another, or adding or removing the `shard` clause of its storage ([time shards](20-document-model.md#time-shards)), rewrites every
   row in one transaction, and the rows read the same before and after; a file with a `format.*` diagnostic refuses it, naming the file.
 - **Keys are opaque**, so no key codemod rewrites references in prose. A key is never updated
   ([document model](20-document-model.md#keys)): a key changes by inserting the row under the new

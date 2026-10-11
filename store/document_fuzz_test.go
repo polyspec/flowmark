@@ -96,7 +96,7 @@ func FuzzParseDocument(f *testing.F) {
 		}
 		// Two rows with byte-for-byte equal keys are readable, but their table is
 		// unavailable to a write (DUPLICATE_KEY), so the emission is the read-side one.
-		out, rd, err := RenderDocument(cat, table, rows, lk)
+		out, rd, err := RenderDocument(cat, table, docPath(table), rows, lk)
 		if err != nil || len(rd) > 0 {
 			for _, d := range rd {
 				if d.Rule != RuleDuplicateKey {
@@ -104,7 +104,7 @@ func FuzzParseDocument(f *testing.F) {
 				}
 			}
 			var rf []Refusal
-			out, _, rf = renderDocument(lay, rows, lk, false)
+			out, _, rf = renderDocument(lay, docPath(lay.table), rows, lk, false)
 			if len(rf) > 0 {
 				t.Fatalf("a parsed document is refused on the read-side emission: %+v\ninput: %q", rf, data)
 			}
@@ -113,7 +113,7 @@ func FuzzParseDocument(f *testing.F) {
 		if err != nil || len(pd) > 0 || back == nil {
 			t.Fatalf("emitted document does not parse cleanly: %v %+v\ninput: %q\nemit: %q", err, pd, data, out)
 		}
-		again, _, rf := renderDocument(lay, back, lk, false)
+		again, _, rf := renderDocument(lay, docPath(lay.table), back, lk, false)
 		if len(rf) > 0 || !bytes.Equal(again, out) {
 			t.Fatalf("P2 failed\ninput: %q\nemit: %q\nagain: %q", data, out, again)
 		}
@@ -147,7 +147,7 @@ func FuzzRenderDocument(f *testing.F) {
 			Table: "items", Key: "T1", Title: title, Body: body, Scalars: sc,
 			Sections: map[string]*string{"evidence": &evidence}, Raw: map[string]string{}, Dangling: map[string]DanglingLink{},
 		}
-		out, diags, err := RenderDocument(cat, "items", []*Row{r}, lk)
+		out, diags, err := RenderDocument(cat, "items", docPath("items"), []*Row{r}, lk)
 		if err != nil || len(diags) > 0 {
 			return
 		}
@@ -161,7 +161,7 @@ func FuzzRenderDocument(f *testing.F) {
 		if want, ok := readable(dbspec.Type{Kind: dbspec.TypeI32}, position); !ok || *back[0].Scalars["position"] != want {
 			t.Fatalf("position changed on the round trip: %q", position)
 		}
-		again, rd, err := RenderDocument(cat, "items", back, lk)
+		again, rd, err := RenderDocument(cat, "items", docPath("items"), back, lk)
 		if err != nil || len(rd) > 0 || !bytes.Equal(again, out) {
 			t.Fatalf("P2 failed: %q vs %q", again, out)
 		}

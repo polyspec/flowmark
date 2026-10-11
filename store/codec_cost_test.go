@@ -28,7 +28,7 @@ func TestCodecAllocationBudget(t *testing.T) {
 	for _, mb := range []int{1, 4} {
 		rows, data := benchDocument(t, mb)
 		parse := allocated(func() { ParseDocument(cat, "items", "items.flowmark.md", data, lk) })
-		render := allocated(func() { RenderDocument(cat, "items", rows, lk) })
+		render := allocated(func() { RenderDocument(cat, "items", docPath("items"), rows, lk) })
 		for name, n := range map[string]uint64{"parse": parse, "render": render} {
 			if x := float64(n) / float64(len(data)); x > codecAllocBudget {
 				t.Errorf("the %s of %d MB allocates %.1f bytes per byte; the budget is %d", name, mb, x, codecAllocBudget)
@@ -84,7 +84,7 @@ func benchDocument(b testing.TB, mb int) ([]*Row, []byte) {
 	b.Helper()
 	cat := loadDocumentFixture(b)
 	rows := benchRows(mb)
-	out, rf, err := RenderDocument(cat, "items", rows, documentLinker())
+	out, rf, err := RenderDocument(cat, "items", docPath("items"), rows, documentLinker())
 	if err != nil || len(rf) > 0 {
 		b.Fatalf("render: %v, %d refusals, first %+v", err, len(rf), rf[:min(len(rf), 1)])
 	}
@@ -144,7 +144,7 @@ func BenchmarkRenderDocument(b *testing.B) {
 			cat := loadDocumentFixture(b)
 			lk := documentLinker()
 			reportPerByte(b, len(data), func() {
-				if _, rf, err := RenderDocument(cat, "items", rows, lk); err != nil || len(rf) > 0 {
+				if _, rf, err := RenderDocument(cat, "items", docPath("items"), rows, lk); err != nil || len(rf) > 0 {
 					b.Fatal(err, rf)
 				}
 			})

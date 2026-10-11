@@ -87,6 +87,9 @@ func (l *loader) checkTable(d *document, t *dbspec.Table) (Storage, bool) {
 		report("table " + t.Name + " has an unknown shape " + s.Store.Shape)
 		return Storage{}, false
 	}
+	if sh := s.Store.Shard; sh != nil {
+		storage.Shard = &Shard{Column: sh.Column, Period: Period(sh.Period)}
+	}
 	if s.Title == nil {
 		switch {
 		case storage.Kind == StorageFiles:
@@ -258,7 +261,7 @@ func (l *loader) checkHistoryStorage() {
 			continue
 		}
 		st := h.storage
-		ok := st.Kind == StorageDocument && st.Shape == ShapeTable
+		ok := st.Kind == StorageDocument && st.Shape == ShapeTable && st.Shard == nil
 		if st.Kind == StorageBlock && st.Shape == ShapeTable && st.Parent == r.table.Name {
 			for _, fk := range h.table.ForeignKeys {
 				if fk.Name == st.ParentForeignKey && len(fk.Columns) == 1 && fk.Columns[0] == hist.Row {

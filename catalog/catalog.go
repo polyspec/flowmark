@@ -1,7 +1,12 @@
 // Package catalog loads the dbspec catalog of a corpus root.
 package catalog
 
-import "github.com/polyspec/orm/engine/dbspec"
+import (
+	"fmt"
+	"time"
+
+	"github.com/polyspec/orm/engine/dbspec"
+)
 
 // Diagnostic is one located catalog error. File is relative to the corpus
 // root and slash-separated; Line and Column are 1-based, in code points.
@@ -78,13 +83,33 @@ const (
 	ShapeTable Shape = "table"
 )
 
+// Period is the length of a time shard (spec 20 Time shards).
+type Period string
+
+// The periods.
+const (
+	PeriodYear  Period = "year"
+	PeriodMonth Period = "month"
+	PeriodDay   Period = "day"
+)
+
+// Shard is the time shard of a document or files storage: the rows of a period stand in their own
+// file or folder. Column is the non-null date or datetime column whose value (a datetime at its stored
+// UTC value) names the period of a row.
+type Shard struct {
+	Column string
+	Period Period
+}
+
 // Storage is where a table's rows live. Shape is empty for files storage;
-// ParentForeignKey and Parent are set for block storage only.
+// ParentForeignKey and Parent are set for block storage only. Shard is nil unless the table declares a
+// time shard.
 type Storage struct {
 	Kind             StorageKind
 	Shape            Shape
 	ParentForeignKey string
 	Parent           string
+	Shard            *Shard
 }
 
 // StateMachine is the state machine of one column of a table.
@@ -156,4 +181,68 @@ func (c *Catalog) Table(name string) (*Table, bool) {
 		}
 	}
 	return nil, false
+}
+
+// DocSuffix is the suffix of a corpus document.
+const DocSuffix = ".flowmark.md"
+
+// RowPath returns the corpus path of the file that holds the row with the key of a files table, or of the
+// document that holds the rows of a document table (the key is then unused). A sharded table puts it in the
+// folder or the file of the period of value, the stored text of the shard column: a datetime at its stored
+// UTC value, a date as it is (spec 20 Time shards). A value that is no date or datetime has no period, so
+// it is an error. A block table has no file of its own, so it has no path.
+func (t *Table) RowPath(key, value string) (string, error) {
+	var period string
+	if sh := t.Storage.Shard; sh != nil {
+		p, err := periodOf(sh.Period, value)
+		if err != nil {
+			return "", fmt.Errorf("the shard column %s of table %s holds %q, which is not a date or datetime", sh.Column, t.Name, value)
+		}
+		period = p
+	}
+	switch t.Storage.Kind {
+	case StorageFiles:
+		if period != "" {
+			return t.Name + "/" + period + "/" + key + DocSuffix, nil
+		}
+		return t.Name + "/" + key + DocSuffix, nil
+	case StorageDocument:
+		if period != "" {
+			return t.Name + "/" + period + DocSuffix, nil
+		}
+		return t.Name + DocSuffix, nil
+	}
+	return "", fmt.Errorf("table %s is stored as a block and has no file of its own", t.Name)
+}
+
+// ValidPeriod reports whether name is the name of a period at the grain p: 2026, 2026-10 or 2026-10-11,
+// a date that exists.
+func ValidPeriod(p Period, name string) bool {
+	layout := map[Period]string{PeriodYear: "2006", PeriodMonth: "2006-01", PeriodDay: "2006-01-02"}[p]
+	if layout == "" || len(name) != len(layout) {
+		return false
+	}
+	_, err := time.Parse(layout, name)
+	return err == nil
+}
+
+// periodOf returns the name of the period of p that the date or datetime text value falls in: 2026, 2026-10
+// or 2026-10-11. The date is read by the standard parser, so a month past 12 or a day past the month fails.
+func periodOf(p Period, value string) (string, error) {
+	day := value
+	if len(day) > 10 {
+		day = day[:10]
+	}
+	if _, err := time.Parse("2006-01-02", day); err != nil || (len(value) > 10 && value[10] != ' ' && value[10] != 'T') {
+		return "", fmt.Errorf("not a date or datetime")
+	}
+	switch p {
+	case PeriodYear:
+		return day[:4], nil
+	case PeriodMonth:
+		return day[:7], nil
+	case PeriodDay:
+		return day, nil
+	}
+	return "", fmt.Errorf("unknown period %q", p)
 }

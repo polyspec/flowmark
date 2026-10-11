@@ -1,5 +1,5 @@
 <!-- doc-id: spec-ops -->
-<!-- source-sha256: ff5062b76e244d6ade4bc38629c0d1b8f0f737c7ac2745d983b42f3c7b87b90b -->
+<!-- source-sha256: 49fc2716c897c4d9fd9a21b7c99be90ba348a1ab00d437b1411b75ed5d047fc8 -->
 # Operations
 
 [English](40-ops.md)
@@ -27,7 +27,9 @@
   지운 stage는 commit을 반쯤 적용된 채로 남기므로 거절은 그것을 해결 방법으로 밝히지 않는다.
 - 열기는 catalog를 읽고 corpus를 walk하며 문서를 parse하고 index를 유도한다: 모든 문서를 한 번 읽고
   parse하는 첫 전체 읽기다. 열린 corpus는 memory에 두고 운영체제의 file 알림으로 최신을 유지하며, 각
-  operation은 lock 아래에서 바로 앞 operation 이후 바뀐 것만 읽는다:
+  operation은 lock 아래에서 바로 앞 operation 이후 바뀐 것만 읽는다. 샤드된 table의 기간
+  folder([시간 shard](20-document-model.ko.md#시간-shard))는 다른 folder와 같다: 읽을 때 각각 지켜보며,
+  table folder 아래에 기간 folder가 생기면 table folder의 항목이 바뀌므로 다음 operation이 그것을 읽는다:
   - folder나 문서는 읽기 전에 지켜보므로 읽은 뒤의 변경을 놓치지 않는다. macOS에서는 각 folder
     (`NOTE_WRITE | NOTE_DELETE | NOTE_RENAME | NOTE_REVOKE`)와 각 문서(그것들과 `NOTE_EXTEND |
     NOTE_ATTRIB`)에 `EV_CLEAR`로 kqueue `EVFILT_VNODE`를 걸며, 각각 `O_EVTONLY`로 열어 descriptor를 하나씩
