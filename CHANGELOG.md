@@ -3,6 +3,7 @@
 
 ## Unreleased
 
+- T12.4-8: the IR executor follows orm's column-pair rules: two columns that do not meet, and a column-comparison operator that the column's type or codec does not allow, answer `OPERATOR_NOT_ALLOWED` from orm's validator, and the executor's own earlier answer is removed.
 - T12.4-7: the IR executor follows orm's key update rule: an `update` or `restore` that assigns a primary key or identity column (or the soft delete column in a restore) answers `IR_INVALID` from orm's validator, and the executor's own earlier answers for it are removed.
 - T12.4-9: the IR executor follows orm's rule that an insert assigns by value or NULL: `plus_p` and `minus_p` in an insert's `set` answer `IR_INVALID` from orm's validator, and the executor's own earlier answer is removed.
 - T12.4-3: the IR executor follows orm's `key_by` rule: a relation keyed by a nullable column answers `IR_INVALID` from orm's validator, and the executor's own earlier answer for it is removed.
