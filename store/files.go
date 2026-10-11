@@ -2,6 +2,7 @@ package store
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"path"
 	"sort"
@@ -84,7 +85,7 @@ func layoutOf(cat *catalog.Catalog, table string) (*filesLayout, error) {
 			lay.fks[fk.Columns[0]] = fk.Table
 		}
 	}
-	children, err := childLayouts(cat, table)
+	children, err := childLayouts(cat, table, true)
 	if err != nil {
 		return nil, err
 	}
@@ -163,6 +164,7 @@ func ParseFile(cat *catalog.Catalog, table, rel string, data []byte, lk Linker) 
 		Sections: map[string]*string{},
 		Raw:      map[string]string{},
 		Dangling: map[string]DanglingLink{},
+		Shared:   map[string]DanglingLink{},
 	}
 	row.setAt("", 1, 1)
 	row.setAt(lay.key.Name, 1, 1)
@@ -319,9 +321,12 @@ func (p *parser) fieldValue(lineNo int, c dbspec.Column, raw string, valueCol in
 			return
 		}
 		want, err := p.lk.Target(p.rel, table, key)
-		if err != nil {
+		switch {
+		case errors.Is(err, ErrKeyShared):
+			row.Shared[c.Name] = DanglingLink{Key: key, Target: target}
+		case err != nil:
 			row.Dangling[c.Name] = DanglingLink{Key: key, Target: target}
-		} else if target != want {
+		case target != want:
 			p.warn(lineNo, valueCol, RuleNoncanonical, "the link target is "+want)
 		}
 		row.Scalars[c.Name] = &key
@@ -567,7 +572,7 @@ func renderRow(lay *filesLayout, row *Row, lk Linker) ([]byte, [][]colSpan, []Re
 	}
 	for _, name := range sortedBlocks(row) {
 		if lay.childNamed(name) == nil {
-			w.refuse("", name+" is not a block of "+lay.table)
+			w.refuse(name, name+" is not a block of "+lay.table)
 		}
 	}
 	dw := newDocWriter(w, lk, true, row.Table, row.Key)
@@ -619,6 +624,14 @@ func (w *writer) fieldText(lay *filesLayout, row *Row, c dbspec.Column, v string
 			return "", false
 		}
 		target, err := lk.Target(w.rel, table, v)
+		if errors.Is(err, ErrKeyShared) {
+			s, kept := row.Shared[c.Name]
+			if !kept || s.Key != v {
+				w.refuse(c.Name, "the foreign key names the key "+v+" that two or more rows of "+table+" share byte for byte, so it has no derived target")
+				return "", false
+			}
+			target, err = s.Target, nil
+		}
 		if err != nil {
 			d, kept := row.Dangling[c.Name]
 			if !kept || d.Key != v {

@@ -1,6 +1,7 @@
 package store
 
 import (
+	"errors"
 	"path"
 	"sort"
 	"strconv"
@@ -48,16 +49,15 @@ func renderDocument(lay *docLayout, rows []*Row, lk Linker, write bool) ([]byte,
 }
 
 // docWriter writes the lists and tables of a file with their detail sections and
-// child blocks. idx holds every row of the file by table and key, the rows that a
-// link may name.
+// child blocks.
 type docWriter struct {
 	w     *writer
 	lk    Linker
 	write bool
-	idx   map[string]map[string]fileRow
 	// tables holds every row given to the write, by table name, across all the blocks
-	// of the file, in the order they were given; shared holds the index of each row
-	// among them when its key is shared byte for byte, and -1 otherwise.
+	// of the file, in the order they were given: the rows of the file that a link may
+	// name. shared holds the index of each row among them when its key is shared byte
+	// for byte, and -1 otherwise.
 	tables map[string][]tabled
 	shared map[*Row]int
 	// ownTable and ownKey name the files row this file holds; empty for a document file.
@@ -70,28 +70,16 @@ type tabled struct {
 	row *Row
 }
 
-// fileRow is a row of the file with the layout that holds it.
-type fileRow struct {
-	lay *docLayout
-	row *Row
-}
-
 // newDocWriter returns a writer of the rows of a file that writes into w. The files
 // row ownTable/ownKey is the one the file holds, empty for a document file.
 func newDocWriter(w *writer, lk Linker, write bool, ownTable, ownKey string) *docWriter {
-	return &docWriter{w: w, lk: lk, write: write, idx: map[string]map[string]fileRow{},
+	return &docWriter{w: w, lk: lk, write: write,
 		tables: map[string][]tabled{}, shared: map[*Row]int{}, ownTable: ownTable, ownKey: ownKey}
 }
 
 // index adds the rows of lay and, recursively, their child rows to the rows of the file.
 func (dw *docWriter) index(lay *docLayout, rows []*Row) {
 	for _, r := range rows {
-		if dw.idx[lay.table] == nil {
-			dw.idx[lay.table] = map[string]fileRow{}
-		}
-		if _, dup := dw.idx[lay.table][r.Key]; !dup {
-			dw.idx[lay.table][r.Key] = fileRow{lay: lay, row: r}
-		}
 		dw.tables[lay.table] = append(dw.tables[lay.table], tabled{lay: lay, row: r})
 		for _, c := range lay.children {
 			dw.index(c, r.Blocks[c.table])
@@ -174,40 +162,48 @@ func (dw *docWriter) rows(lay *docLayout, rows []*Row) {
 	}
 }
 
-// duplicates refuses the rows of one block whose keys are equal without regard to
-// case: of two rows whose keys are equal byte for byte, each row after the first is
-// refused, naming the first; of two whose keys are equal only without regard to case,
-// the row whose key is greater in byte order is refused, naming the other. This
-// check cannot tell a row the write introduces from an existing one, so it is the
-// codec's backstop: the executor checks the keys of a request against the corpus
-// before the codec runs, and a DUPLICATE_KEY that reaches the codec is then internal.
+// duplicates refuses the rows given for one table, over all the blocks of the file,
+// whose keys equal another's without regard to case. A row has at most one duplicate
+// fault, at its key column: when a row given before it shares its key byte for byte,
+// the fault names the first such row; otherwise it names, of the rows whose keys
+// equal its key only without regard to case and whose pair places the fault at it,
+// the one whose key is least in byte order, the first given when several rows hold
+// that key. This check cannot tell a row the write introduces from an existing one,
+// so it places the fault of such a pair at the row whose key is greater in byte
+// order, as for two rows the write introduces: it is the codec's backstop; the
+// executor checks the keys of a request against the corpus before the codec runs,
+// and a DUPLICATE_KEY that reaches the codec is then internal.
 func (dw *docWriter) duplicates(list []tabled) {
 	w := dw.w
 	first := map[string]int{}
 	for i, t := range list {
-		r := t.row
-		if j, ok := first[r.Key]; ok {
-			w.enter(rowRefOf(r, dw.shared[r]), t.lay.key.Name)
-			w.refuseRule(RuleDuplicateKey, t.lay.key.Name, "the key "+r.Key+" equals the key of the row at index "+strconv.Itoa(j)+" of the rows given")
-		} else {
-			first[r.Key] = i
+		if _, ok := first[t.row.Key]; !ok {
+			first[t.row.Key] = i
 		}
 	}
 	for i, t := range list {
 		r := t.row
-		for j := 0; j < i; j++ {
-			o := list[j].row
-			if r.Key == o.Key || strings.ToLower(r.Key) != strings.ToLower(o.Key) {
-				continue
-			}
-			if r.Key > o.Key {
-				w.enter(rowRefOf(r, dw.shared[r]), t.lay.key.Name)
-				w.refuseRule(RuleDuplicateKey, t.lay.key.Name, "the key "+r.Key+" equals the key "+o.Key+" of another row without regard to case")
-			} else {
-				w.enter(rowRefOf(o, dw.shared[o]), list[j].lay.key.Name)
-				w.refuseRule(RuleDuplicateKey, list[j].lay.key.Name, "the key "+o.Key+" equals the key "+r.Key+" of another row without regard to case")
+		w.enter(rowRefOf(r, dw.shared[r]), t.lay.key.Name)
+		if j := first[r.Key]; j < i {
+			w.refuseRule(RuleDuplicateKey, t.lay.key.Name, "the key "+r.Key+" equals the key of the row at index "+strconv.Itoa(j)+" of the rows given")
+			continue
+		}
+		least := -1
+		for j, o := range list {
+			k := o.row.Key
+			if k < r.Key && strings.ToLower(k) == strings.ToLower(r.Key) && (least < 0 || k < list[least].row.Key) {
+				least = j
 			}
 		}
+		if least < 0 {
+			continue
+		}
+		o := list[least].row
+		named := "the key " + o.Key + " of another row"
+		if dw.shared[o] >= 0 {
+			named = "the key " + o.Key + " of the row at index " + strconv.Itoa(least) + " of the rows given"
+		}
+		w.refuseRule(RuleDuplicateKey, t.lay.key.Name, "the key "+r.Key+" equals "+named+" without regard to case")
 	}
 }
 
@@ -442,7 +438,7 @@ func (dw *docWriter) writeList(lay *docLayout, rows []*Row, idx, order, depth []
 			if v == nil {
 				continue
 			}
-			if text, ok := dw.valueText(lay, r, c, *v); ok {
+			if text, ok := dw.valueText(lay, r, c, *v, rows); ok {
 				w.enter(rr, c.Name)
 				w.put(" " + listToken(c.Name, text))
 			}
@@ -477,7 +473,7 @@ func (dw *docWriter) writeTable(lay *docLayout, rows []*Row, idx, order []int) {
 				cell = cellText(r.Title)
 			case v == nil:
 			default:
-				if text, ok := dw.valueText(lay, r, c, *v); ok {
+				if text, ok := dw.valueText(lay, r, c, *v, rows); ok {
 					cell = cellText(text)
 				}
 			}
@@ -492,9 +488,19 @@ func (dw *docWriter) writeTable(lay *docLayout, rows []*Row, idx, order []int) {
 // valueText returns the text that a field or a cell writes for the value v of
 // column c of row r, which the writer has entered, and whether it can be written: a
 // link for a foreign key, the raw text the row was read with, or the readable form
-// of the column's type.
-func (dw *docWriter) valueText(lay *docLayout, r *Row, c dbspec.Column, v string) (string, bool) {
+// of the column's type. block holds the rows of r's block, which a parent names.
+func (dw *docWriter) valueText(lay *docLayout, r *Row, c dbspec.Column, v string, block []*Row) (string, bool) {
 	w := dw.w
+	if c.Name == lay.parent && lay.parent != "" {
+		// A parent names a row of its own block, so its target is derived from that row.
+		for _, b := range block {
+			if b.Key == v {
+				return "[" + v + "](" + localLink(lay, w.rel, b) + ")", true
+			}
+		}
+		w.refuse(c.Name, "the parent "+v+" names no row of its block")
+		return "", false
+	}
 	if table, isFK := lay.fks[c.Name]; isFK {
 		return dw.linkText(r, c, table, v)
 	}
@@ -519,30 +525,63 @@ func (dw *docWriter) valueText(lay *docLayout, r *Row, c dbspec.Column, v string
 
 // linkText writes the link of a foreign key value: its text is the referenced key
 // and its target is derived from the referenced row. A key that names no row keeps
-// the target it was read with, and any other is FOREIGN_KEY.
+// the target it was read with, and any other is FOREIGN_KEY; a key that two or more
+// rows of the table share byte for byte has no derived target, so it keeps the
+// target it was read with, and any other is CONSTRAINT.
 func (dw *docWriter) linkText(r *Row, c dbspec.Column, table, key string) (string, bool) {
-	target, err := dw.linkTarget(table, key)
-	if err != nil {
+	target, found := dw.linkTarget(table, key)
+	switch found {
+	case linkNone:
 		d, kept := r.Dangling[c.Name]
 		if !kept || d.Key != key {
 			dw.w.refuseRule(RuleForeignKey, c.Name, "the foreign key names no row: "+key)
 			return "", false
 		}
 		target = d.Target
+	case linkShared:
+		s, kept := r.Shared[c.Name]
+		if !kept || s.Key != key {
+			dw.w.refuse(c.Name, "the foreign key names the key "+key+" that two or more rows of "+table+" share byte for byte, so it has no derived target")
+			return "", false
+		}
+		target = s.Target
 	}
 	return "[" + key + "](" + target + ")", true
 }
 
-// linkTarget derives the target of a link to the row key of table: from this file
-// for a row the file holds, else from the linker.
-func (dw *docWriter) linkTarget(table, key string) (string, error) {
+// linkTarget derives the target of a link to the row key of table from the one row
+// the key names: from this file for a row the file holds, else from the linker. A
+// key that two or more rows of the table share byte for byte, in this file or, when
+// the table's placement chain reaches a files table, in the corpus, names no one row.
+func (dw *docWriter) linkTarget(table, key string) (string, int) {
 	if table == dw.ownTable && key == dw.ownKey {
-		return path.Base(dw.w.rel), nil
+		return path.Base(dw.w.rel), linkOne
 	}
-	if fr, ok := dw.idx[table][key]; ok {
-		return localLink(fr.lay, dw.w.rel, fr.row), nil
+	var match []tabled
+	for _, t := range dw.tables[table] {
+		if t.row.Key == key {
+			match = append(match, t)
+		}
 	}
-	return dw.lk.Target(dw.w.rel, table, key)
+	switch {
+	case len(match) > 1:
+		return "", linkShared
+	case len(match) == 1:
+		if match[0].lay.inFiles {
+			if _, err := dw.lk.Target(dw.w.rel, table, key); errors.Is(err, ErrKeyShared) {
+				return "", linkShared
+			}
+		}
+		return localLink(match[0].lay, dw.w.rel, match[0].row), linkOne
+	}
+	target, err := dw.lk.Target(dw.w.rel, table, key)
+	switch {
+	case errors.Is(err, ErrKeyShared):
+		return "", linkShared
+	case err != nil:
+		return "", linkNone
+	}
+	return target, linkOne
 }
 
 // sortedBlocks returns the names of the child blocks of row r, sorted.

@@ -4,7 +4,11 @@
 // table forms.
 package store
 
-import "github.com/polyspec/flowmark/catalog"
+import (
+	"errors"
+
+	"github.com/polyspec/flowmark/catalog"
+)
 
 // Diagnostic is one located format error, shaped as catalog.Diagnostic.
 type Diagnostic = catalog.Diagnostic
@@ -45,6 +49,11 @@ type Row struct {
 	// Dangling holds the written target of each foreign key that names no row,
 	// keyed by its column.
 	Dangling map[string]DanglingLink
+	// Shared holds the written target of each foreign key whose key two or more rows
+	// of the referenced table share byte for byte, keyed by its column: such a key
+	// names no one row, so its link has no derived target and is written as read. It
+	// is kept apart from Dangling, which the validator reads as reference.dangling.
+	Shared map[string]DanglingLink
 	// at holds where the parser read each column of a row read from a file: the
 	// row's first line under "", and the element of each column. Only a read sets it.
 	at map[string]elementAt
@@ -68,7 +77,13 @@ func sp(v string) *string { return &v }
 // "/" separators, from the corpus file fromFile to the file that holds the row
 // of table with key, followed by "#<anchor>" when that row has a detail
 // section. It returns an error when no row has the key; a link to such a row
-// is dangling.
+// is dangling. Target returns ErrKeyShared when two or more rows of the table in
+// the corpus, the calling file's own rows included, share the key byte for byte:
+// such a key names no one row, so a link to it has no derived target.
 type Linker interface {
 	Target(fromFile, table, key string) (string, error)
 }
+
+// ErrKeyShared is the error of a Linker for a key that two or more rows of its
+// table share byte for byte.
+var ErrKeyShared = errors.New("two or more rows of the table share the key byte for byte")

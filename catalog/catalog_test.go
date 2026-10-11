@@ -673,6 +673,48 @@ func requireSchema(block bool, typ string, stateMark, historyMark bool) string {
 	return state + history
 }
 
+// TestLoadHistoryStorage pins the ruling of spec 30 on the storage of a history
+// table: stored `document table`, the history rows have row scope 3 at any depth
+// of the state table, so a block machine at row scope 5 that requires a markdown
+// column loads; the same history stored as a block under its state table is
+// refused past H6.
+func TestLoadHistoryStorage(t *testing.T) {
+	const blockStore = "    store block fk_subtask_history_subtask table\n"
+	cases := []struct {
+		name     string
+		document bool // the history table is stored document table
+	}{
+		{"30#the-history-table: a history stored document table under a block machine at row scope 5 loads at row scope 3", true},
+		{"30#the-history-table: the same history stored as a block is refused past H6", false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			schema := requireSchema(true, "text", true, true)
+			if strings.Count(schema, blockStore) != 1 {
+				t.Fatalf("the history store line %q is not in the schema once", blockStore)
+			}
+			if c.document {
+				schema = strings.Replace(schema, blockStore, "    store document table\n", 1)
+			}
+			root, text := editedCorpus(t, [2]string{"table views {", schema})
+			cat, diags := catalog.Load(root)
+			if !c.document {
+				expectRejected(t, cat, diags)
+				expectTableDiag(t, diags, text, "subtask_history", "level 7")
+				return
+			}
+			if cat == nil || len(diags) > 0 {
+				t.Fatalf("a history stored document table is refused: %+v", diags)
+			}
+			state, _ := cat.Table("subtasks")
+			history, _ := cat.Table("subtask_history")
+			if state.RowScope != 5 || history.RowScope != 3 || history.Storage.Kind != catalog.StorageDocument {
+				t.Fatalf("state row scope %d, history row scope %d storage %s; want 5, 3 and document", state.RowScope, history.RowScope, history.Storage.Kind)
+			}
+		})
+	}
+}
+
 // TestLoadRequireOfMarkdownPastH6 pins the ruling of spec 30 on a required column
 // of a block machine: a required column that the state table and the history
 // table both declare markdown is a section of the history rows, which is refused

@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database -->
-<!-- source-sha256: 361fccc6973b3f2848362559f6954c4f1ac6352f9e26a8ae1120a069edc6a6e1 -->
+<!-- source-sha256: 3dcbf7118e816903689e31d2d5c46c96921e498b3f258f85f061e694ccb369d1 -->
 # markdown database 계획
 
 [English](markdown-database-plan.md)
@@ -104,7 +104,7 @@ NULL이 아니며 비어 있을 수 있고, view의 entity table은 둘 다 선�
   GitHub, GitLab, VS Code, MkDocs가 heading에 대해 만드는 anchor인 link다. Pandoc은 주장 대상이 아니다: 기본 설정은 상대 경로 link target을 다시 쓰지 않는다.
   근거: 문서는 database의 유일한 저장소이므로
   읽을 수 있는 문서로 남아야 하며, 기계만 필요로 하는 것은 catalog(`dbspec/`)나 `.flowmark/`에 속한다.
-- 인코딩: BOM 없는 UTF-8, LF, 정확히 마지막 LF 하나. 줄 끝은 CommonMark가 읽는 대로 LF, CRLF, 또는 뒤에 LF가 없는 CR이다. BOM, 모든 줄 끝의 CR, 마지막 LF가 없음, 끝의 빈 줄은 `format.noncanonical`이고, UTF-8이 아닌 byte와 U+0000은 `format.encoding`이다. 값은 줄 바꿈으로 시작하거나 끝나지 않으며 space와 tab만 있는 줄(CommonMark의 빈 줄)로 시작하거나 끝나지 않는다. `format.*` 진단이 있는 file을 다시 쓰는 logical write는 `CONSTRAINT`이며, `format.noncanonical`이면 `flowmark canon`을 밝힌다. `files` 행의 file 전체를 지우는 delete는 rewrite 거절에서만 면제되며, restrict 검사는 그 행을 참조할 수 있는 모든 table의 행을 여전히 필요로 하며(자신의 table을 `parent`로 하는 것, 자식 및 이력 block, 그 행으로의 foreign key를 가진 모든 table), 그 중 하나라도 사용할 수 없으면 그 delete는 `CONSTRAINT`다. `format.block`, `format.section`, `format.encoding`이나 그 행 사이의 `parent.cycle`이 있는 file을 가지거나 바이트 단위로 같은 key를 가진 두 행이 있는 table은 사용할 수 없다: 그 행을 필요로 하는 모든 요청이나 검사는 file과 진단을 밝히며 `CONSTRAINT`로 실패한다. block table은 placement parent의 file을 재귀적으로 가진다. corpus 열기, introspection, `flowmark validate`와 `flowmark canon`은 사용할 수 없는 table에서 결코 실패하지 않으며, 그 table이 필요한 export는 실패하고 아무것도 쓰지 않는다.
+- 인코딩: BOM 없는 UTF-8, LF, 정확히 마지막 LF 하나. 줄 끝은 CommonMark가 읽는 대로 LF, CRLF, 또는 뒤에 LF가 없는 CR이다. BOM, 모든 줄 끝의 CR, 마지막 LF가 없음, 끝의 빈 줄은 `format.noncanonical`이고, UTF-8이 아닌 byte와 U+0000은 `format.encoding`이다. 값은 줄 바꿈으로 시작하거나 끝나지 않으며 space와 tab만 있는 줄(CommonMark의 빈 줄)로 시작하거나 끝나지 않는다. `format.*` 진단이 있는 file을 다시 쓰는 logical write는 `CONSTRAINT`이며, `format.noncanonical`이면 `flowmark canon`을 밝힌다. `files` 행의 file 전체를 지우는 delete는 rewrite 거절에서만 면제되며, restrict 검사는 그 행을 참조할 수 있는 모든 table의 행을 여전히 필요로 하며(자신의 table을 `parent`로 하는 것, 자식 block과 이력 행, 그 행으로의 foreign key를 가진 모든 table), 그 중 하나라도 사용할 수 없으면 그 delete는 `CONSTRAINT`다. `format.block`, `format.section`, `format.encoding`이나 그 행 사이의 `parent.cycle`이 있는 file을 가지거나 바이트 단위로 같은 key를 가진 두 행이 있는 table은 사용할 수 없다: 그 행을 필요로 하는 모든 요청이나 검사는 file과 진단을 밝히며 `CONSTRAINT`로 실패한다. block table은 placement parent의 file을 재귀적으로 가진다. corpus 열기, introspection, `flowmark validate`와 `flowmark canon`은 사용할 수 없는 table에서 결코 실패하지 않으며, 그 table이 필요한 export는 실패하고 아무것도 쓰지 않는다.
 
 - 이 판정과 함께 철회한다: `<!-- doc-id -->` header, 출처 주석, `files` 행의 frontmatter, twin 규칙,
   `dbspec/flowmark.json`의 `translations` setting. adapter가 소유한 문서의 sync 출처는 문서 밖으로
@@ -278,8 +278,11 @@ markdown 전용 선언은 모두 dbspec **manifest setting**이며 `markdown <co
   table의 column 이름을 지정한다(column 이름이 동작을 고르지 않는다): `<fk column>`은 선행 index를
   가진 상태 table로의 foreign key를 갖고, `from`과 `to`는 상태 column의 type, `at`은 `datetime(6)`이며,
   필수 column마다 그 이름과 type을 가진 nullable column 하나가 있다. `identity` key 외의 column은
-  없고, 어긋나면 이력 table 이름에서 setting 오류다. 이력 table은 `block <fk> table`로 저장되며
-  `title`이나 `body`를 선언하지 않는다. 이력은 전이만 쓰고 insert는 쓰지 않는다. 이력 행을 가진 행의
+  없고, 어긋나면 이력 table 이름에서 setting 오류다. 이력 table은 상태 table 아래의
+  `block <fk> table`로, 또는 `document table`로 저장되며 `title`이나 `body`를 선언하지 않는다:
+  이력 규칙은 그 행과 foreign key 위에서 정해지며 그 자리 위에서 정해지지 않으므로 어느 저장도
+  강제하지 않는다(block은 행의 이력을 행 곁에 두고, document table은 깊이 제한이 없다.
+  [schema](../spec/30-schema.ko.md#이력-table) 참고). 이력은 전이만 쓰고 insert는 쓰지 않는다. 이력 행을 가진 행의
   삭제는 `FOREIGN_KEY`로 거절한다(restrict-only).
 - corpus에서 `state_machine`을 가진 table은 `history`를 선언한다. 없으면 schema 오류다.
 - `state_machine <column> initial <state>`는 반복할 수 있고, corpus에서 기계는 적어도 하나를 갖는다.
@@ -301,7 +304,7 @@ markdown 전용 선언은 모두 dbspec **manifest setting**이며 `markdown <co
   거절하며, 그때 사람이 편집으로 합법 상태를 되돌리거나 column을 채운다. repair는 사람이 commit하는
   보통 transaction이다.
 - commit은 먼저 대상이 읽은 뒤 바뀌지 않았는지 확인하고(아니면 `WRITE_CONFLICT`), 그다음 lock 아래
-  다시 읽은 corpus에서 `history.gap`을 포함한 제약 검사를 실행한다. 다른 행의 validator 진단(`type`, `key.duplicate`, `reference.dangling`, `check`, `order`, `state.limit`, `history.gap`, `history.chain`, 여러 `files` file에 걸친 `parent.cycle`)은 commit을 실패시키지 않되, `type` 진단은 commit의 제약 검사가 그 값을 평가해야 할 때 commit을 실패시키고, 바이트 단위로 같은 key를 가진 두 행은 그 table을 사용할 수 없게 한다([canonical format](../spec/10-canonical-format.ko.md#진단)); `format.*` 진단은 다시 쓰기 거절과 사용할 수 없는 table 상태([canonical format](../spec/10-canonical-format.ko.md#진단))가 정하는 경우에만 commit을 실패시킨다. file을 다시 써야 하는 commit — 행 자신의 file, 상세 섹션이 생기거나 사라지는 행으로의 link를 가진 file, `order`의 형제 — 은 그 file이 `format.*` 진단을 가지면 거절한다: `CONSTRAINT`이며 file과 진단을 밝히고, `format.noncanonical`이면 `flowmark canon`을 밝힌다. 세 commit은 면제된다: 대상에 대한 `flowmark canon`([operations](../spec/40-ops.ko.md#canon-연산)), 추가된 column이 일으킨 진단에 대한 add-column migration([migration](../spec/80-migration.ko.md)) — 그 진단은 그 migration에 대해 table을 사용할 수 없게 하지 않는다 —, `files` 행의 file 전체를 지우는 delete는 rewrite 거절에서만 면제되며, restrict 검사는 그 행을 참조할 수 있는 모든 table의 행을 여전히 필요로 하며(자신의 table을 `parent`로 하는 것, 자식 및 이력 block, 그 행으로의 foreign key를 가진 모든 table), 그 중 하나라도 사용할 수 없으면 그 delete는 `CONSTRAINT`다.
+  다시 읽은 corpus에서 `history.gap`을 포함한 제약 검사를 실행한다. 다른 행의 validator 진단(`type`, `key.duplicate`, `reference.dangling`, `check`, `order`, `state.limit`, `history.gap`, `history.chain`, 여러 `files` file에 걸친 `parent.cycle`)은 commit을 실패시키지 않되, `type` 진단은 commit의 제약 검사가 그 값을 평가해야 할 때 commit을 실패시키고, 바이트 단위로 같은 key를 가진 두 행은 그 table을 사용할 수 없게 한다([canonical format](../spec/10-canonical-format.ko.md#진단)); `format.*` 진단은 다시 쓰기 거절과 사용할 수 없는 table 상태([canonical format](../spec/10-canonical-format.ko.md#진단))가 정하는 경우에만 commit을 실패시킨다. file을 다시 써야 하는 commit — 행 자신의 file, 상세 섹션이 생기거나 사라지는 행으로의 link를 가진 file, `order`의 형제 — 은 그 file이 `format.*` 진단을 가지면 거절한다: `CONSTRAINT`이며 file과 진단을 밝히고, `format.noncanonical`이면 `flowmark canon`을 밝힌다. 세 commit은 면제된다: 대상에 대한 `flowmark canon`([operations](../spec/40-ops.ko.md#canon-연산)), 추가된 column이 일으킨 진단에 대한 add-column migration([migration](../spec/80-migration.ko.md)) — 그 진단은 그 migration에 대해 table을 사용할 수 없게 하지 않는다 —, `files` 행의 file 전체를 지우는 delete는 rewrite 거절에서만 면제되며, restrict 검사는 그 행을 참조할 수 있는 모든 table의 행을 여전히 필요로 하며(자신의 table을 `parent`로 하는 것, 자식 block과 이력 행, 그 행으로의 foreign key를 가진 모든 table), 그 중 하나라도 사용할 수 없으면 그 delete는 `CONSTRAINT`다.
 - 줄에 `require (c1, …)`를 가진 전이나 종료 상태 진입은 같은 update에서 나열된 모든 column을 할당해야
   한다. 할당되지 않은 column, `null`, 빈 텍스트는 그 column을 밝히는 `CONSTRAINT`다. 이력 행은 할당된
   값을 복사하고 상태 table은 그 값을 유지한다.
