@@ -29,6 +29,19 @@ type corpus struct {
 	// blocked names the tables that hold an unreadable file or a corpus.walk
 	// entry at their place: a table whose rows are not all readable.
 	blocked map[string]bool
+	// files holds each corpus document read at the place of a table, by corpus
+	// path: its table, its bytes and its top-level rows.
+	files map[string]*File
+}
+
+// File is a corpus document read at the place of a files or document table: the
+// table whose place it is, the bytes read, and its rows of that table in the order
+// the store returns them, each with its block rows. A file that could not be read
+// as rows holds none.
+type File struct {
+	Table string
+	Data  []byte
+	Rows  []*store.Row
 }
 
 // noTargets is the link target function of the first pass: it knows no row, so
@@ -46,7 +59,7 @@ func read(cat *catalog.Catalog, root string, lk store.Linker) (*corpus, error) {
 	if err != nil {
 		return nil, fmt.Errorf("cannot read the corpus root: %w", err)
 	}
-	c := &corpus{cat: cat, rows: map[string][]placed{}, blocked: map[string]bool{}}
+	c := &corpus{cat: cat, rows: map[string][]placed{}, blocked: map[string]bool{}, files: map[string]*File{}}
 	c.diags = append(c.diags, walkRoot(cat, root, entries)...)
 	for _, tb := range cat.Tables {
 		switch tb.Storage.Kind {
@@ -54,10 +67,17 @@ func read(cat *catalog.Catalog, root string, lk store.Linker) (*corpus, error) {
 			if !listed(entries, tb.Name) {
 				continue
 			}
-			rows, ds := store.ParseFilesTable(cat, root, tb.Name, lk)
+			rows, data, ds := store.ParseFilesTable(cat, root, tb.Name, lk)
 			c.diags = append(c.diags, ds...)
+			for path, b := range data {
+				c.files[path] = &File{Table: tb.Name, Data: b}
+			}
 			for _, r := range rows {
-				c.place(r, tb.Name+"/"+r.Key+docSuffix)
+				path := tb.Name + "/" + r.Key + docSuffix
+				if f := c.files[path]; f != nil {
+					f.Rows = append(f.Rows, r)
+				}
+				c.place(r, path)
 			}
 		case catalog.StorageDocument:
 			file := tb.Name + docSuffix
@@ -74,6 +94,7 @@ func read(cat *catalog.Catalog, root string, lk store.Linker) (*corpus, error) {
 				return nil, err
 			}
 			c.diags = append(c.diags, ds...)
+			c.files[file] = &File{Table: tb.Name, Data: data, Rows: rows}
 			for _, r := range rows {
 				c.place(r, file)
 			}

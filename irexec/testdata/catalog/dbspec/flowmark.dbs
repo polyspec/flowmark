@@ -1,0 +1,158 @@
+dbspec 1 flowmark
+
+table items {
+  id varchar(32)
+  parent varchar(32) null
+  state varchar(16) default 'waiting'
+  title varchar(255)
+  body text
+  position i32
+  owner varchar(32) null
+  due date null
+  evidence text null
+  cause text null
+  primary key (id)
+  index ix_items_parent (parent)
+  index ix_items_owner (owner)
+  foreign key fk_items_parent (parent) references items (id) on delete restrict on update restrict
+  foreign key fk_items_owner (owner) references people (id) on delete restrict on update restrict
+  settings {
+    key_prefix 'T'
+    store document list
+    title title
+    body body
+    order position
+    markdown body
+    markdown evidence
+    markdown cause
+    checkbox state waiting ' '
+    checkbox state doing '~'
+    checkbox state done 'x'
+    checkbox state dropped '-'
+    state_machine state initial waiting
+    state_machine state waiting -> doing
+    state_machine state doing -> done require (evidence)
+    state_machine state waiting -> dropped
+    state_machine state terminal done
+    state_machine state terminal dropped require (cause)
+    state_machine state history item_history row item from from_state to to_state at at
+    state_machine state limit doing 2
+  }
+}
+
+table item_history {
+  id i64 identity
+  item varchar(32)
+  from_state varchar(16)
+  to_state varchar(16)
+  at datetime(6)
+  evidence text null
+  cause text null
+  primary key (id)
+  index ix_item_history_item (item)
+  foreign key fk_history_item (item) references items (id) on delete restrict on update restrict
+  settings {
+    store block fk_history_item table
+    markdown evidence
+    markdown cause
+  }
+}
+
+table people {
+  id varchar(32)
+  name varchar(64)
+  email varchar(64) null
+  age i32 null
+  active bool default true
+  score decimal(6,2) default 0.00
+  joined datetime(0) default now
+  deleted_at datetime(6) null
+  updated_at datetime(6) null
+  primary key (id)
+  unique uq_people_email (email)
+  check ck_people_age (age is null or age >= 0)
+  settings {
+    key_prefix 'P'
+    store document table
+    title name
+    soft_delete deleted_at
+    updated updated_at
+  }
+}
+
+table notes {
+  id varchar(16)
+  parent varchar(16) null
+  item varchar(32) null
+  title varchar(255)
+  body text
+  position i32
+  weight f64 null
+  primary key (id)
+  index ix_notes_parent (parent)
+  index ix_notes_item (item)
+  foreign key fk_notes_parent (parent) references notes (id) on delete restrict on update restrict
+  foreign key fk_notes_item (item) references items (id) on delete restrict on update restrict
+  settings {
+    store files
+    title title
+    body body
+    order position
+    markdown body
+  }
+}
+
+table steps {
+  id varchar(16)
+  note varchar(16)
+  title varchar(255)
+  done bool
+  primary key (id)
+  index ix_steps_note (note)
+  foreign key fk_steps_note (note) references notes (id) on delete restrict on update restrict
+  settings {
+    store block fk_steps_note list
+    title title
+  }
+}
+
+table tickets {
+  id varchar(16)
+  state varchar(16)
+  title varchar(64)
+  primary key (id)
+  settings {
+    store document table
+    title title
+    state_machine state initial open
+    state_machine state open -> closed
+    state_machine state terminal closed
+    state_machine state history ticket_history row ticket from from_state to to_state at at
+  }
+}
+
+table ticket_history {
+  id i64 identity
+  ticket varchar(16)
+  from_state varchar(16)
+  to_state varchar(16)
+  at datetime(6)
+  primary key (id)
+  index ix_ticket_history_ticket (ticket)
+  foreign key fk_ticket_history (ticket) references tickets (id) on delete restrict on update restrict
+  settings {
+    store document table
+  }
+}
+
+table tags {
+  id i64 identity
+  label varchar(16)
+  kind varchar(16)
+  primary key (id)
+  unique uq_tags_label (label)
+  check ck_tags_kind (kind in ('topic', 'area'))
+  settings {
+    store document table
+  }
+}

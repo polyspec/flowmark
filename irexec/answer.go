@@ -1,0 +1,112 @@
+package irexec
+
+import (
+	"bytes"
+	"encoding/json"
+)
+
+// Answer is the answer of a request. A row read (one, all, group_count) answers
+// its rows; count its number; sum and avg their value; paginate its page rows and
+// the count of every matching row; a write {affected, keys}.
+type Answer struct {
+	Kind     string
+	Rows     []*Row
+	Count    int64
+	Value    any
+	Affected int64
+	Keys     []any
+}
+
+// MarshalJSON writes the answer as the protocol's JSON: {"rows": [...]} for a row
+// read, {"count": n} for count, {"value": v} for sum and avg, {"rows": [...],
+// "count": n} for paginate, and {"affected": n, "keys": [...]} for a write.
+func (a *Answer) MarshalJSON() ([]byte, error) {
+	rows := a.Rows
+	if rows == nil {
+		rows = []*Row{}
+	}
+	keys := a.Keys
+	if keys == nil {
+		keys = []any{}
+	}
+	switch a.Kind {
+	case "count":
+		return json.Marshal(struct {
+			Count int64 `json:"count"`
+		}{a.Count})
+	case "sum", "avg":
+		return json.Marshal(struct {
+			Value any `json:"value"`
+		}{a.Value})
+	case "paginate":
+		return json.Marshal(struct {
+			Rows  []*Row `json:"rows"`
+			Count int64  `json:"count"`
+		}{rows, a.Count})
+	case "insert", "update", "delete", "restore":
+		return json.Marshal(struct {
+			Affected int64 `json:"affected"`
+			Keys     []any `json:"keys"`
+		}{a.Affected, keys})
+	}
+	return json.Marshal(struct {
+		Rows []*Row `json:"rows"`
+	}{rows})
+}
+
+// Row is one assembled row: its outputs in projection order, then its joins and
+// relations. A join child or a one relation is a *Row or nil, a many relation a
+// []*Row, or a *Row keyed by key_by.
+type Row struct {
+	names  []string
+	values map[string]any
+}
+
+func newRow() *Row { return &Row{values: map[string]any{}} }
+
+// set gives name the value v, appending name when the row does not hold it.
+func (r *Row) set(name string, v any) {
+	if _, ok := r.values[name]; !ok {
+		r.names = append(r.names, name)
+	}
+	r.values[name] = v
+}
+
+// has reports whether the row holds name.
+func (r *Row) has(name string) bool {
+	_, ok := r.values[name]
+	return ok
+}
+
+// Get returns the value of name and whether the row holds it.
+func (r *Row) Get(name string) (any, bool) {
+	v, ok := r.values[name]
+	return v, ok
+}
+
+// Names returns the names of the row in their order.
+func (r *Row) Names() []string { return append([]string(nil), r.names...) }
+
+// MarshalJSON writes the row as a JSON object in its order.
+func (r *Row) MarshalJSON() ([]byte, error) {
+	var b bytes.Buffer
+	b.WriteByte('{')
+	for i, n := range r.names {
+		if i > 0 {
+			b.WriteByte(',')
+		}
+		k, err := json.Marshal(n)
+		if err != nil {
+			return nil, err
+		}
+		b.Write(k)
+		b.WriteByte(':')
+		v, err := json.Marshal(r.values[n])
+		if err != nil {
+			return nil, err
+		}
+		b.Write(v)
+	}
+	b.WriteByte('}')
+	return b.Bytes(), nil
+}

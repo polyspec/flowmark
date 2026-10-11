@@ -229,7 +229,7 @@ func loadCorpus(t testing.TB, c equivCorpus) equivLoaded {
 	switch c.kind {
 	case kindFiles:
 		lk := equivLinker()
-		rows, diags := ParseFilesTable(cat, c.root, "entries", lk)
+		rows, _, diags := ParseFilesTable(cat, c.root, "entries", lk)
 		mustClean(t, c.name, diags)
 		return equivLoaded{cat: cat, lk: lk, rows: rows}
 	case kindDocument:
@@ -243,7 +243,7 @@ func loadCorpus(t testing.TB, c equivCorpus) equivLoaded {
 		return equivLoaded{cat: cat, lk: lk, rows: rows}
 	default:
 		lk := equivBlockLinker()
-		plans, diags := ParseFilesTable(cat, c.root, "plans", lk)
+		plans, _, diags := ParseFilesTable(cat, c.root, "plans", lk)
 		mustClean(t, c.name, diags)
 		return equivLoaded{cat: cat, lk: lk, rows: blockRows(plans), plans: plans}
 	}

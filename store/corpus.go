@@ -16,26 +16,28 @@ import (
 // validator rule, not a read fault.
 // Only the documents of the folder are read; a symbolic link is never
 // followed, and a document that is not of the folder is a walk diagnostic.
-func ParseFilesTable(cat *catalog.Catalog, root, table string, lk Linker) ([]*Row, []Diagnostic) {
+// The bytes of each document read are returned by corpus path, so that a
+// caller holds the exact pre-image of every file its rows came from.
+func ParseFilesTable(cat *catalog.Catalog, root, table string, lk Linker) ([]*Row, map[string][]byte, []Diagnostic) {
 	lay, err := layoutOf(cat, table)
 	if err != nil {
-		return nil, []Diagnostic{fileDiag(table, RuleWalk, err.Error())}
+		return nil, nil, []Diagnostic{fileDiag(table, RuleWalk, err.Error())}
 	}
 	dir := filepath.Join(root, table)
 	fi, err := os.Lstat(dir)
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
-		return nil, nil
+		return nil, nil, nil
 	case err != nil:
-		return nil, []Diagnostic{fileDiag(table, RuleWalk, "cannot read the table folder: "+err.Error())}
+		return nil, nil, []Diagnostic{fileDiag(table, RuleWalk, "cannot read the table folder: "+err.Error())}
 	case fi.Mode()&fs.ModeSymlink != 0:
-		return nil, []Diagnostic{fileDiag(table, RuleWalk, "a symbolic link named as a files table is not followed")}
+		return nil, nil, []Diagnostic{fileDiag(table, RuleWalk, "a symbolic link named as a files table is not followed")}
 	case !fi.IsDir():
-		return nil, []Diagnostic{fileDiag(table, RuleWalk, "the table folder is not a folder")}
+		return nil, nil, []Diagnostic{fileDiag(table, RuleWalk, "the table folder is not a folder")}
 	}
-	w := &walker{cat: cat, lay: lay, lk: lk}
+	w := &walker{cat: cat, lay: lay, lk: lk, data: map[string][]byte{}}
 	w.visit(dir, table, 0)
-	return w.rows, w.diags
+	return w.rows, w.data, w.diags
 }
 
 // walker reads the documents under the folder of a files table.
@@ -44,6 +46,7 @@ type walker struct {
 	lay   *filesLayout
 	lk    Linker
 	rows  []*Row
+	data  map[string][]byte // the bytes of each document read, by corpus path
 	diags []Diagnostic
 }
 
@@ -80,6 +83,7 @@ func (w *walker) visit(dir, rel string, depth int) {
 			w.diags = append(w.diags, fileDiag(file, RuleWalk, "cannot read the document: "+err.Error()))
 			continue
 		}
+		w.data[file] = data
 		row, diags := ParseFile(w.cat, w.lay.table, file, data, w.lk)
 		w.diags = append(w.diags, diags...)
 		if row != nil {
