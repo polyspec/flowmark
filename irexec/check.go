@@ -42,6 +42,13 @@ func (w *writer) checks() *Error {
 }
 
 // evalCheck evaluates a check expression over row x.
+//
+// The check evaluator seam: evalCheck is the one check evaluation of the write path,
+// for a write as it runs and for the commit's re-run of the writes on the corpus
+// re-read under the lock (spec 40 The commit protocol, step 2). When the validator's
+// read-side check rule lands (T12.3-2) with its exported evaluator, evalCheck is
+// replaced by a call to it, so that the validator and the write path evaluate a
+// check one way.
 func (w *writer) evalCheck(x *rec, e dbspec.Expr) (tri, *Error) {
 	switch e := e.(type) {
 	case dbspec.Binary:

@@ -84,8 +84,9 @@ compatibility, no fallback, no hidden error, no trick; rules first.
   with `LOCK_TIMEOUT` naming the holder and its state; a holder that has ended refuses at once,
   and only `flowmark unlock` removes its lock. Spec 40 maps each face name to its orm code:
   `LOCK_TIMEOUT` to `CANCELED`, `CORPUS_CONFLICT` to `WRITE_CONFLICT`.
-- A face (CLI, MCP, sidecar) retries a single-operation write once after a re-read; a server
-  transaction is never retried by the server, and the orm client receives `WRITE_CONFLICT`.
+- The write path retries a single-operation write once after a re-read under the same lock, for
+  every face; a server transaction is never retried by the server, and the orm client receives
+  `WRITE_CONFLICT`.
 
 ### The catalog
 
