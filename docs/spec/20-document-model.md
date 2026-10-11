@@ -130,8 +130,7 @@ so the same rows can be stored either way.
   row's 1-based position among its siblings, a file holding an `order` value there is `format.block`, and
   a write takes each sibling group's values as exactly 1..m, m being the group's size after the write, anything else being `CONSTRAINT`. Grounding: the
   line order of the siblings is their order, so the position is the value, and a value written in the file
-  would be a second order. In `files` storage it is a field-list item whose sibling values are exactly 1..n;
-  a gap or a duplicate is a validate diagnostic.
+  would be a second order. In `files` storage it is a field-list item whose sibling values are exactly 1..n; the validator's `order` is at each row whose value lies outside 1..n or is shared with a sibling, and a value not of the column's type is `type` alone ([constraints](50-constraints.md#hierarchy-and-order)). A row whose `parent` is not of its column's type belongs to no known sibling group: it counts toward no group's n, its own `order` is not judged, and a fault of a group is reported only when it stands whichever groups such rows join — a value shared within the group, or one outside 1..n + u, u being the number of such rows; its `type` stands for the rest.
 - An insert may omit it and the row appends; with k it places the row at k. An update to k moves
   the row and the siblings follow in the same transaction; k < 1 or k > n + 1 is `CONSTRAINT`,
   never clamped. n is the number of rows among the destination siblings excluding the row itself,

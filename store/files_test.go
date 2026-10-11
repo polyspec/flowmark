@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -283,6 +284,7 @@ func parseCases() []parseCase {
 		accept("10#foreign-keys-as-links: dangling parent keeps another written target", doc("# Title", "- parent: [T9](../x/T9.flowmark.md)", "- position: 1", "- done: true", "")),
 		noncanonical("10#foreign-keys-as-links: parent link with another target", 2, doc("# Title", "- parent: [T2](../tasks/T2.flowmark.md)", "- position: 1", "- done: true", "")),
 		noncanonical("10#foreign-keys-as-links: parent link whose text is another row", 2, doc("# Title", "- parent: [T2](T1.flowmark.md)", "- position: 1", "- done: true", "")),
+		acceptRaw("10#readable-values: a parent link whose key is not of its column type", "parent", doc("# Title", "- parent: [ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMN](ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMN.flowmark.md)", "- position: 1", "- done: true", "")),
 		reject("10#foreign-keys-as-links: parent without a link", RuleBlock, 2, doc("# Title", "- parent: T2", "- position: 1", "- done: true", "")),
 		reject("10#foreign-keys-as-links: parent empty", RuleBlock, 2, doc("# Title", "- parent:", "- position: 1", "- done: true", "")),
 		reject("10#foreign-keys-as-links: parent link with no brackets", RuleBlock, 2, doc("# Title", "- parent: [T2]T2.flowmark.md", "- position: 1", "- done: true", "")),
@@ -389,6 +391,13 @@ func TestParseFileRules(t *testing.T) {
 				}
 				if row == nil {
 					t.Fatal("accepted input returned no row")
+				}
+				var raws []string
+				for col := range row.Raw {
+					raws = append(raws, col)
+				}
+				if want := []string{c.raw}; (c.raw == "" && len(raws) > 0) || (c.raw != "" && !reflect.DeepEqual(raws, want)) {
+					t.Fatalf("columns kept raw %q; want %q", raws, c.raw)
 				}
 				out := checkP2(t, cat, row, lk)
 				if !bytes.Equal(out, []byte(c.text)) {
@@ -648,6 +657,20 @@ func TestRenderRules(t *testing.T) {
 			r.Scalars["parent"] = sp("T9")
 			r.Dangling = map[string]DanglingLink{"parent": {Key: "T8", Target: "../x/T8.flowmark.md"}}
 		}, rule: RuleForeignKey, column: "parent"},
+		{name: "10#readable-values: a write of a foreign key whose key is not of its column type is CONSTRAINT alone", mut: func(r *Row) {
+			r.Scalars["parent"] = sp(strings.Repeat("T", 40))
+		}, rule: RuleConstraint, column: "parent"},
+		{name: "10#readable-values: a foreign key read with a key not of its column type is kept as read", mut: func(r *Row) {
+			long := strings.Repeat("T", 40)
+			r.Scalars["parent"] = sp(long)
+			r.Raw = map[string]string{"parent": "[" + long + "](" + long + ".flowmark.md)"}
+			r.Dangling = map[string]DanglingLink{"parent": {Key: long, Target: long + ".flowmark.md"}}
+		}, out: doc("# Title", "- parent: ["+strings.Repeat("T", 40)+"]("+strings.Repeat("T", 40)+".flowmark.md)", "- position: 1", "- done: true", "")},
+		{name: "10#readable-values: a foreign key changed from a key not of its column type is checked", mut: func(r *Row) {
+			long := strings.Repeat("T", 40)
+			r.Scalars["parent"] = sp(long + "U")
+			r.Raw = map[string]string{"parent": "[" + long + "](" + long + ".flowmark.md)"}
+		}, rule: RuleConstraint, column: "parent"},
 		{name: "10#foreign-keys-as-links: a foreign key to a row", mut: func(r *Row) { r.Scalars["parent"] = sp("T2") }, out: doc("# Title", "- parent: [T2](T2.flowmark.md)", "- position: 1", "- done: true", "")},
 		{name: "10#sections-and-their-values: body without a line feed", mut: func(r *Row) { r.Body = "x" }, rule: RuleConstraint, column: "body"},
 		{name: "10#the-field-list-of-a-files-row: body that begins with a list item", mut: func(r *Row) { r.Body = "- x\n" }, rule: RuleConstraint, column: "body"},

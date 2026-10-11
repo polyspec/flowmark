@@ -1,5 +1,5 @@
 <!-- doc-id: spec-constraints -->
-<!-- source-sha256: 429cbea94df75196ade136f9ad5fab2155490acb21d3198293b4621175d2c1a1 -->
+<!-- source-sha256: 4f25977828632a1927af19d5e9e3b566dc2b61b7dcf5141717f88c60aec715a6 -->
 # Constraints
 
 [English](50-constraints.md)
@@ -17,7 +17,7 @@
 
 ## Key와 참조
 
-- **primary key와 unique key**는 table 전체에서 강제한다. 중복은 그것을 새로 만드는 쓰기에서 `DUPLICATE_KEY`이고, 두 번째 자리에서 첫 자리를 가리키는 validator의 `key.duplicate` 진단이다. unique key는 SQL처럼 NULL을 서로 다르게 본다.
+- **primary key와 unique key**는 table 전체에서 강제한다 — block table이면 그것을 가진 모든 file의 모든 block에 걸쳐서. 중복은 그것을 새로 만드는 쓰기에서 `DUPLICATE_KEY`이고, validator의 `key.duplicate`는 [corpus 순서](10-canonical-format.ko.md#진단)에서 첫 자리 다음의 각 자리에, 그 key에 있으며 첫 자리를 밝힌다. unique key는 SQL처럼 NULL을 서로 다르게 본다. unique key의 validator `key.duplicate`는 값을 각각 정식 readable 형식으로 바이트 단위로 비교하며, corpus 순서에서 첫 자리 다음의 각 자리에, key의 첫 column에 있고 첫 자리를 밝힌다. 그 column 중 어느 것의 값이 NULL이거나 column의 type이 아닌 행은 비교에 참여하지 않는다. 근거: SQL과 같다 — unique 제약은 저장된 값을 비교하고 NULL의 반복을 허용한다 — 그리고 엔진이 읽지 못하는 값에는 비교가 없으며 그 `type`이 그것을 대신한다.
 - **foreign key**는 참조된 key와 byte 단위로 정확히 일치해야 풀린다. 어떤 행도 가리키지 않는 참조는
   dangling 참조다: 그것을 새로 만드는 쓰기는 `FOREIGN_KEY`이고, validator의 `reference.dangling`이 참조 자리에 보고하며, file을 읽을 수 없게 하지 않는다. 다만 block이나 document 행의 `parent`가 그 file의 어떤 행도 가리키지 않으면 `format.block`이다([canonical format](10-canonical-format.md#foreign-keys-as-links)).
 - **참조된 행의 key 갱신**은 `FOREIGN_KEY`(restrict-only)다. 그래서 link의 target은 link 아래에서
@@ -68,7 +68,8 @@ check는 commit에서 강제한다. 술어가 unknown(NULL)인 check는 SQL처�
 - `parent` 순환은 쓰기에서 `CONSTRAINT`이고, 한 file의 행 사이의 순환은 읽기에서 `parent.cycle`이며 그 file을 읽을 수 없게 한다([document model](20-document-model.ko.md#계층)); 여러 `files` file의 행에 걸친 순환은 validator의 `parent.cycle`뿐이다. 행의 블록 밖 `parent`는 쓰기에서 `CONSTRAINT`, 읽기에서
   `format.block`이다.
 - 1..n + 1 밖의 순서 값(n은 문서 모델이 정의하는 대로)이나, 둘 이상의 행과 맞는 order column update는
-  `CONSTRAINT`다. block과 document 저장에서 쓰기 뒤의 형제 묶음 순서 값이 정확히 1..m(m은 그 묶음의 쓰기 뒤 크기)이 아니면 `CONSTRAINT`다. `files` 저장에서 정확히 1..n이 아닌 형제 순서 값은 진단이다([document model](20-document-model.md)).
+  `CONSTRAINT`다. block과 document 저장에서 쓰기 뒤의 형제 묶음 순서 값이 정확히 1..m(m은 그 묶음의 쓰기 뒤 크기)이 아니면 `CONSTRAINT`다. `files` 저장에서 validator의 `order`는 순서 값이 1..n 밖이거나 형제와 공유되는 각 행에, 그 `order` 항목에 있으며(n은 그 형제 묶음의 크기), column의 type이 아닌 값은 `type`뿐이다: 그 값은 n에 세어지며 1..n 밖도 공유도 아니다([document model](20-document-model.ko.md#순서)). 근거: 읽을 수 없는 값에는 비교가 없으므로 type 결함이 그것을 대신하며, 그 값이 무엇이든 다른 형제가 가지는 결함은 여전히 보고된다.
+- `parent`가 그 column의 type이 아닌 행은 알려진 형제 묶음에 속하지 않는다: 어느 묶음의 n에도 세어지지 않고 자신의 `order`는 판정하지 않으며, 묶음의 결함은 그런 행들이 어느 묶음에 들어가든 성립할 때만 보고한다 — 묶음 안에서 공유되는 값, 또는 1..n + u 밖의 값(u는 그런 행의 수). 나머지는 그 행의 `type`이 대신한다.
 
 ## 상태기계
 
@@ -82,7 +83,7 @@ check는 commit에서 강제한다. 술어가 unknown(NULL)인 check는 SQL처�
 - **이력.** 엔진이 실행하는 모든 전이는 같은 transaction에서 이력 행 하나를 insert한다: 행의 foreign
   key, from과 to 상태, `at`, 필수 column의 사본. insert는 이력을 쓰지 않는다.
 - **Limit.** `limit <state> <n>`은 그 상태의 table 행을 센다. 이를 넘게 할 전이, insert, update는
-  limit를 밝히는 `CONSTRAINT`다. 사람의 편집 뒤 이미 넘은 corpus는 다른 쓰기를 막지 않는 진단이다.
+  limit를 밝히는 `CONSTRAINT`다. 사람의 편집 뒤 이미 넘은 corpus는 다른 쓰기를 막지 않는 validator의 `state.limit`다: table을 가진 모든 block과 file에서 읽을 수 있는 table 행 m개가 그 상태에 있고 m > n이면, [corpus 순서](10-canonical-format.ko.md#진단)에서 n번째 다음의 각 행을 그 상태 자리(list 행의 glyph, 상태 cell, `files` field list의 상태 항목)에 보고하며, 상태와 limit와 m을 밝힌다. 근거: limit는 그 상태에 n개 행을 허용하므로 m − n개 행이 그 너머에 있고 각각이 결함 하나다. `key.duplicate`가 첫 자리 다음의 각 자리에 보고되는 것과 같다([Key](#key와-참조)). 그것이 어느 행인지는 내용으로 정해지지 않는다 — 사람의 편집은 어느 행이 마지막으로 그 상태에 들어왔는지 기록을 남기지 않으며, 그것은 `history.gap`이 보고하는 것이다 — 그래서 corpus만의 함수인 순서로 고른다.
 
 ## 엔진 밖에서 바뀐 상태
 
@@ -120,4 +121,4 @@ database는 작성자 독점을 강제하지만 corpus에는 그것이 없다. �
 `state.required`, `state.limit`, `history.gap`, `history.chain`, `corpus.walk`
 ([document model](20-document-model.md)의 walk 규칙), 그리고 canonical format의 `format.*` 규칙이다: `format.noncanonical`, `format.block`,
 `format.section`, `format.encoding`. 검증은 corpus 전체에 걸친다. 깨진 corpus 안의 깨끗한 file이 corpus를
-유효하게 만들지 않는다. 열기, introspection, `flowmark validate`, `flowmark canon`은 행에 대한 요청이 아니므로 사용할 수 없는 table에서 결코 실패하지 않으며, canon의 링크 유도 거절은 예외다([operations](40-ops.ko.md#canon-연산)). validator는 모든 file의 `format.*`와 `parent.cycle` 진단과, `format.block`, `format.section`, `format.encoding`이나 그 행 사이의 `parent.cycle`이 없는 file 안에서 읽을 수 있는 모든 행의 validator 규칙을 보고한다. `format.block`, `format.section`, `format.encoding`이나 그 행 사이의 `parent.cycle`이 있는 file을 가진 table의 완전한 행을 필요로 하는 규칙 — 그 table로의 `reference.dangling`, `key.duplicate`, 그 안의 `order`와 `state.limit` — 은 그 table에 대해 보고하지 않으며, file 자신의 진단이 그것을 대신한다. 바이트 단위로 같은 key 때문에만 사용할 수 없는 table은 모든 규칙이 보고된다.
+유효하게 만들지 않는다. 열기, introspection, `flowmark validate`, `flowmark canon`은 행에 대한 요청이 아니므로 사용할 수 없는 table에서 결코 실패하지 않으며, canon의 링크 유도 거절은 예외다([operations](40-ops.ko.md#canon-연산)). validator는 모든 file의 `format.*`와 `parent.cycle` 진단과, `format.block`, `format.section`, `format.encoding`이나 그 행 사이의 `parent.cycle`이 없는 file 안에서 읽을 수 있는 모든 행의 validator 규칙을 보고한다. `format.block`, `format.section`, `format.encoding`이나 그 행 사이의 `parent.cycle`이 있는 file을 가진 table의 완전한 행을 필요로 하는 규칙 — 그 table로의 `reference.dangling`, `key.duplicate`, 그 안의 `order`와 `state.limit` — 은 그 table에 대해 보고하지 않으며, file 자신의 진단이 그것을 대신한다. 여러 `files` file에 걸친 validator의 `parent.cycle`은 읽을 수 있는 행 사이에서 보고한다. 순환은 그 행들 자신의 `parent` 값으로 만들어지며 읽지 못한 어떤 행도 그것을 풀 수 없기 때문이다. 바이트 단위로 같은 key 때문에만 사용할 수 없는 table은 모든 규칙이 보고된다.

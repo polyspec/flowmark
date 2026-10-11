@@ -1,0 +1,216 @@
+dbspec 1 flowmark
+
+table plans {
+  id varchar(16)
+  title varchar(255)
+  body text
+  primary key (id)
+  settings {
+    store files
+    title title
+    body body
+    markdown body
+  }
+}
+
+table entries {
+  id varchar(16)
+  parent varchar(16) null
+  plan varchar(16)
+  title varchar(255)
+  body text
+  position i32
+  kind varchar(16)
+  done bool
+  summary text null
+  primary key (id)
+  index ix_entries_parent (parent)
+  index ix_entries_plan (plan)
+  foreign key fk_entries_parent (parent) references entries (id) on delete restrict on update restrict
+  foreign key fk_entries_plan (plan) references plans (id) on delete restrict on update restrict
+  settings {
+    store files
+    title title
+    body body
+    order position
+    markdown body
+    markdown summary
+  }
+}
+
+table items {
+  id varchar(16)
+  state varchar(16)
+  plan varchar(16) null
+  title varchar(255)
+  body text
+  primary key (id)
+  index ix_items_plan (plan)
+  foreign key fk_items_plan (plan) references plans (id) on delete restrict on update restrict
+  settings {
+    store document list
+    title title
+    body body
+    markdown body
+    checkbox state waiting ' '
+    checkbox state doing '~'
+    checkbox state done 'x'
+    state_machine state initial waiting
+    state_machine state waiting -> doing
+    state_machine state doing -> done
+    state_machine state terminal done
+    state_machine state history item_history row item from from_state to to_state at at
+    state_machine state limit doing 1
+  }
+}
+
+table entry_steps {
+  id varchar(16)
+  entry varchar(16)
+  parent varchar(16) null
+  state varchar(16)
+  primary key (id)
+  index ix_entry_steps_entry (entry)
+  index ix_entry_steps_parent (parent)
+  foreign key fk_steps_entry (entry) references entries (id) on delete restrict on update restrict
+  foreign key fk_steps_parent (parent) references entry_steps (id) on delete restrict on update restrict
+  settings {
+    store block fk_steps_entry table
+    state_machine state initial open
+    state_machine state initial doing
+    state_machine state open -> doing
+    state_machine state history entry_step_history row step from from_state to to_state at at
+    state_machine state limit doing 1
+  }
+}
+
+table entry_step_history {
+  id i64 identity
+  step varchar(16)
+  from_state varchar(16)
+  to_state varchar(16)
+  at datetime(6)
+  primary key (id)
+  index ix_entry_step_history_step (step)
+  foreign key fk_entry_step_history (step) references entry_steps (id) on delete restrict on update restrict
+  settings {
+    store block fk_entry_step_history table
+  }
+}
+
+table tickets {
+  id varchar(16)
+  parent varchar(16) null
+  state varchar(16)
+  title varchar(255)
+  primary key (id)
+  index ix_tickets_parent (parent)
+  foreign key fk_tickets_parent (parent) references tickets (id) on delete restrict on update restrict
+  settings {
+    store document table
+    title title
+    state_machine state initial open
+    state_machine state initial doing
+    state_machine state open -> doing
+    state_machine state history ticket_history row ticket from from_state to to_state at at
+    state_machine state limit doing 1
+  }
+}
+
+table ticket_history {
+  id i64 identity
+  ticket varchar(16)
+  from_state varchar(16)
+  to_state varchar(16)
+  at datetime(6)
+  primary key (id)
+  index ix_ticket_history_ticket (ticket)
+  foreign key fk_ticket_history (ticket) references tickets (id) on delete restrict on update restrict
+  settings {
+    store block fk_ticket_history table
+  }
+}
+
+table jobs {
+  id i64
+  state varchar(16)
+  title varchar(255)
+  step varchar(16) null
+  primary key (id)
+  index ix_jobs_step (step)
+  foreign key fk_jobs_step (step) references entry_steps (id) on delete restrict on update restrict
+  settings {
+    store files
+    title title
+    state_machine state initial open
+    state_machine state initial doing
+    state_machine state open -> doing
+    state_machine state history job_history row job from from_state to to_state at at
+    state_machine state limit doing 1
+  }
+}
+
+table job_history {
+  id i64 identity
+  job i64
+  from_state varchar(16)
+  to_state varchar(16)
+  at datetime(6)
+  primary key (id)
+  index ix_job_history_job (job)
+  foreign key fk_job_history (job) references jobs (id) on delete restrict on update restrict
+  settings {
+    store block fk_job_history table
+  }
+}
+
+table cards {
+  id varchar(16)
+  state varchar(16)
+  title varchar(255)
+  position i32
+  code varchar(8) null
+  lane varchar(8) null
+  slot i32 null
+  primary key (id)
+  unique uq_cards_code (code)
+  unique uq_cards_lane_slot (lane, slot)
+  settings {
+    store files
+    title title
+    order position
+    state_machine state initial open
+    state_machine state initial doing
+    state_machine state open -> doing
+    state_machine state history card_history row card from from_state to to_state at at
+    state_machine state limit doing 1
+  }
+}
+
+table card_history {
+  id i64 identity
+  card varchar(16)
+  from_state varchar(16)
+  to_state varchar(16)
+  at datetime(6)
+  primary key (id)
+  index ix_card_history_card (card)
+  foreign key fk_card_history (card) references cards (id) on delete restrict on update restrict
+  settings {
+    store block fk_card_history table
+  }
+}
+
+table item_history {
+  id i64 identity
+  item varchar(16)
+  from_state varchar(16)
+  to_state varchar(16)
+  at datetime(6)
+  primary key (id)
+  index ix_item_history_item (item)
+  foreign key fk_history_item (item) references items (id) on delete restrict on update restrict
+  settings {
+    store block fk_history_item table
+  }
+}

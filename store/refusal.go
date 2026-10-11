@@ -25,6 +25,20 @@ func (r *Row) setAt(column string, line, col int) {
 	r.at[column] = elementAt{line: line, col: col}
 }
 
+// At returns the 1-based line and column, in code points, of the element of
+// column in the file that row r was read from. The column "" is the row's own
+// first line, and a column the parser did not read is at that line too. A row
+// that was not read from a file is at line 1, column 1.
+func (r *Row) At(column string) (line, col int) {
+	if a, ok := r.at[column]; ok {
+		return a.line, a.col
+	}
+	if a, ok := r.at[""]; ok {
+		return a.line, a.col
+	}
+	return 1, 1
+}
+
 // readDiagnostics returns the read diagnostics of the refusals that the writer makes of
 // the rows read from rel. A refusal is located where the parser read the element its
 // column names; a whole-row refusal, and a column the parser did not read, at the row's

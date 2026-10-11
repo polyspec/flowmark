@@ -360,8 +360,10 @@ func titleFault(lay *docLayout, title string) string {
 
 // checkOrder refuses the order values of each sibling group unless they are exactly
 // 1..m, m being the size of the group.
-// A sibling-order fault is at each row of its group whose value is missing, not an
-// integer, outside 1..m or shared with a sibling, m being the size of the group.
+// A sibling-order fault is at each row of its group whose value is missing, outside
+// 1..m or shared with a sibling, m being the size of the group. A value not of the
+// column's type is the type fault alone: it counts toward m and is neither outside
+// 1..m nor shared, so the faults of its siblings are those that stand whatever it is.
 func checkOrder(w *writer, lay *docLayout, rows []*Row, idx []int) {
 	if lay.order == "" {
 		return
@@ -382,8 +384,9 @@ func checkOrder(w *writer, lay *docLayout, rows []*Row, idx []int) {
 		if g != "" {
 			who = "the parent " + g
 		}
-		count := map[int]int{}
-		vals := make([]int, len(members))
+		m := int64(len(members))
+		count := map[int64]int{}
+		vals := make([]int64, len(members))
 		faults := make([]string, len(members))
 		for k, i := range members {
 			v := rows[i].Scalars[lay.order]
@@ -391,9 +394,10 @@ func checkOrder(w *writer, lay *docLayout, rows []*Row, idx []int) {
 				faults[k] = "the order is missing"
 				continue
 			}
-			n, err := strconv.Atoi(*v)
-			if err != nil || strconv.Itoa(n) != *v {
-				faults[k] = "the order " + *v + " is not a canonical integer"
+			canon, ok := readable(lay.orderType, *v)
+			n, err := strconv.ParseInt(canon, 10, 64)
+			if !ok || err != nil {
+				faults[k] = lay.order + " is not a " + lay.orderType.String() + " value"
 				continue
 			}
 			vals[k] = n
@@ -402,10 +406,10 @@ func checkOrder(w *writer, lay *docLayout, rows []*Row, idx []int) {
 		for k, i := range members {
 			if faults[k] == "" {
 				switch n := vals[k]; {
-				case n < 1 || n > len(members):
-					faults[k] = "the order " + strconv.Itoa(n) + " is outside 1.." + strconv.Itoa(len(members)) + " of the siblings under " + who
+				case n < 1 || n > m:
+					faults[k] = "the order " + strconv.FormatInt(n, 10) + " is outside 1.." + strconv.FormatInt(m, 10) + " of the siblings under " + who
 				case count[n] > 1:
-					faults[k] = "the order " + strconv.Itoa(n) + " is shared with a sibling under " + who
+					faults[k] = "the order " + strconv.FormatInt(n, 10) + " is shared with a sibling under " + who
 				}
 			}
 			if faults[k] != "" {
@@ -523,12 +527,29 @@ func (dw *docWriter) valueText(lay *docLayout, r *Row, c dbspec.Column, v string
 	return canon, true
 }
 
+// readAs reports whether the foreign key of column was read with the key that is
+// not of its type: such a key is kept as read, and any other is checked.
+func readAs(r *Row, column, key string) bool {
+	raw, kept := r.Raw[column]
+	if !kept {
+		return false
+	}
+	k, _, ok := splitLink(raw)
+	return ok && k == key
+}
+
 // linkText writes the link of a foreign key value: its text is the referenced key
 // and its target is derived from the referenced row. A key that names no row keeps
 // the target it was read with, and any other is FOREIGN_KEY; a key that two or more
 // rows of the table share byte for byte has no derived target, so it keeps the
 // target it was read with, and any other is CONSTRAINT.
 func (dw *docWriter) linkText(r *Row, c dbspec.Column, table, key string) (string, bool) {
+	if !readAs(r, c.Name, key) {
+		if _, ok := readable(c.Type, key); !ok {
+			dw.w.refuse(c.Name, c.Name+" is not a "+c.Type.String()+" value")
+			return "", false
+		}
+	}
 	target, found := dw.linkTarget(table, key)
 	switch found {
 	case linkNone:

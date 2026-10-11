@@ -307,7 +307,8 @@ func splitField(line string) (name, raw string, ok bool) {
 // fieldValue reads the value of a stored scalar column in its field, at line
 // lineNo whose value starts at column valueCol. White space that rendering drops
 // around the value is noncanonical; a foreign key whose row is absent keeps its
-// written target; a value not of its column type is kept raw.
+// written target; a value not of its column type, a foreign key's key included, is
+// kept raw.
 func (p *parser) fieldValue(lineNo int, c dbspec.Column, raw string, valueCol int, row *Row) {
 	row.setAt(c.Name, lineNo, 3) // the field item begins after "- "
 	v := trimWhite(raw)
@@ -319,6 +320,9 @@ func (p *parser) fieldValue(lineNo int, c dbspec.Column, raw string, valueCol in
 		if !ok {
 			p.fail(lineNo, valueCol, RuleBlock, "a foreign key is a link [key](target)")
 			return
+		}
+		if _, ok := readable(c.Type, key); !ok {
+			row.Raw[c.Name] = v
 		}
 		want, err := p.lk.Target(p.rel, table, key)
 		switch {
@@ -622,6 +626,12 @@ func (w *writer) fieldText(lay *filesLayout, row *Row, c dbspec.Column, v string
 		if strings.ContainsAny(v, "[]") {
 			w.refuse(c.Name, "the foreign key text holds a bracket")
 			return "", false
+		}
+		if !readAs(row, c.Name, v) {
+			if _, ok := readable(c.Type, v); !ok {
+				w.refuse(c.Name, c.Name+" is not a "+c.Type.String()+" value")
+				return "", false
+			}
 		}
 		target, err := lk.Target(w.rel, table, v)
 		if errors.Is(err, ErrKeyShared) {
