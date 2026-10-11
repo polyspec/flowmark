@@ -164,7 +164,8 @@ The order of the commit protocol is normative.
   ([constraints](50-constraints.md#a-state-changed-outside-the-engine)) and `flowmark unlock <corpus>
   [--holder <holder>]` ([a stale lock](#a-stale-lock)). Every command exits 0 when it ran, 1 when it
   was refused or failed, with `flowmark <command>: <code>: <message>` on standard error, and 2 for a
-  wrong command line.
+  wrong command line. A refused unlock is `CONFIG`, and a failure of the file system under it
+  `DRIVER`.
 - **`flowmark install`** is its own transaction under the lock, `CONFIG` inside an open one as canon
   is. It writes, in one journal commit, the file `<table>.flowmark.md` of each `document` table that
   has none — the empty table, `# <table>` and one LF — and `<corpus>/.gitattributes` with the line

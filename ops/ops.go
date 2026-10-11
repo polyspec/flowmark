@@ -4,6 +4,7 @@
 package ops
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -83,6 +84,12 @@ func Operations() []string {
 	return names
 }
 
+// Members returns the members the operation op requires and the members it may take besides.
+func Members(op string) (required, optional []string) {
+	spec := operations[op]
+	return slices.Clone(spec.required), slices.Clone(spec.optional)
+}
+
 // Request is one operation with its members; every value is in the runtime value model JSON of the protocol.
 type Request struct {
 	Operation string
@@ -143,6 +150,32 @@ type noSubscriber struct{}
 
 func (noSubscriber) Observe(journal.Event) {}
 
+// Journal declares the journal corpus at root, an absolute or relative path of a folder, for the faces' operations
+// below the write path — flowmark unlock. A root that is no folder is CONFIG.
+func Journal(root string) (*journal.Corpus, error) {
+	abs, err := filepath.Abs(root)
+	if err != nil {
+		return nil, errf(codeConfig, "the corpus root %s: %v", root, err)
+	}
+	j, err := journal.New(abs, noSubscriber{})
+	if err != nil {
+		return nil, errf(codeConfig, "%v", err)
+	}
+	return j, nil
+}
+
+// JSON returns the JSON text of an answer as every face writes it: without HTML escaping, so a value reads as it is
+// stored, and without a line feed.
+func JSON(v any) ([]byte, error) {
+	var b bytes.Buffer
+	enc := json.NewEncoder(&b)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(v); err != nil {
+		return nil, err
+	}
+	return bytes.TrimSuffix(b.Bytes(), []byte("\n")), nil
+}
+
 // Corpus is a corpus opened for the faces: its catalog and the write path.
 type Corpus struct {
 	cat *catalog.Catalog
@@ -152,14 +185,11 @@ type Corpus struct {
 // Open opens the corpus at root through the write path (spec 40 Opening a corpus), each operation waiting wait for the
 // lock. A root that is no folder is CONFIG, and a catalog that does not load is SCHEMA_INVALID, naming each diagnostic.
 func Open(ctx context.Context, root string, wait time.Duration) (*Corpus, error) {
-	abs, err := filepath.Abs(root)
+	j, err := Journal(root)
 	if err != nil {
-		return nil, errf(codeConfig, "the corpus root %s: %v", root, err)
+		return nil, err
 	}
-	j, err := journal.New(abs, noSubscriber{})
-	if err != nil {
-		return nil, errf(codeConfig, "%v", err)
-	}
+	abs := j.Root()
 	cat, diags := catalog.Load(abs)
 	if cat == nil || len(diags) > 0 {
 		lines := make([]string, len(diags))

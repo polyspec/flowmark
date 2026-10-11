@@ -1,161 +1,84 @@
-// Command flowmark works a corpus: serve, validate, canon, introspect, items and transition. The document selection of
-// validate comes from the config/documents.json of the root when it exists.
+// Command flowmark is the one binary of the markdown database engine and its faces (spec 40 The faces): the
+// operations over any table, canon, install, introspect, history repair, unlock, the server, the MCP server and the
+// soksak sidecar. Every command exits 0 when it ran, 1 when it was refused or failed, with the failure on standard
+// error, and 2 for a wrong command line.
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"strings"
 	"syscall"
 
-	"github.com/polyspec/flowmark/app"
-	"github.com/polyspec/flowmark/corpus"
-	"github.com/polyspec/flowmark/executor"
-	"github.com/polyspec/flowmark/mcp"
-	"github.com/polyspec/flowmark/sidecar"
+	"github.com/polyspec/flowmark/ops"
 )
 
-type documentsConfig struct {
-	Include []string `json:"include"`
-	Exclude []string `json:"exclude"`
+func main() {
+	os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
 }
 
-func main() {
-	if len(os.Args) == 2 && os.Args[1] == "mcp" {
-		mcp.Serve(os.Stdin, os.Stdout)
-		os.Exit(0)
+// run runs the command line args and returns its exit code.
+func run(args []string, in io.Reader, out, errOut io.Writer) int {
+	if len(args) == 0 {
+		return usage(errOut, "")
 	}
-	if len(os.Args) == 2 && os.Args[1] == "sidecar" {
-		sidecar.Serve(os.Stdin, os.Stdout)
-		os.Exit(0)
-	}
-	if len(os.Args) >= 2 && os.Args[1] == "canon" {
-		os.Exit(canonTo(os.Stdout, os.Stderr, os.Args[2:]))
-	}
-	if len(os.Args) >= 2 && os.Args[1] == "introspect" {
-		os.Exit(introspectTo(os.Stdout, os.Stderr, os.Args[2:]))
-	}
-	if len(os.Args) >= 2 && os.Args[1] == "serve" {
+	name, rest := args[0], args[1:]
+	switch name {
+	case "canon":
+		return canonTo(out, errOut, rest)
+	case "install":
+		return install(out, errOut, rest)
+	case "introspect":
+		return introspectTo(out, errOut, rest)
+	case "history":
+		return history(out, errOut, rest)
+	case "unlock":
+		return unlock(out, errOut, rest)
+	case "serve":
 		stop := make(chan os.Signal, 1)
 		signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
-		os.Exit(serve(os.Args[2:], os.Stdout, os.Stderr, stop))
+		defer signal.Stop(stop)
+		return serve(rest, out, errOut, stop)
+	case "mcp":
+		return mcpFace(in, out, errOut, rest)
+	case "sidecar":
+		return sidecarFace(in, out, errOut, rest)
 	}
-	if len(os.Args) < 3 {
-		usage()
+	if _, ok := faceCommands[name]; ok {
+		return face(out, errOut, name, rest)
 	}
-	root := os.Args[2]
-	switch os.Args[1] {
-	case "validate":
-		os.Exit(validate(root))
-	case "items":
-		os.Exit(items(root))
-	case "add":
-		if len(os.Args) < 5 {
-			usage()
-		}
-		path := os.Args[3]
-		id := "-"
-		title := ""
-		if os.Args[4] != "-" && len(os.Args) >= 6 && !strings.HasPrefix(os.Args[4], "-") && len(os.Args) > 5 && false {
-		}
-		// add <root> <path> [- | <id>] <title...> — "-" allocates the next ID.
-		if len(os.Args) >= 6 {
-			id = os.Args[4]
-			title = strings.Join(os.Args[5:], " ")
-		} else {
-			title = strings.Join(os.Args[4:], " ")
-		}
-		if id == "-" {
-			id = ""
-		}
-		if err := app.AddItem(root, path, id, title); err != nil {
-			fmt.Fprintf(os.Stderr, "flowmark add: %v\n", err)
-			os.Exit(1)
-		}
-		fmt.Printf("[add] %s %s\n", id, title)
-		os.Exit(0)
-	case "rm":
-		if len(os.Args) != 5 {
-			usage()
-		}
-		path, id := os.Args[3], os.Args[4]
-		if err := app.RemoveItem(root, path, id); err != nil {
-			fmt.Fprintf(os.Stderr, "flowmark rm: %v\n", err)
-			os.Exit(1)
-		}
-		fmt.Printf("[rm] %s\n", id)
-		os.Exit(0)
-	case "transition":
-		if len(os.Args) < 6 {
-			usage()
-		}
-		path, id, target := os.Args[3], os.Args[4], os.Args[5]
-		evidence := ""
-		if len(os.Args) == 7 {
-			evidence = os.Args[6]
-		}
-		if err := app.Transition(root, path, id, target, evidence); err != nil {
-			fmt.Fprintf(os.Stderr, "flowmark transition: %v\n", err)
-			os.Exit(1)
-		}
-		fmt.Printf("[transition] %s is %s\n", id, target)
-		os.Exit(0)
-	}
-	usage()
+	return usage(errOut, fmt.Sprintf("the command %q is unknown", name))
 }
 
-func usage() {
-	fmt.Fprintln(os.Stderr, "usage: flowmark mcp | sidecar | serve <corpus> --port <port> [--new-token] [--lock-wait-ms <n>] [--tx-idle-ms <n>] | validate <root> | canon [--lock-wait-ms <n>] <corpus> [file…] | introspect <corpus> | items <root> | add <root> <path> <id> <title> | rm <root> <path> <id> | transition <root> <path> <id> <state> [evidence]")
-	os.Exit(2)
+// usage writes why the command line is wrong and the command lines, and returns 2.
+func usage(errOut io.Writer, why string) int {
+	if why != "" {
+		fmt.Fprintf(errOut, "flowmark: %s\n", why)
+	}
+	lines := []string{"usage:"}
+	for _, n := range ops.Operations() {
+		lines = append(lines, "  flowmark "+n+" [--lock-wait-ms <n>] "+faceCommands[n].usage)
+	}
+	lines = append(lines,
+		"  flowmark canon [--lock-wait-ms <n>] <corpus> [file…]",
+		"  flowmark install [--lock-wait-ms <n>] <corpus>",
+		"  flowmark introspect <corpus>",
+		"  flowmark history repair [--lock-wait-ms <n>] <corpus> <table> <key> [--from <state>]",
+		"  flowmark unlock <corpus> [--holder <pid>@<host>/<session>]",
+		"  flowmark serve <corpus> --port <port> [--new-token] [--lock-wait-ms <n>] [--tx-idle-ms <n>]",
+		"  flowmark mcp [--lock-wait-ms <n>] <corpus>",
+		"  flowmark sidecar [--lock-wait-ms <n>]",
+		"an assignment is <column>=<text> or <column>:=<json>; a value is <text> or :=<json>",
+	)
+	fmt.Fprintln(errOut, strings.Join(lines, "\n"))
+	return 2
 }
 
-func validate(root string) int {
-	config := documentsConfig{Include: []string{"**/*.md"}}
-	if text, err := os.ReadFile(filepath.Join(root, "config", "documents.json")); err == nil {
-		if err := json.Unmarshal(text, &config); err != nil {
-			fmt.Fprintf(os.Stderr, "flowmark validate: config/documents.json: %v\n", err)
-			return 2
-		}
-	}
-	findings, err := corpus.ValidateSelected(root, config.Include, config.Exclude)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "flowmark validate: %v\n", err)
-		return 2
-	}
-	for _, finding := range findings {
-		fmt.Printf("[validate] %s: line %d: %s: %s\n", finding.File, finding.Line, finding.Rule, finding.Message)
-	}
-	if len(findings) > 0 {
-		fmt.Printf("[validate] %d findings\n", len(findings))
-		return 1
-	}
-	fmt.Println("[validate] the corpus passes")
-	return 0
-}
-
-func items(root string) int {
-	return itemsTo(os.Stdout, root)
-}
-
-// itemsTo writes the item rows: state, id, title, path, assignee and due — the same columns
-// the sidecar answer carries, so every face shows the same item.
-func itemsTo(w io.Writer, root string) int {
-	opened, err := executor.Open(root)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "flowmark items: %v\n", err)
-		return 2
-	}
-	rows, err := opened.All("items", executor.Query{})
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "flowmark items: %v\n", err)
-		return 2
-	}
-	for _, row := range rows {
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", row["state"], row["id"], row["title"], row["path"], row["assignee"], row["due"])
-	}
-	return 0
+// fail writes the failure err of the command to standard error as `flowmark <command>: <code>: <message>` and returns 1.
+func fail(errOut io.Writer, command string, err error) int {
+	code, msg := ops.Failure(err)
+	fmt.Fprintf(errOut, "flowmark %s: %s: %s\n", command, code, msg)
+	return 1
 }
