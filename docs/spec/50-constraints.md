@@ -25,7 +25,12 @@ The failure codes are those of [operations](40-ops.md).
   under a link.
 - **Referential actions are restrict-only.** `cascade` and `set_null` are rejected at catalog load:
   they are unimplementable for a writer that bypasses the engine. Deleting a referenced row —
-  including a row that has history rows — is `FOREIGN_KEY`.
+  including a row that has history rows — is `FOREIGN_KEY`. Restrict holds against the rows before
+  the write: a delete is `FOREIGN_KEY` when a row it removes is referenced, also by a row the same
+  request removes; the referencing rows are deleted by an earlier request. Grounding: orm renders
+  `RESTRICT`, checked immediately; MySQL and SQLite then refuse or accept such a delete by their row
+  order and PostgreSQL accepts it, and a set delete has no row order, so the check before the write
+  is the one rule independent of order.
 - **Soft-deleted rows still occupy their unique keys and still satisfy foreign keys** (SQL
   parity), so a soft delete never produces a spurious dangling ruling and a re-insert of the same
   key still fails as a duplicate.

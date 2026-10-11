@@ -43,7 +43,7 @@ Go client implements it first and every other client is its own orm item.
 | `paginate` | Supported; one request reads one consistent corpus |
 | `insert` (single and multi-row) | Supported; `identity`, `key_prefix` and `order` columns are executor-assigned and may be omitted; defaults are written explicitly |
 | `update` | Supported; a target changed since it was read fails `WRITE_CONFLICT`, never an overwrite |
-| `delete`, `restore` | Supported; `restore` keeps its SQL shape (soft-delete column cleared, unique keys held while deleted); a referenced row's delete is `FOREIGN_KEY` |
+| `delete`, `restore` | Supported; `restore` keeps its SQL shape (soft-delete column cleared, unique keys held while deleted); a referenced row's delete is `FOREIGN_KEY`, also when the same delete removes the referencing row ([constraints](50-constraints.md#keys-and-references)) |
 | `optimistic` | Supported; no match is `OPTIMISTIC_LOCK` |
 | `on_duplicate` | Supported with the conflict target **any unique key** (the MySQL rule); on a table with several unique keys this diverges from the PostgreSQL and SQLite target rule, and the divergence is stated here |
 | `lock` `update`, `share` | Accepted as documented no-ops: a server transaction already holds the corpus lock |
