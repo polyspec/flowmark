@@ -23,6 +23,23 @@ func Readable(t dbspec.Type, v string) (string, bool) { return readable(t, v) }
 // the rule a writer checks of a value before it renders a file.
 func SingleLineFault(v string) string { return singleLineFault(v) }
 
+// KeyFault names the key shape rule that key breaks, or "" when none (see the
+// document model, "Keys"): the rule a writer checks of a key before it renders a file.
+func KeyFault(key string) string { return keyFault(key) }
+
+// FoldKey returns key with A-Z lower-cased and every other byte kept: the fold under
+// which two keys are equal without regard to case. The key shape holds A-Z and a-z
+// alone of the letters, so no other character folds (see the document model, "Keys").
+func FoldKey(key string) string {
+	b := []byte(key)
+	for i, c := range b {
+		if 'A' <= c && c <= 'Z' {
+			b[i] = c + ('a' - 'A')
+		}
+	}
+	return string(b)
+}
+
 // readable returns the readable canonical text of v as a value of type t, or
 // false when v is not a value of t. Numbers and booleans take orm's canonical
 // literal; a date, time, datetime or uuid takes the literal of its quoted text,

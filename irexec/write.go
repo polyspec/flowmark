@@ -590,7 +590,7 @@ func (w *writer) onDuplicate(ps []*int) (bool, *Error) {
 			case x.row.Key == k.text:
 				met = x
 			case met != nil && met.row.Key == k.text:
-			case foldASCII(x.row.Key) == foldASCII(k.text) && (met == nil || x.row.Key < met.row.Key):
+			case store.FoldKey(x.row.Key) == store.FoldKey(k.text) && (met == nil || x.row.Key < met.row.Key):
 				met = x
 			}
 		}
