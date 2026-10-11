@@ -191,3 +191,157 @@ func TestMathOpens(t *testing.T) {
 		}
 	}
 }
+
+// TestTableDelimiterRow pins what a GFM table's delimiter row is (GFM 0.29 §4.10): the cells of a line, each only
+// hyphens with an optional colon on either end, separated by pipes, with at most three spaces of indent and a
+// pipe optional at either end. It returns the number of cells.
+func TestTableDelimiterRow(t *testing.T) {
+	cases := []struct {
+		name  string
+		line  string
+		cells int
+	}{
+		{"a delimiter row of two cells", "-|-", 2},
+		{"outer pipes", "|-|-|", 2},
+		{"spaces around the cells", " - | - ", 2},
+		{"alignment colons", ":-|-:", 2},
+		{"centered", "|:-:|--|", 2},
+		{"a long hyphen run", "-----|-----", 2},
+		{"one cell needs a pipe", "|-|", 1},
+		{"one cell without a pipe is no delimiter row", "---", 0},
+		{"an empty cell", "-||-", 0},
+		{"a letter in a cell", "-|a", 0},
+		{"a lone colon", ":|-", 0},
+		{"a colon pair without a hyphen", "::|-", 0},
+		{"four spaces of indent", "    -|-", 0},
+		{"three spaces of indent", "   -|-", 2},
+		{"a blank line", "", 0},
+		{"an escaped pipe is no separator", `-\|-`, 0},
+	}
+	t.Run("10#detail-headings-and-anchors: markdown-it takes one cell without a pipe", func(t *testing.T) {
+		if got := tableDelimiterCells("---", true); got != 1 {
+			t.Fatalf("tableDelimiterCells(%q, true) = %d; want 1", "---", got)
+		}
+	})
+	for _, c := range cases {
+		t.Run("10#detail-headings-and-anchors: "+c.name, func(t *testing.T) {
+			if got := tableDelimiterCells(c.line, false); got != c.cells {
+				t.Fatalf("tableDelimiterCells(%q) = %d; want %d", c.line, got, c.cells)
+			}
+		})
+	}
+}
+
+// TestTableRowCells pins the number of cells of a GFM table row (GFM 0.29 §4.10): the cells between the unescaped pipes
+// a code span does not protect, a pipe at either end optional.
+func TestTableRowCells(t *testing.T) {
+	cases := []struct {
+		name  string
+		line  string
+		cells int
+	}{
+		{"two cells", "a|b", 2},
+		{"outer pipes", "|a|b|", 2},
+		{"one cell with a pipe", "|a|", 1},
+		{"an empty cell", "a||b", 3},
+		{"an escaped pipe", `a\|b|c`, 2},
+		{"a pipe in a code span splits", "`a|b`|c", 3},
+		{"spaces", " a | b ", 2},
+		{"no pipe", "a", 1},
+	}
+	for _, c := range cases {
+		t.Run("10#detail-headings-and-anchors: "+c.name, func(t *testing.T) {
+			if got := tableRowCells(c.line); got != c.cells {
+				t.Fatalf("tableRowCells(%q) = %d; want %d", c.line, got, c.cells)
+			}
+		})
+	}
+}
+
+// TestTables pins the headings of a document that holds a GFM table (GFM 0.29 §4.10) under blockSyntax.tables, which
+// GitHub, GitLab and VS Code read: a table is a header row and a delimiter row of as many cells, and the lines after
+// them are its body rows until a blank line or a block that interrupts a paragraph. A line of the table is no
+// paragraph line, so a setext underline after a body row underlines nothing. CommonMark alone reads no table.
+func TestTables(t *testing.T) {
+	type head struct {
+		at, last int
+		text     string
+	}
+	cases := []struct {
+		name   string
+		lines  []string
+		tables bool
+		want   []head
+	}{
+		{"10#detail-headings-and-anchors: a body row is no text for a setext underline", []string{"a|b", "-|-", "items row T1", "---"}, true, nil},
+		{"10#detail-headings-and-anchors: CommonMark alone reads that underline", []string{"a|b", "-|-", "items row T1", "---"}, false, []head{{0, 3, "a|b\n-|-\nitems row T1"}}},
+		{"10#detail-headings-and-anchors: an ATX heading ends the table", []string{"a|b", "-|-", "c|d", "# items row T1"}, true, []head{{3, 3, "items row T1"}}},
+		{"10#detail-headings-and-anchors: a blank line ends the table, and a setext heading after it is read", []string{"a|b", "-|-", "", "items row T1", "---"}, true, []head{{3, 4, "items row T1"}}},
+		{"10#detail-headings-and-anchors: a mismatched delimiter row is no table", []string{"a|b|c", "-|-", "items row T1", "---"}, true, []head{{0, 3, "a|b|c\n-|-\nitems row T1"}}},
+		{"10#detail-headings-and-anchors: the header row is the last line of the paragraph before it", []string{"x", "a|b", "-|-", "items row T1", "---"}, true, nil},
+		{"10#detail-headings-and-anchors: a block quote ends the table", []string{"a|b", "-|-", "> # h1", "# h2"}, true, []head{{2, 2, "h1"}, {3, 3, "h2"}}},
+		{"10#detail-headings-and-anchors: a table inside a block quote", []string{"> a|b", "> -|-", "> items row T1", "> ---"}, true, nil},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var got []head
+			for _, h := range scanWith(c.lines, 0, blockSyntax{tables: c.tables}).all {
+				got = append(got, head{h.at, h.last, h.text})
+			}
+			if len(got) != len(c.want) {
+				t.Fatalf("headings %+v; want %+v", got, c.want)
+			}
+			for k := range got {
+				if got[k] != c.want[k] {
+					t.Fatalf("headings %+v; want %+v", got, c.want)
+				}
+			}
+		})
+	}
+}
+
+// TestMarkdownItTables pins the two readings of VS Code's markdown-it 14 that differ from GitHub's and GitLab's under
+// tables: a line that would be an ATX heading is the header row of a table when a delimiter row of as many cells
+// follows, and a header row that holds a pipe needs no pipe in its delimiter row.
+func TestMarkdownItTables(t *testing.T) {
+	cases := []struct {
+		name  string
+		lines []string
+		md    bool
+		want  []string
+	}{
+		{"10#detail-headings-and-anchors: a heading line is a header row", []string{"# a|b", "-|-", "x"}, true, nil},
+		{"10#detail-headings-and-anchors: GitHub reads that heading", []string{"# a|b", "-|-", "x"}, false, []string{"a|b"}},
+		{"10#detail-headings-and-anchors: a heading line without a pipe stays a heading", []string{"# a", "-|-", "x"}, true, []string{"a"}},
+		{"10#detail-headings-and-anchors: a heading line with another cell count stays a heading", []string{"# a|b|c", "-|-", "x"}, true, []string{"a|b|c"}},
+		{"10#detail-headings-and-anchors: a heading in a block quote is a header row", []string{"> # a|b", "> -|-", "> x"}, true, nil},
+		{"10#detail-headings-and-anchors: a heading line two lines before is no header row", []string{"# a|b", "text", "-|-"}, true, []string{"a|b"}},
+		{"10#detail-headings-and-anchors: a pipeless delimiter row", []string{"| a |", "---", "x"}, true, nil},
+		{"10#detail-headings-and-anchors: GitHub reads that setext heading", []string{"| a |", "---", "x"}, false, []string{"| a |"}},
+		{"10#detail-headings-and-anchors: a header row without a pipe is no table", []string{"a", "---", "x"}, true, []string{"a"}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var got []string
+			for _, h := range scanWith(c.lines, 0, blockSyntax{tables: true, mdTables: c.md}).all {
+				got = append(got, h.text)
+			}
+			if fmt.Sprint(got) != fmt.Sprint(c.want) {
+				t.Fatalf("headings %q; want %q", got, c.want)
+			}
+		})
+	}
+}
+
+// TestTableAtTheStart pins the table whose header row is the first line of the document, which leaves no paragraph
+// behind: the scanner holds no unit for it, and the paragraphs after the table are read as paragraphs again.
+func TestTableAtTheStart(t *testing.T) {
+	lines := []string{"a|b", "-|-", "c|d", "", "items row T1", "---", "", "more text", "==="}
+	var got []string
+	for _, h := range scanWith(lines, 0, blockSyntax{tables: true}).all {
+		got = append(got, h.text)
+	}
+	if len(got) != 2 || got[0] != "items row T1" || got[1] != "more text" {
+		t.Fatalf("headings %q; want the two setext headings after the table", got)
+	}
+}

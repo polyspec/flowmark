@@ -1,9 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 4b7fee2c51395672c4b21ee40a495977552bd051bdadbb3e8d28cc8e5c6673a0 -->
+<!-- source-sha256: 7d5c96a43edf9a5493f03e12cc150f0317e43ab9367e6c26aabe70d0f5988117 -->
 # Changelog
 
 ## Unreleased
 
+- T12.1-38: 엔진이 GFM table을 GitHub, GitLab, VS Code처럼 읽는다. header row, 같은 수의 cell의 delimiter row, 그 뒤의 body row가 CommonMark가 문단으로 읽는 줄들을 받아 들이므로, 어느 viewer도 읽지 않는 heading은 엔진의 heading이 아니고 body row 뒤의 setext 밑줄은 아무것도 밑줄 긋지 않는다. VS Code의 markdown-it는 heading 줄도 header row로, cell 하나의 pipe 없는 delimiter row도 받는다.
 - T12.5-3: 엔진이 규모 한계를 밝힌다. 문서 하나에 1 MiB, folder와 corpus에 문서 20,000개이며 file 크기, folder와 corpus의 문서, lock 아래 session의 benchmark에서 나왔다. 한계를 넘은 corpus는 validator가 알리고(`scale.file`, `scale.folder`, `scale.corpus`) 문서를 1 MiB 넘게 쓰는 commit은 `scale.exceeded`를 내며, 둘 다 쓰인다.
 - T12.5-6: 한 corpus를 여러 process가 동시에 열 때 둘이 lock folder를 함께 만들어도 실패하지 않는다. folder를 먼저 만들고 나중에 판정한다.
 - T12.5-5: 열기에 실패한 corpus는 lock을 남기지 않는다. lock 해제는 lock file을 여는데 macOS의 감시가 문서마다 descriptor를 쥐어 남은 것이 없었으므로, 감시를 먼저 닫고 lock을 해제한다.
