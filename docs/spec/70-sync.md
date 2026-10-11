@@ -19,6 +19,41 @@ specification is written when an adapter beyond the database export starts.
   The provenance is not part of the document; where it lives is open question 5
   ([open questions](110-open-questions.md)).
 
+## The export
+
+- The export is computed whole, from one corpus as a read request reads it, before anything is
+  written: a failed export gives no statement, so it writes nothing.
+- Its statements are, first, the schema statements orm's renderer (`dbspec.RenderStatements`)
+  writes for the catalog's document set in the target dialect — MySQL, PostgreSQL or SQLite — in
+  the renderer's order; then one insert a row, which orm's planner compiles from an `insert`
+  request of the catalog's runtime model that assigns every column of the table, by its value or
+  by NULL. Each insert carries its bind slots as the planner writes them and its request
+  parameters in the runtime value model JSON a read answers with
+  ([capability table](60-dialect.md#the-wire)). Grounding: orm owns the SQL text, the quoting and
+  the placeholders of each dialect, so the export renders none; a column an insert left out would
+  take the database's default instead of the stored value.
+- Every row of every table is exported, soft-deleted rows included. Grounding: the database is
+  rebuilt whole, and a read of it leaves those rows out as a read of the corpus does.
+- The tables fill in the order of their foreign keys: a table after every other table its foreign
+  keys reference, ties in the order the schema statements create the tables; the tables of a cycle
+  of references across tables follow in that creation order once no other table can come first.
+  A table's rows stand in storage order ([document model](20-document-model.md#order)), so a
+  parent row precedes its children. Grounding: a database that checks a foreign key at each
+  statement refuses a row whose referenced row is not yet inserted. The rows of such a cycle that
+  reference each other load only into a database that defers its foreign key checks; the export
+  never breaks a cycle by writing a value other than the stored one.
+- One corpus gives the same statements on every run.
+- A table with an identity column or a codec column fails the export as
+  `CAPABILITY_UNSUPPORTED`, naming the table and the column. Grounding: orm's insert rule refuses
+  an assignment of an identity column, which the executor assigns, and orm renders no statement
+  that moves a PostgreSQL identity past the keys an export inserts, so the export could not keep
+  the keys that other rows reference; a codec column stores the encoded value, while orm's insert
+  takes the decoded value and encodes it, and the engine decodes no stored value yet. Both wait on
+  orm (open question 6).
+- Binding the parameters to a database driver and running the statements is a database
+  executor's work, which orm keeps inside its clients; until orm exposes it, the export ends at its
+  statements (open question 6).
+
 ## Settled rulings
 
 - **Truth ownership is per table.** Each table declares which side holds the authority; the other
