@@ -85,3 +85,43 @@ func TestOpenWithoutDescriptors(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// TestWatchDescriptors pins what the watch of an opened corpus costs on a platform where it holds a descriptor for
+// every folder and document (spec 40 Opening a corpus): the folders and the documents of the corpus, and nothing
+// that grows with the operations. It is the figure the scale envelope states (T12.5-3), so a change of the watch
+// shows here.
+func TestWatchDescriptors(t *testing.T) {
+	const documents = 150
+	docs := map[string]string{}
+	for i := 0; i < documents; i++ {
+		docs[fmt.Sprintf("cards/C%d.flowmark.md", i)] = fmt.Sprintf("# Card %d\n", i)
+	}
+	root := t.TempDir()
+	writeTree(t, root, map[string]string{"dbspec/test.dbs": cardsDBS})
+	writeTree(t, root, docs)
+	cat, diags := catalog.Load(root)
+	if len(diags) > 0 || cat == nil {
+		t.Fatalf("catalog: %+v", diags)
+	}
+	before := openDescriptors(t)
+	j, err := journal.New(root, &recorder{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := Open(context.Background(), cat, j, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	held := openDescriptors(t) - before
+	// The documents, the table folder and the corpus root, and the few descriptors of the kqueue, the lock and the
+	// journal, which do not grow with the corpus.
+	if held < documents || held > documents+10 {
+		t.Errorf("40#opening-a-corpus: the watch of %d documents holds %d descriptors; want the documents and at most ten more", documents, held)
+	}
+	if err := c.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if after := openDescriptors(t) - before; after != 0 {
+		t.Errorf("40#opening-a-corpus: %d descriptors stay open after the corpus is closed", after)
+	}
+}
