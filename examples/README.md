@@ -26,3 +26,19 @@ links, two people and three views — in three corpora that differ in the store 
 An item's body, its markdown columns and its history block are its detail section in the two
 aggregate corpora and the rest of its own file in the split one. The three corpora read back
 the same rows of every table, which a test checks.
+
+## The board
+
+A board of `posts` (title, body, author, created) with `comments` (body, author, created, and a
+`parent` for a reply) proves a one-to-many relation in markdown, in two corpora that hold the
+same rows (`board.dbs`):
+
+| Corpus | `comments` storage | Where a comment lives |
+| --- | --- | --- |
+| `board/block` | `store block fk_comments_post list` | a list item under `## comments` in its post's file, a reply indented under its comment |
+| `board/files` | `store files` | its own file `comments/<key>.flowmark.md`, whose field list links to its post |
+
+A post is its own file `posts/<key>.flowmark.md` in both, and every document reads as an
+ordinary board page in a markdown viewer: the post, its fields as links, its comments. A test
+creates a post, comments on it, replies, edits and deletes through the engine on both corpora
+and requires the same rows after each step.

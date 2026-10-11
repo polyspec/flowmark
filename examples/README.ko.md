@@ -1,5 +1,5 @@
 <!-- doc-id: examples -->
-<!-- source-sha256: 8a9e6f89601b7897b8305e390043d40aff6c316abcd3d531c3c814c54dd4d125 -->
+<!-- source-sha256: 26c55a44d895479abfe8446bac71c9243350a7d4f296c29be510fda3672d3248 -->
 # Examples
 
 [English](README.md)
@@ -26,3 +26,17 @@ view 세 개 — 를 세 corpus에 담는다. 세 corpus는 `items`의 store set
 item의 body, markdown column, history block은 두 aggregate corpus에서는 그 item의 detail
 section이고, split corpus에서는 그 item 파일의 나머지 부분이다. 세 corpus는 모든 table에서 같은
 행을 읽어 내며, test가 이를 확인한다.
+
+## The board
+
+`posts`(title, body, author, created)와 `comments`(body, author, created, 답글을 위한 `parent`)로
+된 게시판이 markdown의 일대다 관계를 보인다. 같은 행을 담는 두 corpus가 있다(`board.dbs`).
+
+| Corpus | `comments` storage | comment가 놓이는 곳 |
+| --- | --- | --- |
+| `board/block` | `store block fk_comments_post list` | 그 post 파일의 `## comments` 아래 list item 하나, 답글은 그 comment 아래 들여쓰기 |
+| `board/files` | `store files` | 자기 파일 `comments/<key>.flowmark.md`, 그 field list가 post로 link한다 |
+
+두 corpus 모두에서 post는 자기 파일 `posts/<key>.flowmark.md`이고, 모든 문서는 markdown viewer에서
+평범한 게시판 페이지로 읽힌다: post, link로 된 field, comment. test는 두 corpus에서 엔진으로 post를
+만들고, comment를 달고, 답글을 달고, 고치고 지우며, 단계마다 같은 행을 요구한다.
