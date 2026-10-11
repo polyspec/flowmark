@@ -1,5 +1,5 @@
 <!-- doc-id: spec-dialect -->
-<!-- source-sha256: 6fb056bab5acab225ec09567bb703a2b2661eba2918e557d3511e562784707b1 -->
+<!-- source-sha256: fc2aa9921c1114ba2ee4976371c8e72458a88fdfdfcb36e4f48f89e11feedb69 -->
 # Capability table
 
 [English](60-dialect.md)
@@ -29,7 +29,7 @@ surface가 corpus에서 무엇을 하는지 또는 orm 전통에 따라 `CAPABIL
 | Surface | 판정 |
 | --- | --- |
 | `one`, `all`, `count`, `group_count`, `sum`, `avg` | memory의 corpus 위에서 지원. `group_count`는 NULL을 함께 묶는다 |
-| 정렬 | IR `order`는 column의 type으로 정렬한다. 없는 읽기는 저장 순서를 돌려준다([document model](20-document-model.md)) |
+| 정렬 | IR `order`는 column의 type으로 정렬하며, NULL은 오름차순에서 모든 값 앞에, 내림차순에서 모든 값 뒤에 오고, 동률은 저장 순서다 — `group_count`의 group과 `limit_per_parent`의 순위에도 같다. 없는 읽기는 저장 순서를 돌려준다([document model](20-document-model.ko.md#순서)). 근거: MySQL과 SQLite는 오름차순에서 NULL을 처음에, PostgreSQL은 마지막에 둔다. MySQL에는 `NULLS FIRST`가 없으므로, NULL을 가장 작게 두는 것이 세 database가 흉내 없이 render하는 유일한 규칙이다 |
 | `paginate` | 지원. 요청 하나가 일관된 corpus 하나를 읽는다 |
 | `insert`(단일, 다중 행) | 지원. `identity`, `key_prefix`, `order` column은 executor가 할당하며 생략할 수 있다. default는 명시적으로 쓴다 |
 | `update` | 지원. 읽은 뒤 바뀐 대상은 덮어쓰지 않고 `WRITE_CONFLICT`로 실패한다 |

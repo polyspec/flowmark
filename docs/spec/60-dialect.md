@@ -30,7 +30,7 @@ Go client implements it first and every other client is its own orm item.
 | Surface | Ruling |
 | --- | --- |
 | `one`, `all`, `count`, `group_count`, `sum`, `avg` | Supported over the in-memory corpus; `group_count` groups NULLs together |
-| ordering | An IR `order` sorts by the column's type; a read without one returns storage order ([document model](20-document-model.md)) |
+| ordering | An IR `order` sorts by the column's type, NULL before every value ascending and after every value descending, ties in storage order — also for the groups of `group_count` and the ranking of `limit_per_parent`; a read without one returns storage order ([document model](20-document-model.md#order)). Grounding: MySQL and SQLite put NULL first ascending and PostgreSQL last; MySQL has no `NULLS FIRST`, so NULL-smallest is the one rule all three render without emulation |
 | `paginate` | Supported; one request reads one consistent corpus |
 | `insert` (single and multi-row) | Supported; `identity`, `key_prefix` and `order` columns are executor-assigned and may be omitted; defaults are written explicitly |
 | `update` | Supported; a target changed since it was read fails `WRITE_CONFLICT`, never an overwrite |
