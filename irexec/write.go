@@ -871,10 +871,11 @@ func (w *writer) restrict(x *rec, seq int) *Error {
 }
 
 // removeRow removes row x from its file, or the file of a files row; the siblings
-// of an ordered table close the gap.
+// of an ordered block or document table close the gap, and those of a files table
+// keep their ranks, since a gap changes no position.
 func (w *writer) removeRow(x *rec) *Error {
 	tb := x.tb
-	if tb.Order != "" {
+	if tb.Order != "" && tb.Storage.Kind != catalog.StorageFiles {
 		if err := w.closeGap(x); err != nil {
 			return err
 		}

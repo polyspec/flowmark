@@ -33,6 +33,9 @@ type Corpus struct {
 	recs map[string][]*rec
 	// ordered caches the storage order of each table.
 	ordered map[string][]*rec
+	// positions caches the 1-based sibling position of each row of a files table
+	// with an order column, which its stored rank gives (spec 20 Order).
+	positions map[string]map[*rec]int64
 	// byRow finds the record of a row.
 	byRow map[*store.Row]*rec
 }
@@ -89,7 +92,7 @@ func Open(cat *catalog.Catalog, fsys store.FS, m *validate.Memo) (*Corpus, error
 // index builds the rows of each table from the files.
 func (c *Corpus) index() {
 	c.recs = map[string][]*rec{}
-	c.ordered = map[string][]*rec{}
+	c.reorder()
 	c.byRow = map[*store.Row]*rec{}
 	paths := make([]string, 0, len(c.files))
 	for p := range c.files {
@@ -101,6 +104,13 @@ func (c *Corpus) index() {
 			c.place(r, p, nil)
 		}
 	}
+}
+
+// reorder drops the cached storage orders and positions, which a changed rank or
+// a changed set of rows invalidates.
+func (c *Corpus) reorder() {
+	c.ordered = map[string][]*rec{}
+	c.positions = map[string]map[*rec]int64{}
 }
 
 // place records row r, held by the file path, and its block rows.
@@ -248,6 +258,8 @@ func (c *Corpus) value(x *rec, col string) (cell, *Error) {
 		return cell{text: strings.TrimSuffix(*v, "\n")}, nil
 	case tb.Storage.Kind == catalog.StorageBlock && col == placementColumn(tb):
 		return cell{text: x.parent.row.Key}, nil
+	case tb.Storage.Kind == catalog.StorageFiles && col == tb.Order:
+		return c.position(x)
 	}
 	if _, raw := r.Raw[col]; raw {
 		return cell{}, c.typeFault(x, col)
@@ -394,25 +406,7 @@ func (c *Corpus) filesOrder(tb *catalog.Table) ([]*rec, *Error) {
 			sort.SliceStable(group, func(i, j int) bool { return keyLess(keyInt, group[i].row.Key, group[j].row.Key) })
 			return
 		}
-		type pos struct {
-			n  int64
-			ok bool
-		}
-		at := make(map[*rec]pos, len(group))
-		for _, x := range group {
-			n, ok := c.orderValue(x, tb.Order)
-			at[x] = pos{n, ok}
-		}
-		sort.SliceStable(group, func(i, j int) bool {
-			a, b := at[group[i]], at[group[j]]
-			switch {
-			case a.ok != b.ok:
-				return a.ok
-			case a.ok && a.n != b.n:
-				return a.n < b.n
-			}
-			return group[i].file < group[j].file
-		})
+		c.sortSiblings(tb, group)
 	}
 	for _, g := range children {
 		siblings(g)
@@ -443,7 +437,91 @@ func (c *Corpus) filesOrder(tb *catalog.Table) ([]*rec, *Error) {
 	return append(out, rest...), nil
 }
 
-// orderOf returns the order value of row x.
+// sortSiblings sorts a sibling group of a files table with an order column into its
+// sibling order (spec 20 Order): by ascending rank, rows sharing a rank in corpus
+// order, and the rows whose rank is not of its type after the others in corpus
+// order.
+func (c *Corpus) sortSiblings(tb *catalog.Table, group []*rec) {
+	type rank struct {
+		n  int64
+		ok bool
+	}
+	at := make(map[*rec]rank, len(group))
+	for _, x := range group {
+		n, ok := c.orderValue(x, tb.Order)
+		at[x] = rank{n, ok}
+	}
+	sort.SliceStable(group, func(i, j int) bool {
+		a, b := at[group[i]], at[group[j]]
+		switch {
+		case a.ok != b.ok:
+			return a.ok
+		case a.ok && a.n != b.n:
+			return a.n < b.n
+		}
+		return group[i].file < group[j].file
+	})
+}
+
+// filesGroup names the sibling group of a row of a files table by its parent
+// value; ok is false when the parent is not a value of its type, and the row then
+// belongs to no known group.
+func filesGroup(x *rec) (string, bool) {
+	pc := parentColumn(x.tb)
+	if pc == "" {
+		return "", true
+	}
+	if _, raw := x.row.Raw[pc]; raw {
+		return "", false
+	}
+	if v := x.row.Scalars[pc]; v != nil {
+		return "=" + *v, true
+	}
+	return "null", true
+}
+
+// position returns the order value a read fills for row x of a files table: its
+// 1-based position in its sibling order, which its stored rank gives (spec 20
+// Order). A row whose rank, or whose parent, is not a value of its type fails as
+// CONSTRAINT naming that type diagnostic: the rank has no comparison, and without
+// its parent the row's sibling group is not known.
+func (c *Corpus) position(x *rec) (cell, *Error) {
+	tb := x.tb
+	if _, raw := x.row.Raw[tb.Order]; raw {
+		return cell{}, c.typeFault(x, tb.Order)
+	}
+	if _, ok := filesGroup(x); !ok {
+		return cell{}, c.typeFault(x, parentColumn(tb))
+	}
+	at, ok := c.positions[tb.Name]
+	if !ok {
+		groups := map[string][]*rec{}
+		var keys []string
+		for _, y := range c.recs[tb.Name] {
+			g, ok := filesGroup(y)
+			if !ok {
+				continue
+			}
+			if _, seen := groups[g]; !seen {
+				keys = append(keys, g)
+			}
+			groups[g] = append(groups[g], y)
+		}
+		at = map[*rec]int64{}
+		for _, g := range keys {
+			members := groups[g]
+			c.sortSiblings(tb, members)
+			for i, y := range members {
+				at[y] = int64(i + 1)
+			}
+		}
+		c.positions[tb.Name] = at
+	}
+	return cell{text: strconv.FormatInt(at[x], 10)}, nil
+}
+
+// orderOf returns the stored order value of row x: its rank in files storage, its
+// position in the others.
 func (c *Corpus) orderOf(x *rec, col string) (int64, *Error) {
 	n, ok := c.orderValue(x, col)
 	if !ok {
@@ -452,15 +530,18 @@ func (c *Corpus) orderOf(x *rec, col string) (int64, *Error) {
 	return n, nil
 }
 
-// orderValue returns the order value of row x; ok is false when it is not a value
-// of its type.
+// orderValue returns the stored order value of row x; ok is false when it is not a
+// value of its type.
 func (c *Corpus) orderValue(x *rec, col string) (int64, bool) {
-	v, err := c.value(x, col)
-	if err != nil || v.null {
+	if _, raw := x.row.Raw[col]; raw {
 		return 0, false
 	}
-	n, perr := strconv.ParseInt(v.text, 10, 64)
-	return n, perr == nil
+	v := x.row.Scalars[col]
+	if v == nil {
+		return 0, false
+	}
+	n, err := strconv.ParseInt(*v, 10, 64)
+	return n, err == nil
 }
 
 // keyLess orders two canonical keys: numerically for an integer key, else by code

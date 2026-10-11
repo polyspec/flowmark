@@ -94,7 +94,7 @@ func TestInsert(t *testing.T) {
 			t.Fatalf("targets %+v", tg)
 		}
 		f.commit(res)
-		if got := f.file("notes/N4.flowmark.md"); got != lines("# Fourth", "- position: 3", "", "Text.") {
+		if got := f.file("notes/N4.flowmark.md"); got != lines("# Fourth", "- position: 1002", "", "Text.") {
 			t.Fatalf("N4:\n%s", got)
 		}
 	})

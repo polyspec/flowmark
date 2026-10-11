@@ -40,7 +40,7 @@
     "corpus": {
       "tasks/T5.flowmark.md": [
         "# New task",
-        "- position: 1",
+        "- position: 1000",
         "- done: false",
         "",
         "New body."
