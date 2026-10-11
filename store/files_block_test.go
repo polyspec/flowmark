@@ -18,13 +18,13 @@ func blockParseCases() []parseCase {
 		accept("10#sections-and-their-values: a markdown section before a child block", withBase(
 			"## cause", "", "Cause text.", "", "## task_steps", "- S1 Draft done:true")),
 		noncanonical("10#document-order: an empty block heading of a files row", 5, withBase("## task_steps")),
-		noncanonical("10#detail-sections: a block row's detail section without content", 8, withBase(
+		noncanonical("10#detail-headings-and-anchors: a block row's detail section without content", 8, withBase(
 			"## task_steps", "- S1 Draft done:true", "", "### task_steps row S1")),
 		reject("10#list-rows: a placement foreign key written as a field of a block row", RuleBlock, 6, withBase(
 			"## task_steps", "- S1 Draft task:T1 done:true")),
 		reject("10#list-rows: a non-null field of a block row missing", RuleBlock, 6, withBase(
 			"## task_steps", "- S1 Draft")),
-		reject("10#detail-sections: a block row's detail names no row", RuleBlock, 8, withBase(
+		reject("10#detail-headings-and-anchors: a block row's detail names no row", RuleBlock, 8, withBase(
 			"## task_steps", "- S1 Draft done:true", "", "### task_steps row S9", "", "x")),
 		reject("10#sections-and-their-values: a block section written twice", RuleSection, 8, withBase(
 			"## task_steps", "- S1 Draft done:true", "", "## task_steps", "- S2 Two done:true")),
@@ -69,7 +69,7 @@ func TestRenderFileBlocks(t *testing.T) {
 		"#### step_refs\n| id | label |\n| --- | --- |\n| 1 | spec |\n\n" +
 		"##### step_refs row 1\n\n###### note\n\nRef note.\n"
 
-	out, diags := RenderFile(cat, "tasks", taskWithBlocks(map[string][]*Row{"task_steps": steps}), lk)
+	out, diags := renderFileOf(t, cat, "tasks", taskWithBlocks(map[string][]*Row{"task_steps": steps}), lk)
 	if len(diags) > 0 || string(out) != want {
 		t.Fatalf("written %q with %+v; want %q", out, diags, want)
 	}
@@ -80,11 +80,11 @@ func TestRenderFileBlocks(t *testing.T) {
 	if got := back.Blocks["task_steps"]; len(got) != 1 || len(got[0].Blocks["step_refs"]) != 1 {
 		t.Fatalf("read blocks %+v; want the step and its reference", back.Blocks)
 	}
-	if again, _ := RenderFile(cat, "tasks", back, lk); !bytes.Equal(again, out) {
+	if again, _ := renderFileOf(t, cat, "tasks", back, lk); !bytes.Equal(again, out) {
 		t.Fatalf("P2: %q != %q", again, out)
 	}
 
-	out, diags = RenderFile(cat, "tasks", taskWithBlocks(map[string][]*Row{"task_steps": nil}), lk)
+	out, diags = renderFileOf(t, cat, "tasks", taskWithBlocks(map[string][]*Row{"task_steps": nil}), lk)
 	if len(diags) > 0 || string(out) != "# Title\n- position: 1\n- done: true\n" {
 		t.Fatalf("an empty block: written %q with %+v", out, diags)
 	}
@@ -100,7 +100,7 @@ func TestRenderFileBlocks(t *testing.T) {
 			stepRow("S1", "Draft", "1", "true", "", map[string][]*Row{"step_refs": {withRowTable(ref, "tasks")}})}})},
 	}
 	for _, c := range refused {
-		out, diags := RenderFile(cat, "tasks", c.row, lk)
+		out, diags := renderFileOf(t, cat, "tasks", c.row, lk)
 		if out != nil || len(diags) == 0 || diags[0].Rule != RuleConstraint {
 			t.Fatalf("%s: written %q with %+v; want CONSTRAINT", c.name, out, diags)
 		}
@@ -116,7 +116,7 @@ func TestRenderOwnFileLink(t *testing.T) {
 	want := "# Title\n- position: 1\n- done: true\n\n" +
 		"## task_links\n| id | target |\n| --- | --- |\n| L1 | [T1](T1.flowmark.md) |\n"
 
-	out, diags := RenderFile(cat, "tasks", taskWithBlocks(map[string][]*Row{"task_links": {link}}), stubLinker{})
+	out, diags := renderFileOf(t, cat, "tasks", taskWithBlocks(map[string][]*Row{"task_links": {link}}), stubLinker{})
 	if len(diags) > 0 || string(out) != want {
 		t.Fatalf("written %q with %+v; want %q", out, diags, want)
 	}
@@ -124,7 +124,7 @@ func TestRenderOwnFileLink(t *testing.T) {
 	if len(pd) > 0 || back == nil {
 		t.Fatalf("written link does not parse: %+v", pd)
 	}
-	if again, _ := RenderFile(cat, "tasks", back, stubLinker{}); !bytes.Equal(again, out) {
+	if again, _ := renderFileOf(t, cat, "tasks", back, stubLinker{}); !bytes.Equal(again, out) {
 		t.Fatalf("P2: %q != %q", again, out)
 	}
 }

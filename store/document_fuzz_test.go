@@ -103,17 +103,18 @@ func FuzzParseDocument(f *testing.F) {
 					t.Fatalf("a parsed document is refused on write: %v %+v\ninput: %q", err, rd, data)
 				}
 			}
-			out, rd = renderDocument(lay, rows, lk, false)
-			if len(rd) > 0 {
-				t.Fatalf("a parsed document is refused on the read-side emission: %+v\ninput: %q", rd, data)
+			var rf []Refusal
+			out, _, rf = renderDocument(lay, rows, lk, false)
+			if len(rf) > 0 {
+				t.Fatalf("a parsed document is refused on the read-side emission: %+v\ninput: %q", rf, data)
 			}
 		}
 		back, pd, err := ParseDocument(cat, table, rel, out, lk)
 		if err != nil || len(pd) > 0 || back == nil {
 			t.Fatalf("emitted document does not parse cleanly: %v %+v\ninput: %q\nemit: %q", err, pd, data, out)
 		}
-		again, rd := renderDocument(lay, back, lk, false)
-		if len(rd) > 0 || !bytes.Equal(again, out) {
+		again, _, rf := renderDocument(lay, back, lk, false)
+		if len(rf) > 0 || !bytes.Equal(again, out) {
 			t.Fatalf("P2 failed\ninput: %q\nemit: %q\nagain: %q", data, out, again)
 		}
 		if len(diags) == 0 && !bytes.Equal(out, data) {

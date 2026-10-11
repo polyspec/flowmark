@@ -40,7 +40,7 @@ The failure codes are those of [operations](40-ops.md).
   name).
 - **Length.** A `files` key longer than 243 bytes is `CONSTRAINT` on write.
 - **Case-insensitive uniqueness.** A key equal to another key of its table without regard to case is
-  `DUPLICATE_KEY` on a write that introduces it, naming the first, and the validator's `key.duplicate`; the
+  `DUPLICATE_KEY` on a write that introduces it, naming the other row, and the validator's `key.duplicate`; the
   collision is a duplicate of the key's file name and anchor, and it never makes a file unreadable, except that two rows of one file whose keys are byte for byte equal are `format.block` when both have detail sections, since the two sections share one heading text ([canonical format](10-canonical-format.md#detail-headings-and-anchors)), or when a `parent` cell of the file names their key, since the parent cannot be assigned ([canonical format](10-canonical-format.md#table-rows)); two rows with byte-for-byte equal keys make their table unavailable ([canonical format](10-canonical-format.md#diagnostics)).
 - **Canonical file name.** A `files` file whose name is not the canonical text of its key's type is
   `format.block` on read ([document model](20-document-model.md)).
@@ -58,7 +58,7 @@ On write, each of the following is `CONSTRAINT`; the rule that states it is name
 - a logical write that rewrites a file with a `format.*` diagnostic, naming the file and the diagnostic, and naming `flowmark canon` when it is `format.noncanonical`, apart from the exemptions of the commit ([canonical format](10-canonical-format.md)); a write never normalizes document bytes;
 - a `markdown` value holding a top-level heading of level ≤ L, by the CommonMark block structure
   ([canonical format](10-canonical-format.md));
-- a write that introduces a collision of a heading with a detail anchor, naming the other heading: a
+- a write that introduces a collision of a heading with a detail anchor, located at the row and column whose written text holds the heading or id that takes the anchor — a `markdown` column's value, a `files` row's title for its H1, or, for a section or block heading, the row whose scope it opens, at the `markdown` column or child table it names — naming the detail heading whose anchor it takes: a
   title update, a payload write, a row insert, a key update, a move or the creation of a detail section, other than a duplicate key, which is `DUPLICATE_KEY`
   ([canonical format](10-canonical-format.md#detail-headings-and-anchors));
 - a date, time or datetime value written `now`, and a text longer than its column

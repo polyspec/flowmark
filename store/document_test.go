@@ -55,6 +55,9 @@ func row(cells ...string) string { return "| " + strings.Join(cells, " | ") + " 
 const (
 	peopleHeader = "| id | parent | name | role | active | born | seen | clock | ref | blob | weight | rank | big | score |"
 	peopleDelim  = "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"
+	// milestoneHeader and milestoneRow are a three-column table without detail sections.
+	milestoneHeader = "| id | parent | title |"
+	milestoneRow    = "| M1 |  | Foundation |"
 )
 
 // tableOfH1 is the table that a document names in its H1 line, items when the
@@ -114,6 +117,9 @@ func documentParseCases() []docCase {
 		noncanonicalDoc("10#document-order: H1 with extra spaces", 1, raw("#  items", "- [ ] T1 Plan done:false")),
 		noncanonicalDoc("10#document-order: no H1 line", 1, raw("- [ ] T1 Plan done:false")),
 		noncanonicalDoc("10#document-order: a blank line between the H1 and the rows", 2, raw("# items", "", "- [ ] T1 Plan done:false")),
+		noncanonicalDoc("10#document-order: two blank lines between the H1 and the rows", 2, raw("# items", "", "", "- [ ] T1 Plan done:false")),
+		noncanonicalDoc("10#document-order: a line of spaces and tabs between the H1 and the rows", 2, raw("# items", " \t ", "- [ ] T1 Plan done:false")),
+		noncanonicalDoc("10#document-order: a blank line between the H1 and a table", 2, raw("# milestones", "", "| id | parent | title |", "| --- | --- | --- |", row("M1", "", "Foundation"))),
 
 		// List rows: the glyph, the key, the title and the fields.
 		docAccept("10#list-rows: the glyph of each state", itemsOf("- [x] T1 Plan done:true", "- [~] T2 Plan done:false", "- [ ] T3 Plan done:false")),
@@ -136,11 +142,11 @@ func documentParseCases() []docCase {
 			"", "## people row P1", "", "### bio", "", "Notes.")),
 		docAccept("10#list-rows: a list row without a state column", raw("# notes", "- N1 Plan", "  - N2 Child")),
 		docReject("10#list-rows: a state glyph in a list without a state column", RuleBlock, 2, raw("# notes", "- [ ] N1 Plan")),
-		noncanonicalDoc("10#detail-sections: detail sections out of storage order", 5, itemsOf(
+		noncanonicalDoc("10#detail-headings-and-anchors: detail sections out of storage order", 5, itemsOf(
 			"- [ ] T1 Plan done:false", "- [ ] T2 Other done:false", "", "## items row T2", "", "B.", "", "## items row T1", "", "A.")),
 		docAccept("10#single-line-places: U+1680 at the start of a title", itemsOf("- [ ] T1  Plan done:false")),
 		docAccept("10#single-line-places: a prepended concatenation mark at the start of a title", itemsOf("- [ ] T1 ؀Plan done:false")),
-		docAccept("10#detail-sections: an open fence takes in the next detail heading as its body", itemsOf(
+		docAccept("10#detail-headings-and-anchors: an open fence takes in the next detail heading as its body", itemsOf(
 			"- [ ] T1 Plan done:false", "- [ ] T2 Other done:false", "", "## items row T1", "", "```", "", "## items row T2", "", "x")),
 		docReject("10#single-line-places: a table cell that begins with an invisible character", RuleBlock, 4, peopleOf(
 			peopleHeader, peopleDelim,
@@ -151,7 +157,7 @@ func documentParseCases() []docCase {
 		docReject("10#list-rows: a glyph of two characters", RuleBlock, 2, itemsOf("- [xx] T1 Plan done:false")),
 		docReject("10#list-rows: an odd indentation", RuleBlock, 2, itemsOf("   - [ ] T1 Plan done:false")),
 		docReject("10#list-rows: a row two levels under the row above", RuleBlock, 3, itemsOf("- [ ] T1 Plan done:false", "    - [ ] T2 Deep done:false")),
-		docReject("10#list-rows: an undeclared field", RuleBlock, 2, itemsOf("- [ ] T1 Plan done:false nope:1")),
+		docAccept("10#list-rows: an undeclared token after a field is title text", itemsOf("- [ ] T1 Plan nope:1 done:false")),
 		docReject("10#list-rows: a field out of column order", RuleBlock, 2, itemsOf(`- [ ] T1 Plan note:"x" done:false`)),
 		docReject("10#list-rows: a duplicate field", RuleBlock, 2, itemsOf("- [ ] T1 Plan done:false done:true")),
 		docReject("10#list-rows: a non-null field missing", RuleBlock, 2, itemsOf("- [ ] T1 Plan")),
@@ -162,8 +168,20 @@ func documentParseCases() []docCase {
 		docReject("10#foreign-keys-as-links: a foreign key written as plain text", RuleBlock, 2, itemsOf("- [ ] T1 Plan owner:P1 done:false")),
 		docReject("10#list-rows: an empty title", RuleBlock, 2, itemsOf("- [ ] T1 done:false")),
 		docReject("10#list-rows: a key with a dash before an underscore", RuleBlock, 2, itemsOf("- [ ] T-_1 Plan done:false")),
-		docReject("10#list-rows: a tab that ends the title before a field", RuleBlock, 2, itemsOf("- [ ] T1 Plan\tdone:false")),
-		{name: "10#list-rows: an unescaped title token that begins with a column", rule: RuleBlock, line: 2, col: 10, text: itemsOf("- [ ] T1 Set owner: review done:false")},
+		{name: "10#list-rows: a tab after the list marker moves the content indent", rule: RuleBlock, line: 2, col: 2, text: itemsOf("-\t[ ] T1 Plan done:false")},
+		docReject("10#list-rows: a space and a tab after the list marker", RuleBlock, 2, itemsOf("- \t[ ] T1 Plan done:false")),
+		{name: "10#list-rows: a tab after the list marker of a child row", rule: RuleBlock, line: 3, col: 4, text: itemsOf("- [ ] T1 Plan done:false", "  -\t[ ] T2 Child done:false")},
+		noncanonicalDoc("10#list-rows: a tab that ends the title before a field", 2, itemsOf("- [ ] T1 Plan\tdone:false")),
+		noncanonicalDoc("10#list-rows: a tab that ends the title before a field and a second field", 2, itemsOf("- [ ] T1 Plan\tdone:false note:\"x\"")),
+		noncanonicalDoc("10#list-rows: an unescaped title token that begins with a column", 2, itemsOf("- [ ] T1 Set owner: review done:false")),
+		noncanonicalDoc("10#list-rows: an unescaped title token with a value that begins with a column", 2, itemsOf("- [ ] T1 Set owner:x review done:false")),
+		noncanonicalDoc("10#list-rows: an unescaped title token after a tab that begins with a column", 2, itemsOf("- [ ] T1 Set\towner:x review done:false")),
+		docReject("10#list-rows: an unescaped title token that ends the title", RuleBlock, 2, itemsOf(`- [ ] T1 Plan owner:a" done:false`)),
+		docReject("10#list-rows: a title that ends with a column and no value", RuleBlock, 2, itemsOf("- [ ] T1 fix owner:")),
+		docReject("10#list-rows: a title that ends with a column and no value before a field", RuleBlock, 2, itemsOf("- [ ] T1 fix owner: done:false")),
+		docAccept("10#list-rows: two spaces before an escaped title token", itemsOf(`- [ ] T1 a  owner\:x done:false`)),
+		docAccept("10#list-rows: a tab inside a title before an escaped title token", itemsOf("- [ ] T1 Set\towner\\:x done:false")),
+		docAccept("10#list-rows: a tab inside a title before an escaped column token that holds a column", itemsOf("- [ ] T1 Plan\tnote\\:x done:false")),
 		docReject("10#list-rows: a title that begins with an invisible character", RuleBlock, 2, itemsOf("- [ ] T1 ​Plan done:false")),
 		docReject("10#single-line-places: a title with a comment opener", RuleBlock, 2, itemsOf("- [ ] T1 a <!-- b done:false")),
 		docReject("10#list-rows: a parent field in a list", RuleBlock, 2, itemsOf("- [ ] T1 Plan done:false parent:T1")),
@@ -178,21 +196,27 @@ func documentParseCases() []docCase {
 		docAccept("10#list-rows: siblings in the line order of their order column", itemsOf("- [ ] T2 Plan done:false", "- [ ] T1 Plan done:false")),
 
 		// Detail sections.
-		docAccept("10#detail-sections: a body and a section", itemsOf("- [x] T1 Plan done:true", "", "## items row T1", "", "Body text.", "", "### evidence", "", "Proof.")),
-		docAccept("10#detail-sections: a present empty section alone", itemsOf("- [ ] T1 Plan done:false", "", "## items row T1", "", "### cause")),
-		docAccept("10#detail-sections: a level-4 heading inside a body", itemsOf("- [ ] T1 Plan done:false", "", "## items row T1", "", "Body.", "", "#### deep", "", "Deeper.")),
-		docReject("10#detail-sections: a second detail section of a row", RuleBlock, 8, itemsOf("- [ ] T1 Plan done:false", "", "## items row T1", "", "A.", "", "## items row T1", "", "B.")),
-		docReject("10#detail-sections: a detail section that names no row", RuleBlock, 4, itemsOf("- [ ] T1 Plan done:false", "", "## items row T9", "", "A.")),
+		docAccept("10#detail-headings-and-anchors: a body and a section", itemsOf("- [x] T1 Plan done:true", "", "## items row T1", "", "Body text.", "", "### evidence", "", "Proof.")),
+		docAccept("10#detail-headings-and-anchors: a present empty section alone", itemsOf("- [ ] T1 Plan done:false", "", "## items row T1", "", "### cause")),
+		docAccept("10#detail-headings-and-anchors: a level-4 heading inside a body", itemsOf("- [ ] T1 Plan done:false", "", "## items row T1", "", "Body.", "", "#### deep", "", "Deeper.")),
+		docReject("10#detail-headings-and-anchors: a second detail section of a row", RuleBlock, 8, itemsOf("- [ ] T1 Plan done:false", "", "## items row T1", "", "A.", "", "## items row T1", "", "B.")),
+		docReject("10#detail-headings-and-anchors: a detail section that names no row", RuleBlock, 4, itemsOf("- [ ] T1 Plan done:false", "", "## items row T9", "", "A.")),
+		docReject("10#document-order: a detail section whose key two rows share, only one of them with a section", RuleBlock, 5, itemsOf("- [ ] T1 Plan done:false", "- [ ] T1 Other done:false", "", "## items row T1", "", "A.")),
+		{name: "10#document-order: keys equal without regard to case match one row each", text: itemsOf("- [ ] T1 Plan done:false", "- [ ] t1 Other done:false", "", "## items row T1", "", "A."), readOnly: true},
 		docReject("10#document-order: content after the list", RuleBlock, 4, itemsOf("- [ ] T1 Plan done:false", "", "Stray.")),
-		docReject("10#detail-sections: a level-2 heading that is no detail section", RuleBlock, 4, itemsOf("- [ ] T1 Plan done:false", "", "## Notes", "", "x")),
+		docReject("10#detail-headings-and-anchors: a level-2 heading that is no detail section", RuleBlock, 4, itemsOf("- [ ] T1 Plan done:false", "", "## Notes", "", "x")),
 		docReject("10#sections-and-their-values: an undeclared section", RuleSection, 6, itemsOf("- [ ] T1 Plan done:false", "", "## items row T1", "", "### nope", "", "x")),
 		docReject("10#sections-and-their-values: a section written twice", RuleSection, 10, itemsOf("- [ ] T1 Plan done:false", "", "## items row T1", "", "### evidence", "", "a", "", "### evidence", "", "b")),
-		noncanonicalDoc("10#detail-sections: a detail heading with a wrong case of row", 4, itemsOf("- [ ] T1 Plan done:false", "", "## items Row T1", "", "A.")),
-		noncanonicalDoc("10#detail-sections: a detail heading with extra spaces", 4, itemsOf("- [ ] T1 Plan done:false", "", "## items  row T1", "", "A.")),
-		noncanonicalDoc("10#detail-sections: a detail heading with a tab after its hashes", 4, itemsOf("- [ ] T1 Plan done:false", "", "##\titems row T1", "", "A.")),
+		noncanonicalDoc("10#detail-headings-and-anchors: a detail heading with a wrong case of row", 4, itemsOf("- [ ] T1 Plan done:false", "", "## items Row T1", "", "A.")),
+		noncanonicalDoc("10#detail-headings-and-anchors: a detail heading with a wrong case of the table name", 4, itemsOf("- [ ] T1 Plan done:false", "", "## Items row T1", "", "A.")),
+		noncanonicalDoc("10#detail-headings-and-anchors: a detail heading with the table name and row in capitals", 4, itemsOf("- [ ] T1 Plan done:false", "", "## ITEMS ROW T1", "", "A.")),
+		docReject("10#detail-headings-and-anchors: a detail heading naming another table", RuleBlock, 4, itemsOf("- [ ] T1 Plan done:false", "", "## people row P1", "", "A.")),
+		docReject("10#detail-headings-and-anchors: a detail heading with a lowercase key", RuleBlock, 4, itemsOf("- [ ] T1 Plan done:false", "", "## items row t1", "", "A.")),
+		noncanonicalDoc("10#detail-headings-and-anchors: a detail heading with extra spaces", 4, itemsOf("- [ ] T1 Plan done:false", "", "## items  row T1", "", "A.")),
+		noncanonicalDoc("10#detail-headings-and-anchors: a detail heading with a tab after its hashes", 4, itemsOf("- [ ] T1 Plan done:false", "", "##\titems row T1", "", "A.")),
 		noncanonicalDoc("10#sections-and-their-values: a section heading with a tab after its hashes", 6, itemsOf("- [ ] T1 Plan done:false", "", "## items row T1", "", "###\tevidence", "", "a")),
-		noncanonicalDoc("10#detail-sections: a detail section without content", 4, itemsOf("- [ ] T1 Plan done:false", "", "## items row T1")),
-		noncanonicalDoc("10#detail-sections: a detail section directly after the list", 3, itemsOf("- [ ] T1 Plan done:false", "## items row T1", "", "A.")),
+		noncanonicalDoc("10#detail-headings-and-anchors: a detail section without content", 4, itemsOf("- [ ] T1 Plan done:false", "", "## items row T1")),
+		noncanonicalDoc("10#detail-headings-and-anchors: a detail section directly after the list", 3, itemsOf("- [ ] T1 Plan done:false", "## items row T1", "", "A.")),
 
 		// The people table: cells, the pipe escape, the parent link and the non-null sections.
 		{name: "10#table-rows: rows with a parent link, a quoted title and the pipe escape", table: "people", text: peopleOf(
@@ -209,6 +233,17 @@ func documentParseCases() []docCase {
 			text: peopleOf("| id | name |", peopleDelim, row("P1", "Ada"))},
 		{name: "10#table-rows: a delimiter row that is not one", table: "people", rule: RuleBlock, line: 3,
 			text: peopleOf(peopleHeader, "| ? |", row("P1", "", "Ada", "lead", "true", "", "", "", "", "", "", "", "", ""), "", "## people row P1", "", "### bio", "", "Notes.")},
+		noncanonicalDoc("10#table-rows: a delimiter row with alignment colons", 3, milestonesOf(milestoneHeader, "| :--- | --- | ---: |", milestoneRow)),
+		noncanonicalDoc("10#table-rows: a delimiter row without outer pipes", 3, milestonesOf(milestoneHeader, "--- | --- | ---", milestoneRow)),
+		noncanonicalDoc("10#table-rows: a delimiter row with trailing spaces and tabs", 3, milestonesOf(milestoneHeader, "| --- | --- | --- |  \t", milestoneRow)),
+		noncanonicalDoc("10#table-rows: a delimiter row with vertical tabs and form feeds", 3, milestonesOf(milestoneHeader, "|\v---\f|\v---|\f---\v|", milestoneRow)),
+		noncanonicalDoc("10#table-rows: a delimiter row indented by three spaces", 3, milestonesOf(milestoneHeader, "   | --- | --- | --- |", milestoneRow)),
+		noncanonicalDoc("10#table-rows: a delimiter row with a leading pipe and no trailing pipe", 3, milestonesOf(milestoneHeader, "| --- | --- | ---", milestoneRow)),
+		docReject("10#table-rows: a delimiter row indented by four spaces", RuleBlock, 3, milestonesOf(milestoneHeader, "    | --- | --- | --- |", milestoneRow)),
+		docReject("10#table-rows: a delimiter cell with two colons before the hyphens", RuleBlock, 3, milestonesOf(milestoneHeader, "| ::- | --- | --- |", milestoneRow)),
+		docReject("10#table-rows: a delimiter row of a cell count other than the header's", RuleBlock, 3, milestonesOf(milestoneHeader, "| --- | --- |", milestoneRow)),
+		docReject("10#table-rows: a setext-shaped line without outer pipes", RuleBlock, 3, milestonesOf(milestoneHeader, "---  \t", milestoneRow)),
+		docReject("10#table-rows: a list-item-shaped line without outer pipes", RuleBlock, 3, milestonesOf(milestoneHeader, "- --- | --- | ---", milestoneRow)),
 		docReject("10#foreign-keys-as-links: a parent cell written as plain text", RuleBlock, 5, peopleOf(
 			peopleHeader, peopleDelim,
 			row("P1", "", "Ada", "lead", "true", "", "", "", "", "", "", "", "", ""),
@@ -240,7 +275,7 @@ func documentParseCases() []docCase {
 			peopleHeader, peopleDelim,
 			row("P1", "", `"\q"`, "lead", "true", "", "", "", "", "", "", "", "", ""),
 			"", "## people row P1", "", "### bio", "", "Notes.")),
-		docReject("10#detail-sections: a non-null section missing from a row", RuleBlock, 4, peopleOf(
+		docReject("10#detail-headings-and-anchors: a non-null section missing from a row", RuleBlock, 4, peopleOf(
 			peopleHeader, peopleDelim,
 			row("P1", "", "Ada", "lead", "true", "", "", "", "", "", "", "", "", ""))),
 		noncanonicalDoc("10#table-rows: a cell with extra spaces", 4, peopleOf(
@@ -278,13 +313,13 @@ func documentParseCases() []docCase {
 			"- [ ] T1 Plan done:false", "", "## items row T1", "", "### item_history",
 			"| id | from_state | to_state | at |", "| --- | --- | --- | --- |",
 			"| 1 | waiting | doing | 2026-10-01 08:00:00.000000 |")),
-		docAccept("10#detail-sections: a block row with a section, and a row without a detail section", itemsOf(
+		docAccept("10#detail-headings-and-anchors: a block row with a section, and a row without a detail section", itemsOf(
 			"- [ ] T1 Plan done:false", "", "## items row T1", "", "### item_history",
 			"| id | from_state | to_state | at |", "| --- | --- | --- | --- |",
 			"| 1 | waiting | doing | 2026-10-01 08:00:00.000000 |",
 			"| 2 | doing | done | 2026-10-01 09:00:00.000000 |",
 			"", "#### item_history row 1", "", "##### evidence", "", "Checked.")),
-		docAccept("10#detail-sections: a block row with a present empty section", itemsOf(
+		docAccept("10#detail-headings-and-anchors: a block row with a present empty section", itemsOf(
 			"- [ ] T1 Plan done:false", "", "## items row T1", "", "### item_history",
 			"| id | from_state | to_state | at |", "| --- | --- | --- | --- |",
 			"| 1 | waiting | doing | 2026-10-01 08:00:00.000000 |",
@@ -317,7 +352,7 @@ func documentParseCases() []docCase {
 			"- [ ] T1 Plan done:false", "", "## items row T1", "", "### item_history",
 			"| id | from_state | to_state | at |", "| --- | --- | --- | --- |",
 			"| 1 | waiting |  | 2026-10-01 08:00:00.000000 |")),
-		docReject("10#detail-sections: two block rows with one key and a detail section each collide", RuleBlock, 25, itemsOf(
+		docReject("10#detail-headings-and-anchors: two block rows with one key and a detail section each collide", RuleBlock, 25, itemsOf(
 			"- [ ] T1 Plan done:false", "- [ ] T2 Other done:false", "", "## items row T1", "", "### item_history",
 			"| id | from_state | to_state | at |", "| --- | --- | --- | --- |",
 			"| 1 | waiting | doing | 2026-10-01 08:00:00.000000 |",
@@ -326,12 +361,12 @@ func documentParseCases() []docCase {
 			"| id | from_state | to_state | at |", "| --- | --- | --- | --- |",
 			"| 1 | doing | done | 2026-10-01 09:00:00.000000 |",
 			"", "#### item_history row 1", "", "##### evidence", "", "Other.")),
-		docReject("10#detail-sections: a block row's detail names no row of its block", RuleBlock, 11, itemsOf(
+		docReject("10#detail-headings-and-anchors: a block row's detail names no row of its block", RuleBlock, 11, itemsOf(
 			"- [ ] T1 Plan done:false", "", "## items row T1", "", "### item_history",
 			"| id | from_state | to_state | at |", "| --- | --- | --- | --- |",
 			"| 1 | waiting | doing | 2026-10-01 08:00:00.000000 |",
 			"", "#### item_history row 9", "", "x")),
-		docReject("10#detail-sections: a block row's detail at the level of the row above", RuleBlock, 11, itemsOf(
+		docReject("10#detail-headings-and-anchors: a block row's detail at the level of the row above", RuleBlock, 11, itemsOf(
 			"- [ ] T1 Plan done:false", "", "## items row T1", "", "### item_history",
 			"| id | from_state | to_state | at |", "| --- | --- | --- | --- |",
 			"| 1 | waiting | doing | 2026-10-01 08:00:00.000000 |",
@@ -341,7 +376,7 @@ func documentParseCases() []docCase {
 			"| id | from_state | to_state | at |", "| --- | --- | --- | --- |",
 			"| 1 | waiting | doing | 2026-10-01 08:00:00.000000 |",
 			"Stray.")),
-		docReject("10#detail-sections: a block named at the level of its row's detail heading", RuleBlock, 8, itemsOf(
+		docReject("10#detail-headings-and-anchors: a block named at the level of its row's detail heading", RuleBlock, 8, itemsOf(
 			"- [ ] T1 Plan done:false", "", "## items row T1", "", "Body.", "", "## item_history", "| id | from_state | to_state | at |")),
 		docReject("10#sections-and-their-values: a block section written twice", RuleSection, 11, itemsOf(
 			"- [ ] T1 Plan done:false", "", "## items row T1", "", "### item_history",
@@ -393,20 +428,20 @@ func documentParseCases() []docCase {
 			"- [ ] T1 Plan done:false", "- [ ] T2 Other done:false", "", "## items row T1", "", "### item_checks",
 			"- [x] C1 Plan done:true", "", "## items row T2", "", "### item_checks", "  - [ ] C2 Child done:false")),
 		docAccept("10#list-rows: fields after the title in a block", checkedOf("- [ ] C1 Plan done:false weight:2")),
-		docReject("10#list-rows: a field before the title in a block", RuleBlock, 7, checkedOf("- [ ] C1 weight:2 Plan done:false")),
+		noncanonicalDoc("10#list-rows: a declared column name before the title in a block", 7, checkedOf("- [ ] C1 weight:2 Plan done:false")),
 		docAccept("10#list-rows: an escaped title token in a block", checkedOf(`- [ ] C1 Set weight\: review done:false`)),
 		docAccept("10#order: siblings of a block in their line order", checkedOf("- [ ] C2 Two done:false", "- [ ] C1 One done:false")),
 		docReject("20#order: the order column written as a field of a block row", RuleBlock, 7, checkedOf("- [ ] C1 Plan done:false position:1")),
 		docReject("10#list-rows: a placement foreign key written as a field of a block row", RuleBlock, 7, checkedOf("- [ ] C1 Plan item:T1 done:false")),
 		docReject("10#list-rows: a non-null field of a block row missing", RuleBlock, 7, checkedOf("- [ ] C1 Plan")),
-		docAccept("10#detail-sections: a present empty section of a block row", checkedOf("- [x] C1 Plan done:true", "", "#### item_checks row C1", "", "##### evidence")),
+		docAccept("10#detail-headings-and-anchors: a present empty section of a block row", checkedOf("- [x] C1 Plan done:true", "", "#### item_checks row C1", "", "##### evidence")),
 		docAccept("10#document-order: a history block under a block row's detail section", checkedOf(
 			"- [~] C1 Plan done:false", "", "#### item_checks row C1", "", "##### item_check_history",
 			"| id | from_state | to_state | at |", "| --- | --- | --- | --- |",
 			"| 1 | open | doing | 2026-10-01 08:00:00.000000 |")),
 		docReject("20#document-order: a history block outside its block row's detail section", RuleBlock, 9, checkedOf(
 			"- [~] C1 Plan done:false", "", "##### item_check_history", "| id | from_state | to_state | at |", "| --- | --- | --- | --- |")),
-		docReject("10#detail-sections: a block row's detail names no row of its block", RuleBlock, 9, checkedOf(
+		docReject("10#detail-headings-and-anchors: a block row's detail names no row of its block", RuleBlock, 9, checkedOf(
 			"- [x] C1 Plan done:true", "", "#### item_checks row C9", "", "x")),
 	}
 }
@@ -482,20 +517,78 @@ func TestParseDocumentRules(t *testing.T) {
 	}
 }
 
+// TestListTitleDecoding requires that the title of a list row reads each escaped
+// title token `<column>\:` as `<column>:`, and keeps the white space between the
+// title tokens byte for byte, a tab included.
+func TestListTitleDecoding(t *testing.T) {
+	cat := loadDocumentFixture(t)
+	lk := documentLinker()
+	cases := []struct {
+		name, line, title string
+	}{
+		{"10#list-rows: an escaped title token decodes", "- [ ] T1 Set owner\\:x done:false", "Set owner:x"},
+		{"10#list-rows: two spaces before an escaped title token are kept", "- [ ] T1 a  owner\\:x done:false", "a  owner:x"},
+		{"10#list-rows: a tab inside a title before an escaped title token decodes", "- [ ] T1 Set\towner\\:x done:false", "Set\towner:x"},
+		{"10#list-rows: a tab inside a title before an escaped column token decodes", "- [ ] T1 Plan\tnote\\:x done:false", "Plan\tnote:x"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			rows, diags, err := ParseDocument(cat, "items", "items.flowmark.md", []byte(itemsOf(c.line)), lk)
+			if err != nil || len(diags) > 0 || len(rows) != 1 {
+				t.Fatalf("read: %v %+v rows %d", err, diags, len(rows))
+			}
+			if rows[0].Title != c.title {
+				t.Fatalf("title %q; want %q", rows[0].Title, c.title)
+			}
+		})
+	}
+}
+
+// TestDetailTableNameCase requires the table name and `row` of a detail heading to
+// compare as the viewers lowercase them: U+017F is not s, so a heading naming it is
+// another table; U+212A lowercases to k, and a capital K is the table in lower case.
+func TestDetailTableNameCase(t *testing.T) {
+	cat, diags := catalog.Load("testdata/casefold")
+	if len(diags) > 0 || cat == nil {
+		t.Fatalf("casefold fixture catalog: %+v", diags)
+	}
+	lk := documentLinker()
+	cases := []struct {
+		name, table, heading, rule string
+	}{
+		{"10#detail-headings-and-anchors: a table name with a long s is another table", "stems", "ſtems row S1", RuleBlock},
+		{"10#detail-headings-and-anchors: a table name with a Kelvin sign is noncanonical", "ktems", "Ktems row K1", RuleNoncanonical},
+		{"10#detail-headings-and-anchors: a table name in capitals is noncanonical", "ktems", "Ktems row K1", RuleNoncanonical},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			key := map[string]string{"stems": "S1", "ktems": "K1"}[c.table]
+			text := raw("# "+c.table, "| id | title |", "| --- | --- |", "| "+key+" | Plan |", "", "## "+c.heading, "", "A.")
+			_, diags, err := ParseDocument(cat, c.table, c.table+".flowmark.md", []byte(text), lk)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(diags) == 0 || diags[0].Rule != c.rule {
+				t.Fatalf("diagnostics %+v; want first rule %s", diags, c.rule)
+			}
+		})
+	}
+}
+
 // checkDocumentP2 requires that the rows write, that the written bytes parse
 // back without a diagnostic, and that the rows write the same bytes again.
 func checkDocumentP2(t *testing.T, cat *catalog.Catalog, table string, rows []*Row, lk Linker) []byte {
 	t.Helper()
-	out, diags, err := RenderDocument(cat, table, rows, lk)
-	if err != nil || len(diags) > 0 {
-		t.Fatalf("the rows are refused on write: %v %+v", err, diags)
+	out, rf, err := RenderDocument(cat, table, rows, lk)
+	if err != nil || len(rf) > 0 {
+		t.Fatalf("the rows are refused on write: %v %+v", err, rf)
 	}
 	back, diags, err := ParseDocument(cat, table, table+".flowmark.md", out, lk)
 	if err != nil || len(diags) > 0 || back == nil {
 		t.Fatalf("written file does not parse cleanly: %v %+v\n%s", err, diags, out)
 	}
-	again, diags, err := RenderDocument(cat, table, back, lk)
-	if err != nil || len(diags) > 0 || !bytes.Equal(again, out) {
+	again, rf, err := RenderDocument(cat, table, back, lk)
+	if err != nil || len(rf) > 0 || !bytes.Equal(again, out) {
 		t.Fatalf("P2: emit(parse(emit(d))) != emit(d)\n got: %q\nwant: %q", again, out)
 	}
 	return out
@@ -514,9 +607,9 @@ func TestDocumentGoldens(t *testing.T) {
 			if err != nil || len(diags) > 0 || rows == nil {
 				t.Fatalf("golden has diagnostics: %v %+v", err, diags)
 			}
-			out, diags, err := RenderDocument(cat, table, rows, lk)
-			if err != nil || len(diags) > 0 || !bytes.Equal(out, data) {
-				t.Fatalf("P1 failed: %v %+v\n got: %q\nwant: %q", err, diags, out, data)
+			out, rf, err := RenderDocument(cat, table, rows, lk)
+			if err != nil || len(rf) > 0 || !bytes.Equal(out, data) {
+				t.Fatalf("P1 failed: %v %+v\n got: %q\nwant: %q", err, rf, out, data)
 			}
 			checkDocumentP2(t, cat, table, rows, lk)
 		})
@@ -544,7 +637,16 @@ type writeCase struct {
 	rows  []*Row
 	rule  string
 	out   string
-	alone bool // the refusal is the only diagnostic
+	alone bool    // the refusal is the only diagnostic
+	at    []locus // the refusals in order, when their location is checked
+}
+
+// locus is the location of a refusal of a write: the row by key, its index among the
+// rows given (-1 unless its key is shared byte for byte), and the column it names.
+type locus struct {
+	key    string
+	index  int
+	column string
 }
 
 // item is an items row with its state, its done flag and its position.
@@ -565,6 +667,49 @@ func writeCases() []writeCase {
 	return []writeCase{
 		{name: "10#list-rows: a waiting row", rows: []*Row{item("T1", "Plan", "waiting", "1", done)},
 			out: "# items\n- [ ] T1 Plan done:false\n"},
+		{name: "10#diagnostics: a key shared byte for byte is refused at each later row, with its index", rows: []*Row{
+			item("T1", "First", "waiting", "1", done), item("T1", "Second", "waiting", "2", done)},
+			rule: RuleDuplicateKey, alone: true, at: []locus{{key: "T1", index: 1, column: "id"}}},
+		{name: "10#diagnostics: a key that is equal only without regard to case refuses the greater key", rows: []*Row{
+			item("T1", "First", "waiting", "1", done), item("t1", "Second", "waiting", "2", done)},
+			rule: RuleDuplicateKey, alone: true, at: []locus{{key: "t1", index: -1, column: "id"}}},
+		{name: "10#diagnostics: a case-insensitive pair refuses the same row in either request order", rows: []*Row{
+			item("t1", "Second", "waiting", "2", done), item("T1", "First", "waiting", "1", done)},
+			rule: RuleDuplicateKey, alone: true, at: []locus{{key: "t1", index: -1, column: "id"}}},
+		{name: "10#diagnostics: a sibling order shared by two rows faults each row at order", rows: []*Row{
+			item("T1", "A", "waiting", "1", done), item("T2", "B", "waiting", "1", done)},
+			rule: RuleConstraint, alone: false, at: []locus{{key: "T1", index: -1, column: "position"}, {key: "T2", index: -1, column: "position"}}},
+		{name: "10#diagnostics: a parent cycle faults each row on it at parent", rows: []*Row{
+			withParent(item("T1", "A", "waiting", "1", done), "T2"), withParent(item("T2", "B", "waiting", "1", done), "T1")},
+			rule: RuleConstraint, at: []locus{{key: "T1", index: -1, column: "parent"}, {key: "T2", index: -1, column: "parent"}}},
+		{name: "10#diagnostics: a parent that names no row faults its row alone", rows: []*Row{
+			withParent(item("T1", "A", "waiting", "1", done), "T9")},
+			rule: RuleConstraint, alone: true, at: []locus{{key: "T1", index: -1, column: "parent"}}},
+		{name: "10#diagnostics: a row under a parent that names no row has no cycle fault", rows: []*Row{
+			withParent(item("T1", "A", "waiting", "1", done), "T9"), withParent(item("T2", "B", "waiting", "1", done), "T1")},
+			rule: RuleConstraint, alone: true, at: []locus{{key: "T1", index: -1, column: "parent"}}},
+		{name: "10#diagnostics: orders 1 and 3 fault only the row whose order is outside 1..2", rows: []*Row{
+			item("T1", "A", "waiting", "1", done), item("T2", "B", "waiting", "3", done)},
+			rule: RuleConstraint, alone: true, at: []locus{{key: "T2", index: -1, column: "position"}}},
+		{name: "10#diagnostics: a cycle of T1 and T2 with T3 under T1 faults T1 and T2 and not T3", rows: []*Row{
+			withParent(item("T1", "A", "waiting", "1", done), "T2"), withParent(item("T2", "B", "waiting", "1", done), "T1"),
+			withParent(item("T3", "C", "waiting", "2", done), "T1")},
+			rule: RuleConstraint, at: []locus{{key: "T1", index: -1, column: "parent"}, {key: "T2", index: -1, column: "parent"}}},
+		{name: "10#diagnostics: a shared key whose rows also fault in order carries index 0 and 1 on every fault", rows: []*Row{
+			item("T1", "First", "waiting", "x", done), item("T1", "Second", "waiting", "x", done)},
+			rule: RuleDuplicateKey, at: []locus{{key: "T1", index: 1, column: "id"}, {key: "T1", index: 0, column: "position"}, {key: "T1", index: 1, column: "position"}}},
+		{name: "10#diagnostics: a key that two blocks of one table share is DUPLICATE_KEY", rows: []*Row{
+			withBlock(item("T1", "Plan", "waiting", "1", done), "item_checks", checkOf("C1", "A")),
+			withBlock(item("T2", "Other", "waiting", "2", done), "item_checks", checkOf("C1", "B"))},
+			rule: RuleDuplicateKey},
+		{name: "10#diagnostics: keys equal without regard to case in two blocks of one table are DUPLICATE_KEY", rows: []*Row{
+			withBlock(item("T1", "Plan", "waiting", "1", done), "item_checks", checkOf("C1", "A")),
+			withBlock(item("T2", "Other", "waiting", "2", done), "item_checks", checkOf("c1", "B"))},
+			rule: RuleDuplicateKey},
+		{name: "10#diagnostics: keys equal without regard to case, each with a detail section, are DUPLICATE_KEY", rows: []*Row{
+			withBlock(item("T1", "Plan", "waiting", "1", done), "item_checks", withBody(checkOf("C1", "A"), "Body A.\n")),
+			withBlock(item("T2", "Other", "waiting", "2", done), "item_checks", withBody(checkOf("c1", "B"), "Body B.\n"))},
+			rule: RuleDuplicateKey},
 		{name: "10#list-rows: a done row has the done glyph", rows: []*Row{item("T1", "Plan", "done", "1", doneTrue)},
 			out: "# items\n- [x] T1 Plan done:true\n"},
 		{name: "10#list-rows: a child row two spaces deeper", rows: []*Row{
@@ -590,6 +735,15 @@ func writeCases() []writeCase {
 		{name: "10#list-rows: a title token that begins with a column is escaped", rows: []*Row{
 			item("T1", "Ends with owner:", "waiting", "1", done)},
 			out: "# items\n- [ ] T1 Ends with owner\\: done:false\n"},
+		{name: "10#list-rows: a title token after a tab is escaped", rows: []*Row{
+			item("T1", "Plan\tnote:x", "waiting", "1", done)},
+			out: "# items\n- [ ] T1 Plan\tnote\\:x done:false\n"},
+		{name: "10#list-rows: a title token after two spaces is escaped", rows: []*Row{
+			item("T1", "a  owner:x", "waiting", "1", done)},
+			out: "# items\n- [ ] T1 a  owner\\:x done:false\n"},
+		{name: "10#list-rows: a title token written with a tab and the escape already", rows: []*Row{
+			item("T1", "Set\towner\\:x", "waiting", "1", done)},
+			rule: RuleConstraint},
 		{name: "10#list-rows: a title token written with the escape already", rows: []*Row{
 			item("T1", `Set owner\: review`, "waiting", "1", done)},
 			rule: RuleConstraint},
@@ -638,27 +792,27 @@ func writeCases() []writeCase {
 		{name: "20#hierarchy: a parent cycle", rows: []*Row{
 			withParent(item("T1", "Plan", "waiting", "1", done), "T2"),
 			withParent(item("T2", "Other", "waiting", "1", done), "T1")}, rule: RuleConstraint},
-		{name: "10#detail-sections: a body without its final line feed", rows: []*Row{
+		{name: "10#detail-headings-and-anchors: a body without its final line feed", rows: []*Row{
 			withBody(item("T1", "Plan", "waiting", "1", done), "Text.")}, rule: RuleConstraint},
-		{name: "10#detail-sections: a body with a level-2 heading", rows: []*Row{
+		{name: "10#detail-headings-and-anchors: a body with a level-2 heading", rows: []*Row{
 			withBody(item("T1", "Plan", "waiting", "1", done), "## x\n")}, rule: RuleConstraint},
-		{name: "10#detail-sections: a body with a level-3 heading", rows: []*Row{
+		{name: "10#detail-headings-and-anchors: a body with a level-3 heading", rows: []*Row{
 			withBody(item("T1", "Plan", "waiting", "1", done), "### x\n")}, rule: RuleConstraint},
-		{name: "10#detail-sections: a body that begins with a blank line", rows: []*Row{
+		{name: "10#detail-headings-and-anchors: a body that begins with a blank line", rows: []*Row{
 			withBody(item("T1", "Plan", "waiting", "1", done), "\nText.\n")}, rule: RuleConstraint},
-		{name: "10#detail-sections: a body with a CR", rows: []*Row{
+		{name: "10#detail-headings-and-anchors: a body with a CR", rows: []*Row{
 			withBody(item("T1", "Plan", "waiting", "1", done), "A\rB\n")}, rule: RuleConstraint},
-		{name: "10#detail-sections: a body of a table without a body column", table: "people", rows: []*Row{
+		{name: "10#detail-headings-and-anchors: a body of a table without a body column", table: "people", rows: []*Row{
 			withBody(peopleRow("P1", "Ada", map[string]string{}), "Text.\n")}, rule: RuleConstraint},
-		{name: "10#detail-sections: a non-null section missing", table: "people", rows: []*Row{
+		{name: "10#detail-headings-and-anchors: a non-null section missing", table: "people", rows: []*Row{
 			withoutSection(peopleRow("P1", "Ada", map[string]string{}), "bio")}, rule: RuleConstraint},
-		{name: "10#detail-sections: an undeclared section", rows: []*Row{
+		{name: "10#detail-headings-and-anchors: an undeclared section", rows: []*Row{
 			withSection(item("T1", "Plan", "waiting", "1", done), "nope", "x\n")}, rule: RuleConstraint},
 		{name: "10#single-line-places: a title with an invisible character at its start", rows: []*Row{
 			item("T1", "​Plan", "waiting", "1", done)}, rule: RuleConstraint},
-		{name: "10#detail-sections: a body whose open fence precedes a section", rows: []*Row{
+		{name: "10#detail-headings-and-anchors: a body whose open fence precedes a section", rows: []*Row{
 			withSection(withBody(item("T1", "Plan", "waiting", "1", done), "```\ncode\n"), "cause", "x")}, rule: RuleConstraint},
-		{name: "10#detail-sections: a present empty section", rows: []*Row{
+		{name: "10#detail-headings-and-anchors: a present empty section", rows: []*Row{
 			withSection(item("T1", "Plan", "waiting", "1", done), "cause", "")},
 			out: "# items\n- [ ] T1 Plan done:false\n\n## items row T1\n\n### cause\n"},
 		{name: "20#hierarchy: a parent that names no row of its block", table: "people", rows: []*Row{
@@ -685,7 +839,7 @@ func writeCases() []writeCase {
 			out: "# items\n- [ ] T1 Plan done:false\n\n## items row T1\n\n### item_history\n" +
 				"| id | from_state | to_state | at |\n| --- | --- | --- | --- |\n" +
 				"| 1 | waiting | doing | 2026-10-01 08:00:00.000000 |\n"},
-		{name: "10#detail-sections: a block row's section and its detail heading", rows: []*Row{
+		{name: "10#detail-headings-and-anchors: a block row's section and its detail heading", rows: []*Row{
 			withBlock(item("T1", "Plan", "waiting", "1", done), "item_history",
 				withSection(historyRow("1", "waiting", "doing", "2026-10-01 08:00:00.000000"), "evidence", "Checked.\n"))},
 			out: "# items\n- [ ] T1 Plan done:false\n\n## items row T1\n\n### item_history\n" +
@@ -721,15 +875,15 @@ func writeCases() []writeCase {
 		{name: "20#hierarchy: a block row whose parent names a row of another block", rows: []*Row{
 			withBlock(item("T1", "Plan", "waiting", "1", done), "item_steps", stepOf("S1", "")),
 			withBlock(item("T2", "Other", "waiting", "2", done), "item_steps", stepOf("S2", "S1"))}, rule: RuleConstraint, alone: true},
-		{name: "10#detail-sections: a block that the table does not declare", rows: []*Row{
+		{name: "10#detail-headings-and-anchors: a block that the table does not declare", rows: []*Row{
 			withBlock(item("T1", "Plan", "waiting", "1", done), "item_links",
 				historyRow("1", "waiting", "doing", "2026-10-01 08:00:00.000000"))}, rule: RuleConstraint},
-		{name: "10#detail-sections: a block row of another table", rows: []*Row{
+		{name: "10#detail-headings-and-anchors: a block row of another table", rows: []*Row{
 			withBlock(item("T1", "Plan", "waiting", "1", done), "item_history", noteRow("N1", "", "A", "1", nil))}, rule: RuleConstraint},
 		{name: "10#table-rows: a placement foreign key assigned to a block row", rows: []*Row{
 			withBlock(item("T1", "Plan", "waiting", "1", done), "item_history",
 				withScalar(historyRow("1", "waiting", "doing", "2026-10-01 08:00:00.000000"), "item", "T2"))}, rule: RuleConstraint},
-		{name: "10#detail-sections: a block row missing a non-null cell", rows: []*Row{
+		{name: "10#detail-headings-and-anchors: a block row missing a non-null cell", rows: []*Row{
 			withBlock(item("T1", "Plan", "waiting", "1", done), "item_history",
 				withoutScalar(historyRow("1", "waiting", "doing", "2026-10-01 08:00:00.000000"), "to_state"))}, rule: RuleConstraint},
 	}
@@ -769,6 +923,12 @@ func withoutScalar(r *Row, name string) *Row {
 func historyRow(id, from, to, at string) *Row {
 	sc := map[string]*string{"from_state": sp(from), "to_state": sp(to), "at": sp(at)}
 	return &Row{Table: "item_history", Key: id, Scalars: sc, Sections: map[string]*string{}, Raw: map[string]string{}, Dangling: map[string]DanglingLink{}}
+}
+
+// checkOf is an item_checks row, a block of an items row, with its state, title, order and done flag.
+func checkOf(key, title string) *Row {
+	sc := map[string]*string{"state": sp("open"), "position": sp("1"), "done": sp("false")}
+	return &Row{Table: "item_checks", Key: key, Title: title, Scalars: sc, Sections: map[string]*string{}, Raw: map[string]string{}, Dangling: map[string]DanglingLink{}}
 }
 
 // noteRow is a row of the item_notes block of an items row with its parent, its order and the scalars given.
@@ -858,6 +1018,18 @@ func TestRenderDocumentRules(t *testing.T) {
 				}
 				if c.alone && len(diags) != 1 {
 					t.Fatalf("%d diagnostics; want %s alone: %+v", len(diags), c.rule, diags)
+				}
+				if c.at != nil {
+					if len(diags) != len(c.at) {
+						t.Fatalf("%d diagnostics %+v; want the %d locations %+v", len(diags), diags, len(c.at), c.at)
+					}
+					for k, want := range c.at {
+						d := diags[k]
+						if d.Table != table || d.Key != want.key || d.Index != want.index || d.Column != want.column {
+							t.Fatalf("diagnostic %d is %s %s (index %d) column %q; want %s (index %d) column %q: %+v",
+								k, d.Table, d.Key, d.Index, d.Column, want.key, want.index, want.column, d)
+						}
+					}
 				}
 				if out != nil {
 					t.Fatalf("a refused row set writes bytes: %q", out)

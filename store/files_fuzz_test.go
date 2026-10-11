@@ -89,7 +89,7 @@ func FuzzParseFile(f *testing.F) {
 			}
 			return
 		}
-		out, rd := RenderFile(cat, table, row, lk)
+		out, rd := renderFileOf(t, cat, table, row, lk)
 		if len(rd) > 0 {
 			t.Fatalf("a parsed row is refused on write: %+v\ninput: %q", rd, data)
 		}
@@ -97,7 +97,7 @@ func FuzzParseFile(f *testing.F) {
 		if len(pd) > 0 || back == nil {
 			t.Fatalf("emitted file does not parse cleanly: %+v\ninput: %q\nemit: %q", pd, data, out)
 		}
-		again, rd := RenderFile(cat, table, back, lk)
+		again, rd := renderFileOf(t, cat, table, back, lk)
 		if len(rd) > 0 || !bytes.Equal(again, out) {
 			t.Fatalf("P2 failed\ninput: %q\nemit: %q\nagain: %q", data, out, again)
 		}
@@ -126,7 +126,7 @@ func FuzzRenderFile(f *testing.F) {
 			Scalars:  map[string]*string{"position": &position, "done": &doneText, "note": &note, "owner": &owner},
 			Sections: map[string]*string{"evidence": &evidence},
 		}
-		out, diags := RenderFile(cat, "tasks", row, lk)
+		out, diags := renderFileOf(t, cat, "tasks", row, lk)
 		if len(diags) > 0 {
 			return
 		}
@@ -145,7 +145,7 @@ func FuzzRenderFile(f *testing.F) {
 		if !strings.HasPrefix(string(out), "# ") {
 			t.Fatalf("no H1: %q", out)
 		}
-		again, rd := RenderFile(cat, "tasks", back, lk)
+		again, rd := renderFileOf(t, cat, "tasks", back, lk)
 		if len(rd) > 0 || !bytes.Equal(again, out) {
 			t.Fatalf("P2 failed: %q vs %q", again, out)
 		}

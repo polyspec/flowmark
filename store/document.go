@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"path"
+	"regexp"
 	"slices"
 	"sort"
 	"strconv"
@@ -265,9 +266,9 @@ func ParseDocument(cat *catalog.Catalog, table, rel string, data []byte, lk Link
 		return nil, p.diags, nil
 	}
 	rows := sortedRows(lay, recs)
-	out, rd := renderDocument(lay, rows, lk, false)
-	if len(rd) > 0 {
-		return nil, append(p.diags, rd...), nil
+	out, _, rf := renderDocument(lay, rows, lk, false)
+	if len(rf) > 0 {
+		return nil, append(p.diags, readDiagnostics(rel, rf, rows)...), nil
 	}
 	if !hasRule(p.diags, RuleNoncanonical) && !bytes.Equal(out, []byte(text)) {
 		line, col := diffAt([]byte(text), out)
@@ -297,9 +298,11 @@ func (p *docParser) run(lay *docLayout, lines []string) []*docRec {
 	if i == 0 {
 		p.warn(1, 1, RuleNoncanonical, "the document has no H1 line `# "+lay.table+"`")
 	}
-	if i < len(lines) && lines[i] == "" {
-		p.warn(i+1, 1, RuleNoncanonical, "a blank line between the H1 and the rows")
-		i++
+	if i < len(lines) && isBlank(lines[i]) {
+		p.warn(i+1, 1, RuleNoncanonical, "blank lines between the H1 and the rows")
+		for i < len(lines) && isBlank(lines[i]) {
+			i++
+		}
 	}
 	p.lay, p.recs = lay, nil
 	i = p.readRows(lines, i)
@@ -342,7 +345,8 @@ func (p *docParser) separator(lineNo int, line string, off int) int {
 
 // isListRow reports whether line opens a list item, with any indentation.
 func isListRow(line string) bool {
-	return strings.HasPrefix(strings.TrimLeft(line, " "), "- ")
+	t := strings.TrimLeft(line, " ")
+	return strings.HasPrefix(t, "- ") || strings.HasPrefix(t, "-\t")
 }
 
 // readList reads the list rows from line i: two spaces of indentation per level,
@@ -387,8 +391,17 @@ func (p *docParser) readList(lines []string, i int) int {
 // the key, the title and the fields. It returns nil when the row is refused.
 func (p *docParser) listRow(lineNo int, line string, indent int) *docRec {
 	lay := p.lay
+	// A tab in the white space after the marker moves the content indent of the item, as
+	// CommonMark reads it, so the row's nesting would not be the one its indentation writes.
+	ws := line[indent+1:]
+	n := len(ws) - len(strings.TrimLeft(ws, " \t"))
+	if t := strings.IndexByte(ws[:n], '\t'); t >= 0 {
+		p.fail(lineNo, colAt(line, indent+1+t), RuleBlock, "a tab follows the list marker, which moves the item's content indent")
+		return nil
+	}
 	off := p.separator(lineNo, line, indent+1)
 	var state string
+	glyphAt := 0 // the byte index of the state glyph
 	if lay.state != "" {
 		if off >= len(line) || line[off] != '[' {
 			p.fail(lineNo, colAt(line, off), RuleBlock, "a row starts with its state glyph `[g]`")
@@ -405,7 +418,7 @@ func (p *docParser) listRow(lineNo int, line string, indent int) *docRec {
 			p.fail(lineNo, colAt(line, off+1), RuleBlock, "the glyph "+string(r)+" names no state")
 			return nil
 		}
-		state = st
+		state, glyphAt = st, off+1
 		off = end + 1
 		if off >= len(line) || (line[off] != ' ' && line[off] != '\t') {
 			p.fail(lineNo, colAt(line, off), RuleBlock, "a space follows the state glyph")
@@ -431,7 +444,7 @@ func (p *docParser) listRow(lineNo int, line string, indent int) *docRec {
 	if !ok {
 		return nil
 	}
-	title, msg := titleOf(lay, line[titleStart:titleEnd])
+	title, noncanon, msg := titleOf(lay, line[titleStart:titleEnd])
 	switch {
 	case msg != "":
 		p.fail(lineNo, colAt(line, titleStart), RuleBlock, msg)
@@ -443,12 +456,21 @@ func (p *docParser) listRow(lineNo int, line string, indent int) *docRec {
 		p.fail(lineNo, colAt(line, titleStart), RuleBlock, "the title has "+singleLineFault(title))
 		return nil
 	}
-	for k, tok := range toks {
-		p.tokenSeparator(lineNo, line, titleStart, k, tok)
+	for _, off := range noncanon {
+		p.warn(lineNo, colAt(line, titleStart+off), RuleNoncanonical, "a title token that begins with a column is written with `\\:`")
+	}
+	for _, tok := range toks {
+		p.tokenSeparator(lineNo, line, tok)
 	}
 	rec := &docRec{row: newRow(lay.table, key, title), lay: lay, line: lineNo}
+	rec.row.setAt("", lineNo, 1)
+	rec.row.setAt(lay.key.Name, lineNo, colAt(line, off))
+	if lay.title != "" {
+		rec.row.setAt(lay.title, lineNo, colAt(line, titleStart))
+	}
 	if state != "" {
 		rec.row.Scalars[lay.state] = sp(state)
+		rec.row.setAt(lay.state, lineNo, colAt(line, glyphAt))
 	}
 	last := -1
 	for _, tok := range toks {
@@ -462,6 +484,7 @@ func (p *docParser) listRow(lineNo int, line string, indent int) *docRec {
 			return nil
 		}
 		last = idx
+		rec.row.setAt(tok.name, lineNo, colAt(line, tok.start))
 		p.scalarValue(lineNo, colAt(line, tok.start), rec, lay.fields[idx], tok.value)
 	}
 	return rec
@@ -631,37 +654,67 @@ func hasInvisible(v string) bool {
 	return false
 }
 
-// tokenSeparator checks the white space before field k of a list row, which is
-// the title's end for the first field: a tab that ends the title before a field is
-// format.block, another tab or a run of spaces noncanonical.
-func (p *docParser) tokenSeparator(lineNo int, line string, titleStart, k int, tok tailTok) {
-	sep := line[tok.sepAt:tok.start]
-	switch {
-	case sep == " ":
-	case k == 0 && strings.Contains(sep, "\t"):
-		p.fail(lineNo, colAt(line, titleStart), RuleBlock, "a tab ends the title before a field")
-	default:
+// tokenSeparator checks the white space before a field of a list row: the separator
+// is one space, and any other run of spaces and tabs, a tab that ends the title
+// included, is noncanonical.
+func (p *docParser) tokenSeparator(lineNo int, line string, tok tailTok) {
+	if line[tok.sepAt:tok.start] != " " {
 		p.warn(lineNo, colAt(line, tok.sepAt), RuleNoncanonical, "the separator is one space")
 	}
 }
 
-// titleOf reads the title of a list row: a token <column>\: is <column>:, and a
-// token that begins with a declared column and a colon is refused, since the write
-// escapes it. It returns the title and a fault, if any.
-func titleOf(lay *docLayout, raw string) (string, string) {
-	toks := strings.Split(raw, " ")
-	for i, t := range toks {
+// titleTokens returns the spans [start, end) of the tokens of a title: the runs of
+// characters between spaces and tabs.
+func titleTokens(title string) [][2]int {
+	var spans [][2]int
+	for i := 0; i < len(title); {
+		if title[i] == ' ' || title[i] == '\t' {
+			i++
+			continue
+		}
+		j := i
+		for j < len(title) && title[j] != ' ' && title[j] != '\t' {
+			j++
+		}
+		spans = append(spans, [2]int{i, j})
+		i = j
+	}
+	return spans
+}
+
+// titleOf reads the title of a list row from raw, the text between its key and its
+// first field. A token <column>\: reads as <column>:; the white space between the
+// tokens is kept byte for byte. An unescaped token that begins with a declared
+// column and a colon is noncanonical where another token follows it, and a fault
+// where it ends the title, since a field stands there. It returns the title, the
+// offsets in raw of the noncanonical tokens and the fault, if any.
+func titleOf(lay *docLayout, raw string) (string, []int, string) {
+	var b strings.Builder
+	var noncanon []int
+	spans := titleTokens(raw)
+	last := 0
+	for k, sp := range spans {
+		b.WriteString(raw[last:sp[0]])
+		last = sp[1]
+		t := raw[sp[0]:sp[1]]
+		out := t
 		for _, n := range lay.names() {
 			if strings.HasPrefix(t, n+`\:`) {
-				toks[i] = n + ":" + t[len(n)+2:]
+				out = n + ":" + t[len(n)+2:]
 				break
 			}
 			if strings.HasPrefix(t, n+":") {
-				return "", "the title token " + n + ": is not escaped as " + n + `\:`
+				if k == len(spans)-1 {
+					return "", nil, "the title ends with the token " + n + ": where a field stands"
+				}
+				noncanon = append(noncanon, sp[0])
+				break
 			}
 		}
+		b.WriteString(out)
 	}
-	return strings.Join(toks, " "), ""
+	b.WriteString(raw[last:])
+	return b.String(), noncanon, ""
 }
 
 // newRow returns a row of table with the given key and title and no value yet.
@@ -771,16 +824,19 @@ func (p *docParser) cellValue(lineNo int, text string, c tableCell) (string, boo
 // its rows. It returns the index of the first line after the table.
 func (p *docParser) readTable(lines []string, i int) int {
 	lay := p.lay
-	end := i
-	for end < len(lines) && strings.HasPrefix(lines[end], "|") {
-		end++
+	// tableEnd returns the index of the first line from k that does not begin with a pipe.
+	tableEnd := func(k int) int {
+		for k < len(lines) && strings.HasPrefix(lines[k], "|") {
+			k++
+		}
+		return k
 	}
-	if end == i {
+	if i >= len(lines) || !strings.HasPrefix(lines[i], "|") {
 		return i
 	}
-	if end-i < 2 {
+	if i+1 >= len(lines) {
 		p.fail(i+1, 1, RuleBlock, "a table has a header row and a delimiter row")
-		return end
+		return i + 1
 	}
 	want := []string{lay.key.Name}
 	for _, c := range lay.scalars {
@@ -793,22 +849,16 @@ func (p *docParser) readTable(lines []string, i int) int {
 	}
 	if !slices.Equal(names, want) {
 		p.fail(i+1, 1, RuleBlock, "the header is not the columns "+strings.Join(want, ", ")+" of "+lay.table)
+		return tableEnd(i + 1)
+	}
+	end := tableEnd(i + 2)
+	cells, ok := delimiterCells(lines[i+1])
+	if !ok || len(cells) != len(want) {
+		p.fail(i+2, 1, RuleBlock, "the delimiter row is not one with one cell per column of the header")
 		return end
 	}
-	delim := splitTableCells(lines[i+1])
-	if len(delim) != len(want) {
-		p.fail(i+2, 1, RuleBlock, "the delimiter row has one cell per column of the header")
-		return end
-	}
-	for _, c := range delim {
-		switch t := trimWhite(c.raw); {
-		case c.raw == " --- ":
-		case t != "" && strings.Trim(t, ":") != "" && strings.Trim(strings.Trim(t, ":"), "-") == "":
-			p.warn(i+2, colAt(lines[i+1], c.at), RuleNoncanonical, "the delimiter is written `---`")
-		default:
-			p.fail(i+2, colAt(lines[i+1], c.at), RuleBlock, "the delimiter row is not one")
-			return end
-		}
+	if lines[i+1] != delimiterRow(len(want)) {
+		p.warn(i+2, 1, RuleNoncanonical, "the delimiter row is written `"+delimiterRow(len(want))+"`")
 	}
 	for k := i + 2; k < end; k++ {
 		if rec := p.tableRow(k+1, lines[k]); rec != nil {
@@ -816,6 +866,45 @@ func (p *docParser) readTable(lines []string, i int) int {
 		}
 	}
 	return end
+}
+
+// delimiterCell is one cell of a delimiter row: hyphens with at most one colon at
+// either end, and around them the white space of tableSpace.
+var delimiterCell = regexp.MustCompile("^[ \t\v\f]*:?-+:?[ \t\v\f]*$")
+
+// delimiterRow is the canonical delimiter row of a table of n columns.
+func delimiterRow(n int) string {
+	return "| " + strings.TrimSuffix(strings.Repeat("--- | ", n), " | ") + " |"
+}
+
+// delimiterCells reads a line as the delimiter row that GFM reads under a header:
+// at most three spaces of indent, then cells of delimiterCell separated by pipes,
+// the pipes at either end optional. It returns the cells and whether the line is
+// such a row. A line without a leading pipe that CommonMark reads first as a
+// setext underline or as a list item is not one, whatever its cells.
+func delimiterCells(line string) ([]string, bool) {
+	body := strings.TrimLeft(line, " ")
+	if len(line)-len(body) > 3 {
+		return nil, false
+	}
+	if !strings.HasPrefix(body, "|") {
+		rest := strings.TrimRight(body, " \t")
+		if rest != "" && strings.Trim(rest, "-") == "" {
+			return nil, false
+		}
+		if len(body) >= 2 && body[0] == '-' && (body[1] == ' ' || body[1] == '\t') {
+			return nil, false
+		}
+	}
+	s := strings.TrimRight(body, " \t\v\f")
+	s = strings.TrimSuffix(strings.TrimPrefix(s, "|"), "|")
+	cells := strings.Split(s, "|")
+	for _, c := range cells {
+		if !delimiterCell.MatchString(c) {
+			return nil, false
+		}
+	}
+	return cells, true
 }
 
 // tableRow reads one row of a table: the key cell, then one cell per scalar column
@@ -848,6 +937,8 @@ func (p *docParser) tableRow(lineNo int, text string) *docRec {
 		return nil
 	}
 	rec := &docRec{row: newRow(lay.table, key, ""), lay: lay, line: lineNo}
+	rec.row.setAt("", lineNo, 1)
+	rec.row.setAt(lay.key.Name, lineNo, colAt(text, cells[0].at+1))
 	for j, c := range lay.scalars {
 		cell := cells[j+1]
 		v, null, ok := p.cellValue(lineNo, text, cell)
@@ -858,6 +949,7 @@ func (p *docParser) tableRow(lineNo int, text string) *docRec {
 			continue
 		}
 		col := colAt(text, cell.at+1)
+		rec.row.setAt(c.Name, lineNo, col)
 		if c.Name == lay.title {
 			if msg := singleLineFault(v); msg != "" {
 				p.fail(lineNo, col, RuleBlock, "the title has "+msg)
@@ -915,7 +1007,7 @@ func (p *docParser) readDetail(lines []string, h heading, sub []heading, end int
 	lay := p.lay
 	marks := strings.Repeat("#", h.level)
 	parts := strings.Fields(trimWhite(h.text))
-	if len(parts) != 3 || parts[0] != lay.table || !strings.EqualFold(parts[1], "row") || parts[2] == "" {
+	if len(parts) != 3 || strings.ToLower(parts[0]) != lay.table || strings.ToLower(parts[1]) != "row" || parts[2] == "" {
 		p.fail(h.at+1, 4, RuleBlock, "a detail section is `"+marks+" "+lay.table+" row <key>`")
 		return
 	}
@@ -961,7 +1053,10 @@ func (p *docParser) readDetail(lines []string, h heading, sub []heading, end int
 	if len(bounds) > 0 {
 		bEnd = bounds[0].at
 	}
-	body, _ := p.valueLines(lines, h.last+1, bEnd, true)
+	body, bodyAt := p.valueLines(lines, h.last+1, bEnd, true)
+	if len(body) > 0 && lay.body != "" {
+		rec.row.setAt(lay.body, bodyAt+1, 1)
+	}
 	rec.row.Body = joinLines(body)
 	for k, s := range bounds {
 		sEnd := end
@@ -1009,6 +1104,7 @@ func (p *docParser) readSection(lines []string, s heading, sEnd int, rec *docRec
 	rec.seen[name] = true
 	value, _ := p.valueLines(lines, s.last+1, sEnd, true)
 	v := joinLines(value)
+	rec.row.setAt(name, s.at+1, s.level+2) // the heading text follows the hashes and a space
 	rec.row.Sections[name] = &v
 }
 

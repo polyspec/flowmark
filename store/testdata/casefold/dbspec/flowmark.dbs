@@ -1,0 +1,27 @@
+dbspec 1 flowmark
+
+table stems {
+  id varchar(16)
+  title varchar(64)
+  body text
+  primary key (id)
+  settings {
+    key_prefix 'S'
+    store document table
+    title title
+    body body
+  }
+}
+
+table ktems {
+  id varchar(16)
+  title varchar(64)
+  body text
+  primary key (id)
+  settings {
+    key_prefix 'K'
+    store document table
+    title title
+    body body
+  }
+}

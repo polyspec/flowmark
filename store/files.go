@@ -24,6 +24,8 @@ var bom = []byte("\xef\xbb\xbf")
 // single-column foreign keys.
 type filesLayout struct {
 	table    string
+	title    string // the title column: the H1 line
+	body     string // the body column: the body after the field list
 	key      dbspec.Column
 	scalars  []dbspec.Column
 	sections []section
@@ -57,7 +59,7 @@ func layoutOf(cat *catalog.Catalog, table string) (*filesLayout, error) {
 	if tb.Storage.Kind != catalog.StorageFiles {
 		return nil, fmt.Errorf("table %s is not a files table", table)
 	}
-	lay := &filesLayout{table: table, fks: map[string]string{}, scope: tb.RowScope}
+	lay := &filesLayout{table: table, title: tb.Title, body: tb.Body, fks: map[string]string{}, scope: tb.RowScope}
 	markdown := map[string]bool{}
 	for _, m := range tb.Markdown {
 		markdown[m] = true
@@ -162,6 +164,8 @@ func ParseFile(cat *catalog.Catalog, table, rel string, data []byte, lk Linker) 
 		Raw:      map[string]string{},
 		Dangling: map[string]DanglingLink{},
 	}
+	row.setAt("", 1, 1)
+	row.setAt(lay.key.Name, 1, 1)
 	if p.readTitle(lines, row) {
 		i := p.readFields(lines, row)
 		b := p.readBody(lines, i, row)
@@ -175,9 +179,9 @@ func ParseFile(cat *catalog.Catalog, table, rel string, data []byte, lk Linker) 
 	if p.fatal {
 		return nil, p.diags
 	}
-	out, rd := renderRow(lay, row, lk)
-	if len(rd) > 0 {
-		return nil, append(p.diags, rd...)
+	out, _, rf := renderRow(lay, row, lk)
+	if len(rf) > 0 {
+		return nil, append(p.diags, readDiagnostics(rel, rf, []*Row{row})...)
 	}
 	if !hasRule(p.diags, RuleNoncanonical) && !bytes.Equal(out, []byte(text)) {
 		line, col := diffAt([]byte(text), out)
@@ -220,6 +224,7 @@ func (p *parser) readTitle(lines []string, row *Row) bool {
 		p.fail(1, 3, RuleBlock, "the title cannot be written: it would read back as "+unescapeTitle(escapeTitle(title)))
 		return false
 	}
+	row.setAt(p.lay.title, 1, 3)
 	row.Title = title
 	if want := "# " + escapeTitle(title); lines[0] != want {
 		p.warn(1, 3, RuleNoncanonical, "the H1 title is written as "+want)
@@ -302,6 +307,7 @@ func splitField(line string) (name, raw string, ok bool) {
 // around the value is noncanonical; a foreign key whose row is absent keeps its
 // written target; a value not of its column type is kept raw.
 func (p *parser) fieldValue(lineNo int, c dbspec.Column, raw string, valueCol int, row *Row) {
+	row.setAt(c.Name, lineNo, 3) // the field item begins after "- "
 	v := trimWhite(raw)
 	if v != raw {
 		p.warn(lineNo, valueCol, RuleNoncanonical, "the white space around the value is dropped by rendering")
@@ -351,6 +357,7 @@ func (p *parser) readBody(lines []string, i int, row *Row) int {
 		case p.fields > 0 && indented(region[0]):
 			p.fail(start+1, 1, RuleBlock, "the body begins with an indented line after the field list")
 		}
+		row.setAt(p.lay.body, start+1, 1)
 		row.Body = joinLines(region)
 	}
 	return b
@@ -403,6 +410,7 @@ func (p *parser) readSections(lines []string, b int, row *Row, dp *docParser) {
 			}
 			region, _ := p.valueLines(lines, h.last+1, end, true)
 			v := joinLines(region)
+			row.setAt(name, headLine, h.level+2) // the heading text follows the hashes and a space
 			row.Sections[name] = &v
 		}
 	}
@@ -414,41 +422,41 @@ func (p *parser) readSections(lines []string, b int, row *Row, dp *docParser) {
 }
 
 // RenderFile writes the file of row, a row of a files table. A row the writer
-// refuses returns no bytes and diagnostics located in the file it would write.
-func RenderFile(cat *catalog.Catalog, table string, row *Row, lk Linker) ([]byte, []Diagnostic) {
+// refuses returns no bytes and the refusals of the request.
+func RenderFile(cat *catalog.Catalog, table string, row *Row, lk Linker) ([]byte, []Refusal, error) {
 	lay, err := layoutOf(cat, table)
 	if err != nil {
-		return nil, []Diagnostic{fileDiag(table, RuleWalk, err.Error())}
+		return nil, nil, err
 	}
-	out, diags := renderRow(lay, row, lk)
-	if len(diags) > 0 {
-		return nil, diags
+	out, origins, rf := renderRow(lay, row, lk)
+	if len(rf) > 0 {
+		return nil, rf, nil
 	}
-	rel := row.Table + "/" + row.Key + fileSuffix
-	if rd := anchorRefusals(rel, out, tableLevels(lay.table, 0, lay.children)); len(rd) > 0 {
-		return nil, rd
-	}
-	return out, nil
+	return out, anchorRefusals(origins, out, tableLevels(lay.table, 0, lay.children)), nil
 }
 
 // writer collects the file being written and the refusals of its values. An element
 // is a heading or a value; the framing of a value depends on the element that
-// follows it, so each value is checked once the file is complete.
+// follows it, so each value is checked once the file is complete. Every line
+// written takes the origin that is current when it begins.
 type writer struct {
-	rel    string
-	b      strings.Builder
-	lines  int
-	elems  int
-	values []pendingValue
-	diags  []Diagnostic
+	rel      string
+	b        strings.Builder
+	origins  []origin // the origin of each line written, the first line at index 0
+	midLine  bool     // the text written so far ends with no line feed
+	cur      origin   // the origin of the text being written
+	elems    int
+	values   []pendingValue
+	refusals []Refusal
 }
 
 // pendingValue is a body or a section that the writer has written, to be checked
 // once the file is complete. k is the number of elements before it.
 type pendingValue struct {
 	name        string
+	column      string // the column the value is written for
+	row         rowRef // the row the value belongs to
 	v           string
-	line        int // the line the value starts at
 	level       int // the row scope level: a heading of this level or less ends the value
 	body        bool
 	afterFields bool
@@ -465,102 +473,124 @@ func (w *writer) finish() {
 	}
 }
 
-func (w *writer) refuse(line, col int, msg string) {
-	w.refuseRule(RuleConstraint, line, col, msg)
+// enter makes row, and the column of its text, the origin of the text written next.
+func (w *writer) enter(row rowRef, column string) { w.cur = origin{row: row, column: column} }
+
+// refuse refuses the write at column of the row being written.
+func (w *writer) refuse(column, msg string) {
+	w.refuseRule(RuleConstraint, column, msg)
 }
 
-func (w *writer) refuseRule(rule string, line, col int, msg string) {
-	w.diags = append(w.diags, Diagnostic{File: w.rel, Line: line, Column: col, Rule: rule, Message: msg})
+// refuseRule refuses the write by rule at column of the row being written.
+func (w *writer) refuseRule(rule, column, msg string) {
+	w.refusals = append(w.refusals, w.cur.row.refusal(column, rule, msg))
 }
 
+// put writes s, and gives every line it begins the origin that is current.
 func (w *writer) put(s string) {
+	if s == "" {
+		return
+	}
+	if !w.midLine {
+		w.origins = append(w.origins, w.cur)
+	}
+	for i := 0; i+1 < len(s); i++ {
+		if s[i] == '\n' {
+			w.origins = append(w.origins, w.cur)
+		}
+	}
+	w.midLine = !strings.HasSuffix(s, "\n")
 	w.b.WriteString(s)
-	w.lines += strings.Count(s, "\n")
 }
 
-// next is the line the writer writes next.
-func (w *writer) next() int { return w.lines + 1 }
+// field is a field item of a files row and the column it writes.
+type field struct {
+	column, text string
+}
 
-// renderRow writes the file of row in its canonical form.
-func renderRow(lay *filesLayout, row *Row, lk Linker) ([]byte, []Diagnostic) {
+// renderRow writes the file of row in its canonical form, with the origin of each
+// line, or with the refusals of the request when the writer refuses it.
+func renderRow(lay *filesLayout, row *Row, lk Linker) ([]byte, []origin, []Refusal) {
 	w := &writer{rel: row.Table + "/" + row.Key + fileSuffix}
+	rr := rowRefOf(row, -1)
+	w.enter(rr, "")
 	if row.Table != lay.table {
-		w.refuse(1, 1, "the row is of table "+row.Table+", not "+lay.table)
-		return nil, w.diags
+		w.refuse("", "the row is of table "+row.Table+", not "+lay.table)
+		return nil, nil, w.refusals
 	}
 	if msg := keyFault(row.Key); msg != "" {
-		w.refuse(1, 1, "the key: "+msg)
-		return nil, w.diags
+		w.refuse(lay.key.Name, "the key: "+msg)
+		return nil, nil, w.refusals
 	}
 	if canon, ok := readable(lay.key.Type, row.Key); !ok || canon != row.Key {
-		w.refuse(1, 1, "the key is not the canonical text of a "+lay.key.Type.String()+" key")
-		return nil, w.diags
+		w.refuse(lay.key.Name, "the key is not the canonical text of a "+lay.key.Type.String()+" key")
+		return nil, nil, w.refusals
 	}
 	for _, name := range sortedKeys(row.Scalars) {
 		if lay.scalarIndex(name) < 0 {
-			w.refuse(1, 1, name+" is not a stored scalar column of "+lay.table)
+			w.refuse(name, name+" is not a stored scalar column of "+lay.table)
 		}
 	}
 	for _, name := range sortedKeys(row.Sections) {
 		if _, ok := lay.section(name); !ok {
-			w.refuse(1, 1, name+" is not a markdown section of "+lay.table)
+			w.refuse(name, name+" is not a markdown section of "+lay.table)
 		}
 	}
 
-	w.writeTitle(row.Title)
-	var fields []string
-	written := 0
+	w.writeTitle(lay.title, row.Title)
+	var fields []field
 	for _, c := range lay.scalars {
-		line := 2 + written
 		v := row.Scalars[c.Name]
 		if v == nil {
 			if !c.Null {
-				w.refuse(line, 1, "the non-null column "+c.Name+" has no value")
+				w.refuse(c.Name, "the non-null column "+c.Name+" has no value")
 			}
 			continue
 		}
-		written++
-		if text, ok := w.fieldText(lay, row, c, *v, line, lk); ok {
-			fields = append(fields, text)
+		if text, ok := w.fieldText(lay, row, c, *v, lk); ok {
+			fields = append(fields, field{column: c.Name, text: text})
 		}
 	}
 	for _, f := range fields {
-		w.put(f + "\n")
+		w.enter(rr, f.column)
+		w.put(f.text + "\n")
 	}
 	for _, s := range lay.sections {
 		if row.Sections[s.name] == nil && !s.nullable {
-			w.refuse(w.next(), 1, "the non-null section "+s.name+" has no value")
+			w.refuse(s.name, "the non-null section "+s.name+" has no value")
 		}
 	}
 	for _, name := range sortedBlocks(row) {
 		if lay.childNamed(name) == nil {
-			w.refuse(1, 1, name+" is not a block of "+lay.table)
+			w.refuse("", name+" is not a block of "+lay.table)
 		}
 	}
 	dw := newDocWriter(w, lk, true, row.Table, row.Key)
 	for _, c := range lay.children {
 		dw.index(c, row.Blocks[c.table])
 	}
-	dw.contents(lay.scope, lay.sections, lay.children, row, true, len(fields) > 0)
+	dw.prepare()
+	dw.contents(lay.scope, lay.body, lay.sections, lay.children, row, rr, true, len(fields) > 0)
 	w.finish()
-	if len(w.diags) > 0 {
-		return nil, w.diags
+	if len(w.refusals) > 0 {
+		return nil, nil, w.refusals
 	}
-	return []byte(w.b.String()), nil
+	return []byte(w.b.String()), w.origins, nil
 }
 
-// writeTitle writes the H1 line of the title.
-func (w *writer) writeTitle(title string) {
+// writeTitle writes the H1 line of the title, which is the title column's value.
+func (w *writer) writeTitle(column, title string) {
 	switch {
 	case title == "":
-		w.refuse(1, 3, "the title is empty")
+		w.refuse(column, "the title is empty")
 	case !utf8.ValidString(title):
-		w.refuse(1, 3, "the title is not UTF-8")
+		w.refuse(column, "the title is not UTF-8")
 	case singleLineFault(title) != "":
-		w.refuse(1, 3, "the title has "+singleLineFault(title))
+		w.refuse(column, "the title has "+singleLineFault(title))
 	case unescapeTitle(escapeTitle(title)) != title:
-		w.refuse(1, 3, "the title cannot be written: its H1 would read back as "+unescapeTitle(escapeTitle(title)))
+		w.refuse(column, "the title cannot be written: its H1 would read back as "+unescapeTitle(escapeTitle(title)))
 	}
+	w.enter(w.cur.row, column)
 	w.put("# " + escapeTitle(title) + "\n")
 }
 
@@ -568,27 +598,26 @@ func (w *writer) writeTitle(title string) {
 // A value that is not of its column type is written as its raw text only when it
 // is the text the row was read with; any other value is written in its canonical
 // form. A foreign key with no row keeps the target it was read with.
-func (w *writer) fieldText(lay *filesLayout, row *Row, c dbspec.Column, v string, line int, lk Linker) (string, bool) {
-	valueCol := len("- "+c.Name+": ") + 1
+func (w *writer) fieldText(lay *filesLayout, row *Row, c dbspec.Column, v string, lk Linker) (string, bool) {
 	switch {
 	case !utf8.ValidString(v):
-		w.refuse(line, valueCol, "the value is not UTF-8")
+		w.refuse(c.Name, "the value is not UTF-8")
 		return "", false
 	case singleLineFault(v) != "":
-		w.refuse(line, valueCol, "the value has "+singleLineFault(v))
+		w.refuse(c.Name, "the value has "+singleLineFault(v))
 		return "", false
 	}
 	var text string
 	if table, ok := lay.fks[c.Name]; ok {
 		if strings.ContainsAny(v, "[]") {
-			w.refuse(line, valueCol, "the foreign key text holds a bracket")
+			w.refuse(c.Name, "the foreign key text holds a bracket")
 			return "", false
 		}
 		target, err := lk.Target(w.rel, table, v)
 		if err != nil {
 			d, kept := row.Dangling[c.Name]
 			if !kept || d.Key != v {
-				w.refuseRule(RuleForeignKey, line, valueCol, "the foreign key names no row: "+err.Error())
+				w.refuseRule(RuleForeignKey, c.Name, "the foreign key names no row: "+err.Error())
 				return "", false
 			}
 			target = d.Target
@@ -599,7 +628,7 @@ func (w *writer) fieldText(lay *filesLayout, row *Row, c dbspec.Column, v string
 	} else {
 		canon, ok := readable(c.Type, v)
 		if !ok {
-			w.refuse(line, valueCol, "the value is not a "+c.Type.String()+" value")
+			w.refuse(c.Name, "the value is not a "+c.Type.String()+" value")
 			return "", false
 		}
 		text = canon
@@ -618,33 +647,34 @@ func (w *writer) fieldText(lay *filesLayout, row *Row, c dbspec.Column, v string
 // at the top level is refused when the element that follows it would be taken
 // into that block.
 func (w *writer) checkValue(p pendingValue, followed bool) {
-	name, v, line, body, afterFields, level := p.name, p.v, p.line, p.body, p.afterFields, p.level
+	name, col, v, body, afterFields, level := p.name, p.column, p.v, p.body, p.afterFields, p.level
+	w.enter(p.row, col)
 	switch {
 	case !utf8.ValidString(v):
-		w.refuse(line, 1, name+" is not UTF-8")
+		w.refuse(col, name+" is not UTF-8")
 		return
 	case strings.Contains(v, "\r"):
-		w.refuse(line, 1, name+" holds a CR")
+		w.refuse(col, name+" holds a CR")
 		return
 	case strings.ContainsRune(v, 0):
-		w.refuse(line, 1, name+" holds a U+0000")
+		w.refuse(col, name+" holds a U+0000")
 		return
 	case !strings.HasSuffix(v, "\n"):
-		w.refuse(line, 1, name+" must end with a line feed")
+		w.refuse(col, name+" must end with a line feed")
 		return
 	}
 	lines := splitLines(v)
 	if isBlank(lines[0]) {
-		w.refuse(line, 1, name+" begins with a blank line")
+		w.refuse(col, name+" begins with a blank line")
 	}
 	if isBlank(lines[len(lines)-1]) {
-		w.refuse(line+len(lines)-1, 1, name+" ends with a blank line")
+		w.refuse(col, name+" ends with a blank line")
 	}
 	if body && isListItem(lines[0]) {
-		w.refuse(line, 1, "the body begins with a list item")
+		w.refuse(col, "the body begins with a list item")
 	}
 	if body && afterFields && indented(lines[0]) {
-		w.refuse(line, 1, "the body begins with an indented line after the field list")
+		w.refuse(col, "the body begins with an indented line after the field list")
 	}
 	// The element that follows is set off by one blank line, which closes an HTML
 	// block of type 6 or 7 and nothing else; the value is read with that line.
@@ -656,15 +686,15 @@ func (w *writer) checkValue(p pendingValue, followed bool) {
 	for _, h := range sc.heads {
 		if h.level <= level {
 			if h.last != h.at {
-				w.refuse(line+h.last, 1, name+" holds a setext heading")
+				w.refuse(col, name+" holds a setext heading")
 			} else {
-				w.refuse(line+h.at, 1, name+" holds a heading of level "+strconv.Itoa(level)+" or less")
+				w.refuse(col, name+" holds a heading of level "+strconv.Itoa(level)+" or less")
 			}
 			break
 		}
 	}
 	if sc.open && followed {
-		w.refuse(line, 1, name+" leaves a fence or an HTML block open before the next element")
+		w.refuse(col, name+" leaves a fence or an HTML block open before the next element")
 	}
 }
 

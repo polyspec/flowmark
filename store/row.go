@@ -45,6 +45,9 @@ type Row struct {
 	// Dangling holds the written target of each foreign key that names no row,
 	// keyed by its column.
 	Dangling map[string]DanglingLink
+	// at holds where the parser read each column of a row read from a file: the
+	// row's first line under "", and the element of each column. Only a read sets it.
+	at map[string]elementAt
 	// Blocks holds the child rows of each child block table of this row's table,
 	// keyed by the block's table name, each in storage order. A child row carries
 	// no value of its placement foreign key: its parent row is its placement.
