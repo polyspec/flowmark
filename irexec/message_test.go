@@ -109,8 +109,7 @@ func TestParams(t *testing.T) {
 	}
 	for _, c := range cases {
 		f.sub(t, c.name, func(f *fixture) {
-			err := f.fails(f.msg("insert", "people", map[string]any{"set": sets("name", c.col)}, "Lin", c.param), "CONSTRAINT")
-			wantFaults(f.t, err, []dupFault{{"people", "P4", -1, c.col, "CONSTRAINT", c.col}})
+			f.fails(f.msg("insert", "people", map[string]any{"set": sets("name", c.col)}, "Lin", c.param), "CODEC_ENCODE")
 		})
 	}
 }

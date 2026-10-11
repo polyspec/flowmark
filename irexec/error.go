@@ -19,6 +19,7 @@ const (
 	codeColumnUnknown   = "COLUMN_UNKNOWN"
 	codeNotJoined       = "ENTITY_NOT_JOINED"
 	codeOpNotAllowed    = "OPERATOR_NOT_ALLOWED"
+	codeCodecEncode     = "CODEC_ENCODE"
 	codeOptimistic      = "OPTIMISTIC_LOCK"
 	codeConfig          = "CONFIG"
 	codeNoRows          = "NO_ROWS"

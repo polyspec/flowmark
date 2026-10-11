@@ -1,9 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: db99298d4e6a04611f0cee089a84e72f8b7062958596a0653a4437313de9cadd -->
+<!-- source-sha256: 72671f1df2f23a21d1a6298acfa47b721c7f00be5b3fba13d9435b9153f2eb65 -->
 # Changelog
 
 ## Unreleased
 
+- T12.4-5: IR 실행기가 row를 읽기 전에 모든 parameter를 그 slot의 type과 대조한다. slot의 type 밖의 값(JSON 종류, 정수 범위, decimal의 scale과 precision, 0001~9999 밖의 date, varchar의 길이, text의 U+0000, 문자열이 아닌 `contains` 값)과 non-null 컬럼에 할당하는 NULL은 `CODEC_ENCODE`로 답하며, 같은 입력에 대한 capability 오류와 write fault를 대신한다.
 - T12.4-2: IR 실행기가 orm의 스칼라 컬럼 subquery 규칙을 따른다. 한 행의 limit과 primary key를 포함한 order가 없는 스칼라 컬럼 subquery는 orm의 validator에서 `IR_INVALID`로 답하고, 실행기는 여러 행에 대한 자체의 이전 답 대신 subquery의 order의 첫 행을 취하며 일치하는 행이 없으면 NULL이다.
 - T12.4-4: IR 실행기가 orm의 upsert 규칙을 따른다. 둘 이상의 key가 만날 수 있거나 충돌 key를 다 할당하지 않는 `on_duplicate` insert는 orm의 validator에서 `IR_INVALID`로 답하며, 실행기 자체의 이전 답은 지웠다. upsert의 `affected`는 계속 1이다.
 - T12.4-8: IR 실행기가 orm의 열 쌍 규칙을 따른다. 만나지 않는 두 컬럼과 컬럼의 type이나 codec이 허용하지 않는 열 비교 연산자는 orm의 validator에서 `OPERATOR_NOT_ALLOWED`로 답하며, 실행기 자체의 이전 답은 지웠다.
