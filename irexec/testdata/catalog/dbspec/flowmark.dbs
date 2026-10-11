@@ -145,6 +145,18 @@ table ticket_history {
   }
 }
 
+table stamps {
+  id i64 identity
+  label varchar(16)
+  at datetime(3) default now
+  updated_at datetime(3) null
+  primary key (id)
+  settings {
+    store document table
+    updated updated_at
+  }
+}
+
 table tags {
   id i64 identity
   label varchar(16)

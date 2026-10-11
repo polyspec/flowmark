@@ -292,7 +292,11 @@ system's mount point is not supported, and a commit that would write there is re
 
 Every engine-assigned time — `updated`, `soft_delete`, `default now`, a history row's `at` — is
 the request's `now` for an orm request, and otherwise the engine's UTC clock truncated to
-microseconds.
+microseconds; one request has one clock value. Written into a `datetime(p)` column, it is
+truncated to p fraction digits, never rounded; compared with a column, `now` and the relative time
+functions keep six digits. Grounding: orm's clock rule — a clock the ORM writes or compares keeps
+microseconds; MySQL `CURRENT_TIMESTAMP(p)` and orm's SQLite `now` slot truncate a written clock,
+and MySQL and PostgreSQL compare a `datetime(p)` column with `NOW(6)` at six digits.
 
 ## Cost model
 

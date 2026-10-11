@@ -145,7 +145,7 @@ func TestWhere(t *testing.T) {
 		{"60#surfaces: date of a datetime", "people", where(pred("joined", "eq", map[string]any{"p": 0, "fn": map[string]any{"name": "date"}})), []any{"2026-10-01"}, []string{"P1"}},
 		{"60#surfaces: today", "items", where(pred("due", "gt", map[string]any{"value": map[string]any{"name": "today"}})), nil, []string{"T2"}},
 		{"60#surfaces: days_later against a date", "items", where(pred("due", "lt", map[string]any{"value": map[string]any{"name": "days_later", "ps": []int{0}}})), []any{10}, []string{"T2"}},
-		{"60#surfaces: days_ago at the column's fraction digits", "people", where(pred("joined", "gt", map[string]any{"value": map[string]any{"name": "days_ago", "ps": []int{0}}})), []any{10}, []string{"P2"}},
+		{"60#surfaces: days_ago against a datetime", "people", where(pred("joined", "gt", map[string]any{"value": map[string]any{"name": "days_ago", "ps": []int{0}}})), []any{10}, []string{"P2"}},
 		{"60#surfaces: now", "people", where(pred("joined", "lt", map[string]any{"value": map[string]any{"name": "now"}})), nil, []string{"P1", "P2"}},
 		{"60#surfaces: months_ago", "people", where(pred("joined", "gte", map[string]any{"value": map[string]any{"name": "months_ago", "ps": []int{0}}})), []any{0}, nil},
 		{"60#surfaces: AND binds tighter than OR", "items", where(pred("state", "eq", p(0)), map[string]any{"pred": map[string]any{"conn": "or", "column": "state", "op": "eq", "p": 1}}, map[string]any{"pred": map[string]any{"conn": "and", "column": "owner", "op": "eq", "p": 2}}), []any{"waiting", "doing", "P1"}, []string{"T3"}},
@@ -484,6 +484,58 @@ func TestOrderNulls(t *testing.T) {
 	})
 	f.sub(t, "60#surfaces: limit_per_parent ranked descending keeps a value before NULL", func(f *fixture) {
 		f.want(hist(true), `{"rows":[{"id":"T1","parent":null,"owner":"P1","history":[{"id":2,"item":"T1"}]}]}`)
+	})
+}
+
+// TestClock pins the request clock (spec 40 The clock, spec 60 Surfaces): one value
+// per request, truncated to p digits when written into datetime(p) and kept at six
+// digits when compared with a column, now and the relative time functions alike.
+func TestClock(t *testing.T) {
+	const half = "2026-10-11 10:00:00.500000"
+	const late = "2026-10-11 10:00:00.999999"
+	docs := baseDocs()
+	docs["people.flowmark.md"] = lines(
+		"# people",
+		"| id | name | email | age | active | score | joined | deleted_at | updated_at |",
+		"| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+		"| P1 | Ada |  |  | true | 0.00 | 2026-10-11 10:00:00 |  |  |",
+	)
+	f := catalogFixture(t, docs)
+	at := func(f *fixture, op string, value map[string]any, params ...any) []string {
+		res := f.ok(f.msgAt(half, "all", "people", map[string]any{"columns": none, "where": where(pred("joined", op, map[string]any{"value": value}))}, params...))
+		var out []string
+		for _, r := range res.Answer.Rows {
+			v, _ := r.Get("id")
+			out = append(out, v.(string))
+		}
+		return out
+	}
+	f.sub(t, "40#the-clock: a datetime(0) column equals no clock with a fraction", func(f *fixture) {
+		if got := at(f, "eq", map[string]any{"name": "now"}); got != nil {
+			f.t.Fatalf("ids %v", got)
+		}
+	})
+	f.sub(t, "40#the-clock: a datetime(0) column is less than the clock of its second", func(f *fixture) {
+		if got := at(f, "lt", map[string]any{"name": "now"}); !slices.Equal(got, []string{"P1"}) {
+			f.t.Fatalf("ids %v", got)
+		}
+	})
+	f.sub(t, "40#the-clock: a relative time function keeps six digits", func(f *fixture) {
+		if got := at(f, "lt", map[string]any{"name": "seconds_ago", "ps": []int{0}}, 0.25); !slices.Equal(got, []string{"P1"}) {
+			f.t.Fatalf("ids %v", got)
+		}
+	})
+	t.Run("40#the-clock: written into datetime(0) and datetime(3) the clock is truncated, never rounded", func(t *testing.T) {
+		f := fresh(t)
+		f.commit(f.ok(f.msgAt(late, "insert", "people", map[string]any{"set": sets("name")}, "Lin")))
+		f.commit(f.ok(f.msgAt(late, "insert", "stamps", map[string]any{"set": sets("label")}, "one")))
+		f.want(f.msg("all", "people", map[string]any{"columns": map[string]any{"mode": "none", "add": []string{"joined"}}, "where": where(pred("id", "eq", p(0)))}, "P4"),
+			`{"rows":[{"id":"P4","joined":"2026-10-11 10:00:00.000000"}]}`)
+		f.want(f.msg("all", "stamps", map[string]any{"columns": map[string]any{"mode": "all"}}),
+			`{"rows":[{"id":1,"label":"one","at":"2026-10-11 10:00:00.999000","updated_at":null}]}`)
+		f.commit(f.ok(f.msgAt(half, "update", "stamps", map[string]any{"set": sets("label"), "where": where(pred("id", "eq", p(1)))}, "two", 1)))
+		f.want(f.msg("all", "stamps", map[string]any{"columns": map[string]any{"mode": "all"}}),
+			`{"rows":[{"id":1,"label":"two","at":"2026-10-11 10:00:00.999000","updated_at":"2026-10-11 10:00:00.500000"}]}`)
 	})
 }
 
