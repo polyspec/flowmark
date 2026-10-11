@@ -396,6 +396,10 @@ func TestUpdate(t *testing.T) {
 		f.commit(f.ok(f.msg("update", "people", map[string]any{"set": []any{map[string]any{"column": "age", "minus_p": 0}}, "where": where(pred("id", "eq", p(1)))}, 100, "P1")))
 		f.want(f.msg("all", "people", map[string]any{"columns": map[string]any{"mode": "none", "add": []string{"age"}}}), `{"rows":[{"id":"P1","age":0},{"id":"P2","age":null}]}`)
 	})
+	t.Run("60#the-wire: an update's affected counts the rows it matched, one already holding the value", func(t *testing.T) {
+		f := fresh(t)
+		f.want(f.msg("update", "people", map[string]any{"set": sets("active"), "where": where(pred("id", "in", map[string]any{"ps": []int{1, 2}}))}, true, "P1", "P2"), `{"affected":2,"keys":[]}`)
+	})
 	t.Run("60#surfaces: updated takes the request clock", func(t *testing.T) {
 		f := fresh(t)
 		f.commit(f.ok(byID(f, "people", sets("name"), "P2", "Maxine")))
