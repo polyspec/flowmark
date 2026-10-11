@@ -99,28 +99,42 @@ func (h *inotifyHub) run() {
 // inotifyWakes reads a buffer of inotify events: each removal or rename of the lock, each overflow and each event of
 // the watched folder itself (removal, rename, unmount, IN_IGNORED) is one wake; ignored reports IN_IGNORED.
 func inotifyWakes(buf []byte) (wakes int, ignored bool, err error) {
-	const self = unix.IN_IGNORED | unix.IN_DELETE_SELF | unix.IN_MOVE_SELF | unix.IN_UNMOUNT
+	err = inotifyEvents(buf, func(_ int, mask uint32, name string) {
+		switch {
+		case mask&(unix.IN_Q_OVERFLOW|inotifySelf) != 0:
+			wakes++
+			ignored = ignored || mask&unix.IN_IGNORED != 0
+		case mask&(unix.IN_DELETE|unix.IN_MOVED_FROM) != 0 && name == "lock":
+			wakes++
+		}
+	})
+	if err != nil {
+		return 0, false, err
+	}
+	return wakes, ignored, nil
+}
+
+// inotifySelf are the events of a watched folder itself: its removal, rename or unmount, and the end of its watch.
+const inotifySelf = unix.IN_IGNORED | unix.IN_DELETE_SELF | unix.IN_MOVE_SELF | unix.IN_UNMOUNT
+
+// inotifyEvents reads a buffer of inotify events and calls f with the watch descriptor, the mask and the name of
+// each, in order; the lock watch and the corpus tree's watch both read their events through it.
+func inotifyEvents(buf []byte, f func(wd int, mask uint32, name string)) error {
 	for off := 0; off < len(buf); {
 		if len(buf)-off < unix.SizeofInotifyEvent {
-			return 0, false, fmt.Errorf("inotify: a truncated event of %d bytes", len(buf)-off)
+			return fmt.Errorf("inotify: a truncated event of %d bytes", len(buf)-off)
 		}
+		wd := int(int32(binary.NativeEndian.Uint32(buf[off:])))
 		mask := binary.NativeEndian.Uint32(buf[off+4:])
 		size := int(binary.NativeEndian.Uint32(buf[off+12:]))
 		start := off + unix.SizeofInotifyEvent
 		if size > len(buf)-start {
-			return 0, false, fmt.Errorf("inotify: an event name of %d bytes past the buffer", size)
+			return fmt.Errorf("inotify: an event name of %d bytes past the buffer", size)
 		}
-		name := bytes.TrimRight(buf[start:start+size], "\x00")
-		switch {
-		case mask&(unix.IN_Q_OVERFLOW|self) != 0:
-			wakes++
-			ignored = ignored || mask&unix.IN_IGNORED != 0
-		case mask&(unix.IN_DELETE|unix.IN_MOVED_FROM) != 0 && string(name) == "lock":
-			wakes++
-		}
+		f(wd, mask, string(bytes.TrimRight(buf[start:start+size], "\x00")))
 		off = start + size
 	}
-	return wakes, ignored, nil
+	return nil
 }
 
 // linuxWatch is one wait's subscription to the shared inotify instance, and a pidfd of its holder (Linux 5.3+).

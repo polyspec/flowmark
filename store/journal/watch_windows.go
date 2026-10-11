@@ -141,29 +141,42 @@ func (w *windowsWatch) run() {
 // notifyWakes reads a ReadDirectoryChangesW buffer of n bytes: each removal or rename of the lock is one wake; zero
 // bytes is an overflow, one wake; so is a buffer whose entries run past n, since its events cannot be read.
 func notifyWakes(buf []byte, n uint32) int {
-	if n == 0 {
-		return 1
-	}
 	wakes := 0
+	whole := notifyEntries(buf, n, func(action uint32, name string) {
+		if (action == windows.FILE_ACTION_REMOVED || action == windows.FILE_ACTION_RENAMED_OLD_NAME) && name == "lock" {
+			wakes++
+		}
+	})
+	if !whole {
+		wakes++
+	}
+	return wakes
+}
+
+// notifyEntries reads a ReadDirectoryChangesW buffer of n bytes and calls f with the action and the name of each
+// entry, in order; the lock watch and the corpus tree's watch both read their changes through it. It reports false
+// when the buffer is an overflow: zero bytes, or entries that run past n, whose events cannot be read.
+func notifyEntries(buf []byte, n uint32, f func(action uint32, name string)) bool {
+	if n == 0 {
+		return false
+	}
 	for off := 0; ; {
 		if off+12 > int(n) {
-			return wakes + 1
+			return false
 		}
 		next := int(binary.LittleEndian.Uint32(buf[off:]))
 		action := binary.LittleEndian.Uint32(buf[off+4:])
 		size := int(binary.LittleEndian.Uint32(buf[off+8:]))
 		if off+12+size > int(n) {
-			return wakes + 1
+			return false
 		}
 		units := make([]uint16, size/2)
 		for i := range units {
 			units[i] = binary.LittleEndian.Uint16(buf[off+12+2*i:])
 		}
-		if (action == windows.FILE_ACTION_REMOVED || action == windows.FILE_ACTION_RENAMED_OLD_NAME) && string(utf16.Decode(units)) == "lock" {
-			wakes++
-		}
+		f(action, string(utf16.Decode(units)))
 		if next == 0 {
-			return wakes
+			return true
 		}
 		off += next
 	}

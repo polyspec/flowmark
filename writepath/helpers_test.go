@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -68,13 +69,55 @@ func (r *recorder) waitFor(t testing.TB, kind journal.Kind) {
 	}
 }
 
+// kinds returns the kinds of the lock and journal events since the last reset; the events of the corpus tree are
+// read by treeEvents.
 func (r *recorder) kinds() []journal.Kind {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	out := []journal.Kind{}
 	for _, e := range r.events {
-		out = append(out, e.Kind)
+		if !treeKind(e.Kind) {
+			out = append(out, e.Kind)
+		}
 	}
+	return out
+}
+
+// treeKind reports whether kind is an event of the corpus tree.
+func treeKind(kind journal.Kind) bool {
+	return strings.HasPrefix(string(kind), "corpus.")
+}
+
+// treeEvents returns the corpus paths, relative to root and slash-separated, of the events of kind since the last
+// reset, in order.
+func (r *recorder) treeEvents(t testing.TB, root string, kind journal.Kind) []string {
+	t.Helper()
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := []string{}
+	for _, e := range r.events {
+		if e.Kind != kind {
+			continue
+		}
+		rel, err := filepath.Rel(root, e.Path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out = append(out, filepath.ToSlash(rel))
+	}
+	return out
+}
+
+// documentsRead returns the corpus documents read from the disk since the last reset, sorted.
+func (r *recorder) documentsRead(t testing.TB, root string) []string {
+	t.Helper()
+	out := []string{}
+	for _, p := range r.treeEvents(t, root, journal.CorpusRead) {
+		if strings.HasSuffix(p, ".flowmark.md") {
+			out = append(out, p)
+		}
+	}
+	slices.Sort(out)
 	return out
 }
 
@@ -305,6 +348,11 @@ func openFixture(t testing.TB, root string) *fixture {
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
+	t.Cleanup(func() {
+		if err := c.Close(); err != nil {
+			t.Errorf("Close: %v", err)
+		}
+	})
 	c.clock = func() time.Time { return time.Date(2026, 10, 11, 10, 0, 0, 123456000, time.UTC) }
 	f := &fixture{t: t, root: root, cat: cat, j: j, c: c, rec: rec}
 	rec.reset()

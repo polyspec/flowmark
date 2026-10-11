@@ -56,10 +56,11 @@ type rec struct {
 }
 
 // Open reads the corpus fsys as a request reads it: the corpus folder itself
-// (store.DirFS), or the write path's mirror of it. An error is returned only when
+// (store.DirFS), or the write path's mirror of it, parsing through the memo m of a
+// long-lived corpus (nil to parse every document). An error is returned only when
 // the corpus root cannot be read.
-func Open(cat *catalog.Catalog, fsys store.FS) (*Corpus, error) {
-	s, err := validate.Read(cat, fsys)
+func Open(cat *catalog.Catalog, fsys store.FS, m *validate.Memo) (*Corpus, error) {
+	s, err := validate.Read(cat, fsys, m)
 	if err != nil {
 		return nil, err
 	}

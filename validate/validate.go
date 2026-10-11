@@ -22,7 +22,7 @@ import (
 // it. An error is returned only when the corpus root cannot be read, or when orm
 // builds no runtime model of the loaded catalog that the view rule needs.
 func Corpus(cat *catalog.Catalog, root string) ([]catalog.Diagnostic, error) {
-	c, err := load(cat, store.DirFS(root))
+	c, err := load(cat, store.DirFS(root), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -34,18 +34,41 @@ func Corpus(cat *catalog.Catalog, root string) ([]catalog.Diagnostic, error) {
 }
 
 // load reads the corpus fsys in its two passes: the first locates the rows,
-// the second reads them with the index of the first.
-func load(cat *catalog.Catalog, fsys store.FS) (*corpus, error) {
-	first, err := read(cat, fsys, noTargets{})
+// the second reads them with the index of the first. Each pass parses through its
+// memo of m; a nil m parses every document.
+func load(cat *catalog.Catalog, fsys store.FS, m *Memo) (*corpus, error) {
+	var first, second *store.Memo
+	if m != nil {
+		first, second = m.first, m.second
+	}
+	first.Begin(cat)
+	c, err := read(cat, fsys, noTargets{}, first)
 	if err != nil {
 		return nil, err
 	}
-	idx, err := indexOf(cat, first)
+	first.End()
+	idx, err := indexOf(cat, c)
 	if err != nil {
 		return nil, err
 	}
-	return read(cat, fsys, idx)
+	second.Begin(cat)
+	c, err = read(cat, fsys, idx, second)
+	if err != nil {
+		return nil, err
+	}
+	second.End()
+	return c, nil
 }
+
+// Memo keeps the parses of both passes of a read across the reads of a
+// long-lived corpus (store.Memo): a read parses only the documents whose parse
+// can differ from the last read's.
+type Memo struct {
+	first, second *store.Memo
+}
+
+// NewMemo returns an empty memo.
+func NewMemo() *Memo { return &Memo{first: store.NewMemo(), second: store.NewMemo()} }
 
 // sortDiags sorts diagnostics by file, line, column, rule and message.
 func sortDiags(diags []catalog.Diagnostic) {
@@ -82,10 +105,11 @@ type Snapshot struct {
 	unavailable map[string]catalog.Diagnostic
 }
 
-// Read reads the corpus fsys as a request reads it. An error is returned only
-// when the corpus root cannot be read.
-func Read(cat *catalog.Catalog, fsys store.FS) (*Snapshot, error) {
-	c, err := load(cat, fsys)
+// Read reads the corpus fsys as a request reads it, parsing through m (nil to
+// parse every document). An error is returned only when the corpus root cannot be
+// read.
+func Read(cat *catalog.Catalog, fsys store.FS, m *Memo) (*Snapshot, error) {
+	c, err := load(cat, fsys, m)
 	if err != nil {
 		return nil, err
 	}
