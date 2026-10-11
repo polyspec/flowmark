@@ -119,6 +119,42 @@ func (c *Corpus) place(r *store.Row, path string, parent *rec) {
 	}
 }
 
+// Catalog returns the catalog the corpus was read with.
+func (c *Corpus) Catalog() *catalog.Catalog { return c.cat }
+
+// Rows returns every row of table in storage order (spec 20 Order), soft-deleted
+// rows included, each as the value of every column of the table in declaration
+// order, written in the runtime value model JSON a read answers with (spec 60 The
+// wire): the export reads the corpus through it (spec 70 The export). It fails as
+// CONSTRAINT, naming the diagnostic, when the table is unavailable or a value is not
+// of its column type, and as ENTITY_UNKNOWN when the catalog has no such table.
+func (c *Corpus) Rows(table string) ([][]any, error) {
+	if _, ok := c.cat.Table(table); !ok {
+		return nil, errf(codeEntityUnknown, "the catalog has no table %s", table)
+	}
+	recs, err := c.rows(table)
+	if err != nil {
+		return nil, err
+	}
+	out := make([][]any, 0, len(recs))
+	for _, x := range recs {
+		row := make([]any, len(x.tb.Columns))
+		for i, col := range x.tb.Columns {
+			v, err := c.value(x, col.Name)
+			if err != nil {
+				return nil, err
+			}
+			w, err := output(col.Type, v)
+			if err != nil {
+				return nil, err
+			}
+			row[i] = w
+		}
+		out = append(out, row)
+	}
+	return out, nil
+}
+
 // need fails as CONSTRAINT when table is unavailable: a request that needs any of
 // its rows never answers from the other files' rows alone.
 func (c *Corpus) need(table string) *Error {
