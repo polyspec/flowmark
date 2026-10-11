@@ -50,6 +50,7 @@ func Load(root string) (*Catalog, []Diagnostic) {
 	cat := &Catalog{ManifestHash: hash}
 	for _, d := range docs {
 		cat.Documents = append(cat.Documents, d.parsed)
+		cat.Files = append(cat.Files, d.file)
 	}
 	for _, r := range l.order {
 		cat.Tables = append(cat.Tables, buildTable(r))

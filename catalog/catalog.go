@@ -16,6 +16,7 @@ type Diagnostic struct {
 // Catalog is a loaded, valid catalog.
 type Catalog struct {
 	Documents    []*dbspec.Document
+	Files        []string // the corpus path of each document, in the order of Documents
 	ManifestHash string
 	Tables       []*Table
 }
