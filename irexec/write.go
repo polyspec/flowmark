@@ -303,7 +303,7 @@ func (w *writer) insert() *Error {
 			return errf(codeIRInvalid, "cannot set identity column %s", a.Column)
 		}
 		if a.PlusP != nil || a.MinusP != nil {
-			return unspecified("an insert that assigns " + a.Column + " by plus_p or minus_p, which have no old value")
+			return unspecified("an insert that assigns " + a.Column + " by plus_p or minus_p, IR_INVALID once ir.Validate refuses it (orm T99)")
 		}
 	}
 	if err := w.requireAssigned(req.Set); err != nil {
@@ -602,7 +602,7 @@ func (w *writer) onDuplicate(ps []*int) (bool, *Error) {
 			}
 			if equal {
 				if met != nil && met != x {
-					return false, unspecified("an insert with on_duplicate that meets two rows on different keys")
+					return false, unspecified("an insert with on_duplicate that meets two rows on different keys, IR_INVALID once ir.Validate refuses it (orm T87)")
 				}
 				met = x
 			}
