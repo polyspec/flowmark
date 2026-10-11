@@ -1,9 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 6485f9521980af73bdd651102b8819682415ac9952c1403da43e292766a29c1b -->
+<!-- source-sha256: 7b7a519005ebcacbf669fb9cb145dbfb7b5b531a934407f3739d3a39a274b256 -->
 # Changelog
 
 ## Unreleased
 
+- T12.5-5: 열기에 실패한 corpus는 lock을 남기지 않는다. lock 해제는 lock file을 여는데 macOS의 감시가 문서마다 descriptor를 쥐어 남은 것이 없었으므로, 감시를 먼저 닫고 lock을 해제한다.
 - T12.11.2-1: board 애플리케이션이 hyper의 Node.js 서버에서도 orm의 TypeScript client와 `markdown://` 위에 `examples/board/web/node`로 돈다. PHP 서버와 Node.js 서버는 같은 행과 글 하나의 같은 페이지를 낸다.
 - T12.11.2: board 애플리케이션이 hyper의 PHP 서버 위에서 orm과 `markdown://`로 `examples/board/web`에서 돈다. 글 1000개를 1월부터 10월까지 달마다 100개씩 나누며, 두 board corpus 모두 `posts`는 `created`의 달로 샤드되고 `examples/board/seed`가 엔진으로 글을 쓴다.
 - T12.1-35: `files`나 `document` table이 시간 shard(`store ... shard <column> <year|month|day>`, orm T119)를 선언할 수 있다. 행은 `<table>/<period>/<key>.flowmark.md`나 기간 문서 `<table>/<period>.flowmark.md`에 서고, insert는 행을 자기 기간의 파일에 놓고, shard column 갱신은 행을 옮기며 그 행으로의 링크를 같은 쓰기에서 다시 쓰고, 행이 없는 기간에는 파일이 없으며, validator는 다른 기간의 파일에 있는 행을 `shard.period`로 보고한다.

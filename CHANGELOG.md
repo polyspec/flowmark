@@ -3,6 +3,7 @@
 
 ## Unreleased
 
+- T12.5-5: a corpus that fails to open leaves no lock: the watch is closed before the lock is released, since releasing the lock opens its file, which a macOS watch holding a descriptor for every document had left no descriptor for.
 - T12.11.2-1: the board application runs on hyper's Node.js server too, over orm's TypeScript client and `markdown://`, in `examples/board/web/node`; the PHP and the Node.js server give the same rows and the same page for a post.
 - T12.11.2: the board application runs on hyper's PHP server over orm and `markdown://`, in `examples/board/web`, with 1000 posts spread over the months January to October, 100 each: `posts` is sharded by the month of `created` in both board corpora, and `examples/board/seed` writes the posts through the engine.
 - T12.1-35: a `files` or `document` table can declare a time shard (`store ... shard <column> <year|month|day>`, orm T119): its rows stand in `<table>/<period>/<key>.flowmark.md` or its period document `<table>/<period>.flowmark.md`, an insert places a row in the file of its period, an update of the shard column moves the row and rewrites the links to it in the same write, a period without rows has no file, and the validator reports a row in another period's file as `shard.period`.
