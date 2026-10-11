@@ -26,8 +26,8 @@ type Catalog struct {
 // Result is the answer of introspection. Catalog is nil when the catalog does
 // not load, and Diagnostics then holds its catalog diagnostics only.
 type Result struct {
-	Catalog     *Catalog             `json:"catalog"`
-	Diagnostics []catalog.Diagnostic `json:"diagnostics"`
+	Catalog     *Catalog
+	Diagnostics []catalog.Diagnostic
 }
 
 // Corpus introspects the corpus at root: it loads the catalog, validates every
@@ -43,9 +43,6 @@ func Corpus(root string) (*Result, error) {
 	diags, err := validate.Corpus(cat, root)
 	if err != nil {
 		return nil, err
-	}
-	if diags == nil {
-		diags = []catalog.Diagnostic{}
 	}
 	out := &Catalog{ManifestHash: cat.ManifestHash, Documents: make([]Document, len(cat.Documents))}
 	for i, d := range cat.Documents {

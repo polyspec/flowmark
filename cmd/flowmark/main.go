@@ -1,4 +1,4 @@
-// Command flowmark works a corpus: validate, canon, items and transition. The document selection of
+// Command flowmark works a corpus: validate, canon, introspect, items and transition. The document selection of
 // validate comes from the config/documents.json of the root when it exists.
 package main
 
@@ -33,6 +33,9 @@ func main() {
 	}
 	if len(os.Args) >= 2 && os.Args[1] == "canon" {
 		os.Exit(canonTo(os.Stdout, os.Stderr, os.Args[2:]))
+	}
+	if len(os.Args) >= 2 && os.Args[1] == "introspect" {
+		os.Exit(introspectTo(os.Stdout, os.Stderr, os.Args[2:]))
 	}
 	if len(os.Args) < 3 {
 		usage()
@@ -99,7 +102,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: flowmark mcp | sidecar | validate <root> | canon [--lock-wait-ms <n>] <corpus> [file…] | items <root> | add <root> <path> <id> <title> | rm <root> <path> <id> | transition <root> <path> <id> <state> [evidence]")
+	fmt.Fprintln(os.Stderr, "usage: flowmark mcp | sidecar | validate <root> | canon [--lock-wait-ms <n>] <corpus> [file…] | introspect <corpus> | items <root> | add <root> <path> <id> <title> | rm <root> <path> <id> | transition <root> <path> <id> <state> [evidence]")
 	os.Exit(2)
 }
 
