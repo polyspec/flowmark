@@ -122,3 +122,33 @@ over `markdown://` is `CAPABILITY_UNSUPPORTED`.
 Introspection validates every document against the catalog and returns the catalog; a document
 that fails is a located diagnostic. A corpus without a catalog has no schema to return; a tool
 that drafts one is not part of this specification.
+
+- The catalog returned is the `dbspec/` document set: each document in dbspec's canonical form
+  (orm `docs/dbspec.md`, Canonical form), with its corpus path and its document name, in file name
+  order, and the set's manifest hash. Grounding: the catalog is the only origin of the schema, so
+  introspection returns it and nothing derived from the rows; orm's introspection of a database
+  returns a dbspec document, and canonical form is dbspec's own form of one — it keeps every
+  declaration, the markdown settings and the comments, so the returned set reads back to the same
+  manifest hash; the manifest hash is what a client's generated code is checked against
+  (`SCHEMA_HASH_MISMATCH`), so a tool tells from it whether its code matches the corpus. The
+  catalog is read with orm's `engine/dbspec` and written with its `Emit`, never by a second
+  parser or emitter.
+- The diagnostics are every diagnostic of the validator ([constraints](50-constraints.md#diagnostics)),
+  sorted by file, line, column, rule and message, and the catalog is returned with them whenever it
+  loads, whether or not a document fails. Grounding: rows never change the schema, so a document
+  that fails says nothing about the catalog, as a database's introspection returns its schema
+  whatever its rows hold; withholding the catalog would hide the schema from the person who repairs
+  the document. The corpus is valid exactly when there is no diagnostic.
+- A catalog that does not load returns no catalog and only its `catalog` diagnostics: the validator
+  reads the documents through the catalog and cannot run without it. A corpus without `dbspec/` is
+  the `catalog` diagnostic `no dbspec/ directory` at `dbspec`.
+- The command line is `flowmark introspect <corpus>`, `<corpus>` being the corpus root. It prints
+  one JSON object on standard output, `{"catalog": {"manifest_hash", "documents": [{"file",
+  "name", "text"}]}, "diagnostics": [{"file", "line", "column", "rule", "message"}]}`, with
+  `"catalog": null` when the catalog does not load and `"diagnostics": []` when there is none. It
+  exits 0 when there is no diagnostic; 1 when there is one, the object printed all the same, or
+  when the command failed, with the failure on standard error and nothing on standard output; and
+  2 for a wrong command line, as [canon](40-ops.md#the-canon-operation) does. Grounding: a
+  document's text spans lines and the answer is read by tools, so it is one JSON value, as the
+  messages of the IR-executor protocol are; introspection validates, so a diagnostic fails the
+  command as a failed validation does.

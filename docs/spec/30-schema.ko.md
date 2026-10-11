@@ -1,5 +1,5 @@
 <!-- doc-id: spec-schema -->
-<!-- source-sha256: 96c0d67bcfaab53edaab705276857f61c90b094d1d4b3db6b80716561ee11cb4 -->
+<!-- source-sha256: f6fe0ee1b2c5eeabff484be405659502aa7c5e5ced8d6930e95ed6f5a8f427ac -->
 # Schema
 
 [English](30-schema.md)
@@ -99,3 +99,28 @@ file `<table>.flowmark.md`이며, 빈 블록은 쓰이지 않으므로 블록 �
 introspection은 모든 문서를 catalog에 대해 검증하고 catalog를 돌려준다. 실패한 문서는 위치가 있는
 진단이다. catalog 없는 corpus에는 돌려줄 schema가 없으며, catalog 초안을 만드는 도구는 이 spec에 속하지
 않는다.
+
+- 돌려주는 catalog는 `dbspec/` 문서 set이다: 각 문서를 dbspec의 canonical form(orm `docs/dbspec.md`,
+  Canonical form)으로, 그 corpus path와 문서 이름과 함께 file 이름 순서로 돌려주고, set의 manifest hash를
+  함께 돌려준다. 근거: catalog는 schema의 유일한 출발점이므로 introspection은 catalog를 돌려주며 행에서
+  유도한 것은 돌려주지 않는다. orm의 database introspection은 dbspec 문서를 돌려주고, canonical form은
+  dbspec 자신의 문서 형식이다 — 모든 선언, markdown setting, comment를 유지하므로 돌려준 set을 다시 읽으면
+  같은 manifest hash가 된다. manifest hash는 client의 생성 코드를 검사하는 값이므로(`SCHEMA_HASH_MISMATCH`)
+  도구는 그것으로 자신의 코드가 corpus와 맞는지 안다. catalog는 orm의 `engine/dbspec`으로 읽고 그
+  `Emit`으로 쓰며, 두 번째 parser나 emitter를 두지 않는다.
+- 진단은 validator의 모든 진단([constraints](50-constraints.ko.md#진단))이며 file, line, column,
+  rule, message 순으로 정렬한다. catalog가 load되면 문서의 실패 여부와 관계없이 catalog를 진단과 함께
+  돌려준다. 근거: 행은 schema를 바꾸지 않으므로 실패한 문서는 catalog에 대해 아무것도 말하지 않는다.
+  database의 introspection도 행이 무엇을 담든 schema를 돌려준다. catalog를 돌려주지 않으면 문서를 고치는
+  사람에게서 schema를 숨기게 된다. 진단이 하나도 없을 때에만 corpus가 유효하다.
+- load되지 않는 catalog는 catalog 없이 그 `catalog` 진단만 돌려준다: validator는 catalog를 통해 문서를
+  읽으므로 catalog 없이는 실행할 수 없다. `dbspec/`이 없는 corpus는 `dbspec`에 위치한 `catalog` 진단
+  `no dbspec/ directory`다.
+- 명령줄은 `flowmark introspect <corpus>`이며 `<corpus>`는 corpus root다. 표준 출력에 JSON 객체 하나
+  `{"catalog": {"manifest_hash", "documents": [{"file", "name", "text"}]}, "diagnostics": [{"file",
+  "line", "column", "rule", "message"}]}`를 쓰며, catalog가 load되지 않으면 `"catalog": null`, 진단이
+  없으면 `"diagnostics": []`다. 진단이 없으면 0으로 끝난다. 진단이 있으면 객체를 똑같이 쓰고 1로 끝나며,
+  명령이 실패하면 실패를 표준 오류에 쓰고 표준 출력에는 아무것도 쓰지 않고 1로 끝난다. 잘못된 명령줄은
+  [canon](40-ops.ko.md#canon-연산)처럼 2다. 근거: 문서의 text는 여러 줄에 걸치고 그 답은 도구가
+  읽으므로, IR-executor protocol의 message처럼 하나의 JSON 값이다. introspection은 검증하므로 진단은
+  검증 실패처럼 명령을 실패시킨다.
