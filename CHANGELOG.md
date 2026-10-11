@@ -3,6 +3,9 @@
 
 ## Unreleased
 
+- T12.1-33: the collision rule reads raw HTML `<h1>`–`<h6>` headings, which GitHub anchors, and every heading element as GitHub's parser does, by recorded vectors; an element continuing into content the engine does not render takes an anchor its slug so far begins.
+- T12.1-31: S_GL reads math spans as GitLab renders them (their literal source), its final Σ as ς, and its footnote references as comrak does; S_VS reads math spans as no text, as VS Code's default markdown-math does. The slug vectors record GitLab, built from the pinned gitlab-glfm-markdown with GitLab's options.
+- T12.1-32: the vendored Unicode data folders ship the Unicode License v3 text, which the package documentation names and a test requires.
 - T12.1-34: the standard application schema stores one file per item: `items` is `store files`, its history and the links it starts are blocks of its file, and `people` and `views` are one document each, so a transition, a link or a move of an item writes that item's file alone.
 - T12.1-36: `files` storage stores `order` as a sparse rank: a move, an insert or a parent change rewrites only the placed row's file unless no rank is free, then renumbers the group once, and a delete rewrites no sibling; reads still see 1-based positions, and the validator's `order` reports only a shared rank. An insert at position 1 among 1,000 siblings writes 1 file instead of 1,001.
 - T12.5-2: an operation no longer reads unchanged files: an opened corpus is kept current by the operating system's file notifications (kqueue, inotify, ReadDirectoryChangesW), re-reads everything on an overflow, always re-reads its commit targets under the lock, and reuses each document's parse while its bytes and link targets are unchanged; a read of 10k documents drops from 3.9 s to 68 ms of CPU, and every face closes the corpus it opens.

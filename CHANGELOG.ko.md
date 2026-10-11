@@ -1,9 +1,12 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: a59efd81e458da5ca192c088c4849ee7e2bbf555da5cf2cd523c9fa3359606a8 -->
+<!-- source-sha256: d7808135b5d3d5d908670c1e7ab94e8e7e696b87f3e86c2a0114560f6603cba9 -->
 # Changelog
 
 ## Unreleased
 
+- T12.1-33: 충돌 규칙이 GitHub이 anchor를 주는 raw HTML `<h1>`–`<h6>` heading을 읽고, 모든 heading element를 기록된 vector대로 GitHub의 parser처럼 읽는다. 엔진이 렌더하지 않는 내용으로 이어지는 element는 지금까지의 slug가 시작하는 anchor를 차지하는 것으로 본다.
+- T12.1-31: S_GL은 math span을 GitLab이 렌더하는 대로(글자 그대로의 source) 읽고, 끝의 Σ를 ς로, footnote 참조를 comrak처럼 읽는다. S_VS는 VS Code의 기본 markdown-math처럼 math span을 텍스트로 보지 않는다. slug vector는 고정된 gitlab-glfm-markdown을 GitLab의 option으로 build해 GitLab도 기록한다.
+- T12.1-32: vendor한 Unicode data folder가 Unicode License v3 원문을 함께 담으며, package 문서가 이를 밝히고 test가 요구한다.
 - T12.1-34: 표준 응용 schema는 item 하나에 file 하나를 저장한다. `items`는 `store files`이고, 그 이력과 그 item이 시작하는 link는 그 file의 block이며, `people`과 `views`는 각각 문서 하나다. 그래서 item의 transition, link, move는 그 item의 file만 쓴다.
 - T12.1-36: `files` 저장은 `order`를 sparse rank로 저장한다. 이동, insert, parent 변경은 빈 rank가 있으면 놓인 행의 file만 다시 쓰고, 빈 rank가 없으면 묶음을 한 번 다시 번호 매긴다. delete는 형제를 다시 쓰지 않는다. 읽기는 여전히 1부터 센 위치를 보고, validator의 `order`는 공유된 rank만 보고한다. 형제 1,000개 중 1번 위치 insert가 file 1,001개 대신 1개를 쓴다.
 - T12.5-2: operation이 더 이상 바뀌지 않은 file을 읽지 않는다. 열린 corpus는 운영체제의 file 알림(kqueue, inotify, ReadDirectoryChangesW)으로 최신을 유지하고, overflow면 전부 다시 읽으며, commit 대상은 언제나 lock 아래에서 다시 읽고, bytes와 link 대상이 그대로인 문서의 parse를 재사용한다. 10k 문서 읽기가 CPU 3.9초에서 68ms로 줄었고, 모든 face가 자기가 연 corpus를 닫는다.
