@@ -48,8 +48,8 @@ The order of the commit protocol is normative.
   to refuse at once; `<corpus>` is the corpus root. It prints `[canon] rewrote <file>` for each file
   rewritten, `[canon] left <file>: <diagnostic>` for each file reported, and a count of both. It exits
   0 when canon ran, files reported included; 1 when it was refused or failed, with the failure on
-  standard error; and 2 for a wrong command line. `T12.10` generalizes these exit codes to every
-  command of the CLI.
+  standard error; and 2 for a wrong command line — the exit codes of every command of the CLI
+  ([the faces](#the-faces)).
 
 ## The server
 
@@ -100,6 +100,98 @@ The order of the commit protocol is normative.
   messages it has received but not begun to answer are not run — the end of the read is the client's
   close, which a server cannot tell from a half-close, and the session ends with it. On
   `SIGINT` or `SIGTERM` the server stops listening and closes every connection the same way.
+
+## The faces
+
+- The CLI, the MCP server and the soksak sidecar are thin faces of the write path. Each operation of
+  a face is one operation of a session — a request of the IR-executor protocol, a history repair, a
+  rewrite or an install — run as a request outside a transaction ([transactions](#transactions)),
+  under the lock with the face's `--lock-wait-ms`; its request clock is the engine clock
+  ([the clock](#the-clock)). No face reads or writes a corpus file itself. Grounding: one write path
+  holds every rule, so no face can apply a rule otherwise or skip one.
+- An operation is named by `operation` and works over any table of the catalog: no face names a
+  table, a column or a storage. A value — `key`, each member of `values`, `position`, `parent` and
+  every value answered — is in the runtime value model JSON of the protocol
+  ([capability table](60-dialect.md#the-wire)). `key` is the value of the table's primary key.
+
+| Operation | Members | Answer |
+| --- | --- | --- |
+| `schema` | — | `{"manifest_hash", "tables"}`: the catalog — each table with its storage, key, `title`, `body`, `order`, hierarchy column, `markdown` columns, columns, foreign keys, unique keys and state machine |
+| `rows` | `table` | `{"rows"}`: every row of the table in storage order, as an `all` request without `columns` answers it |
+| `row.get` | `table`, `key` | `{"row"}`: the row whose key is `key` |
+| `row.insert` | `table`, `values` | `{"affected", "keys", "rows"}` |
+| `row.update` | `table`, `key`, `values` | `{"affected", "keys", "rows"}` |
+| `row.move` | `table`, `key`, `position`, optional `parent` | `{"affected", "keys", "rows"}` |
+| `row.delete` | `table`, `key` | `{"affected", "keys", "rows"}` |
+| `transition` | `table`, `key`, `state`, optional `values` | `{"affected", "keys", "rows"}` |
+
+- `row.insert` is an `insert` assigning `values`; `row.update` an `update` of the row whose key is
+  `key` assigning `values`; `row.delete` a `delete` of that row. `row.move` is an `update` of that row
+  assigning `position` to the table's `order` column and, when `parent` is given, `parent` to its
+  hierarchy column `parent` ([document model](20-document-model.md#order)); a table without `order`,
+  or a `parent` for a table without the hierarchy, is `CONFIG`. `transition` is an `update` of that
+  row assigning `state` to the column of the table's state machine together with `values`, which
+  carry the columns its transition requires ([constraints](50-constraints.md#the-state-machine)); a
+  table without a state machine is `CONFIG`. Each is checked and committed as any request of its
+  kind; no face adds or drops a rule.
+- A write answers `{affected, keys}` of its request and, as `rows`, the table's rows as `rows`
+  answers them right after the commit. Grounding: a view redraws from the rows an operation returns,
+  never from its own guess ([application schema](100-checklist.md#views)).
+- An operation on the row named by `key` that matches no row — `row.get`, or a write that affects
+  none — is `NO_ROWS`, naming the table and the key, orm's code of a one-row read that matched none.
+  Grounding: a write to a named row that changes nothing would be a silent drop.
+- An unknown `operation`, a missing member, a member the operation does not take, and `values` that
+  is not an object are `CONFIG`, naming it; a table or column the catalog does not declare is the
+  request's `ENTITY_UNKNOWN` or `COLUMN_UNKNOWN`.
+- A view operation — the rows of a view through its stored filter and sort — waits on `T12.3-1`: no
+  setting declares a view table, and a stored filter has nowhere to keep its parameters. Until
+  then a view row is read and written as any row.
+- A failure is answered `{"code", "error"}`: the face name of the [failure vocabulary](#failure-vocabulary),
+  which is the orm code for every code the vocabulary does not list, and the message.
+- **The CLI.** Each operation is a command: `flowmark schema <corpus>`, `rows <corpus> <table>`,
+  `row.get <corpus> <table> <key>`, `row.insert <corpus> <table> [assignment…]`,
+  `row.update <corpus> <table> <key> [assignment…]`, `row.move <corpus> <table> <key> <position> [<parent>]`,
+  `row.delete <corpus> <table> <key>` and `transition <corpus> <table> <key> <state> [assignment…]`.
+  An assignment is `<column>=<text>` or `<column>:=<json>`; a positional value is `<text>` or
+  `:=<json>`. A text is a value's readable text, sent as the wire value of its column's type — a
+  JSON number for an integer or a float, a JSON bool for `bool`, a JSON string otherwise — and
+  `:=` takes the wire value itself, `null` included. Every command takes `--lock-wait-ms <n>` (5000
+  by default, 0 refuses at once), and a flag may stand before or after the positional arguments.
+  The answer is written to standard output as one line of JSON. The other commands are
+  `flowmark canon` ([the canon operation](#the-canon-operation)), `flowmark install <corpus>`
+  ([schema](30-schema.md#install)), `flowmark history repair <corpus> <table> <key> [--from <state>]`
+  ([constraints](50-constraints.md#a-state-changed-outside-the-engine)) and `flowmark unlock <corpus>
+  [--holder <holder>]` ([a stale lock](#a-stale-lock)). Every command exits 0 when it ran, 1 when it
+  was refused or failed, with `flowmark <command>: <code>: <message>` on standard error, and 2 for a
+  wrong command line.
+- **`flowmark install`** is its own transaction under the lock, `CONFIG` inside an open one as canon
+  is. It writes, in one journal commit, the file `<table>.flowmark.md` of each `document` table that
+  has none — the empty table, `# <table>` and one LF — and `<corpus>/.gitattributes` with the line
+  `*.flowmark.md text eol=lf` when no line of it is that line, appended after its last line (and a LF
+  when its last line has none) or as a new file; then, under the same lock, the folder of each
+  `files` table that has none. A path at a table's place that holds another kind of entry, or a
+  `.gitattributes` that is no regular file, refuses the install as `CONFIG`, naming it, and nothing
+  is written. It prints `[install] created <path>` for each file or folder created,
+  `[install] added the line *.flowmark.md text eol=lf to .gitattributes` when it added it, and a
+  count; an install that finds everything in place writes nothing. Grounding: install is idempotent,
+  and a folder holds no bytes the journal could stage, so its creation follows the commit as a
+  separate idempotent step.
+- **The MCP server.** `flowmark mcp [--lock-wait-ms <n>] <corpus>` speaks JSON-RPC 2.0 over standard
+  input and output, one message per line, with `initialize`, `tools/list` and `tools/call`. Each
+  operation is one tool, named as the operation with `_` for `.`, whose arguments are its members;
+  a tool answers one text content holding the answer's JSON, or the failure's JSON with `isError`
+  true. An unknown method is the JSON-RPC error -32601, a line that is not JSON -32700 with a null
+  id, and a notification is not answered.
+- **The sidecar.** `flowmark sidecar [--lock-wait-ms <n>]` speaks protocol v1 of the soksak core
+  specification (`docs/spec/sidecars.md`): a request `{"surface", "root", "body"}` runs the operation
+  of its body over the corpus whose root is `root`, and is answered `{"surface", "body"}` with the
+  request's `cids` when it has them; the body's `id`, when given, is copied into the answer body. A
+  failure body is `{"id", "code", "error"}`, the member `error` stating the failed request as the
+  protocol reads it. A `closed` message is answered `{"surface", "closed": true}`: a surface holds no
+  resource. A line that is no request names no surface to answer, so it is written to standard
+  error, which the host logs. The sidecar pushes no change event: a watch of the corpus driven by
+  the operating system's notification belongs to the long-lived corpus of `T12.5-2`, and a polling
+  watch is not a substitute.
 
 ## The lock
 
@@ -371,7 +463,7 @@ and MySQL and PostgreSQL compare a `datetime(p)` column with `NOW(6)` at six dig
 | `FOREIGN_KEY` | `FOREIGN_KEY` | a reference names no row, or a referenced row is deleted while referenced |
 | `CONSTRAINT` | `CONSTRAINT` | any other rule of the catalog refused the write — a check, a title, a transition, a required column, a limit, an order, a single-line place; names the rule, and the row and column ([canonical format](10-canonical-format.md#diagnostics)); or a write that must rewrite a non-canonical or malformed document, or a request, read or write, that needs the rows of an unavailable table ([canonical format](10-canonical-format.md#diagnostics)), naming the file and the diagnostic |
 | `READ_ONLY` | `READ_ONLY` | a write in a read-only transaction |
-| `CONFIG` | `CONFIG` | a control message that the session's state does not allow ([transactions](#transactions)), or a `flowmark canon` path that names no corpus document ([the canon operation](#the-canon-operation)) |
+| `CONFIG` | `CONFIG` | a control message that the session's state does not allow ([transactions](#transactions)), a `flowmark canon` path that names no corpus document ([the canon operation](#the-canon-operation)), or a face operation that is unknown, lacks a member or names a setting its table does not declare ([the faces](#the-faces)) |
 | recovery refusal | `DRIVER` | names the target and both recorded hashes and the stage files that hold them; opening, and every operation that acquires the lock, refuses until resolved — `DRIVER`, orm's code of a database error no other code names, as SQLite's `SQLITE_CORRUPT` is; a failure of the file system under the journal is `DRIVER` too |
 
 Every failure message names the cause and the fix.
