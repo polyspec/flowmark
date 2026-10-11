@@ -82,3 +82,11 @@ func fail(errOut io.Writer, command string, err error) int {
 	fmt.Fprintf(errOut, "flowmark %s: %s: %s\n", command, code, msg)
 	return 1
 }
+
+// closeCorpus closes the corpus a command opened, on every way out of the command: a failure to close it is written
+// and makes the command's exit code 1.
+func closeCorpus(errOut io.Writer, command string, c *ops.Corpus, code *int) {
+	if err := c.Close(); err != nil {
+		*code = fail(errOut, command, err)
+	}
+}

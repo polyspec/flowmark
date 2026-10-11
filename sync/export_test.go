@@ -19,6 +19,7 @@ import (
 
 	"github.com/polyspec/flowmark/catalog"
 	"github.com/polyspec/flowmark/irexec"
+	"github.com/polyspec/flowmark/store"
 	"github.com/polyspec/orm/engine/dbspec"
 	_ "modernc.org/sqlite"
 )
@@ -99,7 +100,7 @@ func open(t *testing.T, root string) *irexec.Corpus {
 	if len(diags) > 0 {
 		t.Fatalf("catalog: %+v", diags)
 	}
-	c, err := irexec.Open(cat, root)
+	c, err := irexec.Open(cat, store.DirFS(root), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

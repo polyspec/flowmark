@@ -193,7 +193,7 @@ type outcome struct {
 }
 
 // runVector runs the vector v in the empty folder root and returns the first way its run departs from it.
-func runVector(root string, v *vector) error {
+func runVector(root string, v *vector) (err error) {
 	dbs, err := os.ReadFile(filepath.Join("catalogs", v.Catalog+".dbs"))
 	if err != nil {
 		return fmt.Errorf("the catalog %q: %v", v.Catalog, err)
@@ -248,6 +248,7 @@ func runVector(root string, v *vector) error {
 	if err != nil {
 		return fmt.Errorf("opening the corpus: %v", err)
 	}
+	defer func() { err = errors.Join(err, c.Close()) }()
 
 	first, err := run(c, msg)
 	if err != nil {

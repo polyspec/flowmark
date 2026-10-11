@@ -219,6 +219,9 @@ func (c *Corpus) ViewTable() *catalog.Table {
 // Catalog returns the catalog of the corpus.
 func (c *Corpus) Catalog() *catalog.Catalog { return c.cat }
 
+// Close closes the corpus: the watch of its tree (spec 40 Opening a corpus). Every face closes the corpus it opened.
+func (c *Corpus) Close() error { return c.wp.Close() }
+
 // Session returns a new session of the write path named name, for the operations the faces run outside this package:
 // canon, install, history repair.
 func (c *Corpus) Session(name string) (*writepath.Session, error) { return c.wp.Session(name) }

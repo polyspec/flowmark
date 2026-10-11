@@ -22,7 +22,7 @@ const serveUsage = "usage: flowmark serve <corpus> --port <port> [--new-token] [
 // serve runs `flowmark serve` with args, the words after serve (spec 40 The server): it serves the corpus on
 // 127.0.0.1:<port> until stop delivers, printing the address it bound on stdout and each lock and journal event and
 // each failure on stderr. It returns 0 after a stop, 1 when the server cannot start or fails, and 2 on a usage error.
-func serve(args []string, stdout, stderr io.Writer, stop <-chan os.Signal) int {
+func serve(args []string, stdout, stderr io.Writer, stop <-chan os.Signal) (code int) {
 	usage := func(format string, a ...any) int {
 		fmt.Fprintf(stderr, "flowmark serve: "+format+"\n%s\n", append(a, serveUsage)...)
 		return 2
@@ -75,6 +75,12 @@ func serve(args []string, stdout, stderr io.Writer, stop <-chan os.Signal) int {
 	if err != nil {
 		return fail("opening the corpus: %v", err)
 	}
+	// The corpus is closed on every way out: it holds the watch of the corpus tree.
+	defer func() {
+		if err := c.Close(); err != nil {
+			code = fail("%v", err)
+		}
+	}()
 	token, err := server.Token(root, *newToken)
 	if err != nil {
 		return fail("%v", err)
@@ -118,7 +124,12 @@ func (l *lineLog) printf(format string, a ...any) {
 	fmt.Fprintf(l.w, format+"\n", a...)
 }
 
-// Observe prints a lock or journal event.
+// Observe prints a lock, journal or corpus tree event. A read of one folder or file from the disk (corpus.read) is not
+// printed: the opening reads every document, so those lines would list the corpus; what made a read happen is
+// printed as its corpus.changed or corpus.overflow.
 func (l *lineLog) Observe(e journal.Event) {
+	if e.Kind == journal.CorpusRead {
+		return
+	}
 	l.printf("[serve] %s %s %s", e.Kind, e.Holder, e.Path)
 }

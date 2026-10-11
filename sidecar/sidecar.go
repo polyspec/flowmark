@@ -82,7 +82,7 @@ func Serve(wait time.Duration, in io.Reader, out, errOut io.Writer) error {
 
 // body runs the operation of a request body over the corpus at root and returns the answer body: the operation's
 // answer, or {code, error}, each with the request's id when it has one.
-func body(wait time.Duration, root string, raw json.RawMessage) json.RawMessage {
+func body(wait time.Duration, root string, raw json.RawMessage) (answer json.RawMessage) {
 	var members map[string]json.RawMessage
 	if json.Unmarshal(raw, &members) != nil || members == nil {
 		return failure(nil, &ops.Error{Code: "CONFIG", Msg: "the request body is not an object of an operation and its members"})
@@ -110,6 +110,12 @@ func body(wait time.Duration, root string, raw json.RawMessage) json.RawMessage 
 	if err != nil {
 		return failure(id, err)
 	}
+	// The corpus holds the watch of its tree; it is closed on every way out, and a failure to close it is the answer.
+	defer func() {
+		if cerr := c.Close(); cerr != nil {
+			answer = failure(id, cerr)
+		}
+	}()
 	a, err := c.Run(ctx, "sidecar", r)
 	if err != nil {
 		return failure(id, err)

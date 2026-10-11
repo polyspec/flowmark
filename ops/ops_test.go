@@ -97,6 +97,11 @@ func boardCorpus(t *testing.T) *Corpus {
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
+	t.Cleanup(func() {
+		if err := c.Close(); err != nil {
+			t.Errorf("Close: %v", err)
+		}
+	})
 	return c
 }
 
