@@ -186,7 +186,8 @@ func TestWhere(t *testing.T) {
 		{"60#surfaces: a column of a different kind does not meet an in subquery column", f.msg("all", "items", map[string]any{"where": where(pred("id", "in", map[string]any{"sub": map[string]any{"query": map[string]any{"entity": "people"}, "column": "age"}}))}), "OPERATOR_NOT_ALLOWED"},
 		{"60#surfaces: a column comparison of a bool by order", f.msg("all", "people", map[string]any{"where": where(pred("active", "gt_col", ref("", "active")))}), "OPERATOR_NOT_ALLOWED"},
 		{"60#surfaces: ^ outside a subquery", f.msg("all", "items", map[string]any{"where": where(pred("id", "eq_col", ref("^", "id")))}), "IR_INVALID"},
-		{"60#surfaces: a scalar subquery of several rows has no rule yet", f.msg("all", "people", map[string]any{"columns": map[string]any{"mode": "none", "sub": map[string]any{"any_item": map[string]any{"query": map[string]any{"entity": "items"}, "column": "id"}}}}), "CAPABILITY_UNSUPPORTED"},
+		{"60#surfaces: a scalar column subquery without a limit", f.msg("all", "people", map[string]any{"columns": map[string]any{"mode": "none", "sub": map[string]any{"any_item": map[string]any{"query": map[string]any{"entity": "items", "order": []any{map[string]any{"column": "id"}}}, "column": "id"}}}}), "IR_INVALID"},
+		{"60#surfaces: a scalar column subquery whose order lacks the primary key", f.msg("all", "people", map[string]any{"columns": map[string]any{"mode": "none", "sub": map[string]any{"any_item": map[string]any{"query": map[string]any{"entity": "items", "order": []any{map[string]any{"column": "title"}}, "limit": map[string]any{"offset": 0, "count": 1}}, "column": "id"}}}}), "IR_INVALID"},
 	}
 	for _, c := range rejects {
 		f.sub(t, c.name, func(f *fixture) { f.fails(c.msg, c.code) })
@@ -413,6 +414,19 @@ func TestColumns(t *testing.T) {
 		}
 		f.want(f.msg("all", "people", map[string]any{"columns": map[string]any{"mode": "none", "sub": map[string]any{"n": sub("count", ""), "s": sub("sum", "position"), "a": sub("avg", "position")}}}),
 			`{"rows":[{"id":"P1","a":1,"n":1,"s":1},{"id":"P2","a":null,"n":0,"s":0}]}`)
+	})
+	f.sub(t, "60#surfaces: a scalar column subquery is the column of the first row of its order, within its limit", func(f *fixture) {
+		top := func(offset int) map[string]any {
+			return map[string]any{"column": "id", "query": map[string]any{"entity": "items", "order": []any{map[string]any{"column": "id", "desc": true}}, "limit": map[string]any{"offset": offset, "count": 1}}}
+		}
+		f.want(f.msg("all", "people", map[string]any{"columns": map[string]any{"mode": "none", "sub": map[string]any{"top": top(0), "second": top(1)}}}),
+			`{"rows":[{"id":"P1","second":"T3","top":"T4"},{"id":"P2","second":"T3","top":"T4"}]}`)
+	})
+	f.sub(t, "60#surfaces: a scalar column subquery of no row is NULL", func(f *fixture) {
+		first := map[string]any{"column": "id", "query": map[string]any{"entity": "items", "where": where(pred("owner", "eq_col", map[string]any{"ref": map[string]any{"path": "^", "column": "id"}})),
+			"order": []any{map[string]any{"column": "id"}}, "limit": map[string]any{"offset": 0, "count": 1}}}
+		f.want(f.msg("all", "people", map[string]any{"columns": map[string]any{"mode": "none", "sub": map[string]any{"first": first}}}),
+			`{"rows":[{"id":"P1","first":"T1"},{"id":"P2","first":null}]}`)
 	})
 	f.sub(t, "60#surfaces: a datetime answers in the wire form", func(f *fixture) {
 		f.want(f.msg("all", "people", map[string]any{"columns": map[string]any{"mode": "none", "add": []string{"joined", "active", "score"}}, "where": where(pred("id", "eq", p(0)))}, "P1"),
