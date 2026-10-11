@@ -390,7 +390,7 @@ func (r *reader) order(s *scope, envs []*env) ([]*env, *Error) {
 // attached.
 func (r *reader) selectRows(q *ir.Query, one bool) ([]*Row, *Error) {
 	if len(q.GroupBy) > 0 {
-		return nil, unspecified("which row of a group a row read with group_by answers")
+		return nil, unspecified("a row read with group_by, IR_INVALID once ir.Validate refuses it (orm T83)")
 	}
 	s, envs, err := r.statement(q, nil, false, nil)
 	if err != nil {
@@ -792,7 +792,7 @@ func (r *reader) relation(s *scope, bs []*built, rel *ir.Relation) *Error {
 					return err
 				}
 				if v.null {
-					return unspecified("the key of a many relation " + rel.Rel + " keyed by a NULL " + cq.KeyBy)
+					return unspecified("a many relation " + rel.Rel + " keyed by the nullable " + cq.KeyBy + ", IR_INVALID once ir.Validate refuses it (orm T86)")
 				}
 				name, err := keyName(t, v)
 				if err != nil {
@@ -891,7 +891,7 @@ func (r *reader) groupCount(q *ir.Query) ([]*Row, *Error) {
 	}
 	for _, o := range q.Order {
 		if !o.Random && !slices.Contains(q.GroupBy, o.Column) {
-			return nil, unspecified("the order of groups by " + o.Column + ", which is not a group column")
+			return nil, unspecified("an order of groups by " + o.Column + ", which is not a group column, IR_INVALID once ir.Validate refuses it (orm T83)")
 		}
 	}
 	sizes := map[*env]int{}
@@ -990,7 +990,7 @@ func aggregateOf(kind string, t dbspec.Type, vals []cell) (cell, dbspec.Type) {
 // query of fr.
 func (r *reader) subRows(sub *ir.Sub, fr *frame) (*scope, []*env, *Error) {
 	if len(sub.Query.GroupBy) > 0 {
-		return nil, nil, unspecified("a subquery with group_by")
+		return nil, nil, unspecified("a subquery with group_by, IR_INVALID once ir.Validate refuses it (orm T83)")
 	}
 	return r.statement(sub.Query, fr, false, nil)
 }
@@ -1041,5 +1041,5 @@ func (r *reader) subScalar(sub *ir.Sub, fr *frame) (cell, dbspec.Type, *Error) {
 	case 1:
 		return vals[0], t, nil
 	}
-	return cell{}, t, unspecified(fmt.Sprintf("a scalar subquery of %s that matches %d rows", sub.Query.Entity, len(vals)))
+	return cell{}, t, unspecified(fmt.Sprintf("a scalar column subquery of %s that matches %d rows, IR_INVALID by its shape once ir.Validate refuses it (orm T84)", sub.Query.Entity, len(vals)))
 }

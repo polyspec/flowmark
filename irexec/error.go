@@ -63,11 +63,13 @@ func diagError(why string, d catalog.Diagnostic) *Error {
 	return &Error{Code: codeConstraint, Msg: fmt.Sprintf("%s: %s:%d:%d %s: %s", why, d.File, d.Line, d.Column, d.Rule, d.Message), Diagnostic: &d}
 }
 
-// unspecified is the error of a request that needs a rule the specifications do
-// not state yet. It names the open question; the executor never invents the rule.
-// CAPABILITY_UNSUPPORTED is the code of a surface the executor does not run.
+// unspecified is the error of a request whose rule spec 60 states as orm's but
+// that orm's validator does not refuse yet. It names the case and the orm item it
+// waits on; the executor never supplies orm's rule in its place (spec 60
+// Surfaces). CAPABILITY_UNSUPPORTED is the code of a surface the executor does not
+// run.
 func unspecified(question string) *Error {
-	return &Error{Code: codeCapability, Msg: "no specification rules this yet (open question): " + question}
+	return &Error{Code: codeCapability, Msg: "the executor does not run this until orm's rule lands: " + question}
 }
 
 // faultError is the error of a write refused by faults, whose code is the code of

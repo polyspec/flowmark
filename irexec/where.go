@@ -145,13 +145,14 @@ func (r *reader) col(s *scope, ev *env, name string) (cell, dbspec.Type, *Error)
 func (r *reader) param(i int, t dbspec.Type) (cell, *Error) {
 	v, ok := decodeParam(r.cl.params[i], t)
 	if !ok {
-		return cell{}, unspecified(fmt.Sprintf("parameter %d compared with a %s value is not a value of that type", i, t.String()))
+		return cell{}, unspecified(fmt.Sprintf("parameter %d compared with a %s value is not a value of that type, CODEC_ENCODE once ir.ParamUses lists its slot (orm T89; for a contains or contains_binary value, orm T80)", i, t.String()))
 	}
 	return v, nil
 }
 
 // cmpCells compares two values: unknown when either is NULL. Two values whose types
-// read as different kinds have no comparison rule.
+// read as different kinds do not meet, which orm's validator refuses once it checks
+// column pairs (spec 60 Surfaces, column comparisons).
 func cmpCells(at dbspec.Type, a cell, bt dbspec.Type, b cell) (int, bool, *Error) {
 	if a.null || b.null {
 		return 0, true, nil
@@ -165,7 +166,7 @@ func cmpCells(at dbspec.Type, a cell, bt dbspec.Type, b cell) (int, bool, *Error
 		return 0, false, errf(codeInternal, "%q is not a readable %s", b.text, bt.String())
 	}
 	if sa.kind != sb.kind {
-		return 0, false, unspecified("a comparison of a " + at.String() + " value with a " + bt.String() + " value")
+		return 0, false, unspecified("a comparison of a " + at.String() + " value with a " + bt.String() + " value, OPERATOR_NOT_ALLOWED once ir.Validate refuses it (orm T96; the operator's allowance, orm T97)")
 	}
 	return compare(sa, sb), false, nil
 }
