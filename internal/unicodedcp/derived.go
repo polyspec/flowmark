@@ -1,7 +1,9 @@
 // Package unicodedcp carries the Default_Ignorable_Code_Point property of
 // Unicode 17.0.0. The Go unicode package has no such property, so its table is
 // generated from the Unicode data file by go generate (gen/main.go), and a test
-// requires the committed table to be that generation.
+// requires the committed table to be that generation. The data file is Unicode's
+// own, distributed under the Unicode License v3, whose text stands beside it in
+// testdata/UNICODE-LICENSE.txt.
 package unicodedcp
 
 //go:generate go run ./gen

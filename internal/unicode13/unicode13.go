@@ -4,7 +4,9 @@
 // characters this data names (spec 10, Detail headings and anchors, and store's
 // TestVSRemovalIsVSCodeRegex). The Go unicode package holds only the version Go is
 // built with, so the table is generated from the Unicode data files by go generate
-// (gen/main.go), and a test requires the committed table to be that generation.
+// (gen/main.go), and a test requires the committed table to be that generation. The
+// data files are Unicode's own, distributed under the Unicode License v3, whose text
+// stands beside them in testdata/UNICODE-LICENSE.txt.
 package unicode13
 
 //go:generate go run ./gen
