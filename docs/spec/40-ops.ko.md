@@ -1,5 +1,5 @@
 <!-- doc-id: spec-ops -->
-<!-- source-sha256: 69b2b81df771707597184e2f76ba6e1ca463e5aaa35977eb3381d23da18bc954 -->
+<!-- source-sha256: 194b790cbe3a146d6b81ab69a46b751fce28a2311d71e9001e5f0295cc77e34d -->
 # Operations
 
 [English](40-ops.md)
@@ -32,7 +32,7 @@
 
 ## canon 연산
 
-- `flowmark canon <corpus> [file…]`는 지정한 file을(file을 지정하지 않으면 corpus의 모든 문서를) 한 transaction에서 canonical 형식으로 다시 쓴다. 대상은 `format.*` 진단이 있는 file의 commit 거절에서 면제된다. 이름을 준 file에 `format.block`, `format.section`, `format.encoding`이나 그 행 사이의 `parent.cycle`이 있으면 명령은 `CONSTRAINT`로 거절하며 file을 밝히고 아무것도 쓰지 않는다. file을 주지 않으면 대상은 그 행 사이에 `parent.cycle`이 없고 `format.*` 진단이 `format.noncanonical`뿐인 corpus 문서이며, 그 밖의 file은 보고하고 다시 쓰지 않는다. `corpus.walk` file은 결코 대상이 아니다. canon은 논리 값을 바꾸지 않으므로 key, 참조, 제약 검사가 그것을 거절하지 않는다. 링크 유도에 사용할 수 없는 table이 필요한 대상(`files` row로의 링크는 그 key에서만 유도되어 table이 필요 없고, block이나 document row로의 링크는 그 row의 table이 필요하다)은 이름을 준 canon을 `CONSTRAINT`로 거절하며 두 file을 밝히고, file을 주지 않으면 보고만 하고 다시 쓰지 않는다. validator 진단이 있는 값은 쓴 텍스트를 유지한다. 문서 바이트를 정규화하는 유일한 연산이며, 논리적 쓰기는 결코 정규화하지 않는다. 근거: migration은 별도의 명시적 transaction이므로, logical 쓰기는 사용자가 쓰지 않은 바이트를 바꾸지 않는다.
+- `flowmark canon <corpus> [file…]`는 지정한 file을(file을 지정하지 않으면 corpus의 모든 문서를) 한 transaction에서 canonical 형식으로 다시 쓰고, 다시 쓴 file을 답한다. 바이트를 하나도 바꾸지 않는 canon은 아무것도 쓰지 않는다. file은 corpus 경로로 이름을 준다: corpus root에 대한 상대 경로이며, 모든 platform에서 `/`를 쓰고, commit 거절이 밝히는 그 경로다. 두 번 이름을 준 file은 대상 하나다. 대상은 `format.*` 진단이 있는 file의 commit 거절에서 면제된다. 이름을 준 file에 `format.block`, `format.section`, `format.encoding`이나 그 행 사이의 `parent.cycle`이 있으면 명령은 `CONSTRAINT`로 거절하며 file과 진단을 밝히고 아무것도 쓰지 않는다. 이름을 준 `corpus.walk` 항목도 같은 방식으로 거절하며, corpus 문서도 `corpus.walk` 항목도 아닌 경로를 이름으로 주면 `CONFIG`로 거절한다. file을 주지 않으면 대상은 그 행 사이에 `parent.cycle`이 없고 `format.*` 진단이 `format.noncanonical`뿐인 corpus 문서이며, 그 밖의 모든 corpus 문서와 모든 `corpus.walk` 항목은 각각의 진단과 함께 보고하고 어느 것도 다시 쓰지 않는다. `corpus.walk` file은 결코 대상이 아니다. canon은 논리 값을 바꾸지 않으므로 key, 참조, 제약 검사가 그것을 거절하지 않는다. 링크 유도는 거절할 수 있다: `files` row로의 링크는 그 key에서만 유도되어 table이 필요 없고, block이나 document row로의 링크는 그 row의 table이 필요하다. 사용할 수 없는 block 또는 document table의 row로의 링크를 가진 대상은 이름을 준 canon을 `CONSTRAINT`로 거절하며, 그 대상과 table을 사용할 수 없게 하는 진단의 file을 밝힌다. file을 주지 않으면 그 대상은 두 file과 함께 보고하고 다시 쓰지 않는다. validator 진단이 있는 값은 쓴 텍스트를 유지한다. 문서 바이트를 정규화하는 유일한 연산이며, 논리적 쓰기는 결코 정규화하지 않는다. 근거: migration은 별도의 명시적 transaction이므로, logical 쓰기는 사용자가 쓰지 않은 바이트를 바꾸지 않는다. `corpus.walk` 항목은 잘못된 문서처럼 사람이 고칠 진단을 가지고 table의 자리에 있다. 그 밖의 경로는 canon이 다시 쓸 수 있는 것을 가리키지 않으므로 명령의 실수다. table을 사용할 수 없는 링크는 engine이 읽을 수 없는 row나 두 row가 공유하는 key를 가리킬 수 있어 유도된 target을 알 수 없으며, canon은 유도할 수 없는 target을 결코 쓰지 않는다.
 
 ## Server
 
@@ -283,7 +283,7 @@ MySQL과 PostgreSQL은 `datetime(p)` column을 `NOW(6)`와 여섯 자리로 비�
 | `FOREIGN_KEY` | `FOREIGN_KEY` | 참조가 어떤 행도 가리키지 않거나, 참조된 행을 참조되는 동안 지우려 했다 |
 | `CONSTRAINT` | `CONSTRAINT` | catalog의 다른 규칙이 쓰기를 거절했다 — check, 제목, 전이, 필수 column, limit, 순서, 한 줄 자리. 규칙, 그리고 행과 column을 밝힌다([canonical format](10-canonical-format.ko.md#진단)); 비정규이거나 잘못된 문서를 다시 써야 하는 쓰기, 또는 사용할 수 없는 table의 행이 필요한 요청(읽기나 쓰기)은 file과 진단을 밝히며 `CONSTRAINT`다([canonical format](10-canonical-format.ko.md#진단)) |
 | `READ_ONLY` | `READ_ONLY` | 읽기 전용 transaction 안의 쓰기 |
-| `CONFIG` | `CONFIG` | session 상태가 허용하지 않는 control message([transaction](#transaction)) |
+| `CONFIG` | `CONFIG` | session 상태가 허용하지 않는 control message([transaction](#transaction)), 또는 corpus 문서를 가리키지 않는 `flowmark canon` 경로([canon 연산](#canon-연산)) |
 | 복구 거절 | `DRIVER` | 대상, 기록된 두 hash, 그 둘을 담은 stage file을 밝힌다. 해결될 때까지 열기와 lock을 잡는 모든 operation을 거절한다 — SQLite의 `SQLITE_CORRUPT`가 그렇듯 다른 code가 밝히지 않는 database 오류의 orm code인 `DRIVER`다. journal 아래 file system의 실패도 `DRIVER`다 |
 
 모든 실패 메시지는 원인과 고치는 방법을 밝힌다.
