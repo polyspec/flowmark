@@ -275,14 +275,19 @@ reimplements them.
   image is no text), S_VS is VS Code's (the trimmed text lowercased by JavaScript's `toLowerCase`,
   the characters that its `slugify.ts` expression matches removed — those of the Unicode 13.0.0
   categories No, Pd, Ps, Pe, Pi, Pf, Po, S, Cc, Cf, Co, Cn and Z other than an Alphabetic character
-  of Unicode 13.0.0, the space and `-` — each white space then `-`; an image is its alt text) and
-  S_GL is comrak 0.56.0's, which GitLab uses (the text lowercased, the letters, marks, numbers and
-  connector punctuation of Unicode 17.0.0, the space and `-` kept, each space then `-`; an image is
-  its alt text); a line break is nothing under S_GH and S_VS and a space under S_GL. S_GH and S_VS are
-  grounded in the ids the viewers themselves render, recorded on 2026-10-11 by `make slug-vectors`
-  into `store/testdata/slug` — GitHub's `POST /markdown` in mode `markdown`, and VS Code 1.141.0's own
-  `slugify.ts` and `markdownEngine.ts` run on markdown-it 14.3.2 — for every code point and for
-  structural cases, which the slugs reproduce exactly; re-recording is `make slug-vectors`. No slug
+  of Unicode 13.0.0, the space and `-` — each white space then `-`; an image is its alt text; a math
+  span of its default markdown-math extension is no text) and S_GL is comrak 0.56.0's, which GitLab
+  uses (the text lowercased by Rust's `to_lowercase`, so a final Σ is ς, the letters, marks, numbers
+  and connector punctuation of Unicode 17.0.0, the space and `-` kept, each space then `-`; an image
+  is its alt text; a math span of `math_dollars` or `math_code` is its literal source; a footnote
+  reference that a footnote definition defines is no text); a line break is nothing under S_GH and
+  S_VS and a space under S_GL. The slugs are grounded in the ids the viewers themselves render,
+  recorded on 2026-10-11 by `make slug-vectors` into `store/testdata/slug` — GitHub's `POST /markdown`
+  in mode `markdown`; VS Code 1.141.0's own `slugify.ts` and `markdownEngine.ts` run on markdown-it
+  14.3.2 with `@vscode/markdown-it-katex` 1.1.2; and gitlab-glfm-markdown 0.0.45, as GitLab's
+  `Gemfile.lock` pins it, built from its own sources and run with GitLab's engine options — for every
+  code point and for structural cases, which the slugs reproduce exactly; re-recording is
+  `make slug-vectors`. No slug
   normalizes the text; the [canonical format](../spec/10-canonical-format.md#detail-headings-and-anchors)
   states them with their grounding. Pandoc is not claimed. The rule covers every numbering: every
   named viewer numbers a repeated slug by appending `-<n>`, n counting from 1, whichever heading came

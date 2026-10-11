@@ -1,5 +1,5 @@
 <!-- doc-id: spec-canonical-format -->
-<!-- source-sha256: 9ed27e9053a7c8609ac667525e65ccb7ca6ac49ecb01bcc816c06c284edd40f2 -->
+<!-- source-sha256: dc069ebc362869ba7df14d5d1f1388b6cb496df5436ad971386c54a9dba1779e -->
 # Canonical format
 
 [English](10-canonical-format.md)
@@ -88,6 +88,35 @@ column 섹션 — 은 payload다: renderer는 이를 행과 함께 옮기고 그
   포함된다. 줄 바꿈은 soft든 hard든 S_GH와 S_VS에서는 아무것도 아니고 S_GL에서는 공백이다. 근거: GitHub의 id는
   setext heading의 줄을 아무것도 없이 잇고(vector), VS Code는 softbreak와 hardbreak token을 텍스트 없이 쓰며,
   comrak의 `collect_text`는 각각을 공백 하나로 쓴다.
+- **math.** math span은 그 viewer가 읽는 대로 읽으며, code span처럼 쪼개지지 않는다: 그 내용은 markup이 아니다.
+  GitHub의 renderer는 math를 읽지 않으므로 S_GH는 위와 같이 텍스트를 읽는다. **S_GL**에서 math span은 그 글자
+  그대로의 source이며, GitLab이 comrak 0.56.0의 `math_dollars`와 `math_code`로 렌더하는 대로다: backtick이 뒤따르는
+  `$`는 code math를 열고, backtick이 앞서는 첫 `$`가 닫으며, 둘 사이의 내용은 비어 있지 않다. 그 밖에서는 `$` 하나나
+  둘의 run이 dollar math를 열고, 같은 수의 `$`로 된 다음 run이 닫으며, 내용은 비어 있지 않다 — `$` 하나일 때는 여는
+  것 뒤나 닫는 것 앞에 공백, tab, 줄 바꿈이 올 수 없고, backslash 뒤의 `$`는 아무것도 닫지 않으며, 닫는 것 뒤에
+  숫자가 올 수 없다. `$` 하나와 code math의 내용은 code span의 것처럼 정규화하고, `$` 둘의 내용은 있는 그대로 쓴다.
+  `$` 셋 이상의 run은 아무것도 열지 않으며, 아무것도 열지 않는 `$`는 텍스트다. **S_VS**에서 math span은 텍스트가
+  아니며, VS Code의 preview가 `@vscode/markdown-it-katex` 1.1.2로 렌더하는 대로다. 그 plugin은 내장 markdown-math
+  extension이 `markdown.math.enabled` 기본값 true로 기여한다: `$$`는 앞에 `$`나 backslash가 없고 뒤에 `$`가 없는 곳에서
+  열리고, 짝수 개의 backslash가 앞서며 같은 조건을 갖춘 다음 `$$`에서 닫힌다. `$` 하나는 앞에 `$`, backslash, ASCII
+  문자, 숫자, `_`가 없고 guard가 꺼진 곳에서 열리며, 짝수 개의 backslash가 앞서는 다음 `$`에서, 그 뒤에 `$`나 ASCII
+  문자, 숫자, `_`가 없을 때 닫힌다. 아무것도 열지 않는 `$`는 텍스트다. guard는 plugin의 식 `/^<\w+.+[^/]>$/`가 맞추는
+  inline HTML 구성 요소 뒤에 켜지며, markdown-it이 넣는 다른 모든 token이 그것을 끈다: code span, 어느 문자 앞의
+  backslash, character reference, 강조 구분자 run, 둘 이상의 `~` run, 줄 바꿈, autolink, 다른 HTML 구성 요소, math
+  span, 그리고 여는 bracket에서부터의 link나 image다. `scheme://` URL 뒤에도 token을 넣는 markdown-it의 linkify는 읽지
+  않는다: guard를 켜는 tag, 그런 URL, 그다음 `$`를 담은 heading은 guard가 켜진 채로 읽는다. 근거: comrak의
+  `collect_text`는 math node의 literal을 쓰고, VS Code의 `#tokenToPlainText`는 math token을 텍스트 없이 쓰며, slug
+  vector가 둘 다 기록한다: `# items row $T<b>1$`은 GitLab에서 `items-row-tb1`, VS Code에서 `items-row`, GitHub에서
+  `items-row-t1`이다.
+- **S_GL의 footnote.** GitLab은 comrak의 footnotes로 렌더하므로, S_GL은 정의와 참조를 comrak처럼 읽는다. 공백 셋
+  이하 뒤에 `[^`, `]`, 공백, tab, 줄 바꿈이 없는 label, `]:`로 시작하는 줄은 footnote definition이며, 거기서 link
+  reference definition을 시작하지 않는다. `]`가 link 없이 닫는 bracket으로, 그 위에 다른 bracket이 열리지 않았고,
+  텍스트가 `^`로 시작하며 텍스트와 raw HTML만, `^`보다 많이 담은 것은 footnote reference이며, 그 구분자는 강조를 열지
+  않는다: footnote definition이 그 label을 — link label처럼 비교해 — 정의하는 것은 텍스트를 렌더하지 않고, 그 밖의
+  것은 텍스트로 되돌린다 — `[`, 각 raw HTML 구성 요소를 쓰인 그대로 둔 그 텍스트, `]`이며, image bracket의 `!`는
+  빠진다. S_GH와 S_VS는 bracket을 CommonMark처럼 읽는다. 근거: comrak의 `collect_text`는 footnote reference를 아무것도
+  쓰지 않고, 그 `process_footnotes`는 정의되지 않은 것을 text node로 되돌린다(slug vector: `[^1]: n` 옆의 `# a[^1]`은
+  GitLab에서 `a`).
 - **slug.** 한 viewer에서 heading의 slug는 그 렌더된 inline 텍스트로부터 그 viewer가 계산하는 대로 계산한다.
   **S_GH**(GitHub): 텍스트를 Unicode의 full default lowercase mapping으로, 조건부 mapping 없이 소문자로 바꾸고(U+0130은
   `i`와 U+0307이, U+212A는 `k`가, 끝의 Σ는 σ가 된다), Unicode 17.0.0에서 Unicode Technical Standard #18(Annex C)의
@@ -97,25 +126,29 @@ column 섹션 — 은 payload다: renderer는 이를 행과 함께 옮기고 그
   mapping이므로 끝의 Σ는 ς)로 소문자로 바꾸며, VS Code의 식 `githubSlugReplaceRegex`가 맞추는 모든 문자 — Unicode
   13.0.0의 일반 범주가 No, Pd, Ps, Pe, Pi, Pf, Po, Sm, Sc, Sk, So, Cc, Cf, Co, Cn, Zs, Zl, Zp인 문자 가운데 Unicode
   13.0.0의 Alphabetic 문자, 공백, `-`가 아닌 것이므로, Unicode 13.0.0 이후에 배정된 문자는 지워진다 — 를 지우고,
-  그다음 각 JavaScript white space 문자를 `-`로 쓴다. 남는 것은 공백뿐이다. **S_GL**(GitLab): S_GH처럼 소문자로
-  바꾸고, Unicode 17.0.0의 일반 범주가 letter, mark, number, connector punctuation인 문자와 공백, `-`를 남기고 나머지를
+  그다음 각 JavaScript white space 문자를 `-`로 쓴다. 남는 것은 공백뿐이다. **S_GL**(GitLab): Rust의
+  `to_lowercase`, 곧 S_VS처럼 Final_Sigma 조건을 갖춘 full mapping으로 소문자로 바꾸므로 끝의 Σ는 ς이며, Unicode 17.0.0의 일반 범주가 letter, mark, number, connector punctuation인 문자와 공백, `-`를 남기고 나머지를
   지우며, 그다음 각 공백을 `-`로 쓴다. 어느 것도 텍스트를 정규화하거나, hyphen을 잘라내거나, run을 줄이지 않는다:
   `café`와 `cafe`는 slug가 다르며, `items row  T1`과 `items row T1`도 그렇다. engine의 Unicode data는 Go `unicode`
   package의 것인 17.0.0이며, S_VS가 지우는 집합에는 Unicode 13.0.0 data file로 생성한 table을 쓴다. 근거: slug
   vector, 곧 viewer 자신이 렌더하는 id로, 2026-10-11에 `make slug-vectors`(`scripts/record-slugs.mjs`)가
-  `store/testdata/slug`에 기록했으며 S_GH와 S_VS가 그대로 재현한다: surrogate를 뺀 모든 code point마다 그것을 numeric
-  reference로, 그리고 그 문자 자체로 담은 heading, 그리고 공백, tab, underscore, hyphen, reference, escape, 강조, code
-  span, link, image, raw HTML, 줄 바꿈, 반복된 heading의 구조 case다. GitHub의 것은 자신의 renderer, 곧 REST API의
+  `store/testdata/slug`에 기록했으며 S_GH, S_VS, S_GL이 그대로 재현한다: surrogate를 뺀 모든 code point마다 그것을
+  numeric reference로, 그리고 그 문자 자체로 담은 heading, 그리고 공백, tab, underscore, hyphen, reference, escape,
+  강조, code span, link, image, raw HTML, 줄 바꿈, math span, footnote reference, 반복된 heading의 구조 case다. GitHub의 것은 자신의 renderer, 곧 REST API의
   `POST /markdown`을 mode `markdown`으로 불러 렌더하며, 이 mode는 각 heading anchor를 `user-content-`와 id로 쓴다. 그
   id는 Unicode 13.0.0 이후에 배정된 U+107A5, U+1CCF0, U+A7F2를 남기며, 모든 code point에서 Unicode 17.0.0의 word
   문자와 맞는다. VS Code의 것은 최신 stable release 1.141.0의 자기 code를 실행해 렌더한다:
   `extensions/markdown-language-features/src/slugify.ts`의 `githubSlugifier` — VS Code의 MIT license와 함께
   `store/testdata/slug`에 두며, 그 식은 engine의 Unicode 13.0.0 table과 모든 code point에서 같다 — 와
-  `markdownEngine.ts`의 `#tokenToPlainText` method를, 그 `package-lock.json`이 고정하는 markdown-it 14.3.2 위에서다.
-  comrak 0.56.0의 `Anchorizer`는 gitlab-glfm-markdown 0.0.45를 거쳐 GitLab의 heading id를 렌더하며, 그 gem의
-  `Cargo.lock`은 comrak이 범주를 읽는 crate인 finl_unicode 1.4.0을 고정하고, 그 table은 Unicode 17.0.0의 것이다. 다시
-  기록하려면 network, 인증된 `gh`, npm을 갖추고 `make slug-vectors`를 실행한다. viewer가 바뀌면 slug가 더는 재현하지
-  못하는 vector로 드러난다.
+  `markdownEngine.ts`의 `#tokenToPlainText` method를, 그 `package-lock.json`이 고정하는 markdown-it 14.3.2 위에서,
+  markdown-math extension의 `package-lock.json`이 고정하고 그 `extension.ts`가 설정하는 `@vscode/markdown-it-katex`
+  1.1.2와 함께 실행한다. GitLab의 것은 GitLab의 `Gemfile.lock`이 고정하는 version과 sha256의 gitlab-glfm-markdown
+  0.0.45를 그 gem 자신의 source에서 build해 — Ruby extension처럼 comrak 0.56.0으로 렌더하는 그 command line binary를,
+  Ruby binding 없이 — GitLab의 `GlfmMarkdown` engine의 option(그 가운데 `math_dollars`, `math_code`, `footnotes`)과
+  prefix `user-content-`로 실행해 렌더한다. id는 comrak의 `Anchorizer`가 쓰며, 그 gem의 `Cargo.lock`은 comrak이 범주를
+  읽는 crate인 finl_unicode 1.4.0을 고정하고, 그 table은 Unicode 17.0.0의 것이다. 다시 기록하려면 network, 인증된
+  `gh`, npm, cargo를 갖추고 `make slug-vectors`를 실행한다. viewer가 바뀌면 slug가 더는 재현하지 못하는 vector로
+  드러난다.
 - **충돌 규칙.** heading은 모든 ATX heading(block-quote나 list-item 표지 뒤의 것을 포함)과, fence 밖에서
   setext 밑줄이 뒤따르는 모든 문단이다. 그 문단 전체에서 앞머리의 link reference definition을 뺀 것이 heading이다. 상세 heading도 heading이다. 그 definition은 heading의 일부가 아니다: setext heading은 definition이 남긴 첫 줄에서 시작하고, definition은 heading 앞의 내용이며, definition만 있고 밑줄이 뒤따르면 heading이 아니다. 근거: CommonMark 0.31.2는 문단을 setext heading으로 닫기 전에 그 앞머리의 definition을 먼저 읽으므로(§4.3, §4.7), `[r]: /u`, `people row P1`, `---`는 definition 하나와 heading `people row P1`이며, commonmark.js, cmark-gfm, markdown-it이 그렇게 읽는다. 이 규칙에서 상세 heading은 file의 layout에 있는 한 table의 상세 level — 그 행들의 상세 heading의 level, 행 scope보다 한 단계 얕은 — 에 있는 최상위 heading이며, 그 텍스트가 공백, tab, 그리고 setext heading의 줄 바꿈을 뺀 것으로 그 table의 이름과 `row`(각각 viewer가 하듯 소문자로 만든 뒤 정식 텍스트와 같은 것)와 key이다. 즉 상세 섹션의 heading이며, 정식 또는 비정식 철자로 쓰인다. 그 밖의 모든 heading은 payload heading이며, 다른 level이나 block quote, list 항목 안에 있는 `<table> row <key>` heading을 포함해, 그 slug가 모든 상세 anchor와 비교된다. 근거: 상세 섹션은 자리로 배정되므로, 다른 곳의 heading은 어느 행도 가리키지 않으며 자기 anchor를 가지는데, viewer는 그것이 상세 anchor와 반복될 때 번호를 매긴다. 상세 heading이 아닌
   heading H는, S_GH, S_VS, S_GL 가운데 한 slug S와 그 slug가 읽는 대로 렌더된 H의 텍스트 T에 대해 S(T)가 A와 같거나,

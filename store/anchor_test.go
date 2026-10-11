@@ -122,6 +122,17 @@ func clashCases() []clashCase {
 		{"10#detail-headings-and-anchors: a no-break space between words is no separator of a heading, and every slug removes it", []string{"## items row T1", "", "## items row T1"}, nil},
 		{"10#detail-headings-and-anchors: a next-line character between words is no separator of a heading, and every slug removes it", []string{"## items row T1", "", "## items\u0085row T1"}, nil},
 		{"10#detail-headings-and-anchors: a no-break space beside a space is removed by every slug", []string{"## items row T1", "", "## items \U000000A0row T1"}, []int{3}},
+		{"10#detail-headings-and-anchors: GitLab reads a math span's literal source, a tag in it included", []string{"## items row Tb1", "", "# items row $T<b>1$"}, []int{3}},
+		{"10#detail-headings-and-anchors: GitLab reads code math's literal source", []string{"## items row T1", "", "# items row $`T1`$ x"}, nil},
+		{"10#detail-headings-and-anchors: a math span in an image's alt text is its source under S_GL and nothing under S_VS", []string{"## items row T1", "", "# items row ![$&#84;1$](/i.png)"}, nil},
+		{"10#detail-headings-and-anchors: VS Code reads a math span as no text", []string{"## items row T1", "", "# items row T1 $x$"}, []int{3}},
+		{"10#detail-headings-and-anchors: VS Code reads display math as no text", []string{"## items row T1", "", "# items row T1 $$x$$"}, []int{3}},
+		{"10#detail-headings-and-anchors: a '$' after a word character opens no math in VS Code", []string{"## items row T1", "", "# items row T1x$y$"}, nil},
+		{"10#detail-headings-and-anchors: VS Code opens no math right after an inline HTML tag its guard matches", []string{"## items row T1", "", "# items row T1<span>$x$"}, nil},
+		{"10#detail-headings-and-anchors: a delimiter run ends VS Code's guard", []string{"## items row T1", "", "# items row T1<span>*$x$"}, []int{3}},
+		{"10#detail-headings-and-anchors: a short tag is no guard of VS Code", []string{"## items row T1", "", "# items row T1<b>$x$"}, []int{3}},
+		{"10#detail-headings-and-anchors: GitLab reads a defined footnote reference as no text", []string{"## items row T-1", "", "# items row T[^1]", "", "[^1]: n"}, []int{3}},
+		{"10#detail-headings-and-anchors: GitLab restores an undefined footnote reference with its raw HTML as text", []string{"## items row Tabc", "", "# items row T[^a<b>c]"}, []int{3}},
 	}
 }
 

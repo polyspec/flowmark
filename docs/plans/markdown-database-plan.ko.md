@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database -->
-<!-- source-sha256: b78099314f356605cefa430c96393b96855586ac86bb9ebf562fe07ebc08ae17 -->
+<!-- source-sha256: afaf093dc0e76f6e78f8628df791866d1f140464f31478102a483c0edac1b5d0 -->
 # markdown database 계획
 
 [English](markdown-database-plan.md)
@@ -220,12 +220,16 @@ markdown 전용 선언은 모두 dbspec **manifest setting**이며 `markdown <co
   `-`로 쓴다. image는 텍스트가 아니다), S_VS는 VS Code의 것(trim한 텍스트를 JavaScript의 `toLowerCase`로 소문자로
   바꾸고, 그 `slugify.ts` 식이 맞추는 문자 — Unicode 13.0.0 범주 No, Pd, Ps, Pe, Pi, Pf, Po, S, Cc, Cf, Co, Cn, Z의 문자
   가운데 Unicode 13.0.0의 Alphabetic 문자, 공백, `-`가 아닌 것 — 를 지우며, 각 white space를 `-`로 쓴다. image는 그 alt
-  텍스트다), S_GL은 GitLab이 쓰는 comrak 0.56.0의 것(소문자로 바꾸고 Unicode 17.0.0의 letter, mark, number, connector
-  punctuation과 공백, `-`를 남기며, 각 공백을 `-`로 쓴다. image는 그 alt 텍스트다)이다. 줄 바꿈은 S_GH와 S_VS에서
-  아무것도 아니고 S_GL에서 공백이다. S_GH와 S_VS의 근거는 viewer 자신이 렌더하는 id로, 2026-10-11에
-  `make slug-vectors`가 `store/testdata/slug`에 기록했다 — GitHub의 `POST /markdown`(mode `markdown`), 그리고
-  markdown-it 14.3.2 위에서 실행한 VS Code 1.141.0 자신의 `slugify.ts`와 `markdownEngine.ts` — 모든 code point와 구조
-  case에 대해서이며, slug가 그것을 그대로 재현한다. 다시 기록하려면 `make slug-vectors`를 실행한다. 어느 slug도
+  텍스트이고, 기본 markdown-math extension의 math span은 텍스트가 아니다), S_GL은 GitLab이 쓰는 comrak 0.56.0의
+  것(Rust의 `to_lowercase`로 소문자로 바꾸므로 끝의 Σ는 ς이며, Unicode 17.0.0의 letter, mark, number, connector
+  punctuation과 공백, `-`를 남기며, 각 공백을 `-`로 쓴다. image는 그 alt 텍스트이고, `math_dollars`나 `math_code`의
+  math span은 그 글자 그대로의 source이며, footnote definition이 정의하는 footnote reference는 텍스트가 아니다)이다.
+  줄 바꿈은 S_GH와 S_VS에서 아무것도 아니고 S_GL에서 공백이다. slug의 근거는 viewer 자신이 렌더하는 id로,
+  2026-10-11에 `make slug-vectors`가 `store/testdata/slug`에 기록했다 — GitHub의 `POST /markdown`(mode `markdown`),
+  markdown-it 14.3.2와 `@vscode/markdown-it-katex` 1.1.2 위에서 실행한 VS Code 1.141.0 자신의 `slugify.ts`와
+  `markdownEngine.ts`, 그리고 GitLab의 `Gemfile.lock`이 고정하는 gitlab-glfm-markdown 0.0.45를 그 자신의 source에서
+  build해 GitLab engine의 option으로 실행한 것 — 모든 code point와 구조 case에 대해서이며, slug가 그것을 그대로
+  재현한다. 다시 기록하려면 `make slug-vectors`를 실행한다. 어느 slug도
   텍스트를 정규화하지 않는다.
   [canonical format](../spec/10-canonical-format.ko.md#상세-heading과-anchor)이 그 근거와 함께 정한다. Pandoc은
   주장하지 않는다. 모든 번호 매기기를 다루는 근거: 명명된 모든 viewer는 반복된 slug에 1부터 세는 `-<n>`을 덧붙여

@@ -1,7 +1,7 @@
 {
  "viewer": "VS Code",
  "recorded": "2026-10-11",
- "request": "VS Code 1.141.0: extensions/markdown-language-features/src/slugify.ts and markdownEngine.ts #tokenToPlainText, markdown-it 14.3.2, node 26.8.1",
+ "request": "VS Code 1.141.0: extensions/markdown-language-features/src/slugify.ts and markdownEngine.ts #tokenToPlainText, markdown-it 14.3.2, @vscode/markdown-it-katex 1.1.2 with {\"enableFencedBlocks\":true,\"globalGroup\":true,\"macros\":{}}, node 26.8.1",
  "rerecord": "make slug-vectors (scripts/record-slugs.mjs)",
  "cases": [
   {
@@ -431,6 +431,70 @@
     "items-row-t1",
     "items-row-t1-1",
     "items-row-t1-2"
+   ]
+  },
+  {
+   "name": "math spans",
+   "markdown": "# items row $T<b>1$\n\n# items row $T&#49;$\n\n# a $b$ c",
+   "ids": [
+    "items-row",
+    "items-row-1",
+    "a--c"
+   ]
+  },
+  {
+   "name": "math spans and code",
+   "markdown": "# a $`b  c`$ d\n\n# a $$b  c$$ d\n\n# a `$b$` c",
+   "ids": [
+    "a--d",
+    "a--d-1",
+    "a-b-c"
+   ]
+  },
+  {
+   "name": "math delimiters that open nothing",
+   "markdown": "# a $ b $ c\n\n# a $b $ c\n\n# a $b$1 c\n\n# a$b$c\n\n# a $$$b$$$ c",
+   "ids": [
+    "a--c",
+    "a--c-1",
+    "a-b1-c",
+    "abc",
+    "a-b-c"
+   ]
+  },
+  {
+   "name": "math with escapes",
+   "markdown": "# a \\$b$ c\n\n# a $b\\$c$ d\n\n# a $b\\\\$ c",
+   "ids": [
+    "a-b-c",
+    "a--d",
+    "a--c"
+   ]
+  },
+  {
+   "name": "math in emphasis and links",
+   "markdown": "# *a $b*$ c*\n\n# [a $]$](/u) b\n\n# ![a $b$](/i.png) c",
+   "ids": [
+    "a--c",
+    "a--b",
+    "a--c-1"
+   ]
+  },
+  {
+   "name": "math across a line",
+   "markdown": "a $b\nc$ d\n===\n\na $$b\nc$$ d\n===",
+   "ids": [
+    "a--d",
+    "a--d-1"
+   ]
+  },
+  {
+   "name": "math after inline HTML",
+   "markdown": "# <span class=\"x\">a $b$ c</span>\n\n# <b>a $b$ c</b>\n\n# <span class=\"x\">*a* $b$</span>",
+   "ids": [
+    "a-b-c",
+    "a--c",
+    "a"
    ]
   }
  ]

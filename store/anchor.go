@@ -194,7 +194,7 @@ func layoutTable(name string, tables map[string]int) (string, bool) {
 // definitions of the file.
 func headingClashes(lines []string, h heading, setext map[int]unit, anchors []detailAnchor, g linkRefs) []anchorClash {
 	e := headingElement(lines, h, setext)
-	read := inlineText(e.text, g)
+	read := viewerText(e.text, g)
 	var out []anchorClash
 	for _, a := range anchors {
 		if slugsTake(read, a.anchor) {

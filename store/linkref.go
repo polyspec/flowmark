@@ -1,6 +1,7 @@
 package store
 
 import (
+	"regexp"
 	"strings"
 
 	"golang.org/x/text/cases"
@@ -12,9 +13,12 @@ import (
 // is compared by CommonMark's case folding once its white space is collapsed.
 
 // linkRefs are the labels that the definitions of a file define: keys holds each defined
-// label under its folded key.
+// label under its folded key. gl is the definitions as GitLab reads them, and notes,
+// in those, the labels of the footnote definitions.
 type linkRefs struct {
-	keys map[string]bool
+	keys  map[string]bool
+	notes map[string]bool
+	gl    *linkRefs
 }
 
 // defined reports whether a definition of the file defines label.
@@ -193,16 +197,52 @@ func lineEndAfter(s string, p int) int {
 // linkDefs returns the labels that the blocks of a file define: a definition is one that
 // CommonMark reads at the start of a paragraph, inside a container or not, and is never
 // blank: its label has a character that is not white space.
+//
+// It also returns the definitions as GitLab reads them (glRefs): comrak 0.56.0 with
+// footnotes reads a line that begins, after at most three spaces, with `[^`, a label of
+// no ']', space, tab or line ending, and `]:` as a footnote definition, wherever it
+// stands, so such a line starts no link reference definition there.
 func linkDefs(blocks []unit) linkRefs {
-	g := linkRefs{keys: map[string]bool{}}
+	g := linkRefs{keys: map[string]bool{}, gl: &linkRefs{keys: map[string]bool{}, notes: map[string]bool{}}}
 	for _, u := range blocks {
 		if u.html {
 			continue
 		}
-		cm, _ := cmDefLines(u.lines)
-		for _, label := range cm {
+		for _, l := range u.lines {
+			if m := footnoteDef.FindStringSubmatch(l); m != nil {
+				g.gl.notes[foldLabel(m[1])] = true
+			}
+		}
+		joined := strings.Join(u.lines, "\n")
+		for p := 0; p < len(joined); {
+			label, end, ok := cmDefAt(joined, p)
+			if !ok {
+				break
+			}
 			g.keys[foldLabel(label)] = true
+			if !footnoteDef.MatchString(joined[p:]) {
+				g.gl.keys[foldLabel(label)] = true
+			}
+			p = end
 		}
 	}
 	return g
+}
+
+// footnoteDef is comrak's scanner footnote_definition after at most three spaces. The
+// scanner also excludes the byte 0xFF, which no UTF-8 text holds.
+var footnoteDef = regexp.MustCompile(`^ {0,3}\[\^([^\] \r\n\t]+)\]:`)
+
+// glRefs returns the definitions of the file as GitLab reads them.
+func (r linkRefs) glRefs() linkRefs {
+	if r.gl == nil {
+		return linkRefs{}
+	}
+	return *r.gl
+}
+
+// footnote reports whether a footnote definition of the file, as GitLab reads it,
+// defines name.
+func (r linkRefs) footnote(name string) bool {
+	return r.notes[foldLabel(name)]
 }
