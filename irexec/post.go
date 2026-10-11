@@ -48,7 +48,7 @@ type Target struct {
 // of a statement. The code is that of the first fault.
 func (w *writer) finish() (*PostImage, *Error) {
 	keyFaults := w.keyChecks()
-	for _, step := range []func() *Error{w.uniques, w.references, w.parents, w.values, w.checks, w.limits} {
+	for _, step := range []func() *Error{w.uniques, w.references, w.parents, w.values, w.checks, w.rowRules, w.limits} {
 		if err := step(); err != nil {
 			return nil, err
 		}

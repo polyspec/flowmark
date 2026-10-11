@@ -11,6 +11,7 @@ import (
 	"strconv"
 
 	"github.com/polyspec/flowmark/catalog"
+	"github.com/polyspec/flowmark/store"
 	"github.com/polyspec/orm/engine/dbspec"
 	"github.com/polyspec/orm/engine/ir"
 	"github.com/polyspec/orm/engine/runtimemodel"
@@ -19,8 +20,8 @@ import (
 
 // The rule names of the codec and view rules (spec 50 Codec values, Views).
 const (
-	ruleCodec = "codec"
-	ruleView  = "view"
+	RuleCodec = "codec"
+	RuleView  = "view"
 )
 
 // hostStages are the codec stages that orm decodes on the host and does not
@@ -28,23 +29,58 @@ const (
 // that holds one.
 var hostStages = []string{"hex", "ip"}
 
-// codecs reports each non-NULL value of its type in a codec column that orm's
-// codec package cannot decode, at the value's element, and returns the columns
-// it reported. A column whose stages hold a host stage is not judged until orm
-// exports its host decode.
-func (c *corpus) codecs(tb *catalog.Table, p placed) map[string]bool {
+// RowFault is a fault of the codec or view rule in one row: the column whose
+// element it is at, the rule and the message.
+type RowFault struct {
+	Column, Rule, Message string
+}
+
+// JudgeRow returns the codec faults of the row r of table tb, by column in byte
+// order, then its view faults when tb is the view table (spec 50 Codec values,
+// Views). The validator reports them over the corpus, and the commit judges every
+// row it writes with them, so the two judge a row one way. m is orm's runtime
+// model of cat, needed only when tb is the view table.
+func JudgeRow(cat *catalog.Catalog, m *runtimemodel.Model, tb *catalog.Table, r *store.Row) []RowFault {
+	out := codecFaults(tb, r)
 	faulty := map[string]bool{}
+	for _, f := range out {
+		faulty[f.Column] = true
+	}
+	return append(out, viewFaults(cat, m, tb, r, faulty)...)
+}
+
+// judgeRow reports the codec and view faults of the row p of tb.
+func (c *corpus) judgeRow(tb *catalog.Table, p placed) error {
+	var m *runtimemodel.Model
+	if tb.View != nil {
+		var err error
+		if m, err = c.runtimeModel(); err != nil {
+			return err
+		}
+	}
+	for _, f := range JudgeRow(c.cat, m, tb, p.row) {
+		c.report(p, f.Column, f.Rule, f.Message)
+	}
+	return nil
+}
+
+// codecFaults returns a fault for each non-NULL value of its type in a codec
+// column of r that orm's codec package cannot decode, at the value's element. A
+// column whose stages hold a host stage is not judged until orm exports its host
+// decode.
+func codecFaults(tb *catalog.Table, r *store.Row) []RowFault {
+	var out []RowFault
 	for _, col := range sortedKeys(tb.Codecs) {
 		stages := tb.Codecs[col]
 		if slices.ContainsFunc(stages, func(s string) bool { return slices.Contains(hostStages, s) }) {
 			continue
 		}
-		if _, raw := p.row.Raw[col]; raw {
+		if _, raw := r.Raw[col]; raw {
 			continue
 		}
-		v := p.row.Scalars[col]
+		v := r.Scalars[col]
 		if v == nil {
-			v = p.row.Sections[col]
+			v = r.Sections[col]
 		}
 		if v == nil {
 			continue
@@ -58,11 +94,10 @@ func (c *corpus) codecs(tb *catalog.Table, p placed) map[string]bool {
 			cell = b
 		}
 		if _, err := orm.Decode(stages, cell); err != nil {
-			faulty[col] = true
-			c.report(p, col, ruleCodec, fmt.Sprintf("%s holds a value its codec %v cannot decode: %v", col, stages, err))
+			out = append(out, RowFault{col, RuleCodec, fmt.Sprintf("%s holds a value its codec %v cannot decode: %v", col, stages, err)})
 		}
 	}
-	return faulty
+	return out
 }
 
 // sortedKeys returns the keys of m in byte order.
@@ -79,24 +114,20 @@ func sortedKeys(m map[string][]string) []string {
 // Title and body).
 var listKinds = []string{"kanban", "list", "gantt"}
 
-// views reports the view faults of the row p of the view table (spec 50 Views):
-// one view at the element of each faulty column; a column with a type or codec
-// fault is that fault alone, and a faulty entity leaves the other columns
-// unjudged. faulty holds the columns the codec rule reported.
-func (c *corpus) views(tb *catalog.Table, p placed, faulty map[string]bool) error {
+// viewFaults returns the view faults of the row r of the view table tb (spec 50
+// Views), none when tb is another table, judged by JudgeView over the columns of
+// r it can judge: a column that is NULL or has a type or codec fault is that
+// fault alone. faulty holds the columns of r with a codec fault.
+func viewFaults(cat *catalog.Catalog, m *runtimemodel.Model, tb *catalog.Table, r *store.Row, faulty map[string]bool) []RowFault {
 	v := tb.View
 	if v == nil {
 		return nil
 	}
-	m, err := c.runtimeModel()
-	if err != nil {
-		return err
-	}
 	usable := func(col string) (string, bool) {
-		if _, raw := p.row.Raw[col]; raw || faulty[col] {
+		if _, raw := r.Raw[col]; raw || faulty[col] {
 			return "", false
 		}
-		s := p.row.Scalars[col]
+		s := r.Scalars[col]
 		if s == nil {
 			return "", false
 		}
@@ -108,10 +139,11 @@ func (c *corpus) views(tb *catalog.Table, p placed, faulty map[string]bool) erro
 			vals[col] = s
 		}
 	}
-	for _, f := range JudgeView(c.cat, m, v, vals) {
-		c.report(p, f.Column, ruleView, f.Message)
+	var out []RowFault
+	for _, f := range JudgeView(cat, m, v, vals) {
+		out = append(out, RowFault{f.Column, RuleView, f.Message})
 	}
-	return nil
+	return out
 }
 
 // ViewFault is a fault of a view (spec 50 Views): the view column it stands at and its message.

@@ -46,6 +46,28 @@ func (w *writer) checks() *Error {
 	return nil
 }
 
+// rowRules judges the codec and view rules over each written row with the
+// validator's judgement (spec 50 Codec values, Views), so the validator and the
+// commit judge a row one way. A codec fault is a fault of a value the write
+// assigns, every value of an insert: a value the write leaves is no value it
+// writes, as a value not of its type it leaves faults it only when a check reads
+// it. A view fault is a fault of the whole row, a write that leaves a view invalid
+// being refused. Each is CONSTRAINT at its column, its message naming its rule.
+func (w *writer) rowRules() *Error {
+	if len(w.tb.Codecs) == 0 && w.tb.View == nil {
+		return nil
+	}
+	for _, g := range w.given {
+		for _, f := range validate.JudgeRow(w.c.cat, w.r.e.model, w.tb, g.row) {
+			if f.Rule == validate.RuleCodec && !g.inserted && !g.assigned[f.Column] {
+				continue
+			}
+			w.fault(g, w.tb.Name, f.Column, codeConstraint, f.Rule+": "+f.Message)
+		}
+	}
+	return nil
+}
+
 // checkColumns returns the columns a check predicate reads, in its order.
 func checkColumns(e dbspec.Expr) []string {
 	switch e := e.(type) {
