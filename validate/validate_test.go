@@ -654,6 +654,20 @@ func TestValidatorRules(t *testing.T) {
 			files: map[string]string{"items.flowmark.md": "# items\n- [x] T1 First item\n\n## items row T1\n\n### item_history\n| id | from_state | to_state | at |\n| --- | --- | --- | --- |\n" +
 				"| 1 | waiting | abcdefghijklmnopqrs | 2026-10-01 08:00:00.000000 |\n| 2 | doing | done | 2026-10-01 09:00:00.000000 |\n"},
 			want: []string{"items.flowmark.md:9 type"}},
+		{name: "50#a-state-changed-outside-the-engine: a to not of its type is type alone, and its own from is still judged",
+			files: map[string]string{"items.flowmark.md": "# items\n- [x] T1 First item\n\n## items row T1\n\n### item_history\n| id | from_state | to_state | at |\n| --- | --- | --- | --- |\n" +
+				"| 1 | doing | abcdefghijklmnopqrs | 2026-10-01 08:00:00.000000 |\n"},
+			want: []string{
+				"items.flowmark.md:9 history.chain ~ from doing",
+				"items.flowmark.md:9 type",
+			}},
+		{name: "50#a-state-changed-outside-the-engine: a later row whose to is not of its type still has its from judged against the previous to",
+			files: map[string]string{"items.flowmark.md": "# items\n- [x] T1 First item\n\n## items row T1\n\n### item_history\n| id | from_state | to_state | at |\n| --- | --- | --- | --- |\n" +
+				"| 1 | waiting | doing | 2026-10-01 08:00:00.000000 |\n| 2 | waiting | abcdefghijklmnopqrs | 2026-10-01 09:00:00.000000 |\n"},
+			want: []string{
+				"items.flowmark.md:10 history.chain ~ from waiting, which differs from the to doing",
+				"items.flowmark.md:10 type",
+			}},
 		{name: "50#a-state-changed-outside-the-engine: a last to not of its type leaves no gap to judge",
 			files: map[string]string{"items.flowmark.md": "# items\n- [x] T1 First item\n\n## items row T1\n\n### item_history\n| id | from_state | to_state | at |\n| --- | --- | --- | --- |\n" +
 				"| 1 | waiting | abcdefghijklmnopqrs | 2026-10-01 08:00:00.000000 |\n"},
