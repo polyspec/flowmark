@@ -1,5 +1,5 @@
 <!-- doc-id: spec-ops -->
-<!-- source-sha256: 1dfed238005dc50abcb5e9c9d71130a324d960eff1d919bde9f7ef2340d951c1 -->
+<!-- source-sha256: e52240b44852e8d177b8fb0830c0b966948587cbf5420304b968b175e43185f5 -->
 # Operations
 
 [English](40-ops.md)
@@ -142,7 +142,7 @@
   ([constraints](50-constraints.ko.md#엔진-밖에서-바뀐-상태)), `flowmark unlock <corpus>
   [--holder <holder>]`([stale lock](#stale-lock))이다. 모든 명령은 실행되면 0으로, 거절되거나
   실패하면 표준 오류에 `flowmark <command>: <code>: <message>`를 쓰고 1로, 명령줄이 잘못되면 2로
-  끝난다.
+  끝난다. 거절된 unlock은 `CONFIG`이고, 그 아래 file system의 실패는 `DRIVER`다.
 - **`flowmark install`**은 lock 아래의 자기 transaction이며, canon처럼 열린 transaction 안에서는
   `CONFIG`다. journal commit 하나로, file이 없는 각 `document` table의 file `<table>.flowmark.md` —
   빈 table, `# <table>`과 LF 하나 — 와, 어느 줄도 `*.flowmark.md text eol=lf`가 아닐 때 그 줄을 마지막

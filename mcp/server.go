@@ -1,163 +1,233 @@
-// Package mcp is the MCP server face: JSON-RPC 2.0 over standard input and output, one
-// message per line. The tools are the corpus operations — items, transition and validate.
+// Package mcp is the MCP server face (spec 40 The faces): JSON-RPC 2.0 over standard input and output, one message per
+// line, with one tool per operation of the ops layer over the corpus the command line names.
 package mcp
 
 import (
 	"bufio"
+	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
 	"strings"
+	"time"
 
-	"github.com/polyspec/flowmark/app"
-	"github.com/polyspec/flowmark/corpus"
-	"github.com/polyspec/flowmark/executor"
+	"github.com/polyspec/flowmark/ops"
 )
 
+// maxLine is the longest message line the server reads: the sidecar protocol's message limit, which holds the answer
+// of any operation the faces share.
+const maxLine = 64 << 20
+
+// The JSON-RPC 2.0 error codes the server answers with.
+const (
+	parseError     = -32700
+	invalidRequest = -32600
+	methodNotFound = -32601
+	invalidParams  = -32602
+)
+
+// request is one JSON-RPC message from the client; a message without an id is a notification.
 type request struct {
 	JSONRPC string          `json:"jsonrpc"`
 	ID      json.RawMessage `json:"id"`
 	Method  string          `json:"method"`
-	Params  struct {
-		Name      string `json:"name"`
-		Arguments struct {
-			Root     string `json:"root"`
-			Path     string `json:"path"`
-			ID       string `json:"id"`
-			Title    string `json:"title"`
-			State    string `json:"state"`
-			Evidence string `json:"evidence"`
-		} `json:"arguments"`
-	} `json:"params"`
+	Params  json.RawMessage `json:"params"`
 }
 
-// Serve reads one JSON-RPC message per line and writes one response per line.
-func Serve(in io.Reader, out io.Writer) {
-	writer := bufio.NewWriter(out)
-	defer writer.Flush()
-	scanner := bufio.NewScanner(in)
-	scanner.Buffer(make([]byte, 1024*1024), 64*1024*1024)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" {
+// rpcError is a JSON-RPC error object.
+type rpcError struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+}
+
+// response is one JSON-RPC response; exactly one of Result and Error is set.
+type response struct {
+	JSONRPC string          `json:"jsonrpc"`
+	ID      json.RawMessage `json:"id"`
+	Result  any             `json:"result,omitempty"`
+	Error   *rpcError       `json:"error,omitempty"`
+}
+
+// Serve answers the messages of in on out until in ends: each tool call opens the corpus at root through the write path,
+// each operation waiting wait for the lock, so every call reads the catalog as it stands. It returns an error only when
+// in or out fails.
+func Serve(root string, wait time.Duration, in io.Reader, out io.Writer) error {
+	w := bufio.NewWriter(out)
+	sc := bufio.NewScanner(in)
+	sc.Buffer(make([]byte, 64*1024), maxLine+1)
+	for sc.Scan() {
+		line := bytes.TrimSpace(sc.Bytes())
+		if len(line) == 0 {
 			continue
 		}
-		var message request
-		if err := json.Unmarshal([]byte(line), &message); err != nil {
-			continue // a line that is not a request has no response
+		resp := handle(root, wait, line)
+		if resp == nil {
+			continue
 		}
-		if len(message.ID) == 0 {
-			continue // a notification has no response
+		b, err := ops.JSON(resp)
+		if err != nil {
+			return err
 		}
-		result, err := handle(&message)
-		reply(writer, message.ID, result, err)
+		w.Write(b)
+		w.WriteByte('\n')
+		// The client reads each response while the session runs, so each one is flushed on its own.
+		if err := w.Flush(); err != nil {
+			return err
+		}
 	}
+	return sc.Err()
 }
 
-func handle(message *request) (any, error) {
-	switch message.Method {
+// handle answers one message line, nil for a notification.
+func handle(root string, wait time.Duration, line []byte) *response {
+	var req request
+	if err := json.Unmarshal(line, &req); err != nil {
+		return &response{JSONRPC: "2.0", ID: json.RawMessage("null"), Error: &rpcError{parseError, "the line is not JSON: " + err.Error()}}
+	}
+	if len(req.ID) == 0 {
+		return nil // a notification is not answered
+	}
+	resp := &response{JSONRPC: "2.0", ID: req.ID}
+	if req.JSONRPC != "2.0" || req.Method == "" {
+		resp.Error = &rpcError{invalidRequest, "the message is no JSON-RPC 2.0 request with a method"}
+		return resp
+	}
+	switch req.Method {
 	case "initialize":
-		return map[string]any{
+		resp.Result = map[string]any{
 			"protocolVersion": "2024-11-05",
 			"capabilities":    map[string]any{"tools": map[string]any{}},
 			"serverInfo":      map[string]any{"name": "flowmark", "version": "0.0.1"},
-		}, nil
+		}
+	case "ping":
+		resp.Result = map[string]any{}
 	case "tools/list":
-		return map[string]any{"tools": []map[string]any{
-			tool("flowmark_items", "List the checklist items of a corpus", `{"type":"object","properties":{"root":{"type":"string"}},"required":["root"]}`),
-			tool("flowmark_add", "Append one waiting item to a document", `{"type":"object","properties":{"root":{"type":"string"},"path":{"type":"string"},"id":{"type":"string"},"title":{"type":"string"}},"required":["root","path","title"]}`),
-			tool("flowmark_remove", "Remove one item with its children rule", `{"type":"object","properties":{"root":{"type":"string"},"path":{"type":"string"},"id":{"type":"string"}},"required":["root","path","id"]}`),
-			tool("flowmark_transition", "Apply one state transition to an item", `{"type":"object","properties":{"root":{"type":"string"},"path":{"type":"string"},"id":{"type":"string"},"state":{"type":"string"},"evidence":{"type":"string"}},"required":["root","path","id","state"]}`),
-			tool("flowmark_validate", "Validate a corpus: keys, references and the strict parse", `{"type":"object","properties":{"root":{"type":"string"}},"required":["root"]}`),
-		}}, nil
+		resp.Result = map[string]any{"tools": tools()}
 	case "tools/call":
-		return callTool(message)
+		result, err := call(root, wait, req.Params)
+		if err != nil {
+			resp.Error = err
+		} else {
+			resp.Result = result
+		}
+	default:
+		resp.Error = &rpcError{methodNotFound, "the method " + req.Method + " is unknown"}
 	}
-	return nil, fmt.Errorf("the method %q is unknown", message.Method)
+	return resp
 }
 
-func tool(name, description, schema string) map[string]any {
-	var inputSchema any
-	json.Unmarshal([]byte(schema), &inputSchema)
-	return map[string]any{"name": name, "description": description, "inputSchema": inputSchema}
+// toolName is the tool of the operation op: its name with _ for . (spec 40 The faces).
+func toolName(op string) string { return strings.ReplaceAll(op, ".", "_") }
+
+// memberSchemas are the JSON schemas of the members of the operations.
+var memberSchemas = map[string]map[string]any{
+	"table":    {"type": "string", "description": "the table, as the catalog declares it"},
+	"key":      {"description": "the primary key value of the row, in the runtime value model JSON"},
+	"values":   {"type": "object", "description": "the column values to assign, each in the runtime value model JSON"},
+	"position": {"type": "integer", "description": "the 1-based position among the row's siblings"},
+	"parent":   {"description": "the key of the new parent row, or null for the top"},
+	"state":    {"type": "string", "description": "the state to enter"},
 }
 
-func callTool(message *request) (any, error) {
-	arguments := message.Params.Arguments
-	switch message.Params.Name {
-	case "flowmark_items":
-		opened, err := executor.Open(arguments.Root)
-		if err != nil {
-			return nil, err
+// descriptions describe the tools.
+var descriptions = map[string]string{
+	"schema":     "Answer the catalog of the corpus: its tables with their storage, keys, settings, columns and state machines",
+	"rows":       "Answer every row of a table in storage order",
+	"row.get":    "Answer the row of a table whose primary key is key",
+	"row.insert": "Insert a row into a table, and answer its key and the table's rows",
+	"row.update": "Assign column values to the row whose key is key, and answer the table's rows",
+	"row.move":   "Move the row whose key is key to a position among its siblings, optionally under a new parent",
+	"row.delete": "Delete the row whose key is key, and answer the table's rows",
+	"transition": "Move the row whose key is key to a state of its state machine, with the columns the transition requires",
+}
+
+// tools returns the tool of each operation.
+func tools() []map[string]any {
+	var out []map[string]any
+	for _, op := range ops.Operations() {
+		required, optional := ops.Members(op)
+		props := map[string]any{}
+		for _, m := range append(required, optional...) {
+			props[m] = memberSchemas[m]
 		}
-		rows, err := opened.All("items", executor.Query{})
-		if err != nil {
-			return nil, err
+		schema := map[string]any{"type": "object", "properties": props, "additionalProperties": false}
+		if len(required) > 0 {
+			schema["required"] = required
 		}
-		lines := make([]string, 0, len(rows))
-		for _, row := range rows {
-			lines = append(lines, fmt.Sprintf("%s\t%s\t%s", row["state"], row["id"], row["title"]))
-		}
-		return content(strings.Join(lines, "\n")), nil
-	case "flowmark_add":
-		if err := app.AddItem(arguments.Root, arguments.Path, arguments.ID, arguments.Title); err != nil {
-			return nil, err
-		}
-		return content(fmt.Sprintf("%s added", arguments.ID)), nil
-	case "flowmark_remove":
-		if err := app.RemoveItem(arguments.Root, arguments.Path, arguments.ID); err != nil {
-			return nil, err
-		}
-		return content(fmt.Sprintf("%s removed", arguments.ID)), nil
-	case "flowmark_transition":
-		if err := app.Transition(arguments.Root, arguments.Path, arguments.ID, arguments.State, arguments.Evidence); err != nil {
-			return nil, err
-		}
-		return content(fmt.Sprintf("%s is %s", arguments.ID, arguments.State)), nil
-	case "flowmark_validate":
-		findings, err := corpus.Validate(arguments.Root)
-		if err != nil {
-			return nil, err
-		}
-		lines := make([]string, 0, len(findings))
-		for _, finding := range findings {
-			lines = append(lines, fmt.Sprintf("%s: line %d: %s: %s", finding.File, finding.Line, finding.Rule, finding.Message))
-		}
-		if len(lines) == 0 {
-			lines = append(lines, "the corpus passes")
-		}
-		return content(strings.Join(lines, "\n")), nil
+		out = append(out, map[string]any{"name": toolName(op), "description": descriptions[op], "inputSchema": schema})
 	}
-	return nil, fmt.Errorf("the tool %q is unknown", message.Params.Name)
+	return out
 }
 
-func content(text string) map[string]any {
-	return map[string]any{"content": []map[string]any{{"type": "text", "text": text}}}
-}
-
-func reply(writer *bufio.Writer, id json.RawMessage, result any, err error) {
-	response := map[string]any{"jsonrpc": "2.0", "id": json.RawMessage(id)}
+// call runs a tools/call: the operation's answer as one text content, or its failure with isError.
+func call(root string, wait time.Duration, params json.RawMessage) (any, *rpcError) {
+	var p struct {
+		Name      string                     `json:"name"`
+		Arguments map[string]json.RawMessage `json:"arguments"`
+	}
+	if err := json.Unmarshal(params, &p); err != nil {
+		return nil, &rpcError{invalidParams, "the params of tools/call: " + err.Error()}
+	}
+	op := ""
+	for _, o := range ops.Operations() {
+		if toolName(o) == p.Name {
+			op = o
+		}
+	}
+	if op == "" {
+		return nil, &rpcError{invalidParams, "the tool " + p.Name + " is unknown"}
+	}
+	members := p.Arguments
+	if members == nil {
+		members = map[string]json.RawMessage{}
+	}
+	answer, err := runOp(root, wait, op, members)
 	if err != nil {
-		response["error"] = map[string]any{"code": -32000, "message": err.Error()}
-	} else {
-		response["result"] = result
+		code, msg := ops.Failure(err)
+		b, merr := ops.JSON(map[string]string{"code": code, "error": msg})
+		if merr != nil {
+			return nil, &rpcError{invalidParams, merr.Error()}
+		}
+		return content(string(b), true), nil
 	}
-	text, err := json.Marshal(response)
-	if err != nil {
-		return
-	}
-	writer.Write(text)
-	writer.WriteByte('\n')
-	// A client reads each response while the session runs; a message flushes on its own.
-	writer.Flush()
+	return content(answer, false), nil
 }
 
-// writeFile is the test probe that places one document.
-func writeFile(path, text string) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
+// runOp opens the corpus and runs the operation op with its members, answering its JSON.
+func runOp(root string, wait time.Duration, op string, members map[string]json.RawMessage) (string, error) {
+	r, err := ops.Parse(op, members)
+	if err != nil {
+		return "", err
 	}
-	return os.WriteFile(path, []byte(text), 0o644)
+	ctx := context.Background()
+	c, err := ops.Open(ctx, root, wait)
+	if err != nil {
+		return "", err
+	}
+	a, err := c.Run(ctx, "mcp", r)
+	if err != nil {
+		return "", err
+	}
+	b, err := ops.JSON(a)
+	if err != nil {
+		return "", fmt.Errorf("the answer of %s does not marshal: %w", op, err)
+	}
+	return string(b), nil
+}
+
+// textContent is one text content of a tool result, and toolResult the result of a tool call.
+type textContent struct {
+	Type string `json:"type"`
+	Text string `json:"text"`
+}
+
+type toolResult struct {
+	Content []textContent `json:"content"`
+	IsError bool          `json:"isError"`
+}
+
+// content is a tool result of one text content.
+func content(text string, isError bool) toolResult {
+	return toolResult{Content: []textContent{{Type: "text", Text: text}}, IsError: isError}
 }
