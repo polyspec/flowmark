@@ -57,6 +57,7 @@ const (
 	peopleDelim  = "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"
 	// milestoneHeader and milestoneRow are a three-column table without detail sections.
 	milestoneHeader = "| id | parent | title |"
+	milestoneDelim  = "| --- | --- | --- |"
 	milestoneRow    = "| M1 |  | Foundation |"
 )
 
@@ -73,7 +74,7 @@ func tableOfH1(text string) string {
 
 // docCase is one input of the document grammar. rule is the rule of the first
 // diagnostic, empty when the input is accepted; line and col locate it, 0 when
-// not checked; kept says whether rows are returned along with the diagnostics;
+// not checked; kept says whether one or more rows are returned along with the diagnostics;
 // alone says that the first diagnostic is the only one; readOnly says that the
 // accepted rows are only read, since the writer refuses their shared key as
 // DUPLICATE_KEY, which the validator reports and which leaves the table unavailable.
@@ -116,6 +117,9 @@ func documentParseCases() []docCase {
 		noncanonicalDoc("10#encoding-and-line-structure: CRLF line endings", 1, strings.ReplaceAll(itemsOf("- [ ] T1 Plan done:false"), "\n", "\r\n")),
 		noncanonicalDoc("10#document-order: H1 with extra spaces", 1, raw("#  items", "- [ ] T1 Plan done:false")),
 		noncanonicalDoc("10#document-order: no H1 line", 1, raw("- [ ] T1 Plan done:false")),
+		{name: "10#document-order: an H1 with the table name capitalized", rule: RuleNoncanonical, line: 1, col: 3, kept: true, text: raw("# Items", "- [ ] T1 Plan done:false")},
+		noncanonicalDoc("10#document-order: an H1 with the table name in capitals", 1, raw("# ITEMS", "- [ ] T1 Plan done:false")),
+		{name: "10#document-order: an H1 in another case over no rows", rule: RuleNoncanonical, line: 1, col: 3, text: raw("# Items")},
 		noncanonicalDoc("10#document-order: a blank line between the H1 and the rows", 2, raw("# items", "", "- [ ] T1 Plan done:false")),
 		noncanonicalDoc("10#document-order: two blank lines between the H1 and the rows", 2, raw("# items", "", "", "- [ ] T1 Plan done:false")),
 		noncanonicalDoc("10#document-order: a line of spaces and tabs between the H1 and the rows", 2, raw("# items", " \t ", "- [ ] T1 Plan done:false")),
@@ -168,9 +172,20 @@ func documentParseCases() []docCase {
 		docReject("10#foreign-keys-as-links: a foreign key written as plain text", RuleBlock, 2, itemsOf("- [ ] T1 Plan owner:P1 done:false")),
 		docReject("10#list-rows: an empty title", RuleBlock, 2, itemsOf("- [ ] T1 done:false")),
 		docReject("10#list-rows: a key with a dash before an underscore", RuleBlock, 2, itemsOf("- [ ] T-_1 Plan done:false")),
-		{name: "10#list-rows: a tab after the list marker moves the content indent", rule: RuleBlock, line: 2, col: 2, text: itemsOf("-\t[ ] T1 Plan done:false")},
-		docReject("10#list-rows: a space and a tab after the list marker", RuleBlock, 2, itemsOf("- \t[ ] T1 Plan done:false")),
-		{name: "10#list-rows: a tab after the list marker of a child row", rule: RuleBlock, line: 3, col: 4, text: itemsOf("- [ ] T1 Plan done:false", "  -\t[ ] T2 Child done:false")},
+		// The run after the list marker, measured in columns, a tab advancing to the next multiple of four.
+		{name: "10#list-rows: a tab after the list marker is a run of three columns", rule: RuleNoncanonical, line: 2, col: 2, kept: true, text: itemsOf("-\t[ ] T1 Plan done:false")},
+		{name: "10#list-rows: a space and a tab after the list marker are a run of three columns", rule: RuleNoncanonical, line: 2, col: 2, kept: true, text: itemsOf("- \t[ ] T1 Plan done:false")},
+		{name: "10#list-rows: a tab after the list marker of a child row is a run of one column", rule: RuleNoncanonical, line: 3, col: 4, kept: true, text: itemsOf("- [ ] T1 Plan done:false", "  -\t[ ] T2 Child done:false")},
+		{name: "10#list-rows: two tabs after the list marker are a run of seven columns", rule: RuleBlock, line: 2, col: 2, text: itemsOf("-\t\t[ ] T1 Plan done:false")},
+		{name: "10#list-rows: two spaces after the list marker", rule: RuleNoncanonical, line: 2, col: 2, kept: true, text: itemsOf("-  [ ] T1 Plan done:false")},
+		{name: "10#list-rows: four spaces after the list marker", rule: RuleNoncanonical, line: 2, col: 2, kept: true, text: itemsOf("-    [ ] T1 Plan done:false")},
+		noncanonicalDoc("10#list-rows: three spaces after the marker of a child row", 3, itemsOf("- [ ] T1 Plan done:false", "  -   [ ] T2 Child done:false")),
+		noncanonicalDoc("10#list-rows: three spaces after the marker of a row with a sibling", 2, itemsOf("-   [ ] T1 Plan done:false", "- [ ] T2 Other done:false")),
+		{name: "10#list-rows: five spaces after the list marker open a code block", rule: RuleBlock, line: 2, col: 2, text: itemsOf("-     [ ] T1 Plan done:false")},
+		{name: "10#list-rows: five spaces after the marker of a child row", rule: RuleBlock, line: 3, col: 4, text: itemsOf("- [ ] T1 Plan done:false", "  -     [ ] T2 Child done:false")},
+		noncanonicalDoc("10#list-rows: a child at the content indent of a row with three spaces after its marker", 2, itemsOf("-   [ ] T1 Plan done:false", "    - [ ] T2 Child done:false")),
+		noncanonicalDoc("10#list-rows: a child at the content indent of a row with four spaces after its marker", 2, itemsOf("-    [ ] T1 Plan done:false", "      - [ ] T2 Child done:false")),
+		noncanonicalDoc("10#list-rows: a child at the content indent of a row with two spaces after its marker", 2, itemsOf("-  [ ] T1 Plan done:false", "   - [ ] T2 Child done:false")),
 		noncanonicalDoc("10#list-rows: a tab that ends the title before a field", 2, itemsOf("- [ ] T1 Plan\tdone:false")),
 		noncanonicalDoc("10#list-rows: a tab that ends the title before a field and a second field", 2, itemsOf("- [ ] T1 Plan\tdone:false note:\"x\"")),
 		noncanonicalDoc("10#list-rows: an unescaped title token that begins with a column", 2, itemsOf("- [ ] T1 Set owner: review done:false")),
@@ -210,6 +225,7 @@ func documentParseCases() []docCase {
 		noncanonicalDoc("10#detail-headings-and-anchors: a detail heading with a wrong case of row", 4, itemsOf("- [ ] T1 Plan done:false", "", "## items Row T1", "", "A.")),
 		noncanonicalDoc("10#detail-headings-and-anchors: a detail heading with a wrong case of the table name", 4, itemsOf("- [ ] T1 Plan done:false", "", "## Items row T1", "", "A.")),
 		noncanonicalDoc("10#detail-headings-and-anchors: a detail heading with the table name and row in capitals", 4, itemsOf("- [ ] T1 Plan done:false", "", "## ITEMS ROW T1", "", "A.")),
+		docReject("10#detail-headings-and-anchors: a detail heading whose table name lowercases with U+0307 is another table", RuleBlock, 4, itemsOf("- [ ] T1 Plan done:false", "", "## İtems row T1", "", "A.")),
 		docReject("10#detail-headings-and-anchors: a detail heading naming another table", RuleBlock, 4, itemsOf("- [ ] T1 Plan done:false", "", "## people row P1", "", "A.")),
 		docReject("10#detail-headings-and-anchors: a detail heading with a lowercase key", RuleBlock, 4, itemsOf("- [ ] T1 Plan done:false", "", "## items row t1", "", "A.")),
 		noncanonicalDoc("10#detail-headings-and-anchors: a detail heading with extra spaces", 4, itemsOf("- [ ] T1 Plan done:false", "", "## items  row T1", "", "A.")),
@@ -217,6 +233,17 @@ func documentParseCases() []docCase {
 		noncanonicalDoc("10#sections-and-their-values: a section heading with a tab after its hashes", 6, itemsOf("- [ ] T1 Plan done:false", "", "## items row T1", "", "###\tevidence", "", "a")),
 		noncanonicalDoc("10#detail-headings-and-anchors: a detail section without content", 4, itemsOf("- [ ] T1 Plan done:false", "", "## items row T1")),
 		noncanonicalDoc("10#detail-headings-and-anchors: a detail section directly after the list", 3, itemsOf("- [ ] T1 Plan done:false", "## items row T1", "", "A.")),
+
+		// The blank line between the rows and the element after them.
+		noncanonicalDoc("10#document-order: a line of spaces between the list and the first detail section", 3, itemsOf("- [ ] T1 Plan done:false", "  ", "## items row T1", "", "A.")),
+		noncanonicalDoc("10#document-order: a line of a tab between the table and the first detail section", 5, peopleOf(peopleHeader, peopleDelim,
+			row("P1", "", "Ada", "lead", "true", "", "", "", "", "", "", "", "", ""), "\t", "## people row P1", "", "### bio", "", "Notes.")),
+		noncanonicalDoc("10#document-order: two blank lines between the list and the first detail section", 3, itemsOf("- [ ] T1 Plan done:false", "", "", "## items row T1", "", "A.")),
+		noncanonicalDoc("10#document-order: a detail section directly after a table", 5, peopleOf(peopleHeader, peopleDelim,
+			row("P1", "", "Ada", "lead", "true", "", "", "", "", "", "", "", "", ""), "## people row P1", "", "### bio", "", "Notes.")),
+		noncanonicalDoc("10#document-order: a line of spaces after the last row of the file", 3, itemsOf("- [ ] T1 Plan done:false", " ")),
+		noncanonicalDoc("10#document-order: a line of spaces after the last row of a block", 8, checkedOf("- [ ] C1 Plan done:false", " ")),
+		docReject("10#document-order: a line of a form feed between the list and the first detail section", RuleBlock, 3, itemsOf("- [ ] T1 Plan done:false", "\f", "## items row T1", "", "A.")),
 
 		// The people table: cells, the pipe escape, the parent link and the non-null sections.
 		{name: "10#table-rows: rows with a parent link, a quoted title and the pipe escape", table: "people", text: peopleOf(
@@ -244,6 +271,24 @@ func documentParseCases() []docCase {
 		docReject("10#table-rows: a delimiter row of a cell count other than the header's", RuleBlock, 3, milestonesOf(milestoneHeader, "| --- | --- |", milestoneRow)),
 		docReject("10#table-rows: a setext-shaped line without outer pipes", RuleBlock, 3, milestonesOf(milestoneHeader, "---  \t", milestoneRow)),
 		docReject("10#table-rows: a list-item-shaped line without outer pipes", RuleBlock, 3, milestonesOf(milestoneHeader, "- --- | --- | ---", milestoneRow)),
+		docReject("10#table-rows: a delimiter row indented by a space and a tab", RuleBlock, 3, milestonesOf(milestoneHeader, " \t"+milestoneDelim, milestoneRow)),
+		docReject("10#table-rows: a delimiter row without outer pipes indented by a space and a tab", RuleBlock, 3, milestonesOf(milestoneHeader, " \t--- | --- | ---", milestoneRow)),
+
+		// The header row as GFM reads it, and a row without its last pipe.
+		noncanonicalDoc("10#table-rows: a header row without outer pipes", 2, milestonesOf("id | parent | title", milestoneDelim, milestoneRow)),
+		noncanonicalDoc("10#table-rows: a header row without a leading pipe", 2, milestonesOf("id | parent | title |", milestoneDelim, milestoneRow)),
+		noncanonicalDoc("10#table-rows: a header row without a trailing pipe", 2, milestonesOf("| id | parent | title", milestoneDelim, milestoneRow)),
+		noncanonicalDoc("10#table-rows: a header row indented by one space", 2, milestonesOf(" "+milestoneHeader, milestoneDelim, milestoneRow)),
+		noncanonicalDoc("10#table-rows: a header row indented by three spaces", 2, milestonesOf("   "+milestoneHeader, milestoneDelim, milestoneRow)),
+		noncanonicalDoc("10#table-rows: spaces and a tab after the header's last pipe", 2, milestonesOf(milestoneHeader+" \t ", milestoneDelim, milestoneRow)),
+		noncanonicalDoc("10#table-rows: a vertical tab after the header's last pipe", 2, milestonesOf(milestoneHeader+"\v", milestoneDelim, milestoneRow)),
+		noncanonicalDoc("10#table-rows: a form feed after the header's last pipe", 2, milestonesOf(milestoneHeader+"\f", milestoneDelim, milestoneRow)),
+		noncanonicalDoc("10#table-rows: a form feed after a header without a trailing pipe", 2, milestonesOf("| id | parent | title\f", milestoneDelim, milestoneRow)),
+		docReject("10#table-rows: a header row indented by four spaces", RuleBlock, 2, milestonesOf("    "+milestoneHeader, milestoneDelim, milestoneRow)),
+		docReject("10#table-rows: a header row indented by a space and a tab", RuleBlock, 2, milestonesOf(" \t"+milestoneHeader, milestoneDelim, milestoneRow)),
+		docReject("10#table-rows: a header row without a pipe", RuleBlock, 2, milestonesOf("id parent title", milestoneDelim, milestoneRow)),
+		noncanonicalDoc("10#table-rows: a row without its trailing pipe", 4, milestonesOf(milestoneHeader, milestoneDelim, "| M1 |  | Foundation")),
+		noncanonicalDoc("10#table-rows: a row without its trailing pipe ending in an escaped pipe", 4, milestonesOf(milestoneHeader, milestoneDelim, `| M1 |  | Found\|`)),
 		docReject("10#foreign-keys-as-links: a parent cell written as plain text", RuleBlock, 5, peopleOf(
 			peopleHeader, peopleDelim,
 			row("P1", "", "Ada", "lead", "true", "", "", "", "", "", "", "", "", ""),
@@ -282,7 +327,7 @@ func documentParseCases() []docCase {
 			peopleHeader, peopleDelim,
 			strings.Replace(row("P1", "", "Ada", "lead", "true", "", "", "", "", "", "", "", "", ""), "| Ada |", "|  Ada  |", 1),
 			"", "## people row P1", "", "### bio", "", "Notes.")),
-		noncanonicalDoc("10#table-rows: a table with a header and no rows", 2, peopleOf(peopleHeader, peopleDelim)),
+		{name: "10#table-rows: a table with a header and no rows", rule: RuleNoncanonical, line: 2, text: peopleOf(peopleHeader, peopleDelim)},
 		noncanonicalDoc("10#table-rows: rows out of storage order", 5, peopleOf(
 			peopleHeader, peopleDelim,
 			row("P1", "", "Ada", "lead", "true", "", "", "", "", "", "", "", "", ""),
@@ -504,8 +549,8 @@ func TestParseDocumentRules(t *testing.T) {
 			if c.alone && len(diags) != 1 {
 				t.Fatalf("%d diagnostics; want %s alone: %+v", len(diags), c.rule, diags)
 			}
-			if (rows != nil) != c.kept {
-				t.Fatalf("rows returned = %v; want %v", rows != nil, c.kept)
+			if (len(rows) > 0) != c.kept {
+				t.Fatalf("rows returned = %d; want kept %v", len(rows), c.kept)
 			}
 			if rows != nil {
 				out := checkDocumentP2(t, cat, table, rows, lk)
@@ -570,6 +615,147 @@ func TestDetailTableNameCase(t *testing.T) {
 			}
 			if len(diags) == 0 || diags[0].Rule != c.rule {
 				t.Fatalf("diagnostics %+v; want first rule %s", diags, c.rule)
+			}
+		})
+	}
+}
+
+// TestH1LowercasedAsViewers requires that an H1 is compared with the table name as
+// the viewers lowercase it: U+0130 lowercases to i and U+0307, so `# İtems` names
+// no table of items.flowmark.md, and the file has no H1 and a stray heading.
+func TestH1LowercasedAsViewers(t *testing.T) {
+	cat := loadDocumentFixture(t)
+	text := raw("# İtems", "- [ ] T1 Plan done:false")
+	_, diags, err := ParseDocument(cat, "items", "items.flowmark.md", []byte(text), documentLinker())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(diags) == 0 || diags[0].Rule != RuleNoncanonical || diags[0].Line != 1 || diags[0].Column != 1 || !hasRule(diags, RuleBlock) {
+		t.Fatalf("diagnostics %+v; want the missing H1 at 1:1 and format.block", diags)
+	}
+}
+
+// TestTableRowWithoutTrailingPipe requires that a row without its last pipe keeps
+// its last cell whole, a final `\|` being a pipe of that cell, and that canon
+// writes the row with its last pipe.
+func TestTableRowWithoutTrailingPipe(t *testing.T) {
+	cat := loadDocumentFixture(t)
+	lk := documentLinker()
+	cases := []struct{ name, in, want string }{
+		{"10#table-rows: a row without its trailing pipe keeps its last cell", "| M1 |  | Foundation", milestoneRow},
+		{"10#table-rows: a row without its trailing pipe keeps a final escaped pipe", `| M1 |  | Found\|`, `| M1 |  | Found\| |`},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			rows, _, err := ParseDocument(cat, "milestones", "milestones.flowmark.md", []byte(milestonesOf(milestoneHeader, milestoneDelim, c.in)), lk)
+			if err != nil || len(rows) != 1 {
+				t.Fatalf("read: %v, %d rows", err, len(rows))
+			}
+			out := checkDocumentP2(t, cat, "milestones", rows, lk)
+			if want := milestonesOf(milestoneHeader, milestoneDelim, c.want); string(out) != want {
+				t.Fatalf("canon writes %q; want %q", out, want)
+			}
+		})
+	}
+}
+
+// TestOneColumnHeader requires that the header of a one-column table, which GFM
+// reads with a pipe at either end or none, is noncanonical with its row kept.
+func TestOneColumnHeader(t *testing.T) {
+	cat, diags := catalog.Load("testdata/onecol")
+	if len(diags) > 0 || cat == nil {
+		t.Fatalf("onecol fixture catalog: %+v", diags)
+	}
+	lk := documentLinker()
+	for _, header := range []string{"id |", "| id", "id"} {
+		t.Run("10#table-rows: a one-column header "+header, func(t *testing.T) {
+			text := raw("# tags", header, "| --- |", "| A |")
+			rows, diags, err := ParseDocument(cat, "tags", "tags.flowmark.md", []byte(text), lk)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(diags) == 0 || diags[0].Rule != RuleNoncanonical || diags[0].Line != 2 || diags[0].Column != 1 || hasRule(diags, RuleBlock) {
+				t.Fatalf("diagnostics %+v; want format.noncanonical at 2:1 alone in rule", diags)
+			}
+			if len(rows) != 1 || rows[0].Key != "A" {
+				t.Fatalf("rows %d; want the row A", len(rows))
+			}
+			if out := checkDocumentP2(t, cat, "tags", rows, lk); string(out) != raw("# tags", "| id |", "| --- |", "| A |") {
+				t.Fatalf("canon writes %q", out)
+			}
+		})
+	}
+}
+
+// TestListChildAtContentIndent requires that a row whose marker stands where a wider
+// row's content begins, at an indentation to which the two-space grammar gives no
+// place, is that row's child as CommonMark reads it, and is noncanonical; canon
+// writes it two spaces deeper than its parent.
+func TestListChildAtContentIndent(t *testing.T) {
+	cat := loadDocumentFixture(t)
+	lk := documentLinker()
+	cases := []struct {
+		name    string
+		lines   []string
+		parents map[string]string
+	}{
+		{"10#list-rows: a child at the content indent of a three-space run", []string{"-   [ ] T1 Plan done:false", "    - [ ] T2 Child done:false"},
+			map[string]string{"T1": "", "T2": "T1"}},
+		{"10#list-rows: a child at the content indent of a four-space run", []string{"-    [ ] T1 Plan done:false", "      - [ ] T2 Child done:false"},
+			map[string]string{"T1": "", "T2": "T1"}},
+		{"10#list-rows: a child at the content indent of a two-space run", []string{"-  [ ] T1 Plan done:false", "   - [ ] T2 Child done:false"},
+			map[string]string{"T1": "", "T2": "T1"}},
+		{"10#list-rows: two children at the content indent and a sibling after them", []string{"-   [ ] T1 Plan done:false", "    - [ ] T2 Child done:false", "    - [ ] T3 Child done:false", "- [ ] T4 Other done:false"},
+			map[string]string{"T1": "", "T2": "T1", "T3": "T1", "T4": ""}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			rows, diags, err := ParseDocument(cat, "items", "items.flowmark.md", []byte(itemsOf(c.lines...)), lk)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(diags) == 0 || diags[0].Rule != RuleNoncanonical || hasRule(diags, RuleBlock) {
+				t.Fatalf("diagnostics %+v; want format.noncanonical alone in rule", diags)
+			}
+			if len(rows) != len(c.parents) {
+				t.Fatalf("%d rows; want %d", len(rows), len(c.parents))
+			}
+			for _, r := range rows {
+				got := ""
+				if v := r.Scalars["parent"]; v != nil {
+					got = *v
+				}
+				if got != c.parents[r.Key] {
+					t.Fatalf("row %s has parent %q; want %q", r.Key, got, c.parents[r.Key])
+				}
+			}
+			checkDocumentP2(t, cat, "items", rows, lk)
+		})
+	}
+}
+
+// TestListChildUnderWideMarkerRun requires that a row indented two spaces under a
+// row with two to four columns after its marker, a tab measured to the next multiple
+// of four, is format.block at the child row:
+// CommonMark reads it as a sibling, the grammar as the child.
+func TestListChildUnderWideMarkerRun(t *testing.T) {
+	cat := loadDocumentFixture(t)
+	lk := documentLinker()
+	for name, run := range map[string]string{"two spaces": "  ", "three spaces": "   ", "four spaces": "    ", "a tab": "\t"} {
+		t.Run("10#list-rows: a child two spaces under a run of "+name, func(t *testing.T) {
+			text := itemsOf("-"+run+"[ ] T1 Plan done:false", "  - [ ] T2 Child done:false")
+			rows, diags, err := ParseDocument(cat, "items", "items.flowmark.md", []byte(text), lk)
+			if err != nil {
+				t.Fatal(err)
+			}
+			found := false
+			for _, d := range diags {
+				if d.Rule == RuleBlock && d.Line == 3 && d.Column == 1 {
+					found = true
+				}
+			}
+			if len(rows) > 0 || !found {
+				t.Fatalf("rows %d, diagnostics %+v; want format.block at 3:1 and no rows", len(rows), diags)
 			}
 		})
 	}

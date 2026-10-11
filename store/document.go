@@ -288,7 +288,8 @@ func newDocParser(s *sink, rel string, lk Linker, ownTable, ownKey string) *docP
 func (p *docParser) run(lay *docLayout, lines []string) []*docRec {
 	i := 0
 	if len(lines) > 0 {
-		if level, text, tab, ok := headingOf(lines[0]); ok && level == 1 && trimWhite(text) == lay.table {
+		// The H1 names the table once lowercased as the viewers lowercase it.
+		if level, text, tab, ok := headingOf(lines[0]); ok && level == 1 && lowerAsViewers(trimWhite(text)) == lay.table {
 			if text != lay.table || tab {
 				p.warn(1, 3, RuleNoncanonical, "the H1 is written `# "+lay.table+"`")
 			}
@@ -349,11 +350,16 @@ func isListRow(line string) bool {
 	return strings.HasPrefix(t, "- ") || strings.HasPrefix(t, "-\t")
 }
 
-// readList reads the list rows from line i: two spaces of indentation per level,
-// each row the child of the last row of the level above it. It returns the index
-// of the first line after the rows.
+// readList reads the list rows from line i, nested as CommonMark nests them: a row
+// is canonical two spaces under its parent; a row that the two-space grammar and
+// CommonMark both place, but differently, is format.block; a row that only
+// CommonMark places, at most three columns past a wider parent's content indent,
+// is that row's child and noncanonical. It returns the index of the first line
+// after the rows.
 func (p *docParser) readList(lines []string, i int) int {
 	var chain []string // the keys of the open rows, by depth
+	var at []int       // the column of each open row's marker
+	var content []int  // the column where each open row's content begins, as CommonMark reads it
 	for ; i < len(lines) && isListRow(lines[i]); i++ {
 		lineNo := i + 1
 		line := lines[i]
@@ -362,15 +368,41 @@ func (p *docParser) readList(lines []string, i int) int {
 			line = trimmed
 		}
 		indent := indentOf(line)
-		depth := indent / 2
+		// CommonMark nests the row under every open row whose content begins at or
+		// before its marker.
+		d := 0
+		for d < len(chain) && content[d] <= indent {
+			d++
+		}
+		// The grammar nests it two spaces under an open row, or beside an open row at
+		// its own indent.
+		g, gok := 0, indent == 0
+		for k := len(at) - 1; k >= 0; k-- {
+			if at[k] == indent {
+				g, gok = k, true
+				break
+			}
+			if at[k]+2 == indent {
+				g, gok = k+1, true
+				break
+			}
+			if at[k] < indent {
+				break
+			}
+		}
+		depth := g
 		switch {
-		case indent%2 != 0:
-			p.fail(lineNo, 1, RuleBlock, "a row is indented by two spaces per level")
+		case gok && g != d:
+			p.fail(lineNo, 1, RuleBlock, "CommonMark nests this row elsewhere than its indentation writes")
 			continue
-		case depth > len(chain):
+		case !gok && d > 0 && content[d-1] > at[d-1]+2 && indent-content[d-1] <= 3:
+			p.warn(lineNo, 1, RuleNoncanonical, "a child row is indented two spaces deeper than its parent")
+			depth = d
+		case !gok:
 			p.fail(lineNo, 1, RuleBlock, "a row is indented two spaces under the row of the level above it")
 			continue
-		case depth > 0 && p.lay.parent == "":
+		}
+		if depth > 0 && p.lay.parent == "" {
 			p.fail(lineNo, 1, RuleBlock, "a row is nested, but the table has no parent column")
 			continue
 		}
@@ -382,21 +414,36 @@ func (p *docParser) readList(lines []string, i int) int {
 			rec.row.Scalars[p.lay.parent] = sp(chain[depth-1])
 		}
 		chain = append(chain[:depth], rec.row.Key)
+		at = append(at[:depth], indent)
+		content = append(content[:depth], indent+1+markerGap(line, indent))
 		p.recs = append(p.recs, rec)
 	}
 	return i
+}
+
+// markerGap is the width in columns of the spaces and tabs after the list marker at
+// indent, a tab advancing to the next multiple of four (CommonMark 0.31.2 §2.2).
+func markerGap(line string, indent int) int {
+	col := indent + 1
+	for k := indent + 1; k < len(line) && (line[k] == ' ' || line[k] == '\t'); k++ {
+		if line[k] == '\t' {
+			col += 4 - col%4
+		} else {
+			col++
+		}
+	}
+	return col - (indent + 1)
 }
 
 // listRow reads one list row of line, whose marker is at indent: the state glyph,
 // the key, the title and the fields. It returns nil when the row is refused.
 func (p *docParser) listRow(lineNo int, line string, indent int) *docRec {
 	lay := p.lay
-	// A tab in the white space after the marker moves the content indent of the item, as
-	// CommonMark reads it, so the row's nesting would not be the one its indentation writes.
-	ws := line[indent+1:]
-	n := len(ws) - len(strings.TrimLeft(ws, " \t"))
-	if t := strings.IndexByte(ws[:n], '\t'); t >= 0 {
-		p.fail(lineNo, colAt(line, indent+1+t), RuleBlock, "a tab follows the list marker, which moves the item's content indent")
+	// Five or more columns after the marker open an indented code block in the item,
+	// as CommonMark reads it, so a viewer shows no task item; a narrower run, a tab
+	// in it included, is a separator.
+	if markerGap(line, indent) >= 5 {
+		p.fail(lineNo, colAt(line, indent+1), RuleBlock, "five or more columns after the list marker open an indented code block in the item")
 		return nil
 	}
 	off := p.separator(lineNo, line, indent+1)
@@ -774,27 +821,35 @@ type tableCell struct {
 	at  int
 }
 
-// splitTableCells splits a table row, which begins and ends with a pipe, into its
-// cells. A pipe that directly follows a backslash is text, and that one backslash
-// is removed.
-func splitTableCells(line string) []tableCell {
-	var cells []tableCell
+// splitTableCells splits a table row into its cells as GFM reads it: the pipe at
+// either end is optional, and a pipe that directly follows a backslash is text,
+// that one backslash being removed. The row has no indent and no white space at
+// its end. outer reports whether the row has a pipe at both ends.
+func splitTableCells(line string) (cells []tableCell, outer bool) {
 	var cur strings.Builder
-	start := 1
-	for i := 1; i < len(line)-1; i++ {
+	i := 0
+	lead := strings.HasPrefix(line, "|")
+	if lead {
+		i = 1
+	}
+	start, trail := i, false
+	for ; i < len(line); i++ {
 		switch c := line[i]; {
-		case c == '\\' && line[i+1] == '|' && i+1 < len(line)-1:
+		case c == '\\' && i+1 < len(line) && line[i+1] == '|':
 			cur.WriteByte('|')
 			i++
 		case c == '|':
 			cells = append(cells, tableCell{raw: cur.String(), at: start})
 			cur.Reset()
-			start = i + 1
+			start, trail = i+1, i == len(line)-1
 		default:
 			cur.WriteByte(c)
 		}
 	}
-	return append(cells, tableCell{raw: cur.String(), at: start})
+	if !trail {
+		cells = append(cells, tableCell{raw: cur.String(), at: start})
+	}
+	return cells, lead && trail
 }
 
 // cellValue reads the text of a table cell of the line text: one space separates
@@ -831,25 +886,40 @@ func (p *docParser) readTable(lines []string, i int) int {
 		}
 		return k
 	}
-	if i >= len(lines) || !strings.HasPrefix(lines[i], "|") {
+	if i >= len(lines) {
 		return i
 	}
-	if i+1 >= len(lines) {
-		p.fail(i+1, 1, RuleBlock, "a table has a header row and a delimiter row")
-		return i + 1
+	// The header is a paragraph line, as GFM reads it: at most three spaces of indent
+	// and no tab before it, the pipe at either end optional, and any of space, tab,
+	// vertical tab and form feed at its end.
+	hl := lines[i]
+	ind := indentOf(hl)
+	if ind > 3 || (ind < len(hl) && hl[ind] == '\t') {
+		return i
 	}
+	hbody := strings.TrimRight(hl[ind:], " \t\v\f")
+	header, _ := splitTableCells(hbody)
 	want := []string{lay.key.Name}
 	for _, c := range lay.scalars {
 		want = append(want, c.Name)
 	}
-	header := splitTableCells(lines[i])
 	names := make([]string, len(header))
 	for j, c := range header {
 		names[j] = trimWhite(c.raw)
 	}
 	if !slices.Equal(names, want) {
+		if !strings.HasPrefix(hbody, "|") {
+			return i
+		}
 		p.fail(i+1, 1, RuleBlock, "the header is not the columns "+strings.Join(want, ", ")+" of "+lay.table)
 		return tableEnd(i + 1)
+	}
+	if i+1 >= len(lines) {
+		p.fail(i+1, 1, RuleBlock, "a table has a header row and a delimiter row")
+		return i + 1
+	}
+	if canon := "| " + strings.Join(want, " | ") + " |"; hl != canon {
+		p.warn(i+1, 1, RuleNoncanonical, "the header row is written `"+canon+"`")
 	}
 	end := tableEnd(i + 2)
 	cells, ok := delimiterCells(lines[i+1])
@@ -878,13 +948,15 @@ func delimiterRow(n int) string {
 }
 
 // delimiterCells reads a line as the delimiter row that GFM reads under a header:
-// at most three spaces of indent, then cells of delimiterCell separated by pipes,
-// the pipes at either end optional. It returns the cells and whether the line is
-// such a row. A line without a leading pipe that CommonMark reads first as a
-// setext underline or as a list item is not one, whatever its cells.
+// at most three spaces of indent and no tab before it, then cells of delimiterCell
+// separated by pipes, the pipes at either end optional. It returns the cells and
+// whether the line is such a row. A line without a leading pipe that CommonMark
+// reads first as a setext underline or as a list item is not one, whatever its
+// cells; a tab in the indent reaches the fourth column, so CommonMark reads the
+// line as indented, a continuation of the header's paragraph.
 func delimiterCells(line string) ([]string, bool) {
 	body := strings.TrimLeft(line, " ")
-	if len(line)-len(body) > 3 {
+	if len(line)-len(body) > 3 || strings.HasPrefix(body, "\t") {
 		return nil, false
 	}
 	if !strings.HasPrefix(body, "|") {
@@ -915,11 +987,12 @@ func (p *docParser) tableRow(lineNo int, text string) *docRec {
 		p.warn(lineNo, colAt(text, len(trimmed)), RuleNoncanonical, "a space or a tab at the end of the row")
 		text = trimmed
 	}
-	if strings.HasSuffix(text, `\|`) {
-		p.fail(lineNo, colAt(text, len(text)-1), RuleBlock, "the row ends with an escaped pipe, so it has no cell boundary at its end")
-		return nil
+	// A row without its last pipe is read as GFM reads it: its last cell runs to the
+	// end of the line, a final `\|` being a pipe of that cell.
+	cells, outer := splitTableCells(text)
+	if !outer {
+		p.warn(lineNo, 1, RuleNoncanonical, "a row is written with a pipe at either end")
 	}
-	cells := splitTableCells(text)
 	if len(cells) != len(lay.scalars)+1 {
 		p.fail(lineNo, 1, RuleBlock, "a row has one cell per column of the header")
 		return nil
@@ -974,11 +1047,18 @@ func (p *docParser) readDetails(lines []string, i, end int) {
 	if len(heads) > 0 {
 		first = heads[0].at
 	}
+	blank := true
 	for k := i; k < first; k++ {
-		if lines[k] != "" {
+		if !isBlank(lines[k]) {
 			p.fail(k+1, 1, RuleBlock, "content after the list or table is not a detail section")
+			blank = false
 			break
 		}
+	}
+	// One blank line separates the rows from the element after them, and none stands
+	// at the end of the file; a blank line is a line of only spaces and tabs.
+	if want := min(1, len(lines)-first); blank && (first-i != want || (want == 1 && lines[i] != "")) {
+		p.warn(i+1, 1, RuleNoncanonical, "one blank line separates the rows from the element after them")
 	}
 	for k := 0; k < len(heads); {
 		hd := heads[k]
@@ -1007,7 +1087,7 @@ func (p *docParser) readDetail(lines []string, h heading, sub []heading, end int
 	lay := p.lay
 	marks := strings.Repeat("#", h.level)
 	parts := detailFields(h.text)
-	if len(parts) != 3 || strings.ToLower(parts[0]) != strings.ToLower(lay.table) || strings.ToLower(parts[1]) != "row" || parts[2] == "" {
+	if len(parts) != 3 || lowerAsViewers(parts[0]) != lowerAsViewers(lay.table) || strings.ToLower(parts[1]) != "row" || parts[2] == "" {
 		p.fail(h.at+1, 4, RuleBlock, "a detail section is `"+marks+" "+lay.table+" row <key>`")
 		return
 	}
