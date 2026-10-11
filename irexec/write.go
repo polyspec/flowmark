@@ -467,7 +467,16 @@ func (w *writer) insertRow(i int, ps []*int) *Error {
 		}
 	}
 	key0, _ := w.valueOf(g.row, tb.Key)
-	w.answer.Keys = append(w.answer.Keys, output(columnOf(tb, tb.Key).Type, key0))
+	return w.answerKey(key0)
+}
+
+// answerKey appends the key k of a written row to the answer's keys.
+func (w *writer) answerKey(k cell) *Error {
+	o, err := output(columnOf(w.tb, w.tb.Key).Type, k)
+	if err != nil {
+		return err
+	}
+	w.answer.Keys = append(w.answer.Keys, o)
 	return nil
 }
 
@@ -577,8 +586,7 @@ func (w *writer) onDuplicate(ps []*int) (bool, *Error) {
 		return false, err
 	}
 	key, _ := w.valueOf(met.row, w.tb.Key)
-	w.answer.Keys = append(w.answer.Keys, output(columnOf(w.tb, w.tb.Key).Type, key))
-	return true, nil
+	return true, w.answerKey(key)
 }
 
 // matched returns the rows of the next corpus that the write's where matches, once

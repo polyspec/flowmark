@@ -546,25 +546,26 @@ func projection(s *scope) []outCol {
 func (r *reader) build(s *scope, ev *env, b *built) (*Row, *Error) {
 	row := newRow()
 	for _, oc := range projection(s) {
+		var v cell
+		var t dbspec.Type
+		var err *Error
 		switch {
 		case oc.sub != nil:
-			v, t, err := r.subScalar(oc.sub, &frame{sc: s, ev: ev})
-			if err != nil {
-				return nil, err
-			}
-			row.set(oc.name, output(t, v))
+			v, t, err = r.subScalar(oc.sub, &frame{sc: s, ev: ev})
 		default:
-			v, t, err := r.col(s, ev, oc.column)
-			if err != nil {
-				return nil, err
+			v, t, err = r.col(s, ev, oc.column)
+			if err == nil && oc.fn != nil {
+				v, t, err = columnFunction(oc.fn.Name, t, v)
 			}
-			if oc.fn != nil {
-				if v, t, err = columnFunction(oc.fn.Name, t, v); err != nil {
-					return nil, err
-				}
-			}
-			row.set(oc.name, output(t, v))
 		}
+		if err != nil {
+			return nil, err
+		}
+		o, err := output(t, v)
+		if err != nil {
+			return nil, err
+		}
+		row.set(oc.name, o)
 	}
 	b.rows[s.path] = row
 	for _, j := range s.joins {
@@ -793,7 +794,11 @@ func (r *reader) relation(s *scope, bs []*built, rel *ir.Relation) *Error {
 				if v.null {
 					return unspecified("the key of a many relation " + rel.Rel + " keyed by a NULL " + cq.KeyBy)
 				}
-				keyed.set(keyName(t, v), rows[i])
+				name, err := keyName(t, v)
+				if err != nil {
+					return err
+				}
+				keyed.set(name, rows[i])
 			}
 			row.set(rel.Rel, keyed)
 		default:
@@ -808,17 +813,21 @@ func (r *reader) relation(s *scope, bs []*built, rel *ir.Relation) *Error {
 }
 
 // keyName is the text of a key_by value as a JSON object key: the value as the
-// runtime value model writes it, a string as it is.
-func keyName(t dbspec.Type, v cell) string {
-	switch o := output(t, v).(type) {
-	case string:
-		return o
-	case json.Number:
-		return o.String()
-	case bool:
-		return strconv.FormatBool(o)
+// runtime value model writes it, a string as it is. v is not NULL.
+func keyName(t dbspec.Type, v cell) (string, *Error) {
+	o, err := output(t, v)
+	if err != nil {
+		return "", err
 	}
-	return v.text
+	switch o := o.(type) {
+	case string:
+		return o, nil
+	case json.Number:
+		return o.String(), nil
+	case bool:
+		return strconv.FormatBool(o), nil
+	}
+	return "", errf(codeInternal, "the key_by value %q of %s has no JSON key", v.text, t.String())
 }
 
 // count counts the matching rows of q, or its groups when it has group_by. A
@@ -904,7 +913,11 @@ func (r *reader) groupCount(q *ir.Query) ([]*Row, *Error) {
 			if err != nil {
 				return nil, err
 			}
-			row.set(g, output(t, v))
+			o, err := output(t, v)
+			if err != nil {
+				return nil, err
+			}
+			row.set(g, o)
 		}
 		row.set("row_count", json.Number(strconv.Itoa(sizes[f])))
 		out = append(out, row)
@@ -935,7 +948,7 @@ func (r *reader) aggregate(q *ir.Query, kind, col string) (any, *Error) {
 		t = fieldType(s.ent.Field(col))
 	}
 	v, vt := aggregateOf(kind, t, vals)
-	return output(vt, v), nil
+	return output(vt, v)
 }
 
 // aggregateOf computes sum or avg of the values of type t exactly, then writes the

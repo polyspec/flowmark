@@ -151,7 +151,11 @@ func (e *Executor) repair(c *Corpus, table, key, from string, now time.Time) (*R
 	}
 	ht, _ := c.cat.Table(sm.History.Table)
 	w.answer.Affected = 1
-	w.answer.Keys = []any{output(columnOf(ht, ht.Key).Type, id)}
+	answerKey, err := output(columnOf(ht, ht.Key).Type, id)
+	if err != nil {
+		return nil, err
+	}
+	w.answer.Keys = []any{answerKey}
 	post, err := w.finish()
 	if err != nil {
 		return nil, err

@@ -114,24 +114,25 @@ func isJSONNumber(raw []byte) bool {
 }
 
 // output returns the JSON value of a readable value of type t in the runtime value
-// model JSON.
-func output(t dbspec.Type, v cell) any {
+// model JSON. A datetime that does not read is INTERNAL: the corpus holds readable
+// values only, and an answer never carries a stored text in place of the wire form.
+func output(t dbspec.Type, v cell) (any, *Error) {
 	if v.null {
-		return nil
+		return nil, nil
 	}
 	switch t.Kind {
 	case dbspec.TypeI16, dbspec.TypeI32, dbspec.TypeI64, dbspec.TypeF64:
-		return json.Number(v.text)
+		return json.Number(v.text), nil
 	case dbspec.TypeBool:
-		return v.text == "true"
+		return v.text == "true", nil
 	case dbspec.TypeDatetime:
 		tm, err := parseDatetime(v.text)
 		if err != nil {
-			return v.text
+			return nil, errf(codeInternal, "%q is not a readable %s", v.text, t.String())
 		}
-		return tm.Format(datetimeWire)
+		return tm.Format(datetimeWire), nil
 	}
-	return v.text
+	return v.text, nil
 }
 
 // parseDatetime reads a readable datetime, with or without fraction digits.

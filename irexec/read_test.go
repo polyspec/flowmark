@@ -601,6 +601,21 @@ func TestRelativeTimeRange(t *testing.T) {
 	})
 }
 
+// TestOutputInvariant pins that a stored datetime the answer cannot write in its
+// wire form is INTERNAL, never answered as its stored text: the corpus holds only
+// readable values, so such a value is a defect of the executor, and an error is
+// never hidden (AGENTS).
+func TestOutputInvariant(t *testing.T) {
+	f := baseFixture(t).on(t)
+	bad := "2026-13-45 99:00:00"
+	for _, x := range f.c.recs["people"] {
+		if x.row.Key == "P1" {
+			x.row.Scalars["joined"] = &bad
+		}
+	}
+	f.fails(f.msg("all", "people", map[string]any{"columns": map[string]any{"mode": "none", "add": []string{"joined"}}, "where": where(pred("id", "eq", p(0)))}, "P1"), "INTERNAL")
+}
+
 // TestUnavailableTable pins spec 10's unavailable table: a request that needs any
 // row of a table holding an unreadable file, or two rows with byte-equal keys, fails
 // as CONSTRAINT naming the file and the diagnostic, and a request that needs none
