@@ -78,7 +78,7 @@ behaviour.
   above that scope when it can have a body; a table with neither writes no heading below its block
   heading, so its row scope may lie past H6. Grounding: a heading the layout never writes is not one
   the layout needs; a state machine's history table without a markdown column, as when its machine
-  requires no column, has no detail section, and it stands at level 7 under a block row.
+  requires no column or only columns that neither table declares `markdown`, has no detail section, and it stands at level 7 under a block row.
 
 ## The state set
 
@@ -99,6 +99,8 @@ state table with its leading index; `from` and `to` have the state column's type
 name and type. The table has no other column besides its `identity` key and declares no `title`
 or `body`; any mismatch is a setting error at the history table's name. It is stored
 `block <fk> table`.
+
+A column that a `require` list names is declared `markdown` on the history table exactly when it is declared `markdown` on the state table; a mismatch is a schema error at the history table's name. Grounding: a history row holds a copy of the required columns ([constraints](50-constraints.md#the-state-machine)), and a section and a single-line place accept different values — a multi-line value or raw HTML is a section's text but is refused in a cell, and a line `# x` is a cell's text but is refused in a section ([canonical format](10-canonical-format.md#single-line-places)) — so a mismatch would refuse a declared transition for a value the state table holds. dbspec accepts the mismatch, since the SQL backends ignore `markdown`; the catalog rule is stated here. The history table's rows stand two levels below the state table's rows, so its row scope is the state table's row scope plus two. A required `markdown` column is a section of the history rows at that scope; when the state table's row scope is 5 or deeper, that section would stand past H6, so the layout is a schema error at the history table's name ([Heading depth](#name-rules)); a required column that neither table declares `markdown` is a cell, needs no heading, and is allowed at any depth. Grounding: a `markdown` value is a section in every storage ([canonical format](10-canonical-format.md#sections-and-their-values)), and CommonMark has no heading past H6, so such a value has no place to be written; writing it as a cell would change the column's form with its table's depth, and a cell cannot hold a line feed; writing its section at H6 would put it at the level of the history rows' detail headings, where a heading other than `<table> row <key>` ends the row scope and its content belongs to no row ([canonical format](10-canonical-format.md#detail-headings-and-anchors)).
 
 ## Install
 

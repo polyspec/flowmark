@@ -640,6 +640,85 @@ table views {`
 	expectTableDiag(t, diags, text, "note_c", "level 7")
 }
 
+// requireSchema is the state table subtasks, whose machine requires column x,
+// and its history table subtask_history; both declare x with the type typ. A
+// block table stands under items, so its row scope is 5 and its history table's
+// is 7; a document table has row scope 3 and its history table scope 5. stateMark
+// and historyMark declare x markdown on the state table and on the history table.
+func requireSchema(block bool, typ string, stateMark, historyMark bool) string {
+	state := "table subtasks {\n  id i64 identity\n"
+	store := "    store document table\n"
+	if block {
+		state += "  item varchar(32)\n"
+		store = "    store block fk_subtasks_item table\n"
+	}
+	state += "  state varchar(16)\n  x " + typ + " null\n  primary key (id)\n"
+	if block {
+		state += "  index ix_subtasks_item (item)\n  foreign key fk_subtasks_item (item) references items (id) on delete restrict on update restrict\n"
+	}
+	state += "  settings {\n" + store +
+		"    state_machine state initial open\n" +
+		"    state_machine state open -> closed require (x)\n" +
+		"    state_machine state history subtask_history row subtask from from_state to to_state at at\n"
+	if stateMark {
+		state += "    markdown x\n"
+	}
+	state += "  }\n}\n\n"
+
+	history := "table subtask_history {\n  id i64 identity\n  subtask i64\n  from_state varchar(16)\n  to_state varchar(16)\n  at datetime(6)\n  x " + typ + " null\n  primary key (id)\n  index ix_subtask_history_subtask (subtask)\n  foreign key fk_subtask_history_subtask (subtask) references subtasks (id) on delete restrict on update restrict\n  settings {\n    store block fk_subtask_history_subtask table\n"
+	if historyMark {
+		history += "    markdown x\n"
+	}
+	history += "  }\n}\n\ntable views {"
+	return state + history
+}
+
+// TestLoadRequireOfMarkdownPastH6 pins the ruling of spec 30 on a required column
+// of a block machine: a required column that the state table and the history
+// table both declare markdown is a section of the history rows, which is refused
+// past H6; a column that the two tables declare alike without markdown is a cell
+// and is accepted at any depth; a required column that only one of the two tables
+// declares markdown is refused at the history table's name, since the history row
+// holds a copy of a value that the two places accept differently.
+func TestLoadRequireOfMarkdownPastH6(t *testing.T) {
+	cases := []struct {
+		name        string
+		block       bool   // the state table is a block under items, else a document table
+		typ         string // the type of column x in both tables
+		stateMark   bool
+		historyMark bool
+		refusedAt   string // the table the one diagnostic names, or empty when accepted
+		msg         string
+	}{
+		{"both markdown under a block at scope 5", true, "text", true, true, "subtask_history", "level 7"},
+		{"both varchar(255) without markdown", true, "varchar(255)", false, false, "", ""},
+		{"markdown on the state table only", true, "text", true, false, "subtask_history", "markdown setting"},
+		{"markdown on the history only, state table a document", false, "text", false, true, "subtask_history", "markdown setting"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			root, text := editedCorpus(t, [2]string{"table views {", requireSchema(c.block, c.typ, c.stateMark, c.historyMark)})
+			cat, diags := catalog.Load(root)
+			if c.refusedAt == "" {
+				if cat == nil || len(diags) > 0 {
+					t.Fatalf("a required column declared alike without markdown is refused: %+v", diags)
+				}
+				return
+			}
+			expectRejected(t, cat, diags)
+			expectTableDiag(t, diags, text, c.refusedAt, c.msg)
+			if len(diags) != 1 {
+				t.Fatalf("%d diagnostics, want exactly one: %+v", len(diags), diags)
+			}
+			for _, d := range diags {
+				if d.Line == tableLine(t, text, "subtasks") {
+					t.Fatalf("diagnostic %+v on table subtasks, want none", d)
+				}
+			}
+		})
+	}
+}
+
 func TestLoadRejectsBlockCycle(t *testing.T) {
 	node := `table node {
   id varchar(32)
