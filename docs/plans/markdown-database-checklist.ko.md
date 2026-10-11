@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database-checklist -->
-<!-- source-sha256: 585e891390f40e41219145a3e11382e444e4dd680a4733e0321cc61d5033d881 -->
+<!-- source-sha256: 6675de5b374e90456aec3886231c95db6c233cd77ce45b2fbd34773ff228da4a -->
 # markdown database checklist
 
 ## T12 markdown database
@@ -88,7 +88,7 @@
 - [ ] T12.3-3 primary key가 아닌 unique key가 primary key처럼 대소문자를 무시하고 값을 비교하는지 정한다. 또 key가 바이트 단위로 같을 때 `key.duplicate` 메시지가 "대소문자 무시"가 아니라 바이트 단위 동일을 적게 한다. 원인: T12.3 검증에서 둘 다 정해지지 않았음이 드러났다. 완료 기준: 첫 round 전에 범위를 고정한 적대 검증을 거쳐 spec 50 Keys가 근거와 함께 판정을 적고, validator가 red 다음 green test와 함께 따른다 (T12.3 후속)
 - [ ] T12.4 orm IR executor protocol 아래의 IR executor: params, 조립된 relation, 쓰기 답과 오류. orm `T61` 선행 (T12.3 선행)
   - 완료 기준: 모든 규칙마다 허용과 거절 사례가 있고, parse와 emit은 golden seed로 fuzz한다. executor는 요청의 key 검사 두 가지 — 바이트 단위와 대소문자를 무시한 것 — 를 렌더링 전에 corpus에 대해 실행하며, 요청의 index와 함께 보고한다. codec에서 executor에 닿은 `DUPLICATE_KEY`는 INTERNAL이다. test는 다음을 포함한다: table에 `T1`이 있을 때 `T1`을 insert하면 table의 행을 가리키는 `{T1, -1, id}`가, `[T1, T1]`을 insert하면 table의 행을 가리키는 `{T1, 0, id}`와 index 0을 가리키는 `{T1, 1, id}`가 나온다 (T12.1-23).
-- [ ] T12.5 write path: portable lock, journal, transaction과 savepoint, 이력 행과 이력 repair, 순서 이동, `format.*` 진단이 있는 file을 다시 써야 하는 commit의 거절과 그 세 면제, 사용할 수 없는 table, 없는 folder나 file을 만드는 삽입, restrict 검사를 갖춘 file 전체 delete (T12.4 선행)
+- [~] T12.5 write path: portable lock, journal, transaction과 savepoint, 이력 행과 이력 repair, 순서 이동, `format.*` 진단이 있는 file을 다시 써야 하는 commit의 거절과 그 세 면제, 사용할 수 없는 table, 없는 folder나 file을 만드는 삽입, restrict 검사를 갖춘 file 전체 delete (T12.4 선행). 상태: portable lock과 journal은 `store/journal`에 있고(348eeb7) spec 40 판정도 적혀 있다. Linux와 Windows 경로는 compile과 vet을 통과하며 실행은 T12.13에서 한다. transaction, savepoint, 이력 행과 repair, 순서 이동, commit 거절, file 전체 delete는 T12.4의 post-image 이음매를 기다린다.
   - 완료 기준: 모든 규칙마다 허용과 거절 사례가 있고, parse와 emit은 golden seed로 fuzz한다.
 - [ ] T12.5-1 `flowmark canon <corpus> [file…]`: lock 아래 journal을 남기는 transaction 하나로 대상을 canonical 형식으로 다시 쓰며, 대상에 대해 commit 거절을 면제받고, `format.block`, `format.section`, `format.encoding`이 있는 file은 이름을 주면 거절하고 주지 않으면 보고하며, link 유도에 사용할 수 없는 table이 필요한 대상은 spec 40대로 거절하거나 보고한다. 그 거절에 관한 spec 40 문장의 문법을 바로잡는다 (T12.1-3 후속; T12.5 선행)
   - 완료 기준: 대상 종류마다 허용과 거절 사례, 중단된 canon의 crash replay가 있고, `go test ./...`가 통과한다.
