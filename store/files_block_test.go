@@ -28,6 +28,10 @@ func blockParseCases() []parseCase {
 			"## task_steps", "- S1 Draft done:true", "", "### task_steps row S9", "", "x")),
 		reject("10#sections-and-their-values: a block section written twice", RuleSection, 8, withBase(
 			"## task_steps", "- S1 Draft done:true", "", "## task_steps", "- S2 Two done:true")),
+		accept("10#foreign-keys-as-links: a block row links its own files row by the file name", withBase(
+			"## task_links", "| id | target |", "| --- | --- |", "| L1 | [T1](T1.flowmark.md) |")),
+		noncanonical("10#foreign-keys-as-links: a block row's link to its own files row with another target", 8, withBase(
+			"## task_links", "| id | target |", "| --- | --- |", "| L1 | [T1](tasks/T1.flowmark.md) |")),
 		reject("10#table-rows: a placement foreign key written as a cell of a block table", RuleBlock, 11, withBase(
 			"## task_steps", "- S1 Draft done:true", "", "### task_steps row S1", "",
 			"#### step_refs", "| id | step | label |", "| --- | --- | --- |", "| 1 | S1 | spec |")),
@@ -100,6 +104,28 @@ func TestRenderFileBlocks(t *testing.T) {
 		if out != nil || len(diags) == 0 || diags[0].Rule != RuleConstraint {
 			t.Fatalf("%s: written %q with %+v; want CONSTRAINT", c.name, out, diags)
 		}
+	}
+}
+
+// TestRenderOwnFileLink requires that a block row links the files row of its own
+// file by the file name, which its key derives, with no linker that holds the row.
+func TestRenderOwnFileLink(t *testing.T) {
+	cat := loadFixture(t)
+	link := &Row{Table: "task_links", Key: "L1", Scalars: map[string]*string{"target": sp("T1")},
+		Sections: map[string]*string{}, Raw: map[string]string{}, Dangling: map[string]DanglingLink{}}
+	want := "# Title\n- position: 1\n- done: true\n\n" +
+		"## task_links\n| id | target |\n| --- | --- |\n| L1 | [T1](T1.flowmark.md) |\n"
+
+	out, diags := RenderFile(cat, "tasks", taskWithBlocks(map[string][]*Row{"task_links": {link}}), stubLinker{})
+	if len(diags) > 0 || string(out) != want {
+		t.Fatalf("written %q with %+v; want %q", out, diags, want)
+	}
+	back, pd := ParseFile(cat, "tasks", "tasks/T1.flowmark.md", out, stubLinker{})
+	if len(pd) > 0 || back == nil {
+		t.Fatalf("written link does not parse: %+v", pd)
+	}
+	if again, _ := RenderFile(cat, "tasks", back, stubLinker{}); !bytes.Equal(again, out) {
+		t.Fatalf("P2: %q != %q", again, out)
 	}
 }
 

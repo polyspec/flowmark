@@ -165,7 +165,7 @@ func ParseFile(cat *catalog.Catalog, table, rel string, data []byte, lk Linker) 
 	if p.readTitle(lines, row) {
 		i := p.readFields(lines, row)
 		b := p.readBody(lines, i, row)
-		dp := newDocParser(&p.sink, rel, lk)
+		dp := newDocParser(&p.sink, rel, lk, table, key)
 		p.readSections(lines, b, row, dp)
 		dp.resolveLinks()
 	}
@@ -537,7 +537,7 @@ func renderRow(lay *filesLayout, row *Row, lk Linker) ([]byte, []Diagnostic) {
 			w.refuse(1, 1, name+" is not a block of "+lay.table)
 		}
 	}
-	dw := newDocWriter(w, lk, true)
+	dw := newDocWriter(w, lk, true, row.Table, row.Key)
 	for _, c := range lay.children {
 		dw.index(c, row.Blocks[c.table])
 	}

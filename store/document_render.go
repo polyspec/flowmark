@@ -1,6 +1,7 @@
 package store
 
 import (
+	"path"
 	"sort"
 	"strconv"
 	"strings"
@@ -35,7 +36,7 @@ func RenderDocument(cat *catalog.Catalog, table string, rows []*Row, lk Linker) 
 // ParseDocument does not, since the validator reports those keys.
 func renderDocument(lay *docLayout, rows []*Row, lk Linker, write bool) ([]byte, []Diagnostic) {
 	w := &writer{rel: docFileName(lay)}
-	dw := newDocWriter(w, lk, write)
+	dw := newDocWriter(w, lk, write, "", "")
 	dw.index(lay, rows)
 	w.put("# " + lay.table + "\n")
 	dw.rows(lay, rows)
@@ -56,6 +57,8 @@ type docWriter struct {
 	write bool
 	idx   map[string]map[string]fileRow
 	lower map[string]bool
+	// ownTable and ownKey name the files row this file holds; empty for a document file.
+	ownTable, ownKey string
 }
 
 // fileRow is a row of the file with the layout that holds it.
@@ -64,9 +67,11 @@ type fileRow struct {
 	row *Row
 }
 
-// newDocWriter returns a writer of the rows of a file that writes into w.
-func newDocWriter(w *writer, lk Linker, write bool) *docWriter {
-	return &docWriter{w: w, lk: lk, write: write, idx: map[string]map[string]fileRow{}, lower: map[string]bool{}}
+// newDocWriter returns a writer of the rows of a file that writes into w. The files
+// row ownTable/ownKey is the one the file holds, empty for a document file.
+func newDocWriter(w *writer, lk Linker, write bool, ownTable, ownKey string) *docWriter {
+	return &docWriter{w: w, lk: lk, write: write, idx: map[string]map[string]fileRow{}, lower: map[string]bool{},
+		ownTable: ownTable, ownKey: ownKey}
 }
 
 // index adds the rows of lay and, recursively, their child rows to the rows of the file.
@@ -122,7 +127,12 @@ func (dw *docWriter) rows(lay *docLayout, rows []*Row) {
 	}
 	checkOrder(w, lay, rows, rowLine)
 	if len(unreached) > 0 {
-		w.refuse(rowLine(unreached[0]), 1, "the parents of the rows form a cycle")
+		for _, i := range unreached {
+			if rowOnCycle(lay, rows, i) {
+				w.refuse(rowLine(i), 1, "the parents of the rows form a cycle")
+				break
+			}
+		}
 		return
 	}
 	if lay.list {
@@ -435,6 +445,9 @@ func (dw *docWriter) linkText(r *Row, c dbspec.Column, table, key string, line i
 // linkTarget derives the target of a link to the row key of table: from this file
 // for a row the file holds, else from the linker.
 func (dw *docWriter) linkTarget(table, key string) (string, error) {
+	if table == dw.ownTable && key == dw.ownKey {
+		return path.Base(dw.w.rel), nil
+	}
 	if fr, ok := dw.idx[table][key]; ok {
 		return localLink(fr.lay, dw.w.rel, fr.row), nil
 	}

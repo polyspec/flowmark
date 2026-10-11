@@ -208,3 +208,17 @@ table item_check_history {
     store block fk_check_history table
   }
 }
+
+table item_steps {
+  id varchar(16)
+  item varchar(32)
+  parent varchar(16) null
+  primary key (id)
+  index ix_item_steps_item (item)
+  index ix_item_steps_parent (parent)
+  foreign key fk_step_item (item) references items (id) on delete restrict on update restrict
+  foreign key fk_step_parent (parent) references item_steps (id) on delete restrict on update restrict
+  settings {
+    store block fk_step_item table
+  }
+}

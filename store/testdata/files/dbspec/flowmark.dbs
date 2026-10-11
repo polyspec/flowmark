@@ -85,3 +85,17 @@ table step_refs {
     markdown note
   }
 }
+
+table task_links {
+  id varchar(16)
+  task varchar(32)
+  target varchar(32)
+  primary key (id)
+  index ix_task_links_task (task)
+  index ix_task_links_target (target)
+  foreign key fk_link_task (task) references tasks (id) on delete restrict on update restrict
+  foreign key fk_link_target (target) references tasks (id) on delete restrict on update restrict
+  settings {
+    store block fk_link_task table
+  }
+}
