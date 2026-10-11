@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database-checklist -->
-<!-- source-sha256: 84784c9991b7b6309e5b3df418503b9a19ce8ffd137ec43f3e34e904e7212d0b -->
+<!-- source-sha256: 7839555bc3657ad47cec71e7bd1862e52363a7de664ff6a9c7778970a0526cf1 -->
 # markdown database checklist
 
 ## T12 markdown database
@@ -104,3 +104,4 @@
   - 완료 기준: 각 server에서 form을 통해 post를 만들고, 댓글과 답글을 달고, 고치고 지우면 같은 corpus file이 바뀌며, 모든 페이지가 같은 행을 그리고, list와 post 페이지의 screenshot이 캡처된다.
 - [ ] T12.12 pseudo-version 대신 orm release를 요구한다: T12.11이 끝나면 flowmark의 go.mod는 `T61`과 `T62`를 담은 released orm tag를 요구한다 (T12.11 선행, orm release 항목 선행)
   - 완료 기준: go.mod가 tag된 orm 버전을 요구하고, `go build ./...`와 `go test ./...`가 통과한다.
+- [ ] T12.13 마지막 플랫폼 관문: 엔진 전체 — codec, validator, executor, lock과 journal을 포함한 쓰기 경로, server, face — 가 macOS에서처럼 Linux와 Windows에서 전체 test suite와 end-to-end 검사를 실행한다. 원인: 플랫폼별 code(Linux의 inotify, pidfd, /proc, machine-id; Windows의 ReadDirectoryChangesW, MoveFileEx write-through, CreateFileW share-delete, MachineGuid, GetProcessTimes)는 모든 플랫폼에서 compile과 vet을 통과하지만 자기 플랫폼에서만 실행된다. component가 들어올 때마다 VM에서 검증하면 준비를 되풀이하고 component가 만나는 방식을 놓치므로, 관문은 엔진이 완성되었을 때 한 번 실행한다. 완료 기준: `make test`가 Linux host와 Windows host(이 machine의 VM이나 CI)에서 플랫폼 test를 하나도 건너뛰지 않고 통과하며, share-delete handle 아래 Windows의 delete-pending 동작도 포함한다. 모든 실패는 세 플랫폼에서 red 다음 green으로 고친다 (T12.10 선행)
