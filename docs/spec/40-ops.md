@@ -95,7 +95,9 @@ The order of the commit protocol is normative.
   idle transaction holds the lock no longer than another operation waits for it by default. The idle
   bound is a timer because idleness is the absence of an event; it is the session's only timer.
 - A closed connection rolls its open transaction back, releases the lock and ends its request's lock
-  wait; the server learns it from the connection's read, which runs while the request does. On
+  wait; the server learns it from the connection's read, which runs while the request does, and the
+  messages it has received but not begun to answer are not run — the end of the read is the client's
+  close, which a server cannot tell from a half-close, and the session ends with it. On
   `SIGINT` or `SIGTERM` the server stops listening and closes every connection the same way.
 
 ## The lock

@@ -643,12 +643,12 @@ func TestClosedConnection(t *testing.T) {
 			t.Fatalf("tags:\n%s", f.tags())
 		}
 	})
-	t.Run("40#the-lock: a closed connection ends its request's lock wait", func(t *testing.T) {
+	t.Run("40#the-lock: a closed connection ends its request's lock wait and runs no later message", func(t *testing.T) {
 		f := start(t, noIdle, waitLong)
 		a := f.connect()
 		a.want(begin, ok)
 		b := f.connect()
-		b.send(begin)
+		b.send(begin + "\n" + f.insertTag("web", "area") + "\n" + commit)
 		f.rec.waitFor(t, "the wait of serve-2", func(e journal.Event) bool {
 			return e.Kind == journal.LockWaiting && strings.HasSuffix(e.Holder, "/serve-1")
 		})
@@ -658,6 +658,9 @@ func TestClosedConnection(t *testing.T) {
 		a.want(rollback, ok)
 		if n := f.rec.count(of(journal.LockAcquired, "serve-2")); n != 0 {
 			t.Fatalf("serve-2 acquired the lock %d times after its connection closed", n)
+		}
+		if f.tags() != tagsDoc {
+			t.Fatalf("a message after the close ran:\n%s", f.tags())
 		}
 	})
 	t.Run("40#the-server: closing the server rolls every open transaction back", func(t *testing.T) {
