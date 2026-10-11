@@ -138,9 +138,9 @@ func documentParseCases() []docCase {
 		docAccept("10#list-rows: a foreign key link", itemsOf("- [ ] T1 Plan owner:[P1](people.flowmark.md#people-row-p1) done:false")),
 		docAccept("10#foreign-keys-as-links: a dangling link keeps its written target", itemsOf("- [ ] T1 Plan owner:[P9](people.flowmark.md#people-row-p9) done:false")),
 		docAccept("10#list-rows: the weight field of an i16", itemsOf("- [ ] T1 Plan done:false weight:-3")),
-		docAccept("20#readable-values: a temporal field written now is kept as written, not of its type", itemsOf("- [ ] T1 Plan done:false seen_on:now")),
+		docAccept("10#readable-values: a temporal field written now is kept as written, not of its type", itemsOf("- [ ] T1 Plan done:false seen_on:now")),
 		docAccept("10#readable-values: a text field written now is text", itemsOf("- [ ] T1 Plan done:false note:now")),
-		docAccept("20#readable-values: a temporal cell written now is kept as written, and a text cell now is text", peopleOf(
+		docAccept("10#readable-values: a temporal cell written now is kept as written, and a text cell now is text", peopleOf(
 			peopleHeader, peopleDelim,
 			row("P1", "", "Ada", "now", "true", "now", "", "", "", "", "", "", "", ""),
 			"", "## people row P1", "", "### bio", "", "Notes.")),
@@ -347,11 +347,11 @@ func documentParseCases() []docCase {
 		// The milestones table: the order column is logical, the parent is a link to a row of the file.
 		{name: "10#table-rows: a parent that names no row of a milestones table", table: "milestones", rule: RuleBlock, line: 4,
 			text: milestonesOf("| id | parent | title |", "| --- | --- | --- |", row("M2", "[M9](milestones.flowmark.md)", "Parser"))},
-		{name: "10#storage-order: a parent cycle", table: "milestones", rule: RuleParentCycle, text: milestonesOf(
+		{name: "10#document-order: a parent cycle", table: "milestones", rule: RuleParentCycle, text: milestonesOf(
 			"| id | parent | title |", "| --- | --- | --- |",
 			row("M1", "[M2](milestones.flowmark.md)", "A"),
 			row("M2", "[M1](milestones.flowmark.md)", "B"))},
-		{name: "10#order: the order column is not a header", table: "milestones", rule: RuleBlock, line: 2,
+		{name: "20#order: the order column is not a header", table: "milestones", rule: RuleBlock, line: 2,
 			text: milestonesOf("| id | parent | title | position |", "| --- | --- | --- | --- |", row("M1", "", "A", "1"))},
 
 		// Block sections: a child block in a row's detail section, its list or table, and its rows' detail sections.
@@ -476,7 +476,7 @@ func documentParseCases() []docCase {
 		docAccept("10#list-rows: fields after the title in a block", checkedOf("- [ ] C1 Plan done:false weight:2")),
 		noncanonicalDoc("10#list-rows: a declared column name before the title in a block", 7, checkedOf("- [ ] C1 weight:2 Plan done:false")),
 		docAccept("10#list-rows: an escaped title token in a block", checkedOf(`- [ ] C1 Set weight\: review done:false`)),
-		docAccept("10#order: siblings of a block in their line order", checkedOf("- [ ] C2 Two done:false", "- [ ] C1 One done:false")),
+		docAccept("20#order: siblings of a block in their line order", checkedOf("- [ ] C2 Two done:false", "- [ ] C1 One done:false")),
 		docReject("20#order: the order column written as a field of a block row", RuleBlock, 7, checkedOf("- [ ] C1 Plan done:false position:1")),
 		docReject("10#list-rows: a placement foreign key written as a field of a block row", RuleBlock, 7, checkedOf("- [ ] C1 Plan item:T1 done:false")),
 		docReject("10#list-rows: a non-null field of a block row missing", RuleBlock, 7, checkedOf("- [ ] C1 Plan")),
@@ -485,7 +485,7 @@ func documentParseCases() []docCase {
 			"- [~] C1 Plan done:false", "", "#### item_checks row C1", "", "##### item_check_history",
 			"| id | from_state | to_state | at |", "| --- | --- | --- | --- |",
 			"| 1 | open | doing | 2026-10-01 08:00:00.000000 |")),
-		docReject("20#document-order: a history block outside its block row's detail section", RuleBlock, 9, checkedOf(
+		docReject("10#document-order: a history block outside its block row's detail section", RuleBlock, 9, checkedOf(
 			"- [~] C1 Plan done:false", "", "##### item_check_history", "| id | from_state | to_state | at |", "| --- | --- | --- | --- |")),
 		docReject("10#detail-headings-and-anchors: a block row's detail names no row of its block", RuleBlock, 9, checkedOf(
 			"- [x] C1 Plan done:true", "", "#### item_checks row C9", "", "x")),
@@ -949,12 +949,12 @@ func writeCases() []writeCase {
 			item("T1", "Plan", "waiting", "1", withNote("a "))}, rule: RuleConstraint},
 		{name: "10#list-rows: a field with a line feed", rows: []*Row{
 			item("T1", "Plan", "waiting", "1", withNote("a\nb"))}, rule: RuleConstraint},
-		{name: "20#readable-values: a temporal field assigned now is not of its type", rows: []*Row{
+		{name: "10#readable-values: a temporal field assigned now is not of its type", rows: []*Row{
 			item("T1", "Plan", "waiting", "1", map[string]string{"done": "false", "seen_on": "now"})}, rule: RuleConstraint},
 		{name: "10#readable-values: a text field assigned now is text", rows: []*Row{
 			item("T1", "Plan", "waiting", "1", withNote("now"))},
 			out: "# items\n- [ ] T1 Plan done:false note:now\n"},
-		{name: "20#readable-values: a temporal cell assigned now is not of its type", table: "people", rows: []*Row{
+		{name: "10#readable-values: a temporal cell assigned now is not of its type", table: "people", rows: []*Row{
 			peopleRow("P1", "Ada", map[string]string{"born": "now"})}, rule: RuleConstraint},
 		{name: "10#readable-values: a text cell assigned now is text", table: "people", rows: []*Row{
 			peopleRow("P1", "Ada", map[string]string{"role": "now"})},
@@ -966,13 +966,13 @@ func writeCases() []writeCase {
 		{name: "10#list-rows: two rows with keys equal without regard to case", rows: []*Row{
 			item("T1", "Plan", "waiting", "1", done), item("t1", "Other", "waiting", "2", done)},
 			rule: RuleDuplicateKey},
-		{name: "10#order: siblings with the same value", rows: []*Row{
+		{name: "20#order: siblings with the same value", rows: []*Row{
 			item("T1", "Plan", "waiting", "1", done), item("T2", "Other", "waiting", "1", done)}, rule: RuleConstraint},
-		{name: "10#order: a row without an order value", rows: []*Row{
+		{name: "20#order: a row without an order value", rows: []*Row{
 			{Table: "items", Key: "T1", Title: "Plan", Scalars: map[string]*string{"state": sp("waiting"), "done": sp("false")},
 				Sections: map[string]*string{}, Raw: map[string]string{}, Dangling: map[string]DanglingLink{}},
 			item("T2", "Other", "waiting", "1", done)}, rule: RuleConstraint},
-		{name: "10#order: siblings with a gap", rows: []*Row{
+		{name: "20#order: siblings with a gap", rows: []*Row{
 			item("T1", "Plan", "waiting", "1", done), item("T2", "Other", "waiting", "3", done)}, rule: RuleConstraint},
 		{name: "20#hierarchy: a parent that names no row", rows: []*Row{
 			withParent(item("T1", "Plan", "waiting", "1", done), "T9")}, rule: RuleConstraint, alone: true},
@@ -1007,9 +1007,9 @@ func writeCases() []writeCase {
 		{name: "10#list-rows: a list without a state column writes no glyph", table: "notes", rows: []*Row{
 			notePlan("N1", "", "Plan"), notePlan("N2", "N1", "Child")},
 			out: "# notes\n- N1 Plan\n  - N2 Child\n"},
-		{name: "10#storage-order: the empty table is the H1 and one LF", table: "milestones", rows: nil,
+		{name: "10#document-order: the empty table is the H1 and one LF", table: "milestones", rows: nil,
 			out: "# milestones\n"},
-		{name: "10#storage-order: a milestones table in its storage order", table: "milestones", rows: []*Row{
+		{name: "10#document-order: a milestones table in its storage order", table: "milestones", rows: []*Row{
 			milestone("M3", "", "Release", "2"),
 			milestone("M2", "M1", "Parser", "1"),
 			milestone("M1", "", "Foundation", "1"),
