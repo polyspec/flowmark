@@ -24,10 +24,6 @@ func (e *Executor) checkParams(req *ir.Request, params []json.RawMessage) *Error
 		}
 		for _, u := range us {
 			t := slotType(u)
-			if t.Kind == dbspec.TypeTime {
-				// The time wire form waits on orm T91 (T12.4-6): the write path judges a time until then.
-				continue
-			}
 			if _, ok := decodeParam(raw, t); !ok || textual(t) && hasNUL(raw) {
 				return errf(codeCodecEncode, "parameter %d is not a value of %s", i, t.String())
 			}

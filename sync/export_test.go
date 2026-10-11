@@ -332,6 +332,12 @@ func wire(t *testing.T, typ dbspec.Type, v any) any {
 			s += "."
 		}
 		return s + strings.Repeat("0", 26-len(s))
+	case dbspec.TypeTime:
+		s := v.(string)
+		if len(s) == 8 {
+			s += "."
+		}
+		return s + strings.Repeat("0", 15-len(s))
 	}
 	switch x := v.(type) {
 	case string:
