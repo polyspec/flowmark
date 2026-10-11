@@ -1,5 +1,5 @@
 <!-- doc-id: spec-ops -->
-<!-- source-sha256: 2c799b7dcb4a942a3acca88936c5e6b41bce797e938223995dfe48072e0615bc -->
+<!-- source-sha256: 226d26be15f1185cb76f25f17ef3722316ae2c36eea3626b01c7c9edd8f20bd3 -->
 # Operations
 
 [English](40-ops.md)
@@ -57,8 +57,12 @@
 
 ### Holder record
 
-- lock file은 JSON 한 줄 `{"pid", "start", "host", "hostname", "session"}`과 line feed를 담는다. holder의
-  이름은 `<pid>@<host>/<session>`이다. 그 밖의 것을 담은 file은 결코 빈 lock으로 여기지 않는다.
+- lock file은 JSON 한 줄 `{"pid", "start", "host", "hostname", "session",
+  "acquisition"}`과 line feed를 담는다. holder의 이름은 `<pid>@<host>/<session>`이다. `acquisition`은 획득
+  하나의 token이다: OS random source의 128 random bit를 나타내는 소문자 hex 32자리이며 그 pending record의
+  이름도 된다. 그 밖의 것을 담은 file은 결코 빈 lock으로 여기지 않는다. 근거: session은 자기 process에서
+  다시 획득할 수 있으므로, 획득마다의 token만이 두 획득자가 byte 단위로 같은 record를 쓰지 않게 하며, 그렇지
+  않으면 아래의 응답 유실 규칙이 둘을 하나로 여긴다.
 - `start`는 process의 시작이다: Linux에서는 `/proc/sys/kernel/random/boot_id`의 boot와
   `/proc/<pid>/stat`의 22번째 field, macOS에서는 sysctl `kern.proc.pid.<pid>`의 `kp_proc.p_starttime`,
   Windows에서는 `GetProcessTimes`의 creation time이다.
@@ -78,11 +82,11 @@
 
 ### 잡기와 기다리기
 
-- record는 `.flowmark/lock.<128 random bit의 hex 32자리>.pending`에 통째로 쓰고 sync한 뒤
+- record는 `.flowmark/lock.<acquisition>.pending`에 통째로 쓰고 sync한 뒤
   `.flowmark/lock`으로 hard link한다. lock이 있으면 link가 실패하므로 lock은 record 전체와 함께
   atomic하게 나타난다. 대기자는 pending record를 한 번만 쓴다. pending record는 배타에 관여하지 않는다.
 - link가 `EEXIST`로 실패한 시도는 lock을 읽는다. 잡으려는 쪽 자신의 record와 byte 단위로 같은
-  record(그 session은 유일하다)는 응답을 잃었어도 link가 이루어졌다는 뜻이며(NFS), lock을 잡은 것이다.
+  record(그 획득 token은 유일하다)는 응답을 잃었어도 link가 이루어졌다는 뜻이며(NFS), lock을 잡은 것이다.
   읽기 전에 사라진 lock은 곧바로 다시 시도한다.
 - 실행 중인 holder나 다른 host의 holder가 잡은 lock을 만난 operation은 그 release를 기다리며, deadline이
   먼저 지나면 holder와 그 상태를 밝히는 `LOCK_TIMEOUT`으로 실패한다. 끝난 holder는 곧바로 거절한다.

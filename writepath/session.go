@@ -70,14 +70,13 @@ type op struct {
 	own    bool
 }
 
-// Session returns a new session. Its holder name in the lock is label with a random suffix, since two sessions of one
-// process must never write the same holder record (a byte-equal record is taken for the acquirer's own); label holds
-// no '/', '@' or line break.
-func (c *Corpus) Session(label string) (*Session, error) {
-	if label == "" || strings.ContainsAny(label, "/@\r\n") {
-		return nil, newError(codeConfig, "the session label %q is empty or holds '/', '@' or a line break, which a lock holder name cannot hold", label)
+// Session returns a new session named name, the session of its lock holder record; each acquisition of the lock
+// carries its own token, so sessions of one name never take each other's lock. name holds no '/', '@' or line break.
+func (c *Corpus) Session(name string) (*Session, error) {
+	if name == "" || strings.ContainsAny(name, "/@\r\n") {
+		return nil, newError(codeConfig, "the session name %q is empty or holds '/', '@' or a line break, which a lock holder name cannot hold", name)
 	}
-	return &Session{c: c, name: label + "-" + randomHex(8)}, nil
+	return &Session{c: c, name: name}, nil
 }
 
 // Name returns the session's name, which the lock names as the holder's session.

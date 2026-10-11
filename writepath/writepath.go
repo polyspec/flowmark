@@ -12,8 +12,6 @@ package writepath
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"time"
@@ -115,7 +113,7 @@ func Open(ctx context.Context, cat *catalog.Catalog, j *journal.Corpus, wait tim
 		return nil, err
 	}
 	c := &Corpus{cat: cat, exec: e, j: j, root: j.Root(), wait: wait, clock: engineClock}
-	l, err := c.acquire(ctx, "open-"+randomHex(8))
+	l, err := c.acquire(ctx, "open")
 	if err != nil {
 		return nil, err
 	}
@@ -161,12 +159,4 @@ func (c *Corpus) read() (*irexec.Corpus, error) {
 		return nil, driverError("reading the corpus", err)
 	}
 	return cur, nil
-}
-
-// randomHex returns 2n lowercase hex digits of n random bytes from the OS random source.
-func randomHex(n int) string {
-	b := make([]byte, n)
-	// crypto/rand.Read never returns an error; it aborts the program when the system source fails.
-	_, _ = rand.Read(b)
-	return hex.EncodeToString(b)
 }

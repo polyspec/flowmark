@@ -150,7 +150,7 @@ func (c *Corpus) Acquire(ctx context.Context, session string, wait time.Duration
 		return nil, fmt.Errorf("journal: the lock file: %w", err)
 	}
 	a := &acquirer{c: c, self: self, record: self.record(), lock: c.abs(LockPath), wait: wait,
-		pending: c.abs(".flowmark/lock." + randomHex(16) + pendingSuffix)}
+		pending: c.abs(".flowmark/lock." + self.Acquisition + pendingSuffix)}
 	if err := writeSynced(a.pending, a.record, os.O_EXCL); err != nil {
 		return nil, errors.Join(fmt.Errorf("journal: the pending lock record: %w", err), removeAbsent(a.pending))
 	}
@@ -189,7 +189,7 @@ func (a *acquirer) held() *Lock {
 
 // try is one acquisition attempt. A lock that disappears between the failed link and its read is tried again at
 // once; a lock that holds this acquirer's own record was linked by this attempt although its reply was lost (REVIEW
-// 2-a: the session is unique).
+// 2-a: its acquisition token is unique, so no other acquisition writes the same record).
 func (a *acquirer) try() (tried, error) {
 	for {
 		if err := a.c.step("lock-attempt", 0); err != nil {
