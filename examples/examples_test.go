@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/polyspec/flowmark/catalog"
@@ -161,6 +162,72 @@ func snapshot(t *testing.T, root string) map[string]string {
 		t.Fatal(err)
 	}
 	return out
+}
+
+// TestTrackerSchema: each tracker catalog is the application schema (spec 100, catalog/testdata/app) but for the store
+// setting of items, so the split-file corpus is the application schema itself and the other two differ from it in that
+// one line.
+func TestTrackerSchema(t *testing.T) {
+	app, err := os.ReadFile(filepath.Join("..", "catalog", "testdata", "app", "dbspec", "flowmark.dbs"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	stores := map[catalog.Storage]string{
+		{Kind: catalog.StorageDocument, Shape: catalog.ShapeList}:  "    key_prefix 'T'\n    store document list\n",
+		{Kind: catalog.StorageDocument, Shape: catalog.ShapeTable}: "    key_prefix 'T'\n    store document table\n",
+		{Kind: catalog.StorageFiles}:                               "    key_prefix 'T'\n    store files\n",
+	}
+	for _, tc := range trackerCorpora {
+		b, err := os.ReadFile(filepath.Join(tc.root, "dbspec", "flowmark.dbs"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		text, line := string(b), stores[tc.storage]
+		if !strings.Contains(text, line) {
+			t.Fatalf("%s: no items store line %q", tc.root, line)
+		}
+		if got := strings.Replace(text, line, stores[catalog.Storage{Kind: catalog.StorageFiles}], 1); got != string(app) {
+			t.Errorf("%s: the catalog differs from the application schema beyond the store setting of items", tc.root)
+		}
+	}
+}
+
+// TestTrackerWritesOneFile: in the application schema's storage (spec 100 Files and links, the split-file corpus) a
+// transition, a link of an item and a move of an item each write that item's file alone, so no write touches a file
+// that holds the whole project.
+func TestTrackerWritesOneFile(t *testing.T) {
+	root := copyCorpus(t, "tracker/split-file")
+	c := open(t, root)
+	steps := []struct {
+		name, op, members, file string
+	}{
+		{"a transition writes its history row into the item's file", "transition", `{"table":"items","key":"T3","state":"doing"}`, "items/T3.flowmark.md"},
+		{"a link is a block of its from item's file", "row.insert", `{"table":"item_links","values":{"from_item":"T3","to_item":"T1","kind":"relates"}}`, "items/T3.flowmark.md"},
+		{"a move takes a rank between its new neighbours", "row.move", `{"table":"items","key":"T6","position":1}`, "items/T6.flowmark.md"},
+	}
+	for _, s := range steps {
+		before := snapshot(t, root)
+		run(t, c, s.op, s.members)
+		after := snapshot(t, root)
+		var changed []string
+		for p, b := range after {
+			if before[p] != b {
+				changed = append(changed, p)
+			}
+		}
+		for p := range before {
+			if _, ok := after[p]; !ok {
+				changed = append(changed, p)
+			}
+		}
+		if len(changed) != 1 || changed[0] != s.file {
+			t.Errorf("%s: the write changed %v, want %s alone", s.name, changed, s.file)
+		}
+	}
+	if got := run(t, c, "row.get", `{"table":"items","key":"T6"}`); !strings.Contains(got, `"position":1,`) {
+		t.Errorf("T6 after its move = %s, want position 1", got)
+	}
+	sound(t, root)
 }
 
 // TestTrackerStorages: the tracker corpora declare the three storages of items, each corpus is valid and canonical,

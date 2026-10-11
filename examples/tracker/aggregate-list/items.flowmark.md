@@ -35,6 +35,11 @@ Figma의 최신 시안을 확인하고 색상 팔레트와 타이포그래피를
 | --- | --- | --- | --- |
 | 3 | waiting | doing | 2026-10-04 09:30:00.000000 |
 
+### item_links
+| id | to_item | kind |
+| --- | --- | --- |
+| 1 | [T3](#items-row-t3) | blocks |
+
 ## items row T3
 
 모든 route에 대한 통합 테스트가 통과해야 한다.
@@ -73,6 +78,11 @@ dump가 도착하면 다시 시작한다.
 ##### retry
 
 dump가 도착하면 다시 시작한다.
+
+### item_links
+| id | to_item | kind |
+| --- | --- | --- |
+| 2 | [T2](#items-row-t2) | relates |
 
 ## items row T6
 
