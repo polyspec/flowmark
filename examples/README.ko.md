@@ -1,0 +1,28 @@
+<!-- doc-id: examples -->
+<!-- source-sha256: 8a9e6f89601b7897b8305e390043d40aff6c316abcd3d531c3c814c54dd4d125 -->
+# Examples
+
+[English](README.md)
+
+엔진의 예제 corpus들이다. 각 folder가 corpus root이며, `dbspec/` catalog와 엔진이 쓴
+`*.flowmark.md` 문서를 담는다. 모든 행은 엔진을 거쳐 쓰였고, 이 folder의 test
+(`go test ./examples/`, `make test`에 포함)는 face의 operation만으로 corpus의 복사본을 읽고
+바꾸므로 corpus는 valid하고 canonical한 상태를 유지한다.
+
+어느 face로든 열 수 있다. 예: `flowmark rows examples/tracker/aggregate-list items`.
+
+## The tracker in three storages
+
+응용 schema(`flowmark.dbs`: `items`, `people`, `item_links`, `item_history`, `views`)의 issue
+tracker가 dataset 하나 — 모든 state에 걸친 item 여섯 개, 그 history, link 두 개, 사람 두 명,
+view 세 개 — 를 세 corpus에 담는다. 세 corpus는 `items`의 store setting 하나만 다르다.
+
+| Corpus | `items` storage | item이 놓이는 곳 |
+| --- | --- | --- |
+| `tracker/aggregate-list` | `store document list` | `items.flowmark.md`의 list item 하나 |
+| `tracker/aggregate-table` | `store document table` | `items.flowmark.md`의 table 행 하나 |
+| `tracker/split-file` | `store files` | 자기 파일 `items/<key>.flowmark.md` |
+
+item의 body, markdown column, history block은 두 aggregate corpus에서는 그 item의 detail
+section이고, split corpus에서는 그 item 파일의 나머지 부분이다. 세 corpus는 모든 table에서 같은
+행을 읽어 내며, test가 이를 확인한다.
