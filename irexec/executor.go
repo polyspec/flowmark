@@ -101,6 +101,31 @@ func (e *Executor) decode(b []byte) (*call, *Error) {
 	return &call{req: req, params: m.Params, now: tm}, nil
 }
 
+// IsWrite reports whether the request message msg holds a write — insert, update,
+// delete or restore — by the kind of its request, as the executor runs it. A message
+// whose request kind does not decode holds no write; executing it answers its error.
+// The write path reads it to refuse a write in a read-only transaction before it runs.
+func IsWrite(msg []byte) bool {
+	var m struct {
+		Request struct {
+			Kind string `json:"kind"`
+		} `json:"request"`
+	}
+	if json.Unmarshal(msg, &m) != nil {
+		return false
+	}
+	return isWriteKind(m.Request.Kind)
+}
+
+// isWriteKind reports whether a request kind is a write.
+func isWriteKind(kind string) bool {
+	switch kind {
+	case "insert", "update", "delete", "restore":
+		return true
+	}
+	return false
+}
+
 // Result is the answer of one request: the answer sent to the client, and, for a
 // write, its post-image.
 type Result struct {
@@ -128,8 +153,7 @@ func (e *Executor) run(c *Corpus, cl *call) (*Result, *Error) {
 	if c.cat != e.cat {
 		return nil, errf(codeInternal, "the corpus was read with another catalog than the executor's")
 	}
-	switch cl.req.Kind {
-	case "insert", "update", "delete", "restore":
+	if isWriteKind(cl.req.Kind) {
 		return e.write(c, cl)
 	}
 	a, err := e.read(c, cl)
