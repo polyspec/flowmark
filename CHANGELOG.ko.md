@@ -1,9 +1,11 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: f90729f386b24b841a94dcaaa08d8d972846c8da095dcaf3a1de6dd7231f4084 -->
+<!-- source-sha256: 0398f5d9d4ced36ba36f9d1ebdd9a2acc6b4f9b6e02797607b4e2f9bfa176bed -->
 # Changelog
 
 ## Unreleased
 
+- T12.3-2: validator는 type이 아닌 값이 무엇이든(그런 atom을 true로, 이어 false로 평가해) 행의 논리 값에 대해 check 술어가 false이면 `check`를 보고하고, 같은 판정을 commit용으로 export한다. `history.chain`은 연속성만, `state.transition`은 선언되지 않은 이력 쌍을, `state.required`는 필수 값이 없는 선언된 쌍을 보고하며, type이 아닌 상태, `from`, `to`는 `type`만이고, 행 자신의 `from`은 여전히 앞 행에 대해 판정한다.
+- T12.3-3: unique key는 orm의 binary collation처럼 바이트 단위로 비교한다. primary key는 file 이름이자 anchor이기 때문에만 대소문자를 무시한다. `key.duplicate`는 key가 바이트 단위로 같으면 그 행을 밝혀 바이트 단위로 같다고 말하고, 그렇지 않으면 대소문자를 무시하고 같은 첫 key를 밝힌다.
 - T12.4(일부): IR executor(`irexec`)를 추가한다. orm request message를 decode하고, store 행 위에서 IR Where, join, relation, aggregate, pagination으로 읽기에 답하며, 사용할 수 없는 table이 필요한 요청을 거부하고, 렌더링 전에 요청의 key 검사를 corpus에 대해 실행하며, 쓰기에는 `{affected, keys}`와 write path가 commit할 post-image로 답한다. spec이 아직 정하지 않은 질문은 판정될 때까지 `CAPABILITY_UNSUPPORTED`로 답한다.
 - T12.3: validator는 이력 table이 어떻게 저장되든 행의 이력을 이력 foreign key로, corpus 순서로 찾으므로, `document table` 이력이 더는 거짓 `history.gap`을 보고하지 않는다. `scripts/go-test.mjs`는 `spawnSync go ENOENT`로 실패하는 대신 PATH에 없는 `go`를 밝힌다.
 - T12.1-4-1: readability의 기준은 spec이다. 구조는 CommonMark 0.31.2로, table과 task-list 항목은 GFM 0.29로 판단한다. fragment target — heading slug, 그리고 CommonMark가 code 밖에서 읽는 raw HTML의 id와 name — 은 GitHub, GitLab, VS Code로 판단한다. spec이 이를 정의하지 않으며 link `[k](file#anchor)`가 그 viewer들에서 풀려야 하기 때문이다. MkDocs와 Python-Markdown은 기준에서 철회한다. MkDocs는 T12.1-2에서 `--` key 규칙의 근거로만 처음 이름 붙었고 T12.1-4에서 그것을 요구하는 어떤 요구 없이 지정 viewer가 되었으며, Python-Markdown은 어떤 spec도 구현하지 않으므로 그것을 따르는 일은 한 구현의 일탈을 쫓는 일이었다. 함께 철회한다: T12.1-2와 T12.1-4의 `--` key 규칙(어느 기준 viewer도 연속 hyphen을 접지 않으므로 `a--b`는 유효한 key다), T12.1-4의 F_M fold와 MkDocs의 `_<n>` 번호, T12.1-14의 Python-Markdown reference definition과 attribute-list 충돌 규칙(`{#…}`는 CommonMark와 GFM에서 글자 그대로의 텍스트다), 그리고 T12.2.2, T12.2.2-1, T12.2.2-6에서 이를 구현한 code(`store/attr.go`, `foldM`, F_M definition)와 그것을 고정하던 test. 근거를 바로잡아 남기는 것: `-_` key 규칙(CommonMark §6.2), `-<n>` 반복 번호, code 밖 raw HTML에 대한 HTML `id`/`name` 규칙. T12.1-22, T12.1-26, T12.1-27은 그 원인과 함께 impossible로 철회한다.
