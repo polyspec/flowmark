@@ -133,7 +133,11 @@ func engineClock() time.Time { return time.Now().UTC().Truncate(time.Microsecond
 func (c *Corpus) acquire(ctx context.Context, session string) (_ *journal.Lock, err error) {
 	l, err := c.j.Acquire(ctx, session, c.wait)
 	if err != nil {
-		return nil, lockError(err)
+		e := lockError(err)
+		if errors.Is(context.Cause(ctx), errSessionClosed) {
+			e.Msg = "the session was closed while its request waited for the lock: " + e.Msg
+		}
+		return nil, e
 	}
 	recovered := false
 	defer func() {

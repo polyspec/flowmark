@@ -3,6 +3,7 @@ package writepath
 import (
 	"bytes"
 	"context"
+	"errors"
 	"slices"
 	"strings"
 	"sync"
@@ -21,6 +22,23 @@ type Session struct {
 	mu     sync.Mutex
 	tx     *tx
 	closed bool
+	// life ends when Close is called, before Close waits for a request in progress: it ends that request's lock
+	// wait, as a closed connection does.
+	life context.Context
+	end  context.CancelFunc
+}
+
+// errSessionClosed is the cause of a lock wait that Close ended.
+var errSessionClosed = errors.New("the session was closed")
+
+// bind returns ctx ended also by the session's Close, and the function that releases it.
+func (s *Session) bind(ctx context.Context) (context.Context, func()) {
+	ctx, cancel := context.WithCancelCause(ctx)
+	stop := context.AfterFunc(s.life, func() { cancel(errSessionClosed) })
+	return ctx, func() {
+		stop()
+		cancel(nil)
+	}
 }
 
 // tx is an open transaction: the lock it holds, the corpus read at its begin, its post-image, the writes that made
@@ -75,7 +93,8 @@ func (c *Corpus) Session(name string) (*Session, error) {
 	if name == "" || strings.ContainsAny(name, "/@\r\n") {
 		return nil, newError(codeConfig, "the session name %q is empty or holds '/', '@' or a line break, which a lock holder name cannot hold", name)
 	}
-	return &Session{c: c, name: name}, nil
+	life, end := context.WithCancel(context.Background())
+	return &Session{c: c, name: name, life: life, end: end}, nil
 }
 
 // Name returns the session's name, which the lock names as the holder's session.
@@ -135,6 +154,8 @@ func (s *Session) Rewrite(ctx context.Context, compute func(*irexec.Corpus) ([]R
 
 // do runs an operation in the session's transaction, or as one transaction under the lock.
 func (s *Session) do(ctx context.Context, o op) (*irexec.Answer, error) {
+	ctx, unbind := s.bind(ctx)
+	defer unbind()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed {
@@ -218,6 +239,8 @@ func (c *Corpus) runSingle(l *journal.Lock, o op) (*irexec.Answer, bool, error) 
 // read-only transaction takes the lock too and refuses every write as READ_ONLY. A begin that does not open the
 // transaction, by an error or a panic, releases the lock.
 func (s *Session) Begin(ctx context.Context, readOnly bool) (err error) {
+	ctx, unbind := s.bind(ctx)
+	defer unbind()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed {
@@ -337,6 +360,7 @@ func (s *Session) RollbackTo(name string) error {
 // Close closes the session: an open transaction is rolled back and the lock released. A closed session refuses every
 // operation; closing it again does nothing.
 func (s *Session) Close() error {
+	s.end()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed {
