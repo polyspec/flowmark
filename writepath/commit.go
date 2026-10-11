@@ -64,13 +64,22 @@ func (c *Corpus) commit(t *tx) (bool, error) {
 	for i, tg := range net {
 		changes[i] = journal.Change{Path: tg.Path, Data: tg.After, Delete: tg.After == nil}
 	}
-	err = c.j.Commit(t.lock, changes)
+	return c.journalCommit(t.lock, changes)
+}
+
+// journalCommit writes changes through the journal under the held lock l (steps 3 to 8) and reports whether the
+// corpus was written. A journal commit that stops is recovered at once, under the same lock: before its prepare record
+// it wrote nothing, and its partial stage is discarded; from the prepare record on the commit is decided, and recovery
+// completes it — or, when that recovery fails too, the commit completes at the next acquisition of the lock, which the
+// failure says.
+func (c *Corpus) journalCommit(l *journal.Lock, changes []journal.Change) (bool, error) {
+	err := c.j.Commit(l, changes)
 	if err == nil {
 		return true, nil
 	}
 	var ce *journal.CommitError
 	prepared := errors.As(err, &ce) && ce.Prepared
-	rerr := c.j.Recover(t.lock)
+	rerr := c.j.Recover(l)
 	switch {
 	case prepared && rerr == nil:
 		return true, nil

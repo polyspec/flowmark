@@ -148,7 +148,8 @@ func (c *Corpus) nearestFolder(dir string) (string, error) {
 	return cur, nil
 }
 
-// ensureDir creates every absent folder of rel inside `.flowmark/` (the journal's own folders), following no symlink.
+// ensureDir creates every absent folder of rel — the journal's own folders inside `.flowmark/`, and a folder MakeFolder
+// creates — following no symlink.
 func (c *Corpus) ensureDir(rel string) error {
 	cur := c.root
 	for _, part := range strings.Split(rel, "/") {
