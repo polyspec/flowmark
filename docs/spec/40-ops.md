@@ -27,8 +27,11 @@ The order of the commit protocol is normative.
   which completes the commit; the edit is then made again as a new change. Until then every open
   refuses the same way. A stage removed by hand leaves the commit half-applied, so the refusal
   never names that as a resolution.
-- Opening loads the catalog, walks the corpus, parses the documents, derives the indexes, and
-  reuses the parsed-row cache keyed by file content hash for unchanged files.
+- Opening loads the catalog, walks the corpus, parses the documents and derives the indexes. Each
+  operation reads the corpus again under the lock; how an operation avoids reading unchanged files —
+  a long-lived corpus kept current by the operating system's file notifications, with the commit
+  targets always re-read under the lock — is owned by `T12.5-2`. A cache keyed by file content hash
+  does not do it, since hashing reads every file.
 
 ## The canon operation
 
@@ -164,6 +167,16 @@ The order of the commit protocol is normative.
 - Requests inside a transaction read its post-image, held in the server's memory; a savepoint is a
   nested level of it, and `rollback_to` discards the levels above it. A journal stage in
   `.flowmark/tx/` exists only from step 3 to step 8 of one commit.
+- Isolation. Engine sessions are serialized by the lock: a transaction holds it from `begin` to its
+  end, so no engine write interleaves with it. Against an edit outside the engine a transaction is
+  snapshot-like: the commit checks its targets (step 1) and runs its writes again on the re-read corpus
+  (step 2), but it does not validate what its reads returned, so a decision made on a read row that an
+  outside edit then changes in another file can commit — write skew. MySQL's `REPEATABLE READ` allows
+  the same (probed on MySQL 8.4.11: two transactions each read two rows in a state, each moved a
+  different one out of it, and both committed, leaving none), and so do PostgreSQL's `READ COMMITTED`
+  and `REPEATABLE READ` (PostgreSQL documentation, Transaction Isolation; only `SERIALIZABLE` detects
+  it). Grounding: an outside edit takes no lock, so no lock-based isolation can include it; validating
+  every read would need the read set of every request, which no orm client sends.
 - A request outside a transaction — a read, a write, a history repair — is one transaction under the
   lock: it takes the lock, reads the corpus, and a write commits before the lock is released.
 - A request that fails inside a transaction changes nothing, and the transaction stays open at its
@@ -200,7 +213,8 @@ The order of the commit protocol is normative.
   never retries it. Grounding: one place retries for every face, and the retry never releases the lock
   between the read and the commit.
 - `flowmark canon` and the add-column migration are each their own transaction: inside an open
-  transaction they are `CONFIG`. Each names the format diagnostics of its targets that it is exempt for
+  transaction, a read-only one included, they are `CONFIG`, never `READ_ONLY`, since they never run
+  in a transaction they did not begin. Each names the format diagnostics of its targets that it is exempt for
   ([commit protocol](#the-commit-protocol), step 2).
 
 ## The commit protocol
@@ -215,8 +229,9 @@ The order of the commit protocol is normative.
    writes run again, in order, on the re-read corpus. A write they refuse fails the commit with its
    code. A write that answers otherwise than it answered, or a net post-image that differs, fails
    `CORPUS_CONFLICT` naming each changed file and its first changed line: the writes depend on the
-   change that landed, which is SQL's serialization failure (SQLSTATE 40001), and the client already
-   holds the first answers. When the re-read corpus is the one read, the writes were checked on it as
+   change that landed, and the client already holds the first answers. This is the analogue of SQL's
+   serialization failure (SQLSTATE 40001), which orm reports as `WRITE_CONFLICT`, not `DEADLOCK` (orm
+   maps 40001 to `DEADLOCK`), since the client never retries it. When the re-read corpus is the one read, the writes were checked on it as
    they ran. The rewrite refusal below is checked as each request runs too, as SQL checks a constraint
    that is not deferred, so the request that must rewrite such a file fails at once. A validator diagnostic on another row (`type`, `key.duplicate`, `reference.dangling`, `check`, `order`, `state.transition`, `state.required`, `state.limit`, `history.gap`, `history.chain`, and the validator's `parent.cycle` across several `files` files) never fails the commit, except that a `type` diagnostic fails it when a constraint check of the commit must evaluate that value ([canonical format](10-canonical-format.md#readable-values)), and two rows with byte-for-byte equal keys make their table unavailable ([canonical format](10-canonical-format.md#diagnostics)); a `format.*` diagnostic fails it only as the rewrite refusal and the unavailable table state ([canonical format](10-canonical-format.md#diagnostics)). A commit that must rewrite a file — the row's own file, a file holding a link to a row whose detail section appears or disappears, an `order` sibling — is refused when that file has a `format.*` diagnostic: `CONSTRAINT`, naming the file and the diagnostic, and naming `flowmark canon` when it is `format.noncanonical`. Three commits are exempt: `flowmark canon` for its targets ([operations](#the-canon-operation)); the add-column migration, for the diagnostics the added column causes, which do not make its table unavailable to that migration ([migration](80-migration.md)); and a delete that removes a `files` row's whole file from the rewrite refusal only — its restrict check still needs the rows of every table that may reference the row (its own table through `parent`, its child blocks and its history rows, and every table with a foreign key to it), so such a delete is `CONSTRAINT` when any of them is unavailable.
 3. Write each post-image once into `.flowmark/tx/<id>/`, content-addressed as `<hash>`, and, as
@@ -283,7 +298,8 @@ microseconds.
 
 - A per-command p95 latency target is declared here (hundreds of milliseconds at the corpus
   envelope of [open questions](110-open-questions.md)).
-- The parsed-row cache avoids re-parsing unchanged files. The commit checks every constraint whose
+- The read cost of an operation, which today re-reads every corpus document, is owned by `T12.5-2`
+  ([opening a corpus](#opening-a-corpus)). The commit checks every constraint whose
   outcome the transaction can change: the keys, references, checks, order, limits, transitions and
   `history.gap` of the target rows, and the rows they reference or that reference them, evaluated
   on the corpus re-read under the lock. Full `flowmark validate` runs on demand and on catalog

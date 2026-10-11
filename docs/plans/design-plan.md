@@ -53,7 +53,7 @@ flowmark = the markdown database engine (one Go binary)
    ├─ validator: catalog constraints (type/PK/UNIQUE/FK/CHECK/state machine and history)
    ├─ IR executor over in-memory indexes derived from the parsed corpus
    ├─ write path: lock → conflict check → validate → stage → prepare record → renames → commit
-   ├─ .flowmark/: lock, tx journal, server token, parsed-row cache
+   ├─ .flowmark/: lock, tx journal, server token
    ├─ faces: server · CLI · MCP · soksak sidecar
    └─ sync engine: md→db export / db→md materialize (§7)
 ```
@@ -90,7 +90,7 @@ flowmark = the markdown database engine (one Go binary)
 - **The server** (Revision 3) is a resident face bound to loopback with a kept token; the DSN is `markdown://127.0.0.1:<port>/<corpus>?token=<token>`.
 - **Validation runs at commit against the corpus freshly re-read under the lock**, after the conflict check — not against a BEGIN snapshot, and not against a predicted touched-file set.
 - The corpus revision and `CORPUS_CHANGED` are withdrawn (Revision 3): `paginate` is one request, and no face reads across calls.
-- **Cost model**: a per-command p95 latency target is declared in 40-ops (order: hundreds of milliseconds at the corpus envelope); a `.flowmark/cache/` of parsed rows keyed by per-file content hash avoids re-parsing unchanged files; the commit checks every constraint the transaction can change, on the corpus re-read under the lock, with full `flowmark validate` on demand and on catalog change.
+- **Cost model**: a per-command p95 latency target is declared in 40-ops (order: hundreds of milliseconds at the corpus envelope); how an operation avoids reading unchanged files — a long-lived corpus kept current by file notifications, with the commit targets always re-read under the lock — is owned by `T12.5-2`, since a cache keyed by content hash must still read every file; the commit checks every constraint the transaction can change, on the corpus re-read under the lock, with full `flowmark validate` on demand and on catalog change.
 - Walk rules: only `*.flowmark.md` files outside `dbspec/`, `.flowmark/` and hidden entries are read; a symlinked document or `files` folder is `corpus.walk`, any other symlink is outside the database; a hard link is not a rule (document model).
 
 ### 6. Constraints and the capability table (`50-constraints.md`, `60-dialect.md`)

@@ -1,5 +1,5 @@
 <!-- doc-id: spec-overview -->
-<!-- source-sha256: ff02179d86b3ca7bd4db1e67b45ba78c8a0a686bf7e70ec09e2afde7502ffc21 -->
+<!-- source-sha256: 5cec94fe83a6fc82f2cd306a3371ee7451ba6a779336aa1e76ce94ad403105cf -->
 # 개요
 
 [English](00-overview.md)
@@ -59,7 +59,7 @@ emit하면 그대로 재현되고, 같은 입력으로 operation을 반복하면
 
 - SQL 텍스트를 만들거나 받지 않는다. executor는 IR 요청을 소비한다.
 - 파생 query mirror는 없다: mirror를 들인다면 전체 재구축 동등성을 증명하고 write path가 없어야 한다.
-  memory index와 parse된 행 cache는 가속기이지 mirror가 아니다.
+  memory index는 가속기이지 mirror가 아니다.
 - v1에는 원격 접속이 없다: server는 loopback에만 bind하고 token으로 인증한다.
 - 일반 wiki 엔진이 아니다: 문법은 catalog가 기술하는 문서를 위한 것이고, 자유 prose는 catalog가 정한
   자리에 산다.
