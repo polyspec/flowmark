@@ -638,6 +638,61 @@ func TestH1LowercasedAsViewers(t *testing.T) {
 	}
 }
 
+// TestSetextDetailHeading requires that a setext detail heading is located at the
+// first character of its text, the first line of its text, and that the link
+// reference definitions CommonMark 0.31.2 reads at the start of its paragraph are
+// not part of its text (§4.7): they stand before it, in the content they end.
+func TestSetextDetailHeading(t *testing.T) {
+	cat := loadDocumentFixture(t)
+	lk := documentLinker()
+	two := []string{"- [ ] T1 Plan done:false", "- [ ] T2 Other done:false", ""}
+	cases := []struct {
+		name       string
+		text       string
+		rule       string
+		line, col  int
+		bodies     []string
+		noBlockErr bool
+	}{
+		{"10#diagnostics: a setext detail heading is located at the first character of its text",
+			itemsOf("- [ ] T1 Plan done:false", "", "items row T1", "------------", "", "A."), RuleNoncanonical, 4, 1, []string{"A."}, true},
+		{"10#diagnostics: an indented setext detail heading is located at the first character of its text",
+			itemsOf("- [ ] T1 Plan done:false", "", "  items row T1", "------------", "", "A."), RuleNoncanonical, 4, 3, []string{"A."}, true},
+		{"10#detail-headings-and-anchors: a definition before a setext detail heading is not its text",
+			itemsOf(append(two, "## items row T1", "", "[r]: /u", "items row T2", "------------", "", "B.")...), RuleNoncanonical, 8, 1, []string{"[r]: /u", "B."}, true},
+		{"10#detail-headings-and-anchors: definitions over several lines before a setext detail heading are not its text",
+			itemsOf(append(two, "## items row T1", "", "[r]:", "/u", "'t'", "[s]: /v", "items row T2", "------------", "", "B.")...), RuleNoncanonical, 11, 1, []string{"[r]:\n/u\n't'\n[s]: /v", "B."}, true},
+		{"10#detail-headings-and-anchors: a definition right after the list is content before the setext detail heading",
+			itemsOf("- [ ] T1 Plan done:false", "", "[r]: /u", "items row T1", "------------", "", "A."), RuleBlock, 4, 1, nil, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			rows, diags, err := ParseDocument(cat, "items", "items.flowmark.md", []byte(c.text), lk)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(diags) == 0 || diags[0].Rule != c.rule || diags[0].Line != c.line || diags[0].Column != c.col {
+				t.Fatalf("diagnostics %+v; want first %s at %d:%d", diags, c.rule, c.line, c.col)
+			}
+			if c.noBlockErr && hasRule(diags, RuleBlock) {
+				t.Fatalf("diagnostics %+v; want no format.block", diags)
+			}
+			if c.bodies == nil {
+				return
+			}
+			if len(rows) != len(c.bodies) {
+				t.Fatalf("%d rows; want %d", len(rows), len(c.bodies))
+			}
+			for k, b := range c.bodies {
+				if b += "\n"; rows[k].Body != b {
+					t.Fatalf("row %s body %q; want %q", rows[k].Key, rows[k].Body, b)
+				}
+			}
+			checkDocumentP2(t, cat, "items", rows, lk)
+		})
+	}
+}
+
 // TestTableRowWithoutTrailingPipe requires that a row without its last pipe keeps
 // its last cell whole, a final `\|` being a pipe of that cell, and that canon
 // writes the row with its last pipe.

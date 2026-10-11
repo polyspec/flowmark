@@ -10,13 +10,30 @@ import (
 // paragraphs, the HTML blocks of types 1 to 7, and containers. A line of four or
 // more spaces of indent is code, never a heading or a fence.
 
-// heading is an ATX or a setext heading: the first line and the last line of it
-// (the underline of a setext heading), its level, and its text.
+// heading is an ATX or a setext heading: the first line of its text and its last line
+// (the underline of a setext heading), its level, and its text. The link reference
+// definitions at the start of a setext heading's paragraph are no part of it.
 type heading struct {
 	at, last, level int
 	text            string
 	tab             bool // the separator after the hashes is a tab, a noncanonical spelling
 	nested          bool // the heading is inside a block quote or a list item
+}
+
+// textCol returns the 1-based column, in code points, of the first character of the
+// text of h, a heading outside every container, in the lines it was read from: after
+// the indent, the hashes and the white space after them on the line of an ATX heading,
+// and after the white space that begins the first line of a setext heading's text.
+func (h heading) textCol(lines []string) int {
+	l := lines[h.at]
+	p := indentOf(l)
+	if h.last == h.at {
+		p += h.level
+	}
+	for p < len(l) && (l[p] == ' ' || l[p] == '\t') {
+		p++
+	}
+	return 1 + utf8.RuneCountInString(l[:p])
 }
 
 // headingOf reads an ATX heading: up to three spaces, one to six '#', then a
@@ -194,8 +211,8 @@ type scan struct {
 }
 
 // scanHeadings reads the block structure of lines from index from on. A setext
-// heading is the whole paragraph before its underline; a fence or an HTML block
-// hides the lines it holds, headings included.
+// heading is the paragraph before its underline after the link reference definitions
+// at its start; a fence or an HTML block hides the lines it holds, headings included.
 func scanHeadings(lines []string, from int) scan {
 	var sc scan
 	var s scanner
@@ -222,14 +239,27 @@ func (s *scanner) addLine(text string) {
 	s.units[s.cur].lines = append(s.units[s.cur].lines, text)
 }
 
-// unitText is the text of a paragraph: its lines without the white space around them,
-// joined by line feeds, as a setext heading's text is.
-func unitText(u unit) string {
-	parts := make([]string, len(u.lines))
-	for i, l := range u.lines {
+// paraText is the text of the lines of a paragraph: each without the white space around
+// it, joined by line feeds, as a setext heading's text is.
+func paraText(lines []string) string {
+	parts := make([]string, len(lines))
+	for i, l := range lines {
 		parts[i] = strings.TrimRight(strings.TrimLeft(l, " \t"), " \t")
 	}
 	return strings.Join(parts, "\n")
+}
+
+// textStart returns the index of the first line of a paragraph that is text: the link
+// reference definitions at its start are no text of it (CommonMark 0.31.2 §4.7), so the
+// text begins at the first line they do not consume, or at len(lines) when they consume
+// every line.
+func textStart(lines []string) int {
+	_, consumed := cmDefLines(lines)
+	k := 0
+	for k < len(lines) && consumed[k] {
+		k++
+	}
+	return k
 }
 
 // feed reads line i of lines and returns the heading that it completes when the
@@ -298,11 +328,19 @@ func (s *scanner) start(lines []string, i int, rest string, col int) (heading, b
 			return heading{}, false
 		}
 		if s.leaf == leafPara {
+			// The definitions at the start of the paragraph are read before the underline
+			// (§4.7): the heading is the text after them, from its own first line. A
+			// paragraph of definitions alone makes no heading, and the line is read as the
+			// block starts below read it, as commonmark.js and markdown-it read it: `---` a
+			// thematic break, anything else text of the paragraph. cmark-gfm reads `---`
+			// as text too; no reading makes it a heading.
 			if level := setextLevel(rest); level > 0 {
 				u := &s.units[s.cur]
-				u.heading = true
-				s.leaf = leafNone
-				return heading{at: u.at, last: i, level: level, text: unitText(*u), nested: !top}, true
+				if k := textStart(u.lines); k < len(u.lines) {
+					u.heading = true
+					s.leaf = leafNone
+					return heading{at: u.at + k, last: i, level: level, text: paraText(u.lines[k:]), nested: !top}, true
+				}
 			}
 		}
 		if level, text, tab, ok := headingOf(rest); ok {
