@@ -9,9 +9,20 @@ The order of the commit protocol is normative.
 
 ## Opening a corpus
 
-- Opening runs **recovery first**: a stage with a prepare record is completed, a stage without one
-  is discarded, and a target whose current hash matches neither recorded hash — a human edit
-  landed mid-crash — is refused and reported, never silently overwritten.
+- Opening runs **recovery first**, under the lock. It removes the pending lock records of ended
+  holders ([the lock](#the-lock)) and leaves every `*.clearing` claim alone. `.flowmark/tx/` holds
+  at most one stage, named by 32 lowercase hex digits of 128 random bits from the OS random source;
+  an entry of another name or form, or a second stage, refuses opening and is named. The stage is
+  collected when it holds a commit record, completed when it holds a prepare record, and discarded
+  otherwise. Recovery is idempotent: a replay interrupted at any step is completed by the next.
+- A target whose current hash matches neither recorded hash — a change landed while the commit was
+  interrupted — is refused and reported, never silently overwritten. The refusal names the target,
+  both recorded hashes and the stage files that hold them, and leaves the stage. It is resolved
+  when the target holds one of its recorded states (an absent state by removing the file): the
+  person copies the edit aside, copies one stage file over the target and opens the corpus again,
+  which completes the commit; the edit is then made again as a new change. Until then every open
+  refuses the same way. A stage removed by hand leaves the commit half-applied, so the refusal
+  never names that as a resolution.
 - Opening loads the catalog, walks the corpus, parses the documents, derives the indexes, and
   reuses the parsed-row cache keyed by file content hash for unchanged files.
 
@@ -36,17 +47,116 @@ The order of the commit protocol is normative.
 ## The lock
 
 - **One portable lock.** Every operation — read or write, from any face — takes the same lock
-  file with holder identity and stale detection: a lock file with `<pid>@<host>/<session>`, after
-  the kit holder-lock precedent; no flock, no OS-specific primitive.
+  file, `.flowmark/lock` under the corpus root; the path is a constant, and `.flowmark/` is
+  created when absent. It follows the kit holder-lock precedent: a lock file with holder identity
+  and stale detection. No OS file lock is used; the platform primitives used are named in this
+  section. Grounding: an OS lock (flock, fcntl, LockFileEx) has no portable cancellable wait, is
+  granted only locally on some network file systems, and names no holder.
 - The lock is held for one operation, or for one server transaction from `begin` to `commit` or
   `rollback`. A closed connection, or a transaction idle longer than the server flag
   `tx_idle_ms`, rolls the transaction back and releases the lock.
-- The CLI, MCP and sidecar wait on the same lock and fail with `LOCK_TIMEOUT` naming the holder.
+
+### The holder record
+
+- The lock file holds one line of JSON, `{"pid", "start", "host", "hostname", "session"}`, and a
+  line feed; the holder is named `<pid>@<host>/<session>`. A file that holds anything else is
+  never taken for a free lock.
+- `start` is the start of the process: on Linux the boot of `/proc/sys/kernel/random/boot_id` with
+  field 22 of `/proc/<pid>/stat`; on macOS `kp_proc.p_starttime` of sysctl `kern.proc.pid.<pid>`;
+  on Windows the `GetProcessTimes` creation time.
+- `host` is the machine identifier: `/etc/machine-id` on Linux (machine-id(5)) with the inode of
+  `/proc/self/ns/pid`, `gethostuuid(2)` on macOS, and
+  `HKLM\SOFTWARE\Microsoft\Cryptography\MachineGuid` on Windows. A missing one refuses the lock,
+  naming the cause. `hostname` is the host name, recorded for the messages only.
+- A holder of this host has ended when no process has its ID, when that process's start differs
+  (a reused ID), or when it is a zombie; a process that exists but whose start cannot be read
+  counts as running. Whether a process ID exists: on Linux and macOS `kill(pid, 0)`, where `ESRCH`
+  means none and success or `EPERM` means one exists; on Linux, when `/proc/<pid>/stat` cannot be
+  read (hidepid), `kill(pid, 0)` is asked again, and `ESRCH` then means ended. On Windows
+  `OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE)`, where `ERROR_INVALID_PARAMETER`
+  means none and `ERROR_ACCESS_DENIED` means one exists; its liveness comes from
+  `WaitForSingleObject(h, 0)`, never from the exit code, since an exit code of 259 equals
+  `STILL_ACTIVE`.
+- A holder of another host is unknown and never judged ended. A corpus is used from one host at a
+  time; a release on another host reaches a waiter only where the file system reports remote
+  changes, so such a wait may end at its deadline.
+
+### Acquiring and waiting
+
+- The record is written whole to `.flowmark/lock.<32 hex digits of 128 random bits>.pending`,
+  synced, and hard-linked to `.flowmark/lock`; the link fails when the lock exists, so the lock
+  appears atomically with its whole record. A waiter writes its pending record once. A pending
+  record takes no part in exclusion.
+- A try whose link fails with `EEXIST` reads the lock. A record byte-equal to the acquirer's own
+  (its session is unique) means the link took effect although its reply was lost (NFS), and the
+  lock is held. A lock that disappears before it is read is tried again at once.
+- An operation that finds the lock held by a running holder, or by one on another host, waits for
+  its release and fails with `LOCK_TIMEOUT`, naming the holder and its state, when its deadline
+  passes first. A holder that has ended refuses at once. The deadline is the wait's one timer: the
+  CLI, MCP and sidecar take `--lock-wait-ms <n>` (default 5000; 0 refuses at once), and the server
+  takes the flag `lock_wait_ms` (default 5000); a closed connection ends the wait. Grounding: an
+  immediate refusal would move the retry loop into every caller.
+- The wait is driven by the OS change notification on the lock: on Linux inotify on `.flowmark/`
+  (`IN_DELETE | IN_MOVED_FROM | IN_DELETE_SELF | IN_MOVE_SELF | IN_UNMOUNT`), one instance shared
+  by all waits of a process on one corpus, as a server's sessions are; on macOS kqueue
+  `EVFILT_VNODE` (`NOTE_DELETE | NOTE_RENAME | NOTE_REVOKE`, `EV_CLEAR`) on the lock file opened
+  with `O_EVTONLY`; on Windows an overlapped `ReadDirectoryChangesW` on `.flowmark/`, opened with
+  `FILE_LIST_DIRECTORY`, `FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED` and
+  `FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE`.
+- Each removal or rename of the lock file, each overflow (`IN_Q_OVERFLOW`; zero bytes returned;
+  `ERROR_NOTIFY_ENUM_DIR`) and each event of the watched folder itself (removal, rename, unmount,
+  `IN_IGNORED`) starts exactly one more acquisition attempt. No other event and no timer starts
+  one; the removal of another name, such as a waiter's pending record, starts none.
+- The watch is armed after the failed try, and a release between the two is never lost. On Linux
+  and Windows the lock is tried once more after arming. On macOS, after a try fails, the lock is
+  opened with `O_EVTONLY` (a lock that is absent is tried again at once) and registered, and the
+  `fstat` of the descriptor is compared with the `lstat` of `.flowmark/lock`: a link count of 0,
+  or another device or inode, starts one more attempt. Each later vnode event is judged by the
+  same comparison: when the lock path still names the watched inode with a link count above 0,
+  the event came from another name of that file (an acquirer's pending record) and starts no
+  attempt; a change of one file starts one attempt, however many events it raises.
+- A watch that cannot be armed refuses the wait at once, naming the cause: `EMFILE` names
+  `fs.inotify.max_user_instances`, `ENOSPC` names `fs.inotify.max_user_watches`, and
+  `ERROR_INVALID_FUNCTION` names the unsupported file system.
+- The holder's exit is an event. When the holder is on this host and running, the waiter also
+  watches its exit: on Linux a pidfd of `pidfd_open` (Linux 5.3 or later is required), waited on
+  by the runtime's poller beside the inotify descriptor; on macOS `EVFILT_PROC NOTE_EXIT` in the
+  same kqueue; on Windows the process handle (`SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION`),
+  waited with the change event by `WaitForMultipleObjects` — a process whose handle this user may
+  not open is not watched, and its release is learned from the lock alone. After arming, the
+  holder is judged again, so a reused process ID is never watched. An exit starts no attempt: it
+  judges the holder again, and an ended holder whose record the lock still holds refuses at once
+  as `LOCK_TIMEOUT`, naming it as ended.
+- On Windows every open of the lock file, a pending record or a stage file is `CreateFileW` with
+  `FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE`, so a reader never blocks the holder's
+  delete or an unlock.
+- Acquiring, releasing, clearing and waiting are published as the events `lock.acquired`,
+  `lock.released`, `lock.cleared` and `lock.waiting` (once per holder waited for, after the watch
+  is armed).
+
+### A stale lock
+
+- A stale lock is never removed by an operation. `flowmark unlock <corpus>` removes it:
+  1. Read the record R. Refuse a running holder, and a holder on another host without
+     `--holder <pid>@<host>/<session>` naming it.
+  2. Link `.flowmark/lock` to `.flowmark/lock.<first 32 hex digits of the SHA-256 of R>.clearing`.
+     `EEXIST` refuses, naming that file as another unlock of the same holder, running or
+     interrupted.
+  3. Read the claim. A record other than R means a new holder took the lock: remove the claim and
+     refuse.
+  4. Otherwise remove `.flowmark/lock`, then the claim, and publish `lock.cleared` with the record.
+- Grounding: only the holder and the one unlock that holds the claim ever remove the lock, so
+  between the claim and the removal the lock still names R, and a running holder's lock is never
+  moved.
+- An interrupted claim is named in the refusal of the next unlock; the person removes it after
+  checking that no unlock runs. A `LOCK_TIMEOUT` of an ended holder names `flowmark unlock
+  <corpus>`, and one of a holder on another host names `--holder`.
 
 ## Transactions
 
-- Requests inside a transaction read the staged post-image; a savepoint is a nested stage, and
-  `rollback_to` discards the stages above it.
+- Requests inside a transaction read its post-image, held in the server's memory; a savepoint is a
+  nested level of it, and `rollback_to` discards the levels above it. A journal stage in
+  `.flowmark/tx/` exists only from step 3 to step 8 of one commit.
 - A face retries a single-operation write once after a re-read when the commit meets
   `CORPUS_CONFLICT`. A server transaction is never retried by the server; the orm client receives
   `WRITE_CONFLICT` and never retries it.
@@ -58,15 +168,59 @@ The order of the commit protocol is normative.
 2. Run the constraint checks against the corpus re-read under the lock with the post-image
    applied — not against a snapshot taken at `begin`, and not against a predicted touched-file
    set. A validator diagnostic on another row (`type`, `key.duplicate`, `reference.dangling`, `check`, `order`, `state.limit`, `history.gap`, `history.chain`, and the validator's `parent.cycle` across several `files` files) never fails the commit, except that a `type` diagnostic fails it when a constraint check of the commit must evaluate that value ([canonical format](10-canonical-format.md#readable-values)), and two rows with byte-for-byte equal keys make their table unavailable ([canonical format](10-canonical-format.md#diagnostics)); a `format.*` diagnostic fails it only as the rewrite refusal and the unavailable table state ([canonical format](10-canonical-format.md#diagnostics)). A commit that must rewrite a file — the row's own file, a file holding a link to a row whose detail section appears or disappears, an `order` sibling — is refused when that file has a `format.*` diagnostic: `CONSTRAINT`, naming the file and the diagnostic, and naming `flowmark canon` when it is `format.noncanonical`. Three commits are exempt: `flowmark canon` for its targets ([operations](#the-canon-operation)); the add-column migration, for the diagnostics the added column causes, which do not make its table unavailable to that migration ([migration](80-migration.md)); and a delete that removes a `files` row's whole file from the rewrite refusal only — its restrict check still needs the rows of every table that may reference the row (its own table through `parent`, its child blocks and its history rows, and every table with a foreign key to it), so such a delete is `CONSTRAINT` when any of them is unavailable.
-3. Write every post-image file into `.flowmark/tx/<id>/` content-addressed and fsync it.
-4. Copy the pre-image of every target into the stage and fsync.
-5. Write and fsync the **prepare record**: every rename with its pre- and post-hashes.
-6. Perform the renames through the runtime's atomic rename.
-7. Write and fsync the commit record.
-8. Collect the stage.
+3. Write each post-image once into `.flowmark/tx/<id>/`, content-addressed as `<hash>`, and, as
+   the source of rename n, a copy `<n>.<hash>` of it; both stay until the stage is collected.
+   Before this step, the folder of every target and every folder to create is checked to be on
+   the device of `.flowmark/tx/` (`st_dev`; on Windows the volume serial number of
+   `GetFileInformationByHandle`); a mismatch refuses the commit, naming the folder and "a mount
+   point inside the corpus is unsupported", and nothing is staged.
+4. Write the pre-image of every target into the stage, content-addressed as `<hash>`.
+5. Write the **prepare record**: every rename with its pre- and post-hashes. An absent file is the
+   empty hash `""`: a create has an empty pre-hash, and a delete an empty post-hash.
+6. Perform the renames through the runtime's atomic rename, after checking every target: one that
+   holds its post-image is done, one that holds its pre-image is renamed, and any other refuses
+   the whole stage. A delete renames its target into the stage as `<n>.deleted`. A create whose
+   folder is absent first creates that folder, from the corpus root, following no symlink; on
+   Windows each missing folder is created in the stage as `<n>.dir.<k>` and moved into place. A
+   replay does the same: it skips a folder it finds in place and moves one it finds staged, and
+   when it finds a target at its pre-hash and `<n>.<hash>` absent it writes the copy again from
+   `<hash>`. An empty table folder left by an interruption is an empty table
+   ([document model](20-document-model.md#storage)).
+7. Write the commit record.
+8. Collect the stage: the prepare record is renamed aside first, so a stage interrupted while it
+   is collected holds the commit record alone and is collected again; collecting removes the
+   `<n>.deleted` files.
 
-Durability across power loss relies on this journal and the recovery on open, not on
-OS-specific directory fsync semantics.
+Grounding: a rename gives the target the source's file. Distinct per-rename copies keep two
+identical targets as two files and keep the target sharing no file with the stage, and both
+recorded states stay in the stage for a recovery refusal. The journal needs no hard link.
+
+Every hash of the journal and of recovery is the SHA-256 of the file's raw bytes, as 64
+lowercase hex digits (raw-file-bytes hashing, [design plan](../plans/design-plan.md)). Each step
+is published: `journal.prepared` after step 5, `journal.applied` after step 7,
+`journal.collected` after step 8, and on opening `journal.replayed` or `journal.discarded`.
+
+Durability across power loss needs each step's files and folder entries on disk before the next
+step begins. A file is synced by the runtime's sync (`fsync`; `F_FULLFSYNC` on macOS;
+`FlushFileBuffers` on Windows). A created, renamed or removed name is made durable on Linux and
+macOS by syncing its folder, as POSIX defines, and on Windows, which has no folder flush, by
+renaming with `MoveFileEx` and `MOVEFILE_WRITE_THROUGH`, which returns once the move is on disk;
+so every stage file is written to a partial name and renamed into place, and a delete is a
+rename. A created folder is made durable on Linux and macOS by syncing its parent, and on Windows
+by creating it in the stage and moving it into place with `MOVEFILE_WRITE_THROUGH`. The lock is
+never synced as a folder entry: a power loss ends its holder; its record is synced before its
+link. On Windows a holder's liveness is read from its process handle, never from its exit code.
+
+## The file system
+
+The corpus root lies on one local file system with hard links and change notifications: APFS or
+HFS+ on macOS, ext4, XFS, Btrfs or the like on Linux, NTFS (or ReFS with hard links) on Windows.
+FAT32 and exFAT have no hard links, so the lock cannot appear atomically with its whole record;
+they are not supported, and the lock's link failure there (`EPERM`, `ENOTSUP`,
+`ERROR_INVALID_FUNCTION`, `ERROR_NOT_SUPPORTED`) refuses, naming that cause. A file system that
+sends no change notification is not supported. A folder of the corpus that is another file
+system's mount point is not supported, and a commit that would write there is refused
+([commit protocol](#the-commit-protocol), step 3).
 
 ## The clock
 
@@ -90,11 +244,11 @@ microseconds.
 
 | Face name | orm code | Meaning |
 | --- | --- | --- |
-| `LOCK_TIMEOUT` | `CANCELED` | the lock wait ended; names the holder — `CANCELED`, as a SQLite `busy_timeout` is |
+| `LOCK_TIMEOUT` | `CANCELED` | the lock wait ended — at its deadline, or at once when the holder has ended; names the holder and its state — `CANCELED`, as a SQLite `busy_timeout` is |
 | `CORPUS_CONFLICT` | `WRITE_CONFLICT` | a target changed since it was read; names the file and line |
 | `DUPLICATE_KEY` | `DUPLICATE_KEY` | a primary or unique key value already exists; names both rows (table and key) |
 | `FOREIGN_KEY` | `FOREIGN_KEY` | a reference names no row, or a referenced row is deleted while referenced |
 | `CONSTRAINT` | `CONSTRAINT` | any other rule of the catalog refused the write — a check, a title, a transition, a required column, a limit, an order, a single-line place; names the rule, and the row and column ([canonical format](10-canonical-format.md#diagnostics)); or a write that must rewrite a non-canonical or malformed document, or a request, read or write, that needs the rows of an unavailable table ([canonical format](10-canonical-format.md#diagnostics)), naming the file and the diagnostic |
-| recovery refusal | — | names the target and both recorded hashes; opening refuses until resolved |
+| recovery refusal | — | names the target and both recorded hashes and the stage files that hold them; opening refuses until resolved |
 
 Every failure message names the cause and the fix.

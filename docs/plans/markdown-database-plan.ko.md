@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database -->
-<!-- source-sha256: 3dcbf7118e816903689e31d2d5c46c96921e498b3f258f85f061e694ccb369d1 -->
+<!-- source-sha256: c5dcb8c0283b99e61f9457e85986105c85bcfaa729b3f920a9353f6a92e359f3 -->
 # markdown database 계획
 
 [English](markdown-database-plan.md)
@@ -69,10 +69,14 @@ NULL이 아니며 비어 있을 수 있고, view의 entity table은 둘 다 선�
   DSN은 `markdown://127.0.0.1:<port>/<corpus>?token=<token>`이고 `<corpus>`는 corpus root의 directory
   이름이다. corpus나 token 불일치는 `CONFIG`다.
 - portable lock(spec 40)은 operation 하나 동안, 또는 transaction 하나의 `begin`부터 `commit`이나
-  `rollback`까지 잡는다. holder 식별자는 `<pid>@<host>/<session>`이다. 연결이 닫히거나 transaction이
-  `tx_idle_ms`(server flag)보다 오래 쉬면 transaction을 rollback하고 lock을 푼다. transaction 안의
-  요청은 stage된 post-image를 읽고, savepoint는 중첩 stage다. CLI, MCP, sidecar는 같은 lock을 기다리며
-  holder를 밝히는 `LOCK_TIMEOUT`으로 실패한다. spec 40은 각 face 이름을 orm code에 대응시킨다:
+  `rollback`까지 잡는다. lock file `.flowmark/lock`은 holder record, 즉 JSON 한 줄
+  `{pid, start, host, hostname, session}`을 담으며 holder의 이름은 `<pid>@<host>/<session>`이다. 연결이
+  닫히거나 transaction이 `tx_idle_ms`(server flag)보다 오래 쉬면 transaction을 rollback하고 lock을 푼다.
+  transaction 안의 요청은 server의 memory에 있는 그 post-image를 읽고, savepoint는 그 중첩 단계이며,
+  journal stage는 commit 하나가 쓰는 동안에만 있다. CLI, MCP, sidecar는 같은 lock을 OS 변경 알림이
+  이끄는 대기로 `--lock-wait-ms`(server는 flag `lock_wait_ms`, 기본 5000)까지 기다리며, holder와 그
+  상태를 밝히는 `LOCK_TIMEOUT`으로 실패한다. 끝난 holder는 곧바로 거절하며 그 lock은 `flowmark
+  unlock`만 지운다. spec 40은 각 face 이름을 orm code에 대응시킨다:
   `LOCK_TIMEOUT`은 `CANCELED`, `CORPUS_CONFLICT`는 `WRITE_CONFLICT`.
 - face(CLI, MCP, sidecar)는 단일 operation 쓰기를 다시 읽은 뒤 한 번 재시도한다. server transaction은
   server가 재시도하지 않으며 orm client는 `WRITE_CONFLICT`를 받는다.

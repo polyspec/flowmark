@@ -1,5 +1,5 @@
 <!-- doc-id: spec-ops -->
-<!-- source-sha256: 0dc66213e9b2ee0b64ff77be8620856b5ac96ee29139f66fd67030a9d6ed6476 -->
+<!-- source-sha256: 9c8bf57661c9b5fc2eeeed9da22794103117f61bc8ca018785a4f96f7c3e327f -->
 # Operations
 
 [English](40-ops.md)
@@ -9,9 +9,18 @@
 
 ## Corpus 열기
 
-- 열기는 **복구를 먼저** 실행한다: prepare record가 있는 stage는 완료하고, 없는 stage는 버리며, 현재
-  hash가 기록된 어느 hash와도 맞지 않는 대상 — crash 도중 들어온 사람의 편집 — 은 거절하고 보고하며
-  조용히 덮어쓰지 않는다.
+- 열기는 lock 아래에서 **복구를 먼저** 실행한다. 끝난 holder의 pending lock record를 지우고
+  ([lock](#lock)), `*.clearing` claim은 건드리지 않는다. `.flowmark/tx/`는 stage를 많아야 하나 가지며,
+  그 이름은 OS random source의 128 random bit를 나타내는 소문자 hex 32자리다. 다른 이름이나 형태의
+  항목, 또는 두 번째 stage는 열기를 거절하며 그 이름을 밝힌다. stage는 commit record가 있으면 거두고,
+  prepare record가 있으면 완료하며, 둘 다 없으면 버린다. 복구는 idempotent다: 어느 단계에서 중단된
+  replay든 다음 replay가 완료한다.
+- 현재 hash가 기록된 어느 hash와도 맞지 않는 대상 — commit이 중단된 동안 들어온 변경 — 은 거절하고
+  보고하며 조용히 덮어쓰지 않는다. 거절은 대상, 기록된 두 hash, 그 둘을 담은 stage file을 밝히고
+  stage를 남긴다. 대상이 기록된 상태 중 하나를 가지면(없는 상태는 file을 지워서) 해결된다: 사람이
+  그 편집을 따로 복사해 두고, stage file 하나를 대상 위에 복사한 뒤 corpus를 다시 열면 commit이
+  완료되며, 그 편집은 새 변경으로 다시 한다. 그때까지 모든 열기가 같은 방식으로 거절한다. 손으로
+  지운 stage는 commit을 반쯤 적용된 채로 남기므로 거절은 그것을 해결 방법으로 밝히지 않는다.
 - 열기는 catalog를 읽고 corpus를 walk하며 문서를 parse하고 index를 유도하고, 바뀌지 않은 file에는
   file content hash를 key로 하는 parse된 행 cache를 다시 쓴다.
 
@@ -32,18 +41,104 @@
 
 ## Lock
 
-- **portable lock 하나.** 모든 operation — 읽기든 쓰기든, 어느 face에서든 — 은 holder 식별자와 stale
-  감지를 갖는 같은 lock file을 잡는다: kit holder-lock 선례를 따라 `<pid>@<host>/<session>`을 담은 lock
-  file이며 flock이나 OS 전용 primitive는 없다.
+- **portable lock 하나.** 모든 operation — 읽기든 쓰기든, 어느 face에서든 — 은 같은 lock file,
+  corpus root 아래 `.flowmark/lock`을 잡는다. 경로는 상수이며 `.flowmark/`가 없으면 만든다. kit
+  holder-lock 선례를 따른다: holder 식별자와 stale 감지를 갖는 lock file이다. OS file lock은 쓰지
+  않으며, 쓰는 platform primitive는 이 절에 이름을 밝힌다. 근거: OS lock(flock, fcntl, LockFileEx)은
+  portable하게 취소할 수 있는 대기가 없고, 일부 network file system에서는 local로만 주어지며, holder를
+  밝히지 않는다.
 - lock은 operation 하나 동안, 또는 server transaction 하나의 `begin`부터 `commit`이나 `rollback`까지
   잡는다. 연결이 닫히거나 transaction이 server flag `tx_idle_ms`보다 오래 쉬면 transaction을
   rollback하고 lock을 푼다.
-- CLI, MCP, sidecar는 같은 lock을 기다리며 holder를 밝히는 `LOCK_TIMEOUT`으로 실패한다.
+
+### Holder record
+
+- lock file은 JSON 한 줄 `{"pid", "start", "host", "hostname", "session"}`과 line feed를 담는다. holder의
+  이름은 `<pid>@<host>/<session>`이다. 그 밖의 것을 담은 file은 결코 빈 lock으로 여기지 않는다.
+- `start`는 process의 시작이다: Linux에서는 `/proc/sys/kernel/random/boot_id`의 boot와
+  `/proc/<pid>/stat`의 22번째 field, macOS에서는 sysctl `kern.proc.pid.<pid>`의 `kp_proc.p_starttime`,
+  Windows에서는 `GetProcessTimes`의 creation time이다.
+- `host`는 machine 식별자다: Linux에서는 `/etc/machine-id`(machine-id(5))와 `/proc/self/ns/pid`의 inode,
+  macOS에서는 `gethostuuid(2)`, Windows에서는 `HKLM\SOFTWARE\Microsoft\Cryptography\MachineGuid`다.
+  없으면 원인을 밝히며 lock을 거절한다. `hostname`은 host 이름이며 메시지를 위해서만 기록한다.
+- 이 host의 holder는 그 ID를 가진 process가 없거나, 그 process의 start가 다르거나(재사용된 ID), 그
+  process가 zombie이면 끝난 것이다. 존재하지만 start를 읽을 수 없는 process는 실행 중으로 센다. process
+  ID가 있는지는 Linux와 macOS에서 `kill(pid, 0)`으로 정한다: `ESRCH`는 없음, 성공이나 `EPERM`은 있음이다.
+  Linux에서 `/proc/<pid>/stat`을 읽을 수 없으면(hidepid) `kill(pid, 0)`을 다시 묻고, 그때 `ESRCH`는 끝남이다.
+  Windows에서는 `OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE)`로 정한다:
+  `ERROR_INVALID_PARAMETER`는 없음, `ERROR_ACCESS_DENIED`는 있음이다. 그 생존은 `WaitForSingleObject(h, 0)`로
+  읽으며 exit code로는 결코 읽지 않는다. exit code 259는 `STILL_ACTIVE`와 같기 때문이다.
+- 다른 host의 holder는 알 수 없음이며 결코 끝났다고 판정하지 않는다. corpus는 한 번에 한 host에서
+  쓴다. 다른 host의 release는 file system이 원격 변경을 알리는 곳에서만 대기자에게 닿으므로, 그런 대기는
+  deadline에 끝날 수 있다.
+
+### 잡기와 기다리기
+
+- record는 `.flowmark/lock.<128 random bit의 hex 32자리>.pending`에 통째로 쓰고 sync한 뒤
+  `.flowmark/lock`으로 hard link한다. lock이 있으면 link가 실패하므로 lock은 record 전체와 함께
+  atomic하게 나타난다. 대기자는 pending record를 한 번만 쓴다. pending record는 배타에 관여하지 않는다.
+- link가 `EEXIST`로 실패한 시도는 lock을 읽는다. 잡으려는 쪽 자신의 record와 byte 단위로 같은
+  record(그 session은 유일하다)는 응답을 잃었어도 link가 이루어졌다는 뜻이며(NFS), lock을 잡은 것이다.
+  읽기 전에 사라진 lock은 곧바로 다시 시도한다.
+- 실행 중인 holder나 다른 host의 holder가 잡은 lock을 만난 operation은 그 release를 기다리며, deadline이
+  먼저 지나면 holder와 그 상태를 밝히는 `LOCK_TIMEOUT`으로 실패한다. 끝난 holder는 곧바로 거절한다.
+  deadline이 대기의 유일한 timer다: CLI, MCP, sidecar는 `--lock-wait-ms <n>`(기본 5000, 0이면 곧바로
+  거절)을 받고 server는 flag `lock_wait_ms`(기본 5000)를 받는다. 연결이 닫히면 대기가 끝난다. 근거:
+  곧바로 거절하면 재시도 loop가 모든 호출자에게 옮겨 간다.
+- 대기는 lock에 대한 OS 변경 알림이 이끈다: Linux에서는 `.flowmark/`에 대한 inotify(`IN_DELETE |
+  IN_MOVED_FROM | IN_DELETE_SELF | IN_MOVE_SELF | IN_UNMOUNT`)이며, server의 session들처럼 한 process가 한
+  corpus에서 하는 모든 대기가 instance 하나를 나눈다. macOS에서는 `O_EVTONLY`로 연 lock file에 대한 kqueue
+  `EVFILT_VNODE`(`NOTE_DELETE | NOTE_RENAME | NOTE_REVOKE`, `EV_CLEAR`)다. Windows에서는 `FILE_LIST_DIRECTORY`,
+  `FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED`, `FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE`로
+  연 `.flowmark/`에 대한 overlapped `ReadDirectoryChangesW`다.
+- lock file의 제거나 rename 하나, overflow 하나(`IN_Q_OVERFLOW`, 0 byte 반환, `ERROR_NOTIFY_ENUM_DIR`),
+  지켜보는 folder 자체의 event 하나(제거, rename, unmount, `IN_IGNORED`)는 정확히 한 번의 획득 시도를 더
+  시작한다. 다른 event나 timer는 시도를 시작하지 않는다. 대기자의 pending record 같은 다른 이름의
+  제거는 시도를 시작하지 않는다.
+- watch는 실패한 시도 뒤에 arm하며, 그 사이의 release를 잃지 않는다. Linux와 Windows에서는 arm한 뒤
+  lock을 한 번 더 시도한다. macOS에서는 시도가 실패한 뒤 lock을 `O_EVTONLY`로 열고(lock이 없으면
+  곧바로 다시 시도한다) 등록한 뒤, descriptor의 `fstat`을 `.flowmark/lock`의 `lstat`과 비교한다: link
+  count 0이나 다른 device 또는 inode는 시도를 한 번 더 시작한다. 이후의 vnode event도 같은 비교로
+  판정한다: lock 경로가 여전히 link count가 0보다 큰 지켜보는 inode를 가리키면 그 event는 그 file의 다른
+  이름(잡으려는 쪽의 pending record)에서 온 것이므로 시도를 시작하지 않는다. file 하나의 변경은 event를
+  몇 번 일으키든 시도를 한 번 시작한다.
+- arm할 수 없는 watch는 원인을 밝히며 대기를 곧바로 거절한다: `EMFILE`은
+  `fs.inotify.max_user_instances`를, `ENOSPC`는 `fs.inotify.max_user_watches`를, `ERROR_INVALID_FUNCTION`은
+  지원하지 않는 file system을 밝힌다.
+- holder의 종료는 event다. holder가 이 host에서 실행 중이면 대기자는 그 종료도 지켜본다: Linux에서는
+  `pidfd_open`의 pidfd(Linux 5.3 이상이 필요하다)를 runtime의 poller가 inotify descriptor 곁에서
+  기다린다. macOS에서는 같은 kqueue의 `EVFILT_PROC NOTE_EXIT`이다. Windows에서는 process handle(`SYNCHRONIZE |
+  PROCESS_QUERY_LIMITED_INFORMATION`)을 변경 event와 함께 `WaitForMultipleObjects`로 기다린다 — 이 사용자가
+  handle을 열 수 없는 process는 지켜보지 않으며, 그 release는 lock으로만 알게 된다. arm한 뒤 holder를 다시
+  판정하므로 재사용된 process ID를 지켜보는 일은 없다. 종료는 시도를 시작하지 않는다: holder를 다시
+  판정하며, lock이 아직 그 record를 담고 있는 끝난 holder는 끝났다고 밝히는 `LOCK_TIMEOUT`으로 곧바로
+  거절한다.
+- Windows에서 lock file, pending record, stage file을 여는 일은 모두 `FILE_SHARE_READ | FILE_SHARE_WRITE |
+  FILE_SHARE_DELETE`를 준 `CreateFileW`이므로, 읽는 쪽이 holder의 delete나 unlock을 막지 않는다.
+- 잡기, 풀기, 치우기, 기다리기는 event `lock.acquired`, `lock.released`, `lock.cleared`,
+  `lock.waiting`(기다리는 holder마다 한 번, watch를 arm한 뒤)으로 publish한다.
+
+### Stale lock
+
+- stale lock은 operation이 결코 지우지 않는다. `flowmark unlock <corpus>`가 지운다:
+  1. record R을 읽는다. 실행 중인 holder는 거절하고, 다른 host의 holder는 그것을 가리키는
+     `--holder <pid>@<host>/<session>`이 없으면 거절한다.
+  2. `.flowmark/lock`을 `.flowmark/lock.<R의 SHA-256 앞 hex 32자리>.clearing`으로 link한다. `EEXIST`는 그
+     file을 같은 holder의 다른 unlock — 실행 중이거나 중단된 — 으로 밝히며 거절한다.
+  3. claim을 읽는다. R이 아닌 record는 새 holder가 lock을 잡았다는 뜻이다: claim을 지우고 거절한다.
+  4. 그렇지 않으면 `.flowmark/lock`을, 이어서 claim을 지우고 그 record와 함께 `lock.cleared`를
+     publish한다.
+- 근거: holder와 claim을 가진 unlock 하나만 lock을 지우므로, claim과 제거 사이에 lock은 여전히 R을
+  가리키며, 실행 중인 holder의 lock은 결코 옮겨지지 않는다.
+- 중단된 claim은 다음 unlock의 거절이 밝히며, 사람은 실행 중인 unlock이 없음을 확인한 뒤 그것을
+  지운다. 끝난 holder의 `LOCK_TIMEOUT`은 `flowmark unlock <corpus>`를, 다른 host의 holder의 것은
+  `--holder`를 밝힌다.
 
 ## Transaction
 
-- transaction 안의 요청은 stage된 post-image를 읽는다. savepoint는 중첩 stage이고 `rollback_to`는 그
-  위의 stage를 버린다.
+- transaction 안의 요청은 server의 memory에 있는 그 post-image를 읽는다. savepoint는 그 중첩 단계이고
+  `rollback_to`는 그 위의 단계를 버린다. `.flowmark/tx/`의 journal stage는 commit 하나의 3단계부터
+  8단계까지만 존재한다.
 - face는 commit이 `CORPUS_CONFLICT`를 만나면 다시 읽은 뒤 단일 operation 쓰기를 한 번 재시도한다.
   server transaction은 server가 재시도하지 않으며 orm client는 `WRITE_CONFLICT`를 받고 이를 재시도하지 않는다.
 
@@ -53,15 +148,51 @@
    실패한다.
 2. post-image를 적용해 lock 아래 다시 읽은 corpus에 대해 제약 검사를 실행한다 — `begin` 때의 snapshot도,
    예측한 대상 file 집합도 아니다. 다른 행의 validator 진단(`type`, `key.duplicate`, `reference.dangling`, `check`, `order`, `state.limit`, `history.gap`, `history.chain`, 여러 `files` file에 걸친 `parent.cycle`)은 commit을 실패시키지 않되, `type` 진단은 commit의 제약 검사가 그 값을 평가해야 할 때 commit을 실패시키고, 바이트 단위로 같은 key를 가진 두 행은 그 table을 사용할 수 없게 한다([canonical format](10-canonical-format.ko.md#진단)); `format.*` 진단은 다시 쓰기 거절과 사용할 수 없는 table 상태([canonical format](10-canonical-format.ko.md#진단))가 정하는 경우에만 commit을 실패시킨다. file을 다시 써야 하는 commit — 행 자신의 file, 상세 섹션이 생기거나 사라지는 행으로의 link를 가진 file, `order`의 형제 — 은 그 file이 `format.*` 진단을 가지면 거절한다: `CONSTRAINT`이며 file과 진단을 밝히고, `format.noncanonical`이면 `flowmark canon`을 밝힌다. 세 commit은 면제된다: 대상에 대한 `flowmark canon`([operations](#canon-연산)), 추가된 column이 일으킨 진단에 대한 add-column migration([migration](80-migration.ko.md)) — 그 진단은 그 migration에 대해 table을 사용할 수 없게 하지 않는다 —, `files` 행의 file 전체를 지우는 delete는 rewrite 거절에서만 면제되며, restrict 검사는 그 행을 참조할 수 있는 모든 table의 행을 여전히 필요로 하며(자신의 table을 `parent`로 하는 것, 자식 block과 이력 행, 그 행으로의 foreign key를 가진 모든 table), 그 중 하나라도 사용할 수 없으면 그 delete는 `CONSTRAINT`다.
-3. 모든 post-image file을 `.flowmark/tx/<id>/`에 content-addressed로 쓰고 fsync한다.
-4. 모든 대상의 pre-image를 stage에 복사하고 fsync한다.
-5. **prepare record**를 쓰고 fsync한다: pre-hash와 post-hash를 가진 모든 rename.
-6. runtime의 atomic rename으로 rename을 실행한다.
-7. commit record를 쓰고 fsync한다.
-8. stage를 거둔다.
+3. 각 post-image를 `.flowmark/tx/<id>/`에 `<hash>`로 content-addressed하여 한 번 쓰고, rename n의
+   source로 그 사본 `<n>.<hash>`를 쓴다. 둘 다 stage를 거둘 때까지 남는다. 이 단계 전에 모든 대상의
+   folder와 만들 모든 folder가 `.flowmark/tx/`의 device(`st_dev`, Windows에서는
+   `GetFileInformationByHandle`의 volume serial number)에 있는지 확인한다. 다르면 folder와 "a mount point
+   inside the corpus is unsupported"를 밝히며 commit을 거절하고, 아무것도 stage하지 않는다.
+4. 모든 대상의 pre-image를 stage에 `<hash>`로 content-addressed하여 쓴다.
+5. **prepare record**를 쓴다: pre-hash와 post-hash를 가진 모든 rename. 없는 file은 빈 hash `""`다:
+   create는 빈 pre-hash를, delete는 빈 post-hash를 가진다.
+6. 모든 대상을 확인한 뒤 runtime의 atomic rename으로 rename을 실행한다: post-image를 가진 대상은 끝난
+   것이고, pre-image를 가진 대상은 rename하며, 그 밖의 대상은 stage 전체를 거절한다. delete는 대상을
+   stage 안의 `<n>.deleted`로 rename한다. folder가 없는 create는 먼저 그 folder를 corpus root에서부터
+   symlink를 따르지 않고 만든다. Windows에서는 없는 folder마다 stage 안에 `<n>.dir.<k>`로 만들어 제자리로
+   옮긴다. replay도 똑같이 한다: 제자리에 있는 folder는 건너뛰고 stage에 있는 folder는 옮기며, 대상이
+   pre-hash에 있고 `<n>.<hash>`가 없으면 `<hash>`에서 사본을 다시 쓴다. 중단으로 남은 빈 table folder는
+   빈 table이다([문서 모델](20-document-model.ko.md#저장)).
+7. commit record를 쓴다.
+8. stage를 거둔다: prepare record를 먼저 옆으로 rename하므로, 거두는 도중 중단된 stage는 commit
+   record만 가지며 다시 거두어진다. 거두기는 `<n>.deleted` file을 지운다.
 
-전원 손실을 넘는 내구성은 이 journal과 열 때의 복구에 기대며, OS 전용 directory fsync 의미에 기대지
-않는다.
+근거: rename은 대상에게 source의 file을 준다. rename마다 별개의 사본은 같은 두 대상을 두 file로
+유지하고 대상이 stage와 file을 나누지 않게 하며, 기록된 두 상태가 복구 거절을 위해 stage에 남는다.
+journal은 hard link가 필요 없다.
+
+journal과 복구의 모든 hash는 file의 raw byte의 SHA-256이며 소문자 hex 64자리다(raw-file-bytes hashing,
+[design plan](../plans/design-plan.ko.md)). 각 단계는 publish된다: 5단계 뒤 `journal.prepared`, 7단계 뒤
+`journal.applied`, 8단계 뒤 `journal.collected`, 열 때 `journal.replayed`나 `journal.discarded`다.
+
+전원 손실을 넘는 내구성은 각 단계의 file과 folder 항목이 다음 단계가 시작하기 전에 disk에 있기를
+요구한다. file은 runtime의 sync(`fsync`, macOS에서는 `F_FULLFSYNC`, Windows에서는 `FlushFileBuffers`)로
+sync한다. 만들거나 rename하거나 지운 이름은 Linux와 macOS에서 POSIX가 정하듯 그 folder를 sync하여
+지속되게 하고, folder flush가 없는 Windows에서는 move가 disk에 닿은 뒤 돌아오는 `MoveFileEx`와
+`MOVEFILE_WRITE_THROUGH`로 rename하여 지속되게 한다. 그래서 모든 stage file은 부분 이름에 쓴 뒤 제자리로
+rename하고, delete는 rename이다. 만든 folder는 Linux와 macOS에서 그 부모를 sync하여, Windows에서는 stage
+안에 만들어 `MOVEFILE_WRITE_THROUGH`로 제자리에 옮겨 지속되게 한다. lock은 folder 항목으로 sync하지
+않는다: 전원 손실은 그 holder를 끝내며, 그 record는 link 전에 sync한다. Windows에서 holder의 생존은 그
+process handle에서 읽으며 결코 exit code에서 읽지 않는다.
+
+## File system
+
+corpus root는 hard link와 변경 알림을 가진 local file system 하나에 있다: macOS에서는 APFS나 HFS+,
+Linux에서는 ext4, XFS, Btrfs 같은 것, Windows에서는 NTFS(또는 hard link를 가진 ReFS)다. FAT32와 exFAT은
+hard link가 없어 lock이 record 전체와 함께 atomic하게 나타날 수 없으므로 지원하지 않으며, 거기서 lock의
+link 실패(`EPERM`, `ENOTSUP`, `ERROR_INVALID_FUNCTION`, `ERROR_NOT_SUPPORTED`)는 그 원인을 밝히며 거절한다.
+변경 알림을 보내지 않는 file system은 지원하지 않는다. 다른 file system의 mount point인 corpus folder는
+지원하지 않으며, 거기에 쓰려는 commit은 거절한다([commit protocol](#commit-protocol), 3단계).
 
 ## 시계
 
@@ -83,11 +214,11 @@
 
 | face 이름 | orm code | 뜻 |
 | --- | --- | --- |
-| `LOCK_TIMEOUT` | `CANCELED` | lock 대기가 끝났다. holder를 밝힌다 — SQLite의 `busy_timeout`이 그렇듯 `CANCELED`다 |
+| `LOCK_TIMEOUT` | `CANCELED` | lock 대기가 끝났다 — deadline에, 또는 holder가 끝났으면 곧바로. holder와 그 상태를 밝힌다 — SQLite의 `busy_timeout`이 그렇듯 `CANCELED`다 |
 | `CORPUS_CONFLICT` | `WRITE_CONFLICT` | 읽은 뒤 대상이 바뀌었다. file과 줄을 밝힌다 |
 | `DUPLICATE_KEY` | `DUPLICATE_KEY` | primary나 unique key 값이 이미 있다. 두 행(table과 key)을 밝힌다 |
 | `FOREIGN_KEY` | `FOREIGN_KEY` | 참조가 어떤 행도 가리키지 않거나, 참조된 행을 참조되는 동안 지우려 했다 |
 | `CONSTRAINT` | `CONSTRAINT` | catalog의 다른 규칙이 쓰기를 거절했다 — check, 제목, 전이, 필수 column, limit, 순서, 한 줄 자리. 규칙, 그리고 행과 column을 밝힌다([canonical format](10-canonical-format.ko.md#진단)); 비정규이거나 잘못된 문서를 다시 써야 하는 쓰기, 또는 사용할 수 없는 table의 행이 필요한 요청(읽기나 쓰기)은 file과 진단을 밝히며 `CONSTRAINT`다([canonical format](10-canonical-format.ko.md#진단)) |
-| 복구 거절 | — | 대상과 기록된 두 hash를 밝힌다. 해결될 때까지 열기를 거절한다 |
+| 복구 거절 | — | 대상, 기록된 두 hash, 그 둘을 담은 stage file을 밝힌다. 해결될 때까지 열기를 거절한다 |
 
 모든 실패 메시지는 원인과 고치는 방법을 밝힌다.

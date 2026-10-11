@@ -1,5 +1,5 @@
 <!-- doc-id: plans-design-plan -->
-<!-- source-sha256: 2597b8a30ec0c0ec65443a5ddd43e0a63ceba781983949c06adaa0dc9d1bdf10 -->
+<!-- source-sha256: 7f427b8c8b66f246cacff7fd49ee3c79161b9e1b699f189efc9ec018ac46a89b -->
 # flowmark 설계 계획
 
 Revision 2 — 3개 lane의 적대 감사 결과(engine core, orm 통합, 운영)와 multi-platform 지시를 아래 판정에 접는다. 감사의 blocker는 전부 판정이 되었고, 부수지 못한 주장은 문서 끝에 남긴다.
@@ -30,7 +30,7 @@ Revision 3 — [markdown database 계획](markdown-database-plan.ko.md)이 철�
 5. 이번 session의 deliverable = **설계 문서 + repository bootstrap** (구현은 checklist의 후속 phase로 추적). 감사의 범위 지적에 따라 spec 문서 자체는 다음 session(T1b)으로 분리하고, 이번 session은 T1a를 닫는다.
 6. Sync projection 파일: 실제 markdown 파일이 disk에 존재. `readonly`(기본) / `writable` 옵션 (상세 §7).
 7. Repository는 **github.com/polyspec/flowmark** — polyspec organization 안의 독립 repository.
-8. **Multi-platform은 hard requirement. 편법 금지.** 현재 요구사항을 완전히 충족하는 가장 단순한 구현을 선택한다 (kit 자신의 규칙을 여기에 적용): flock 없음, POSIX 전용 durability 가정 없음 — lock은 kit의 `holder-lock` 선례(lock file + holder 신원 + stale 판정, 순수 runtime primitive)를 따르고, crash 안전성은 OS별 directory fsync가 아니라 journal replay로 얻는다.
+8. **Multi-platform은 hard requirement. 편법 금지.** 현재 요구사항을 완전히 충족하는 가장 단순한 구현을 선택한다 (kit 자신의 규칙을 여기에 적용): OS file lock 없음, POSIX 전용 durability 가정 없음 — lock은 kit의 `holder-lock` 선례(lock file + holder 신원 + stale 판정)를 따르며, platform마다 필요한 primitive는 spec 40에 이름을 밝힌다(lock 대기를 이끄는 변경 알림, holder를 판정하는 process start와 machine 식별자, Windows에서 이름을 지속시키는 write-through move). crash 안전성은 journal replay로 얻으며, spec 40이 platform별로 정하듯 각 단계의 file과 이름을 다음 단계 전에 지속시킨다.
 9. **GUI는 자기 repo의 soksak plugin으로 출시되고, flowmark는 soksak의 sidecar로 서비스한다.** 하나의 Go binary가 세 개의 thin face을 갖는다 — CLI, MCP server, soksak sidecar(soksak core 명세의 protocol v1: 표준 입출력 위의 JSON lines, surface·root routing, host 소유 lifecycle). 저장소는 단일 언어 Go에 `package.json`과 `sidecar.json` manifest를 얹은 형태이고, 언어별 package는 요구사항이 이름을 붙일 때 만든다.
 
 ## 검증된 근거 (polyspec checkout에서 직접 확인)
@@ -86,8 +86,8 @@ flowmark = the markdown database engine (one Go binary)
 
 ### 5. Ops와 transaction (`40-ops.md`)
 
-- **Commit protocol** (순서가 규범적): post-image 파일을 `.flowmark/tx/<id>/`에 content-addressed로 쓰고 fsync; 모든 대상의 pre-image를 stage로 복사하고 fsync; 모든 rename과 pre/post hash를 적은 **prepare record**를 쓰고 fsync; runtime의 atomic rename으로 rename; commit record를 쓰고 fsync; stage 정리. **복구는 corpus를 열 때마다 실행한다**: prepare record가 있으면 완료, 없으면 stage 폐기, 대상의 현재 hash가 기록된 어느 쪽과도 다르면 거부하고 보고한다(crash 사이에 사람 편집이 들어왔다는 뜻 — 결코 조용히 덮어쓰지 않는다). 정전 이후의 durability는 OS별 directory fsync가 아니라 journal replay에 의존한다.
-- **하나의 portable lock** (multi-platform 판정): 모든 작업 — 읽기와 쓰기, 어느 face에서든 — 은 holder 신원·stale 판정을 갖는 같은 lock file을 획득한다(kit `holder-lock` 선례) — timeout은 holder를 보고한다. lock은 작업 하나 동안, 또는 server transaction 하나의 `begin`부터 `commit`이나 `rollback`까지 잡는다(Revision 3). 닫힌 연결이나 유휴 transaction은 rollback하고 lock을 푼다. commit 시 충돌(읽은 뒤 대상이 바뀜)은 file과 line과 함께 실패한다 — face는 다시 읽고 한 번 재시도하며 orm client는 `WRITE_CONFLICT`를 받는다 — silent merge 없음.
+- **Commit protocol** (순서가 규범적): 각 post-image를 `.flowmark/tx/<id>/`에 `<hash>`로 content-addressed하여 한 번 쓰고, rename n마다 source로 사본 `<n>.<hash>`를 써서 같은 두 대상이 두 file로 남고 어느 대상도 stage와 file을 나누지 않게 한다; 모든 대상의 pre-image를 content-addressed로 쓴다; 모든 rename과 pre/post hash를 적은 **prepare record**를 쓴다(없는 file은 빈 hash); runtime의 atomic rename으로 rename하며 delete는 stage로의 rename이다; commit record를 쓴다; stage 정리. **복구는 corpus를 열 때마다 실행한다**: prepare record가 있으면 완료, 없으면 stage 폐기, 대상의 현재 hash가 기록된 어느 쪽과도 다르면 기록된 두 상태를 담은 stage file을 밝히며 거부하고 보고한다(crash 사이에 변경이 들어왔다는 뜻 — 결코 조용히 덮어쓰지 않는다). 정전 이후의 durability는 각 단계의 file과 이름이 다음 단계 전에 disk에 있기를 요구한다: Linux와 macOS에서는 folder sync, Windows에서는 write-through move다(spec 40).
+- **하나의 portable lock** (multi-platform 판정): 모든 작업 — 읽기와 쓰기, 어느 face에서든 — 은 holder 신원·stale 판정을 갖는 같은 lock file `.flowmark/lock`을 획득한다(kit `holder-lock` 선례). 잡힌 lock은 OS 변경 알림이 이끄는 대기로 holder를 보고하는 deadline까지 기다리며, stale lock은 `flowmark unlock`만 지운다. lock은 작업 하나 동안, 또는 server transaction 하나의 `begin`부터 `commit`이나 `rollback`까지 잡는다(Revision 3). 닫힌 연결이나 유휴 transaction은 rollback하고 lock을 푼다. commit 시 충돌(읽은 뒤 대상이 바뀜)은 file과 line과 함께 실패한다 — face는 다시 읽고 한 번 재시도하며 orm client는 `WRITE_CONFLICT`를 받는다 — silent merge 없음.
 - **Server**(Revision 3)는 loopback에 bind하고 유지되는 token을 갖는 상주 face다. DSN은 `markdown://127.0.0.1:<port>/<corpus>?token=<token>`이다.
 - **검증은 commit 시점에 충돌 검사 뒤 lock 아래에서 corpus를 새로 읽어 수행한다** — BEGIN snapshot도 예측된 touch file 집합도 아니다.
 - corpus revision과 `CORPUS_CHANGED`는 철회한다(Revision 3): `paginate`는 요청 하나이고, 호출을 넘어 읽는 face는 없다.
