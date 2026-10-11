@@ -300,96 +300,129 @@ func (c *Corpus) rows(table string) ([]*rec, *Error) {
 	return out, nil
 }
 
-// filesOrder returns the rows of a files table in storage order. The tree of a files
-// table runs through its files, so its order is computed over all its rows.
+// filesOrder returns the rows of a files table in storage order (spec 20 Order). The
+// tree of a files table runs through its files, so its order is computed over all
+// its rows, and it is total whatever the validator reports on the rows: a row whose
+// parent is NULL or names no row is a root; the roots stand by sibling group — the
+// NULL parent group first, then each group of a parent value that names no row, in
+// key order of that value — each root followed by its subtree in pre-order; the rows
+// no root reaches (a parent not of its type, a cycle of parents across files, and
+// every row under one of them) follow in corpus order. Within a sibling group, rows
+// that share an order value stand in corpus order, and rows whose order value is
+// not of its type stand after the others in corpus order.
 func (c *Corpus) filesOrder(tb *catalog.Table) ([]*rec, *Error) {
 	all := c.recs[tb.Name]
 	parent := parentColumn(tb)
+	keyInt := isInteger(columnOf(tb, tb.Key).Type.Kind)
 	byKey := map[string]*rec{}
 	for _, x := range all {
 		byKey[x.row.Key] = x
 	}
 	children := map[*rec][]*rec{}
-	var roots []*rec
+	// The root groups: the rows whose parent is NULL, then the rows of each parent
+	// value that names no row.
+	var nullRoots []*rec
+	dangling := map[string][]*rec{}
+	var danglingValues []string
 	for _, x := range all {
 		if parent == "" {
-			roots = append(roots, x)
+			nullRoots = append(nullRoots, x)
 			continue
 		}
 		v, err := c.value(x, parent)
 		if err != nil {
-			return nil, err
+			continue // a parent not of its type: no root reaches the row
 		}
 		if v.null {
-			roots = append(roots, x)
+			nullRoots = append(nullRoots, x)
 			continue
 		}
-		p, ok := byKey[v.text]
-		if !ok {
-			return nil, unspecified(fmt.Sprintf("the storage order of the files row %s of %s, whose parent %s names no row", x.row.Key, tb.Name, v.text))
+		if p, ok := byKey[v.text]; ok {
+			children[p] = append(children[p], x)
+			continue
 		}
-		children[p] = append(children[p], x)
+		if _, seen := dangling[v.text]; !seen {
+			danglingValues = append(danglingValues, v.text)
+		}
+		dangling[v.text] = append(dangling[v.text], x)
 	}
-	keyInt := isInteger(columnOf(tb, tb.Key).Type.Kind)
-	var sortErr *Error
-	less := func(group []*rec) {
+	sort.Slice(danglingValues, func(i, j int) bool { return keyLess(keyInt, danglingValues[i], danglingValues[j]) })
+	rootGroups := [][]*rec{nullRoots}
+	for _, v := range danglingValues {
+		rootGroups = append(rootGroups, dangling[v])
+	}
+	siblings := func(group []*rec) {
+		if tb.Order == "" {
+			sort.SliceStable(group, func(i, j int) bool { return keyLess(keyInt, group[i].row.Key, group[j].row.Key) })
+			return
+		}
+		type pos struct {
+			n  int64
+			ok bool
+		}
+		at := make(map[*rec]pos, len(group))
+		for _, x := range group {
+			n, ok := c.orderValue(x, tb.Order)
+			at[x] = pos{n, ok}
+		}
 		sort.SliceStable(group, func(i, j int) bool {
-			a, b := group[i], group[j]
-			if tb.Order != "" {
-				av, err := c.orderOf(a, tb.Order)
-				if err != nil && sortErr == nil {
-					sortErr = err
-				}
-				bv, err := c.orderOf(b, tb.Order)
-				if err != nil && sortErr == nil {
-					sortErr = err
-				}
-				if av != bv {
-					return av < bv
-				}
-				if sortErr == nil {
-					sortErr = unspecified(fmt.Sprintf("the storage order of the files rows %s and %s of %s, which share the order value %d", a.row.Key, b.row.Key, tb.Name, av))
-				}
-				return false
+			a, b := at[group[i]], at[group[j]]
+			switch {
+			case a.ok != b.ok:
+				return a.ok
+			case a.ok && a.n != b.n:
+				return a.n < b.n
 			}
-			return keyLess(keyInt, a.row.Key, b.row.Key)
+			return group[i].file < group[j].file
 		})
 	}
-	less(roots)
 	for _, g := range children {
-		less(g)
-	}
-	if sortErr != nil {
-		return nil, sortErr
+		siblings(g)
 	}
 	out := make([]*rec, 0, len(all))
+	reached := make(map[*rec]bool, len(all))
 	var walk func(x *rec)
 	walk = func(x *rec) {
 		out = append(out, x)
+		reached[x] = true
 		for _, ch := range children[x] {
 			walk(ch)
 		}
 	}
-	for _, r := range roots {
-		walk(r)
+	for _, group := range rootGroups {
+		siblings(group)
+		for _, r := range group {
+			walk(r)
+		}
 	}
-	if len(out) != len(all) {
-		return nil, unspecified("the storage order of the files rows of " + tb.Name + " on a cycle of parents")
+	var rest []*rec
+	for _, x := range all {
+		if !reached[x] {
+			rest = append(rest, x)
+		}
 	}
-	return out, nil
+	sort.SliceStable(rest, func(i, j int) bool { return rest[i].file < rest[j].file })
+	return append(out, rest...), nil
 }
 
 // orderOf returns the order value of row x.
 func (c *Corpus) orderOf(x *rec, col string) (int64, *Error) {
-	v, err := c.value(x, col)
-	if err != nil {
-		return 0, err
-	}
-	n, perr := strconv.ParseInt(v.text, 10, 64)
-	if v.null || perr != nil {
+	n, ok := c.orderValue(x, col)
+	if !ok {
 		return 0, c.typeFault(x, col)
 	}
 	return n, nil
+}
+
+// orderValue returns the order value of row x; ok is false when it is not a value
+// of its type.
+func (c *Corpus) orderValue(x *rec, col string) (int64, bool) {
+	v, err := c.value(x, col)
+	if err != nil || v.null {
+		return 0, false
+	}
+	n, perr := strconv.ParseInt(v.text, 10, 64)
+	return n, perr == nil
 }
 
 // keyLess orders two canonical keys: numerically for an integer key, else by code

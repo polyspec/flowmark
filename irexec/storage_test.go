@@ -1,6 +1,7 @@
 package irexec
 
 import (
+	"slices"
 	"strings"
 	"testing"
 )
@@ -23,6 +24,68 @@ func TestGoldenReads(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// TestFilesStorageOrder pins the storage order of a files table whose tree is not
+// whole (spec 20 Order, "Storage order"): it is total, so a read without an IR order
+// never fails on a validator diagnostic of another row. The roots stand by sibling
+// group, NULL parent first, then each dangling parent value in key order; the rows
+// no root reaches follow in corpus order; tied or untyped order values fall back to
+// corpus order.
+func TestFilesStorageOrder(t *testing.T) {
+	note := func(key, parent string, position string) string {
+		ls := []string{"# " + key}
+		if parent != "" {
+			ls = append(ls, "- parent: ["+parent+"]("+parent+".flowmark.md)")
+		}
+		ls = append(ls, "- position: "+position)
+		return lines(ls...)
+	}
+	corpus := func(notes map[string][2]string) map[string]string {
+		docs := baseDocs()
+		for p := range docs {
+			if strings.HasPrefix(p, "notes/") {
+				delete(docs, p)
+			}
+		}
+		for k, v := range notes {
+			docs["notes/"+k+".flowmark.md"] = note(k, v[0], v[1])
+		}
+		return docs
+	}
+	cases := []struct {
+		name  string
+		notes map[string][2]string
+		want  []string
+	}{
+		{"20#order: a row whose parent names no row is a root after the NULL parent group",
+			map[string][2]string{"A": {"ghost", "1"}, "B": {"A", "1"}, "C": {"", "1"}}, []string{"C", "A", "B"}},
+		{"20#order: dangling parent groups stand in the key order of their parent value",
+			map[string][2]string{"D": {"zz", "1"}, "E": {"aa", "1"}}, []string{"E", "D"}},
+		{"20#order: rows on a cycle of parents across files follow the reached rows in corpus order",
+			map[string][2]string{"X": {"Y", "1"}, "Y": {"X", "1"}, "Z": {"X", "2"}, "R": {"", "1"}}, []string{"R", "X", "Y", "Z"}},
+		{"20#order: siblings sharing an order value stand in corpus order",
+			map[string][2]string{"S1": {"", "2"}, "S2": {"", "1"}, "S3": {"", "1"}}, []string{"S2", "S3", "S1"}},
+		{"20#order: a sibling whose order value is not of its type stands after the others",
+			map[string][2]string{"S1": {"", "x"}, "S2": {"", "2"}, "S3": {"", "1"}}, []string{"S3", "S2", "S1"}},
+		{"20#order: a row whose parent is not of its type and its subtree follow the reached rows",
+			map[string][2]string{"A": {"ABCDEFGHIJKLMNOPQ", "1"}, "B": {"A", "1"}, "C": {"", "1"}}, []string{"C", "A", "B"}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			f := catalogFixture(t, corpus(c.notes)).on(t)
+			// The keys alone: a parent not of its type fails a read that returns it.
+			res := f.ok(f.msg("all", "notes", map[string]any{"columns": map[string]any{"mode": "none", "remove": []string{"parent", "item"}}}))
+			var got []string
+			for _, r := range res.Answer.Rows {
+				v, _ := r.Get("id")
+				got = append(got, v.(string))
+			}
+			if !slices.Equal(got, c.want) {
+				t.Fatalf("ids %v; want %v", got, c.want)
+			}
+		})
 	}
 }
 
