@@ -1,8 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: a112a52c51496c251dfe9834a8783d54bca9d4c5fab1cbe53ca063f209970d55 -->
+<!-- source-sha256: 6ef8f7f6390e6f74e6c362ba6b32eb29a8d7feb885b3495228129cdd988311f6 -->
 # Changelog
 
 ## Unreleased
+
+- T12.1-13: spec이 block codec이 규칙 없이 내린 판단을 적으며, 이제 두 spec이 어긋나지 않는다. block이나 document 행의 `parent`는 자기 file이 아니라 자기 block의 행을 가리킨다: 다른 block의 부모는 쓰기에서 `CONSTRAINT`, 읽기에서 `format.block`이며, 읽기는 거짓 `parent.cycle`을 더하지 않는다. block heading 뒤의 빈 줄은 개수와 무관하게 `format.noncanonical`이며, space와 tab만 있는 줄도 빈 줄로 센다. 자식 block은 행 scope에 한 번만 서고 두 번째는 `format.section`이다. 두 행의 block들이 공유하는 상세 key는 block이 배정한다. block 행은 자기 `files` 행을 그 file의 key에서 유도한 file 이름으로 link한다. codec은 이 판단을 따른다: 빈 줄 규칙은 모든 빈 줄을 건너뛰며 진단은 하나이고, file 자신의 행으로 가는 link는 linker 없이 유도하므로 render가 이를 `FOREIGN_KEY`로 거절하지 않는다. 쓰기는 없는 행을 가리키는 parent를 한 번만 `CONSTRAINT`로 거절하며, 그 옆에 붙던 거짓 `parent.cycle`은 없다.
 
 - T12.2.5: `store/testdata/equivalence` 아래에 storage 동등성 dataset을 더했다. table `entries`의 다섯 행을 다섯 corpus로 저장하며, 각 corpus는 자기 catalog를 가진다: files(행마다 file 하나), document list와 document table(`entries.flowmark.md`), 그리고 files table `plans` 아래의 block list와 block table이다. 다섯 catalog는 같은 column을 선언하고, block corpus만 placement foreign key `plan`을 더한다. 행은 title, 비어 있지 않은 body와 빈 body, 없음·빈 값·값이 있는 상태의 nullable summary section, text, int, bool, date와 NULL scalar, 그리고 상세 section이 없는 행을 포함하는 self foreign key `parent` 계층을 담는다. 이 계층은 list corpus에서 들여쓰기이고 table corpus에서는 명시적 `parent` column이다. 테스트는 다섯 corpus가 NULL을 포함해 모든 공유 column에서 같은 행으로 parse되는지, 각 저장이 행과 golden bytes를 왕복하는지 요구한다. file과 document fuzz target은 이 dataset의 golden을 seed로 읽으며, corpus마다 selector byte 하나로 고른다.
 - T12.2.4-1: store fixture에 `list` storage이고 table에 상태기계가 있는 block을 더했다: 각 items row 아래의 `item_checks`는 세 상태마다 checkbox glyph, 중첩 행, order column, 그리고 행의 상세 section 안의 `history` block(`item_check_history`)을 가진다. 허용과 거절 사례가 그것이 쓰는 각 규칙을 고정하고, items golden이 그 P1과 P2 왕복을 담으며, fuzz target은 그 golden으로 시드된다. catalog의 heading 깊이 규칙이 history block을 level 7에서 거절했으나 그 행은 거기서 heading을 쓰지 않는다. 이제 규칙은 행이 H6를 넘는 heading을 쓰는 layout만 거절하며, spec 30이 그렇게 적는다. body만 있는 level 7 행은 유효하고, level 7의 markdown column은 여전히 거절된다.

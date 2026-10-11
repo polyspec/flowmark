@@ -46,7 +46,7 @@ guessed.
 - **`store document list`, `store document table`** — every row in the one file
   `<table>.flowmark.md` at the corpus root.
 - **`store block <fk> list`, `store block <fk> table`** — the rows inside the scope of the parent
-  row that the named foreign key references.
+  row that the named foreign key references. Its block section is a heading named by the child table with the list or table on the next line ([canonical format](10-canonical-format.md#document-order)).
 
 - A missing table folder (`files`) or a missing document file (`document`) is an empty table: zero
   rows and no diagnostic. A document file without its H1 line is `format.noncanonical`. Grounding: git keeps no empty folders, so a checkout may hold no folder for a table without rows; an absent folder or file holds no rows, as an empty folder or a document file holding only `# <table>` does, so its absence is one form of zero rows, not a corpus defect.
@@ -71,7 +71,7 @@ so the same rows can be stored either way.
   key holds no `--` and no `-_`: the MkDocs viewer collapses hyphen runs and would otherwise alter the anchor, and a `_` after punctuation, as in `-_`, can open emphasis.
 - A key is unique within its table without regard to case, because case-insensitive file systems
   and lowercased anchors would otherwise collide. A key equal to another key of its table without regard to case is `DUPLICATE_KEY` on a write that
-  introduces it and `key.duplicate` in the validator; it never makes a file unreadable, except that two rows of one file whose keys are byte for byte equal are `format.block` when both have detail sections, since the two sections share one heading text ([canonical format](10-canonical-format.md#detail-headings-and-anchors)), or when a `parent` cell of the file names their key, since the parent cannot be assigned ([canonical format](10-canonical-format.md#table-rows)); two rows with byte-for-byte equal keys make their table unavailable ([canonical format](10-canonical-format.md#diagnostics)).
+  introduces it and `key.duplicate` in the validator; it never makes a file unreadable, except that two rows of one file whose keys are byte for byte equal are `format.block` when both have detail sections, since the two sections share one heading text ([canonical format](10-canonical-format.md#detail-headings-and-anchors)), and, when both stand in one block, when a detail section names their key or a `parent` cell of that block names it, since the section or the parent cannot be assigned ([canonical format](10-canonical-format.md#document-order)); rows of different blocks are assigned by their block; two rows with byte-for-byte equal keys make their table unavailable ([canonical format](10-canonical-format.md#diagnostics)).
 - A foreign key matches the referenced key byte for byte. A link text that differs from the key
   only in case is a dangling reference.
 - A key or a table name equal, without regard to case, to `CON`, `PRN`, `AUX`, `NUL`, `COM0`–`COM9`
@@ -111,7 +111,7 @@ so the same rows can be stored either way.
 - A `markdown` column is always a section of the row scope — never a field or a cell — in every
   storage. Each `markdown` column other than the body (a non-null one always present, a nullable one
   when it is not NULL) and each child block is a section of the row scope named by the column or
-  the child table; a child table named like a markdown column of its
+  the child table; a child block stands once in its row scope, and a second one is `format.section` ([canonical format](10-canonical-format.md#sections-and-their-values)); a child table named like a markdown column of its
   parent is a schema error.
 
 ## Hierarchy
@@ -119,7 +119,7 @@ so the same rows can be stored either way.
 - Hierarchy is a self foreign key `parent`. In a list the indentation is the parent and no column
   is written; a table or a file writes the column.
 - No parent is guessed; a cycle is refused: `CONSTRAINT` on write. On read, a cycle among one file's rows is `parent.cycle` and leaves that file unreadable, since its rows have no storage order; a cycle through the rows of several `files` files is the validator's `parent.cycle` and never makes a file unreadable. A `parent`
-  outside the row's block is `CONSTRAINT` on write and `format.block` on read.
+  of a block or document row names a row of its own block — the one list or table that holds the row, which for a document row is its file's: any other is `CONSTRAINT` on write and `format.block` on read ([canonical format](10-canonical-format.md#document-order)). Grounding: a parent and its child share a placement parent, or the child has no place in the storage order, and a list's indentation cannot reach another block.
 
 ## Order
 
@@ -153,8 +153,8 @@ so the same rows can be stored either way.
 - Every foreign key is restrict-only ([constraints](50-constraints.md)): `cascade` and `set_null`
   are rejected at catalog load ([schema](30-schema.md)).
 - A foreign key value is a link. Its text is the referenced key and its target is derived from the
-  referenced row, as the [canonical format](10-canonical-format.md) states. A dangling foreign key is the validator's `reference.dangling`; a write that introduces one is
-  `FOREIGN_KEY`, and it never makes a file unreadable, except a `parent` of a block or document row that names no row of its file, which is `format.block` ([canonical format](10-canonical-format.md#foreign-keys-as-links)). Every relation is a link whose `#<anchor>` is the anchor that GitHub, GitLab, VS Code and MkDocs generate for the heading it names, as the [canonical format](10-canonical-format.md#detail-headings-and-anchors) states. Pandoc is not a viewer the claim is made for: its default does not rewrite relative link targets, so a link between corpus files is not claimed to be followed in its output.
+  referenced row, as the [canonical format](10-canonical-format.md) states. A link from a block row to the `files` row whose file holds it is that file's name, derived from the file's own key ([canonical format](10-canonical-format.md#foreign-keys-as-links)). A dangling foreign key is the validator's `reference.dangling`; a write that introduces one is
+  `FOREIGN_KEY`, and it never makes a file unreadable, except a `parent` of a block or document row that names no row of its block, which is `format.block` ([canonical format](10-canonical-format.md#foreign-keys-as-links)). Every relation is a link whose `#<anchor>` is the anchor that GitHub, GitLab, VS Code and MkDocs generate for the heading it names, as the [canonical format](10-canonical-format.md#detail-headings-and-anchors) states. Pandoc is not a viewer the claim is made for: its default does not rewrite relative link targets, so a link between corpus files is not claimed to be followed in its output.
 - A one-to-many across files stores the child table with `store files` and writes the foreign key
   in its field list. A one-to-many inside a file stores the child table with `store block`.
 - Many-to-many is a link table with an `identity` key.

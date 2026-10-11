@@ -3,6 +3,7 @@ package store
 import (
 	"bytes"
 	"fmt"
+	"path"
 	"slices"
 	"sort"
 	"strconv"
@@ -237,6 +238,8 @@ type docParser struct {
 	all     []*docRec
 	links   []docLink
 	details map[string]bool // the heading text of each detail section read: two of one text collide
+	// ownTable and ownKey name the files row this file holds; empty for a document file.
+	ownTable, ownKey string
 }
 
 // ParseDocument reads the document file rel of a document table, <table>.flowmark.md,
@@ -248,7 +251,7 @@ func ParseDocument(cat *catalog.Catalog, table, rel string, data []byte, lk Link
 	if err != nil {
 		return nil, nil, err
 	}
-	p := newDocParser(&sink{rel: rel}, rel, lk)
+	p := newDocParser(&sink{rel: rel}, rel, lk, "", "")
 	text, ok := p.normalize(data)
 	if !ok {
 		return nil, p.diags, nil
@@ -273,9 +276,10 @@ func ParseDocument(cat *catalog.Catalog, table, rel string, data []byte, lk Link
 	return rows, p.diags, nil
 }
 
-// newDocParser returns a parser of the file rel, whose diagnostics go to s.
-func newDocParser(s *sink, rel string, lk Linker) *docParser {
-	return &docParser{sink: s, rel: rel, lk: lk, details: map[string]bool{}}
+// newDocParser returns a parser of the file rel, whose diagnostics go to s. The
+// files row ownTable/ownKey is the one the file holds, empty for a document file.
+func newDocParser(s *sink, rel string, lk Linker, ownTable, ownKey string) *docParser {
+	return &docParser{sink: s, rel: rel, lk: lk, details: map[string]bool{}, ownTable: ownTable, ownKey: ownKey}
 }
 
 // run reads the H1, the list or table of the rows, and their detail sections, and
@@ -1016,9 +1020,11 @@ func (p *docParser) readChildBlock(lines []string, h heading, end int, child *do
 	p.lay, p.recs = child, nil
 	defer func() { p.lay, p.recs = outerLay, outerRecs }()
 	i := h.last + 1
-	if i < end && lines[i] == "" {
+	if i < end && isBlank(lines[i]) {
 		p.warn(i+1, 1, RuleNoncanonical, "a blank line between the block heading and its rows")
-		i++
+		for i < end && isBlank(lines[i]) {
+			i++
+		}
 	}
 	start := i
 	i = p.readRows(lines[:end], i)
@@ -1093,9 +1099,47 @@ func (p *docParser) checkScope(recs []*docRec) {
 		}
 	}
 	if _, _, unreached := storageOrder(lay, recRows(recs)); len(unreached) > 0 {
-		p.fail(recs[unreached[0]].line, 1, RuleParentCycle, "the parents of the rows form a cycle")
+		for _, i := range unreached {
+			if rowOnCycle(lay, recRows(recs), i) {
+				p.fail(recs[i].line, 1, RuleParentCycle, "the parents of the rows form a cycle")
+				break
+			}
+		}
 	}
 	p.all = append(p.all, recs...)
+}
+
+// rowOnCycle reports whether the parents of rows[i] lead back to rows[i]. A row
+// under a parent that no row holds, or that two rows hold, is not on a cycle: that
+// parent is reported by its own rule.
+func rowOnCycle(lay *docLayout, rows []*Row, i int) bool {
+	cur := i
+	for range rows {
+		next := uniqueRow(rows, parentKey(lay, rows[cur]))
+		if next < 0 {
+			return false
+		}
+		if next == i {
+			return true
+		}
+		cur = next
+	}
+	return false
+}
+
+// uniqueRow returns the index of the row of rows whose key is key, -1 when no row or
+// two rows have it.
+func uniqueRow(rows []*Row, key string) int {
+	found := -1
+	for j, r := range rows {
+		if r.Key == key {
+			if found >= 0 {
+				return -1
+			}
+			found = j
+		}
+	}
+	return found
 }
 
 // resolveLinks checks each foreign key of the file against the row it names, once
@@ -1140,6 +1184,9 @@ func sortedRows(lay *docLayout, recs []*docRec) []*Row {
 // this file, the file's name with the anchor of the row's detail section when it
 // has one; otherwise the linker's target. It reports false when no row has the key.
 func (p *docParser) linkTarget(table, key string) (string, bool) {
+	if table == p.ownTable && key == p.ownKey {
+		return path.Base(p.rel), true
+	}
 	for _, rec := range p.all {
 		if rec.row.Table == table && rec.row.Key == key {
 			return localLink(rec.lay, p.rel, rec.row), true

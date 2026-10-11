@@ -70,15 +70,20 @@ func tableOfH1(text string) string {
 
 // docCase is one input of the document grammar. rule is the rule of the first
 // diagnostic, empty when the input is accepted; line and col locate it, 0 when
-// not checked; kept says whether rows are returned along with the diagnostics.
+// not checked; kept says whether rows are returned along with the diagnostics;
+// alone says that the first diagnostic is the only one; readOnly says that the
+// accepted rows are only read, since the writer refuses their shared key as
+// DUPLICATE_KEY, which the validator reports and which leaves the table unavailable.
 type docCase struct {
-	name  string
-	table string // "" is items
-	text  string
-	rule  string
-	line  int
-	col   int
-	kept  bool
+	name     string
+	table    string // "" is items
+	text     string
+	rule     string
+	line     int
+	col      int
+	kept     bool
+	alone    bool
+	readOnly bool
 }
 
 func docAccept(name, text string) docCase { return docCase{name: name, text: text} }
@@ -343,6 +348,40 @@ func documentParseCases() []docCase {
 			"| id | from_state | to_state | at |", "| --- | --- | --- | --- |",
 			"| 1 | waiting | doing | 2026-10-01 08:00:00.000000 |",
 			"", "### item_history", "| id | from_state | to_state | at |", "| --- | --- | --- | --- |")),
+		// A parent cell names a row of its own block; a key two blocks of the file share is assigned by its block.
+		{name: "10#table-rows: a parent cell in one block names a key another block shares", readOnly: true, text: itemsOf(
+			"- [ ] T1 Plan done:false", "- [ ] T2 Other done:false", "",
+			"## items row T1", "", "### item_steps", "| id | parent |", "| --- | --- |",
+			"| S1 |  |", "| S2 | [S1](items.flowmark.md) |", "",
+			"## items row T2", "", "### item_steps", "| id | parent |", "| --- | --- |", "| S1 |  |"), kept: true},
+		{name: "10#document-order: a parent cell naming a row of another block", rule: RuleBlock, line: 17, alone: true, text: itemsOf(
+			"- [ ] T1 Plan done:false", "- [ ] T2 Other done:false", "",
+			"## items row T1", "", "### item_steps", "| id | parent |", "| --- | --- |", "| S1 |  |", "",
+			"## items row T2", "", "### item_steps", "| id | parent |", "| --- | --- |", "| S2 | [S1](items.flowmark.md) |")},
+		{name: "10#table-rows: a parent cell naming a key two rows of its block share", rule: RuleBlock, line: 11, alone: true, text: itemsOf(
+			"- [ ] T1 Plan done:false", "", "## items row T1", "", "### item_steps",
+			"| id | parent |", "| --- | --- |", "| S1 |  |", "| S1 |  |", "| S2 | [S1](items.flowmark.md) |")},
+		{name: "10#document-order: a detail key that two blocks of the file share, with a section in one", readOnly: true, text: itemsOf(
+			"- [ ] T1 Plan done:false", "- [ ] T2 Other done:false", "",
+			"## items row T1", "", "### item_notes", "- N1 Spec the codec", "",
+			"#### item_notes row N1", "", "Body of N1.", "",
+			"## items row T2", "", "### item_notes", "- N1 Other"), kept: true},
+
+		// A blank line after a block heading is noncanonical in any count, and a line of spaces or tabs is one.
+		noncanonicalDoc("10#document-order: two blank lines between a block heading and a table", 7, itemsOf(
+			"- [ ] T1 Plan done:false", "", "## items row T1", "", "### item_history", "", "",
+			"| id | from_state | to_state | at |", "| --- | --- | --- | --- |",
+			"| 1 | waiting | doing | 2026-10-01 08:00:00.000000 |")),
+		noncanonicalDoc("10#document-order: a line of spaces between a block heading and a table", 7, itemsOf(
+			"- [ ] T1 Plan done:false", "", "## items row T1", "", "### item_history", "  ",
+			"| id | from_state | to_state | at |", "| --- | --- | --- | --- |",
+			"| 1 | waiting | doing | 2026-10-01 08:00:00.000000 |")),
+		noncanonicalDoc("10#document-order: two blank lines between a block heading and a list", 7, itemsOf(
+			"- [ ] T1 Plan done:false", "", "## items row T1", "", "### item_notes", "", "",
+			"- N1 Spec the codec")),
+		noncanonicalDoc("10#document-order: a line of a tab between a block heading and a list", 7, itemsOf(
+			"- [ ] T1 Plan done:false", "", "## items row T1", "", "### item_notes", "\t",
+			"- N1 Spec the codec")),
 
 		// The block of a state machine (item_checks): its glyphs, fields, order, nesting and history block.
 		docAccept("10#list-rows: the glyph of each state in a block", checkedOf("- [ ] C1 Open done:false", "- [~] C2 Doing done:false", "- [x] C3 Done done:true")),
@@ -403,6 +442,9 @@ func TestParseDocumentRules(t *testing.T) {
 				if rows == nil {
 					t.Fatal("accepted input returned no rows")
 				}
+				if c.readOnly {
+					return
+				}
 				out := checkDocumentP2(t, cat, table, rows, lk)
 				if !bytes.Equal(out, []byte(c.text)) {
 					t.Fatalf("P1: emit(parse(s)) != s\n got: %q\nwant: %q", out, c.text)
@@ -423,6 +465,9 @@ func TestParseDocumentRules(t *testing.T) {
 			}
 			if c.col != 0 && diags[0].Column != c.col {
 				t.Fatalf("first diagnostic at column %d; want %d: %+v", diags[0].Column, c.col, diags[0])
+			}
+			if c.alone && len(diags) != 1 {
+				t.Fatalf("%d diagnostics; want %s alone: %+v", len(diags), c.rule, diags)
 			}
 			if (rows != nil) != c.kept {
 				t.Fatalf("rows returned = %v; want %v", rows != nil, c.kept)
@@ -499,6 +544,7 @@ type writeCase struct {
 	rows  []*Row
 	rule  string
 	out   string
+	alone bool // the refusal is the only diagnostic
 }
 
 // item is an items row with its state, its done flag and its position.
@@ -587,9 +633,9 @@ func writeCases() []writeCase {
 			item("T2", "Other", "waiting", "1", done)}, rule: RuleConstraint},
 		{name: "10#order: siblings with a gap", rows: []*Row{
 			item("T1", "Plan", "waiting", "1", done), item("T2", "Other", "waiting", "3", done)}, rule: RuleConstraint},
-		{name: "10#hierarchy: a parent that names no row", rows: []*Row{
-			withParent(item("T1", "Plan", "waiting", "1", done), "T9")}, rule: RuleConstraint},
-		{name: "10#hierarchy: a parent cycle", rows: []*Row{
+		{name: "20#hierarchy: a parent that names no row", rows: []*Row{
+			withParent(item("T1", "Plan", "waiting", "1", done), "T9")}, rule: RuleConstraint, alone: true},
+		{name: "20#hierarchy: a parent cycle", rows: []*Row{
 			withParent(item("T1", "Plan", "waiting", "1", done), "T2"),
 			withParent(item("T2", "Other", "waiting", "1", done), "T1")}, rule: RuleConstraint},
 		{name: "10#detail-sections: a body without its final line feed", rows: []*Row{
@@ -615,8 +661,8 @@ func writeCases() []writeCase {
 		{name: "10#detail-sections: a present empty section", rows: []*Row{
 			withSection(item("T1", "Plan", "waiting", "1", done), "cause", "")},
 			out: "# items\n- [ ] T1 Plan done:false\n\n## items row T1\n\n### cause\n"},
-		{name: "10#hierarchy: a parent that names no row of its file", table: "people", rows: []*Row{
-			peopleRow("P1", "Ada", map[string]string{"parent": "P9"})}, rule: RuleConstraint},
+		{name: "20#hierarchy: a parent that names no row of its block", table: "people", rows: []*Row{
+			peopleRow("P1", "Ada", map[string]string{"parent": "P9"})}, rule: RuleConstraint, alone: true},
 		{name: "10#list-rows: a list without a state column writes no glyph", table: "notes", rows: []*Row{
 			notePlan("N1", "", "Plan"), notePlan("N2", "N1", "Child")},
 			out: "# notes\n- N1 Plan\n  - N2 Child\n"},
@@ -669,21 +715,33 @@ func writeCases() []writeCase {
 		{name: "10#list-rows: two block rows with keys equal without regard to case", rows: []*Row{
 			withBlock(item("T1", "Plan", "waiting", "1", done), "item_notes",
 				noteRow("N1", "", "A", "1", nil), noteRow("n1", "", "B", "2", nil))}, rule: RuleDuplicateKey},
-		{name: "10#hierarchy: a block row whose parent names no row of its block", rows: []*Row{
+		{name: "20#hierarchy: a block row whose parent names no row of its block", rows: []*Row{
 			withBlock(item("T1", "Plan", "waiting", "1", done), "item_notes",
-				noteRow("N1", "N9", "A", "1", nil))}, rule: RuleConstraint},
+				noteRow("N1", "N9", "A", "1", nil))}, rule: RuleConstraint, alone: true},
+		{name: "20#hierarchy: a block row whose parent names a row of another block", rows: []*Row{
+			withBlock(item("T1", "Plan", "waiting", "1", done), "item_steps", stepOf("S1", "")),
+			withBlock(item("T2", "Other", "waiting", "2", done), "item_steps", stepOf("S2", "S1"))}, rule: RuleConstraint, alone: true},
 		{name: "10#detail-sections: a block that the table does not declare", rows: []*Row{
 			withBlock(item("T1", "Plan", "waiting", "1", done), "item_links",
 				historyRow("1", "waiting", "doing", "2026-10-01 08:00:00.000000"))}, rule: RuleConstraint},
 		{name: "10#detail-sections: a block row of another table", rows: []*Row{
 			withBlock(item("T1", "Plan", "waiting", "1", done), "item_history", noteRow("N1", "", "A", "1", nil))}, rule: RuleConstraint},
-		{name: "10#hierarchy: a placement foreign key assigned to a block row", rows: []*Row{
+		{name: "10#table-rows: a placement foreign key assigned to a block row", rows: []*Row{
 			withBlock(item("T1", "Plan", "waiting", "1", done), "item_history",
 				withScalar(historyRow("1", "waiting", "doing", "2026-10-01 08:00:00.000000"), "item", "T2"))}, rule: RuleConstraint},
 		{name: "10#detail-sections: a block row missing a non-null cell", rows: []*Row{
 			withBlock(item("T1", "Plan", "waiting", "1", done), "item_history",
 				withoutScalar(historyRow("1", "waiting", "doing", "2026-10-01 08:00:00.000000"), "to_state"))}, rule: RuleConstraint},
 	}
+}
+
+// stepOf is a row of the item_steps block with its parent, empty for a root row.
+func stepOf(key, parent string) *Row {
+	sc := map[string]*string{}
+	if parent != "" {
+		sc["parent"] = sp(parent)
+	}
+	return &Row{Table: "item_steps", Key: key, Scalars: sc, Sections: map[string]*string{}, Raw: map[string]string{}, Dangling: map[string]DanglingLink{}}
 }
 
 // withBlock sets the rows of the child block table of row r.
@@ -797,6 +855,9 @@ func TestRenderDocumentRules(t *testing.T) {
 			if c.rule != "" {
 				if len(diags) == 0 || diags[0].Rule != c.rule {
 					t.Fatalf("diagnostics %+v; want rule %s", diags, c.rule)
+				}
+				if c.alone && len(diags) != 1 {
+					t.Fatalf("%d diagnostics; want %s alone: %+v", len(diags), c.rule, diags)
 				}
 				if out != nil {
 					t.Fatalf("a refused row set writes bytes: %q", out)
