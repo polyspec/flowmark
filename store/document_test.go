@@ -863,7 +863,7 @@ func TestListChildUnderWideMarkerRun(t *testing.T) {
 // back without a diagnostic, and that the rows write the same bytes again.
 func checkDocumentP2(t *testing.T, cat *catalog.Catalog, table string, rows []*Row, lk Linker) []byte {
 	t.Helper()
-	out, rf, err := RenderDocument(cat, table, rows, lk)
+	out, rf, err := RenderDocument(cat, table, docPath(table), rows, lk)
 	if err != nil || len(rf) > 0 {
 		t.Fatalf("the rows are refused on write: %v %+v", err, rf)
 	}
@@ -871,7 +871,7 @@ func checkDocumentP2(t *testing.T, cat *catalog.Catalog, table string, rows []*R
 	if err != nil || len(diags) > 0 || back == nil {
 		t.Fatalf("written file does not parse cleanly: %v %+v\n%s", err, diags, out)
 	}
-	again, rf, err := RenderDocument(cat, table, back, lk)
+	again, rf, err := RenderDocument(cat, table, docPath(table), back, lk)
 	if err != nil || len(rf) > 0 || !bytes.Equal(again, out) {
 		t.Fatalf("P2: emit(parse(emit(d))) != emit(d)\n got: %q\nwant: %q", again, out)
 	}
@@ -891,7 +891,7 @@ func TestDocumentGoldens(t *testing.T) {
 			if err != nil || len(diags) > 0 || rows == nil {
 				t.Fatalf("golden has diagnostics: %v %+v", err, diags)
 			}
-			out, rf, err := RenderDocument(cat, table, rows, lk)
+			out, rf, err := RenderDocument(cat, table, docPath(table), rows, lk)
 			if err != nil || len(rf) > 0 || !bytes.Equal(out, data) {
 				t.Fatalf("P1 failed: %v %+v\n got: %q\nwant: %q", err, rf, out, data)
 			}
@@ -908,7 +908,7 @@ func TestBlockTableIsNoDocument(t *testing.T) {
 	if _, _, err := ParseDocument(cat, "item_history", "item_history.flowmark.md", nil, lk); err == nil {
 		t.Fatal("a block table read as a document table: want an error")
 	}
-	if _, _, err := RenderDocument(cat, "item_notes", nil, lk); err == nil {
+	if _, _, err := RenderDocument(cat, "item_notes", docPath("item_notes"), nil, lk); err == nil {
 		t.Fatal("a block table written as a document table: want an error")
 	}
 }
@@ -1311,7 +1311,7 @@ func TestRenderDocumentRules(t *testing.T) {
 			if table == "" {
 				table = "items"
 			}
-			out, diags, err := RenderDocument(cat, table, c.rows, lk)
+			out, diags, err := RenderDocument(cat, table, docPath(table), c.rows, lk)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}

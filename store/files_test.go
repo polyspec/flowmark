@@ -188,7 +188,7 @@ func TestFilesSectionHeading(t *testing.T) {
 // a files table of the catalog.
 func renderFileOf(t testing.TB, cat *catalog.Catalog, table string, row *Row, lk Linker) ([]byte, []Refusal) {
 	t.Helper()
-	out, rf, err := RenderFile(cat, table, row, lk)
+	out, rf, err := RenderFile(cat, table, filePath(table, row.Key), row, lk)
 	if err != nil {
 		t.Fatal(err)
 	}

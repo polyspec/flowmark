@@ -167,7 +167,7 @@ func TestSharedKeyLinkWrite(t *testing.T) {
 		sharedItem("T1", "1", map[string][]*Row{"refs": {ref}, "steps": {sharedStep("S1")}}),
 		sharedItem("T2", "2", map[string][]*Row{"steps": {sharedStep("S1")}}),
 	}
-	out, rf, err := RenderDocument(cat, "items", rows, stubLinker{})
+	out, rf, err := RenderDocument(cat, "items", docPath("items"), rows, stubLinker{})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,6 +1,7 @@
 package store
 
 import (
+	"fmt"
 	"io/fs"
 	"os"
 	"slices"
@@ -53,7 +54,7 @@ func ParseFilesTable(cat *catalog.Catalog, fsys FS, table string, lk Linker, mem
 	case !root[i].IsDir():
 		return nil, nil, []Diagnostic{fileDiag(table, RuleWalk, "the table folder is not a folder")}
 	}
-	w := &walker{cat: cat, fsys: fsys, lay: lay, lk: lk, memo: memo, data: map[string][]byte{}}
+	w := &walker{cat: cat, fsys: fsys, lay: lay, lk: lk, memo: memo, data: map[string][]byte{}, shard: lay.shard}
 	w.visit(table, 0)
 	return w.rows, w.data, w.diags
 }
@@ -63,6 +64,7 @@ type walker struct {
 	cat   *catalog.Catalog
 	fsys  FS
 	lay   *filesLayout
+	shard *catalog.Shard // the time shard of the table, nil when none: its rows stand one folder deeper
 	lk    Linker
 	memo  *Memo
 	rows  []*Row
@@ -88,13 +90,29 @@ func (w *walker) visit(rel string, depth int) {
 		file := rel + "/" + name
 		doc := strings.HasSuffix(name, fileSuffix)
 		looseDoc := !doc && strings.HasSuffix(strings.ToLower(name), fileSuffix)
+		if w.shard != nil && depth == 0 {
+			// The table folder of a sharded table holds the folders of its periods and nothing else.
+			switch {
+			case e.IsDir() && e.Type()&fs.ModeSymlink == 0 && catalog.ValidPeriod(w.shard.Period, name):
+				w.visit(file, depth+1)
+			case e.IsDir() && e.Type()&fs.ModeSymlink == 0:
+				w.diags = append(w.diags, fileDiag(file, RuleWalk, "a folder of a sharded table is named as a "+string(w.shard.Period)+", not "+name))
+			case doc || looseDoc:
+				w.diags = append(w.diags, fileDiag(file, RuleWalk, "a document directly in the table folder of a sharded table is not a row; a row stands in the folder of its "+string(w.shard.Period)))
+			}
+			continue
+		}
 		if !doc && !looseDoc {
 			if e.IsDir() {
 				w.visit(file, depth+1)
 			}
 			continue
 		}
-		if reason := notARow(e, depth, looseDoc); reason != "" {
+		rowDepth := depth
+		if w.shard != nil {
+			rowDepth = depth - 1
+		}
+		if reason := notARow(e, rowDepth, looseDoc); reason != "" {
 			w.diags = append(w.diags, fileDiag(file, RuleWalk, reason))
 			continue
 		}
@@ -128,4 +146,77 @@ func notARow(e fs.DirEntry, depth int, looseDoc bool) string {
 		return "not a regular file"
 	}
 	return ""
+}
+
+// DocFile is one document file of a sharded document table: its corpus path, the bytes read, and its rows.
+type DocFile struct {
+	Path string
+	Data []byte
+	Rows []*Row
+}
+
+// ParseDocumentTable reads the documents of the sharded document table of the corpus fsys: the files
+// <table>/<period>.flowmark.md, the period named at the grain of the table's shard (spec 20 Time shards). A
+// missing folder has no documents. A document named as another grain or as no period, a folder, and a
+// symbolic link are walk diagnostics; none is followed. A document that is read is returned with the
+// diagnostics of its read, each document through memo, nil to parse every one.
+func ParseDocumentTable(cat *catalog.Catalog, fsys FS, table string, lk Linker, memo *Memo) ([]DocFile, []Diagnostic, error) {
+	tb, ok := cat.Table(table)
+	if !ok || tb.Storage.Kind != catalog.StorageDocument || tb.Storage.Shard == nil {
+		return nil, nil, fmt.Errorf("table %s is not a sharded document table", table)
+	}
+	root, err := fsys.ReadDir(".")
+	if err != nil {
+		return nil, []Diagnostic{fileDiag(table, RuleWalk, "cannot read the corpus root: "+err.Error())}, nil
+	}
+	i := slices.IndexFunc(root, func(e fs.DirEntry) bool { return e.Name() == table })
+	switch {
+	case i < 0:
+		return nil, nil, nil
+	case root[i].Type()&fs.ModeSymlink != 0:
+		return nil, []Diagnostic{fileDiag(table, RuleWalk, "a symbolic link named as a sharded table is not followed")}, nil
+	case !root[i].IsDir():
+		return nil, []Diagnostic{fileDiag(table, RuleWalk, "the table folder is not a folder")}, nil
+	}
+	entries, err := fsys.ReadDir(table)
+	if err != nil {
+		return nil, []Diagnostic{fileDiag(table, RuleWalk, "cannot read the folder: "+err.Error())}, nil
+	}
+	var docs []DocFile
+	var diags []Diagnostic
+	for _, e := range entries {
+		name := e.Name()
+		if strings.HasPrefix(name, ".") {
+			continue
+		}
+		file := table + "/" + name
+		doc := strings.HasSuffix(name, fileSuffix)
+		looseDoc := !doc && strings.HasSuffix(strings.ToLower(name), fileSuffix)
+		switch {
+		case e.IsDir() && e.Type()&fs.ModeSymlink == 0:
+			diags = append(diags, fileDiag(file, RuleWalk, "a folder in the folder of a sharded document table is not a period"))
+		case !doc && !looseDoc:
+		case looseDoc:
+			diags = append(diags, fileDiag(file, RuleWalk, "the suffix of a document is .flowmark.md in lower case"))
+		case e.Type()&fs.ModeSymlink != 0:
+			diags = append(diags, fileDiag(file, RuleWalk, "a symbolic link is not followed"))
+		case !e.Type().IsRegular():
+			diags = append(diags, fileDiag(file, RuleWalk, "not a regular file"))
+		case !catalog.ValidPeriod(tb.Storage.Shard.Period, strings.TrimSuffix(name, fileSuffix)):
+			diags = append(diags, fileDiag(file, RuleWalk, "a document of a sharded document table is named as a "+string(tb.Storage.Shard.Period)+", not "+strings.TrimSuffix(name, fileSuffix)))
+		default:
+			data, err := fsys.ReadFile(file)
+			if err != nil {
+				diags = append(diags, fileDiag(file, RuleWalk, "cannot read the document: "+err.Error()))
+				continue
+			}
+			rows, ds, err := memo.ParseDocument(cat, table, file, data, lk)
+			if err != nil {
+				return nil, nil, err
+			}
+			diags = append(diags, ds...)
+			docs = append(docs, DocFile{Path: file, Data: data, Rows: rows})
+		}
+	}
+	return docs, diags, nil
 }

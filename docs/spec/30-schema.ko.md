@@ -1,5 +1,5 @@
 <!-- doc-id: spec-schema -->
-<!-- source-sha256: ca273add2be52610b572bc06d9d0a479f2f7c36b028c9f89a3deb3e473da3fb7 -->
+<!-- source-sha256: cf86772fc36584a723627e6271fbcdae5f159a6901747609aadc8839c23e1fc1 -->
 # Schema
 
 [English](30-schema.md)
@@ -27,7 +27,7 @@ column을 이름 붙인다 — column 이름이 동작을 고르지 않는다.
 
 | Setting | 뜻 |
 | --- | --- |
-| `store files` / `store document list\|table` / `store block <fk> list\|table` | table의 저장([document model](20-document-model.md)). corpus에서 table마다 정확히 하나 |
+| `store files` / `store document list\|table` / `store block <fk> list\|table` | table의 저장([document model](20-document-model.md)). corpus에서 table마다 정확히 하나. `files`나 `document` 저장은 `shard <column> <year\|month\|day>`로 끝날 수 있으며 기간마다 따로 저장한다([시간 shard](20-document-model.ko.md#시간-shard)). 절은 orm이 검사하고(non-null `date`나 `datetime` column, `order` 없음, block 아님) 이력 table은 샤드하지 않는다 |
 | `key_prefix <p>` | `varchar` primary key를 `<p><n + 1>`로 할당한다. orm은 이 column을 executor가 할당하는 것으로 다룬다 — `varchar`다. dbspec은 `text` column을 key로 삼지 않기 때문이다 |
 | `title <column>` | 행의 제목: non-null, 비지 않음 |
 | `body <column>` | 행의 body: `markdown` column, NULL이 아님 |

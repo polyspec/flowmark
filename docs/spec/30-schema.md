@@ -31,7 +31,7 @@ behaviour.
 
 | Setting | Meaning |
 | --- | --- |
-| `store files` / `store document list\|table` / `store block <fk> list\|table` | the table's storage ([document model](20-document-model.md)); exactly one per table on a corpus |
+| `store files` / `store document list\|table` / `store block <fk> list\|table` | the table's storage ([document model](20-document-model.md)); exactly one per table on a corpus. A `files` or `document` store may end in `shard <column> <year\|month\|day>`, which stores each period apart ([time shards](20-document-model.md#time-shards)); orm checks the clause (a non-null `date` or `datetime` column, no `order`, no block), and a history table is never sharded |
 | `key_prefix <p>` | the `varchar` primary key is allocated `<p><n + 1>`; orm treats the column as executor-assigned — a `varchar`, as dbspec keys no `text` column |
 | `title <column>` | the row's title: non-null, never empty |
 | `body <column>` | the row's body: a `markdown` column, never NULL |

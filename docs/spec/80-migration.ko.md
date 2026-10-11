@@ -1,5 +1,5 @@
 <!-- doc-id: spec-migration -->
-<!-- source-sha256: 88cffda0d1c71c81cee6b2247ab20ff820b78caaa3fe3fd4bb9a0a659dfedc9c -->
+<!-- source-sha256: f22d3690415829e15fbb6afcc6ada5173f9b21fd593cc3a906d2bf8d22da24b6 -->
 # Migration (범위를 정한 뼈대)
 
 [English](80-migration.md)
@@ -17,7 +17,7 @@
 ## 확정된 판정
 
 - **추가 우선**: 이름 변경은 명시적인 단계이며 "새로 추가하고 옛것을 지우기"가 아니다.
-- **저장 변경은 transaction이다**: table을 한 저장에서 다른 저장으로 옮기면 모든 행을 transaction 하나로
+- **저장 변경은 transaction이다**: table을 한 저장에서 다른 저장으로 옮기거나 저장의 `shard` 절을 더하거나 빼면([시간 shard](20-document-model.ko.md#시간-shard)) 모든 행을 transaction 하나로
   다시 쓰며, 행은 전후로 같게 읽힌다; `format.*` 진단이 있는 file은 거절하며 file을 밝힌다.
 - **key는 불투명하다.** 그래서 prose의 참조를 고쳐 쓰는 key codemod는 없다. key는 결코
   갱신되지 않는다([document model](20-document-model.ko.md#key)): key는 새 key로 행을 insert하고,

@@ -30,7 +30,10 @@ The order of the commit protocol is normative.
 - Opening loads the catalog, walks the corpus, parses the documents and derives the indexes: the
   first full read, which reads and parses every document once. An opened corpus is kept in memory,
   current by the operating system's file notifications, and each operation reads under the lock
-  only what changed since the operation before it:
+  only what changed since the operation before it. The period folders of a sharded table
+  ([time shards](20-document-model.md#time-shards)) are folders like any other: each is watched when
+  it is read, and a period folder that appears under the table folder changes the table folder's
+  entries, so the next operation reads it:
   - A folder or a document is watched before it is read, so no change after its read is missed. On
     macOS kqueue `EVFILT_VNODE` with `EV_CLEAR` on each folder (`NOTE_WRITE | NOTE_DELETE |
     NOTE_RENAME | NOTE_REVOKE`) and each document (those and `NOTE_EXTEND | NOTE_ATTRIB`), each

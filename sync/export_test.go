@@ -559,3 +559,37 @@ func TestExportRestartsTheIdentity(t *testing.T) {
 		t.Fatalf("70#the-export: step_refs holds the largest key %d and its identity restarts past %d", max, seq)
 	}
 }
+
+// TestExportShardedTables pins that a database export ignores a time shard (spec 20 Time shards): a sharded
+// table is one table with the rows of every period, read back as the corpus reads them.
+func TestExportShardedTables(t *testing.T) {
+	docs := map[string]string{
+		"events/2026-10/E1.flowmark.md": "# First\n- at: 2026-10-11 09:30:00.000000\n",
+		"events/2026-11/E2.flowmark.md": "# Second\n- at: 2026-11-02 08:00:00.000000\n",
+	}
+	c := open(t, corpus(t, "shard", docs))
+	stmts, err := Export(c, dbspec.DialectSQLite)
+	if err != nil {
+		t.Fatal(err)
+	}
+	creates := 0
+	for _, s := range stmts {
+		if strings.HasPrefix(s.SQL, `CREATE TABLE "events"`) {
+			creates++
+			if strings.Contains(strings.ToLower(s.SQL), "shard") || strings.Contains(strings.ToLower(s.SQL), "partition") {
+				t.Fatalf("the statement renders the shard: %s", s.SQL)
+			}
+		}
+	}
+	if creates != 1 {
+		t.Fatalf("%d statements create events; want one", creates)
+	}
+	db := apply(t, c, stmts)
+	want, err := c.Rows("events")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := readBack(t, db, c, "events"); !reflect.DeepEqual(got, want) || len(got) != 2 {
+		t.Fatalf("events read back %v; want the two rows %v", got, want)
+	}
+}

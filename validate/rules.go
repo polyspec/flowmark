@@ -15,6 +15,7 @@ import (
 // the store's; the others are the validator's own (spec 50 Diagnostics).
 const (
 	ruleType         = "type"
+	ruleShardPeriod  = "shard.period"
 	ruleDangling     = "reference.dangling"
 	ruleDuplicate    = "key.duplicate"
 	ruleOrder        = "order"
@@ -42,6 +43,7 @@ func (c *corpus) rules() error {
 		rows := corpusOrder(c.rows[tb.Name])
 		for _, p := range rows {
 			c.types(tb, p)
+			c.shardPeriod(tb, p)
 			c.dangling(p)
 			c.checks(tb, p)
 			if err := c.judgeRow(tb, p); err != nil {
@@ -86,6 +88,35 @@ func (c *corpus) types(tb *catalog.Table, p placed) {
 	for _, col := range slices.Sorted(maps.Keys(p.row.Raw)) {
 		c.report(p, col, ruleType, fmt.Sprintf("%s is not a value of type %s", col, columnType(tb, col)))
 	}
+}
+
+// shardPeriod reports a row of a sharded table that stands in the file of another period than the one its shard
+// column names (spec 20 Time shards). A row whose column is no value of its type is its type fault alone, and
+// a block row stands where its placement row does, so only the rows of a file or document table are judged.
+func (c *corpus) shardPeriod(tb *catalog.Table, p placed) {
+	sh := tb.Storage.Shard
+	if sh == nil {
+		return
+	}
+	v := p.row.Scalars[sh.Column]
+	if _, raw := p.row.Raw[sh.Column]; raw || v == nil {
+		return
+	}
+	want, err := tb.RowPath(p.row.Key, *v)
+	if err != nil || want == p.file {
+		return
+	}
+	c.report(p, sh.Column, ruleShardPeriod, fmt.Sprintf("%s %s names the period %s, so the row stands in %s, not in %s", sh.Column, *v, periodOfPath(want), want, p.file))
+}
+
+// periodOfPath returns the period folder or document name of a sharded row's path.
+func periodOfPath(rel string) string {
+	rel = strings.TrimSuffix(rel, docSuffix)
+	parts := strings.Split(rel, "/")
+	if len(parts) >= 3 {
+		return parts[1]
+	}
+	return parts[len(parts)-1]
 }
 
 // dangling reports each foreign key that names no row, unless its referenced table

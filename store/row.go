@@ -36,8 +36,11 @@ const (
 // column other than the body: a nil entry is an absent section and a non-nil
 // empty entry a present empty section.
 type Row struct {
-	Table    string
-	Key      string
+	Table string
+	Key   string
+	// Path is the corpus path of the file a row was read from; a row that was not read from a files table
+	// has none.
+	Path     string
 	Title    string
 	Body     string
 	Scalars  map[string]*string

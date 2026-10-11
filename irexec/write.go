@@ -452,7 +452,14 @@ func (w *writer) insertRow(i int, ps []*int) *Error {
 	// document, a block row in the scope of the row its placement key names.
 	switch tb.Storage.Kind {
 	case catalog.StorageFiles:
-		path := tb.Name + "/" + g.row.Key + docSuffix
+		path, perr := w.rowPath(tb, g, vals)
+		if perr != nil {
+			return perr
+		}
+		if path == "" {
+			return nil
+		}
+		g.row.Path = path
 		if _, exists := w.next.files[path]; exists {
 			// The key equals an existing row's key byte for byte: the key check
 			// reports it; the row is placed nowhere.
@@ -461,7 +468,13 @@ func (w *writer) insertRow(i int, ps []*int) *Error {
 		w.next.files[path] = &file{table: tb.Name, rows: []*store.Row{g.row}}
 		w.touched[path] = true
 	case catalog.StorageDocument:
-		path := tb.Name + docSuffix
+		path, perr := w.rowPath(tb, g, vals)
+		if perr != nil {
+			return perr
+		}
+		if path == "" {
+			return nil
+		}
 		f := w.next.files[path]
 		if f == nil {
 			f = &file{table: tb.Name}
@@ -740,6 +753,12 @@ func (w *writer) updateRows(rows []*rec, set []ir.Assign, stamp bool) *Error {
 		}
 		x = w.next.byRow[x.row]
 		w.touched[x.file] = true
+		if sh := tb.Storage.Shard; sh != nil && g.assigned[sh.Column] {
+			if err := w.moveShard(g, x, vals[sh.Column]); err != nil {
+				return err
+			}
+			x = w.next.byRow[x.row]
+		}
 		moved := false
 		var oldParent *store.Row
 		if x.parent != nil {
@@ -773,6 +792,50 @@ func (w *writer) updateRows(rows []*rec, set []ir.Assign, stamp bool) *Error {
 		}
 		w.next.index()
 	}
+	return nil
+}
+
+// moveShard moves the row x of a sharded table, whose shard column was just assigned v, to the file or the
+// document of the period v names (spec 20 Time shards), when that is not where it stands. A files row moves to
+// its new file; a document row leaves its document, which is removed when the row was its last, and joins the
+// document of its period, created when the period has none. A row whose new value is no time stays: the
+// value is a fault already.
+func (w *writer) moveShard(g *given, x *rec, v cell) *Error {
+	tb := x.tb
+	if v.null {
+		return nil
+	}
+	to, err := tb.RowPath(x.row.Key, v.text)
+	if err != nil {
+		return errf(codeInternal, "%v", err)
+	}
+	if to == x.file {
+		return nil
+	}
+	if tb.Storage.Kind == catalog.StorageFiles {
+		if _, exists := w.next.files[to]; exists {
+			w.fault(g, tb.Name, tb.Storage.Shard.Column, codeDuplicateKey, fmt.Sprintf("the key %s already stands in %s", x.row.Key, to))
+			return nil
+		}
+		delete(w.next.files, x.file)
+		x.row.Path = to
+		w.next.files[to] = &file{table: tb.Name, rows: []*store.Row{x.row}}
+	} else {
+		from := w.next.files[x.file]
+		from.rows = slices.DeleteFunc(slices.Clone(from.rows), func(r *store.Row) bool { return r == x.row })
+		if len(from.rows) == 0 {
+			delete(w.next.files, x.file)
+		}
+		dest := w.next.files[to]
+		if dest == nil {
+			dest = &file{table: tb.Name}
+			w.next.files[to] = dest
+		}
+		dest.rows = append(slices.Clone(dest.rows), x.row)
+	}
+	w.touched[x.file] = true
+	w.touched[to] = true
+	w.next.index()
 	return nil
 }
 
@@ -886,6 +949,9 @@ func (w *writer) removeRow(x *rec) *Error {
 	case catalog.StorageDocument:
 		f := w.next.files[x.file]
 		f.rows = slices.DeleteFunc(slices.Clone(f.rows), func(r *store.Row) bool { return r == x.row })
+		if len(f.rows) == 0 && tb.Storage.Shard != nil {
+			delete(w.next.files, x.file)
+		}
 	case catalog.StorageBlock:
 		p := x.parent.row
 		p.Blocks[tb.Name] = slices.DeleteFunc(slices.Clone(p.Blocks[tb.Name]), func(r *store.Row) bool { return r == x.row })
@@ -954,4 +1020,25 @@ func sortedTables(set map[string]bool) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// rowPath returns the corpus path of the file or the document that holds the inserted row g of tb (spec 20 Time
+// shards). A row without a usable value for its shard column has no path, and "" is returned.
+func (w *writer) rowPath(tb *catalog.Table, g *given, vals map[string]cell) (string, *Error) {
+	value := ""
+	if sh := tb.Storage.Shard; sh != nil {
+		v, ok := vals[sh.Column]
+		if !ok || v.null {
+			// The column is non-null: a value that is no value of its type, or a missing one, is already a fault
+			// of the row, and a row with a fault is placed nowhere.
+			return "", nil
+		}
+		value = v.text
+	}
+	path, err := tb.RowPath(g.row.Key, value)
+	if err != nil {
+		// A value of the column's type is a date or a datetime, which has a period: this is a defect.
+		return "", errf(codeInternal, "%v", err)
+	}
+	return path, nil
 }

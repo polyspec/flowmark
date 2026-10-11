@@ -78,6 +78,10 @@ func (c *Corpus) installPlan(l *journal.Lock) (*InstallResult, []journal.Change,
 			place, want = tb.Name, journal.EntryFolder
 		case catalog.StorageDocument:
 			place, want = tb.Name+".flowmark.md", journal.EntryFile
+			if tb.Storage.Shard != nil {
+				// A sharded document table stands in the folder of its periods (spec 20 Time shards).
+				place, want = tb.Name, journal.EntryFolder
+			}
 		default:
 			continue // an empty block is not written
 		}
@@ -93,7 +97,7 @@ func (c *Corpus) installPlan(l *journal.Lock) (*InstallResult, []journal.Change,
 		case want == journal.EntryFolder:
 			folders = append(folders, place)
 		default:
-			empty, refusals, err := store.RenderDocument(c.cat, tb.Name, nil, nil)
+			empty, refusals, err := store.RenderDocument(c.cat, tb.Name, place, nil, nil)
 			if err != nil || len(refusals) > 0 {
 				return nil, nil, nil, newError(codeInternal, "the empty table %s does not render: %v %v", tb.Name, err, refusals)
 			}

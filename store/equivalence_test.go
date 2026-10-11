@@ -170,7 +170,7 @@ func renderGolden(t testing.TB, c equivCorpus, rel string, data []byte) []byte {
 			t.Fatal(err)
 		}
 		mustClean(t, rel, diags)
-		out, rf, err := RenderDocument(cat, "entries", rows, lk)
+		out, rf, err := RenderDocument(cat, "entries", docPath("entries"), rows, lk)
 		if err != nil {
 			t.Fatal(err)
 		}

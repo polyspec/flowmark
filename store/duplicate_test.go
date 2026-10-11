@@ -63,7 +63,7 @@ func TestDuplicateFaultOnce(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			out, rf, err := RenderDocument(cat, "items", items(c.keys...), lk)
+			out, rf, err := RenderDocument(cat, "items", docPath("items"), items(c.keys...), lk)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -71,7 +71,7 @@ func TestDuplicateFaultOnce(t *testing.T) {
 		})
 	}
 	t.Run("10#diagnostics: keys equal only without regard to case are written", func(t *testing.T) {
-		out, rf, err := RenderDocument(cat, "items", items("AB", "Ab", "ab"), lk)
+		out, rf, err := RenderDocument(cat, "items", docPath("items"), items("AB", "Ab", "ab"), lk)
 		if err != nil || len(rf) > 0 || out == nil {
 			t.Fatalf("written %q with refusals %+v, %v", out, rf, err)
 		}

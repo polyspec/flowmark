@@ -31,8 +31,9 @@ type filesLayout struct {
 	scalars  []dbspec.Column
 	sections []section
 	fks      map[string]string
-	scope    int          // the row scope level of the file: its sections are at this level
-	children []*docLayout // the block tables stored in the file, by table name
+	shard    *catalog.Shard // the time shard of the table, nil when none
+	scope    int            // the row scope level of the file: its sections are at this level
+	children []*docLayout   // the block tables stored in the file, by table name
 }
 
 // childNamed returns the child block of the table whose name is name, or nil.
@@ -60,7 +61,7 @@ func layoutOf(cat *catalog.Catalog, table string) (*filesLayout, error) {
 	if tb.Storage.Kind != catalog.StorageFiles {
 		return nil, fmt.Errorf("table %s is not a files table", table)
 	}
-	lay := &filesLayout{table: table, title: tb.Title, body: tb.Body, fks: map[string]string{}, scope: tb.RowScope}
+	lay := &filesLayout{table: table, title: tb.Title, body: tb.Body, fks: map[string]string{}, scope: tb.RowScope, shard: tb.Storage.Shard}
 	markdown := map[string]bool{}
 	for _, m := range tb.Markdown {
 		markdown[m] = true
@@ -121,8 +122,14 @@ func keyOfFile(lay *filesLayout, rel string) (string, []Diagnostic) {
 	fail := func(rule, msg string) (string, []Diagnostic) {
 		return "", []Diagnostic{fileDiag(rel, rule, msg)}
 	}
-	if path.Dir(rel) != lay.table {
+	if lay.shard == nil && path.Dir(rel) != lay.table {
 		return fail(RuleWalk, "the file is outside the folder "+lay.table+"/")
+	}
+	if lay.shard != nil {
+		dir := path.Dir(rel)
+		if path.Dir(dir) != lay.table || !catalog.ValidPeriod(lay.shard.Period, path.Base(dir)) {
+			return fail(RuleWalk, "the file is outside a folder "+lay.table+"/<"+string(lay.shard.Period)+">/")
+		}
 	}
 	base := path.Base(rel)
 	if !strings.HasSuffix(base, fileSuffix) {
@@ -159,7 +166,7 @@ func ParseFile(cat *catalog.Catalog, table, rel string, data []byte, lk Linker) 
 	}
 	lines := splitLines(text)
 	row := &Row{
-		Table: table, Key: key,
+		Table: table, Key: key, Path: rel,
 		Scalars:  map[string]*string{},
 		Sections: map[string]*string{},
 		Raw:      map[string]string{},
@@ -181,7 +188,7 @@ func ParseFile(cat *catalog.Catalog, table, rel string, data []byte, lk Linker) 
 	if p.fatal {
 		return nil, p.diags
 	}
-	out, _, rf := renderRow(lay, row, lk)
+	out, _, rf := renderRow(lay, rel, row, lk)
 	if len(rf) > 0 {
 		return nil, append(p.diags, readDiagnostics(rel, rf, []*Row{row})...)
 	}
@@ -433,12 +440,12 @@ func (p *parser) readSections(lines []string, b int, row *Row, dp *docParser) {
 
 // RenderFile writes the file of row, a row of a files table. A row the writer
 // refuses returns no bytes and the refusals of the request.
-func RenderFile(cat *catalog.Catalog, table string, row *Row, lk Linker) ([]byte, []Refusal, error) {
+func RenderFile(cat *catalog.Catalog, table, rel string, row *Row, lk Linker) ([]byte, []Refusal, error) {
 	lay, err := layoutOf(cat, table)
 	if err != nil {
 		return nil, nil, err
 	}
-	out, lines, rf := renderRow(lay, row, lk)
+	out, lines, rf := renderRow(lay, rel, row, lk)
 	if len(rf) > 0 {
 		return nil, rf, nil
 	}
@@ -525,8 +532,8 @@ type field struct {
 
 // renderRow writes the file of row in its canonical form, with the origin of each
 // line, or with the refusals of the request when the writer refuses it.
-func renderRow(lay *filesLayout, row *Row, lk Linker) ([]byte, [][]colSpan, []Refusal) {
-	w := &writer{rel: row.Table + "/" + row.Key + fileSuffix}
+func renderRow(lay *filesLayout, rel string, row *Row, lk Linker) ([]byte, [][]colSpan, []Refusal) {
+	w := &writer{rel: rel}
 	rr := rowRefOf(row, -1)
 	w.enter(rr, "")
 	if row.Table != lay.table {

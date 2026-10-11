@@ -534,9 +534,9 @@ func (w *writer) render() (*PostImage, []store.Refusal, *Error) {
 		var rf []store.Refusal
 		var rerr error
 		if tb.Storage.Kind == catalog.StorageFiles {
-			out, rf, rerr = store.RenderFile(w.c.cat, f.table, f.rows[0], after)
+			out, rf, rerr = store.RenderFile(w.c.cat, f.table, path, f.rows[0], after)
 		} else {
-			out, rf, rerr = store.RenderDocument(w.c.cat, f.table, f.rows, after)
+			out, rf, rerr = store.RenderDocument(w.c.cat, f.table, path, f.rows, after)
 		}
 		if rerr != nil {
 			return nil, nil, errf(codeInternal, "rendering %s: %v", path, rerr)

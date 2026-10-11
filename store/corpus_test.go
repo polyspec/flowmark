@@ -263,3 +263,138 @@ func TestKeysCollideWithoutRegardToCase(t *testing.T) {
 		t.Fatalf("rows = %v, diagnostics = %+v; want both rows and no diagnostic", keys, diags)
 	}
 }
+
+// shardEvent is the file of an event at the time at.
+func shardEvent(title, at string) string {
+	return "# " + title + "\n- at: " + at + "\n"
+}
+
+// TestParseFilesTableShard pins the walk of a sharded files table (spec 20 Time shards): its rows stand in
+// the folder of their period, <table>/<period>/<key>.flowmark.md, the period named at the grain of the shard.
+func TestParseFilesTableShard(t *testing.T) {
+	cat, diags := catalog.Load("testdata/shard")
+	if len(diags) > 0 || cat == nil {
+		t.Fatalf("shard catalog: %+v", diags)
+	}
+	e1 := shardEvent("First", "2026-10-11 09:30:00.000000")
+	cases := []struct {
+		name  string
+		files map[string]string
+		keys  []string
+		paths []string
+		rules []string
+	}{
+		{name: "20#time-shards: a row in the folder of a period", files: map[string]string{"events/2026-10/E1.flowmark.md": e1},
+			keys: []string{"E1"}, paths: []string{"events/2026-10/E1.flowmark.md"}},
+		{name: "20#time-shards: the rows of two periods", files: map[string]string{"events/2026-10/E1.flowmark.md": e1, "events/2026-11/E2.flowmark.md": shardEvent("Second", "2026-11-02 08:00:00.000000")},
+			keys: []string{"E1", "E2"}, paths: []string{"events/2026-10/E1.flowmark.md", "events/2026-11/E2.flowmark.md"}},
+		{name: "20#time-shards: a row in another period's folder is still read, the validator judges it", files: map[string]string{"events/2026-11/E1.flowmark.md": e1},
+			keys: []string{"E1"}, paths: []string{"events/2026-11/E1.flowmark.md"}},
+		{name: "20#time-shards: a document directly in the table folder is a walk diagnostic", files: map[string]string{"events/E1.flowmark.md": e1},
+			rules: []string{RuleWalk}},
+		{name: "20#time-shards: a folder named as another grain is a walk diagnostic", files: map[string]string{"events/2026/E1.flowmark.md": e1, "events/2026-10-11/E2.flowmark.md": e1},
+			rules: []string{RuleWalk, RuleWalk}},
+		{name: "20#time-shards: a folder that is no period is a walk diagnostic", files: map[string]string{"events/2026-13/E1.flowmark.md": e1, "events/misc/E2.flowmark.md": e1},
+			rules: []string{RuleWalk, RuleWalk}},
+		{name: "20#time-shards: a document below a period folder is a walk diagnostic", files: map[string]string{"events/2026-10/sub/E1.flowmark.md": e1},
+			rules: []string{RuleWalk}},
+		{name: "20#time-shards: a missing table folder has no rows and no diagnostic"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			root := tree(t, c.files, nil)
+			rows, _, diags := ParseFilesTable(cat, DirFS(root), "events", stubLinker{}, nil)
+			keys, rules := keysAndRules(rows, diags)
+			if !reflect.DeepEqual(keys, c.keys) {
+				t.Fatalf("keys = %v; want %v (diagnostics %+v)", keys, c.keys, diags)
+			}
+			if !reflect.DeepEqual(rules, c.rules) {
+				t.Fatalf("diagnostic rules = %v; want %v: %+v", rules, c.rules, diags)
+			}
+			var paths []string
+			for _, r := range rows {
+				paths = append(paths, r.Path)
+			}
+			sort.Strings(paths)
+			if !reflect.DeepEqual(paths, c.paths) {
+				t.Fatalf("row paths = %v; want %v", paths, c.paths)
+			}
+		})
+	}
+}
+
+// shardNotes renders the document of notes at the corpus path rel; each note is key, title, written.
+func shardNotes(t *testing.T, cat *catalog.Catalog, rel string, notes ...[3]string) string {
+	t.Helper()
+	var rows []*Row
+	for _, n := range notes {
+		w := n[2]
+		rows = append(rows, &Row{Table: "notes", Key: n[0], Title: n[1], Scalars: map[string]*string{"written": &w}})
+	}
+	out, rf, err := RenderDocument(cat, "notes", rel, rows, stubLinker{})
+	if err != nil || len(rf) > 0 {
+		t.Fatalf("render %s: %v %+v", rel, err, rf)
+	}
+	return string(out)
+}
+
+// TestParseDocumentTableShard pins the walk of a sharded document table (spec 20 Time shards): the rows of a
+// period stand in <table>/<period>.flowmark.md, the period named at the grain of the shard.
+func TestParseDocumentTableShard(t *testing.T) {
+	cat, diags := catalog.Load("testdata/shard")
+	if len(diags) > 0 || cat == nil {
+		t.Fatalf("shard catalog: %+v", diags)
+	}
+	y26 := shardNotes(t, cat, "notes/2026.flowmark.md", [3]string{"N1", "One", "2026-03-04"}, [3]string{"N2", "Two", "2026-09-30"})
+	y27 := shardNotes(t, cat, "notes/2027.flowmark.md", [3]string{"N3", "Three", "2027-01-02"})
+	cases := []struct {
+		name  string
+		files map[string]string
+		links map[string]string
+		keys  []string
+		paths []string
+		rules []string
+	}{
+		{name: "20#time-shards: the rows of a period in its document", files: map[string]string{"notes/2026.flowmark.md": y26},
+			keys: []string{"N1", "N2"}, paths: []string{"notes/2026.flowmark.md", "notes/2026.flowmark.md"}},
+		{name: "20#time-shards: the documents of two periods", files: map[string]string{"notes/2026.flowmark.md": y26, "notes/2027.flowmark.md": y27},
+			keys: []string{"N1", "N2", "N3"}, paths: []string{"notes/2026.flowmark.md", "notes/2026.flowmark.md", "notes/2027.flowmark.md"}},
+		{name: "20#time-shards: a document named as another grain is a walk diagnostic", files: map[string]string{"notes/2026-03.flowmark.md": y26},
+			rules: []string{RuleWalk}},
+		{name: "20#time-shards: a document named as no period is a walk diagnostic", files: map[string]string{"notes/misc.flowmark.md": y26, "notes/N1.flowmark.md": y26},
+			rules: []string{RuleWalk, RuleWalk}},
+		{name: "20#time-shards: a folder in the table folder is a walk diagnostic", files: map[string]string{"notes/2026/N1.flowmark.md": y26},
+			rules: []string{RuleWalk}},
+		{name: "20#time-shards: a symbolic link named as a period is a walk diagnostic and is not followed", files: map[string]string{"notes/2027.flowmark.md": y27},
+			links: map[string]string{"notes/2026.flowmark.md": "2027.flowmark.md"}, keys: []string{"N3"}, paths: []string{"notes/2027.flowmark.md"}, rules: []string{RuleWalk}},
+		{name: "20#time-shards: a missing table folder has no rows and no diagnostic"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			root := tree(t, c.files, c.links)
+			docs, diags, err := ParseDocumentTable(cat, DirFS(root), "notes", stubLinker{}, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var rows []*Row
+			var paths []string
+			for _, d := range docs {
+				for _, r := range d.Rows {
+					rows = append(rows, r)
+					paths = append(paths, d.Path)
+				}
+			}
+			keys, rules := keysAndRules(rows, diags)
+			if !reflect.DeepEqual(keys, c.keys) {
+				t.Fatalf("keys = %v; want %v (diagnostics %+v)", keys, c.keys, diags)
+			}
+			if !reflect.DeepEqual(rules, c.rules) {
+				t.Fatalf("diagnostic rules = %v; want %v: %+v", rules, c.rules, diags)
+			}
+			sort.Strings(paths)
+			if !reflect.DeepEqual(paths, c.paths) {
+				t.Fatalf("paths = %v; want %v", paths, c.paths)
+			}
+		})
+	}
+}

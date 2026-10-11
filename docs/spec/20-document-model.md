@@ -58,6 +58,48 @@ guessed.
 Aggregate or split is a storage declaration; the logical relations are the same in every storage,
 so the same rows can be stored either way.
 
+## Time shards
+
+A `files` or `document` table whose `store` setting carries `shard <column> <period>` stores the rows
+of each period apart, the column being a non-null `date` or `datetime` column and the period `year`,
+`month` or `day` (the setting and its errors are orm's, T119). A table that no row owns and that
+accumulates in time — an event log, time entries — would otherwise grow one file without end (`document`)
+or one folder without end (`files`).
+
+- **Period name.** The name of the period of a row is its column's value cut to the grain: `2026`,
+  `2026-10` or `2026-10-11`. A `datetime` counts at its stored UTC value, a `date` as written. A value
+  that is no date, such as a month past 12, has no period; the row is refused as a write and `type` as a read.
+- **Paths.** A sharded `files` table stores a row in `<table>/<period>/<key>.flowmark.md`, a sharded
+  `document` table stores the rows of a period in `<table>/<period>.flowmark.md`, whose H1 line is
+  `# <table>`. A period without rows has no file or folder, as an empty table has none.
+- **The walk.** The folder of a sharded table holds the folders (files) or the documents (document) of
+  its periods, named at the grain of the shard, and nothing else that is a document: a document directly in
+  the folder of a sharded `files` table, a folder or a document named as another grain or as no period, and
+  a document below a period folder are `corpus.walk`.
+- **Storage order.** A shard changes where the rows stand, never the order the table reads in, since the
+  logical relations are the same in every storage. A `files` table keeps its order (spec 20 Order, by key
+  without a hierarchy or an order column, as orm allows none on a sharded table), whatever the periods are. A
+  `document` table reads its periods ascending, and each document in its own order.
+- **Keys.** A key, an `identity` value and a `key_prefix` allocation are unique across all periods: the
+  rows of every period are one table, read from the corpus the engine keeps in memory, and no index file
+  stands beside the corpus. Grounding: the key check of a table reads the table's rows, and a shard changes
+  where they stand, never which rows the table has.
+- **A row in another period's file.** A row whose column value names a period other than the one of the
+  file that holds it is the validator's `shard.period` at the row; the next write of the row moves it to the
+  file of its period.
+- **An update of the column** moves the row to the file of its new period and rewrites, in the same
+  transaction, every file that links to it, since a link to a sharded row carries the path of its period.
+  Grounding: a link is derived from where the row stands (spec 10), so a move changes the link.
+- **Changing the clause** adds or removes the shard of a table: a storage change (spec 80).
+- **The one method, and where it applies.** There is one shard method, the time shard, with the periods
+  `year`, `month` and `day`. It is a statement about the storage of a markdown corpus, not a partition of a
+  database: the SQL backends (MySQL, PostgreSQL, SQLite) ignore the clause as orm defines it (orm
+  `docs/dbspec.md`, T119), so a database export (spec 70) creates one table for a sharded table and inserts
+  its rows of every period in the order the table reads in. The clause applies to `files` and `document`
+  storage; orm rejects it on a `block` table, on a table with a self foreign key and on a table with
+  `order`, and the catalog rejects it on a history table. Shard by key range, by hash or by list, and a
+  shard of more than one column, are not defined.
+
 ## Keys
 
 - A markdown table has a single-column primary key; a composite primary key is a schema error. A
