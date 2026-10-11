@@ -2,8 +2,6 @@ package validate
 
 import (
 	"io/fs"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/polyspec/flowmark/catalog"
@@ -19,7 +17,7 @@ const docSuffix = ".flowmark.md"
 // file. Every other document is outside its place, or is a case variant of one.
 // The names are compared as the listing holds them, never as a path lookup, so a
 // case-folding file system reports a case variant as a case variant.
-func walkRoot(cat *catalog.Catalog, root string, entries []fs.DirEntry) []catalog.Diagnostic {
+func walkRoot(cat *catalog.Catalog, fsys store.FS, entries []fs.DirEntry) []catalog.Diagnostic {
 	var diags []catalog.Diagnostic
 	for _, e := range entries {
 		name := e.Name()
@@ -44,7 +42,7 @@ func walkRoot(cat *catalog.Catalog, root string, entries []fs.DirEntry) []catalo
 			continue
 		}
 		if e.IsDir() {
-			diags = append(diags, walkFolder(filepath.Join(root, name), name)...)
+			diags = append(diags, walkFolder(fsys, name)...)
 		}
 	}
 	return diags
@@ -53,11 +51,11 @@ func walkRoot(cat *catalog.Catalog, root string, entries []fs.DirEntry) []catalo
 // dbspecDir is the folder of the catalog, which the corpus walk does not read.
 const dbspecDir = "dbspec"
 
-// walkFolder returns the diagnostics of the documents in the folder dir, which is
-// the corpus path rel: no folder outside the table places is a table folder, so
-// a document in it is outside every place. Symbolic links are not followed.
-func walkFolder(dir, rel string) []catalog.Diagnostic {
-	entries, err := os.ReadDir(dir)
+// walkFolder returns the diagnostics of the documents in the folder of the corpus
+// path rel: no folder outside the table places is a table folder, so a document in
+// it is outside every place. Symbolic links are not followed.
+func walkFolder(fsys store.FS, rel string) []catalog.Diagnostic {
+	entries, err := fsys.ReadDir(rel)
 	if err != nil {
 		return []catalog.Diagnostic{walkDiag(rel, "cannot read the folder: "+err.Error())}
 	}
@@ -72,7 +70,7 @@ func walkFolder(dir, rel string) []catalog.Diagnostic {
 		case hasDocSuffixFold(name):
 			diags = append(diags, walkDiag(path, "a document outside every table place is not a row"))
 		case e.IsDir():
-			diags = append(diags, walkFolder(filepath.Join(dir, name), path)...)
+			diags = append(diags, walkFolder(fsys, path)...)
 		}
 	}
 	return diags

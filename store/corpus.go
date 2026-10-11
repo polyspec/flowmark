@@ -1,48 +1,66 @@
 package store
 
 import (
-	"errors"
 	"io/fs"
 	"os"
-	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/polyspec/flowmark/catalog"
 )
 
-// ParseFilesTable reads the rows of the files table under the corpus root:
-// the files <root>/<table>/<key>.flowmark.md. A missing folder has no rows.
+// FS is the corpus as a read sees it: its folders with the type of each entry, and its files, by slash-separated
+// corpus path ("." is the root). A read goes through it and never through the working directory; the write path
+// passes a mirror of the corpus kept current by the operating system's file notifications (spec 40 Opening a corpus),
+// and a one-shot read passes the corpus folder itself (DirFS). ReadDir returns the entries sorted by name, each with
+// its type as lstat gives it, so a symbolic link is an entry of its own type and is never followed. The bytes
+// ReadFile returns are never changed by the caller.
+type FS interface {
+	ReadDir(name string) ([]fs.DirEntry, error)
+	ReadFile(name string) ([]byte, error)
+}
+
+// DirFS returns the corpus folder root as an FS, each call reading the disk.
+func DirFS(root string) FS {
+	return os.DirFS(root).(FS)
+}
+
+// ParseFilesTable reads the rows of the files table of the corpus fsys:
+// the files <table>/<key>.flowmark.md. A missing folder has no rows.
 // Rows whose keys differ only in case are all returned: key.duplicate is a
 // validator rule, not a read fault.
 // Only the documents of the folder are read; a symbolic link is never
 // followed, and a document that is not of the folder is a walk diagnostic.
 // The bytes of each document read are returned by corpus path, so that a
 // caller holds the exact pre-image of every file its rows came from.
-func ParseFilesTable(cat *catalog.Catalog, root, table string, lk Linker) ([]*Row, map[string][]byte, []Diagnostic) {
+func ParseFilesTable(cat *catalog.Catalog, fsys FS, table string, lk Linker) ([]*Row, map[string][]byte, []Diagnostic) {
 	lay, err := layoutOf(cat, table)
 	if err != nil {
 		return nil, nil, []Diagnostic{fileDiag(table, RuleWalk, err.Error())}
 	}
-	dir := filepath.Join(root, table)
-	fi, err := os.Lstat(dir)
+	// The folder's type is its entry in the root, never a lookup of its path, which would follow a symbolic link.
+	root, err := fsys.ReadDir(".")
+	if err != nil {
+		return nil, nil, []Diagnostic{fileDiag(table, RuleWalk, "cannot read the corpus root: "+err.Error())}
+	}
+	i := slices.IndexFunc(root, func(e fs.DirEntry) bool { return e.Name() == table })
 	switch {
-	case errors.Is(err, fs.ErrNotExist):
+	case i < 0:
 		return nil, nil, nil
-	case err != nil:
-		return nil, nil, []Diagnostic{fileDiag(table, RuleWalk, "cannot read the table folder: "+err.Error())}
-	case fi.Mode()&fs.ModeSymlink != 0:
+	case root[i].Type()&fs.ModeSymlink != 0:
 		return nil, nil, []Diagnostic{fileDiag(table, RuleWalk, "a symbolic link named as a files table is not followed")}
-	case !fi.IsDir():
+	case !root[i].IsDir():
 		return nil, nil, []Diagnostic{fileDiag(table, RuleWalk, "the table folder is not a folder")}
 	}
-	w := &walker{cat: cat, lay: lay, lk: lk, data: map[string][]byte{}}
-	w.visit(dir, table, 0)
+	w := &walker{cat: cat, fsys: fsys, lay: lay, lk: lk, data: map[string][]byte{}}
+	w.visit(table, 0)
 	return w.rows, w.data, w.diags
 }
 
 // walker reads the documents under the folder of a files table.
 type walker struct {
 	cat   *catalog.Catalog
+	fsys  FS
 	lay   *filesLayout
 	lk    Linker
 	rows  []*Row
@@ -50,12 +68,12 @@ type walker struct {
 	diags []Diagnostic
 }
 
-// visit reads the entries of dir, which is the folder rel of the corpus. A
+// visit reads the entries of the folder rel of the corpus. A
 // document at depth 0 is a row; a document in a subfolder or with another
 // suffix case is a walk diagnostic; a folder is searched for such documents;
 // any other entry is outside the database.
-func (w *walker) visit(dir, rel string, depth int) {
-	entries, err := os.ReadDir(dir)
+func (w *walker) visit(rel string, depth int) {
+	entries, err := w.fsys.ReadDir(rel)
 	if err != nil {
 		w.diags = append(w.diags, fileDiag(rel, RuleWalk, "cannot read the folder: "+err.Error()))
 		return
@@ -70,7 +88,7 @@ func (w *walker) visit(dir, rel string, depth int) {
 		looseDoc := !doc && strings.HasSuffix(strings.ToLower(name), fileSuffix)
 		if !doc && !looseDoc {
 			if e.IsDir() {
-				w.visit(filepath.Join(dir, name), file, depth+1)
+				w.visit(file, depth+1)
 			}
 			continue
 		}
@@ -78,7 +96,7 @@ func (w *walker) visit(dir, rel string, depth int) {
 			w.diags = append(w.diags, fileDiag(file, RuleWalk, reason))
 			continue
 		}
-		data, err := os.ReadFile(filepath.Join(dir, name))
+		data, err := w.fsys.ReadFile(file)
 		if err != nil {
 			w.diags = append(w.diags, fileDiag(file, RuleWalk, "cannot read the document: "+err.Error()))
 			continue

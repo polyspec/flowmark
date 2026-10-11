@@ -141,7 +141,7 @@ func TestParseFilesTableWalk(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			root := tree(t, c.files, c.links)
-			rows, _, diags := ParseFilesTable(cat, root, "tasks", lk)
+			rows, _, diags := ParseFilesTable(cat, DirFS(root), "tasks", lk)
 			keys, rules := keysAndRules(rows, diags)
 			if !reflect.DeepEqual(keys, c.keys) {
 				t.Fatalf("keys = %v; want %v (diagnostics %+v)", keys, c.keys, diags)
@@ -194,7 +194,7 @@ func TestIntegerKeysAndMandatorySection(t *testing.T) {
 		t.Fatalf("corpus: %+v", diags)
 	}
 	lk := stubLinker{}
-	rows, _, diags := ParseFilesTable(cat, root, "notes", lk)
+	rows, _, diags := ParseFilesTable(cat, DirFS(root), "notes", lk)
 	if len(diags) > 0 || len(rows) != 1 || rows[0].Key != "7" || rows[0].Title != "Seven" || *rows[0].Sections["summary"] != "x\n" {
 		t.Fatalf("rows = %+v, diagnostics %+v", rows, diags)
 	}
@@ -253,7 +253,7 @@ func TestKeysCollideWithoutRegardToCase(t *testing.T) {
 	if len(entries) < 2 {
 		t.Skip("the file system is case-insensitive; the two names cannot coexist")
 	}
-	rows, _, diags := ParseFilesTable(cat, root, "tasks", lk)
+	rows, _, diags := ParseFilesTable(cat, DirFS(root), "tasks", lk)
 	var keys []string
 	for _, r := range rows {
 		keys = append(keys, r.Key)

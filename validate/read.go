@@ -3,8 +3,6 @@ package validate
 import (
 	"fmt"
 	"io/fs"
-	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 
@@ -58,22 +56,22 @@ func (noTargets) Target(fromFile, table, key string) (string, error) {
 	return "", fmt.Errorf("no %s row is known to the first pass", table)
 }
 
-// read reads the corpus at root by storage, and reports the walk and the format
+// read reads the corpus fsys by storage, and reports the walk and the format
 // diagnostics of its files. A row of a block table is read with its placement row.
-func read(cat *catalog.Catalog, root string, lk store.Linker) (*corpus, error) {
-	entries, err := os.ReadDir(root)
+func read(cat *catalog.Catalog, fsys store.FS, lk store.Linker) (*corpus, error) {
+	entries, err := fsys.ReadDir(".")
 	if err != nil {
 		return nil, fmt.Errorf("cannot read the corpus root: %w", err)
 	}
 	c := &corpus{cat: cat, rows: map[string][]placed{}, blocked: map[string]bool{}, files: map[string]*File{}}
-	c.diags = append(c.diags, walkRoot(cat, root, entries)...)
+	c.diags = append(c.diags, walkRoot(cat, fsys, entries)...)
 	for _, tb := range cat.Tables {
 		switch tb.Storage.Kind {
 		case catalog.StorageFiles:
 			if !listed(entries, tb.Name) {
 				continue
 			}
-			rows, data, ds := store.ParseFilesTable(cat, root, tb.Name, lk)
+			rows, data, ds := store.ParseFilesTable(cat, fsys, tb.Name, lk)
 			c.diags = append(c.diags, ds...)
 			for path, b := range data {
 				c.files[path] = &File{Table: tb.Name, Data: b}
@@ -90,7 +88,7 @@ func read(cat *catalog.Catalog, root string, lk store.Linker) (*corpus, error) {
 			if !regularListed(entries, file) {
 				continue
 			}
-			data, err := os.ReadFile(filepath.Join(root, file))
+			data, err := fsys.ReadFile(file)
 			if err != nil {
 				c.diags = append(c.diags, walkDiag(file, "cannot read the document: "+err.Error()))
 				continue

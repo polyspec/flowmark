@@ -13,6 +13,7 @@ import (
 	"sort"
 
 	"github.com/polyspec/flowmark/catalog"
+	"github.com/polyspec/flowmark/store"
 )
 
 // Corpus validates the corpus at root against cat and returns its diagnostics,
@@ -21,7 +22,7 @@ import (
 // it. An error is returned only when the corpus root cannot be read, or when orm
 // builds no runtime model of the loaded catalog that the view rule needs.
 func Corpus(cat *catalog.Catalog, root string) ([]catalog.Diagnostic, error) {
-	c, err := load(cat, root)
+	c, err := load(cat, store.DirFS(root))
 	if err != nil {
 		return nil, err
 	}
@@ -32,10 +33,10 @@ func Corpus(cat *catalog.Catalog, root string) ([]catalog.Diagnostic, error) {
 	return c.diags, nil
 }
 
-// load reads the corpus at root in its two passes: the first locates the rows,
+// load reads the corpus fsys in its two passes: the first locates the rows,
 // the second reads them with the index of the first.
-func load(cat *catalog.Catalog, root string) (*corpus, error) {
-	first, err := read(cat, root, noTargets{})
+func load(cat *catalog.Catalog, fsys store.FS) (*corpus, error) {
+	first, err := read(cat, fsys, noTargets{})
 	if err != nil {
 		return nil, err
 	}
@@ -43,7 +44,7 @@ func load(cat *catalog.Catalog, root string) (*corpus, error) {
 	if err != nil {
 		return nil, err
 	}
-	return read(cat, root, idx)
+	return read(cat, fsys, idx)
 }
 
 // sortDiags sorts diagnostics by file, line, column, rule and message.
@@ -81,10 +82,10 @@ type Snapshot struct {
 	unavailable map[string]catalog.Diagnostic
 }
 
-// Read reads the corpus at root as a request reads it. An error is returned only
+// Read reads the corpus fsys as a request reads it. An error is returned only
 // when the corpus root cannot be read.
-func Read(cat *catalog.Catalog, root string) (*Snapshot, error) {
-	c, err := load(cat, root)
+func Read(cat *catalog.Catalog, fsys store.FS) (*Snapshot, error) {
+	c, err := load(cat, fsys)
 	if err != nil {
 		return nil, err
 	}
