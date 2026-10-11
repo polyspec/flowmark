@@ -93,6 +93,7 @@ table notes {
   index ix_notes_item (item)
   foreign key fk_notes_parent (parent) references notes (id) on delete restrict on update restrict
   foreign key fk_notes_item (item) references items (id) on delete restrict on update restrict
+  check ck_notes_weight (weight is null or weight >= 0)
   settings {
     store files
     title title

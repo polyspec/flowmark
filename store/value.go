@@ -18,6 +18,11 @@ const maxKeyBytes = 243
 // (see the canonical format, "Readable values").
 func Readable(t dbspec.Type, v string) (string, bool) { return readable(t, v) }
 
+// SingleLineFault names the single-line rule that a value written in a single-line
+// place breaks, or "" when none (see the canonical format, "Single-line places"):
+// the rule a writer checks of a value before it renders a file.
+func SingleLineFault(v string) string { return singleLineFault(v) }
+
 // readable returns the readable canonical text of v as a value of type t, or
 // false when v is not a value of t. Numbers and booleans take orm's canonical
 // literal; a date, time, datetime or uuid takes the literal of its quoted text,

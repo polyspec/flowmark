@@ -25,19 +25,29 @@ type writer struct {
 	ent     *runtimemodel.Entity
 	touched map[string]bool
 	given   []*given
-	faults  []store.Refusal
+	faults  []fault
 	answer  *Answer
 	// copies maps each corpus row to its copy in the next corpus, before the
 	// write changes the copy.
 	copies map[*rec]*rec
 }
 
+// fault is a fault of a refused write with the position of its row in request
+// order: seq is the place of the row among the rows the write takes, an insert's in
+// their given order and an update's or delete's in storage order.
+type fault struct {
+	store.Refusal
+	seq int
+}
+
 // given is a row the write writes, in the next corpus: its position among the rows
-// given, whether the write inserts it, the columns the request assigns, and its
-// values before the write (nil for an insert).
+// given, its place among the rows the write takes, whether the write inserts it,
+// the columns the request assigns, and its values before the write (nil for an
+// insert).
 type given struct {
 	row      *store.Row
 	index    int
+	seq      int
 	inserted bool
 	assigned map[string]bool
 	before   map[string]cell
@@ -133,11 +143,17 @@ func (w *writer) fault(g *given, table, column, rule, msg string) {
 	if g != nil && g.inserted && w.sharedGiven(g) {
 		idx = g.index
 	}
-	key := ""
+	key, seq := "", 0
 	if g != nil {
-		key = g.row.Key
+		key, seq = g.row.Key, g.seq
 	}
-	w.faults = append(w.faults, store.Refusal{Table: table, Key: key, Index: idx, Column: column, Rule: rule, Message: msg})
+	w.faults = append(w.faults, fault{store.Refusal{Table: table, Key: key, Index: idx, Column: column, Rule: rule, Message: msg}, seq})
+}
+
+// take records g as the next row the write takes, in request order.
+func (w *writer) take(g *given) {
+	g.seq = len(w.given)
+	w.given = append(w.given, g)
 }
 
 // sharedGiven reports whether another row given to the write shares g's key byte
@@ -391,7 +407,7 @@ func (w *writer) insertRow(i int, ps []*int) *Error {
 	}
 	key, keyGiven := vals[tb.Key]
 	g.row.Key = key.text
-	w.given = append(w.given, g)
+	w.take(g)
 	for _, b := range bad {
 		w.fault(g, tb.Name, b.column, codeConstraint, b.msg)
 	}
@@ -661,7 +677,7 @@ func (w *writer) updateRows(rows []*rec, set []ir.Assign, stamp bool) *Error {
 	for i, x := range rows {
 		x = w.next.byRow[x.row] // an earlier row's move may have re-indexed the corpus
 		g := &given{row: x.row, index: i, assigned: map[string]bool{}, before: map[string]cell{}}
-		w.given = append(w.given, g)
+		w.take(g)
 		for _, c := range tb.Columns {
 			v, err := w.next.value(x, c.Name)
 			if err != nil {
@@ -772,14 +788,14 @@ func (w *writer) delete() *Error {
 	if sd := w.ent.SoftDelete; sd != "" {
 		for i, x := range rows {
 			g := &given{row: x.row, index: i, assigned: map[string]bool{sd: true}}
-			w.given = append(w.given, g)
+			w.take(g)
 			setValue(w.tb, x.row, sd, w.clock(fieldType(w.ent.Field(sd))))
 			w.touched[x.file] = true
 		}
 		return nil
 	}
-	for _, x := range rows {
-		if err := w.restrict(x); err != nil {
+	for i, x := range rows {
+		if err := w.restrict(x, i); err != nil {
 			return err
 		}
 	}
@@ -800,8 +816,9 @@ func (w *writer) delete() *Error {
 // key, its parent, the placement key of a block row in its scope, or a history row
 // (spec 50 Keys and references, restrict-only). Restrict holds against the rows
 // before the write, so a referencing row the same delete removes still refuses it.
-// Every table that may reference the row is needed.
-func (w *writer) restrict(x *rec) *Error {
+// Every table that may reference the row is needed. seq is the place of x among
+// the rows the delete takes.
+func (w *writer) restrict(x *rec, seq int) *Error {
 	for _, t := range w.c.cat.Tables {
 		for _, fk := range t.ForeignKeys {
 			if fk.Table != x.tb.Name || len(fk.Columns) != 1 {
@@ -818,8 +835,8 @@ func (w *writer) restrict(x *rec) *Error {
 				if v.null || v.text != x.row.Key {
 					continue
 				}
-				w.faults = append(w.faults, store.Refusal{Table: x.tb.Name, Key: x.row.Key, Index: -1, Rule: codeForeignKey,
-					Message: fmt.Sprintf("the row is referenced by %s %s through %s in %s", t.Name, y.row.Key, fk.Columns[0], y.file)})
+				w.faults = append(w.faults, fault{store.Refusal{Table: x.tb.Name, Key: x.row.Key, Index: -1, Rule: codeForeignKey,
+					Message: fmt.Sprintf("the row is referenced by %s %s through %s in %s", t.Name, y.row.Key, fk.Columns[0], y.file)}, seq})
 				return nil
 			}
 		}

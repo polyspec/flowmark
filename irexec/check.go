@@ -15,28 +15,27 @@ import (
 // false whatever the row's values not of their column type are is a fault naming
 // the check; a check false only for some of those values needs them, so the write
 // fails naming the type diagnostic of the first such value it reads; a check whose
-// predicate is unknown (NULL) passes, as in SQL.
+// predicate is unknown (NULL) passes, as in SQL. A row the write places nowhere,
+// whose key or placement key is faulted, has its checks judged too: a row's value
+// faults are reported with its key fault (spec 10 Diagnostics, "Write faults").
 func (w *writer) checks() *Error {
 	if len(w.tb.Checks) == 0 {
 		return nil
 	}
 	for _, g := range w.given {
 		x := w.next.byRow[g.row]
-		if x == nil {
-			continue
-		}
 		var parent *store.Row
-		if x.parent != nil {
+		if x != nil && x.parent != nil {
 			parent = x.parent.row
 		}
-		values := validate.RowOperands(w.tb, x.row, parent)
+		values := validate.RowOperands(w.tb, g.row, parent)
 		for _, ck := range w.tb.Checks {
 			switch validate.JudgeCheck(w.tb, ck.Expression, values) {
 			case validate.CheckFails:
 				w.fault(g, w.tb.Name, "", codeConstraint, fmt.Sprintf("the check %s of %s is false for %s", ck.Name, w.tb.Name, g.row.Key))
 			case validate.CheckNeedsType:
 				for _, col := range checkColumns(ck.Expression) {
-					if _, raw := x.row.Raw[col]; raw {
+					if _, raw := g.row.Raw[col]; raw && x != nil {
 						return w.next.typeFault(x, col)
 					}
 				}

@@ -235,10 +235,59 @@ func TestKeyChecks(t *testing.T) {
 		w := &writer{r: r, c: f.c, next: f.c.clone(), touched: map[string]bool{"tags.flowmark.md": true}}
 		doc := w.next.files["tags.flowmark.md"]
 		doc.rows = append(doc.rows, cloneRow(doc.rows[0]))
-		if _, err := w.render(); err == nil || err.Code != "INTERNAL" {
+		if _, _, err := w.render(); err == nil || err.Code != "INTERNAL" {
 			f.t.Fatalf("render: %v; want INTERNAL", err)
 		}
 	})
+}
+
+// TestFaultOrder pins a refused write with faults of several rules (spec 10
+// Diagnostics, "Write faults"): the rows in request order, within a row its value
+// faults before its key fault, FOREIGN_KEY only when no row has another fault, a
+// fault that needs a rendered file only when no key or value fault stands, and the
+// code that of the first fault.
+func TestFaultOrder(t *testing.T) {
+	f := baseFixture(t)
+	const dup, fk, con = "DUPLICATE_KEY", "FOREIGN_KEY", "CONSTRAINT"
+	people := func(rows ...[]any) []byte {
+		var params []any
+		var more [][]int
+		for i, r := range rows {
+			params = append(params, r...)
+			if i > 0 {
+				more = append(more, []int{3 * i, 3*i + 1, 3*i + 2})
+			}
+		}
+		body := map[string]any{"set": sets("id", "name", "age")}
+		if more != nil {
+			body["rows"] = more
+		}
+		return f.msg("insert", "people", body, params...)
+	}
+	cases := []struct {
+		name string
+		msg  []byte
+		code string
+		want []dupFault
+	}{
+		{"10#diagnostics: a row's check fault comes before its key fault", people([]any{"P1", "X", -1}), con,
+			[]dupFault{{"people", "P1", -1, "", con, "ck_people_age"}, {"people", "P1", -1, "id", dup, "people.flowmark.md"}}},
+		{"10#diagnostics: a row's title fault comes before its key fault", people([]any{"P1", "two\nlines", 1}), con,
+			[]dupFault{{"people", "P1", -1, "name", con, "line break"}, {"people", "P1", -1, "id", dup, "people.flowmark.md"}}},
+		{"10#diagnostics: the rows stand in request order, a key fault first when its row is first", people([]any{"P1", "X", 1}, []any{"P9", "Y", -1}), dup,
+			[]dupFault{{"people", "P1", -1, "id", dup, "people.flowmark.md"}, {"people", "P9", -1, "", con, "ck_people_age"}}},
+		{"10#diagnostics: a FOREIGN_KEY fault is not reported beside another fault", f.msg("insert", "items", map[string]any{"set": sets("id", "title", "body", "owner"), "rows": [][]int{{4, 5, 6, 7}}}, "T8", "A", "", "P9", "T1", "B", "", nil), dup,
+			[]dupFault{{"items", "T1", -1, "id", dup, "items.flowmark.md"}}},
+		{"10#diagnostics: a FOREIGN_KEY fault alone is the code", f.msg("insert", "items", map[string]any{"set": sets("id", "title", "body", "owner")}, "T8", "A", "", "P9"), fk,
+			[]dupFault{{"items", "T8", -1, "owner", fk, "P9"}}},
+		{"10#diagnostics: a files row placed nowhere for its key still has its check judged", f.msg("insert", "notes", map[string]any{"set": sets("id", "title", "body", "weight")}, "N1", "X", "", -1), con,
+			[]dupFault{{"notes", "N1", -1, "", con, "ck_notes_weight"}, {"notes", "N1", -1, "id", dup, "notes/N1.flowmark.md"}}},
+		{"10#diagnostics: a key fault stops the render, so no anchor fault is reported", f.msg("insert", "items", map[string]any{"set": sets("id", "title", "body")}, "T1", "Items row T1", "A body."), dup,
+			[]dupFault{{"items", "T1", -1, "id", dup, "items.flowmark.md"}}},
+	}
+	for _, c := range cases {
+		f.sub(t, c.name, func(f *fixture) { wantFaults(f.t, f.fails(c.msg, c.code), c.want) })
+	}
 }
 
 // TestUpdate pins update (spec 60 Surfaces, spec 50 The state machine, spec 20
