@@ -294,13 +294,22 @@ func (c *corpus) history(tb *catalog.Table, rows []placed) {
 	if sm == nil || sm.History.Table == "" {
 		return
 	}
+	of, ok := c.historyOf(tb, sm)
+	if !ok {
+		return
+	}
 	for _, p := range rows {
 		s := p.row.Scalars[sm.Column]
 		if s == nil {
 			continue
 		}
 		state := *s
-		hist := p.row.Blocks[sm.History.Table]
+		var hist []*store.Row
+		var files []string
+		for _, h := range of(p) {
+			hist = append(hist, h.row)
+			files = append(files, h.file)
+		}
 		if len(hist) == 0 {
 			if !slices.Contains(sm.Initial, state) {
 				c.report(p, "", ruleHistoryGap, fmt.Sprintf("the state %s of %s has no history row and is not an initial state", state, p.row.Key))
@@ -319,9 +328,56 @@ func (c *corpus) history(tb *catalog.Table, rows []placed) {
 			if follows && declared(sm, from, to) {
 				continue
 			}
-			c.report(placed{row: h, file: p.file}, "", ruleHistoryChain, fmt.Sprintf("the history row %s goes from %s to %s, which does not follow the row before it or is not a declared transition", h.Key, from, to))
+			c.report(placed{row: h, file: files[i]}, "", ruleHistoryChain, fmt.Sprintf("the history row %s goes from %s to %s, which does not follow the row before it or is not a declared transition", h.Key, from, to))
 		}
 	}
+}
+
+// historyOf returns the function that gives the history rows of a state row of tb,
+// in corpus order: the rows of the history table whose foreign key names it. A
+// history table stored as a block of the state table through that key holds them in
+// the row's block, whose order in its file is corpus order; any other history table
+// holds them among its rows, whose key is matched byte for byte. ok is false when
+// such a history table is unavailable, since the history rules then need its
+// complete rows (spec 50 Diagnostics), and the file's own diagnostic stands for them.
+func (c *corpus) historyOf(tb *catalog.Table, sm *catalog.StateMachine) (func(placed) []placed, bool) {
+	ht, found := c.cat.Table(sm.History.Table)
+	if !found {
+		return nil, false
+	}
+	if ht.Storage.Kind == catalog.StorageBlock && ht.Storage.Parent == tb.Name && placementOf(ht) == sm.History.Row {
+		// A readable row's block is read whole with the row's own file.
+		return func(p placed) []placed {
+			var out []placed
+			for _, h := range p.row.Blocks[ht.Name] {
+				out = append(out, placed{row: h, file: p.file})
+			}
+			return out
+		}, true
+	}
+	if c.isBlocked(ht.Name) {
+		return nil, false
+	}
+	byKey := map[string][]placed{}
+	for _, h := range corpusOrder(c.rows[ht.Name]) {
+		if _, raw := h.row.Raw[sm.History.Row]; raw {
+			continue
+		}
+		if v := h.row.Scalars[sm.History.Row]; v != nil {
+			byKey[*v] = append(byKey[*v], h)
+		}
+	}
+	return func(p placed) []placed { return byKey[p.row.Key] }, true
+}
+
+// placementOf returns the placement foreign key column of a block table.
+func placementOf(tb *catalog.Table) string {
+	for _, fk := range tb.ForeignKeys {
+		if fk.Name == tb.Storage.ParentForeignKey && len(fk.Columns) == 1 {
+			return fk.Columns[0]
+		}
+	}
+	return ""
 }
 
 // declared reports whether the transition from -> to is declared by the machine.
