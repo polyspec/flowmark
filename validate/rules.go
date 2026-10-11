@@ -320,15 +320,19 @@ func (c *corpus) history(tb *catalog.Table, rows []placed) {
 			h := hp.row
 			from, okFrom := readable(h, sm.History.From)
 			to, okTo := readable(h, sm.History.To)
+			// The chain of a row reads its own from and the previous row's to, so
+			// a raw to of the row itself leaves its chain judged.
+			if okFrom {
+				if i == 0 {
+					if !slices.Contains(sm.Initial, from) {
+						c.report(hp, "", ruleHistoryChain, fmt.Sprintf("the history row %s goes from %s, which is not an initial state", h.Key, from))
+					}
+				} else if prev, ok := readable(hist[i-1].row, sm.History.To); ok && from != prev {
+					c.report(hp, "", ruleHistoryChain, fmt.Sprintf("the history row %s goes from %s, which differs from the to %s of the row before it", h.Key, from, prev))
+				}
+			}
 			if !okFrom || !okTo {
 				continue
-			}
-			if i == 0 {
-				if !slices.Contains(sm.Initial, from) {
-					c.report(hp, "", ruleHistoryChain, fmt.Sprintf("the history row %s goes from %s, which is not an initial state", h.Key, from))
-				}
-			} else if prev, ok := readable(hist[i-1].row, sm.History.To); ok && from != prev {
-				c.report(hp, "", ruleHistoryChain, fmt.Sprintf("the history row %s goes from %s, which differs from the to %s of the row before it", h.Key, from, prev))
 			}
 			t, ok := transition(sm, from, to)
 			if !ok {
