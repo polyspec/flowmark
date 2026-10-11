@@ -1,9 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 1f41499c2626d52cfbbcf773131bb05a01f5691c427440b151df40a5260f458e -->
+<!-- source-sha256: d3698931448897b812d4bd3908840e28ae5b3f74ab1a624386d2346cf84f9e85 -->
 # Changelog
 
 ## Unreleased
 
+- T12.5: write path가 IR executor와 journal을 잇는다. 모든 operation은 corpus lock을 잡고 중단된 commit을 먼저 복구한다. transaction 밖의 요청은 lock 아래 transaction 하나다. transaction과 savepoint는 lock을 잡고 자기 post-image를 읽는다. commit은 대상을 확인하고, lock 아래 다시 읽은 corpus가 바뀌었으면 쓰기를 그 위에서 다시 실행하며, journal로 쓴다. prepare 기록이 commit 시점이다. lock 기록은 획득마다 token을 가진다. panic이 나도 lock을 놓는다. format 진단이 있는 file을 다시 써야 하는 쓰기는 요청에서 거절되며, canon, add-column migration, file 전체 delete는 면제된다. flowmark history repair는 executor 쓰기다. commit은 validator의 evaluator로 check를 판정한다.
 - T12.1-30: 상세 anchor 충돌 규칙이 접은 형태 대신 각 viewer의 정확한 slug를 따른다. S_GH는 GitHub의 heading id(Unicode 17.0.0 word 문자, alt 텍스트 없음)를, S_VS는 VS Code의 것(그 slugify.ts, Unicode 13.0.0 집합, Final_Sigma, alt 텍스트)을 재현하며, 둘 다 `make slug-vectors`가 viewer에서 모든 code point에 대해 기록한 id와 대조한다. S_GL은 GitLab이 고정한 comrak 0.56.0의 것을 재현한다. slug 입력은 CommonMark 0.31.2가 렌더한 텍스트다. 텍스트의 numeric character reference는 그 code point다. HTML id나 name은 소문자로 바꾼 뒤, GitHub의 `user-content-` 형태로도 비교한다.
 - T13: Git이 `config/commits.json`을 어기는 message를 거절하는 `commit-msg` hook과 `pre-push` push gate를 실행한다. `config/checklist.json`이 둘을 나열하고 `make hooks`가 설치한다.
 - T12.3-2: validator는 type이 아닌 값이 무엇이든(그런 atom을 true로, 이어 false로 평가해) 행의 논리 값에 대해 check 술어가 false이면 `check`를 보고하고, 같은 판정을 commit용으로 export한다. `history.chain`은 연속성만, `state.transition`은 선언되지 않은 이력 쌍을, `state.required`는 필수 값이 없는 선언된 쌍을 보고하며, type이 아닌 상태, `from`, `to`는 `type`만이고, 행 자신의 `from`은 여전히 앞 행에 대해 판정한다.
