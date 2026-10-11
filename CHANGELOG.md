@@ -3,6 +3,7 @@
 
 ## Unreleased
 
+- T12.4-9: the IR executor follows orm's rule that an insert assigns by value or NULL: `plus_p` and `minus_p` in an insert's `set` answer `IR_INVALID` from orm's validator, and the executor's own earlier answer is removed.
 - T12.4-3: the IR executor follows orm's `key_by` rule: a relation keyed by a nullable column answers `IR_INVALID` from orm's validator, and the executor's own earlier answer for it is removed.
 - T12.4-1: the IR executor follows orm's `group_by` rule: a grouped row read, a grouped sum, a grouped subquery and a group order outside the group answer `IR_INVALID` from orm's validator, and the executor's own earlier answers for them are removed.
 - T12.1-38: the engine reads GFM tables as GitHub, GitLab and VS Code do: a header row, a delimiter row of as many cells and the body rows after it take in the lines that CommonMark reads as a paragraph, so a heading that no viewer reads is no heading of the engine and a setext underline after a body row underlines nothing; VS Code's markdown-it also takes a heading line as a header row and a pipeless delimiter row of one cell.

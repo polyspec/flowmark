@@ -1,9 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 63d85ece324e7a1489dce5affe5654273de8942a56ecee4f1119b3c5c8a8ea62 -->
+<!-- source-sha256: c07199a07675875922a2988fa8eb88d20f5099e3a30fbf25689c5a86b0ec3910 -->
 # Changelog
 
 ## Unreleased
 
+- T12.4-9: IR 실행기가 insert는 값이나 NULL로 할당한다는 orm의 규칙을 따른다. insert의 `set`에 있는 `plus_p`와 `minus_p`는 orm의 validator에서 `IR_INVALID`로 답하며, 실행기 자체의 이전 답은 지웠다.
 - T12.4-3: IR 실행기가 orm의 `key_by` 규칙을 따른다. nullable 컬럼으로 key를 정한 relation은 orm의 validator에서 `IR_INVALID`로 답하며, 그에 대한 실행기 자체의 이전 답은 지웠다.
 - T12.4-1: IR 실행기가 orm의 `group_by` 규칙을 따른다. group된 행 읽기, group된 sum, group된 subquery, group 밖 order는 orm의 validator에서 `IR_INVALID`로 답하며, 그에 대한 실행기 자체의 이전 답은 지웠다.
 - T12.1-38: 엔진이 GFM table을 GitHub, GitLab, VS Code처럼 읽는다. header row, 같은 수의 cell의 delimiter row, 그 뒤의 body row가 CommonMark가 문단으로 읽는 줄들을 받아 들이므로, 어느 viewer도 읽지 않는 heading은 엔진의 heading이 아니고 body row 뒤의 setext 밑줄은 아무것도 밑줄 긋지 않는다. VS Code의 markdown-it는 heading 줄도 header row로, cell 하나의 pipe 없는 delimiter row도 받는다.
