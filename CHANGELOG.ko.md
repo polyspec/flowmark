@@ -1,9 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: d30147f3037d20931a152c8b0b5e4124655d156fdee77752f7681605ac80356f -->
+<!-- source-sha256: b2c7b501eaa599e45d88dea2942479a71bf01db9033d9d9372a5b7d3a32b97e7 -->
 # Changelog
 
 ## Unreleased
 
+- T12.7: database로의 export가 완료되었다. codec column은 저장된 cell을 유지하고, list 끝의 host stage hex와 ip는 풀었다가 orm이 다시 적용하며, client stage 앞의 host stage만 거절한다. 앞선 항목의 identity key와 `datetime(p)` bind까지 합쳐 catalog의 모든 table이 export된다.
 - T12.4: IR executor가 완료되었다. orm protocol 아래에서 모든 IR 종류에 답하며, orm이 필요 없는 판정은 적용되어 있다. orm 항목을 기다리는 열 가지 판정은 하위 항목 T12.4-1부터 T12.4-10이며 각각 orm bump 뒤에 적용된다.
 - T12.7(일부): export test가 자체 binder 대신 orm의 `DB.Execute`로 statement를 적용하므로 모든 precision의 SQLite `datetime(p)`와 `time(p)` column이 database가 요구하는 대로 bind된다. orm pin은 그것을 담은 commit으로 올라간다.
 - T12.7(일부): database로의 export가 identity table의 key를 지킨다. 행은 orm의 `load` insert로 적재되고 orm의 identity restart가 뒤따라 다음에 생성되는 key가 적재된 가장 큰 key를 잇는다. codec table만 아직 거절한다.

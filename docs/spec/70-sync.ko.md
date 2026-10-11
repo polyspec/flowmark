@@ -1,5 +1,5 @@
 <!-- doc-id: spec-sync -->
-<!-- source-sha256: 330f976579cd8c17d81060423ec1cd01376f2d8fdcc81199b0a129294265bc82 -->
+<!-- source-sha256: f857176908386a9edae4c6f341e9258d2bae168aae97357352fa8394f56507fa -->
 # Sync (범위를 정한 뼈대)
 
 [English](70-sync.md)
@@ -44,9 +44,12 @@
   적재하고, 그 행 뒤에 orm의 `restart_identity` statement가 오며, 이 statement는 identity를 table의 가장 큰
   key 너머로 옮긴다. 그래서 다른 행이 참조하는 key가 지켜지고 database가 다음에 생성하는 key는 그 뒤를
   잇는다. 근거: key는 다른 행이 참조하는 행의 identity이며, 새 key를 생성하는 export는 그 참조를 깬다.
-- codec column이 있는 table은 export를 `CAPABILITY_UNSUPPORTED`로 실패시키며, 그 table과 column을 밝힌다.
-  근거: codec column은 encode된 값을 저장하는데 orm의 insert는 decode된 값을 받아 encode하며, 엔진은 아직
-  저장된 값을 decode하지 않는다. orm을 기다린다(open question 6).
+- codec column은 저장된 값, 곧 encode된 cell을 유지한다. orm이 client에서 적용하는 stage(`gz`, `base64`,
+  `serialize`, `yaml`, `ordered_json`)는 그 cell에 이미 적용되어 있으므로 insert는 그것을 그대로 bind한다.
+  list 끝의 host stage(`hex`, `ip`)는 key가 필요 없는 `orm.HostDecode`로 풀고 orm의 bind가 다시 적용하므로
+  column은 같은 cell을 저장한다. client stage 앞의 host stage는 export를 `CAPABILITY_UNSUPPORTED`로
+  실패시키며 table과 column을 밝힌다. 근거: export는 저장된 값을 모두 유지하고, orm은 host stage를 client
+  stage가 남긴 값에 적용한다.
 - parameter를 database driver에 bind하고 statement를 실행하는 일은 database executor의 일이며, orm은 이를
   client 안에 둔다. orm의 `DB.Execute`는 statement 하나를 slot과 함께 실행하고 SQLite `datetime(p)`와 `time(p)`를
   정확히 p자리로 bind하되, wire 형식이 아니라 client 값(정수, 숫자, decode된 bytes)을 받으므로 export는 아직
