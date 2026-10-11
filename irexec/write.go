@@ -662,7 +662,7 @@ func (w *writer) update() *Error {
 	for _, a := range req.Set {
 		f := w.ent.Field(a.Column)
 		if f.PrimaryKey || f.Identity {
-			return unspecified("an update of the key column " + a.Column + ": orm's planner refuses it as IR_INVALID while spec 10 and 50 rule key updates")
+			return unspecified("an update of the key column " + a.Column + ", IR_INVALID once ir.Validate refuses it (orm T94)")
 		}
 	}
 	rows, err := w.matched(false)

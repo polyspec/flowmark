@@ -1,5 +1,5 @@
 <!-- doc-id: spec-dialect -->
-<!-- source-sha256: 6e141022f64d60d005a09e6b7596c99bcba4c53364f4c67130e8bd760fb3a2de -->
+<!-- source-sha256: a5aec312e5035c27976060b7309a41f518514a632f63d41721e90018a97f8564 -->
 # Capability table
 
 [English](60-dialect.md)
@@ -50,8 +50,8 @@ surface가 corpus에서 무엇을 하는지 또는 orm 전통에 따라 `CAPABIL
 | 정렬 | IR `order`는 column의 type으로 정렬하며, NULL은 오름차순에서 모든 값 앞에, 내림차순에서 모든 값 뒤에 오고, 동률은 저장 순서다 — `group_count`의 group과 `limit_per_parent`의 순위에도 같다. 없는 읽기는 저장 순서를 돌려준다([document model](20-document-model.ko.md#순서)). 근거: MySQL과 SQLite는 오름차순에서 NULL을 처음에, PostgreSQL은 마지막에 둔다. MySQL에는 `NULLS FIRST`가 없으므로, NULL을 가장 작게 두는 것이 세 database가 흉내 없이 render하는 유일한 규칙이다 |
 | `paginate` | 지원. 요청 하나가 일관된 corpus 하나를 읽는다 |
 | `insert`(단일, 다중 행) | 지원. `identity`, `key_prefix`, `order` column은 executor가 할당하며 생략할 수 있다. default는 명시적으로 쓴다 |
-| `update` | 지원. 읽은 뒤 바뀐 대상은 덮어쓰지 않고 `WRITE_CONFLICT`로 실패한다 |
-| `delete`, `restore` | 지원. `restore`는 SQL 형태를 지킨다(soft delete column을 비우고, 지운 동안 unique key를 유지). 참조되는 행의 delete는 같은 delete가 참조하는 행을 지우더라도 `FOREIGN_KEY`([constraints](50-constraints.ko.md#key와-참조)) |
+| `update` | 지원. 읽은 뒤 바뀐 대상은 덮어쓰지 않고 `WRITE_CONFLICT`로 실패한다. primary key나 identity column의 배정은 `IR_INVALID`다([document model](20-document-model.ko.md#key)) |
+| `delete`, `restore` | 지원. `restore`는 SQL 형태를 지킨다(soft delete column을 비우고, 지운 동안 unique key를 유지). 참조되는 행의 delete는 같은 delete가 참조하는 행을 지우더라도 `FOREIGN_KEY`([constraints](50-constraints.ko.md#key와-참조)). primary key, identity, soft delete column을 배정하는 `restore`는 `IR_INVALID`다 |
 | `optimistic` | 지원. 일치가 없으면 `OPTIMISTIC_LOCK` |
 | `on_duplicate` | 충돌 대상 **모든 unique key**(MySQL 규칙)로 지원. unique key가 여럿인 table에서는 PostgreSQL과 SQLite의 대상 규칙과 다르며 그 차이를 여기 밝힌다 |
 | primary key 비교 | A–Z의 대소문자를 가리지 않는다. SQL에서 orm의 binary collation과 다른데, key는 file 이름이자 anchor이기 때문이다([document model](20-document-model.ko.md#key)): key가 다른 key와 대소문자를 무시하고 같은 insert는 `DUPLICATE_KEY`이며, 충돌 key가 primary key인 `on_duplicate` insert는 그 행 — 바이트 단위로 같은 key가 먼저, 아니면 byte 순서에서 가장 작은 것 — 과 만나고, 그 행은 자기 key를 유지한다. 근거: `ON DUPLICATE KEY UPDATE`와 `ON CONFLICT`는 충돌 key의 index가 그 index의 비교로 보고하는 중복에서 작동한다 |

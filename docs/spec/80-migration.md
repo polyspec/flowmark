@@ -19,9 +19,11 @@ specification is written when evolution beyond the v1 scope starts.
 - **Additive-first**: a rename is an explicit step, never "add new and drop old".
 - **A storage change is a transaction**: moving a table from one storage to another rewrites every
   row in one transaction, and the rows read the same before and after; a file with a `format.*` diagnostic refuses it, naming the file.
-- **Keys are opaque**, so no key codemod rewrites references in prose; a key change is refused while any row
-  references the key; the referencing rows are updated first, in the same transaction, by the
-  caller.
+- **Keys are opaque**, so no key codemod rewrites references in prose. A key is never updated
+  ([document model](20-document-model.md#keys)): a key changes by inserting the row under the new
+  key, pointing the referencing rows at it and deleting the old row, in one transaction by the
+  caller; the delete is `FOREIGN_KEY` while any row still references the old key
+  ([constraints](50-constraints.md#keys-and-references)).
 
 ## Open for later
 

@@ -150,7 +150,7 @@ reimplements them.
 
 - Exactly one per table, or a schema error:
   - `store files` — one file per row, `<table>/<key>.flowmark.md` under the corpus root. The file
-    name is the key; a key change renames the file in the same transaction.
+    name is the key; a key is never updated (`IR_INVALID`), so a write never renames a file.
   - `store document list` / `store document table` — every row in the one file
     `<table>.flowmark.md` at the corpus root: `# <table>`, then the list or table directly under
     the H1 and the detail sections at H2.
@@ -182,8 +182,7 @@ reimplements them.
   schema error, a key as `CONSTRAINT` — since those names are reserved file names on Windows; a
   `files` key is at most 243 bytes, so its file name stays within 255. A file name that is not the
   canonical text of its key's type (`007.flowmark.md` for an integer key) is `format.block`. A file
-  name whose key breaks the key shape is `format.block` on read. A key change that differs only in case renames through an intermediate name inside the journaled
-  transaction.
+  name whose key breaks the key shape is `format.block` on read.
 - `identity` is allowed only on an `i64` primary key column: an insert that omits the key gets `max+1`,
   allocated under the lock; reuse after a git rewind is accepted and stated. A text key with
   `key_prefix <p>` is allocated `<p><n + 1>`, where n is the largest decimal suffix without a
@@ -266,7 +265,7 @@ reimplements them.
   equals A, or `user-content-` followed by A, once lowercased by the full mapping, in raw HTML as
   CommonMark 0.31.2 reads it (a code span or code block holds none), collides too: VS Code compares
   a fragment with an id lowercased, and GitHub renders a raw id or name, its case kept, with
-  `user-content-` before it unless it already begins so, the form of its heading ids. A write that introduces a collision — a title update, a payload write, a row insert, a key update, a move or the creation of a detail section — is `CONSTRAINT`, naming the other heading, except a write giving a row a key equal (with or without regard to case) to another key of its table, which is `DUPLICATE_KEY`, the key rule; on read it is `format.block`, except between the detail headings of two rows whose keys differ only in case, which is `key.duplicate` alone. A detail heading in a
+  `user-content-` before it unless it already begins so, the form of its heading ids. A write that introduces a collision — a title update, a payload write, a row insert, a move or the creation of a detail section — is `CONSTRAINT`, naming the other heading, except a write giving a row a key equal (with or without regard to case) to another key of its table, which is `DUPLICATE_KEY`, the key rule; on read it is `format.block`, except between the detail headings of two rows whose keys differ only in case, which is `key.duplicate` alone. A detail heading in a
   non-canonical spelling (extra spaces, a wrong case of `row`) is `format.noncanonical`, which
   `flowmark canon` repairs. A detail section whose key names no row of its block is `format.block`, and so is a second detail section of the same row, whatever its spelling: its body and sections cannot be assigned.
 - A `markdown` column is always a section of the row scope — never a field or a cell — in every
@@ -354,7 +353,7 @@ reimplements them.
   exactly when that row has a detail section; a link inside the referenced row's own file is
   `#<anchor>` alone, or that file's name when the row has no anchor. A write that adds or removes a
   row's detail section rewrites every link to that row in the same transaction. A target that
-  differs from the derived one is `format.noncanonical`; a key that names no row is a dangling reference (`reference.dangling` in the validator; `FOREIGN_KEY` on a write that introduces it; it never makes a file unreadable, and it keeps its written target (read without a target check and written as read), except a `parent` of a block or document row that names no row of its file, which is `format.block`); a key update of a referenced row is `FOREIGN_KEY` (restrict), so a target never
+  differs from the derived one is `format.noncanonical`; a key that names no row is a dangling reference (`reference.dangling` in the validator; `FOREIGN_KEY` on a write that introduces it; it never makes a file unreadable, and it keeps its written target (read without a target check and written as read), except a `parent` of a block or document row that names no row of its file, which is `format.block`); a key is never updated, so a target never
   moves under a link. A `parent` written in a `files` row is a link too; the placement foreign
   key of a block row is never written. Examples: a `files` row `comments/C5.flowmark.md` links its
   post `[P3](../posts/P3.flowmark.md)`; a block comment inside `posts/P3.flowmark.md` links its

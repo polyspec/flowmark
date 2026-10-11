@@ -561,6 +561,17 @@ func TestDelete(t *testing.T) {
 	sf.sub(t, "50#keys-and-references: a delete of a row whose scope holds block rows", func(f *fixture) {
 		wantFaults(f.t, f.fails(byID(f, "delete", "notes", "N1"), "FOREIGN_KEY"), []dupFault{{"notes", "N1", -1, "", "FOREIGN_KEY", "steps S1"}})
 	})
+	t.Run("20#keys: a key changes by an insert under the new key, the references pointed at it and the old row deleted", func(t *testing.T) {
+		f := fresh(t)
+		f.commit(f.ok(f.msg("update", "notes", map[string]any{"set": sets("item"), "where": where(pred("id", "eq", p(1)))}, "T3", "N3")))
+		f.fails(byID(f, "delete", "items", "T3"), "FOREIGN_KEY")
+		f.commit(f.want(f.msg("insert", "items", map[string]any{"set": sets("id", "title", "body")}, "T9", "Review the design", ""), `{"affected":1,"keys":["T9"]}`))
+		f.commit(f.ok(f.msg("update", "notes", map[string]any{"set": sets("item"), "where": where(pred("id", "eq", p(1)))}, "T9", "N3")))
+		f.commit(f.want(byID(f, "delete", "items", "T3"), `{"affected":1,"keys":[]}`))
+		if got := f.file("notes/N3.flowmark.md"); !strings.Contains(got, "- item: [T9](../items.flowmark.md)\n") {
+			t.Fatalf("N3:\n%s", got)
+		}
+	})
 	noSteps := baseDocs()
 	noSteps["notes/N1.flowmark.md"] = lines("# First note", "- item: [T1](../items.flowmark.md#items-row-t1)", "- position: 1", "", "Note body.")
 	nf := catalogFixture(t, noSteps)

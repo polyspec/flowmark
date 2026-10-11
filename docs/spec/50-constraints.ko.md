@@ -1,5 +1,5 @@
 <!-- doc-id: spec-constraints -->
-<!-- source-sha256: 2b4ca95df5e19352db41bcd1c64a95aa68c29c048b794c027ada7891e2927b0c -->
+<!-- source-sha256: 23270fda5840002e3a36c339b06ec88abd511e7c968b1585b07a015fb1359ee4 -->
 # Constraints
 
 [English](50-constraints.md)
@@ -20,8 +20,9 @@
 - **primary key와 unique key**는 table 전체에서 강제한다 — block table이면 그것을 가진 모든 file의 모든 block에 걸쳐서. 중복은 그것을 새로 만드는 쓰기에서 `DUPLICATE_KEY`이고, validator의 `key.duplicate`는 [corpus 순서](10-canonical-format.ko.md#진단)에서 첫 자리 다음의 각 자리에, 그 key에 있으며 첫 자리를 밝힌다. unique key는 SQL처럼 NULL을 서로 다르게 본다. unique key의 validator `key.duplicate`는 값을 각각 정식 readable 형식으로 바이트 단위로 비교하며, corpus 순서에서 첫 자리 다음의 각 자리에, key의 첫 column에 있고 첫 자리를 밝힌다. 그 column 중 어느 것의 값이 NULL이거나 column의 type이 아닌 행은 비교에 참여하지 않는다. 근거: SQL과 같다 — orm은 모든 문자 column에 code point를 비교하는 binary collation 하나(`utf8mb4_0900_bin`, `COLLATE "C"`, `BINARY`)를 주고 NULL의 반복을 허용한다 — 그리고 엔진이 읽지 못하는 값에는 비교가 없으며 그 `type`이 그것을 대신한다. primary key가 대소문자를 무시하고 비교하는 것은 그것이 file 이름이자 anchor이기 때문일 뿐이다([document model](20-document-model.ko.md#key)). unique key의 값은 어느 쪽도 아니므로 그 이유가 미치지 않는다.
 - **foreign key**는 참조된 key와 byte 단위로 정확히 일치해야 풀린다. 어떤 행도 가리키지 않는 참조는
   dangling 참조다: 그것을 새로 만드는 쓰기는 `FOREIGN_KEY`이고, validator의 `reference.dangling`이 참조 자리에 보고하며, file을 읽을 수 없게 하지 않는다. 다만 block이나 document 행의 `parent`가 그 file의 어떤 행도 가리키지 않으면 `format.block`이다([canonical format](10-canonical-format.md#foreign-keys-as-links)).
-- **참조된 행의 key 갱신**은 `FOREIGN_KEY`(restrict-only)다. 그래서 link의 target은 link 아래에서
-  움직이지 않는다.
+- **key는 결코 갱신되지 않는다.** primary key를 배정하는 update나 restore는 `IR_INVALID`(모든
+  database에서 orm의 규칙)이므로 link의 target은 link 아래에서 움직이지 않는다. key는 새 key로 행을
+  insert하고, 참조하는 행이 그것을 가리키게 하고, 옛 행을 지우는 것으로 한 transaction에서 바뀐다.
 - **참조 action은 restrict-only다.** `cascade`와 `set_null`은 catalog를 읽을 때 거절한다: 엔진을
   우회하는 작성자에게는 구현할 수 없다. 참조되는 행 — 이력 행을 가진 행 포함 — 의 삭제는
   `FOREIGN_KEY`다. restrict는 쓰기 전의 행에 대해 성립한다: delete가 지우는 행이 참조되면, 같은 요청이
@@ -54,7 +55,7 @@
 - 바이트 그대로 쓸 수 없는 text나 `markdown` 값, 그리고 `CanonicalLiteral`이 거절하는 typed 값(scale보다 많은 소수 자릿수 — 0 포함, precision − scale보다 많은 정수 자릿수, precision보다 많은 소수 자릿수의 time이나 datetime). orm parameter이면 type 밖의 typed 값은 U+0000을 포함해 대신 `CODEC_ENCODE`다([canonical format](10-canonical-format.md));
 - `format.*` 진단이 있는 file을 다시 쓰는 logical write는 file과 진단을 밝히며 `CONSTRAINT`다. 그 진단이 `format.noncanonical`이면 `flowmark canon`을 밝힌다(commit의 면제를 제외하고)([canonical format](10-canonical-format.md)). 쓰기는 문서 바이트를 정규화하지 않는다;
 - CommonMark block 구조에서 최상위 level ≤ L heading을 가진 `markdown` 값([canonical format](10-canonical-format.md));
-- 상세 anchor와의 충돌(heading 또는 HTML `id`나 `name`)을 새로 만드는 쓰기 — 제목 갱신, payload 쓰기, 행 삽입, key 갱신, 이동,
+- 상세 anchor와의 충돌(heading 또는 HTML `id`나 `name`)을 새로 만드는 쓰기 — 제목 갱신, payload 쓰기, 행 삽입, 이동,
   상세 섹션의 생성 — 는 anchor를 차지하는 heading이나 id를 쓴 행과 column — `markdown` column의 값, `files` 행의 제목(H1에 대해), 또는 section이나 block heading에 대해서는 그것이 여는 행 scope의 행, 그 heading이 이름 붙인 `markdown` column이나 자식 table — 에 위치하며, 차지한 anchor의 상세 heading을 밝히는 `CONSTRAINT`다. 다만 중복 key는 `DUPLICATE_KEY`다([canonical format](10-canonical-format.md#detail-headings-and-anchors));
 - date, time 또는 datetime 값으로 쓴 `now`(그 type이 아니다), 그리고 column 길이를 넘는 text(orm parameter이면 `CODEC_ENCODE`)([canonical format](10-canonical-format.md));
 - list 제목 token `<declared column>\:`([canonical format](10-canonical-format.md#list-rows));

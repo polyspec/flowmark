@@ -1,5 +1,5 @@
 <!-- doc-id: spec-document-model -->
-<!-- source-sha256: d75b66466fbf3c4ed9c92300eea8213b59350757900076802c14f139950d68a2 -->
+<!-- source-sha256: 6293ee7e43ef30eb7ebfb625d974f0c65ee84c210ce0378993090fa3bb40a379 -->
 # 문서 모델
 
 [English](20-document-model.md)
@@ -38,7 +38,8 @@
 각 table은 정확히 하나의 저장을 선언한다. 없는 table은 schema 오류이며 기본값을 추측하지 않는다.
 
 - **`store files`** — 행마다 file 하나: corpus root 아래 `<table>/<key>.flowmark.md`. file 이름이 key다.
-  key가 바뀌면 같은 transaction에서 file 이름도 바뀐다.
+  key는 결코 갱신되지 않는다: primary key를 배정하는 update는 모든 database에서 orm의 규칙인
+  `IR_INVALID`이므로, 쓰기가 file 이름을 바꾸는 일은 없다.
 - **`store document list`, `store document table`** — 모든 행이 corpus root의 file
   `<table>.flowmark.md` 하나에 있다.
 - **`store block <fk> list`, `store block <fk> table`** — 이름 붙은 foreign key가 가리키는 부모 행의
@@ -70,7 +71,6 @@ aggregate냐 split이냐는 저장 선언이다. 논리 관계는 모든 저장�
 - `files` key는 최대 243 byte이며, 그래서 file 이름이 255 byte 안에 든다.
 - key 타입의 정식 텍스트가 아닌 file 이름은 `format.block`이다: 정수 key 7의 정식 file 이름은
   `7.flowmark.md`이고 `007.flowmark.md`는 아니다.
-- 대소문자만 다른 key 변경은 journal에 기록되는 transaction 안에서 중간 이름을 거쳐 file 이름을 바꾼다.
 - `identity`는 `i64` primary key column에만 허용된다([schema](30-schema.md)): key를 생략한 insert는 lock 아래 할당된 `max+1`을 받는다.
   git을 되감은 뒤의 재사용은 받아들인다 — 할당의 기록은 sequence가 아니라 git history다.
 - `key_prefix <p>`를 가진 key는 `<p><n + 1>`로 할당되며, n은 `<p><n>` 꼴 key 가운데 선행 0 없는 가장 큰

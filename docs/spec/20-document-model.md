@@ -42,7 +42,8 @@ Each table declares exactly one storage; a table without one is a schema error, 
 guessed.
 
 - **`store files`** — one file per row: `<table>/<key>.flowmark.md` under the corpus root. The file
-  name is the key; a key change renames the file in the same transaction.
+  name is the key. A key is never updated: an update that assigns the primary key is `IR_INVALID`,
+  the orm rule on every database, so a file is never renamed by a write.
 - **`store document list`, `store document table`** — every row in the one file
   `<table>.flowmark.md` at the corpus root.
 - **`store block <fk> list`, `store block <fk> table`** — the rows inside the scope of the parent
@@ -80,8 +81,6 @@ so the same rows can be stored either way.
 - A `files` key is at most 243 bytes, so its file name stays within 255 bytes.
 - A file name that is not the canonical text of its key's type is `format.block`: for the integer
   key 7 the canonical file name is `7.flowmark.md`, and `007.flowmark.md` is not.
-- A key change that differs only in case renames the file through an intermediate name, inside the
-  journaled transaction.
 - `identity` is allowed only on an `i64` primary key column ([schema](30-schema.md)): an insert that omits the key gets `max+1`,
   allocated under the lock. Reuse after a git rewind is accepted — git history, not a sequence, is
   the allocator of record.
