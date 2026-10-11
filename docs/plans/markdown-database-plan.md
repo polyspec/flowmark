@@ -74,12 +74,16 @@ compatibility, no fallback, no hidden error, no trick; rules first.
   `markdown://127.0.0.1:<port>/<corpus>?token=<token>`, where `<corpus>` is the corpus root's
   directory name. A corpus or token mismatch is `CONFIG`.
 - The portable lock (spec 40) is held for one operation, or for one transaction from `begin` to
-  `commit` or `rollback`. The holder identity is `<pid>@<host>/<session>`. A closed connection, or
-  a transaction idle longer than `tx_idle_ms` (a server flag), rolls the transaction back and
-  releases the lock. Requests inside a transaction read the staged post-image; a savepoint is a
-  nested stage. The CLI, MCP and sidecar wait on the same lock and fail with `LOCK_TIMEOUT`
-  naming the holder. Spec 40 maps each face name to its orm code: `LOCK_TIMEOUT` to `CANCELED`,
-  `CORPUS_CONFLICT` to `WRITE_CONFLICT`.
+  `commit` or `rollback`. The lock file `.flowmark/lock` holds the holder record, one line of JSON
+  `{pid, start, host, hostname, session}`, and the holder is named `<pid>@<host>/<session>`. A
+  closed connection, or a transaction idle longer than `tx_idle_ms` (a server flag), rolls the
+  transaction back and releases the lock. Requests inside a transaction read its post-image, held
+  in the server's memory; a savepoint is a nested level of it, and a journal stage exists only
+  while one commit writes. The CLI, MCP and sidecar wait on the same lock, driven by the OS change
+  notification, up to `--lock-wait-ms` (the server's flag `lock_wait_ms`; default 5000), and fail
+  with `LOCK_TIMEOUT` naming the holder and its state; a holder that has ended refuses at once,
+  and only `flowmark unlock` removes its lock. Spec 40 maps each face name to its orm code:
+  `LOCK_TIMEOUT` to `CANCELED`, `CORPUS_CONFLICT` to `WRITE_CONFLICT`.
 - A face (CLI, MCP, sidecar) retries a single-operation write once after a re-read; a server
   transaction is never retried by the server, and the orm client receives `WRITE_CONFLICT`.
 
