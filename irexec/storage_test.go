@@ -89,6 +89,27 @@ func TestFilesStorageOrder(t *testing.T) {
 	}
 }
 
+// TestLimitCountsSoftDeleted pins a state limit over a soft-deleted row (spec 50
+// The state machine, Limit): the soft-deleted row still counts in its state, so a
+// soft delete frees no place and a restore never exceeds the limit.
+func TestLimitCountsSoftDeleted(t *testing.T) {
+	docs := map[string]string{
+		"tasks.flowmark.md": lines("# tasks", "| id | state | title | deleted_at |", "| --- | --- | --- | --- |",
+			"| A | doing | Alpha | 2026-10-05 00:00:00.000000 |", "| B | todo | Beta |  |"),
+		"task_history.flowmark.md": lines("# task_history", "| id | task | from_state | to_state | at |", "| --- | --- | --- | --- | --- |",
+			"| 1 | [A](tasks.flowmark.md) | todo | doing | 2026-10-01 00:00:00.000000 |"),
+	}
+	t.Run("50#the-state-machine: a restore into a state at its limit succeeds", func(t *testing.T) {
+		f := catalogFixture(t, docs).on(t)
+		f.commit(f.want(f.msg("restore", "tasks", map[string]any{"where": where(pred("id", "eq", p(0)))}, "A"), `{"affected":1,"keys":[]}`))
+	})
+	t.Run("50#the-state-machine: a soft-deleted row holds its place under the limit", func(t *testing.T) {
+		f := catalogFixture(t, docs).on(t)
+		err := f.fails(f.msg("update", "tasks", map[string]any{"set": sets("state"), "where": where(pred("id", "eq", p(1)))}, "doing", "B"), "CONSTRAINT")
+		wantFaults(t, err, []dupFault{{"tasks", "B", -1, "state", "CONSTRAINT", "limit 1"}})
+	})
+}
+
 // TestDocumentLifecycle pins a document table from its first insert to its last
 // delete (spec 20 Storage): a missing document is an empty table, an insert creates
 // it, and a delete of its last row leaves # <table> and one LF.

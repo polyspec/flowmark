@@ -146,6 +146,38 @@ table ticket_history {
   }
 }
 
+table tasks {
+  id varchar(16)
+  state varchar(16)
+  title varchar(64)
+  deleted_at datetime(6) null
+  primary key (id)
+  settings {
+    store document table
+    title title
+    soft_delete deleted_at
+    state_machine state initial todo
+    state_machine state todo -> doing
+    state_machine state doing -> todo
+    state_machine state history task_history row task from from_state to to_state at at
+    state_machine state limit doing 1
+  }
+}
+
+table task_history {
+  id i64 identity
+  task varchar(16)
+  from_state varchar(16)
+  to_state varchar(16)
+  at datetime(6)
+  primary key (id)
+  index ix_task_history_task (task)
+  foreign key fk_task_history (task) references tasks (id) on delete restrict on update restrict
+  settings {
+    store document table
+  }
+}
+
 table stamps {
   id i64 identity
   label varchar(16)
