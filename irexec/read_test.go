@@ -539,6 +539,39 @@ func TestClock(t *testing.T) {
 	})
 }
 
+// TestRelativeTimeRange pins a relative time function whose result lies outside
+// 0001-01-01 to 9999-12-31 23:59:59.999999, or whose interval cannot be represented
+// (spec 60 Surfaces): it is NULL, so a comparison with it is unknown and neither it
+// nor its negation matches a row.
+func TestRelativeTimeRange(t *testing.T) {
+	f := baseFixture(t)
+	cases := []struct {
+		name, fn string
+		param    any
+	}{
+		{"60#surfaces: seconds_ago past every datetime is NULL", "seconds_ago", 1e300},
+		{"60#surfaces: days_later past 9999-12-31 is NULL", "days_later", 4000000},
+		{"60#surfaces: months_ago before 0001-01-01 is NULL", "months_ago", 200000},
+		{"60#surfaces: hours_later past 9999-12-31 is NULL", "hours_later", 2000000000},
+	}
+	for _, c := range cases {
+		cmp := pred("joined", "lt", map[string]any{"value": map[string]any{"name": c.fn, "ps": []int{0}}})
+		f.sub(t, c.name, func(f *fixture) {
+			if got := f.ids("people", where(cmp), c.param); got != nil {
+				f.t.Fatalf("ids %v", got)
+			}
+			if got := f.ids("people", where(map[string]any{"group": map[string]any{"not": true, "items": []any{cmp}}}), c.param); got != nil {
+				f.t.Fatalf("negated: ids %v", got)
+			}
+		})
+	}
+	f.sub(t, "60#surfaces: a relative time function inside the range is a value", func(f *fixture) {
+		if got := f.ids("people", where(pred("joined", "lt", map[string]any{"value": map[string]any{"name": "days_later", "ps": []int{0}}})), 2000000); !slices.Equal(got, []string{"P1", "P2"}) {
+			f.t.Fatalf("ids %v", got)
+		}
+	})
+}
+
 // TestUnavailableTable pins spec 10's unavailable table: a request that needs any
 // row of a table holding an unreadable file, or two rows with byte-equal keys, fails
 // as CONSTRAINT naming the file and the diagnostic, and a request that needs none

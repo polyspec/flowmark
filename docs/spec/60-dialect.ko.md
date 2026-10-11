@@ -1,5 +1,5 @@
 <!-- doc-id: spec-dialect -->
-<!-- source-sha256: 8d63558e0ccc60c62408fc0418ff20fc2e520a3f54af75c15cc00bb666f11b51 -->
+<!-- source-sha256: 98c916e3b2e6740a83ce31796e8913ff035608fcd9f374dc36fb67ea8fd30bb7 -->
 # Capability table
 
 [English](60-dialect.md)
@@ -42,7 +42,7 @@ surface가 corpus에서 무엇을 하는지 또는 orm 전통에 따라 `CAPABIL
 | subquery(`tuple_in`, `tuple_not_in`, scalar `Sub` aggregate) | 지원 |
 | `contains`(`Lk` 연산자) | 지원: column의 텍스트가 parameter의 텍스트를 substring으로 담으면 참이다. ASCII 문자 A–Z와 a–z는 대소문자를 가리지 않고, 그 밖의 문자는 code point로 비교한다. NULL column이나 parameter는 unknown이며, parameter의 `%`, `_`, `\`는 문자 그대로다. 근거: SQL parity — orm의 `COLLATE "C"` 아래 PostgreSQL `ILIKE`, SQLite `LIKE`, orm의 MySQL ASCII fold가 이 결과를 준다 |
 | `contains_binary`(`Lb` 연산자) | 지원: column의 텍스트가 parameter의 텍스트를 substring으로 담으면 참이며, code point로 비교한다. NULL column이나 parameter는 unknown이며, parameter의 `%`, `_`, `\`는 문자 그대로다. 근거: `utf8mb4_0900_bin` 아래 MySQL `LIKE`, `COLLATE "C"` 아래 PostgreSQL `LIKE`, SQLite `instr`가 일치한다 |
-| `now`, `default now`, `updated`, `soft_delete` | 요청마다 값 하나인 요청의 `now`: `datetime(p)`에 쓸 때는 p자리로 자르고, 비교할 때는 여섯 자리다([operations](40-ops.ko.md#시계)) |
+| `now`, `default now`, `updated`, `soft_delete` | 요청마다 값 하나인 요청의 `now`: `datetime(p)`에 쓸 때는 p자리로 자르고, 비교할 때는 여섯 자리다([operations](40-ops.ko.md#시계)). 결과가 0001-01-01부터 9999-12-31 23:59:59.999999 밖에 있거나 간격을 표현할 수 없는 상대 시각 함수는 NULL이다(orm의 규칙). 근거: MySQL과 SQLite는 범위를 넘으면 NULL을 주며, NULL은 다른 dialect를 guard로 맞출 수 있는 유일한 결과다 |
 | codec columns | orm 요청에서는 client가 적용한다. 엔진이 시작하는 쓰기(CLI, MCP, sidecar, 이력)는 orm의 Go codec package로 codec을 적용하며, 검증은 같은 package로 decode한다. 저장 값은 encode된 값이며, byte를 만드는 단계는 base64다 |
 | indexes | 허용되며 메모리에서 유도된다 |
 | `select explicit`, `entity`, `navigation` | client 쪽이며 저장에 효과가 없다 |

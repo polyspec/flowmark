@@ -534,31 +534,47 @@ func (r *reader) valueFunction(f *ir.Func) (cell, dbspec.Type, *Error) {
 	if pv.null {
 		return cell{null: true}, dt, nil
 	}
+	// A result outside the datetime range, or an interval past every result in it, is
+	// NULL (spec 60 Surfaces): the bounds below lie beyond the span of the range, so
+	// no in-range result is lost and no arithmetic overflows.
 	var at time.Time
 	switch unit {
-	case "second":
+	case "second", "minute", "hour":
 		x, _ := strconv.ParseFloat(pv.text, 64)
-		d := x * float64(time.Second)
-		if math.Abs(d) > math.MaxInt64 {
-			return cell{}, dt, unspecified("a seconds interval beyond the range of a datetime")
+		x *= float64(sign) * map[string]float64{"second": 1, "minute": 60, "hour": 3600}[unit]
+		if math.Abs(x) > 1e13 {
+			return cell{null: true}, dt, nil
 		}
-		at = now.Add(time.Duration(float64(sign) * d))
+		whole := math.Trunc(x)
+		shifted := now.Add(time.Duration(math.Round((x - whole) * float64(time.Second))))
+		at = time.Unix(shifted.Unix()+int64(whole), int64(shifted.Nanosecond())).UTC()
 	default:
 		n, _ := strconv.Atoi(pv.text)
 		n *= sign
 		switch unit {
-		case "minute":
-			at = now.Add(time.Duration(n) * time.Minute)
-		case "hour":
-			at = now.Add(time.Duration(n) * time.Hour)
 		case "day":
+			if n > 3652059 || n < -3652059 {
+				return cell{null: true}, dt, nil
+			}
 			at = now.AddDate(0, 0, n)
 		case "month":
+			if n > 119987 || n < -119987 {
+				return cell{null: true}, dt, nil
+			}
 			at = addMonths(now, n)
 		}
 	}
+	if at.Before(datetimeMin) || at.After(datetimeMax) {
+		return cell{null: true}, dt, nil
+	}
 	return cell{text: formatDatetime(at, 9)}, dbspec.Type{Kind: dbspec.TypeDatetime, Precision: 9}, nil
 }
+
+// datetimeMin and datetimeMax bound orm's datetime range (orm dialects.md).
+var (
+	datetimeMin = time.Date(1, 1, 1, 0, 0, 0, 0, time.UTC)
+	datetimeMax = time.Date(9999, 12, 31, 23, 59, 59, 999999000, time.UTC)
+)
 
 // addMonths moves tm by n months, to the last day of the target month when the
 // day does not exist there.
