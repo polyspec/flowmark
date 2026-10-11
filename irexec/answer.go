@@ -31,27 +31,40 @@ func (a *Answer) MarshalJSON() ([]byte, error) {
 	}
 	switch a.Kind {
 	case "count":
-		return json.Marshal(struct {
+		return marshalPlain(struct {
 			Count int64 `json:"count"`
 		}{a.Count})
 	case "sum", "avg":
-		return json.Marshal(struct {
+		return marshalPlain(struct {
 			Value any `json:"value"`
 		}{a.Value})
 	case "paginate":
-		return json.Marshal(struct {
+		return marshalPlain(struct {
 			Rows  []*Row `json:"rows"`
 			Count int64  `json:"count"`
 		}{rows, a.Count})
 	case "insert", "update", "delete", "restore":
-		return json.Marshal(struct {
+		return marshalPlain(struct {
 			Affected int64 `json:"affected"`
 			Keys     []any `json:"keys"`
 		}{a.Affected, keys})
 	}
-	return json.Marshal(struct {
+	return marshalPlain(struct {
 		Rows []*Row `json:"rows"`
 	}{rows})
+}
+
+// marshalPlain returns the JSON of v without HTML escaping and without a line feed: json.Marshal escapes <, > and &
+// also in the output of a Marshaler, and an encoder that marshals the answer does not undo them, so an answer would no
+// longer read as its values are stored.
+func marshalPlain(v any) ([]byte, error) {
+	var b bytes.Buffer
+	enc := json.NewEncoder(&b)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(v); err != nil {
+		return nil, err
+	}
+	return bytes.TrimSuffix(b.Bytes(), []byte("\n")), nil
 }
 
 // Row is one assembled row: its outputs in projection order, then its joins and
@@ -81,7 +94,7 @@ func (r *Row) Get(name string) (any, bool) {
 // Names returns the names of the row in their order.
 func (r *Row) Names() []string { return append([]string(nil), r.names...) }
 
-// MarshalJSON writes the row as a JSON object in its order.
+// MarshalJSON writes the row as a JSON object in its order, its strings without HTML escaping (see marshalPlain).
 func (r *Row) MarshalJSON() ([]byte, error) {
 	var b bytes.Buffer
 	b.WriteByte('{')
@@ -89,13 +102,13 @@ func (r *Row) MarshalJSON() ([]byte, error) {
 		if i > 0 {
 			b.WriteByte(',')
 		}
-		k, err := json.Marshal(n)
+		k, err := marshalPlain(n)
 		if err != nil {
 			return nil, err
 		}
 		b.Write(k)
 		b.WriteByte(':')
-		v, err := json.Marshal(r.values[n])
+		v, err := marshalPlain(r.values[n])
 		if err != nil {
 			return nil, err
 		}
