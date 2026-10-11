@@ -788,9 +788,6 @@ func (r *reader) relation(s *scope, bs []*built, rel *ir.Relation) *Error {
 				if err != nil {
 					return err
 				}
-				if v.null {
-					return unspecified("a many relation " + rel.Rel + " keyed by the nullable " + cq.KeyBy + ", IR_INVALID once ir.Validate refuses it (orm T86)")
-				}
 				name, err := keyName(t, v)
 				if err != nil {
 					return err
