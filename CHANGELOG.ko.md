@@ -1,9 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: acaf33bfbbdc2e7d1731245f54eb44ace86e1e4c5928fe8a199fe29679e0bf9f -->
+<!-- source-sha256: 876bc2bc11d429649bc77052780879b343276a157dc540fccbe49f422fb22df3 -->
 # Changelog
 
 ## Unreleased
 
+- T12.4-10: orm의 "Markdown IR executor" 표는 spec 60의 capability 표를 행마다 옮긴 것이며, orm의 `make markdown-table-check`가 그것이 고정한 flowmark 판(`444f27f`)에 대해 지킨다. spec 60의 한국어 capability 표는 orm의 문체 규칙 안의 표현으로 고쳤다.
 - T12.4-6: `time`은 IR executor 메시지에서 컬럼의 precision과 무관하게 `HH:MM:SS.ffffff`라는 한 형식을 가진다. 실행기는 그 형식의 parameter(p 뒤는 0)를 읽고 time을 그 형식으로 답하며, p자리 형식과 p 뒤의 0이 아닌 자리는 `CODEC_ENCODE`로 거절한다(이전에는 p자리를 읽고 답했다).
 - T12.4-5 (수정): parameter 검사는 orm client의 메시지에만 적용한다. face 작업의 값은 엔진 자신의 쓰기이므로 catalog의 규칙이 판정하며, 틀린 type의 값을 쓰는 face 쓰기는 spec 50이 말하는 대로 다시 `CONSTRAINT`이다.
 - T12.4-5: IR 실행기가 row를 읽기 전에 모든 parameter를 그 slot의 type과 대조한다. slot의 type 밖의 값(JSON 종류, 정수 범위, decimal의 scale과 precision, 0001~9999 밖의 date, varchar의 길이, text의 U+0000, 문자열이 아닌 `contains` 값)과 non-null 컬럼에 할당하는 NULL은 `CODEC_ENCODE`로 답하며, 같은 입력에 대한 capability 오류와 write fault를 대신한다.
