@@ -2,25 +2,22 @@ package irexec
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/polyspec/flowmark/store"
+	"github.com/polyspec/flowmark/validate"
 	"github.com/polyspec/orm/engine/dbspec"
 )
 
-// checks refuses a written row that a check of its table makes false; a check
-// whose predicate is unknown (NULL) passes, as in SQL (spec 50 Checks). A value of
-// the row not of its type, which the check evaluates, fails the write.
+// checks judges each check of the table over each written row with the validator's
+// evaluator (spec 50 Checks), so the validator and the write path evaluate a check
+// one way — for a write as it runs and for the commit's run of the writes again on
+// the corpus re-read under the lock (spec 40 The commit protocol, step 2). A check
+// false whatever the row's values not of their column type are is a fault naming
+// the check; a check false only for some of those values needs them, so the write
+// fails naming the type diagnostic of the first such value it reads; a check whose
+// predicate is unknown (NULL) passes, as in SQL.
 func (w *writer) checks() *Error {
-	var checks []dbspec.Check
-	for _, d := range w.c.cat.Documents {
-		for _, t := range d.Tables {
-			if t.Name == w.tb.Name {
-				checks = t.Checks
-			}
-		}
-	}
-	if len(checks) == 0 {
+	if len(w.tb.Checks) == 0 {
 		return nil
 	}
 	for _, g := range w.given {
@@ -28,108 +25,43 @@ func (w *writer) checks() *Error {
 		if x == nil {
 			continue
 		}
-		for _, ck := range checks {
-			v, err := w.evalCheck(x, ck.Expression)
-			if err != nil {
-				return err
-			}
-			if v == tFalse {
+		var parent *store.Row
+		if x.parent != nil {
+			parent = x.parent.row
+		}
+		values := validate.RowOperands(w.tb, x.row, parent)
+		for _, ck := range w.tb.Checks {
+			switch validate.JudgeCheck(w.tb, ck.Expression, values) {
+			case validate.CheckFails:
 				w.fault(g, w.tb.Name, "", codeConstraint, fmt.Sprintf("the check %s of %s is false for %s", ck.Name, w.tb.Name, g.row.Key))
+			case validate.CheckNeedsType:
+				for _, col := range checkColumns(ck.Expression) {
+					if _, raw := x.row.Raw[col]; raw {
+						return w.next.typeFault(x, col)
+					}
+				}
+				return errf(codeInternal, "the check %s of %s needs a value not of its column type, but reads none", ck.Name, w.tb.Name)
 			}
 		}
 	}
 	return nil
 }
 
-// evalCheck evaluates a check expression over row x.
-//
-// The check evaluator seam: evalCheck is the one check evaluation of the write path,
-// for a write as it runs and for the commit's re-run of the writes on the corpus
-// re-read under the lock (spec 40 The commit protocol, step 2). When the validator's
-// read-side check rule lands (T12.3-2) with its exported evaluator, evalCheck is
-// replaced by a call to it, so that the validator and the write path evaluate a
-// check one way.
-func (w *writer) evalCheck(x *rec, e dbspec.Expr) (tri, *Error) {
-	switch e := e.(type) {
-	case dbspec.Binary:
-		switch e.Op {
-		case "and", "or":
-			a, err := w.evalCheck(x, e.Left)
-			if err != nil {
-				return tFalse, err
-			}
-			b, err := w.evalCheck(x, e.Right)
-			if err != nil {
-				return tFalse, err
-			}
-			if e.Op == "and" {
-				return and3(a, b), nil
-			}
-			return or3(a, b), nil
-		}
-		lt, lv, err := w.operand(x, e.Left, e.Right)
-		if err != nil {
-			return tFalse, err
-		}
-		rt, rv, err := w.operand(x, e.Right, e.Left)
-		if err != nil {
-			return tFalse, err
-		}
-		op := map[string]string{"=": "eq", "<>": "not_eq", "<": "lt", "<=": "lte", ">": "gt", ">=": "gte"}[e.Op]
-		return cmp3(op, lt, lv, rt, rv)
-	case dbspec.In:
-		ot, ov, err := w.operand(x, e.Operand, nil)
-		if err != nil {
-			return tFalse, err
-		}
-		res := tFalse
-		for _, l := range e.List {
-			lt, lv, err := w.operand(x, l, e.Operand)
-			if err != nil {
-				return tFalse, err
-			}
-			eq, err := cmp3("eq", ot, ov, lt, lv)
-			if err != nil {
-				return tFalse, err
-			}
-			res = or3(res, eq)
-		}
-		if e.Negated {
-			res = not3(res)
-		}
-		return res, nil
-	case dbspec.IsNull:
-		_, v, err := w.operand(x, e.Operand, nil)
-		if err != nil {
-			return tFalse, err
-		}
-		return bool3(v.null != e.Negated), nil
-	}
-	return tFalse, errf(codeInternal, "an unknown check expression %T", e)
-}
-
-// operand returns the type and the value of a check operand: a column of row x, or a
-// literal in the canonical form of the column it meets (other).
-func (w *writer) operand(x *rec, e, other dbspec.Expr) (dbspec.Type, cell, *Error) {
+// checkColumns returns the columns a check predicate reads, in its order.
+func checkColumns(e dbspec.Expr) []string {
 	switch e := e.(type) {
 	case dbspec.ColumnRef:
-		v, err := w.next.value(x, e.Name)
-		return columnOf(x.tb, e.Name).Type, v, err
-	case dbspec.Literal:
-		ref, ok := other.(dbspec.ColumnRef)
-		if !ok {
-			return dbspec.Type{}, cell{}, errf(codeInternal, "a check literal %s meets no column", e.Text)
+		return []string{e.Name}
+	case dbspec.Binary:
+		return append(checkColumns(e.Left), checkColumns(e.Right)...)
+	case dbspec.In:
+		out := checkColumns(e.Operand)
+		for _, l := range e.List {
+			out = append(out, checkColumns(l)...)
 		}
-		t := columnOf(x.tb, ref.Name).Type
-		text := e.Text
-		if strings.HasPrefix(text, "'") && strings.HasSuffix(text, "'") && len(text) >= 2 {
-			text = strings.ReplaceAll(text[1:len(text)-1], "''", "'")
-		}
-		v, ok := store.Readable(t, text)
-		if !ok {
-			return t, cell{}, errf(codeInternal, "the check literal %s is not a %s", e.Text, t.String())
-		}
-		return t, cell{text: v}, nil
+		return out
+	case dbspec.IsNull:
+		return checkColumns(e.Operand)
 	}
-	return dbspec.Type{}, cell{}, errf(codeInternal, "an unknown check operand %T", e)
+	return nil
 }
