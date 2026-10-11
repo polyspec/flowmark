@@ -1,5 +1,5 @@
 <!-- doc-id: spec-constraints -->
-<!-- source-sha256: a986f5f4346b58504cb435ec48f1dfde1c881d7d43dc0c366482a69dda5c024b -->
+<!-- source-sha256: 9132b250427db9bc915120a76642ce17c0507d2191314d8b6be1c8c4cf1c1618 -->
 # Constraints
 
 [English](50-constraints.md)
@@ -74,7 +74,10 @@ check는 commit에서 강제한다. 술어가 unknown(NULL)인 check는 SQL처�
 ([canonical format](10-canonical-format.ko.md#읽을-수-있는-값-형식)). validator는 type에 맞는 non-NULL 값마다
 orm의 Go codec package — stage `gz`, `base64`, `serialize`, `yaml`, `ordered_json`을 가진 `orm.Decode` —
 로 decode하며, `bytes` 값은 그 base64 텍스트에서 decode한다. stage가 거절하면 그 값의 요소에서 orm의
-message를 실어 `codec`을 보고한다. 그런 값을 할당하는 쓰기는 `CONSTRAINT`다. column의 type이 아닌 값은
+message를 실어 `codec`을 보고한다. 그런 값을 할당하는 쓰기 — insert는 모든 값을 할당한다 — 는 그
+column에서 `CONSTRAINT`이고 message가 `codec`을 밝히며, commit은 validator의 decode로 그것을 판정한다.
+쓰기가 그대로 두는 값은 판정하지 않는다. 그대로 두는 `type` 결함이 check가 그것을 읽을 때에만 쓰기를
+실패시키는 것과 같다. column의 type이 아닌 값은
 `type`만이다. host stage `hex`나 `ip`를 포함하는 column은 orm이 host decode를 공개할 때까지(orm `T74`)
 판정하지 않는다: `orm.Decode`는 host stage를 담은 모든 목록을 거절하므로, 판정하면 모든 값을 보고하게
 된다. 그때 목록 전체를 거꾸로 decode하며, host stage는 orm의 `HostDecode`로, 나머지는 `orm.Decode`로
@@ -107,7 +110,9 @@ view table은 응용 schema의 table `views`다([응용 schema](100-checklist.ko
 `filter`, `sort`, `group_by`는 판정하지 않는다. view column의 `type`, `codec`, `check` 결함은 그것만으로
 서며, `kind`는 자기 `view`를 갖지 않는다. 이 규칙은 자기 행만 필요로 하므로 사용할 수 없는 table에서도
 보고한다. catalog 변경으로 유효하지 않게 된 view는 보고하며 읽기에서 거절하지 않는다. view를 유효하지
-않게 남기는 쓰기는 `CONSTRAINT`다. validator는 param을 그 쓰임의 type에 대해 판정하지 않는다: 그 type은
+않게 남기는 쓰기는 `CONSTRAINT`다: commit은 쓰기가 어느 column을 할당하든 자기가 쓰는 view 행마다
+validator의 판정으로 판정하며, 결함은 각각 그 column에 있고 message가 `view`를 밝힌다. 그래서 catalog
+변경으로 유효하지 않게 된 view는 유효하게만 쓰인다. validator는 param을 그 쓰임의 type에 대해 판정하지 않는다: 그 type은
 orm의 planner가 계산하고 공개하지 않은 slot type이며(orm `T89`), executor의 parameter 검사도 같은 원천을
 기다린다. 다른 type의 param은 view를 실행하는 읽기가 거절하며, orm이 slot을 공개하면 validator는 각
 param을 모든 쓰임에 대해 판정한다. `ir.Validate`가 검사하는 것은 orm의 계약이다. 그 빈틈 — 해석하지

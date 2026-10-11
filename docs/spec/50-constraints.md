@@ -88,7 +88,9 @@ A column with a `codec` setting holds the encoded value in its type's readable f
 value of its type with orm's Go codec package — `orm.Decode`, which holds the stages `gz`, `base64`,
 `serialize`, `yaml` and `ordered_json` — a `bytes` value from its base64 text, and reports `codec` at
 the value's element when the stages refuse it, carrying orm's message; a write that assigns such a
-value is `CONSTRAINT`. A value not of its column type is `type` alone. A column whose stages include
+value — an insert assigns every value — is `CONSTRAINT` at its column, its message naming `codec`, and
+the commit judges it with the validator's decode. A value the write leaves is not judged, as a `type`
+fault it leaves fails it only when a check reads it. A value not of its column type is `type` alone. A column whose stages include
 the host stage `hex` or `ip` is not judged until orm exports its host decode (orm `T74`):
 `orm.Decode` refuses every list that holds a host stage, so judging it would report every value;
 the whole list is then decoded in reverse, the host stages by orm's `HostDecode` and the others by
@@ -123,7 +125,10 @@ Each fault is `view`, at the element of its column, one report per column; when 
 `filter`, `sort` and `group_by` are not judged. A `type`, `codec` or `check` fault on a view column
 stands alone, and `kind` carries no `view` of its own. The rule needs only its own row, so it is
 reported in an unavailable table too. A view made invalid by a catalog change is reported and never
-refused on a read; a write that leaves a view invalid is `CONSTRAINT`. The validator does not judge a
+refused on a read; a write that leaves a view invalid is `CONSTRAINT`: the commit judges each view row
+it writes, whichever columns the write assigns, with the validator's judgement, and each fault is at
+its column, its message naming `view`, so a view a catalog change made invalid is written only
+valid. The validator does not judge a
 param against the type of its use: that type is the slot type that orm's planner computes and has not
 published (orm `T89`), the source the executor's parameter check waits on too; a param of another
 type is refused by the read that runs the view, and the validator judges each param against every
