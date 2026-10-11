@@ -1,5 +1,5 @@
 <!-- doc-id: spec-sync -->
-<!-- source-sha256: bbb39694cde709dc06dda3153804ad47d5e60cc7dadb1ba475e78ed091e7a8e1 -->
+<!-- source-sha256: 1c1d5b6dd58a8fef9b951d2490e8e61dfa671988ab249864559588a093b18d69 -->
 # Sync (범위를 정한 뼈대)
 
 [English](70-sync.md)
@@ -18,6 +18,35 @@
 - db→md(그리고 모든 adapter→md)는 materialization이다: adapter의 행을 엔진으로 선언된 저장에 쓰고
   sync provenance로 표시하며 commit이 이를 기록한다. provenance는 document 안에 있지 않으며, 그것이 어디에
   있는지는 open question 5([open questions](110-open-questions.md))다.
+
+## export
+
+- export는 무엇이든 쓰기 전에, read 요청이 읽는 것과 같이 읽은 corpus 하나에서 통째로 계산된다: 실패한
+  export는 statement를 내지 않으므로 아무것도 쓰지 않는다.
+- 그 statement는 먼저 orm의 renderer(`dbspec.RenderStatements`)가 catalog의 document set에 대해 대상
+  dialect — MySQL, PostgreSQL 또는 SQLite — 로 쓰는 schema statement를 renderer의 순서대로 두고, 이어서
+  행마다 insert 하나를 둔다. 그 insert는 orm의 planner가 catalog의 runtime model의 `insert` 요청에서
+  compile하며, 그 요청은 table의 모든 column을 값이나 NULL로 할당한다. 각 insert는 planner가 쓴 bind slot과,
+  read가 답하는 runtime value model JSON으로 된 요청 parameter를 함께 갖는다
+  ([capability table](60-dialect.ko.md#wire)). 근거: 각 dialect의 SQL text, quoting, placeholder는
+  orm의 것이므로 export는 아무것도 렌더하지 않는다. insert가 뺀 column은 저장된 값 대신 database의 default를
+  받는다.
+- 모든 table의 모든 행을 export하며, soft delete된 행도 포함한다. 근거: database는 통째로 다시 만들어지고,
+  그 database의 read는 corpus의 read처럼 그 행들을 뺀다.
+- table은 foreign key의 순서로 채운다: table은 그 foreign key가 참조하는 다른 모든 table 뒤에 오고, 동률은
+  schema statement가 table을 만드는 순서를 따른다. table 사이 참조의 cycle에 든 table은 다른 table이 먼저 올
+  수 없게 된 뒤 그 생성 순서로 온다. 한 table의 행은 저장 순서([document model](20-document-model.ko.md#순서))로
+  서므로 부모 행이 자식보다 앞선다. 근거: statement마다 foreign key를 검사하는 database는 참조하는 행이 아직
+  insert되지 않은 행을 거절한다. 그런 cycle에서 서로 참조하는 행은 foreign key 검사를 미루는 database에만
+  들어간다. export는 저장된 값과 다른 값을 써서 cycle을 끊지 않는다.
+- 같은 corpus는 매번 같은 statement를 낸다.
+- identity column이나 codec column이 있는 table은 export를 `CAPABILITY_UNSUPPORTED`로 실패시키며, 그 table과
+  column을 밝힌다. 근거: orm의 insert 규칙은 executor가 할당하는 identity column의 할당을 거절하고, orm은
+  PostgreSQL identity를 export가 넣은 key 너머로 옮기는 statement를 렌더하지 않으므로, export는 다른 행이
+  참조하는 key를 지킬 수 없다. codec column은 encode된 값을 저장하는데 orm의 insert는 decode된 값을 받아
+  encode하며, 엔진은 아직 저장된 값을 decode하지 않는다. 둘 다 orm을 기다린다(open question 6).
+- parameter를 database driver에 bind하고 statement를 실행하는 일은 database executor의 일이며, orm은 이를
+  client 안에 둔다. orm이 이를 드러내기 전까지 export는 statement에서 끝난다(open question 6).
 
 ## 확정된 판정
 

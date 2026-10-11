@@ -13,6 +13,7 @@ A decision promotes its entry into the owning specification and removes it here.
 | 3 | The order of the orm items that T12 requires | the protocol's IR executors and `WRITE_CONFLICT` first, then the markdown settings — the settings item needs the executor-assigned columns that the protocol item defines | the orm checklist entries |
 | 4 | Re-vendor kit after the user tags the next kit release | `make kit-sync KIT_TAG=<tag>` replaces the local-path lock record | the kit release tag |
 | 5 | Where the sync provenance of an adapter-owned document lives, now that a document carries no comment | None recorded; the adapter work decides it | the first adapter beyond the database export |
+| 6 | The orm surfaces the database export waits on ([sync](70-sync.md#the-export)) | orm items for: an insert that keeps a stored identity value, with the statement that restarts a PostgreSQL identity past it; a public binding of a plan's parameters to a database driver, which orm's Go client keeps private; and a SQLite `datetime(p)` bind with p fraction digits, since its executor binds six while its renderer's CHECK requires p | the orm checklist entries |
 
 Withdrawn with the markdown database plan: children of a suffixed item (keys are opaque, and the
 suffix grammar is removed), and the MCP tool list (the faces operate over any table, T12.10).

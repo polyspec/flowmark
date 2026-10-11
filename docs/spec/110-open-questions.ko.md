@@ -1,5 +1,5 @@
 <!-- doc-id: spec-open-questions -->
-<!-- source-sha256: 4e7eff3d04e3c36478009d4c966331092f1a858f0178414cf4509587b51c1859 -->
+<!-- source-sha256: 2543fa70903888c9b69499732933e41a488be85274503e720f1a77e23898e214 -->
 # Open questions
 
 [English](110-open-questions.md)
@@ -14,6 +14,7 @@
 | 3 | T12가 요구하는 orm 항목의 순서 | protocol의 IR executor와 `WRITE_CONFLICT`가 먼저, 그다음 markdown setting — setting 항목은 protocol 항목이 정의하는 executor 할당 column을 필요로 한다 | orm checklist의 등재 |
 | 4 | 사용자가 다음 kit release에 tag를 붙인 뒤 kit 재vendor | `make kit-sync KIT_TAG=<tag>`가 local path lock 기록을 대체한다 | kit release tag |
 | 5 | comment를 갖지 않게 된 document에서, adapter가 소유한 document의 sync provenance가 어디에 놓이는가 | 아직 기록된 권고가 없다. adapter 작업이 정한다 | database export 너머의 첫 adapter |
+| 6 | database export가 기다리는 orm의 surface([sync](70-sync.ko.md#export)) | 다음을 위한 orm 항목: 저장된 identity 값을 지키는 insert와 PostgreSQL identity를 그 값 너머로 다시 시작하는 statement; orm의 Go client가 비공개로 두는, plan의 parameter를 database driver에 bind하는 공개 기능; 그리고 p자리 소수를 가진 SQLite `datetime(p)` bind — 그 executor는 여섯 자리를 bind하지만 renderer의 CHECK는 p자리를 요구한다 | orm checklist의 등재 |
 
 markdown database 계획으로 철회한 것: suffix 항목의 자식(key는 불투명하고 suffix 문법은 제거됨), MCP tool
 목록(face는 모든 table 위에서 동작한다, T12.10). readable 문서 판정으로 철회한 것: frontmatter comment
