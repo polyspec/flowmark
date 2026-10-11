@@ -52,7 +52,9 @@ specification is written when an adapter beyond the database export starts.
   Grounding: a codec column stores the encoded value, while orm's insert takes the decoded value and encodes
   it, and the engine decodes no stored value yet. It waits on orm (open question 6).
 - Binding the parameters to a database driver and running the statements is a database
-  executor's work, which orm keeps inside its clients; until orm exposes it, the export ends at its
+  executor's work, which orm keeps inside its clients; orm's `DB.Execute` runs one statement with
+  its slots and binds a SQLite `datetime(p)` or `time(p)` with exactly p digits, taking client
+  values (integers, numbers, bytes decoded), not the wire form, so the export still ends at its
   statements (open question 6).
 
 ## Settled rulings
