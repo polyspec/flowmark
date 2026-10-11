@@ -13,6 +13,11 @@ import (
 // maxKeyBytes bounds a files key so its file name stays within 255 bytes.
 const maxKeyBytes = 243
 
+// Readable returns the readable canonical text of v as a value of type t, or
+// false when v is not a value of t: the form a stored scalar takes in a Row
+// (see the canonical format, "Readable values").
+func Readable(t dbspec.Type, v string) (string, bool) { return readable(t, v) }
+
 // readable returns the readable canonical text of v as a value of type t, or
 // false when v is not a value of t. Numbers and booleans take orm's canonical
 // literal; a date, time, datetime or uuid takes the literal of its quoted text,

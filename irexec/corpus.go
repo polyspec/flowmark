@@ -1,0 +1,365 @@
+package irexec
+
+import (
+	"fmt"
+	"slices"
+	"sort"
+	"strconv"
+	"strings"
+
+	"github.com/polyspec/flowmark/catalog"
+	"github.com/polyspec/flowmark/store"
+	"github.com/polyspec/flowmark/validate"
+	"github.com/polyspec/orm/engine/dbspec"
+)
+
+// docSuffix is the suffix of a corpus document.
+const docSuffix = ".flowmark.md"
+
+// Corpus is the corpus a request reads: every corpus document at the place of a
+// table with its bytes and rows, the read diagnostics of each, and the tables that
+// are unavailable (spec 10 Diagnostics, "Unavailable table"). A Corpus is never
+// changed: a write computes the next Corpus beside it (see PostImage).
+type Corpus struct {
+	cat         *catalog.Catalog
+	files       map[string]*file
+	unavailable map[string]catalog.Diagnostic
+	// recs holds the rows of each table, by file path order and then the order
+	// the store returns them in; a block row follows its placement row.
+	recs map[string][]*rec
+	// ordered caches the storage order of each table.
+	ordered map[string][]*rec
+	// byRow finds the record of a row.
+	byRow map[*store.Row]*rec
+}
+
+// file is a corpus document at the place of a files or document table.
+type file struct {
+	table string
+	// data is the bytes read; nil for a file that the corpus did not hold.
+	data  []byte
+	rows  []*store.Row
+	diags []catalog.Diagnostic
+}
+
+// rec is a row of the corpus with the file that holds it and, for a block row,
+// the row whose scope holds it: its placement parent.
+type rec struct {
+	row    *store.Row
+	file   string
+	parent *rec
+	tb     *catalog.Table
+}
+
+// Open reads the corpus at root as a request reads it. An error is returned only
+// when the corpus root cannot be read.
+func Open(cat *catalog.Catalog, root string) (*Corpus, error) {
+	s, err := validate.Read(cat, root)
+	if err != nil {
+		return nil, err
+	}
+	c := &Corpus{cat: cat, files: map[string]*file{}, unavailable: map[string]catalog.Diagnostic{}}
+	for path, f := range s.Files {
+		c.files[path] = &file{table: f.Table, data: f.Data, rows: f.Rows}
+	}
+	for _, d := range s.Diagnostics {
+		if f := c.files[d.File]; f != nil {
+			f.diags = append(f.diags, d)
+		}
+	}
+	for _, tb := range cat.Tables {
+		if d, ok := s.Unavailable(tb.Name); ok {
+			c.unavailable[tb.Name] = d
+		}
+	}
+	c.index()
+	return c, nil
+}
+
+// index builds the rows of each table from the files.
+func (c *Corpus) index() {
+	c.recs = map[string][]*rec{}
+	c.ordered = map[string][]*rec{}
+	c.byRow = map[*store.Row]*rec{}
+	paths := make([]string, 0, len(c.files))
+	for p := range c.files {
+		paths = append(paths, p)
+	}
+	sort.Strings(paths)
+	for _, p := range paths {
+		for _, r := range c.files[p].rows {
+			c.place(r, p, nil)
+		}
+	}
+}
+
+// place records row r, held by the file path, and its block rows.
+func (c *Corpus) place(r *store.Row, path string, parent *rec) {
+	tb, _ := c.cat.Table(r.Table)
+	x := &rec{row: r, file: path, parent: parent, tb: tb}
+	c.recs[r.Table] = append(c.recs[r.Table], x)
+	c.byRow[r] = x
+	names := make([]string, 0, len(r.Blocks))
+	for name := range r.Blocks {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		for _, child := range r.Blocks[name] {
+			c.place(child, path, x)
+		}
+	}
+}
+
+// need fails as CONSTRAINT when table is unavailable: a request that needs any of
+// its rows never answers from the other files' rows alone.
+func (c *Corpus) need(table string) *Error {
+	if d, ok := c.unavailable[table]; ok {
+		return diagError("the table "+table+" is unavailable", d)
+	}
+	return nil
+}
+
+// Diagnostics returns the read diagnostics of the corpus file path: its format
+// diagnostics, which the commit's rewrite refusal reads.
+func (c *Corpus) Diagnostics(path string) []catalog.Diagnostic {
+	if f := c.files[path]; f != nil {
+		return slices.Clone(f.diags)
+	}
+	return nil
+}
+
+// cell is the value of a column of a row: NULL, or its canonical readable text.
+type cell struct {
+	null bool
+	text string
+}
+
+// value returns the value of column col of row x. The key, the title, the body, a
+// markdown section and the placement foreign key have their own places in a row;
+// every other column is a stored scalar. A markdown value is its text without the
+// line feed that ends its last line. A scalar that is not a value of its column type
+// fails as CONSTRAINT, naming its type diagnostic: a request that evaluates such a
+// value has no answer (spec 10 Readable values).
+func (c *Corpus) value(x *rec, col string) (cell, *Error) {
+	tb := x.tb
+	r := x.row
+	switch {
+	case col == tb.Key:
+		return cell{text: r.Key}, nil
+	case col == tb.Title:
+		return cell{text: r.Title}, nil
+	case col == tb.Body:
+		return cell{text: strings.TrimSuffix(r.Body, "\n")}, nil
+	case isMarkdown(tb, col):
+		v, ok := r.Sections[col]
+		if !ok || v == nil {
+			return cell{null: true}, nil
+		}
+		return cell{text: strings.TrimSuffix(*v, "\n")}, nil
+	case tb.Storage.Kind == catalog.StorageBlock && col == placementColumn(tb):
+		return cell{text: x.parent.row.Key}, nil
+	}
+	if _, raw := r.Raw[col]; raw {
+		return cell{}, c.typeFault(x, col)
+	}
+	v := r.Scalars[col]
+	if v == nil {
+		return cell{null: true}, nil
+	}
+	return cell{text: *v}, nil
+}
+
+// typeFault is the CONSTRAINT error of a request that evaluates the value of col of
+// row x, which is not a value of its column type, naming its type diagnostic.
+func (c *Corpus) typeFault(x *rec, col string) *Error {
+	line, column := x.row.At(col)
+	d := catalog.Diagnostic{File: x.file, Line: line, Column: column, Rule: "type",
+		Message: fmt.Sprintf("%s is not a value of type %s", col, columnOf(x.tb, col).Type.String())}
+	return diagError("the request evaluates a value not of its column type", d)
+}
+
+// isMarkdown reports whether col is a markdown column of tb other than the body.
+func isMarkdown(tb *catalog.Table, col string) bool {
+	return col != tb.Body && slices.Contains(tb.Markdown, col)
+}
+
+// placementColumn returns the placement foreign key column of a block table.
+func placementColumn(tb *catalog.Table) string {
+	for _, fk := range tb.ForeignKeys {
+		if fk.Name == tb.Storage.ParentForeignKey && len(fk.Columns) == 1 {
+			return fk.Columns[0]
+		}
+	}
+	return ""
+}
+
+// columnOf returns the column named col of tb; the request was validated against
+// the runtime model, so every column it names exists.
+func columnOf(tb *catalog.Table, col string) dbspec.Column {
+	for _, c := range tb.Columns {
+		if c.Name == col {
+			return c
+		}
+	}
+	panic("irexec: no column " + col + " in " + tb.Name)
+}
+
+// parentColumn returns the self foreign key "parent" of tb, "" when it has none.
+func parentColumn(tb *catalog.Table) string {
+	for _, fk := range tb.ForeignKeys {
+		if fk.Table == tb.Name && len(fk.Columns) == 1 && fk.Columns[0] == "parent" {
+			return "parent"
+		}
+	}
+	return ""
+}
+
+// rows returns the rows of table in storage order (spec 20 Order): the pre-order of
+// the tree of parents, each row's children in sibling order, and the rows of
+// different placement parents in their parents' storage order. It fails as
+// CONSTRAINT when the table is unavailable.
+func (c *Corpus) rows(table string) ([]*rec, *Error) {
+	if err := c.need(table); err != nil {
+		return nil, err
+	}
+	if out, ok := c.ordered[table]; ok {
+		return out, nil
+	}
+	tb, _ := c.cat.Table(table)
+	var out []*rec
+	switch tb.Storage.Kind {
+	case catalog.StorageDocument:
+		// The store returns a document's rows in storage order.
+		out = slices.Clone(c.recs[table])
+	case catalog.StorageBlock:
+		parents, err := c.rows(tb.Storage.Parent)
+		if err != nil {
+			return nil, err
+		}
+		byParent := map[*store.Row][]*rec{}
+		for _, x := range c.recs[table] {
+			byParent[x.parent.row] = append(byParent[x.parent.row], x)
+		}
+		for _, p := range parents {
+			// The store returns a block's rows in storage order.
+			out = append(out, byParent[p.row]...)
+		}
+	case catalog.StorageFiles:
+		o, err := c.filesOrder(tb)
+		if err != nil {
+			return nil, err
+		}
+		out = o
+	}
+	c.ordered[table] = out
+	return out, nil
+}
+
+// filesOrder returns the rows of a files table in storage order. The tree of a files
+// table runs through its files, so its order is computed over all its rows.
+func (c *Corpus) filesOrder(tb *catalog.Table) ([]*rec, *Error) {
+	all := c.recs[tb.Name]
+	parent := parentColumn(tb)
+	byKey := map[string]*rec{}
+	for _, x := range all {
+		byKey[x.row.Key] = x
+	}
+	children := map[*rec][]*rec{}
+	var roots []*rec
+	for _, x := range all {
+		if parent == "" {
+			roots = append(roots, x)
+			continue
+		}
+		v, err := c.value(x, parent)
+		if err != nil {
+			return nil, err
+		}
+		if v.null {
+			roots = append(roots, x)
+			continue
+		}
+		p, ok := byKey[v.text]
+		if !ok {
+			return nil, unspecified(fmt.Sprintf("the storage order of the files row %s of %s, whose parent %s names no row", x.row.Key, tb.Name, v.text))
+		}
+		children[p] = append(children[p], x)
+	}
+	keyInt := isInteger(columnOf(tb, tb.Key).Type.Kind)
+	var sortErr *Error
+	less := func(group []*rec) {
+		sort.SliceStable(group, func(i, j int) bool {
+			a, b := group[i], group[j]
+			if tb.Order != "" {
+				av, err := c.orderOf(a, tb.Order)
+				if err != nil && sortErr == nil {
+					sortErr = err
+				}
+				bv, err := c.orderOf(b, tb.Order)
+				if err != nil && sortErr == nil {
+					sortErr = err
+				}
+				if av != bv {
+					return av < bv
+				}
+				if sortErr == nil {
+					sortErr = unspecified(fmt.Sprintf("the storage order of the files rows %s and %s of %s, which share the order value %d", a.row.Key, b.row.Key, tb.Name, av))
+				}
+				return false
+			}
+			return keyLess(keyInt, a.row.Key, b.row.Key)
+		})
+	}
+	less(roots)
+	for _, g := range children {
+		less(g)
+	}
+	if sortErr != nil {
+		return nil, sortErr
+	}
+	out := make([]*rec, 0, len(all))
+	var walk func(x *rec)
+	walk = func(x *rec) {
+		out = append(out, x)
+		for _, ch := range children[x] {
+			walk(ch)
+		}
+	}
+	for _, r := range roots {
+		walk(r)
+	}
+	if len(out) != len(all) {
+		return nil, unspecified("the storage order of the files rows of " + tb.Name + " on a cycle of parents")
+	}
+	return out, nil
+}
+
+// orderOf returns the order value of row x.
+func (c *Corpus) orderOf(x *rec, col string) (int64, *Error) {
+	v, err := c.value(x, col)
+	if err != nil {
+		return 0, err
+	}
+	n, perr := strconv.ParseInt(v.text, 10, 64)
+	if v.null || perr != nil {
+		return 0, c.typeFault(x, col)
+	}
+	return n, nil
+}
+
+// keyLess orders two canonical keys: numerically for an integer key, else by code
+// point, which is byte order in UTF-8.
+func keyLess(integer bool, a, b string) bool {
+	if integer {
+		x, _ := strconv.ParseInt(a, 10, 64)
+		y, _ := strconv.ParseInt(b, 10, 64)
+		return x < y
+	}
+	return a < b
+}
+
+// isInteger reports whether k is an integer type.
+func isInteger(k dbspec.TypeKind) bool {
+	return k == dbspec.TypeI16 || k == dbspec.TypeI32 || k == dbspec.TypeI64
+}
