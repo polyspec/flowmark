@@ -22,6 +22,7 @@ const (
 	codeOptimistic      = "OPTIMISTIC_LOCK"
 	codeConfig          = "CONFIG"
 	codeNoRows          = "NO_ROWS"
+	codeEntityUnknown   = "ENTITY_UNKNOWN"
 	codeDuplicateKey    = "DUPLICATE_KEY"
 	codeForeignKey      = "FOREIGN_KEY"
 	codeConstraint      = "CONSTRAINT"

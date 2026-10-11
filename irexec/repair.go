@@ -22,8 +22,9 @@ import (
 // transition, a required column that is NULL or empty on the row, and a state whose
 // limit the rows in it, this row counted, exceed; as CONFIG a table without a state
 // machine with a history, and a from that is given for a row with history rows, that
-// is not an initial state, or that is missing where the machine has several; and as
-// NO_ROWS a key that names no row.
+// is not an initial state, or that is missing where the machine has several; as
+// ENTITY_UNKNOWN a table the catalog does not declare; and as NO_ROWS a key that names
+// no row.
 func (e *Executor) Repair(c *Corpus, table, key, from string, now time.Time) (*Result, error) {
 	res, err := e.repair(c, table, key, from, now)
 	if err != nil {
@@ -38,7 +39,7 @@ func (e *Executor) repair(c *Corpus, table, key, from string, now time.Time) (*R
 	}
 	tb, ok := c.cat.Table(table)
 	if !ok {
-		return nil, errf(codeConfig, "the catalog has no table %s", table)
+		return nil, errf(codeEntityUnknown, "the catalog declares no table %s", table)
 	}
 	sm := tb.StateMachine
 	if sm == nil || sm.History.Table == "" {

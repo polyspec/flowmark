@@ -245,6 +245,7 @@ func TestRepairRejects(t *testing.T) {
 		{"50#a-state-changed-outside-the-engine: --from that is not an initial state", jobs, "jobs", "J1", "running", "CONFIG", "", "not an initial state"},
 		{"50#a-state-changed-outside-the-engine: no --from where the machine has several initial states", jobs, "jobs", "J1", "", "CONFIG", "", "--from"},
 		{"50#a-state-changed-outside-the-engine: a key that names no row", func(t *testing.T) *fixture { return baseFixture(t) }, "items", "T9", "", "NO_ROWS", "", "T9"},
+		{"50#a-state-changed-outside-the-engine: a table the catalog does not declare", func(t *testing.T) *fixture { return baseFixture(t) }, "nothing", "X1", "", "ENTITY_UNKNOWN", "", "nothing"},
 		{"50#a-state-changed-outside-the-engine: a table without a history", func(t *testing.T) *fixture { return baseFixture(t) }, "people", "P1", "", "CONFIG", "", "history"},
 		{"10#diagnostics: an unavailable state table", func(t *testing.T) *fixture {
 			return catalogFixture(t, map[string]string{"tickets.flowmark.md": "no heading\n"})
