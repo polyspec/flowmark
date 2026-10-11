@@ -389,9 +389,6 @@ func (r *reader) order(s *scope, envs []*env) ([]*env, *Error) {
 // for a one read), each built to its projection with its joins, and its relations
 // attached.
 func (r *reader) selectRows(q *ir.Query, one bool) ([]*Row, *Error) {
-	if len(q.GroupBy) > 0 {
-		return nil, unspecified("a row read with group_by, IR_INVALID once ir.Validate refuses it (orm T83)")
-	}
 	s, envs, err := r.statement(q, nil, false, nil)
 	if err != nil {
 		return nil, err
@@ -889,11 +886,6 @@ func (r *reader) groupCount(q *ir.Query) ([]*Row, *Error) {
 	if err != nil {
 		return nil, err
 	}
-	for _, o := range q.Order {
-		if !o.Random && !slices.Contains(q.GroupBy, o.Column) {
-			return nil, unspecified("an order of groups by " + o.Column + ", which is not a group column, IR_INVALID once ir.Validate refuses it (orm T83)")
-		}
-	}
 	sizes := map[*env]int{}
 	for i, f := range firsts {
 		sizes[f] = len(groups[i])
@@ -989,9 +981,6 @@ func aggregateOf(kind string, t dbspec.Type, vals []cell) (cell, dbspec.Type) {
 // subRows returns the matching rows of a subquery and its root scope, owned by the
 // query of fr.
 func (r *reader) subRows(sub *ir.Sub, fr *frame) (*scope, []*env, *Error) {
-	if len(sub.Query.GroupBy) > 0 {
-		return nil, nil, unspecified("a subquery with group_by, IR_INVALID once ir.Validate refuses it (orm T83)")
-	}
 	return r.statement(sub.Query, fr, false, nil)
 }
 

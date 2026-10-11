@@ -101,7 +101,11 @@ func TestReadRejects(t *testing.T) {
 		{"60#surfaces: force_index of an undeclared index is unknown", f.msg("all", "items", map[string]any{"force_index": "ix_nope"}), "INDEX_UNKNOWN"},
 		{"60#surfaces: an unknown entity", f.msg("all", "nope", nil), "ENTITY_UNKNOWN"},
 		{"60#surfaces: an unknown column", f.msg("all", "items", map[string]any{"where": where(pred("nope", "eq", p(0)))}, "x"), "COLUMN_UNKNOWN"},
-		{"60#surfaces: a row read with group_by has no rule", f.msg("all", "items", map[string]any{"group_by": []string{"owner"}}), "CAPABILITY_UNSUPPORTED"},
+		{"60#surfaces: group_by is invalid on all", f.msg("all", "items", map[string]any{"group_by": []string{"owner"}}), "IR_INVALID"},
+		{"60#surfaces: group_by is invalid on one", f.msg("one", "items", map[string]any{"group_by": []string{"owner"}}), "IR_INVALID"},
+		{"60#surfaces: group_by is invalid on sum", f.msg("sum", "people", map[string]any{"agg": "score", "group_by": []string{"active"}}), "IR_INVALID"},
+		{"60#surfaces: group_by is invalid in a subquery", f.msg("all", "people", map[string]any{"where": where(pred("id", "in", map[string]any{"sub": map[string]any{"query": map[string]any{"entity": "items", "group_by": []string{"owner"}}, "column": "owner"}}))}), "IR_INVALID"},
+		{"60#surfaces: a group order by a column outside the group is invalid", f.msg("group_count", "items", map[string]any{"group_by": []string{"owner"}, "order": []any{map[string]any{"column": "state"}}}), "IR_INVALID"},
 	}
 	for _, c := range cases {
 		f.sub(t, c.name, func(f *fixture) { f.fails(c.msg, c.code) })
