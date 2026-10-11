@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -21,6 +22,10 @@ import (
 	"github.com/polyspec/flowmark/irexec"
 	"github.com/polyspec/flowmark/store"
 	"github.com/polyspec/orm/engine/dbspec"
+	"github.com/polyspec/orm/engine/plan"
+	"github.com/polyspec/orm/engine/runtimemodel"
+	"github.com/polyspec/orm/packages/orm-go/orm"
+	_ "github.com/polyspec/orm/packages/orm-go/orm/sqlite"
 	_ "modernc.org/sqlite"
 )
 
@@ -134,62 +139,61 @@ func typesDocs(t *testing.T) map[string]string {
 }
 
 // apply runs the statements of the export of c on a new SQLite database with its
-// foreign keys enforced, binding each parameter as the test binder below does. The
-// inserts of a table stand in the order of its rows, whose non-null values are the
-// parameters in column order, so each parameter's column is known.
+// foreign keys enforced: the schema statements through the driver and every insert
+// through orm's DB.Execute, which binds the parameters in the wire form (spec 70 The
+// export).
 func apply(t *testing.T, c *irexec.Corpus, stmts []Statement) *sql.DB {
 	t.Helper()
-	db, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "export.sqlite")+"?_pragma=foreign_keys(1)")
+	path := filepath.Join(t.TempDir(), "export.sqlite")
+	db, err := sql.Open("sqlite", path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { db.Close() })
-	next := map[string]int{}
+	model, diags := runtimemodel.Build(c.Catalog().Documents)
+	if len(diags) > 0 {
+		t.Fatalf("runtime model: %v", runtimemodel.DiagnosticsError(diags))
+	}
+	var odb *orm.DB
 	for i, s := range stmts {
-		var columns []dbspec.Column
-		if len(s.Slots) > 0 {
-			tb, _ := c.Catalog().Table(s.Table)
-			rows, err := c.Rows(s.Table)
+		if len(s.Slots) == 0 && len(s.Params) == 0 {
+			if _, err := db.Exec(s.SQL); err != nil {
+				t.Fatalf("statement %d %s: %v", i, s.SQL, err)
+			}
+			continue
+		}
+		if odb == nil {
+			odb, err = orm.ConnectSchema((&url.URL{Scheme: "sqlite", Path: path}).String(), &orm.Schema{Hash: model.ManifestHash, Text: model.ManifestText}, orm.Config{})
 			if err != nil {
 				t.Fatal(err)
 			}
-			for j, v := range rows[next[s.Table]] {
-				if v != nil {
-					columns = append(columns, tb.Columns[j])
-				}
-			}
-			next[s.Table]++
+			t.Cleanup(func() { odb.Close() })
 		}
-		args := make([]any, len(s.Slots))
-		for j, slot := range s.Slots {
-			args[j] = bind(t, slot.ColType, columns[slot.Param].Type.Precision, s.Params[slot.Param])
+		params := make([]any, len(s.Params))
+		for j, v := range s.Params {
+			params[j] = v
 		}
-		if _, err := db.Exec(s.SQL, args...); err != nil {
-			t.Fatalf("statement %d %s %v: %v", i, s.SQL, args, err)
+		for _, slot := range s.Slots {
+			params[slot.Param] = native(t, slot.ColType, s.Params[slot.Param])
+		}
+		if err := odb.Execute(&plan.Step{Role: "main", SQL: s.SQL, BindSlots: s.Slots}, params); err != nil {
+			t.Fatalf("statement %d %s %v: %v", i, s.SQL, s.Params, err)
 		}
 	}
 	return db
 }
 
-// bind turns a parameter in the wire form into a SQLite driver value for a slot of
-// the dbspec type col, as orm's SQLite executor binds it: a decimal as its scaled
-// integer, bytes decoded from base64, numbers as int64 or float64. It is the test's
-// stand-in for the binding orm keeps private (spec 70 The export). A datetime is
-// bound with the precision digits of its slot, the form the renderer's SQLite CHECK
-// requires: orm's executor binds six digits (orm docs/dialects.md), which that CHECK
-// refuses for a precision below six.
-func bind(t *testing.T, col string, precision int, v any) any {
+// native turns a parameter in the wire form into the value orm's DB.Execute takes for
+// a slot of the dbspec type col: an integer as int64, a number as float64, bytes decoded
+// from base64. Decimals, datetimes, times and text stay strings, which Execute binds by
+// the slot's type. orm offers no call that takes the wire form itself (spec 70, open
+// question 6).
+func native(t *testing.T, col string, v any) any {
 	t.Helper()
 	if v == nil {
 		return nil
 	}
 	switch col {
-	case "datetime":
-		s := v.(string)
-		if precision == 0 {
-			return s[:19]
-		}
-		return s[:20+precision]
 	case "i16", "i32", "i64":
 		n, err := v.(json.Number).Int64()
 		if err != nil {
@@ -202,12 +206,6 @@ func bind(t *testing.T, col string, precision int, v any) any {
 			t.Fatal(err)
 		}
 		return f
-	case "decimal":
-		n, err := strconv.ParseInt(strings.Replace(v.(string), ".", "", 1), 10, 64)
-		if err != nil {
-			t.Fatal(err)
-		}
-		return n
 	case "bytes":
 		b, err := base64.StdEncoding.DecodeString(v.(string))
 		if err != nil {

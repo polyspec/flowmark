@@ -1,9 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: d1335df23b057aca2dea92aa7d559469b201db2d9d4bfeecd905830cef9b601e -->
+<!-- source-sha256: df8e4bef71e8acd81be95caf17e92c4436ada9c2c69049b327d1a8542ded06e7 -->
 # Changelog
 
 ## Unreleased
 
+- T12.7(일부): export test가 자체 binder 대신 orm의 `DB.Execute`로 statement를 적용하므로 모든 precision의 SQLite `datetime(p)`와 `time(p)` column이 database가 요구하는 대로 bind된다. orm pin은 그것을 담은 commit으로 올라간다.
 - T12.7(일부): database로의 export가 identity table의 key를 지킨다. 행은 orm의 `load` insert로 적재되고 orm의 identity restart가 뒤따라 다음에 생성되는 key가 적재된 가장 큰 key를 잇는다. codec table만 아직 거절한다.
 - T12.1-37: 상세 anchor 충돌 규칙이 각 viewer의 block을 읽는다. GitHub과 GitLab의 footnote 정의, VS Code의 math block, GitHub의 footnote 번호, GitLab의 wikilink다. GitLab의 snippet prefix는 corpus file에 적용되지 않음을 명시한다.
 - T12.5-4: codec의 parse와 render 비용이 file byte에 선형이다. MB당 약 48 ms와 35 ms, 할당 50배와 39배다(전에는 1 MB parse에 2.1초, 456배).

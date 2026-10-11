@@ -1,5 +1,5 @@
 <!-- doc-id: spec-sync -->
-<!-- source-sha256: 531eda46374d63fcdbfe6197eb47f53cea39f185eceeeacc9aab84073e69eeb7 -->
+<!-- source-sha256: 330f976579cd8c17d81060423ec1cd01376f2d8fdcc81199b0a129294265bc82 -->
 # Sync (범위를 정한 뼈대)
 
 [English](70-sync.md)
@@ -48,7 +48,9 @@
   근거: codec column은 encode된 값을 저장하는데 orm의 insert는 decode된 값을 받아 encode하며, 엔진은 아직
   저장된 값을 decode하지 않는다. orm을 기다린다(open question 6).
 - parameter를 database driver에 bind하고 statement를 실행하는 일은 database executor의 일이며, orm은 이를
-  client 안에 둔다. orm이 이를 드러내기 전까지 export는 statement에서 끝난다(open question 6).
+  client 안에 둔다. orm의 `DB.Execute`는 statement 하나를 slot과 함께 실행하고 SQLite `datetime(p)`와 `time(p)`를
+  정확히 p자리로 bind하되, wire 형식이 아니라 client 값(정수, 숫자, decode된 bytes)을 받으므로 export는 아직
+  statement에서 끝난다(open question 6).
 
 ## 확정된 판정
 
