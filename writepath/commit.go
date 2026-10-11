@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/polyspec/flowmark/catalog"
 	"github.com/polyspec/flowmark/irexec"
 	"github.com/polyspec/flowmark/store/journal"
 )
@@ -83,6 +84,7 @@ func (c *Corpus) commit(t *tx) (bool, error) {
 func (c *Corpus) journalCommit(l *journal.Lock, changes []journal.Change) (bool, error) {
 	err := c.j.Commit(l, changes)
 	if err == nil {
+		c.publishScale(changes)
 		return true, nil
 	}
 	var ce *journal.CommitError
@@ -90,6 +92,7 @@ func (c *Corpus) journalCommit(l *journal.Lock, changes []journal.Change) (bool,
 	rerr := c.j.Recover(l)
 	switch {
 	case prepared && rerr == nil:
+		c.publishScale(changes)
 		return true, nil
 	case prepared:
 		return false, &Error{Code: codeDriver, Face: codeDriver, Err: errors.Join(err, rerr),
@@ -218,4 +221,15 @@ func (c *Corpus) refuseRewrite(targets []irexec.Target, exempt Exempt) error {
 		}
 	}
 	return nil
+}
+
+// publishScale publishes ScaleExceeded for each file the commit wrote past the file size of the scale envelope (spec
+// 40 The scale envelope): the write is written all the same, and the event says which file grew past it.
+func (c *Corpus) publishScale(changes []journal.Change) {
+	limit := catalog.Envelope.FileBytes
+	for _, ch := range changes {
+		if !ch.Delete && len(ch.Data) > limit {
+			c.j.Publish(journal.Event{Kind: journal.ScaleExceeded, Path: c.j.Abs(ch.Path), Detail: fmt.Sprintf("%d bytes, past the %d bytes of the scale envelope", len(ch.Data), limit)})
+		}
+	}
 }

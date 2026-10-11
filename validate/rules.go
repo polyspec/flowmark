@@ -16,6 +16,9 @@ import (
 const (
 	ruleType         = "type"
 	ruleShardPeriod  = "shard.period"
+	ruleScaleFile    = "scale.file"
+	ruleScaleFolder  = "scale.folder"
+	ruleScaleCorpus  = "scale.corpus"
 	ruleDangling     = "reference.dangling"
 	ruleDuplicate    = "key.duplicate"
 	ruleOrder        = "order"
@@ -39,6 +42,7 @@ func (c *corpus) report(p placed, column, rule, msg string) {
 // The validator's parent.cycle across files is reported among the rows read, since
 // no unread row can undo a cycle that the rows' own parent values make.
 func (c *corpus) rules() error {
+	c.scale()
 	for _, tb := range c.cat.Tables {
 		rows := corpusOrder(c.rows[tb.Name])
 		for _, p := range rows {
@@ -515,4 +519,43 @@ func columnType(tb *catalog.Table, col string) string {
 		}
 	}
 	return "?"
+}
+
+// scale reports the corpus past the scale envelope (spec 40 The scale envelope): a document of more bytes than
+// catalog.Envelope.FileBytes (scale.file), a folder of more documents than Envelope.FolderFiles (scale.folder), and a
+// corpus of more documents than Envelope.CorpusFiles (scale.corpus). Each names what is past, its size, its table and
+// the limit of the envelope. A corpus past the envelope is read and written all the same.
+func (c *corpus) scale() {
+	limit := catalog.Envelope
+	paths := slices.Sorted(maps.Keys(c.files))
+	folders := map[string]int{}
+	for _, path := range paths {
+		f := c.files[path]
+		if n := len(f.Data); n > limit.FileBytes {
+			c.diags = append(c.diags, scaleDiag(path, ruleScaleFile, fmt.Sprintf("the document of the table %s holds %d bytes, past the %d bytes of the scale envelope", f.Table, n, limit.FileBytes)))
+		}
+		folders[folderOf(path)]++
+	}
+	for _, folder := range slices.Sorted(maps.Keys(folders)) {
+		if n := folders[folder]; folder != "" && n > limit.FolderFiles {
+			c.diags = append(c.diags, scaleDiag(folder, ruleScaleFolder, fmt.Sprintf("the folder %s holds %d documents, past the %d documents of the scale envelope", folder, n, limit.FolderFiles)))
+		}
+	}
+	if n := len(paths); n > limit.CorpusFiles {
+		c.diags = append(c.diags, scaleDiag(".", ruleScaleCorpus, fmt.Sprintf("the corpus holds %d documents, past the %d documents of the scale envelope", n, limit.CorpusFiles)))
+	}
+}
+
+// folderOf returns the folder of a corpus path, "" for a document at the root.
+func folderOf(path string) string {
+	i := strings.LastIndex(path, "/")
+	if i < 0 {
+		return ""
+	}
+	return path[:i]
+}
+
+// scaleDiag is a scale diagnostic located at the first line of a file or a folder.
+func scaleDiag(file, rule, msg string) catalog.Diagnostic {
+	return catalog.Diagnostic{File: file, Line: 1, Column: 1, Rule: rule, Message: msg}
 }

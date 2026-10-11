@@ -32,14 +32,19 @@ const (
 	// CorpusOverflow: the change notifications overflowed, so the corpus tree dropped everything and the next read
 	// reads the whole corpus again; Path is the corpus root.
 	CorpusOverflow Kind = "corpus.overflow"
+	// ScaleExceeded: a commit wrote a file past the scale envelope (spec 40 The scale envelope); Path is the file and
+	// Detail names its size and the limit. The commit is written all the same.
+	ScaleExceeded Kind = "scale.exceeded"
 )
 
 // Event is one published event. Path is the absolute path of the lock file or of the stage directory; Holder is the
-// lock holder's record for the lock events and empty otherwise.
+// lock holder's record for the lock events and empty otherwise; Detail is the text a kind adds to its path, empty for
+// the kinds that add none.
 type Event struct {
 	Kind   Kind
 	Path   string
 	Holder string
+	Detail string
 }
 
 // Observer receives every event of a Corpus, synchronously, in the goroutine that caused it.

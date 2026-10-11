@@ -522,7 +522,7 @@ and MySQL and PostgreSQL compare a `datetime(p)` column with `NOW(6)` at six dig
   rows is held whole; what parsing it allocates is the codec's cost below.
 - A write still parses and renders each changed target whole, and the executor's post-image copies
   the rows of the corpus, so a write's cost grows with its target files and with the rows; bounding
-  the size of a target file is `T12.5-3`'s, and the cost per byte of a target is the codec's cost.
+  the size of a target file is [the scale envelope](#the-scale-envelope), and the cost per byte of a target is the codec's cost.
 - **The codec's cost** is linear in the bytes of a file: the parse and the render of a file each take
   at most 0.1 s of CPU per megabyte of it and allocate at most 64 bytes per byte of it, for a document
   file of rows with detail sections. No pass compares each heading with each detail anchor, or each
@@ -548,6 +548,39 @@ and MySQL and PostgreSQL compare a `datetime(p)` column with `NOW(6)` at six dig
   change.
 - A long-lived face (the sidecar, the server) may watch the corpus and push change events to its
   host; writes still go through the transaction protocol only.
+
+## The scale envelope
+
+The engine states the size of a corpus it serves within the latency target above, and says when a corpus passes it.
+
+- **The envelope** is 1 MiB for one document, 20,000 documents for one folder and 20,000 documents for a corpus.
+  `catalog.Envelope` holds the three numbers, and the specification and the code state no other.
+- **The measurements** are the benchmarks of `writepath` (`BenchmarkFileSizeWrite`, `BenchmarkShardOpen`,
+  `BenchmarkShardInsert`, `BenchmarkShardRead`, `BenchmarkSessions`), run on macOS (11 cores) at the date of `T12.5-3`:
+  - The update of one row of a document takes 83 ms (p95) at 32 KB, 239 ms at 340 KB and 757 ms at 1.4 MB, 0.7 ms
+    of CPU for each KB: a write parses, checks and renders its target whole. 1 MiB is the size at which the update of
+    a row is still within hundreds of milliseconds.
+  - With the documents of a folder from 5,000 to 20,000, the opening takes 336 ms, 697 ms and 1,245 ms (p95) and the
+    insert of a document 99 ms, 129 ms and 249 ms: 0.06 ms for each document. At 20,000 documents the insert is at
+    the latency target, which sets the number for a folder and for a corpus alike.
+  - A shard by month leaves the opening, the insert and the read within noise. It keeps a folder from growing without
+    end; it does not make a corpus of the same documents faster.
+  - On macOS the watch holds a descriptor for every folder and document (20,009 at 10,000 documents, one for each
+    document and folder): the number of documents is also the number of descriptors a process needs. An opening that
+    cannot get them fails as `DRIVER` naming the file, and leaves no lock.
+  - Sessions are not limited: the lock serializes them, so one write takes the same time and the last of sixteen
+    sessions that write at once waits 1.3 s.
+- **Past the envelope** the corpus is read and written as before. The validator reports it: `scale.file` at a
+  document of more bytes than 1 MiB, `scale.folder` at a folder of more documents than the limit and `scale.corpus` at the
+  corpus root when it holds more, each naming what is past, its size, its table and the limit. A commit that writes a
+  document past 1 MiB publishes the event `scale.exceeded`, naming the file, its bytes and the limit.
+  Grounding: a limit that refused a write would make a corpus that grew past it unusable by a mistake of
+  size; the cost is the user's to decide, so the engine reports it. A write is refused only for what the engine
+  cannot hold correctly: the descriptors of the watch that the process cannot get, which is `DRIVER`.
+- The size of a document and of a folder is the question of a storage declaration: a document table that
+  grows past 1 MiB is stored as `files` or sharded by time ([time shards](20-document-model.md#time-shards)).
+- Linux and Windows are measured with the same benchmarks; a number that differs from macOS changes the
+  envelope's grounding, not the means.
 
 ## Failure vocabulary
 

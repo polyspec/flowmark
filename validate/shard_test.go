@@ -1,6 +1,7 @@
 package validate
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -85,6 +86,82 @@ func TestShardPeriod(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			root := t.TempDir()
 			tc.build(root)
+			diags, err := Corpus(cat, root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			check(t, diags, tc.want)
+		})
+	}
+}
+
+// TestScaleEnvelope pins the diagnostics of a corpus past the scale envelope (spec 40 The scale envelope): a file
+// of more bytes than catalog.Envelope.FileBytes, a folder of more documents than Envelope.FolderFiles, and a corpus
+// of more documents than Envelope.CorpusFiles are scale.file, scale.folder and scale.corpus, each naming what is
+// past, its size, its table and the envelope. The rule reports; a corpus past the envelope is read and written all
+// the same.
+func TestScaleEnvelope(t *testing.T) {
+	cat := shardCatalog(t)
+	env := catalog.Envelope
+	cases := []struct {
+		name  string
+		build func(root string)
+		want  []string
+	}{
+		{name: "40#the-scale-envelope: a corpus within the envelope reports nothing", build: func(root string) {
+			writeFile(t, root, "events/2026-10/E1.flowmark.md", event("A", "2026-10-11 09:30:00.000000"))
+		}},
+		{name: "40#the-scale-envelope: a file past the file size is scale.file", build: func(root string) {
+			rows := make([][3]string, 0, env.FileBytes/30)
+			for i := 0; len(rows) < cap(rows); i++ {
+				rows = append(rows, [3]string{fmt.Sprintf("N%d", i+1), fmt.Sprintf("Note %d", i+1), "2026-03-04"})
+			}
+			writeShardNotes(t, cat, root, "notes/2026.flowmark.md", rows...)
+		}, want: []string{"notes/2026.flowmark.md scale.file ~ notes"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			tc.build(root)
+			diags, err := Corpus(cat, root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			check(t, diags, tc.want)
+		})
+	}
+}
+
+// TestScaleEnvelopeCounts pins scale.folder and scale.corpus with an envelope of a few documents, since a corpus of
+// the real limits holds twenty thousand: the rules read catalog.Envelope, which the test lowers and restores.
+func TestScaleEnvelopeCounts(t *testing.T) {
+	cat := shardCatalog(t)
+	old := catalog.Envelope
+	t.Cleanup(func() { catalog.Envelope = old })
+	catalog.Envelope = catalog.EnvelopeLimits{FileBytes: old.FileBytes, FolderFiles: 2, CorpusFiles: 4}
+	build := func(root string, folders ...int) {
+		n := 0
+		for m, count := range folders {
+			for i := 0; i < count; i++ {
+				n++
+				writeFile(t, root, fmt.Sprintf("events/2026-%02d/E%d.flowmark.md", m+1, n), event("E", fmt.Sprintf("2026-%02d-15 09:00:00.000000", m+1)))
+			}
+		}
+	}
+	cases := []struct {
+		name    string
+		folders []int
+		want    []string
+	}{
+		{name: "40#the-scale-envelope: a folder and a corpus at the envelope report nothing", folders: []int{2, 2}},
+		{name: "40#the-scale-envelope: a folder past the envelope is scale.folder", folders: []int{3, 1}, want: []string{"events/2026-01 scale.folder ~ 3 documents"}},
+		{name: "40#the-scale-envelope: a corpus past the envelope is scale.corpus", folders: []int{2, 2, 1}, want: []string{". scale.corpus ~ 5 documents"}},
+		{name: "40#the-scale-envelope: both are reported", folders: []int{3, 2}, want: []string{"events/2026-01 scale.folder ~ 3 documents", ". scale.corpus ~ 5 documents"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			build(root, tc.folders...)
 			diags, err := Corpus(cat, root)
 			if err != nil {
 				t.Fatal(err)

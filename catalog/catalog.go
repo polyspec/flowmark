@@ -246,3 +246,22 @@ func periodOf(p Period, value string) (string, error) {
 	}
 	return "", fmt.Errorf("unknown period %q", p)
 }
+
+// EnvelopeLimits are the sizes past which a corpus is outside the scale envelope the engine states (spec 40 The scale
+// envelope). A corpus past one of them is read and written all the same; the validator reports it (scale.file,
+// scale.folder, scale.corpus) and a write that carries a file past the file size publishes an event.
+type EnvelopeLimits struct {
+	// FileBytes is the largest document: a write parses, checks and renders its target whole, and the update of one
+	// row costs 0.7 ms of CPU for each KB of the document (83 ms at 32 KB, 239 ms at 340 KB, 757 ms at 1.4 MB).
+	FileBytes int
+	// FolderFiles is the most documents of one folder.
+	FolderFiles int
+	// CorpusFiles is the most documents of a corpus: the first read costs 0.06 ms for each, and on macOS the watch
+	// holds a descriptor for each (20009 at 10000 documents).
+	CorpusFiles int
+}
+
+// Envelope is the scale envelope: what the benchmarks of the write path measured within the cost model of spec 40, an
+// operation within hundreds of milliseconds. Sessions are not limited here: the lock serializes them, and the wait of
+// the last of sixteen writers is 1.3 s.
+var Envelope = EnvelopeLimits{FileBytes: 1 << 20, FolderFiles: 20000, CorpusFiles: 20000}
