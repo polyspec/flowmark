@@ -141,6 +141,16 @@ A check is enforced at commit; a check whose predicate is unknown (NULL) passes,
   when a column the transition requires is null or empty on the row, or when the current state's
   limit is exceeded counting this row; the human then restores a legal state or fills the columns
   by editing. The repair is a normal transaction that the human commits.
+  The repair also refuses, as `CONSTRAINT` at the state column, a row without a gap — its state is the
+  `to` of its last history row, or, without history rows, an initial state, or its state is NULL —
+  since inserting a history row for a transition that never happened would forge the trail; as
+  `CONFIG`, a `--from` given for a row that has history rows (the repair goes from the last `to`), a
+  `--from` that is not an initial state, a missing `--from` where the machine has several initial
+  states, and a table without a state machine with a history; and as `NO_ROWS` a key that names no row
+  byte for byte, orm's code of a one-row read that matched none. It runs outside a transaction as one
+  transaction under the lock, or inside an open one as any write; its `at` is the engine clock read
+  once for the repair, so the commit's re-run of it writes the same row
+  ([operations](40-ops.md#the-commit-protocol)).
 
 ## Human-write rulings
 
