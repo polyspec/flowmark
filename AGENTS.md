@@ -33,6 +33,16 @@ has its checklist in `docs/plans/`.
   fallback or a migration shim.
 - Errors are never hidden: no fallback that turns a wrong input into a plausible one, no silent
   drop of an input or an output, no swallowed error.
+- A fallback stands only where it is truly needed, with that need stated; a fallback added by
+  habit is poison.
+- Events, not polling. A change is published as an event, and its subscribers or consumers
+  receive and handle it. Polling or a timer is an alternative chosen only when no orthodox
+  mechanism exists, stated as such, never the main path.
+- Every operation is idempotent. Nothing is patched ad hoc to make something appear to work.
+  What happens is observable and mechanical: that an event occurred is known from what it
+  publishes, not found by searching for it.
+- Paths are resolved declaratively and by discovery from a declared root, never as paths
+  relative to an assumed working directory. Symlinks are never used.
 - No tricks, in any case. When a requirement cannot be met the orthodox way and only a trick
   would meet it, that is stated exactly instead of done quietly.
 - The simplest implementation that fully satisfies the current requirements wins; no
