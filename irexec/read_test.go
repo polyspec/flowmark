@@ -172,8 +172,6 @@ func TestWhere(t *testing.T) {
 		msg  []byte
 		code string
 	}{
-		{"60#surfaces: the Lb operator is not allowed", f.msg("all", "items", map[string]any{"where": where(pred("title", "contains_binary", p(0)))}, "x"), "OPERATOR_NOT_ALLOWED"},
-		{"60#surfaces: contains has no rule on a corpus yet", f.msg("all", "items", map[string]any{"where": where(pred("title", "contains", p(0)))}, "x"), "CAPABILITY_UNSUPPORTED"},
 		{"60#surfaces: an operator the column type does not take", f.msg("all", "people", map[string]any{"where": where(pred("active", "gt", p(0)))}, true), "OPERATOR_NOT_ALLOWED"},
 		{"60#surfaces: a parameter not of the compared type has no rule yet", f.msg("all", "items", map[string]any{"where": where(pred("state", "eq", p(0)))}, 5), "CAPABILITY_UNSUPPORTED"},
 		{"60#surfaces: a group may not start with or", f.msg("all", "items", map[string]any{"where": where(map[string]any{"pred": map[string]any{"conn": "or", "column": "id", "op": "eq", "p": 0}})}, "T1"), "OR_AT_GROUP_START"},
@@ -187,6 +185,65 @@ func TestWhere(t *testing.T) {
 	for _, c := range rejects {
 		f.sub(t, c.name, func(f *fixture) { f.fails(c.msg, c.code) })
 	}
+}
+
+// TestContains pins contains (the Lk operator) and contains_binary (the Lb
+// operator) on a corpus (spec 60 Surfaces): a substring match, contains comparing
+// the ASCII letters without regard to case and every other character by code point,
+// contains_binary every character by code point; a NULL column or parameter is
+// unknown, and %, _ and \ in the parameter are literal.
+func TestContains(t *testing.T) {
+	docs := baseDocs()
+	docs["people.flowmark.md"] = lines(
+		"# people",
+		"| id | name | email | age | active | score | joined | deleted_at | updated_at |",
+		"| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+		"| P1 | One | Apple |  | true | 0.00 | 2026-10-01 09:00:00 |  |  |",
+		"| P2 | Two | apple |  | true | 0.00 | 2026-10-01 09:00:00 |  |  |",
+		"| P3 | Three | Évian |  | true | 0.00 | 2026-10-01 09:00:00 |  |  |",
+		"| P4 | Four | évian |  | true | 0.00 | 2026-10-01 09:00:00 |  |  |",
+		"| P5 | Five | x_y |  | true | 0.00 | 2026-10-01 09:00:00 |  |  |",
+		"| P6 | Six | 50% |  | true | 0.00 | 2026-10-01 09:00:00 |  |  |",
+		"| P7 | Seven |  |  | true | 0.00 | 2026-10-01 09:00:00 |  |  |",
+	)
+	f := catalogFixture(t, docs)
+	not := func(item map[string]any) map[string]any {
+		return where(map[string]any{"group": map[string]any{"not": true, "items": []any{item}}})
+	}
+	cases := []struct {
+		name  string
+		w     map[string]any
+		param any
+		want  []string
+	}{
+		{"60#surfaces: contains folds the ASCII letters", where(pred("email", "contains", p(0))), "PPL", []string{"P1", "P2"}},
+		{"60#surfaces: contains compares a non-ASCII letter by code point", where(pred("email", "contains", p(0))), "ÉV", []string{"P3"}},
+		{"60#surfaces: contains takes _ literally", where(pred("email", "contains", p(0))), "_", []string{"P5"}},
+		{"60#surfaces: contains takes % literally", where(pred("email", "contains", p(0))), "%", []string{"P6"}},
+		{"60#surfaces: contains of the empty text matches every non-NULL value", where(pred("email", "contains", p(0))), "", []string{"P1", "P2", "P3", "P4", "P5", "P6"}},
+		{"60#surfaces: contains on a NULL value is unknown, also negated", not(pred("email", "contains", p(0))), "x", []string{"P1", "P2", "P3", "P4", "P6"}},
+		{"60#surfaces: contains of a NULL parameter is unknown", where(pred("email", "contains", p(0))), nil, nil},
+		{"60#surfaces: contains of a NULL parameter is unknown negated", not(pred("email", "contains", p(0))), nil, nil},
+		{"60#surfaces: contains_binary compares by code point", where(pred("email", "contains_binary", p(0))), "pp", []string{"P1", "P2"}},
+		{"60#surfaces: contains_binary does not fold case", where(pred("email", "contains_binary", p(0))), "PP", nil},
+		{"60#surfaces: contains_binary of a non-ASCII letter", where(pred("email", "contains_binary", p(0))), "É", []string{"P3"}},
+		{"60#surfaces: contains_binary takes _ literally", where(pred("email", "contains_binary", p(0))), "_", []string{"P5"}},
+		{"60#surfaces: contains_binary on a NULL value is unknown, also negated", not(pred("email", "contains_binary", p(0))), "x", []string{"P1", "P2", "P3", "P4", "P6"}},
+		{"60#surfaces: contains_binary of a NULL parameter is unknown", where(pred("email", "contains_binary", p(0))), nil, nil},
+	}
+	for _, c := range cases {
+		f.sub(t, c.name, func(f *fixture) {
+			if got := f.ids("people", c.w, c.param); !slices.Equal(got, c.want) {
+				f.t.Fatalf("ids %v; want %v", got, c.want)
+			}
+		})
+	}
+	f.sub(t, "60#surfaces: contains on an integer column is not allowed", func(f *fixture) {
+		f.fails(f.msg("all", "tags", map[string]any{"where": where(pred("id", "contains", p(0)))}, "1"), "OPERATOR_NOT_ALLOWED")
+	})
+	f.sub(t, "60#surfaces: contains_binary on an integer column is not allowed", func(f *fixture) {
+		f.fails(f.msg("all", "tags", map[string]any{"where": where(pred("id", "contains_binary", p(0)))}, "1"), "OPERATOR_NOT_ALLOWED")
+	})
 }
 
 // TestJoins pins inner and left joins, their on and where groups, and a joined

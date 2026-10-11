@@ -1,5 +1,5 @@
 <!-- doc-id: spec-dialect -->
-<!-- source-sha256: 2fc16d2d0d8e92caee30debcf9210e42439f5fe5500d2a8cea50459bf78457aa -->
+<!-- source-sha256: 6fb056bab5acab225ec09567bb703a2b2661eba2918e557d3511e562784707b1 -->
 # Capability table
 
 [English](60-dialect.md)
@@ -40,6 +40,8 @@ surface가 corpus에서 무엇을 하는지 또는 orm 전통에 따라 `CAPABIL
 | `lock` `update_nowait`, `share_nowait` | `CAPABILITY_UNSUPPORTED` |
 | relation(`limit_per_parent`, `if_parent`, `flatten`, `key_by`, `no_cascade_delete`) | 지원. executor가 조립한다 |
 | subquery(`tuple_in`, `tuple_not_in`, scalar `Sub` aggregate) | 지원 |
+| `contains`(`Lk` 연산자) | 지원: column의 텍스트가 parameter의 텍스트를 substring으로 담으면 참이다. ASCII 문자 A–Z와 a–z는 대소문자를 가리지 않고, 그 밖의 문자는 code point로 비교한다. NULL column이나 parameter는 unknown이며, parameter의 `%`, `_`, `\`는 문자 그대로다. 근거: SQL parity — orm의 `COLLATE "C"` 아래 PostgreSQL `ILIKE`, SQLite `LIKE`, orm의 MySQL ASCII fold가 이 결과를 준다 |
+| `contains_binary`(`Lb` 연산자) | 지원: column의 텍스트가 parameter의 텍스트를 substring으로 담으면 참이며, code point로 비교한다. NULL column이나 parameter는 unknown이며, parameter의 `%`, `_`, `\`는 문자 그대로다. 근거: `utf8mb4_0900_bin` 아래 MySQL `LIKE`, `COLLATE "C"` 아래 PostgreSQL `LIKE`, SQLite `instr`가 일치한다 |
 | `now`, `default now`, `updated`, `soft_delete` | orm 시계 규칙에 따른 요청의 `now` |
 | codec columns | orm 요청에서는 client가 적용한다. 엔진이 시작하는 쓰기(CLI, MCP, sidecar, 이력)는 orm의 Go codec package로 codec을 적용하며, 검증은 같은 package로 decode한다. 저장 값은 encode된 값이며, byte를 만드는 단계는 base64다 |
 | indexes | 허용되며 메모리에서 유도된다 |
@@ -53,7 +55,7 @@ surface가 corpus에서 무엇을 하는지 또는 orm 전통에 따라 `CAPABIL
 | `isolation`, `timeoutMs` option | `CAPABILITY_UNSUPPORTED` |
 | `getQuery()`, statement event, `subscribe()` | `CAPABILITY_UNSUPPORTED` — SQL 텍스트가 없다 |
 | `force_index` | `CAPABILITY_UNSUPPORTED` — index는 이름 붙은 것이 아니라 유도된다 |
-| `fulltext`, `Lb` 연산자 | `OPERATOR_NOT_ALLOWED` |
+| `fulltext` | `OPERATOR_NOT_ALLOWED`: SQLite는 table에 full-text index가 없다(orm dialects.md) |
 | lock, local setting, privilege, AES rotation utility | `CAPABILITY_UNSUPPORTED` |
 | schema install, dbplan chain | `CAPABILITY_UNSUPPORTED`. `flowmark install`이 corpus를 만들고([schema](30-schema.md)), 진화는 [migration](80-migration.md)을 따른다 |
 | 사용할 수 없는 table(`format.block`, `format.section`, `format.encoding`이나 그 행 사이의 `parent.cycle`이 있는 file, 바이트 단위로 같은 key를 가진 두 행, 또는 자리의 `corpus.walk` 항목) | 그 행이 필요한 모든 요청은 읽기든 쓰기든 file과 진단을 밝히며 `CONSTRAINT`로 실패하며, 다른 file들의 행만으로 답하지 않는다([canonical format](10-canonical-format.ko.md#진단)) |
