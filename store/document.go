@@ -260,7 +260,7 @@ func ParseDocument(cat *catalog.Catalog, table, rel string, data []byte, lk Link
 	lines := splitLines(text)
 	recs := p.run(lay, lines)
 	for _, c := range anchorClashes(lines, tableLevels(lay.table, lay.scope-1, lay.children)) {
-		p.fail(c.line, 1, RuleBlock, c.message())
+		p.fail(c.line, clashColumn(lines, c), RuleBlock, c.message())
 	}
 	if p.fatal {
 		return nil, p.diags, nil
@@ -1006,8 +1006,8 @@ func (p *docParser) readDetails(lines []string, i, end int) {
 func (p *docParser) readDetail(lines []string, h heading, sub []heading, end int) {
 	lay := p.lay
 	marks := strings.Repeat("#", h.level)
-	parts := strings.Fields(trimWhite(h.text))
-	if len(parts) != 3 || strings.ToLower(parts[0]) != lay.table || strings.ToLower(parts[1]) != "row" || parts[2] == "" {
+	parts := detailFields(h.text)
+	if len(parts) != 3 || strings.ToLower(parts[0]) != strings.ToLower(lay.table) || strings.ToLower(parts[1]) != "row" || parts[2] == "" {
 		p.fail(h.at+1, 4, RuleBlock, "a detail section is `"+marks+" "+lay.table+" row <key>`")
 		return
 	}

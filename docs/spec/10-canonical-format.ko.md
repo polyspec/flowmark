@@ -1,5 +1,5 @@
 <!-- doc-id: spec-canonical-format -->
-<!-- source-sha256: cd41d1a5d7fafa31223de8a4b67f341af1dc608e8a068b47c7dc9bb76bd08472 -->
+<!-- source-sha256: 627c5335463049684b7f38f23af8d60daa3ab225a90965d4d2c5de3639ce6ca2 -->
 # Canonical format
 
 [English](10-canonical-format.md)
@@ -61,14 +61,29 @@ column 섹션 — 은 payload다: renderer는 이를 행과 함께 옮기고 그
   `items-row-t2`다. table은 anchor 텍스트에서 첫 `-` 앞이며, table 이름에는 `-`가 없다.
 - **fold.** 두 fold가 heading의 렌더된 inline 텍스트에 대해 충돌을 정한다. 텍스트는 GitHub이 slug를 만드는
   방식을 따른다(link의 target을 뺀 link 텍스트, 강조 표지 제거, code span 내용 유지, entity 해석, raw HTML 태그는
-  텍스트가 아님을 포함한다). F_G는 Unicode 일반 범주가 letter(L)나 십진 숫자(Nd)가 아닌 모든 문자를 지우고,
+  텍스트가 아님을 포함한다). 렌더된 inline 텍스트는 file 전체의 link reference definition을 가지고 CommonMark 0.31.2가
+  해석하는 것이다: definition은 CommonMark가 읽는 곳에서, 즉 문단의 시작에 있는 block으로, 컨테이너 안이든 밖이든,
+  그 자리를 가리지 않고 읽는다. label이 그런 definition과 맞는 full, collapsed 또는 shortcut reference link는 그 link
+  텍스트로 센다. 어떤 definition과도 맞지 않는 bracket 텍스트는 label과 bracket을 포함해 글자 그대로의 텍스트로 센다.
+  F_M에서 definition은 Python-Markdown이 읽는 것이다: code block 밖의 줄로서 들여쓰기 최대 세 칸, bracket이 없는
+  label의 `[label]:`, 그 뒤 그 줄이나 다음 줄의 destination, 그 뒤 따옴표나 괄호 안의 title 하나까지를 가지며 그 줄에 다른 것이 뒤따르지 않고, 줄이 block의 어디에 있든 — 문단 안이든 컨테이너 안이든 — 읽는다.
+  그 label은 양끝 공백을 뺀 뒤 소문자로 바꾼다. full, collapsed 또는 shortcut reference는, label의 공백 run을 한 칸으로 만든 뒤 소문자로
+  바꾼 것이 그런 definition과 맞을 때 link 텍스트로 센다. 그리고 link 텍스트와 label 사이에는 줄 바꿈을 포함해 공백
+  문자 하나까지 올 수 있다. 근거: GitHub, GitLab, VS Code는 CommonMark를 해석하며, 거기서 link reference definition은
+  문단의 시작에 있는 block이므로, 정의된 `[items row T1][r]`은 `items row T1` 텍스트로 렌더된다. Python-Markdown의
+  reference processor는 block의 모든 줄에서 `^[ ]{0,3}\[([^\[\]]*)\]:`를 찾고 id를 소문자로 만들며, 그 inline
+  reference는 `]`와 `[` 사이에 공백 문자 하나를 허용하고 정의되지 않은 reference는 텍스트로 둔다. image는 F_G에서 alt 텍스트로도,
+  텍스트 없이도 센다. F_M에서는 텍스트 없이 센다. heading은 세 읽기 가운데 하나라도 충돌하면 anchor를 가져간다. 근거: VS Code의
+  markdown language service는 heading의 slug를 inline token의 텍스트로 만들며, 거기에는 image의 alt 텍스트가 포함된다.
+  Python-Markdown의 toc는 heading의 HTML에서 태그를 벗기므로 `img`와 그 `alt`가 빠진다. GitHub과 GitLab은 heading의 텍스트를
+  취하며, F_G를 두 방식으로 읽으면 어느 쪽이든 덮인다. F_G는 Unicode 일반 범주가 letter(L)나 십진 숫자(Nd)가 아닌 모든 문자를 지우고,
   나머지를 소문자로 바꾸고, NFKD로 분해하고, 결합 기호를 버리며, 남은 ASCII 문자와 숫자만 남긴다. F_M은 텍스트를
   소문자로 바꾸고, NFKD로 분해하고, 결합 기호를 버리며, 남은 ASCII 문자와 숫자만 남긴다. 근거: GitHub, GitLab,
   VS Code의 anchor는 글자, 숫자, `-`, `_`, 공백을 남기고 나머지를 지우며, 그 가운데 위첨자와 원 숫자(범주 No)도
   지운다. F_G가 그것을 지운다. MkDocs는 텍스트의 NFKD 형식에서 ASCII 문자와 숫자만 남기는데 F_M이 그것을 남기고,
   F_G는 그렇지 않으므로 두 fold를 쓴다. `café`는 두 fold 모두에서 `cafe`가 된다.
 - **충돌 규칙.** heading은 모든 ATX heading(block-quote나 list-item 표지 뒤의 것을 포함)과, fence 밖에서
-  setext 밑줄이 뒤따르는 모든 문단이다. 그 문단 전체가 heading이다. 상세 heading도 heading이다. 상세 heading이 아닌
+  setext 밑줄이 뒤따르는 모든 문단이다. 그 문단 전체가 heading이다. 상세 heading도 heading이다. 이 규칙에서 상세 heading은 file의 layout에 있는 한 table의 상세 level — 그 행들의 상세 heading의 level, 행 scope보다 한 단계 얕은 — 에 있는 최상위 heading이며, 그 텍스트가 공백, tab, 그리고 setext heading의 줄 바꿈을 뺀 것으로 그 table의 이름과 `row`(각각 viewer가 하듯 소문자로 만든 뒤 정식 텍스트와 같은 것)와 key이다. 즉 상세 섹션의 heading이며, 정식 또는 비정식 철자로 쓰인다. 그 밖의 모든 heading은 payload heading이며, 다른 level이나 block quote, list 항목 안에 있는 `<table> row <key>` heading을 포함해, 그 fold가 모든 상세 anchor와 비교된다. 근거: 상세 섹션은 자리로 배정되므로, 다른 곳의 heading은 어느 행도 가리키지 않으며 자기 anchor를 가지는데, viewer는 그것이 상세 anchor와 반복될 때 번호를 매긴다. 상세 heading이 아닌
   heading H는 F = F_G 또는 F = F_M 아래에서, F(H)와 F(A)가 각각의 끝 십진 숫자 run을 뺀 뒤 같으면 상세 heading의 anchor A를
   가져간다. anchor의 fold는 두 fold에서 같다. anchor의 글자와 숫자는 ASCII이기 때문이다. 두 상세 heading은 anchor가 같을 때에만
   충돌한다. 근거: 명명된 viewer들은 반복되거나 점유된 id를 숫자를 덧붙이거나 끝 숫자를 올리는 방식으로만 번호 매긴다(GitHub,
@@ -76,18 +91,16 @@ column 섹션 — 은 payload다: renderer는 이를 행과 함께 옮기고 그
   그래서 끝 숫자를 뺀 fold를 비교하면 어느 heading이나 id가 먼저 왔든 모든 번호 매기기를 다룬다. 그 비용은 상세 heading과
   끝 숫자만 다른 payload heading도 거절된다는 것이다. 허용되는 예: 한 file의 key `T1`과 `T10`은 둘 다 상세 heading이므로
   결코 충돌하지 않는다. 거절되는 예: `items row T_1` 상세 heading 옆의 payload heading `items row T`는 거절된다. `Notes`는
-  그렇지 않다. 이 검사는 file의 모든 heading — 골격과 payload 모두 — 에 적용한다. 또한 file의 payload에 있는 attribute list
-  `{…}`(앞의 `:`가 있거나 없는)로서 `#A`로, 또는 `id=` 뒤에 A를 그대로나 작은따옴표·큰따옴표 안에 두어 id를 A로 정하는 것과, 값이 A인 HTML `id` 또는 `name`을
-  거절하며, 모두 대소문자를 무시하고 비교한다. 근거: Python-Markdown의 attr_list 확장(MkDocs가 켤 수 있다)은 heading이나
-  block 끝의 그런 list를 id로 읽고, HTML viewer는 `id`와 `name`을 anchor로 읽으며, heading의 텍스트와 무관하다.
-- 충돌을 새로 만드는 쓰기는 `CONSTRAINT`이며, anchor를 차지하는 heading이나 id를 쓴 행과 column — `markdown` column의 값, `files` 행의 제목(H1에 대해), 또는 section이나 block heading에 대해서는 그것이 여는 행 scope의, 이름 붙인 `markdown` column이나 자식 table — 에 위치하고, 차지한 anchor의 상세 heading을 밝힌다: 제목 갱신, payload 쓰기, 상세 섹션을 만드는 행
+  그렇지 않다. 이 검사는 file의 모든 heading — 골격과 payload 모두 — 에 적용한다. file 어디서든, 골격까지 포함해, 값이 A인 HTML `id` 또는 `name`과, code span과 code block까지 포함해 attribute list가 정하는 id A를 거절하며, 모두 대소문자를 무시하고 비교한다. attribute list는 홀수 개의 backslash가 앞서지 않은 `{`, 선택적 `:`, 선택적 공백, 그리고 같은 줄의 `}`까지 공백으로 나뉜 token이다. 첫 token은 공백도 `}`도 아닌 글자로 시작하며, tab은 공백으로 센다. `key="…"`나 `key='…'` token은 그 줄의 마지막 `}` 앞에 있는 닫는 따옴표까지의 모든 글자를, 공백과 `}`를 포함해 담는다. 그런 따옴표가 닫지 않는 따옴표는 그 token의 평범한 글자다. `#A` token은 key `id`를 A로 정하며, 대소문자와 무관하게 key가 `id` 또는 `name`인 token(bare, `"…"`, `'…'`)은 그 key를 정한다. key의 쓰인 철자마다 마지막 token이 이기며, 그렇게 정해진 모든 값을 비교한다. 그런 list는 어느 요소 안이나 옆에 있든, attr_list가 그것을 붙이든 말든 모두 센다. 근거: MkDocs가 요청 시 켜는 Python-Markdown의 attr_list 확장은 그런 list에서만 id를 정한다. Python-Markdown이 tab을 펼친 뒤 한 줄의 `{…}`에 맞추고, token을 순서대로 적용하며, backslash로 escape된 `{`는 읽지 않는다. 그러므로 그런 list를 모두 거절하면 그것이 정하는 id를 놓치지 않는다. 그것이 어느 list를 붙이는지는 Python-Markdown 자신의 block·inline 해석에 달려 있다. 그 해석은 무엇이 code인지(list 항목 안의 들여쓴 block, 닫히지 않은 fence)부터 CommonMark와 다르고 릴리스에 따라 바뀔 수 있으므로, 규칙은 그 자리를 따르지 않는다. 그 비용으로 Python-Markdown이 글자로 두는 list도 거절된다. code 밖에서는 `{`를 escape해 그런 글자를 쓸 수 있고, 자기 file의 상세 anchor를 attribute list로 보여 주는 code span이나 code block은 거절된다. 제목, list field, cell은 사용자가 쓰는 글자이므로 골격도 id를 정할 수 있다. HTML viewer는 `id`와 `name`을 heading의 텍스트와 무관하게 anchor로 읽는다.
+- 충돌을 새로 만드는 쓰기는 `CONSTRAINT`이며, anchor를 차지하는 heading이나 id를 쓴 행과 column — `markdown` column의 값, `files` 행의 제목(H1에 대해), list나 table 행의 제목·field·cell, 또는 `files` 행 field list의 항목(attribute list의 `{`나 tag의 `<`가 놓인 column에 위치한다), 또는 section이나 block heading에 대해서는 그것이 여는 행 scope의, 이름 붙인 `markdown` column이나 자식 table — 에 위치하고, 차지한 anchor의 상세 heading을 밝힌다: 제목 갱신, payload 쓰기, 상세 섹션을 만드는 행
   삽입, key 갱신, 이동, 상세 섹션의 생성. 다만 행에 같은 table의 다른 key와 대소문자를 무시하고 같은 key를 주는 쓰기는
   `DUPLICATE_KEY`이며, 그것이 key 규칙이다([document model](20-document-model.md#keys)). 상세 섹션이 없는 행은 anchor가
   없으므로 아무와도 충돌하지 않는다. 읽기에서 충돌은 `format.block`이다. 다만 key가 대소문자만 다른 두 상세 heading 사이는
   `key.duplicate`뿐이다. 같은 file 안에서 같은
   heading 텍스트를 가진 두 상세 섹션은 충돌하므로 `format.block`이며, 어느 행에도 배정할 수 없다.
-- 공백이 더 있거나, hash 뒤에 tab이 있거나, table 이름이나 `row`의 대소문자가 정식과 다른 상세 heading이나 section heading은 `format.noncanonical`이며, `flowmark canon`이 고친다. hash 뒤의 canonical 구분자는 공백 하나이며, tab은 쓰이지 않는다. 다만 CommonMark는 `##` 뒤에 tab이 와도 같은 heading으로 읽는다. 근거: table 이름은 상세 level의 자리가, `row`는 문법이 정하며, 이름 붙은 모든 viewer가 anchor에서 둘을 소문자로 만들므로, 정식과 대소문자만 다른 heading은 같은 행을 같은 anchor로 가리킨다. 둘은 viewer가 소문자로 만든 뒤 정식 텍스트와 같을 때 맞는다: U+017F는 `s`가 아니며, U+212A는 소문자로 `k`가 된다.
-- 자기 table의 `<table> row <key>`가 아닌, 상세 level의 list나 table의 heading — 대소문자를 무시하고 비교하여 다른 table의 이름을 가진 것(예컨대 `items.flowmark.md`의 `## people row P1`), 또는 다른 어떤 텍스트든 — 은 `format.block`이다. 근거: 상세 level의 heading은 그 앞의 행 scope를 끝내고 이 table의 scope를 열지 않으므로, 그 내용은 file이 가진 어느 행에도 속하지 않으며, `flowmark canon`은 그것이 어디에 속하는지 알 수 없다. key는 대소문자를 구분한다: `## items row t1`은 `format.block`이다.
+- 읽기에서 충돌은 충돌하는 요소의 자리에 위치한다([진단](#진단)): heading은 첫 줄(setext heading이면 문단의 첫 줄)과 그 텍스트의 첫 글자에, attribute list는 그 `{`에, HTML `id`나 `name`은 그 tag의 `<`에 위치한다. 이것은 읽기 위치일 뿐이다: 충돌을 새로 만드는 쓰기는 [진단](#진단)의 쓰기 결함과 앞 절이 정하는 대로, anchor를 차지하는 heading이나 id를 쓴 행과 column에 위치하며, 그 메시지는 상세 heading을 밝힌다. 근거: column은 규칙이 이름 붙인 글자를 가리키며, block의 첫 줄은 마지막 줄의 attribute list나 HTML block 깊숙한 `id`에서 멀리 떨어질 수 있다.
+- 정식 공백 하나가 아닌 공백이나 tab의 run(글 앞, 낱말 사이, 또는 글 뒤에 있는 것), hash 뒤에 tab이 있거나, hash 대신 setext 밑줄이 있거나, table 이름이나 `row`의 대소문자가 정식과 다른 상세 heading이나 section heading은 `format.noncanonical`이며, `flowmark canon`이 고친다. hash 뒤의 canonical 구분자는 공백 하나이며, tab은 쓰이지 않는다. 다만 CommonMark는 `##` 뒤에 tab이 와도 같은 heading으로 읽는다. 근거: table 이름은 상세 level의 자리가, `row`는 문법이 정하며, 이름 붙은 모든 viewer가 anchor에서 둘을 소문자로 만들므로, 정식과 대소문자만 다른 heading은 같은 행을 같은 anchor로 가리킨다. 둘은 viewer가 소문자로 만든 뒤 정식 텍스트와 같을 때 맞는다: U+017F는 `s`가 아니며, U+212A는 소문자로 `k`가 된다.
+- 자기 table의 `<table> row <key>`가 아닌, 상세 level의 list나 table의 heading — 소문자로 만든 뒤 다른 table의 이름을 가진 것(예컨대 `items.flowmark.md`의 `## people row P1`), 또는 다른 어떤 텍스트든 — 은 `format.block`이다. 근거: 상세 level의 heading은 그 앞의 행 scope를 끝내고 이 table의 scope를 열지 않으므로, 그 내용은 file이 가진 어느 행에도 속하지 않으며, `flowmark canon`은 그것이 어디에 속하는지 알 수 없다. key는 대소문자를 구분한다: `## items row t1`은 `format.block`이다.
 
 ## 섹션과 그 값
 

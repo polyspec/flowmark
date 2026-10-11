@@ -174,7 +174,7 @@ func ParseFile(cat *catalog.Catalog, table, rel string, data []byte, lk Linker) 
 		dp.resolveLinks()
 	}
 	for _, c := range anchorClashes(lines, tableLevels(lay.table, 0, lay.children)) {
-		p.fail(c.line, 1, RuleBlock, c.message())
+		p.fail(c.line, clashColumn(lines, c), RuleBlock, c.message())
 	}
 	if p.fatal {
 		return nil, p.diags
@@ -428,11 +428,11 @@ func RenderFile(cat *catalog.Catalog, table string, row *Row, lk Linker) ([]byte
 	if err != nil {
 		return nil, nil, err
 	}
-	out, origins, rf := renderRow(lay, row, lk)
+	out, lines, rf := renderRow(lay, row, lk)
 	if len(rf) > 0 {
 		return nil, rf, nil
 	}
-	return out, anchorRefusals(origins, out, tableLevels(lay.table, 0, lay.children)), nil
+	return out, anchorRefusals(lines, out, tableLevels(lay.table, 0, lay.children)), nil
 }
 
 // writer collects the file being written and the refusals of its values. An element
@@ -442,9 +442,10 @@ func RenderFile(cat *catalog.Catalog, table string, row *Row, lk Linker) ([]byte
 type writer struct {
 	rel      string
 	b        strings.Builder
-	origins  []origin // the origin of each line written, the first line at index 0
-	midLine  bool     // the text written so far ends with no line feed
-	cur      origin   // the origin of the text being written
+	lines    [][]colSpan // the origins of the text of each line written, the first line at index 0
+	midLine  bool        // the text written so far ends with no line feed
+	col      int         // the byte offset in the current line of the text written next
+	cur      origin      // the origin of the text being written
 	elems    int
 	values   []pendingValue
 	refusals []Refusal
@@ -486,21 +487,25 @@ func (w *writer) refuseRule(rule, column, msg string) {
 	w.refusals = append(w.refusals, w.cur.row.refusal(column, rule, msg))
 }
 
-// put writes s, and gives every line it begins the origin that is current.
+// put writes s. Each piece of s that lies on one line gives that piece the origin that
+// is current, at its column, and a line begins with the first piece written on it.
 func (w *writer) put(s string) {
-	if s == "" {
-		return
-	}
-	if !w.midLine {
-		w.origins = append(w.origins, w.cur)
-	}
-	for i := 0; i+1 < len(s); i++ {
-		if s[i] == '\n' {
-			w.origins = append(w.origins, w.cur)
+	for s != "" {
+		if !w.midLine {
+			w.lines = append(w.lines, nil)
+			w.col = 0
 		}
+		seg := s
+		if i := strings.IndexByte(s, '\n'); i >= 0 {
+			seg = s[:i+1]
+		}
+		n := len(w.lines) - 1
+		w.lines[n] = append(w.lines[n], colSpan{at: w.col, o: w.cur})
+		w.col += len(seg)
+		w.midLine = !strings.HasSuffix(seg, "\n")
+		w.b.WriteString(seg)
+		s = s[len(seg):]
 	}
-	w.midLine = !strings.HasSuffix(s, "\n")
-	w.b.WriteString(s)
 }
 
 // field is a field item of a files row and the column it writes.
@@ -510,7 +515,7 @@ type field struct {
 
 // renderRow writes the file of row in its canonical form, with the origin of each
 // line, or with the refusals of the request when the writer refuses it.
-func renderRow(lay *filesLayout, row *Row, lk Linker) ([]byte, []origin, []Refusal) {
+func renderRow(lay *filesLayout, row *Row, lk Linker) ([]byte, [][]colSpan, []Refusal) {
 	w := &writer{rel: row.Table + "/" + row.Key + fileSuffix}
 	rr := rowRefOf(row, -1)
 	w.enter(rr, "")
@@ -575,7 +580,7 @@ func renderRow(lay *filesLayout, row *Row, lk Linker) ([]byte, []origin, []Refus
 	if len(w.refusals) > 0 {
 		return nil, nil, w.refusals
 	}
-	return []byte(w.b.String()), w.origins, nil
+	return []byte(w.b.String()), w.lines, nil
 }
 
 // writeTitle writes the H1 line of the title, which is the title column's value.

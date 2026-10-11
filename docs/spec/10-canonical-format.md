@@ -96,7 +96,28 @@ and the column sections — are payload: the renderer moves them with their row 
   name contains no `-`.
 - **The folds.** Two folds of a heading's rendered inline text decide a collision: the text as GitHub
   slugs it (the text of a link without its target, emphasis markers removed, code span content kept,
-  entities decoded, raw HTML tags not text). F_G removes every character whose Unicode general
+  entities decoded, raw HTML tags not text). The rendered inline text is the one CommonMark 0.31.2
+  parses, with the link reference definitions of the whole file: a definition is read where CommonMark
+  reads one, a block at the start of a paragraph, inside a container or not, wherever it stands. A
+  full, collapsed or shortcut reference link whose label matches such a definition counts by its link
+  text, and a bracketed text whose label matches none counts as its literal text, brackets and label
+  included. Under F_M the definitions are the ones Python-Markdown reads: a line outside a code block of
+  at most three spaces, `[label]:` with no bracket in the label, then a destination, on that line or the next, and at most a title in quotes
+  or parentheses after it, nothing else following on its line, wherever the line stands in a block, inside
+  a paragraph or a container included; its label, without the white space at its ends, is lowercased. A full,
+  collapsed or shortcut reference counts by its link text when its label, its runs of white space made
+  one space and then lowercased, matches such a definition, and the link text may be followed by at most
+  one white space character, a line ending included, before the label. Grounding: GitHub, GitLab and VS
+  Code parse CommonMark, where a link reference definition is a block at the start of a paragraph, so a
+  defined `[items row T1][r]` renders the text `items row T1`; Python-Markdown's reference processor
+  searches every line of a block for `^[ ]{0,3}\[([^\[\]]*)\]:` and lowercases the id, and its inline
+  reference allows one white space character between `]` and `[` and leaves an undefined reference as
+  text. An image counts under F_G both by its alt text and by no text, and under F_M by no text: a
+  heading takes the anchor when any of the three readings collides. Grounding: VS Code's markdown
+  language service builds a heading's slug from the text of its inline tokens, an image's alt text
+  included; Python-Markdown's toc strips the tags from the heading's HTML, which drops an `img` and its
+  `alt`; GitHub and GitLab take the heading's text, and reading F_G both ways covers them whichever they
+  take. F_G removes every character whose Unicode general
   category is not a letter (L) or a decimal digit (Nd), lowercases the rest, decomposes it by Unicode
   compatibility (NFKD), drops the combining marks, and keeps only the ASCII letters and digits that
   remain. F_M lowercases the text, decomposes it by NFKD, drops the combining marks, and keeps only the
@@ -107,7 +128,7 @@ and the column sections — are payload: the renderer moves them with their row 
   `cafe` under both.
 - **The collision rule.** A heading is every ATX heading, also after a block-quote or list-item marker,
   and every paragraph followed by a setext underline, the whole paragraph being the heading, outside
-  fenced blocks; a detail heading is one too. A heading H other than a detail heading takes the anchor
+  fenced blocks; a detail heading is one too. For this rule, a detail heading is a top-level heading at the detail level of a table of the file's layout — the level of its rows' detail headings, one less than their row scope — whose text, its spaces, tabs and the line endings of a setext heading aside, is that table's name and the word `row`, each equal to its canonical text once lowercased as the viewers lowercase it, and a key: the heading of a detail section, in its canonical or a non-canonical spelling. Every other heading is a payload heading, a `<table> row <key>` heading at another level or inside a block quote or list item included, and its folds are compared with every detail anchor. Grounding: a detail section is assigned by its place, so a heading elsewhere names no row and renders an anchor of its own, which a viewer numbers when it repeats a detail anchor. A heading H other than a detail heading takes the anchor
   A of a detail heading when, under F = F_G or under F = F_M, F(H) and F(A) are equal once a final run
   of decimal digits is removed from each. The fold of an anchor is the same under both folds, since its
   letters and digits are ASCII. Two detail headings collide only when their anchors are equal.
@@ -119,22 +140,44 @@ and the column sections — are payload: the renderer moves them with their row 
   Accepted: keys `T1` and `T10` in one file never collide, since both are detail headings and only equal
   anchors collide between them. Refused: a payload heading `items row T` beside the detail heading
   `items row T_1`; a payload heading `Notes` beside it is not refused. The check applies to every
-  heading of a file, skeleton and payload alike. It also refuses, in the payload of a file, an attribute
-  list `{…}`, with or without a leading `:`, that sets the id A by `#A` or by `id=` followed by A bare or in single or double quotes, and an
-  HTML `id` or `name` whose value is A, all compared without regard to case. Grounding:
-  Python-Markdown's attr_list extension, which MkDocs can enable, reads such a list at the end of a
-  heading or block as its id, and an HTML viewer reads `id` and `name` as anchors, whatever the text of
-  the heading.
-- A write that introduces a collision is `CONSTRAINT`, located at the row and column whose written text holds the heading or id that takes the anchor — a `markdown` column's value, a `files` row's title for its H1, or, for a section or block heading, the row whose scope it opens, at the `markdown` column or child table it names — naming the detail heading whose anchor it takes: a title update, a payload write, a row insert that creates a detail section, a key update, a move, or the creation of a detail section; except that a write giving a row a key equal, with or without regard to case, to another key of its table is `DUPLICATE_KEY`, the key rule of the [document model](20-document-model.md#keys). A row without a detail section has no anchor, so it collides with nothing. On read a collision is `format.block`, except between two detail headings whose keys differ only in case, which is `key.duplicate` alone. Two detail sections of one file under the same
+  heading of a file, skeleton and payload alike. It also refuses, anywhere in the file, the skeleton
+  included, an HTML `id` or `name` whose value is A, and an id A that an attribute list sets, code spans and
+  code blocks included; all compare without regard to case. An attribute list is a `{` that no odd run of
+  backslashes precedes, an optional `:`, optional spaces, then tokens separated by spaces up to a `}` on the
+  same line, its first token beginning with neither a space nor `}`; a tab counts as a space. A token
+  `key="…"` or `key='…'` holds every character up to its closing quote before the last `}` of its line, spaces and `}` included; a quote that no such quote closes is an ordinary character of its token. A token `#A`
+  sets the key `id` to A, and a token whose key is `id` or `name` in any case (bare, `"…"` or `'…'`) sets that
+  key; for each key, its spelling as written, the last token wins, and the value of each such key is compared.
+  Every such list counts, whatever element it stands in or beside and whether or not attr_list attaches it.
+  Grounding: Python-Markdown's attr_list extension, which MkDocs enables on request, sets an id only from such
+  a list — it matches `{…}` on one line after Python-Markdown expands tabs, applies the tokens in order, and
+  reads no `{` that a backslash escapes — so refusing every such list never misses an id it sets. Which lists
+  it attaches depends on Python-Markdown's own block and inline parsing, which differs from CommonMark's even
+  on what is code (an indented block in a list item, an unclosed fence) and may change with its releases, so
+  the rule does not follow its positions. The cost is that a list Python-Markdown leaves as text is refused
+  too: a writer keeps such text by escaping its `{` outside code, and a code span or block that shows a detail
+  anchor of its own file as an attribute list is refused. A title, a list field and a cell are text a user
+  writes, so the skeleton can set an id too. An HTML viewer reads `id` and `name` as anchors, whatever the text
+  of the heading.
+- A write that introduces a collision is `CONSTRAINT`, located at the row and column whose written text holds the heading or id that takes the anchor — a `markdown` column's value, a `files` row's title for its H1, a title, field or cell of a list or table row, or an item of a `files` row's field list, at the column whose text holds the attribute list's `{` or the tag's `<`, or, for a section or block heading, the row whose scope it opens, at the `markdown` column or child table it names — naming the detail heading whose anchor it takes: a title update, a payload write, a row insert that creates a detail section, a key update, a move, or the creation of a detail section; except that a write giving a row a key equal, with or without regard to case, to another key of its table is `DUPLICATE_KEY`, the key rule of the [document model](20-document-model.md#keys). A row without a detail section has no anchor, so it collides with nothing. On read a collision is `format.block`, except between two detail headings whose keys differ only in case, which is `key.duplicate` alone. Two detail sections of one file under the same
   heading text collide, so they are `format.block`, since neither can be assigned to a row.
-- A detail heading or section heading in a non-canonical spelling (extra spaces, a tab after its
-  hashes, a case of the table name or of `row` other than the canonical one) is `format.noncanonical`, so `flowmark canon` repairs it. The
+- On read, a collision is located at the element that collides ([Diagnostics](#diagnostics)): a heading at
+  its first line (the paragraph's first line for a setext heading) and the first character of its text; an
+  attribute list at its `{`; an HTML `id` or `name` at the `<` of its tag. This is the read location only: a
+  write that introduces a collision is located as [Write faults](#diagnostics) and the clause above state, at
+  the row and column whose written text holds the heading or id that takes the anchor, and its message names
+  the detail heading. Grounding: a column locates the text a rule names, and a block's first line can stand
+  far from an attribute list on its last line or an `id` deep inside an HTML block.
+- A detail heading or section heading in a non-canonical spelling (a run of spaces or tabs other than the
+  canonical single space — before its text, between its words or after it —, a tab after its hashes, a
+  setext underline in place of the hashes, a case of the table name or of `row` other than the canonical
+  one) is `format.noncanonical`, so `flowmark canon` repairs it. The
   canonical separator after the hashes is one space; a tab is never written, though CommonMark reads
   `##` followed by a tab as the same heading. Grounding: the table name is fixed by the place of the
   detail level and the word `row` by the grammar, and every named viewer lowercases both in the
   anchor, so a heading that differs from the canonical one only in their case names the same row
   under the same anchor. The two match when each equals its canonical text after lowercasing, as the viewers lowercase it: U+017F is not `s`, and U+212A lowercases to `k`.
-- A heading at the detail level of a list or table that is not `<table> row <key>` for its own table — one naming another table, compared without regard to case, such as `## people row P1` in `items.flowmark.md`, or any other text — is `format.block`. Grounding: a heading at the detail level ends the row scope before it and opens no scope of this table, so its content belongs to no row the file holds, and `flowmark canon` cannot know where it belongs. The key is case-sensitive: `## items row t1` is `format.block`.
+- A heading at the detail level of a list or table that is not `<table> row <key>` for its own table — one naming another table once lowercased, such as `## people row P1` in `items.flowmark.md`, or any other text — is `format.block`. Grounding: a heading at the detail level ends the row scope before it and opens no scope of this table, so its content belongs to no row the file holds, and `flowmark canon` cannot know where it belongs. The key is case-sensitive: `## items row t1` is `format.block`.
 
 ## Sections and their values
 

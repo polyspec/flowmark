@@ -12,37 +12,58 @@ type htmlAttr struct {
 	name, value string
 }
 
-// inlineText returns the text that a heading or a paragraph renders to, as the folds
-// read it, and the attributes of each raw HTML open tag of s, in order. The reader
-// follows the precedence of CommonMark 0.31.2 where it decides what is text: a code
-// span, an autolink and a raw HTML tag bind tighter than a link bracket, and a link
-// may not contain another link, so the brackets around one turn inactive. A link
-// keeps its text and loses its target and title. An image keeps no text, since the
-// text of an img element is empty. Markup that is not a letter or a digit, such as
-// emphasis markers and escapes, is kept as characters, which the folds drop. A
-// bracket pair that is not followed by an inline target is text, so a full
-// reference `[a][b]` reads as the two labels, since link reference definitions are
-// not read.
-func inlineText(s string) (string, [][]htmlAttr) {
-	r := inlineReader{s: s}
+// inlineResult is the inline text of a heading or a paragraph as the folds read it:
+// text, where an image keeps no text, and alt, where an image keeps its alt text; and
+// the attributes of each raw HTML open tag of the source, in order.
+type inlineResult struct {
+	text, alt string
+	tags      [][]htmlAttr
+	tagAt     []int // the offset in the source of the '<' of each tag
+}
+
+// inlineText returns the inline text of s, as the folds read it. The reader follows the
+// precedence of CommonMark 0.31.2 where it decides what is text: a code span, an
+// autolink and a raw HTML tag bind tighter than a link bracket, and a link may not
+// contain another link, so the brackets around one turn inactive. A link keeps its text
+// and loses its target and title. An image keeps no text in text, since the text of an
+// img element is empty, and its alt text in alt. Markup that is not a letter or a digit,
+// such as emphasis markers and escapes, is kept as characters, which the folds drop. A
+// bracket pair that is followed by no inline target is a link when refs defines its
+// label: a full, a collapsed or a shortcut reference, which keeps its text. Otherwise
+// the brackets are text, and the text stays.
+func inlineText(s string, refs linkRefs) inlineResult {
+	r := inlineReader{s: s, refs: refs}
 	r.run()
-	return string(r.out), r.tags
+	return inlineResult{text: string(r.plain), alt: string(r.out), tags: r.tags, tagAt: r.tagAt}
 }
 
-// inlineReader holds the text kept so far, the tags read, and the open brackets.
+// inlineReader holds the text kept so far, with and without the alt text of images, the
+// tags read and their offsets, the open brackets, and the link reference definitions that
+// the fold reads.
 type inlineReader struct {
-	s    string
-	out  []byte
-	tags [][]htmlAttr
-	open []bracket
+	s     string
+	refs  linkRefs
+	out   []byte // the kept text with the alt text of each image
+	plain []byte // the kept text with no text of an image
+	tags  [][]htmlAttr
+	tagAt []int
+	open  []bracket
 }
 
-// bracket is an open link or image bracket: the length of the kept text when it was
-// read, whether it opens an image, and whether it may still open a link.
+// keep keeps s as text, in both readings.
+func (r *inlineReader) keep(s string) {
+	r.out = append(r.out, s...)
+	r.plain = append(r.plain, s...)
+}
+
+// bracket is an open link or image bracket: the length of the kept text in each reading
+// when it was read, the index of its '[' in the source, whether it opens an image, and
+// whether it may still open a link.
 type bracket struct {
-	pos    int
-	image  bool
-	active bool
+	pos, plainPos int
+	src           int
+	image         bool
+	active        bool
 }
 
 // run reads the whole of r.s, left to right.
@@ -60,15 +81,15 @@ func (r *inlineReader) run() {
 		case c == '&':
 			i = r.reference(i)
 		case c == '!' && i+1 < len(s) && s[i+1] == '[':
-			r.open = append(r.open, bracket{pos: len(r.out), image: true, active: true})
+			r.open = append(r.open, bracket{pos: len(r.out), plainPos: len(r.plain), src: i + 1, image: true, active: true})
 			i += 2
 		case c == '[':
-			r.open = append(r.open, bracket{pos: len(r.out), active: true})
+			r.open = append(r.open, bracket{pos: len(r.out), plainPos: len(r.plain), src: i, active: true})
 			i++
 		case c == ']':
 			i = r.closeBracket(i)
 		default:
-			r.out = append(r.out, c)
+			r.keep(s[i : i+1])
 			i++
 		}
 	}
@@ -87,12 +108,12 @@ func (r *inlineReader) codeSpan(i int) int {
 		}
 		m := runOf(s[k:], '`')
 		if m == n {
-			r.out = append(r.out, s[i+n:k]...)
+			r.keep(s[i+n : k])
 			return k + m
 		}
 		k += m
 	}
-	r.out = append(r.out, s[i:i+n]...)
+	r.keep(s[i : i+n])
 	return i + n
 }
 
@@ -102,16 +123,17 @@ func (r *inlineReader) codeSpan(i int) int {
 func (r *inlineReader) angle(i int) int {
 	s := r.s[i:]
 	if n, text := autolinkAt(s); n > 0 {
-		r.out = append(r.out, text...)
+		r.keep(text)
 		return i + n
 	}
 	if n, attrs, open := htmlMarkupAt(s); n > 0 {
 		if open {
 			r.tags = append(r.tags, attrs)
+			r.tagAt = append(r.tagAt, i)
 		}
 		return i + n
 	}
-	r.out = append(r.out, '<')
+	r.keep("<")
 	return i + 1
 }
 
@@ -119,17 +141,17 @@ func (r *inlineReader) angle(i int) int {
 // ampersand that begins no reference is text.
 func (r *inlineReader) reference(i int) int {
 	if text, n := htmlentity.Reference(r.s[i:]); n > 0 {
-		r.out = append(r.out, text...)
+		r.keep(text)
 		return i + n
 	}
-	r.out = append(r.out, '&')
+	r.keep("&")
 	return i + 1
 }
 
 // closeBracket reads the ']' at i. The nearest open bracket forms a link or an image
-// when an inline target follows it; a link deactivates the brackets of links before
-// it, and an image drops the text it encloses. Otherwise the bracket is text, its
-// label kept.
+// when an inline target or a reference that refs defines follows it; a link deactivates
+// the brackets of links before it, and an image drops the text it encloses. Otherwise
+// the bracket is text, its label kept.
 func (r *inlineReader) closeBracket(i int) int {
 	n := len(r.open)
 	if n == 0 {
@@ -142,10 +164,14 @@ func (r *inlineReader) closeBracket(i int) int {
 	}
 	end, ok := inlineTail(r.s, i+1)
 	if !ok {
+		end, ok = r.refTail(o, i)
+	}
+	if !ok {
 		return i + 1
 	}
 	if o.image {
-		r.out = r.out[:o.pos]
+		// The alt text stays in alt; the text of the image leaves the plain reading.
+		r.plain = r.plain[:o.plainPos]
 	} else {
 		for k := range r.open {
 			if !r.open[k].image {
@@ -154,6 +180,36 @@ func (r *inlineReader) closeBracket(i int) int {
 		}
 	}
 	return end
+}
+
+// refTail reads the reference that follows the ']' at i, which closes the bracket o:
+// a full reference with a label, a collapsed one with an empty label, which reads the
+// link text as its label, or a shortcut that is no label at all. A full or collapsed
+// reference is read when its label is defined; a shortcut is read when the link text is.
+// Under F_M one white space may stand before the label. It returns the index after the
+// reference, and false when none is defined.
+func (r *inlineReader) refTail(o bracket, i int) (int, bool) {
+	s := r.s
+	text := s[o.src+1 : i]
+	p := i + 1
+	if r.refs.space && p+1 < len(s) && (s[p] == ' ' || s[p] == '\t' || s[p] == '\n') && s[p+1] == '[' {
+		p++
+	}
+	if p < len(s) && s[p] == '[' {
+		if q := strings.IndexByte(s[p+1:], ']'); q >= 0 {
+			label := s[p+1 : p+1+q]
+			if label == "" {
+				label = text
+			}
+			if r.refs.defined(label) {
+				return p + q + 2, true
+			}
+		}
+	}
+	if r.refs.defined(text) {
+		return i + 1, true
+	}
+	return 0, false
 }
 
 // autolinkAt reads the URI or the email autolink that begins s, which starts with

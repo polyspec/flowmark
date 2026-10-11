@@ -48,12 +48,36 @@ func TestInlineText(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			text, tags := inlineText(c.in)
-			if text != c.text {
-				t.Fatalf("inlineText(%q) text = %q; want %q", c.in, text, c.text)
+			res := inlineText(c.in, linkRefs{})
+			if res.text != c.text {
+				t.Fatalf("inlineText(%q) text = %q; want %q", c.in, res.text, c.text)
 			}
-			if got := fmt.Sprint(tags); got != c.tags {
+			if got := fmt.Sprint(res.tags); got != c.tags {
 				t.Fatalf("inlineText(%q) tags = %s; want %s", c.in, got, c.tags)
+			}
+		})
+	}
+}
+
+// TestInlineAlt pins the alt text that the reader keeps for an image, which the F_G
+// fold reads beside the text without it: an image keeps no text but its alt text,
+// nested links and emphasis included, and an image in a link keeps its alt text too.
+func TestInlineAlt(t *testing.T) {
+	cases := []struct {
+		name, in, text, alt string
+	}{
+		{"image keeps its alt text in alt only", "![alt](/img.png) x", " x", "alt x"},
+		{"alt text keeps its emphasis markers as characters", "![a *b*](x)", "", "a *b*"},
+		{"link in alt text keeps its text", "![a [b](c)](d)", "", "a b"},
+		{"image in a link keeps the alt text", "[![a](b)](c)", "", "a"},
+		{"image nested in an image keeps both alt texts", "![x ![y](z)](w)", "", "x y"},
+		{"unclosed image bracket is text in both readings", "![a b", "a b", "a b"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			res := inlineText(c.in, linkRefs{})
+			if res.text != c.text || res.alt != c.alt {
+				t.Fatalf("inlineText(%q) = text %q, alt %q; want %q, %q", c.in, res.text, res.alt, c.text, c.alt)
 			}
 		})
 	}
