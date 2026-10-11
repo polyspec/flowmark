@@ -93,7 +93,8 @@ The order of the commit protocol is normative.
   `CONNECTION_LOST` names an idle limit; a connection kept open after a silent rollback would run the
   client's next write outside the transaction it believes open. The default is the lock wait's, so an
   idle transaction holds the lock no longer than another operation waits for it by default. The idle
-  bound is a timer because idleness is the absence of an event; it is the session's only timer.
+  bound is a timer because idleness is the absence of an event; besides a lock wait's deadline it is the session's only
+  timer.
 - A closed connection rolls its open transaction back, releases the lock and ends its request's lock
   wait; the server learns it from the connection's read, which runs while the request does, and the
   messages it has received but not begun to answer are not run — the end of the read is the client's

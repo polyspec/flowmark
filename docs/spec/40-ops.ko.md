@@ -1,5 +1,5 @@
 <!-- doc-id: spec-ops -->
-<!-- source-sha256: d1eb0d66baf613f54a41238c98b7bbf59dbbd95779cdfcc4fa68fec109a342c8 -->
+<!-- source-sha256: 7c5d60d1196cbf6196c1857eab6b0fc51afee7de403e6913c25100b0d30cd0fc -->
 # Operations
 
 [English](40-ops.md)
@@ -76,7 +76,7 @@
   (SQLSTATE 25P03), orm의 `CONNECTION_LOST`는 idle 한도를 이름 짓는다. 조용히 rollback한 뒤 연결을 열어
   두면 client가 열려 있다고 믿는 transaction 밖에서 client의 다음 쓰기가 실행된다. 기본값은 lock 대기의
   기본값과 같아서, 쉬는 transaction은 다른 operation이 기본으로 기다리는 시간보다 오래 lock을 잡지 않는다.
-  idle 상한이 timer인 까닭은 쉼이 event의 부재이기 때문이며, session의 유일한 timer다.
+  idle 상한이 timer인 까닭은 쉼이 event의 부재이기 때문이며, lock 대기의 deadline 말고는 session의 유일한 timer다.
 - 닫힌 연결은 열린 transaction을 rollback하고 lock을 풀며 요청의 lock 대기를 끝낸다. server는 요청이
   실행되는 동안에도 도는 연결의 read로 이를 알며, 받았지만 답하기 시작하지 않은 message는 실행하지 않는다
   — read의 끝은 client의 close이고 server는 이를 half-close와 구별할 수 없으며, session은 그와 함께
