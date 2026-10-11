@@ -72,12 +72,6 @@ func (r *Row) set(name string, v any) {
 	r.values[name] = v
 }
 
-// has reports whether the row holds name.
-func (r *Row) has(name string) bool {
-	_, ok := r.values[name]
-	return ok
-}
-
 // Get returns the value of name and whether the row holds it.
 func (r *Row) Get(name string) (any, bool) {
 	v, ok := r.values[name]
