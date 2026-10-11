@@ -1,9 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: fa144b990fdd9dbcd80993e2ccab5232a7fc80d7433956457e66c65f229b93e5 -->
+<!-- source-sha256: 5e52f68ea8d55f64c31a6005f2c13183ad8ada3896610f6db4cf930bd39f4e45 -->
 # Changelog
 
 ## Unreleased
 
+- T12.10: CLI, MCP server, sidecar가 write path를 통해 어느 table에서나 schema, rows, row.get, row.insert, row.update, row.move, row.delete, transition, views를 실행하고 wire JSON과 `{code, error}` 실패로 답한다. views는 view table을, 또는 저장된 filter와 sort를 통한 view의 행을 답한다. `flowmark install`은 document file, files table folder, `.gitattributes` 줄 `*.flowmark.md text eol=lf`를 만든다. history repair와 unlock이 명령이 된다. 모든 명령은 0, 1, 2로 끝난다. 옛 codec, executor, corpus, app 경로와 `make validate`를 지웠다. 답은 더 이상 HTML escape하지 않는다.
 - T12.3-1: 응용 schema가 view table(문서 `flowmark`의 `views`)을 선언한다. validator는 entity, filter, sort, group이 유효하지 않은 view를 orm의 `ir.Validate`로 검사해 `view`로, stage가 decode할 수 없는 값을 `codec`으로 보고한다. 마지막 stage가 `yaml`인 codec은 거절한다.
 - T12.3-5: spec 30이 이력 block이 자기 상태 행 아래에만 서는 근거를 밝히고, 배치 key마다 catalog case를 둔다.
 - T12.9: `flowmark serve <corpus> --port <port>`는 orm client가 loopback TCP로 접속하는 server다. `.flowmark/server.json`의 token, corpus와 token을 확인하는 connect message, control message로 다루는 transaction과 savepoint, 쉬는 transaction을 rollback하고 그 연결을 닫는 `--tx-idle-ms`를 갖춘다.

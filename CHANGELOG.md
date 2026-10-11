@@ -3,6 +3,7 @@
 
 ## Unreleased
 
+- T12.10: the CLI, MCP server and sidecar run schema, rows, row.get, row.insert, row.update, row.move, row.delete, transition and views over any table through the write path, answering wire JSON and `{code, error}` failures; views answers the view table, or a view's rows through its stored filter and sort; `flowmark install` creates the document files, the files-table folders and the `.gitattributes` line `*.flowmark.md text eol=lf`; history repair and unlock are commands; every command exits 0, 1 or 2; the old codec, executor, corpus and app paths and `make validate` are removed; answers no longer HTML-escape.
 - T12.3-1: the application schema declares its view table (`views` of the document `flowmark`); the validator reports `view` for a view whose entity, filter, sort or group is invalid, checked with orm's `ir.Validate`, and `codec` for a value its stages cannot decode; a codec ending in `yaml` is refused.
 - T12.3-5: spec 30 grounds why a history block stands only under its own state row, with a catalog case for each placement key.
 - T12.9: `flowmark serve <corpus> --port <port>` is the server orm clients reach over loopback TCP, with a token in `.flowmark/server.json`, a connect message that checks the corpus and token, transactions and savepoints as control messages, and `--tx-idle-ms`, which rolls back an idle transaction and closes its connection.
