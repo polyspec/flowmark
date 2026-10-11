@@ -1,5 +1,5 @@
 <!-- doc-id: examples-board-web -->
-<!-- source-sha256: 390ffad1180c2d73f89685a66f4259e0a0a9a6ee55dbfb818b9f03c2bf48449a -->
+<!-- source-sha256: 2846a4634cf17180ff0121dc9edcce91fd184e5e9e16b878c5d67c6e5cdc9b10 -->
 # 게시판 애플리케이션
 
 [English](README.md)
@@ -36,6 +36,20 @@ corpus는 글 1000개 규모로 잡았다. `posts`는 `store files shard created
    ```sh
    FLOWMARK_DSN='markdown://127.0.0.1:<port>/board?token=<token>' php -S 127.0.0.1:8090 -t public public/index.php
    ```
+
+## Node.js 서버에서 실행
+
+같은 애플리케이션이 orm의 TypeScript client 위에서 hyper의 Node.js 서버로도 돈다. `node/`에 `main.ts`,
+`handlers.ts`, `posts.ts`(같은 메서드 다섯 개, 비동기)와 같은 catalog에서 생성한 `node/model/`의 model이
+있다(`orm-gen gen --schema ../block/dbspec/board.dbs --out node/model --scan node/posts.ts`. `--scan`은
+`posts.ts`가 부르는 조건과 join 메서드를 선언하게 한다). 이 folder에서 `npm install`을 하고 위의 1, 2단계를
+마친 뒤 `npm run build:node`로 서버를 번들하며, corpus의 DSN은 환경변수로 준다:
+
+```sh
+FLOWMARK_DSN='markdown://127.0.0.1:<port>/board?token=<token>' BOARD_SESSIONS=<session folder> BOARD_PORT=8091 node build/node/server.mjs
+```
+
+두 서버는 같게 답한다. 목록의 모든 페이지의 행과 글 하나의 페이지가 같게 나온다.
 
 `src/Model/`의 model은 corpus catalog에서 생성한다(`orm-gen gen --out src/Model --namespace
 'Flowmark\Board\Model' examples/board/block/dbspec/board.dbs`). hash를 바꾸는 catalog 변경은 model을 다시
