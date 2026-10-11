@@ -283,16 +283,32 @@ func placedJoins(g *ir.Group, placed map[string]bool) {
 	}
 }
 
-// sortKey is the value an order item sorts a row by.
+// sortKey is the value an order item sorts a row by; null for a NULL value.
 type sortKey struct {
 	v      scalar
+	null   bool
 	random float64
+}
+
+// compareKeys orders two sort keys of a column item ascending: NULL before every
+// value and two NULLs tied (spec 60 Surfaces, ordering — the one rule MySQL, which
+// has no NULLS FIRST, renders natively with SQLite, and PostgreSQL by a suffix).
+func compareKeys(a, b sortKey) int {
+	switch {
+	case a.null && b.null:
+		return 0
+	case a.null:
+		return -1
+	case b.null:
+		return 1
+	}
+	return compare(a.v, b.v)
 }
 
 // order sorts envs by the order items of s, stably: rows that every item ties
 // stay in storage order. A column sorts by its type, a column function by its
-// result, and random by a random number that is not seeded. A NULL among the
-// sorted values has no rule yet.
+// result, and random by a random number that is not seeded. NULL sorts before every
+// value ascending and after every value descending.
 func (r *reader) order(s *scope, envs []*env) ([]*env, *Error) {
 	items := s.q.Order
 	if len(items) == 0 {
@@ -316,7 +332,8 @@ func (r *reader) order(s *scope, envs []*env) ([]*env, *Error) {
 				}
 			}
 			if v.null {
-				return nil, unspecified("where an IR order puts a NULL value of " + s.ent.Name + "." + o.Column)
+				ks[i] = sortKey{null: true}
+				continue
 			}
 			sv, ok := scalarOf(t, v.text)
 			if !ok {
@@ -339,7 +356,7 @@ func (r *reader) order(s *scope, envs []*env) ([]*env, *Error) {
 					c = 1
 				}
 			} else {
-				c = compare(ka[i].v, kb[i].v)
+				c = compareKeys(ka[i], kb[i])
 			}
 			if o.Desc {
 				c = -c

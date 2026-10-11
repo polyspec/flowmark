@@ -101,7 +101,6 @@ func TestReadRejects(t *testing.T) {
 		{"60#surfaces: force_index of an undeclared index is unknown", f.msg("all", "items", map[string]any{"force_index": "ix_nope"}), "INDEX_UNKNOWN"},
 		{"60#surfaces: an unknown entity", f.msg("all", "nope", nil), "ENTITY_UNKNOWN"},
 		{"60#surfaces: an unknown column", f.msg("all", "items", map[string]any{"where": where(pred("nope", "eq", p(0)))}, "x"), "COLUMN_UNKNOWN"},
-		{"60#surfaces: an IR order puts a NULL where no rule says", f.msg("all", "items", map[string]any{"order": []any{map[string]any{"column": "due"}}}), "CAPABILITY_UNSUPPORTED"},
 		{"60#surfaces: a row read with group_by has no rule", f.msg("all", "items", map[string]any{"group_by": []string{"owner"}}), "CAPABILITY_UNSUPPORTED"},
 	}
 	for _, c := range cases {
@@ -426,6 +425,65 @@ func TestOrderAndLimit(t *testing.T) {
 	})
 	f.sub(t, "60#surfaces: an order item with both a column and random is invalid", func(f *fixture) {
 		f.fails(f.msg("all", "items", order(map[string]any{"column": "id", "random": true})), "IR_INVALID")
+	})
+}
+
+// TestOrderNulls pins where an IR order puts NULL (spec 60 Surfaces, ordering):
+// before every value ascending and after every value descending, two NULLs tied in
+// storage order — for a root order, the groups of group_count and the ranking of
+// limit_per_parent.
+func TestOrderNulls(t *testing.T) {
+	docs := baseDocs()
+	docs["people.flowmark.md"] = lines(
+		"# people",
+		"| id | name | email | age | active | score | joined | deleted_at | updated_at |",
+		"| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+		"| P1 | One |  |  | true | 0.00 | 2026-10-01 09:00:00 |  |  |",
+		"| P2 | Two |  | 5 | true | 0.00 | 2026-10-01 09:00:00 |  |  |",
+		"| P3 | Three |  | 3 | true | 0.00 | 2026-10-01 09:00:00 |  |  |",
+		"| P4 | Four |  |  | true | 0.00 | 2026-10-01 09:00:00 |  |  |",
+		"| P5 | Five |  | 1 | true | 0.00 | 2026-10-01 09:00:00 |  |  |",
+	)
+	f := catalogFixture(t, docs)
+	byAge := func(desc bool) map[string]any {
+		return map[string]any{"columns": none, "order": []any{map[string]any{"column": "age", "desc": desc}}}
+	}
+	ids := func(f *fixture, m []byte) []string {
+		var out []string
+		for _, r := range f.ok(m).Answer.Rows {
+			v, _ := r.Get("id")
+			out = append(out, v.(string))
+		}
+		return out
+	}
+	f.sub(t, "60#surfaces: NULL sorts before every value ascending, NULLs in storage order", func(f *fixture) {
+		if got := ids(f, f.msg("all", "people", byAge(false))); !slices.Equal(got, []string{"P1", "P4", "P5", "P3", "P2"}) {
+			f.t.Fatalf("ids %v", got)
+		}
+	})
+	f.sub(t, "60#surfaces: NULL sorts after every value descending, NULLs in storage order", func(f *fixture) {
+		if got := ids(f, f.msg("all", "people", byAge(true))); !slices.Equal(got, []string{"P2", "P3", "P5", "P1", "P4"}) {
+			f.t.Fatalf("ids %v", got)
+		}
+	})
+	f.sub(t, "60#surfaces: group_count ordered ascending puts the NULL group first", func(f *fixture) {
+		f.want(f.msg("group_count", "items", map[string]any{"group_by": []string{"owner"}, "order": []any{map[string]any{"column": "owner"}}}),
+			`{"rows":[{"owner":null,"row_count":3},{"owner":"P1","row_count":1}]}`)
+	})
+	f.sub(t, "60#surfaces: group_count ordered descending puts the NULL group last", func(f *fixture) {
+		f.want(f.msg("group_count", "items", map[string]any{"group_by": []string{"owner"}, "order": []any{map[string]any{"column": "owner", "desc": true}}}),
+			`{"rows":[{"owner":"P1","row_count":1},{"owner":null,"row_count":3}]}`)
+	})
+	hist := func(desc bool) []byte {
+		rel := map[string]any{"rel": "history", "kind": "many", "keys": []any{map[string]any{"left": "id", "right": "item"}},
+			"query": map[string]any{"entity": "item_history", "columns": none, "limit_per_parent": 1, "order": []any{map[string]any{"column": "evidence", "desc": desc}}}}
+		return f.msg("all", "items", map[string]any{"columns": none, "where": where(pred("id", "eq", p(0))), "relations": []any{rel}}, "T1")
+	}
+	f.sub(t, "60#surfaces: limit_per_parent ranked ascending keeps a NULL row first", func(f *fixture) {
+		f.want(hist(false), `{"rows":[{"id":"T1","parent":null,"owner":"P1","history":[{"id":1,"item":"T1"}]}]}`)
+	})
+	f.sub(t, "60#surfaces: limit_per_parent ranked descending keeps a value before NULL", func(f *fixture) {
+		f.want(hist(true), `{"rows":[{"id":"T1","parent":null,"owner":"P1","history":[{"id":2,"item":"T1"}]}]}`)
 	})
 }
 
