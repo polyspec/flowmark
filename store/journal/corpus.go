@@ -58,6 +58,14 @@ func New(root string, obs Observer) (*Corpus, error) {
 	return c, nil
 }
 
+// Root returns the declared corpus root.
+func (c *Corpus) Root() string { return c.root }
+
+// SetFault installs the fault-injection seam: f is called at each step of a commit, a replay, a lock attempt and an
+// unlock, and its error stops the run there as a crash would; nil removes it. It is exported for the crash tests of the
+// write path above the journal, which commits through it; nothing outside the tests installs one.
+func (c *Corpus) SetFault(f func(step string, index int) error) { c.fault = f }
+
 func (c *Corpus) step(step string, index int) error {
 	if c.fault == nil {
 		return nil
