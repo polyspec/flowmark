@@ -124,6 +124,7 @@ The order of the commit protocol is normative.
 | `row.move` | `table`, `key`, `position`, optional `parent` | `{"affected", "keys", "rows"}` |
 | `row.delete` | `table`, `key` | `{"affected", "keys", "rows"}` |
 | `transition` | `table`, `key`, `state`, optional `values` | `{"affected", "keys", "rows"}` |
+| `views` | optional `key` | `{"rows"}` of the view table, or `{"view", "rows"}` of the view `key` |
 
 - `row.insert` is an `insert` assigning `values`; `row.update` an `update` of the row whose key is
   `key` assigning `values`; `row.delete` a `delete` of that row. `row.move` is an `update` of that row
@@ -144,15 +145,23 @@ The order of the commit protocol is normative.
   not an object, and `values` of `transition` that assign the state column, which `state` gives, are
   `CONFIG`, naming it; a table or column the catalog does not declare is the
   request's `ENTITY_UNKNOWN` or `COLUMN_UNKNOWN`.
-- A view operation — the rows of a view through its stored filter and sort — waits on `T12.3-1`: no
-  setting declares a view table, and a stored filter has nowhere to keep its parameters. Until
-  then a view row is read and written as any row.
+- `views` reads the view table of the catalog ([application schema](100-checklist.md#views)), never
+  a table the face names: without `key` it answers the view table's rows as `rows` does; with `key`
+  it answers `{"view", "rows"}`, the view row and the rows of its `entity` read by an `all` request
+  whose where and params are the stored filter's and whose order is the stored sort — `group_by` is
+  the view's to apply. Both reads run in one read-only transaction, so the view and its rows come
+  from one corpus. The view is first judged as the validator judges it
+  ([constraints](50-constraints.md#views)), and a view with a fault is `CONSTRAINT`, naming each
+  fault; a read of the view table never is. A catalog without a view table refuses `views` as
+  `CONFIG`. Grounding: a view is a stored request, so running it is that request, and a view the
+  validator reports runs no request the client could not form itself.
 - A failure is answered `{"code", "error"}`: the face name of the [failure vocabulary](#failure-vocabulary),
   which is the orm code for every code the vocabulary does not list, and the message.
 - **The CLI.** Each operation is a command: `flowmark schema <corpus>`, `rows <corpus> <table>`,
   `row.get <corpus> <table> <key>`, `row.insert <corpus> <table> [assignment…]`,
   `row.update <corpus> <table> <key> [assignment…]`, `row.move <corpus> <table> <key> <position> [<parent>]`,
-  `row.delete <corpus> <table> <key>` and `transition <corpus> <table> <key> <state> [assignment…]`.
+  `row.delete <corpus> <table> <key>`, `transition <corpus> <table> <key> <state> [assignment…]` and
+  `views <corpus> [<key>]`.
   An assignment is `<column>=<text>` or `<column>:=<json>`; a positional value is `<text>` or
   `:=<json>`. A text is a value's readable text, sent as the wire value of its column's type — a
   JSON number for an integer or a float, a JSON bool for `bool`, a JSON string otherwise — and

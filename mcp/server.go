@@ -140,6 +140,7 @@ var descriptions = map[string]string{
 	"row.move":   "Move the row whose key is key to a position among its siblings, optionally under a new parent",
 	"row.delete": "Delete the row whose key is key, and answer the table's rows",
 	"transition": "Move the row whose key is key to a state of its state machine, with the columns the transition requires",
+	"views":      "Answer the rows of the view table, or, with key, that view and the rows of its entity through its stored filter and sort",
 }
 
 // tools returns the tool of each operation.

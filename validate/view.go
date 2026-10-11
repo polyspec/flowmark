@@ -102,42 +102,64 @@ func (c *corpus) views(tb *catalog.Table, p placed, faulty map[string]bool) erro
 		}
 		return *s, true
 	}
-	name, ok := usable(v.Entity)
+	vals := map[string]string{}
+	for _, col := range []string{v.Kind, v.Entity, v.Filter, v.Sort, v.Group} {
+		if s, ok := usable(col); ok {
+			vals[col] = s
+		}
+	}
+	for _, f := range JudgeView(c.cat, m, v, vals) {
+		c.report(p, f.Column, ruleView, f.Message)
+	}
+	return nil
+}
+
+// ViewFault is a fault of a view (spec 50 Views): the view column it stands at and its message.
+type ViewFault struct {
+	Column  string
+	Message string
+}
+
+// JudgeView returns the faults of a view of the view table whose columns v names, over the catalog cat and its runtime
+// model m (spec 50 Views): vals holds the text of each view column that can be judged, a column being absent when it is
+// NULL or has a fault of its own. A faulty or absent entity leaves the other columns unjudged; the faces judge a view
+// with it before they run it.
+func JudgeView(cat *catalog.Catalog, m *runtimemodel.Model, v *catalog.View, vals map[string]string) []ViewFault {
+	name, ok := vals[v.Entity]
 	if !ok {
 		return nil
 	}
 	ent := m.Entities[name]
 	if ent == nil {
-		c.report(p, v.Entity, ruleView, fmt.Sprintf("the entity %s is no entity of the catalog", name))
-		return nil
+		return []ViewFault{{v.Entity, fmt.Sprintf("the entity %s is no entity of the catalog", name)}}
 	}
-	if kind, ok := usable(v.Kind); ok && slices.Contains(listKinds, kind) {
-		et, _ := c.cat.Table(ent.Table)
+	if kind, ok := vals[v.Kind]; ok && slices.Contains(listKinds, kind) {
+		et, _ := cat.Table(ent.Table)
 		if et == nil || et.Title == "" || et.Body == "" {
-			c.report(p, v.Entity, ruleView, fmt.Sprintf("a %s view needs an entity whose table declares title and body, and %s declares no title or no body", kind, name))
-			return nil
+			return []ViewFault{{v.Entity, fmt.Sprintf("a %s view needs an entity whose table declares title and body, and %s declares no title or no body", kind, name)}}
 		}
 	}
-	if text, ok := usable(v.Filter); ok {
+	var out []ViewFault
+	if text, ok := vals[v.Filter]; ok {
 		if msg := judgeFilter(m, name, text); msg != "" {
-			c.report(p, v.Filter, ruleView, "the filter "+msg)
+			out = append(out, ViewFault{v.Filter, "the filter " + msg})
 		}
 	}
-	if text, ok := usable(v.Sort); ok {
+	if text, ok := vals[v.Sort]; ok {
 		if msg := judgeSort(m, name, text); msg != "" {
-			c.report(p, v.Sort, ruleView, "the sort "+msg)
+			out = append(out, ViewFault{v.Sort, "the sort " + msg})
 		}
 	}
-	if g, ok := usable(v.Group); ok {
+	if g, ok := vals[v.Group]; ok {
 		f := ent.Field(g)
 		switch {
 		case f == nil:
-			c.report(p, v.Group, ruleView, fmt.Sprintf("the group %s is no field of %s", g, name))
+			out = append(out, ViewFault{v.Group, fmt.Sprintf("the group %s is no field of %s", g, name)})
 		case !ir.OpAllowed(f, "eq"):
-			c.report(p, v.Group, ruleView, fmt.Sprintf("the group %s of %s has no equality, so its rows have no groups", g, name))
+			out = append(out, ViewFault{v.Group, fmt.Sprintf("the group %s of %s has no equality, so its rows have no groups", g, name)})
 		}
 	}
-	return nil
+	return out
 }
 
 // runtimeModel returns orm's runtime model of the catalog, built once.

@@ -28,6 +28,7 @@ var faceCommands = map[string]faceCommand{
 	"row.move":   {usage: "<corpus> <table> <key> <position> [<parent>]", fixed: []string{"table", "key", "position"}, optional: "parent"},
 	"row.delete": {usage: "<corpus> <table> <key>", fixed: []string{"table", "key"}},
 	"transition": {usage: "<corpus> <table> <key> <state> [assignment…]", fixed: []string{"table", "key", "state"}, assigns: true},
+	"views":      {usage: "<corpus> [<key>]", optional: "key"},
 }
 
 // arg is a value of the command line: its readable text, or the wire value written after `:=`.
@@ -118,6 +119,12 @@ func face(out, errOut io.Writer, name string, args []string) int {
 	}
 	table := positional["table"].text
 	tb, _ := c.Catalog().Table(table)
+	if name == "views" {
+		// The key is a key of the view table, which the catalog names.
+		if tb = c.ViewTable(); tb != nil {
+			table = tb.Name
+		}
+	}
 	column := func(member string) string {
 		if tb == nil {
 			return ""
