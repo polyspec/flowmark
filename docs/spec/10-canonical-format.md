@@ -146,6 +146,42 @@ and the column sections — are payload: the renderer moves them with their row 
   break, soft or hard, is nothing under S_GH and S_VS and a space under S_GL. Grounding: GitHub's ids
   join the lines of a setext heading with nothing (the vectors), VS Code writes a softbreak or
   hardbreak token as no text, and comrak's `collect_text` writes each as one space.
+- **Math.** A math span is read as its viewer reads it, and is atomic as a code span is: its content
+  is no markup. GitHub's renderer reads none, so S_GH reads the text as above. Under **S_GL** a math
+  span is its literal source, as GitLab renders with comrak 0.56.0's `math_dollars` and `math_code`:
+  `$` followed by a backtick opens code math, closed by the first `$` that a backtick precedes, its
+  content between the two not empty; otherwise a run of one or two `$` opens dollar math, closed by the
+  next run of as many `$`, its content not empty — for one `$`, no space, tab or line ending may follow
+  the opening or precede the closing, a `$` after a backslash closes nothing, and no digit may follow
+  the closing; the content of one `$` and of code math is normalized as a code span's, that of two `$`
+  is taken as it stands; a run of three or more `$` opens nothing, and a `$` that opens nothing is text.
+  Under **S_VS** a math span is no text, as VS Code's preview renders with `@vscode/markdown-it-katex`
+  1.1.2, which its built-in markdown-math extension contributes with `markdown.math.enabled` true by
+  default: `$$` opens where neither a `$` nor a backslash precedes it and no `$` follows it, and closes
+  at the next `$$` that an even number of backslashes precedes and that meets the same condition; a
+  single `$` opens where neither a `$`, a backslash nor an ASCII letter, digit or `_` precedes it and
+  the guard is off, and closes at the next `$` that an even number of backslashes precedes when neither
+  a `$` nor an ASCII letter, digit or `_` follows it; a `$` that opens nothing is text. The guard is on
+  after an inline HTML construct that the plugin's expression `/^<\w+.+[^/]>$/` matches, and every other
+  token that markdown-it pushes turns it off: a code span, a backslash before any character, a
+  character reference, an emphasis delimiter run, a run of two or more `~`, a line ending, an
+  autolink, any other HTML construct, a math span, and a link or an image, from its opening bracket.
+  markdown-it's linkify, which also pushes a token after a `scheme://` URL, is not read: a heading
+  that holds a guarding tag, then such a URL, then a `$` is read with the guard on. Grounding: comrak's
+  `collect_text` writes a math node's literal, VS Code's `#tokenToPlainText` writes a math token as no
+  text, and the slug vectors record both: `# items row $T<b>1$` is `items-row-tb1` on GitLab,
+  `items-row` in VS Code and `items-row-t1` on GitHub.
+- **Footnotes under S_GL.** GitLab renders with comrak's footnotes, so S_GL reads the definitions and
+  the references as comrak does. A line that begins, after at most three spaces, with `[^`, a label of
+  no `]`, space, tab or line ending, and `]:` is a footnote definition, and starts no link reference
+  definition. A bracket that a `]` closes with no link, above which no bracket was opened, whose text
+  begins with `^` and holds only text and raw HTML, more than the `^`, is a footnote reference, and
+  its delimiters open no emphasis: one whose label a footnote definition defines, compared as a link
+  label is, renders no text; any other is restored as text — `[`, its text with each raw HTML
+  construct as written, and `]`, the `!` of an image's bracket dropped. S_GH and S_VS read the
+  brackets as CommonMark does. Grounding: comrak's `collect_text` writes a footnote reference as
+  nothing, and its `process_footnotes` restores an undefined one as text nodes (the slug vectors:
+  `# a[^1]` beside `[^1]: n` is `a` on GitLab).
 - **The slugs.** A heading's slug under a viewer is computed from its rendered inline text as the
   viewer computes it. **S_GH** (GitHub): the text lowercased by the Unicode full default lowercase
   mapping without its conditional mappings (U+0130 becomes `i` followed by U+0307, U+212A becomes `k`,
@@ -159,28 +195,34 @@ and the column sections — are payload: the renderer moves them with their row 
   Ps, Pe, Pi, Pf, Po, Sm, Sc, Sk, So, Cc, Cf, Co, Cn, Zs, Zl or Zp, other than an Alphabetic character of
   Unicode 13.0.0, the space and `-`, so a character assigned after Unicode 13.0.0 is removed; each
   JavaScript white space character then written `-`, of which only the space is left. **S_GL**
-  (GitLab): the text lowercased as under S_GH; every character kept whose general category in Unicode
+  (GitLab): the text lowercased by Rust's `to_lowercase`, the full mapping with its Final_Sigma
+  condition as under S_VS, so a final Σ is ς; every character kept whose general category in Unicode
   17.0.0 is a letter, a mark, a number or connector punctuation, and the space and `-`, the others
   removed; each space then written `-`. None of them normalizes the text, trims hyphens or collapses
   runs: `café` and `cafe` have different slugs, and so do `items row  T1` and `items row T1`. The
   engine's Unicode data is that of Go's `unicode` package, 17.0.0, and, for S_VS's removal, a table
   generated from the Unicode 13.0.0 data files. Grounding: the slug vectors, the ids the viewers
   themselves render, recorded on 2026-10-11 by `make slug-vectors` (`scripts/record-slugs.mjs`) into
-  `store/testdata/slug`, which S_GH and S_VS reproduce exactly: for every code point but the
+  `store/testdata/slug`, which S_GH, S_VS and S_GL reproduce exactly: for every code point but the
   surrogates, a heading holding it as a numeric reference and as itself, and structural cases of
   spaces, tabs, underscores, hyphens, references, escapes, emphasis, code spans, links, images, raw HTML,
-  line breaks and repeated headings. GitHub's are rendered by its own renderer, `POST /markdown` of the
+  line breaks, math spans, footnote references and repeated headings. GitHub's are rendered by its own renderer, `POST /markdown` of the
   REST API in mode `markdown`, which writes each heading anchor as `user-content-` and the id; they keep
   U+107A5, U+1CCF0 and U+A7F2, assigned after Unicode 13.0.0, and match the word characters of Unicode
   17.0.0 at every code point. VS Code's are rendered by running its own code at its latest stable
   release, 1.141.0: `githubSlugifier` of `extensions/markdown-language-features/src/slugify.ts`, kept
   with VS Code's MIT license in `store/testdata/slug`, whose expression the engine's Unicode 13.0.0
   table equals at every code point, and the `#tokenToPlainText` method of `markdownEngine.ts`, on
-  markdown-it 14.3.2 as its `package-lock.json` pins. comrak 0.56.0's `Anchorizer` renders GitLab's
-  heading ids through gitlab-glfm-markdown 0.0.45, whose `Cargo.lock` pins finl_unicode 1.4.0, the
-  crate comrak reads the categories from, whose tables are those of Unicode 17.0.0. Re-recording is
-  `make slug-vectors`, with the network, an authenticated `gh` and npm; a viewer that changes shows as
-  a vector the slugs no longer reproduce.
+  markdown-it 14.3.2 as its `package-lock.json` pins, with `@vscode/markdown-it-katex` 1.1.2 as the
+  markdown-math extension's `package-lock.json` pins and its `extension.ts` configures it. GitLab's are
+  rendered by running gitlab-glfm-markdown 0.0.45, the version and sha256 that GitLab's `Gemfile.lock`
+  pins, built from the gem's own sources — its command line binary, which renders through comrak
+  0.56.0 as its Ruby extension does, without the Ruby binding — with the options of GitLab's
+  `GlfmMarkdown` engine, `math_dollars`, `math_code` and `footnotes` among them, and the prefix
+  `user-content-`; comrak's `Anchorizer` writes the id, and the gem's `Cargo.lock` pins finl_unicode
+  1.4.0, the crate comrak reads the categories from, whose tables are those of Unicode 17.0.0.
+  Re-recording is `make slug-vectors`, with the network, an authenticated `gh`, npm and cargo; a
+  viewer that changes shows as a vector the slugs no longer reproduce.
 - **The collision rule.** A heading is every ATX heading, also after a block-quote or list-item marker,
   and every paragraph followed by a setext underline, the whole paragraph after the link reference
   definitions at its start being the heading, outside fenced blocks; a detail heading is one too. Those

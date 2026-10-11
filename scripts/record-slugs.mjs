@@ -1,14 +1,17 @@
-// The recorder of the slug vectors: the heading ids that GitHub and VS Code render, observed from the viewers themselves,
-// which store's tests require S_GH and S_VS to reproduce (spec 10, Detail headings and anchors). It writes, under
-// store/testdata/slug, for each viewer a code point file, the id of a heading holding each code point but the
-// surrogates, and a heading file, the ids of the structural cases below; for GitHub also the id and name attributes it
-// renders for raw HTML. GitHub is asked through `gh api` (POST /markdown, mode markdown, the mode that renders heading
+// The recorder of the slug vectors: the heading ids that GitHub, VS Code and GitLab render, observed from the viewers
+// themselves, which store's tests require S_GH, S_VS and S_GL to reproduce (spec 10, Detail headings and anchors). It
+// writes, under store/testdata/slug, for each viewer a code point file, the id of a heading holding each code point but
+// the surrogates, and a heading file, the ids of the structural cases below; for GitHub also the id and name attributes
+// it renders for raw HTML. GitHub is asked through `gh api` (POST /markdown, mode markdown, the mode that renders heading
 // anchors); VS Code is run: the latest release's slugify.ts and the #tokenToPlainText method of markdownEngine.ts of
 // extensions/markdown-language-features, at the release tag, with the markdown-it version its package-lock.json pins,
-// configured as the preview configures it by default. It needs the network, an authenticated gh and npm; `make
-// slug-vectors` runs it.
+// configured as the preview configures it by default, and the markdown-it-katex plugin that its markdown-math
+// extension contributes by default; GitLab is run: the gitlab-glfm-markdown gem that GitLab's Gemfile.lock pins, built
+// from its own sources, with the options of GitLab's engine. It needs the network, an authenticated gh, npm and cargo;
+// `make slug-vectors` runs it.
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -198,6 +201,22 @@ export const structuralCases = [
   ['a heading equal to a later number', '# a-2\n\n# a\n\n# a\n\n# a'],
   ['duplicates in a block quote and a list', '> # a\n\n- # a\n\n# a'],
   ['detail heading shape', '## items row T1\n\n## items row T1\n\n## Items Row T1'],
+  ['math spans', '# items row $T<b>1$\n\n# items row $T&#49;$\n\n# a $b$ c'],
+  ['math spans and code', '# a $`b  c`$ d\n\n# a $$b  c$$ d\n\n# a `$b$` c'],
+  ['math delimiters that open nothing', '# a $ b $ c\n\n# a $b $ c\n\n# a $b$1 c\n\n# a$b$c\n\n# a $$$b$$$ c'],
+  ['math with escapes', '# a \\$b$ c\n\n# a $b\\$c$ d\n\n# a $b\\\\$ c'],
+  ['math in emphasis and links', '# *a $b*$ c*\n\n# [a $]$](/u) b\n\n# ![a $b$](/i.png) c'],
+  ['math across a line', 'a $b\nc$ d\n===\n\na $$b\nc$$ d\n==='],
+  ['math after inline HTML', '# <span class="x">a $b$ c</span>\n\n# <b>a $b$ c</b>\n\n# <span class="x">*a* $b$</span>'],
+];
+
+/**
+ * The structural cases of GitLab alone: footnote references by label, which S_GL reads as comrak's footnotes do. GitHub
+ * renders a footnote reference as its number, which S_GH does not read, so these are not cases of GitHub or VS Code.
+ */
+export const gitlabCases = [
+  ['footnote references by label', '# a[^note] b[^Q] c[^x] d\n\n[^note]: n\n\n[^q]:\n\n[r]: /u'],
+  ['footnote references with markup', '# a[^b<i>c] d[^e*f*] g[^h i] ![^note]\n\n[^note]: n'],
 ];
 
 /**
@@ -371,6 +390,24 @@ export function methodSource(src, head) {
   throw new Error(`${head} does not close`);
 }
 
+/**
+ * The options that VS Code's markdown-math extension.ts passes to @vscode/markdown-it-katex: the boolean members of its
+ * `const options = {…}`, and macros, which are the user's markdown.math.macros, empty by default. Any other member is
+ * an error, so a changed extension shows here.
+ */
+export function katexOptions(src) {
+  const m = src.match(/const options = \{([^}]*\{[^}]*\}[^}]*|[^}]*)\};/);
+  if (!m) throw new Error('no options in markdown-math extension.ts');
+  const options = {};
+  for (const line of m[1].split('\n').map(l => l.trim().replace(/,$/, '')).filter(Boolean)) {
+    const b = line.match(/^(\w+): (true|false)$/);
+    if (b) options[b[1]] = b[2] === 'true';
+    else if (line === 'macros: { ...settingsMacros }') options.macros = {};
+    else throw new Error(`an option of markdown-math that the recorder does not read: ${line}`);
+  }
+  return options;
+}
+
 async function recordVSCode() {
   const tag = JSON.parse(execFileSync('gh', ['api', 'repos/microsoft/vscode/releases/latest']).toString('utf8')).tag_name;
   const base = 'extensions/markdown-language-features';
@@ -380,9 +417,21 @@ async function recordVSCode() {
   const mdVersion = lock.packages['node_modules/markdown-it'].version;
   const nodeVersion = vscodeFile('.nvmrc', tag).trim();
   const ts = JSON.parse(vscodeFile('package-lock.json', tag)).packages['node_modules/typescript'];
+  // The markdown-math extension, which VS Code ships with markdown.math.enabled true by default, contributes
+  // @vscode/markdown-it-katex to the engine; its options are those of its extension.ts.
+  const mathBase = 'extensions/markdown-math';
+  const mathExtension = vscodeFile(`${mathBase}/src/extension.ts`, tag);
+  const mathLock = JSON.parse(vscodeFile(`${mathBase}/package-lock.json`, tag)).packages;
+  const katexPluginVersion = mathLock['node_modules/@vscode/markdown-it-katex'].version;
+  const katexVersion = mathLock['node_modules/katex'].version;
+  const mathOptions = katexOptions(mathExtension);
+  const mathEnabled = JSON.parse(vscodeFile(`${mathBase}/package.json`, tag)).contributes.configuration
+    .flatMap(c => Object.entries(c.properties ?? {}))
+    .find(([k]) => k === 'markdown.math.enabled')[1].default;
+  if (mathEnabled !== true) throw new Error(`markdown.math.enabled defaults to ${mathEnabled}`);
   const work = mkdtempSync(path.join(tmpdir(), 'record-slugs-'));
   try {
-    execFileSync('npm', ['install', '--prefix', work, '--no-save', '--ignore-scripts', '--no-audit', '--no-fund', `markdown-it@${mdVersion}`, `typescript@npm:${ts.name ?? 'typescript'}@${ts.version}`], { stdio: 'ignore' });
+    execFileSync('npm', ['install', '--prefix', work, '--no-save', '--ignore-scripts', '--no-audit', '--no-fund', `markdown-it@${mdVersion}`, `typescript@npm:${ts.name ?? 'typescript'}@${ts.version}`, `@vscode/markdown-it-katex@${katexPluginVersion}`, `katex@${katexVersion}`], { stdio: 'ignore' });
     const typescript = (await import(pathToFileURL(path.join(work, 'node_modules', 'typescript', 'lib', 'typescript.js')).href)).default;
     // The TypeScript sources compiled as VS Code compiles them, by the TypeScript its package-lock.json pins.
     const compile = src => typescript.transpileModule(src, { compilerOptions: { target: typescript.ScriptTarget.ES2022, module: typescript.ModuleKind.ESNext } }).outputText;
@@ -392,8 +441,10 @@ async function recordVSCode() {
     const { githubSlugifier } = await import(pathToFileURL(path.join(work, 'slugify.mjs')).href);
     const { Engine } = await import(pathToFileURL(path.join(work, 'plain.mjs')).href);
     const markdownit = (await import(pathToFileURL(path.join(work, 'node_modules', 'markdown-it', 'index.mjs')).href)).default;
-    const md = markdownit({ html: true, breaks: false, linkify: true, typographer: false });
+    const katexPlugin = (await import(pathToFileURL(path.join(work, 'node_modules', '@vscode', 'markdown-it-katex', 'dist', 'index.js')).href)).default.default;
+    let md = markdownit({ html: true, breaks: false, linkify: true, typographer: false });
     md.linkify.set({ fuzzyLink: false });
+    md = md.use(katexPlugin, mathOptions);
     const plain = new Engine();
     // The heading ids of #addNamedHeaders: the slug builder of the render, fed the plain text of each heading's
     // inline token.
@@ -410,7 +461,8 @@ async function recordVSCode() {
       "VS Code's heading ids per code point (spec 10, Detail headings and anchors), the vectors of S_VS.",
       `Recorded ${today()} by running VS Code ${tag}'s own code: ${base}/src/slugify.ts (githubSlugifier) and`,
       `the #tokenToPlainText method of src/markdownEngine.ts, with markdown-it ${mdVersion} as its package-lock.json`,
-      `pins, configured as the preview's defaults (html, linkify without fuzzy links, no breaks, no typographer);`,
+      `pins, configured as the preview's defaults (html, linkify without fuzzy links, no breaks, no typographer),`,
+      `with @vscode/markdown-it-katex ${katexPluginVersion} (katex ${katexVersion}) as ${mathBase} contributes it, enabled by default;`,
       `node ${process.versions.node} (Unicode ${process.versions.unicode}), VS Code ${tag} names node ${nodeVersion}.`,
       'Re-record with make slug-vectors (scripts/record-slugs.mjs).',
     ];
@@ -420,7 +472,7 @@ async function recordVSCode() {
     const file = {
       viewer: 'VS Code',
       recorded: today(),
-      request: `VS Code ${tag}: ${base}/src/slugify.ts and markdownEngine.ts #tokenToPlainText, markdown-it ${mdVersion}, node ${process.versions.node}`,
+      request: `VS Code ${tag}: ${base}/src/slugify.ts and markdownEngine.ts #tokenToPlainText, markdown-it ${mdVersion}, @vscode/markdown-it-katex ${katexPluginVersion} with ${JSON.stringify(mathOptions)}, node ${process.versions.node}`,
       rerecord: 'make slug-vectors (scripts/record-slugs.mjs)',
       cases: structuralCases.map(([name, markdown]) => ({ name, markdown, ids: render(markdown + '\n') })),
     };
@@ -433,10 +485,131 @@ async function recordVSCode() {
   }
 }
 
+/**
+ * The command line options of the gitlab-glfm-markdown CLI that the OPTIONS of GitLab's GlfmMarkdown engine
+ * (lib/banzai/filter/markdown_engines/glfm_markdown.rb) name: each true member as its flag, header_id_prefix as
+ * Banzai::Renderer::USER_CONTENT_ID_PREFIX, only_escape_chars as REFERENCE_CHARS. A false member is the CLI's default.
+ * Any other value is an error, so a changed engine shows here.
+ */
+export function glfmArgs(src) {
+  const body = src.match(/OPTIONS = \{([^}]*)\}\.freeze/);
+  if (!body) throw new Error('no OPTIONS in glfm_markdown.rb');
+  const chars = src.match(/REFERENCE_CHARS = %w\[([^\]]*)\]\.freeze/);
+  const args = [];
+  for (const line of body[1].split('\n').map(l => l.trim().replace(/,$/, '')).filter(Boolean)) {
+    const m = line.match(/^(\w+): (.+)$/);
+    if (!m) throw new Error(`an OPTIONS line the recorder does not read: ${line}`);
+    const flag = `--${m[1].replaceAll('_', '-')}`;
+    if (m[2] === 'true') args.push(flag);
+    else if (m[2] === 'false') continue;
+    else if (m[1] === 'header_id_prefix' && m[2] === 'Banzai::Renderer::USER_CONTENT_ID_PREFIX') args.push(flag, 'user-content-');
+    else if (m[1] === 'only_escape_chars' && m[2] === 'REFERENCE_CHARS' && chars) args.push(flag, chars[1].split(/\s+/).join(''));
+    else throw new Error(`an OPTIONS value the recorder does not read: ${line}`);
+  }
+  return args;
+}
+
+/**
+ * The heading ids of the gitlab-glfm-markdown rendering html, one per heading element in order: the id of a heading
+ * comrak renders, which carries data-sourcepos, without user-content-; null for raw HTML, which comrak writes as it
+ * stands and gives no id of its own.
+ */
+export function gitlabIds(html) {
+  return [...html.matchAll(/<h[1-6](\s[^>]*)?>/gi)].map(m => {
+    const attrs = m[1] ?? '';
+    if (!/\sdata-sourcepos="/.test(attrs)) return null;
+    const id = attrs.match(/\sid="([^"]*)"/);
+    if (!id) throw new Error(`a heading of comrak without an id: ${m[0]}`);
+    const v = unescapeAttr(id[1]);
+    if (!v.startsWith('user-content-')) throw new Error(`a heading id without user-content-: ${v}`);
+    return v.slice('user-content-'.length);
+  });
+}
+
+/** The text of a URL, or an error naming it. */
+async function fetchText(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`${url}: ${res.status}`);
+  return res.text();
+}
+
+/**
+ * Builds the CLI of gitlab-glfm-markdown at version, whose gem must have the sha256 GitLab's Gemfile.lock records, in
+ * work, and returns its path. The CLI is the gem's own binary target (src/main.rs, with src/glfm.rs and
+ * src/formatter.rs, which render through comrak as the Ruby extension does); it is built with the gem's Cargo.lock and
+ * dependencies, without the Ruby binding (magnus, rb-sys, serde_magnus), which only src/lib.rs uses.
+ */
+async function buildGlfm(version, sha256, work) {
+  const res = await fetch(`https://rubygems.org/downloads/gitlab-glfm-markdown-${version}.gem`);
+  if (!res.ok) throw new Error(`gitlab-glfm-markdown ${version}: ${res.status}`);
+  const gem = Buffer.from(await res.arrayBuffer());
+  const got = createHash('sha256').update(gem).digest('hex');
+  if (got !== sha256) throw new Error(`gitlab-glfm-markdown ${version} has sha256 ${got}; GitLab's Gemfile.lock records ${sha256}`);
+  const src = path.join(work, 'gem');
+  mkdirSync(src);
+  writeFileSync(path.join(work, 'gem.tar'), gem);
+  execFileSync('tar', ['-xf', path.join(work, 'gem.tar'), '-C', src]);
+  execFileSync('tar', ['-xzf', path.join(src, 'data.tar.gz'), '-C', src]);
+  const ext = path.join(src, 'ext', 'gitlab_glfm_markdown');
+  const toml = readFileSync(path.join(ext, 'Cargo.toml'), 'utf8');
+  const section = name => (toml.match(new RegExp(`^\\[${name}\\]\\n([^]*?)(?=^\\[|(?![^]))`, 'm')) ?? [])[1] ?? '';
+  const deps = section('dependencies').split('\n').filter(l => !/^(magnus|rb-sys|serde_magnus)\s*=/.test(l)).join('\n');
+  const harness = path.join(work, 'harness');
+  mkdirSync(harness);
+  writeFileSync(path.join(harness, 'Cargo.toml'), [
+    '[package]', 'name = "glfm-cli"', `version = "${version}"`, 'edition = "2021"', 'publish = false', '',
+    '[[bin]]', 'name = "glfm"', `path = ${JSON.stringify(path.join(ext, 'src', 'main.rs'))}`, '',
+    '[dependencies]', deps.trim(), '',
+    '[features]', 'default = ["cli"]', section('features').trim(), '',
+  ].join('\n'));
+  writeFileSync(path.join(harness, 'Cargo.lock'), readFileSync(path.join(ext, 'Cargo.lock')));
+  log(`GitLab: building gitlab-glfm-markdown ${version}'s CLI`);
+  execFileSync('cargo', ['build', '--release', '--quiet', '--manifest-path', path.join(harness, 'Cargo.toml')], { stdio: 'inherit' });
+  return path.join(harness, 'target', 'release', 'glfm');
+}
+
+async function recordGitLab() {
+  const project = 'https://gitlab.com/api/v4/projects/gitlab-org%2Fgitlab';
+  const commit = JSON.parse(await fetchText(`${project}/repository/commits/master`)).id;
+  const raw = file => fetchText(`https://gitlab.com/gitlab-org/gitlab/-/raw/${commit}/${file}`);
+  const lock = (await raw('Gemfile.lock')).match(/^ {2}gitlab-glfm-markdown \(([0-9.]+)\) sha256=([0-9a-f]{64})$/m);
+  if (!lock) throw new Error("no gitlab-glfm-markdown checksum in GitLab's Gemfile.lock");
+  const [, version, sha256] = lock;
+  const engineFile = 'lib/banzai/filter/markdown_engines/glfm_markdown.rb';
+  const args = glfmArgs(await raw(engineFile));
+  const work = mkdtempSync(path.join(tmpdir(), 'record-slugs-'));
+  try {
+    const bin = await buildGlfm(version, sha256, work);
+    const render = text => gitlabIds(execFileSync(bin, args, { input: text, maxBuffer: 1 << 30 }).toString('utf8'));
+    const options = args.join(' ');
+    const header = [
+      "GitLab's heading ids per code point (spec 10, Detail headings and anchors), the vectors of S_GL.",
+      `Recorded ${today()} by running gitlab-glfm-markdown ${version}, the version and sha256 GitLab's Gemfile.lock`,
+      `pins at commit ${commit}, with the OPTIONS of its ${engineFile}:`,
+      options,
+      'Each heading id is user-content- and the id here. Re-record with make slug-vectors (scripts/record-slugs.mjs).',
+    ];
+    const ref = codePointIds('ref', render, 'GitLab');
+    const rawIds = codePointIds('raw', render, 'GitLab');
+    writeFileSync(path.join(vectorDir, 'gitlab-codepoints.txt'), codePointFile(header, ref, rawIds));
+    const file = {
+      viewer: 'GitLab',
+      recorded: today(),
+      request: `gitlab-glfm-markdown ${version} (GitLab ${commit}), ${options}; ids without user-content-`,
+      rerecord: 'make slug-vectors (scripts/record-slugs.mjs)',
+      cases: [...structuralCases, ...gitlabCases].map(([name, markdown]) => ({ name, markdown, ids: render(markdown + '\n') })),
+    };
+    writeFileSync(path.join(vectorDir, 'gitlab-headings.json'), JSON.stringify(file, null, 1) + '\n');
+  } finally {
+    rmSync(work, { recursive: true, force: true });
+  }
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   mkdirSync(vectorDir, { recursive: true });
   const which = process.argv.slice(2);
   if (which.length === 0 || which.includes('github')) recordGitHub();
   if (which.length === 0 || which.includes('vscode')) await recordVSCode();
+  if (which.length === 0 || which.includes('gitlab')) await recordGitLab();
   log(`wrote ${vectorDir}`);
 }

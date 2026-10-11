@@ -1,7 +1,8 @@
 # VS Code's heading ids per code point (spec 10, Detail headings and anchors), the vectors of S_VS.
 # Recorded 2026-10-11 by running VS Code 1.141.0's own code: extensions/markdown-language-features/src/slugify.ts (githubSlugifier) and
 # the #tokenToPlainText method of src/markdownEngine.ts, with markdown-it 14.3.2 as its package-lock.json
-# pins, configured as the preview's defaults (html, linkify without fuzzy links, no breaks, no typographer);
+# pins, configured as the preview's defaults (html, linkify without fuzzy links, no breaks, no typographer),
+# with @vscode/markdown-it-katex 1.1.2 (katex 0.16.21) as extensions/markdown-math contributes it, enabled by default;
 # node 26.8.1 (Unicode 17.0), VS Code 1.141.0 names node 24.18.0.
 # Re-record with make slug-vectors (scripts/record-slugs.mjs).
 #

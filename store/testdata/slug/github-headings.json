@@ -432,6 +432,70 @@
     "items-row-t1-1",
     "items-row-t1-2"
    ]
+  },
+  {
+   "name": "math spans",
+   "markdown": "# items row $T<b>1$\n\n# items row $T&#49;$\n\n# a $b$ c",
+   "ids": [
+    "items-row-t1",
+    "items-row-t1-1",
+    "a-b-c"
+   ]
+  },
+  {
+   "name": "math spans and code",
+   "markdown": "# a $`b  c`$ d\n\n# a $$b  c$$ d\n\n# a `$b$` c",
+   "ids": [
+    "a-b--c-d",
+    "a-b--c-d-1",
+    "a-b-c"
+   ]
+  },
+  {
+   "name": "math delimiters that open nothing",
+   "markdown": "# a $ b $ c\n\n# a $b $ c\n\n# a $b$1 c\n\n# a$b$c\n\n# a $$$b$$$ c",
+   "ids": [
+    "a--b--c",
+    "a-b--c",
+    "a-b1-c",
+    "abc",
+    "a-b-c"
+   ]
+  },
+  {
+   "name": "math with escapes",
+   "markdown": "# a \\$b$ c\n\n# a $b\\$c$ d\n\n# a $b\\\\$ c",
+   "ids": [
+    "a-b-c",
+    "a-bc-d",
+    "a-b-c-1"
+   ]
+  },
+  {
+   "name": "math in emphasis and links",
+   "markdown": "# *a $b*$ c*\n\n# [a $]$](/u) b\n\n# ![a $b$](/i.png) c",
+   "ids": [
+    "a-b-c",
+    "a-u-b",
+    "-c"
+   ]
+  },
+  {
+   "name": "math across a line",
+   "markdown": "a $b\nc$ d\n===\n\na $$b\nc$$ d\n===",
+   "ids": [
+    "a-bc-d",
+    "a-bc-d-1"
+   ]
+  },
+  {
+   "name": "math after inline HTML",
+   "markdown": "# <span class=\"x\">a $b$ c</span>\n\n# <b>a $b$ c</b>\n\n# <span class=\"x\">*a* $b$</span>",
+   "ids": [
+    "a-b-c",
+    "a-b-c-1",
+    "a-b"
+   ]
   }
  ],
  "attributes": [

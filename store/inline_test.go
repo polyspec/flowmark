@@ -120,6 +120,46 @@ func TestInlineAlt(t *testing.T) {
 	}
 }
 
+// TestViewerReadings pins the readings of VS Code and GitLab: each viewer's math, and
+// GitLab's footnote references, accepted and refused.
+func TestViewerReadings(t *testing.T) {
+	notes := linkRefs{gl: &linkRefs{keys: map[string]bool{}, notes: map[string]bool{"n": true}}}
+	cases := []struct {
+		name, in, vs, gl string
+	}{
+		{"10#detail-headings-and-anchors: a math span", "a $b$ c", "a  c", "a b c"},
+		{"10#detail-headings-and-anchors: GitLab keeps the source of math, a tag included", "$T<b>1$", "", "T<b>1"},
+		{"10#detail-headings-and-anchors: GitLab normalizes one-dollar math as a code span", "$ b $", "", "$ b $"},
+		{"10#detail-headings-and-anchors: GitLab opens no one-dollar math before a space", "a $ b$ c", "a  c", "a $ b$ c"},
+		{"10#detail-headings-and-anchors: GitLab closes no math before a digit", "$b$1", "$b$1", "$b$1"},
+		{"10#detail-headings-and-anchors: GitLab takes two-dollar math as it stands", "$$ b $$", "", " b "},
+		{"10#detail-headings-and-anchors: three dollars open nothing", "$$$b$$$", "$$$b$$$", "$$$b$$$"},
+		{"10#detail-headings-and-anchors: code math", "$`b  c`$", "", "b  c"},
+		{"10#detail-headings-and-anchors: empty code math opens nothing in GitLab", "$``$", "", "$``$"},
+		{"10#detail-headings-and-anchors: an escaped dollar opens nothing", `\$b$`, "$b$", "$b$"},
+		{"10#detail-headings-and-anchors: a dollar after a backslash closes nothing in GitLab", `$b\$c$`, "", `b\$c`},
+		{"10#detail-headings-and-anchors: VS Code opens no math after a word character", "a$b$", "a$b$", "ab"},
+		{"10#detail-headings-and-anchors: VS Code closes no math before a word character", "$b$c", "$b$c", "bc"},
+		{"10#detail-headings-and-anchors: VS Code's guard after a long tag", "<span>$b$", "$b$", "b"},
+		{"10#detail-headings-and-anchors: a code span ends VS Code's guard", "<span>`x`$b$", "x", "xb"},
+		{"10#detail-headings-and-anchors: a link ends VS Code's guard at its bracket", "<span>[$b$](/u)", "", "b"},
+		{"10#detail-headings-and-anchors: a defined footnote reference is no text in GitLab", "a[^n]", "a[^n]", "a"},
+		{"10#detail-headings-and-anchors: an undefined footnote reference is restored", "a[^m<i>x] *b*", "a[^mx] b", "a[^m<i>x] b"},
+		{"10#detail-headings-and-anchors: a footnote reference stops emphasis inside it", "*a[^m*]", "a[^m]", "*a[^m*]"},
+		{"10#detail-headings-and-anchors: a code span in brackets is no footnote reference", "[^`n`]", "[^n]", "[^n]"},
+		{"10#detail-headings-and-anchors: a nested bracket is no footnote reference", "[^n[x]]", "[^n[x]]", "[^n[x]]"},
+		{"10#detail-headings-and-anchors: an image's footnote reference loses its '!'", "![^m]", "![^m]", "[^m]"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			res := viewerText(c.in, notes)
+			if shown(res.vs) != c.vs || shown(res.gl) != c.gl {
+				t.Fatalf("viewerText(%q) = vs %q, gl %q; want %q, %q", c.in, shown(res.vs), shown(res.gl), c.vs, c.gl)
+			}
+		})
+	}
+}
+
 // TestInlineBreaks requires a reading to hold its line breaks apart from its text, so
 // S_GH joins its lines with nothing and S_GL with a space.
 func TestInlineBreaks(t *testing.T) {

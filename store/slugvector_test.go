@@ -12,8 +12,9 @@ import (
 )
 
 // The slug vectors of spec 10 (Detail headings and anchors): the heading ids that
-// GitHub and VS Code render, recorded from the viewers by scripts/record-slugs.mjs
-// (make slug-vectors) into testdata/slug. S_GH and S_VS must reproduce every one.
+// GitHub, VS Code and GitLab render, recorded from the viewers by
+// scripts/record-slugs.mjs (make slug-vectors) into testdata/slug. S_GH, S_VS and S_GL
+// must reproduce every one.
 
 // cpVector is a line of a code point file: the code points lo to hi, the surrogates
 // skipped, and the treatment of each in the reference form and in the raw form.
@@ -96,12 +97,9 @@ func cpForm(cp rune, raw bool) string {
 	return string(cp)
 }
 
-// viewerSlug is a viewer's slug of a heading's rendered text: S_GH reads the text
-// without the text of images, S_VS with their alt text.
+// viewerSlug is a viewer's slug of a heading's rendered text, as the collision rule
+// reads it: ghSlug, vsSlug or glSlug.
 type viewerSlug func(inlineResult) string
-
-func ghOfReading(r inlineResult) string { return slugGH(strings.Join(r.text, "")) }
-func vsOfReading(r inlineResult) string { return slugVS(strings.Join(r.alt, "")) }
 
 // checkCodePoints requires slug to give, for every code point of the file in each of
 // its forms, the heading -c- the id -t-, t the code point's recorded id.
@@ -122,7 +120,7 @@ func checkCodePoints(t *testing.T, file string, slug viewerSlug) {
 				}
 				_, content := atxContent("-" + cpForm(cp, form.raw) + "-")
 				want := "-" + cpID(t, cp, form.spec) + "-"
-				if got := slug(inlineText(content, linkRefs{})); got != want {
+				if got := slug(viewerText(content, linkRefs{})); got != want {
 					n++
 					if len(bad) < 12 {
 						bad = append(bad, fmt.Sprintf("%U raw=%v: %+q, want %+q", cp, form.raw, got, want))
@@ -138,12 +136,17 @@ func checkCodePoints(t *testing.T, file string, slug viewerSlug) {
 
 // TestGitHubCodePoints requires S_GH to reproduce GitHub's id of every code point.
 func TestGitHubCodePoints(t *testing.T) {
-	checkCodePoints(t, "testdata/slug/github-codepoints.txt", ghOfReading)
+	checkCodePoints(t, "testdata/slug/github-codepoints.txt", ghSlug)
 }
 
 // TestVSCodeCodePoints requires S_VS to reproduce VS Code's id of every code point.
 func TestVSCodeCodePoints(t *testing.T) {
-	checkCodePoints(t, "testdata/slug/vscode-codepoints.txt", vsOfReading)
+	checkCodePoints(t, "testdata/slug/vscode-codepoints.txt", vsSlug)
+}
+
+// TestGitLabCodePoints requires S_GL to reproduce GitLab's id of every code point.
+func TestGitLabCodePoints(t *testing.T) {
+	checkCodePoints(t, "testdata/slug/gitlab-codepoints.txt", glSlug)
 }
 
 // headingFile is a heading file: the structural cases, each a document and the id of
@@ -188,7 +191,7 @@ func headingReadings(lines []string) []inlineResult {
 	setext := setextStarts(sc.blocks)
 	var out []inlineResult
 	for _, h := range sc.all {
-		out = append(out, inlineText(headingElement(lines, h, setext).text, g))
+		out = append(out, viewerText(headingElement(lines, h, setext).text, g))
 	}
 	return out
 }
@@ -230,12 +233,17 @@ func checkHeadings(t *testing.T, file string, slug viewerSlug) {
 
 // TestGitHubHeadings requires S_GH to reproduce GitHub's structural cases.
 func TestGitHubHeadings(t *testing.T) {
-	checkHeadings(t, "testdata/slug/github-headings.json", ghOfReading)
+	checkHeadings(t, "testdata/slug/github-headings.json", ghSlug)
 }
 
 // TestVSCodeHeadings requires S_VS to reproduce VS Code's structural cases.
 func TestVSCodeHeadings(t *testing.T) {
-	checkHeadings(t, "testdata/slug/vscode-headings.json", vsOfReading)
+	checkHeadings(t, "testdata/slug/vscode-headings.json", vsSlug)
+}
+
+// TestGitLabHeadings requires S_GL to reproduce GitLab's structural cases.
+func TestGitLabHeadings(t *testing.T) {
+	checkHeadings(t, "testdata/slug/gitlab-headings.json", glSlug)
 }
 
 // TestGitHubAttributes requires the collision rule to refuse every raw HTML id or name

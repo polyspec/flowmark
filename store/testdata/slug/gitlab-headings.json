@@ -1,0 +1,515 @@
+{
+ "viewer": "GitLab",
+ "recorded": "2026-10-11",
+ "request": "gitlab-glfm-markdown 0.0.45 (GitLab 696fef3904c18e549f85545d1b66002446a504b2), --alerts --autolink --cjk-friendly-emphasis --description-lists --escaped-char-spans --footnotes --full-info-string --header-accessibility --header-id-prefix user-content- --inapplicable-tasks --math-code --math-dollars --multiline-block-quotes --only-escape-chars $%#&@!~^: --placeholder-detection --relaxed-autolinks --relaxed-tasklist-character --sourcepos --strikethrough --table --tasklist --tasklist-classes --tasklist-in-table --wikilinks-title-before-pipe --unsafe; ids without user-content-",
+ "rerecord": "make slug-vectors (scripts/record-slugs.mjs)",
+ "cases": [
+  {
+   "name": "spaces",
+   "markdown": "# a b  c   d",
+   "ids": [
+    "a-b--c---d"
+   ]
+  },
+  {
+   "name": "leading and trailing spaces by reference",
+   "markdown": "# &#32;a b&#32;",
+   "ids": [
+    "-a-b-"
+   ]
+  },
+  {
+   "name": "tabs",
+   "markdown": "# a\tb\t\tc",
+   "ids": [
+    "abc"
+   ]
+  },
+  {
+   "name": "tabs by reference",
+   "markdown": "# &#9;a&#9;b&#9;",
+   "ids": [
+    "ab"
+   ]
+  },
+  {
+   "name": "no-break and ideographic spaces",
+   "markdown": "# a b　c d",
+   "ids": [
+    "abcd"
+   ]
+  },
+  {
+   "name": "line feed by reference",
+   "markdown": "# a&#10;b",
+   "ids": [
+    "ab"
+   ]
+  },
+  {
+   "name": "underscores",
+   "markdown": "# a_b __c__ _d_ snake_case_",
+   "ids": [
+    "a_b-c-d-snake_case_"
+   ]
+  },
+  {
+   "name": "hyphens",
+   "markdown": "# -a--b- - -",
+   "ids": [
+    "-a--b-----"
+   ]
+  },
+  {
+   "name": "ASCII punctuation",
+   "markdown": "# a!\"#$%&'()*+,./:;<=>?@[\\\\]^`{|}~b",
+   "ids": [
+    "ab"
+   ]
+  },
+  {
+   "name": "character references",
+   "markdown": "# a&amp;b &copy; &#x41; &#65; &nbsp; &ouml;",
+   "ids": [
+    "ab--a-a--ö"
+   ]
+  },
+  {
+   "name": "backslash escapes",
+   "markdown": "# \\*a\\* \\_b\\_ \\# \\\\",
+   "ids": [
+    "a-_b_--"
+   ]
+  },
+  {
+   "name": "emphasis",
+   "markdown": "# *a* **b** _c_ __d__ ***e***",
+   "ids": [
+    "a-b-c-d-e"
+   ]
+  },
+  {
+   "name": "unmatched delimiters",
+   "markdown": "# *a _b c* d_",
+   "ids": [
+    "a-_b-c-d_"
+   ]
+  },
+  {
+   "name": "intraword underscore",
+   "markdown": "# foo_bar_baz",
+   "ids": [
+    "foo_bar_baz"
+   ]
+  },
+  {
+   "name": "strikethrough",
+   "markdown": "# ~~a~~ ~b~",
+   "ids": [
+    "a-b"
+   ]
+  },
+  {
+   "name": "code spans",
+   "markdown": "# `a  b` `` c`d `` ` e `",
+   "ids": [
+    "a--b-cd-e"
+   ]
+  },
+  {
+   "name": "code span of spaces",
+   "markdown": "# x`  `y",
+   "ids": [
+    "x--y"
+   ]
+  },
+  {
+   "name": "inline link",
+   "markdown": "# [a b](/u \"t\") c",
+   "ids": [
+    "a-b-c"
+   ]
+  },
+  {
+   "name": "reference link",
+   "markdown": "# [a][r] [r] [r][]\n\n[r]: /u",
+   "ids": [
+    "a-r-r"
+   ]
+  },
+  {
+   "name": "undefined reference",
+   "markdown": "# [a][nope] [b]",
+   "ids": [
+    "anope-b"
+   ]
+  },
+  {
+   "name": "autolinks",
+   "markdown": "# <https://x.y/z> <a@b.c>",
+   "ids": [
+    "httpsxyz-abc"
+   ]
+  },
+  {
+   "name": "extended autolinks",
+   "markdown": "# www.example.com https://x.y/z a@b.co",
+   "ids": [
+    "wwwexamplecom-httpsxyz-abco"
+   ]
+  },
+  {
+   "name": "image",
+   "markdown": "# a ![b c](/i.png) d",
+   "ids": [
+    "a-b-c-d"
+   ]
+  },
+  {
+   "name": "image with emphasis in its description",
+   "markdown": "# ![*b* `c`](/i.png)",
+   "ids": [
+    "b-c"
+   ]
+  },
+  {
+   "name": "image in a link",
+   "markdown": "# [![b](/i.png) c](/u)",
+   "ids": [
+    "b-c"
+   ]
+  },
+  {
+   "name": "inline HTML",
+   "markdown": "# a <span id=\"q\">b</span> <!-- c --> d",
+   "ids": [
+    "a-b--d"
+   ]
+  },
+  {
+   "name": "HTML entity in inline HTML",
+   "markdown": "# a<b title=\"&amp;\">c</b>",
+   "ids": [
+    "ac"
+   ]
+  },
+  {
+   "name": "emoji shortcode",
+   "markdown": "# a :smile: b",
+   "ids": [
+    "a-smile-b"
+   ]
+  },
+  {
+   "name": "footnote reference",
+   "markdown": "# a[^1]\n\n[^1]: n",
+   "ids": [
+    "a"
+   ]
+  },
+  {
+   "name": "mention and issue reference",
+   "markdown": "# @octocat #1 GH-1",
+   "ids": [
+    "octocat-1-gh-1"
+   ]
+  },
+  {
+   "name": "setext heading with a soft break",
+   "markdown": "a\nb\n===",
+   "ids": [
+    "a-b"
+   ]
+  },
+  {
+   "name": "setext heading with a hard break by spaces",
+   "markdown": "a  \nb\n===",
+   "ids": [
+    "a-b"
+   ]
+  },
+  {
+   "name": "setext heading with a hard break by backslash",
+   "markdown": "a\\\nb\n===",
+   "ids": [
+    "a-b"
+   ]
+  },
+  {
+   "name": "setext heading after a definition",
+   "markdown": "[r]: /u\na [r]\n---",
+   "ids": [
+    "a-r"
+   ]
+  },
+  {
+   "name": "ATX closing sequence",
+   "markdown": "# a # b ##",
+   "ids": [
+    "a--b"
+   ]
+  },
+  {
+   "name": "empty heading",
+   "markdown": "#\n\n#",
+   "ids": [
+    "",
+    "-1"
+   ]
+  },
+  {
+   "name": "heading of punctuation only",
+   "markdown": "# !!!\n\n# ???",
+   "ids": [
+    "",
+    "-1"
+   ]
+  },
+  {
+   "name": "capitals and dotted I",
+   "markdown": "# ABC İ K Ω",
+   "ids": [
+    "abc-i̇-k-ω"
+   ]
+  },
+  {
+   "name": "final sigma",
+   "markdown": "# ΑΣ ΣΑ Σ ΟΔΟΣ",
+   "ids": [
+    "ας-σα-σ-οδος"
+   ]
+  },
+  {
+   "name": "decomposed and composed",
+   "markdown": "# café café",
+   "ids": [
+    "café-café"
+   ]
+  },
+  {
+   "name": "marks and numbers",
+   "markdown": "# x́ ² Ⅳ ١ ½",
+   "ids": [
+    "x́-²-ⅳ-١-½"
+   ]
+  },
+  {
+   "name": "symbols",
+   "markdown": "# © ™ € → 😀",
+   "ids": [
+    "----"
+   ]
+  },
+  {
+   "name": "format characters",
+   "markdown": "# a​b‍c­d﻿e",
+   "ids": [
+    "abcde"
+   ]
+  },
+  {
+   "name": "duplicates",
+   "markdown": "# a\n\n# a\n\n# a",
+   "ids": [
+    "a",
+    "a-1",
+    "a-2"
+   ]
+  },
+  {
+   "name": "duplicates after a numbered heading",
+   "markdown": "# a-1\n\n# a\n\n# a",
+   "ids": [
+    "a-1",
+    "a",
+    "a-2"
+   ]
+  },
+  {
+   "name": "a numbered heading between duplicates",
+   "markdown": "# a\n\n# a-1\n\n# a",
+   "ids": [
+    "a",
+    "a-1",
+    "a-2"
+   ]
+  },
+  {
+   "name": "a numbered heading after duplicates",
+   "markdown": "# a\n\n# a\n\n# a-1",
+   "ids": [
+    "a",
+    "a-1",
+    "a-1-1"
+   ]
+  },
+  {
+   "name": "duplicates of a numbered heading",
+   "markdown": "# a-1\n\n# a-1\n\n# a",
+   "ids": [
+    "a-1",
+    "a-1-1",
+    "a"
+   ]
+  },
+  {
+   "name": "duplicates under different cases",
+   "markdown": "# A\n\n# a\n\n# A",
+   "ids": [
+    "a",
+    "a-1",
+    "a-2"
+   ]
+  },
+  {
+   "name": "duplicates of empty headings",
+   "markdown": "#\n\n#\n\n# -1",
+   "ids": [
+    "",
+    "-1",
+    "-1-1"
+   ]
+  },
+  {
+   "name": "empty slugs after an empty heading",
+   "markdown": "#\n\n# !\n\n# ?",
+   "ids": [
+    "",
+    "-1",
+    "-2"
+   ]
+  },
+  {
+   "name": "duplicates of empty slugs",
+   "markdown": "# !\n\n# ?\n\n# a",
+   "ids": [
+    "",
+    "-1",
+    "a"
+   ]
+  },
+  {
+   "name": "ten duplicates",
+   "markdown": "# a\n\n# a\n\n# a\n\n# a\n\n# a\n\n# a\n\n# a\n\n# a\n\n# a\n\n# a\n\n# a",
+   "ids": [
+    "a",
+    "a-1",
+    "a-2",
+    "a-3",
+    "a-4",
+    "a-5",
+    "a-6",
+    "a-7",
+    "a-8",
+    "a-9",
+    "a-10"
+   ]
+  },
+  {
+   "name": "a heading equal to a later number",
+   "markdown": "# a-2\n\n# a\n\n# a\n\n# a",
+   "ids": [
+    "a-2",
+    "a",
+    "a-1",
+    "a-3"
+   ]
+  },
+  {
+   "name": "duplicates in a block quote and a list",
+   "markdown": "> # a\n\n- # a\n\n# a",
+   "ids": [
+    "a",
+    "a-1",
+    "a-2"
+   ]
+  },
+  {
+   "name": "detail heading shape",
+   "markdown": "## items row T1\n\n## items row T1\n\n## Items Row T1",
+   "ids": [
+    "items-row-t1",
+    "items-row-t1-1",
+    "items-row-t1-2"
+   ]
+  },
+  {
+   "name": "math spans",
+   "markdown": "# items row $T<b>1$\n\n# items row $T&#49;$\n\n# a $b$ c",
+   "ids": [
+    "items-row-tb1",
+    "items-row-t49",
+    "a-b-c"
+   ]
+  },
+  {
+   "name": "math spans and code",
+   "markdown": "# a $`b  c`$ d\n\n# a $$b  c$$ d\n\n# a `$b$` c",
+   "ids": [
+    "a-b--c-d",
+    "a-b--c-d-1",
+    "a-b-c"
+   ]
+  },
+  {
+   "name": "math delimiters that open nothing",
+   "markdown": "# a $ b $ c\n\n# a $b $ c\n\n# a $b$1 c\n\n# a$b$c\n\n# a $$$b$$$ c",
+   "ids": [
+    "a--b--c",
+    "a-b--c",
+    "a-b1-c",
+    "abc",
+    "a-b-c"
+   ]
+  },
+  {
+   "name": "math with escapes",
+   "markdown": "# a \\$b$ c\n\n# a $b\\$c$ d\n\n# a $b\\\\$ c",
+   "ids": [
+    "a-b-c",
+    "a-bc-d",
+    "a-b-c-1"
+   ]
+  },
+  {
+   "name": "math in emphasis and links",
+   "markdown": "# *a $b*$ c*\n\n# [a $]$](/u) b\n\n# ![a $b$](/i.png) c",
+   "ids": [
+    "a-b-c",
+    "a--b",
+    "a-b-c-1"
+   ]
+  },
+  {
+   "name": "math across a line",
+   "markdown": "a $b\nc$ d\n===\n\na $$b\nc$$ d\n===",
+   "ids": [
+    "a-b-c-d",
+    "a-bc-d"
+   ]
+  },
+  {
+   "name": "math after inline HTML",
+   "markdown": "# <span class=\"x\">a $b$ c</span>\n\n# <b>a $b$ c</b>\n\n# <span class=\"x\">*a* $b$</span>",
+   "ids": [
+    "a-b-c",
+    "a-b-c-1",
+    "a-b"
+   ]
+  },
+  {
+   "name": "footnote references by label",
+   "markdown": "# a[^note] b[^Q] c[^x] d\n\n[^note]: n\n\n[^q]:\n\n[r]: /u",
+   "ids": [
+    "a-b-cx-d"
+   ]
+  },
+  {
+   "name": "footnote references with markup",
+   "markdown": "# a[^b<i>c] d[^e*f*] g[^h i] ![^note]\n\n[^note]: n",
+   "ids": [
+    "abic-def-gh-i-"
+   ]
+  }
+ ]
+}

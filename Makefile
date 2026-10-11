@@ -13,7 +13,7 @@ test: ## Run the tests of the repository's own code and scripts; offline
 	node scripts/go-test.mjs
 
 .PHONY: slug-vectors
-slug-vectors: ## Record the heading ids GitHub and VS Code render into store/testdata/slug; needs the network, gh and npm
+slug-vectors: ## Record the heading ids GitHub, VS Code and GitLab render into store/testdata/slug; needs the network, gh, npm and cargo
 	node scripts/record-slugs.mjs
 
 .PHONY: build

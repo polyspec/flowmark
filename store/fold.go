@@ -149,15 +149,17 @@ func jsTrimmed(r rune) bool {
 	return unicode.Is(unicode.Zs, r)
 }
 
-// slugGL is S_GL, comrak's Anchorizer: the text lowercased, every character kept whose
-// general category is a letter, a mark, a number or connector punctuation, and the
-// space and '-', the others removed, and each space then written '-'. comrak reads the
-// categories from finl_unicode 1.4.0, which gitlab-glfm-markdown 0.0.45's Cargo.lock
-// pins, and whose tables are those of Unicode 17.0.0, the version of Go's unicode
-// package (TestUnicodeVersion).
+// slugGL is S_GL, comrak's Anchorizer: the text lowercased by Rust's to_lowercase,
+// which is lowerJS, the full mapping with the Final_Sigma condition (GitLab writes a
+// final Σ as ς, testdata/slug), every character kept whose general category is a
+// letter, a mark, a number or connector punctuation, and the space and '-', the others
+// removed, and each space then written '-'. comrak reads the categories from
+// finl_unicode 1.4.0, which gitlab-glfm-markdown 0.0.45's Cargo.lock pins, and whose
+// tables are those of Unicode 17.0.0, the version of Go's unicode package
+// (TestUnicodeVersion).
 func slugGL(s string) string {
 	var b strings.Builder
-	for _, r := range lowerFull(s) {
+	for _, r := range lowerJS(s) {
 		switch {
 		case r == ' ':
 			b.WriteByte('-')
@@ -188,11 +190,19 @@ func takesAnchor(s, a string) bool {
 }
 
 // slugsTake reports whether a heading whose rendered text is r takes the anchor a under
-// one of the slugs, each reading the text as its viewer does: S_GH without the text of
-// images, S_VS and S_GL with their alt text; S_GH and S_VS read a line break as
-// nothing, and S_GL as a space.
+// one of the slugs, each reading the text as its viewer does (ghSlug, vsSlug, glSlug).
 func slugsTake(r inlineResult, a string) bool {
-	return takesAnchor(slugGH(strings.Join(r.text, "")), a) ||
-		takesAnchor(slugVS(strings.Join(r.alt, "")), a) ||
-		takesAnchor(slugGL(strings.Join(r.alt, " ")), a)
+	return takesAnchor(ghSlug(r), a) || takesAnchor(vsSlug(r), a) || takesAnchor(glSlug(r), a)
 }
+
+// ghSlug is S_GH of a heading's rendered text: without the text of images, a line
+// break read as nothing.
+func ghSlug(r inlineResult) string { return slugGH(strings.Join(r.text, "")) }
+
+// vsSlug is S_VS of a heading's rendered text: with the alt text of images and VS
+// Code's math, a line break read as nothing.
+func vsSlug(r inlineResult) string { return slugVS(strings.Join(r.vs, "")) }
+
+// glSlug is S_GL of a heading's rendered text: with the alt text of images and
+// GitLab's math, a line break read as a space.
+func glSlug(r inlineResult) string { return slugGL(strings.Join(r.gl, " ")) }

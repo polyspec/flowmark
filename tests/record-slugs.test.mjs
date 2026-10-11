@@ -2,7 +2,7 @@
 // headings and the splitting of their ids, the treatments and their compression, and the reading of GitHub's HTML.
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { compress, forms, githubAttributes, githubIds, groupSize, headingsOf, methodSource, splitIds, treatment } from '../scripts/record-slugs.mjs';
+import { compress, forms, githubAttributes, githubIds, gitlabIds, glfmArgs, groupSize, headingsOf, katexOptions, methodSource, splitIds, treatment } from '../scripts/record-slugs.mjs';
 
 test('a code point has a reference form and a raw form, escaped when it is ASCII punctuation', () => {
   assert.deepEqual(forms(0x41), { ref: '&#x41;', raw: 'A' });
@@ -62,4 +62,22 @@ test('a method is taken to its matching brace', () => {
   const src = 'class A {\n\t#m(x: T): string {\n\t\tif (x) { return 1; }\n\t}\n\tn() {}\n}';
   assert.equal(methodSource(src, '#m(x: T): string {'), '#m(x: T): string {\n\t\tif (x) { return 1; }\n\t}');
   assert.throws(() => methodSource(src, '#z('));
+});
+
+test("the options of VS Code's markdown-math are read, and an unknown one refused", () => {
+  const src = 'const options = {\n\t\t\t\t\tenableFencedBlocks: true,\n\t\t\t\t\tglobalGroup: true,\n\t\t\t\t\tmacros: { ...settingsMacros }\n\t\t\t\t};';
+  assert.deepEqual(katexOptions(src), { enableFencedBlocks: true, globalGroup: true, macros: {} });
+  assert.throws(() => katexOptions('const options = {\n\tthrowOnError: x\n};'));
+});
+
+test("GitLab's engine options become the CLI's flags, and an unknown value is refused", () => {
+  const src = "REFERENCE_CHARS = %w[$ % #].freeze\nOPTIONS = {\n  alerts: true,\n  hardbreaks: false,\n  header_id_prefix: Banzai::Renderer::USER_CONTENT_ID_PREFIX,\n  only_escape_chars: REFERENCE_CHARS,\n  math_dollars: true\n}.freeze";
+  assert.deepEqual(glfmArgs(src), ['--alerts', '--header-id-prefix', 'user-content-', '--only-escape-chars', '$%#', '--math-dollars']);
+  assert.throws(() => glfmArgs('OPTIONS = {\n  smart: maybe\n}.freeze'));
+});
+
+test("GitLab's heading ids are read per heading, the prefix removed, raw HTML without an id", () => {
+  const html = '<h1 id="user-content-a&amp;b" data-sourcepos="1:1-1:5">a<a href="#a" class="anchor"></a></h1>\n<h2 id="hh">g</h2>\n<h2 id="user-content-" data-sourcepos="3:1-3:2"></h2>';
+  assert.deepEqual(gitlabIds(html), ['a&b', null, '']);
+  assert.throws(() => gitlabIds('<h1 data-sourcepos="1:1-1:1">x</h1>'));
 });

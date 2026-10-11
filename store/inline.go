@@ -1,6 +1,7 @@
 package store
 
 import (
+	"regexp"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -21,11 +22,44 @@ type reading []string
 
 // inlineResult is the rendered text of a heading or a paragraph: text, where an image
 // renders no text, and alt, where an image renders its alt text; and the attributes of
-// each raw HTML open tag of the source, in order.
+// each raw HTML open tag of the source, in order. vs and gl are the alt readings with
+// the math of VS Code and of GitLab (mathSyntax), which viewerText fills.
 type inlineResult struct {
 	text, alt reading
+	vs, gl    reading
 	tags      [][]htmlAttr
 	tagAt     []int // the offset in the source of the '<' of each tag
+}
+
+// mathSyntax is the inline math that a viewer's renderer reads besides CommonMark.
+type mathSyntax int
+
+const (
+	// noMath reads CommonMark alone.
+	noMath mathSyntax = iota
+	// glMath reads comrak 0.56.0's math_dollars and math_code, which GitLab enables:
+	// a math span renders its literal source, which comrak's collect_text writes into
+	// the heading's text.
+	glMath
+	// vsMath reads the math of @vscode/markdown-it-katex 1.1.2, which VS Code's
+	// markdown-math extension contributes by default: a math span renders no text,
+	// since #tokenToPlainText writes a math token as nothing.
+	vsMath
+)
+
+// viewerText returns inlineText of s with the readings of VS Code and GitLab, each
+// with its viewer's math.
+func viewerText(s string, refs linkRefs) inlineResult {
+	res := inlineText(s, refs)
+	first := inlineReader{s: s, refs: refs, math: vsMath, links: map[int]bool{}}
+	first.run()
+	vs := inlineReader{s: s, refs: refs, math: vsMath, linkAt: first.links}
+	vs.run()
+	_, res.vs = vs.readings()
+	gl := inlineReader{s: s, refs: refs.glRefs(), math: glMath}
+	gl.run()
+	_, res.gl = gl.readings()
+	return res
 }
 
 // inlineText returns the text that CommonMark 0.31.2 renders from the inline content
@@ -61,6 +95,26 @@ type inlineReader struct {
 	open   []bracket
 	tags   [][]htmlAttr
 	tagAt  []int
+
+	// math is the inline math read. Under vsMath, guard is whether the last token
+	// that markdown-it has pushed is an inline HTML tag that the plugin's guard
+	// matches (vsGuard), which keeps a '$' from opening math; links records the '['
+	// of each bracket that forms a link or an image, and linkAt holds those of an
+	// earlier reading, at which markdown-it pushes the link's first token.
+	math   mathSyntax
+	guard  bool
+	links  map[int]bool
+	linkAt map[int]bool
+}
+
+// vsGuard is the expression by which @vscode/markdown-it-katex 1.1.2 reads no math
+// right after an html_inline token: `/^<\w+.+[^/]>$/`.
+var vsGuard = regexp.MustCompile(`^<\w+.+[^/]>$`)
+
+// token records that markdown-it pushes a token other than html_inline, which ends
+// the guard.
+func (r *inlineReader) token() {
+	r.guard = false
 }
 
 // inlineNode is a piece of the rendered text: a text, or a line break; image marks a
@@ -69,6 +123,10 @@ type inlineNode struct {
 	text  string
 	brk   bool
 	image bool
+	// plain marks a node that comrak reads as a Text or an HtmlInline node, whose
+	// literal is lit: the text, or the raw HTML construct, which renders no text.
+	plain bool
+	lit   string
 }
 
 // delimiter is a run of '*' or '_' that can open or close emphasis: the node that holds
@@ -92,10 +150,26 @@ type bracket struct {
 	image  bool
 	active bool
 	bottom int
+	// after marks a bracket above which another was opened, comrak's bracket_after.
+	after bool
 }
 
-// text appends s to the rendered text.
+// push opens the bracket b above the others.
+func (r *inlineReader) push(b bracket) {
+	if n := len(r.open); n > 0 {
+		r.open[n-1].after = true
+	}
+	r.open = append(r.open, b)
+}
+
+// text appends s to the rendered text, as a text node.
 func (r *inlineReader) text(s string) {
+	r.nodes = append(r.nodes, inlineNode{text: s, plain: true, lit: s})
+}
+
+// other appends s to the rendered text, as the text of a code span, an autolink or a
+// math span.
+func (r *inlineReader) other(s string) {
 	r.nodes = append(r.nodes, inlineNode{text: s})
 }
 
@@ -105,7 +179,19 @@ func (r *inlineReader) run() {
 	s := r.s
 	for i := 0; i < len(s); {
 		c := s[i]
+		if c == '\\' && i+1 < len(s) || c == '\n' {
+			r.token() // markdown-it pushes text_special, a hardbreak or a softbreak
+		}
 		switch {
+		case c == '$' && r.math == glMath:
+			i = r.glDollars(i)
+		case c == '$' && r.math == vsMath:
+			i = r.vsDollars(i)
+		case c == '~' && r.math == vsMath && runOf(s[i:], '~') >= 2:
+			r.token() // markdown-it's strikethrough pushes a text token per pair
+			n := runOf(s[i:], '~')
+			r.text(s[i : i+n])
+			i += n
 		case c == '\\' && i+1 < len(s) && s[i+1] == '\n':
 			r.nodes = append(r.nodes, inlineNode{brk: true})
 			i += 2
@@ -130,11 +216,17 @@ func (r *inlineReader) run() {
 		case c == '*' || c == '_':
 			i = r.delimiterRun(i)
 		case c == '!' && i+1 < len(s) && s[i+1] == '[':
-			r.open = append(r.open, bracket{node: len(r.nodes), src: i + 1, image: true, active: true, bottom: len(r.delims)})
+			if r.linkAt[i+1] {
+				r.token()
+			}
+			r.push(bracket{node: len(r.nodes), src: i + 1, image: true, active: true, bottom: len(r.delims)})
 			r.text("![")
 			i += 2
 		case c == '[':
-			r.open = append(r.open, bracket{node: len(r.nodes), src: i, active: true, bottom: len(r.delims)})
+			if r.linkAt[i] {
+				r.token()
+			}
+			r.push(bracket{node: len(r.nodes), src: i, active: true, bottom: len(r.delims)})
 			r.text("[")
 			i++
 		case c == ']':
@@ -190,7 +282,8 @@ func (r *inlineReader) codeSpan(i int) int {
 		}
 		m := runOf(s[k:], '`')
 		if m == n {
-			r.text(codeContent(s[i+n : k]))
+			r.token()
+			r.other(codeContent(s[i+n : k]))
 			return k + m
 		}
 		k += m
@@ -210,16 +303,206 @@ func codeContent(c string) string {
 	return c
 }
 
+// glDollars reads the '$' at i as comrak 0.56.0's handle_dollars does with
+// math_dollars and math_code: a math span renders its literal source; a run of '$'
+// that opens none is text.
+//
+// A '$' followed by '`' opens code math, closed by the first '$' after it that a '`'
+// precedes; its content, between "$`" and "`$", must not be empty and is normalized as
+// a code span's. Otherwise a run of one or two '$' opens dollar math, closed by the next
+// run of as many '$', its content not empty: for one '$', no space, tab or line ending
+// may follow the opening or precede the closing, a '$' after a backslash closes
+// nothing, a digit may not follow the closing, and the content is normalized as a code
+// span's; for two, the content is taken as it stands. Where the code math closes on
+// nothing, the '$' alone is text; elsewhere the whole run is.
+func (r *inlineReader) glDollars(i int) int {
+	s := r.s
+	n := runOf(s[i:], '$')
+	if n == 1 && i+1 < len(s) && s[i+1] == '`' {
+		for k := i + 2; k < len(s); k++ {
+			if s[k] != '$' || s[k-1] != '`' {
+				continue
+			}
+			if k+1-i >= 5 {
+				r.other(codeContent(s[i+2 : k-1]))
+				return k + 1
+			}
+			break
+		}
+		r.text("$")
+		return i + 1
+	}
+	if end, ok := glDollarClose(s, i, n); ok {
+		content := s[i+n : end-n]
+		if n == 1 {
+			content = codeContent(content)
+		}
+		r.other(content)
+		return end
+	}
+	r.text(s[i : i+n])
+	return i + n
+}
+
+// glDollarClose returns the index after the run of n '$' that closes the dollar math
+// opened by the n '$' at i, as comrak's scan_to_closing_dollar finds it.
+func glDollarClose(s string, i, n int) (int, bool) {
+	isSpace := func(c byte) bool { return c == ' ' || c == '\t' || c == '\n' || c == '\r' }
+	p := i + n
+	if n > 2 || n == 1 && p < len(s) && isSpace(s[p]) {
+		return 0, false
+	}
+	for {
+		k := strings.IndexByte(s[p:], '$')
+		if k < 0 {
+			return 0, false
+		}
+		p += k
+		c := s[p-1]
+		if n == 1 && isSpace(c) {
+			return 0, false
+		}
+		if n == 1 && c == '\\' {
+			p++
+			continue
+		}
+		m := min(runOf(s[p:], '$'), n)
+		p += m
+		if n == 1 && p < len(s) && s[p] >= '0' && s[p] <= '9' {
+			return 0, false
+		}
+		if m == n {
+			return p, p-i >= 2*n+1
+		}
+	}
+}
+
+// vsDollars reads the '$' at i as @vscode/markdown-it-katex 1.1.2 does: its rule
+// math_inline_block reads "$$", and math_inline a single '$'. A math span renders no
+// text; a '$' that opens none is text.
+//
+// "$$" opens when no '$' or backslash precedes it and no '$' follows it; it closes at
+// the next "$$" that an even number of backslashes precedes, which must also be such a
+// delimiter and leave the content not empty. A single '$' opens when the guard is off
+// and neither a '$', a backslash nor an ASCII word character precedes it; it closes at
+// the next '$' that an even number of backslashes precedes, when neither a '$' nor an
+// ASCII word character follows that one. The content may begin or end with a space.
+func (r *inlineReader) vsDollars(i int) int {
+	s := r.s
+	if strings.HasPrefix(s[i:], "$$") {
+		if !vsBlockDelim(s, i) {
+			r.text("$$")
+			return i + 2
+		}
+		start := i + 2
+		match, ok := vsUnescaped(s, start, "$$")
+		switch {
+		case !ok:
+			r.text("$$")
+			return start
+		case match == start:
+			r.text("$$$$")
+			return start + 2
+		case !vsBlockDelim(s, match):
+			r.text("$$")
+			return start
+		}
+		r.token()
+		return match + 2
+	}
+	if r.guard {
+		r.text("$")
+		return i + 1
+	}
+	if !vsCanOpen(s, i) {
+		r.text("$")
+		return i + 1
+	}
+	start := i + 1
+	match, ok := vsUnescaped(s, start, "$")
+	switch {
+	case !ok:
+		r.text("$")
+		return start
+	case match == start:
+		r.text("$$")
+		return start + 1
+	case !vsCanClose(s, match):
+		r.text("$")
+		return start
+	}
+	r.token()
+	return match + 1
+}
+
+// vsUnescaped returns the index of the first delim at or after from that an even
+// number of backslashes precedes.
+func vsUnescaped(s string, from int, delim string) (int, bool) {
+	for m := from; ; m += len(delim) {
+		k := strings.Index(s[m:], delim)
+		if k < 0 {
+			return 0, false
+		}
+		m += k
+		p := m - 1
+		for p >= 0 && s[p] == '\\' {
+			p--
+		}
+		if (m-p)%2 == 1 {
+			return m, true
+		}
+	}
+}
+
+// vsBlockDelim reports whether the "$$" at pos is a delimiter of math_inline_block:
+// no '$' or backslash before it, and no '$' after it.
+func vsBlockDelim(s string, pos int) bool {
+	if pos > 0 && (s[pos-1] == '$' || s[pos-1] == '\\') {
+		return false
+	}
+	return pos+2 >= len(s) || s[pos+2] != '$'
+}
+
+// vsCanOpen reports whether the '$' at pos can open math_inline: the character before
+// it is none, or neither '$' nor a backslash and either white space or no ASCII word
+// character.
+func vsCanOpen(s string, pos int) bool {
+	if pos == 0 {
+		return true
+	}
+	prev, _ := utf8.DecodeLastRuneInString(s[:pos])
+	return prev != '$' && prev != '\\' && (jsTrimmed(prev) || !asciiWord(prev))
+}
+
+// vsCanClose reports whether the '$' at pos can close math_inline: the character after
+// it is none, or not '$' and either white space or no ASCII word character.
+func vsCanClose(s string, pos int) bool {
+	if pos+1 >= len(s) {
+		return true
+	}
+	next, _ := utf8.DecodeRuneInString(s[pos+1:])
+	return next != '$' && (jsTrimmed(next) || !asciiWord(next))
+}
+
+// asciiWord reports whether r is a character of the class [\w\d] of a JavaScript
+// expression: an ASCII letter, digit or '_'.
+func asciiWord(r rune) bool {
+	return r < utf8.RuneSelf && (isASCIIAlnum(byte(r)) || r == '_')
+}
+
 // angle reads what begins with '<' at i: an autolink, whose text renders, or a raw
 // HTML construct, which renders no text and whose open tag is recorded. Any other '<'
 // is text.
 func (r *inlineReader) angle(i int) int {
 	s := r.s[i:]
 	if n, text := autolinkAt(s); n > 0 {
-		r.text(text)
+		r.token()
+		r.other(text)
 		return i + n
 	}
 	if n, attrs, open := htmlMarkupAt(s); n > 0 {
+		r.guard = vsGuard.MatchString(s[:n])
+		r.nodes = append(r.nodes, inlineNode{plain: true, lit: s[:n]})
 		if open {
 			r.tags = append(r.tags, attrs)
 			r.tagAt = append(r.tagAt, i)
@@ -234,6 +517,7 @@ func (r *inlineReader) angle(i int) int {
 // ampersand that begins no reference is text.
 func (r *inlineReader) reference(i int) int {
 	if text, n := htmlentity.Reference(r.s[i:]); n > 0 {
+		r.token()
 		r.text(text)
 		return i + n
 	}
@@ -248,6 +532,7 @@ func (r *inlineReader) delimiterRun(i int) int {
 	s := r.s
 	c := s[i]
 	n := runOf(s[i:], c)
+	r.token() // markdown-it's emphasis pushes a text token for each delimiter
 	before, after := rune(-1), rune(-1)
 	if i > 0 {
 		before, _ = utf8.DecodeLastRuneInString(s[:i])
@@ -376,11 +661,18 @@ func (r *inlineReader) closeBracket(i int) int {
 	if !ok {
 		end, ok = r.refTail(o, i)
 	}
+	if !ok && r.math == glMath && r.glFootnote(o) {
+		return i + 1
+	}
 	if !ok {
 		r.text("]")
 		return i + 1
 	}
 	r.processEmphasis(o.bottom)
+	r.token() // link_close, or the image token
+	if r.links != nil {
+		r.links[o.src] = true
+	}
 	r.nodes[o.node].text = ""
 	if o.image {
 		for k := o.node + 1; k < len(r.nodes); k++ {
@@ -394,6 +686,48 @@ func (r *inlineReader) closeBracket(i int) int {
 		}
 	}
 	return end
+}
+
+// glFootnote reads the bracket o, which a ']' closes with no link, as a footnote
+// reference of comrak 0.56.0 with footnotes, as GitLab renders it, and reports whether
+// it is one: no bracket was opened above o, the node after its '[' is a text beginning
+// with '^', and every node after it is a text or a raw HTML construct, whose literals
+// joined, the name, are more than the '^'. The delimiters above o then open no
+// emphasis. A name that a footnote definition of the file defines renders no text,
+// since comrak's collect_text writes a footnote reference as nothing; any other is
+// restored as text: '[', each literal, a raw HTML construct's included, and ']', the
+// '!' of an image's bracket dropped.
+func (r *inlineReader) glFootnote(o bracket) bool {
+	if o.after || o.node+1 >= len(r.nodes) || !r.nodes[o.node+1].plain || !strings.HasPrefix(r.nodes[o.node+1].text, "^") {
+		return false
+	}
+	var name strings.Builder
+	for _, n := range r.nodes[o.node+1:] {
+		if !n.plain {
+			return false
+		}
+		name.WriteString(n.lit)
+	}
+	if name.Len() <= 1 {
+		return false
+	}
+	for m := range r.delims {
+		if r.delims[m].node > o.node {
+			r.delims[m].live = false
+		}
+	}
+	if r.refs.footnote(name.String()[1:]) {
+		for k := o.node; k < len(r.nodes); k++ {
+			r.nodes[k] = inlineNode{}
+		}
+		return true
+	}
+	r.nodes[o.node] = inlineNode{text: "["}
+	for k := o.node + 1; k < len(r.nodes); k++ {
+		r.nodes[k] = inlineNode{text: r.nodes[k].lit}
+	}
+	r.nodes = append(r.nodes, inlineNode{text: "]"})
+	return true
 }
 
 // refTail reads the reference that follows the ']' at i, which closes the bracket o:
