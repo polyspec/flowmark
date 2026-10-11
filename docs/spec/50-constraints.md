@@ -103,7 +103,9 @@ A check is enforced at commit; a check whose predicate is unknown (NULL) passes,
   transaction, with the row's foreign key, the from and to states, `at`, and a copy of the
   required columns. An insert writes no history.
 - **Limit.** `limit <state> <n>` counts the table's rows in the state; a transition, insert or
-  update that would exceed it is `CONSTRAINT` naming the limit. A corpus already over the limit
+  update that would exceed it is `CONSTRAINT` naming the limit. The count includes soft-deleted
+  rows: a soft-deleted row is a stored row in its state, as it still holds its unique keys, so a
+  soft delete frees no place and a restore never exceeds the limit. A corpus already over the limit
   after a human edit is the validator's `state.limit`, which blocks no other write: when m readable rows of the table, in every block and file that holds it, are in the state and m > n, each row after the n-th in [corpus order](10-canonical-format.md#diagnostics) is reported, at its state (the glyph of a list row, the state cell, the state item of a `files` field list), naming the state, the limit and m. Grounding: the limit admits n rows in the state, so m − n rows stand beyond it, each one fault, as `key.duplicate` is reported at each occurrence after the first ([Keys](#keys-and-references)); which rows they are is not decided by their content — a human edit leaves no record of which row entered the state last, which is what `history.gap` reports — so they are chosen by an order that is a function of the corpus alone.
 
 ## A state changed outside the engine

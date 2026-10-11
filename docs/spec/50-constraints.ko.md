@@ -1,5 +1,5 @@
 <!-- doc-id: spec-constraints -->
-<!-- source-sha256: 1cfbb54d4fae4d507caa68d8d6ad71c477431d03e1511fea35df6a0e5812fc55 -->
+<!-- source-sha256: 1a0c80942a8c645ca2ee7d158d16394421923d65f7d473354c128a9cb76beaa3 -->
 # Constraints
 
 [English](50-constraints.md)
@@ -87,7 +87,9 @@ check는 commit에서 강제한다. 술어가 unknown(NULL)인 check는 SQL처�
 - **이력.** 엔진이 실행하는 모든 전이는 같은 transaction에서 이력 행 하나를 insert한다: 행의 foreign
   key, from과 to 상태, `at`, 필수 column의 사본. insert는 이력을 쓰지 않는다.
 - **Limit.** `limit <state> <n>`은 그 상태의 table 행을 센다. 이를 넘게 할 전이, insert, update는
-  limit를 밝히는 `CONSTRAINT`다. 사람의 편집 뒤 이미 넘은 corpus는 다른 쓰기를 막지 않는 validator의 `state.limit`다: table을 가진 모든 block과 file에서 읽을 수 있는 table 행 m개가 그 상태에 있고 m > n이면, [corpus 순서](10-canonical-format.ko.md#진단)에서 n번째 다음의 각 행을 그 상태 자리(list 행의 glyph, 상태 cell, `files` field list의 상태 항목)에 보고하며, 상태와 limit와 m을 밝힌다. 근거: limit는 그 상태에 n개 행을 허용하므로 m − n개 행이 그 너머에 있고 각각이 결함 하나다. `key.duplicate`가 첫 자리 다음의 각 자리에 보고되는 것과 같다([Key](#key와-참조)). 그것이 어느 행인지는 내용으로 정해지지 않는다 — 사람의 편집은 어느 행이 마지막으로 그 상태에 들어왔는지 기록을 남기지 않으며, 그것은 `history.gap`이 보고하는 것이다 — 그래서 corpus만의 함수인 순서로 고른다.
+  limit를 밝히는 `CONSTRAINT`다. 이 수는 soft delete된 행을 포함한다: soft delete된 행은 여전히 unique
+  key를 차지하듯 그 상태에 있는 저장된 행이므로, soft delete는 자리를 비우지 않고 restore는 limit를
+  넘지 않는다. 사람의 편집 뒤 이미 넘은 corpus는 다른 쓰기를 막지 않는 validator의 `state.limit`다: table을 가진 모든 block과 file에서 읽을 수 있는 table 행 m개가 그 상태에 있고 m > n이면, [corpus 순서](10-canonical-format.ko.md#진단)에서 n번째 다음의 각 행을 그 상태 자리(list 행의 glyph, 상태 cell, `files` field list의 상태 항목)에 보고하며, 상태와 limit와 m을 밝힌다. 근거: limit는 그 상태에 n개 행을 허용하므로 m − n개 행이 그 너머에 있고 각각이 결함 하나다. `key.duplicate`가 첫 자리 다음의 각 자리에 보고되는 것과 같다([Key](#key와-참조)). 그것이 어느 행인지는 내용으로 정해지지 않는다 — 사람의 편집은 어느 행이 마지막으로 그 상태에 들어왔는지 기록을 남기지 않으며, 그것은 `history.gap`이 보고하는 것이다 — 그래서 corpus만의 함수인 순서로 고른다.
 
 ## 엔진 밖에서 바뀐 상태
 
