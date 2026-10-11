@@ -3,6 +3,8 @@
 
 ## Unreleased
 
+- T12.8: the conformance vectors are rewritten for the storage grammar: spec 90 fixes the vector format, and 69 vectors run through the write path over files, document list and table, and block list and table, with equivalence groups, repeats and the write path's own answers.
+- T12.7 (in part): the export to a database renders through orm: orm's schema statements, then one planner insert per row in foreign-key and storage order, soft-deleted rows included; identity and codec tables are refused until orm offers what they need; the provenance header writer is removed.
 - T12.6: introspection validates every document against the catalog and returns the catalog, each `dbspec/` document in canonical form with its path, name and manifest hash, with every diagnostic; `flowmark introspect` prints it as JSON and exits 0, 1 or 2.
 - T12.5-1: `flowmark canon <corpus> [file…]` rewrites the named files, or every corpus document it can, to canonical form in one journaled transaction under the lock. A named file with `format.block`, `format.section`, `format.encoding`, a `parent.cycle` among its rows, or a link into an unavailable block or document table is refused as `CONSTRAINT` and nothing is written; with no file named, such files are reported and left as they are. The command exits 0 when canon ran, 1 on a refusal or failure and 2 on a wrong command line.
 - T12.3-4: the catalog refuses a block table whose placement foreign key column is nullable, at the table's name: a block row stands inside the scope of the row that key references, and NULL references none. The history table's storage rule relies on this one rule, and spec 30 names the setting error that places a history row by a column other than its row column.

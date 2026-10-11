@@ -1,9 +1,11 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: ae99294beb142f1f4b86712d386201486eb24b5ee57b73b358a98a793fad29b0 -->
+<!-- source-sha256: 85b9d0e9c0f14b9da4ffc58afaeb38246a5c3dde49ceb59280aad4bc7396c0cf -->
 # Changelog
 
 ## Unreleased
 
+- T12.8: conformance vector를 저장 문법에 맞게 다시 썼다. spec 90이 vector 형식을 정하고, 69개 vector가 files, document list와 table, block list와 table 위에서 write path를 지나 실행되며 equivalence group, 반복, write path 자신의 답을 다룬다.
+- T12.7(일부): database로의 export가 orm으로 렌더된다. orm의 schema statement 다음에 foreign key 순서와 저장 순서로 행마다 planner insert 하나를 두며, soft delete된 행도 포함한다. identity와 codec table은 orm이 필요한 것을 제공할 때까지 거절한다. provenance header writer는 지웠다.
 - T12.6: introspection은 모든 문서를 catalog에 대해 검증하고, 각 `dbspec/` 문서의 canonical 형식과 path, 이름, manifest hash로 된 catalog를 모든 진단과 함께 돌려준다. `flowmark introspect`는 이를 JSON으로 쓰고 0, 1, 2로 끝난다.
 - T12.5-1: `flowmark canon <corpus> [file…]`가 지정한 file을, 지정하지 않으면 다시 쓸 수 있는 모든 corpus 문서를 lock 아래 journal을 남기는 transaction 하나로 canonical 형식으로 다시 쓴다. `format.block`, `format.section`, `format.encoding`, 행 사이의 `parent.cycle`, 또는 사용할 수 없는 block이나 document table로의 link가 있는 file을 이름으로 주면 `CONSTRAINT`로 거절하고 아무것도 쓰지 않는다. file을 주지 않으면 그런 file은 보고하고 그대로 둔다. 명령은 canon이 실행되면 0, 거절이나 실패면 1, 잘못된 명령줄이면 2로 끝난다.
 - T12.3-4: catalog는 배치 foreign key column이 nullable인 block table을 table 이름에서 거절한다. block 행은 그 key가 참조하는 행의 범위 안에 서며, NULL은 어떤 행도 참조하지 않는다. 이력 table의 저장 규칙은 이 하나의 규칙에 기대고, spec 30은 이력 행을 row column이 아닌 column으로 배치하는 setting 오류를 적는다.
