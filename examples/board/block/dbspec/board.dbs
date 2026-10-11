@@ -1,0 +1,51 @@
+dbspec 1 board
+
+table people {
+  id varchar(32)
+  name varchar(255)
+  primary key (id)
+  settings {
+    key_prefix 'U'
+    store document table
+    title name
+  }
+}
+
+table posts {
+  id varchar(32)
+  title varchar(255)
+  body text
+  author varchar(32)
+  created datetime(0)
+  primary key (id)
+  index ix_posts_author (author)
+  foreign key fk_posts_author (author) references people (id) on delete restrict on update restrict
+  settings {
+    key_prefix 'P'
+    store files
+    title title
+    body body
+    markdown body
+  }
+}
+
+table comments {
+  id varchar(32)
+  post varchar(32)
+  parent varchar(32) null
+  body text
+  author varchar(32)
+  created datetime(0)
+  primary key (id)
+  index ix_comments_post (post)
+  index ix_comments_parent (parent)
+  index ix_comments_author (author)
+  foreign key fk_comments_post (post) references posts (id) on delete restrict on update restrict
+  foreign key fk_comments_parent (parent) references comments (id) on delete restrict on update restrict
+  foreign key fk_comments_author (author) references people (id) on delete restrict on update restrict
+  settings {
+    key_prefix 'C'
+    store block fk_comments_post list
+    title body
+  }
+}
