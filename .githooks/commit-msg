@@ -1,0 +1,4 @@
+#!/bin/sh
+# commit-msg hook: refuses a commit whose message breaks config/commits.json, with the rule and the reason. make sets
+# core.hooksPath to .githooks at parse time (scripts/kit/kit.mk), so git runs this file on every commit of the checkout.
+exec node "$(dirname "$0")/../scripts/kit/check-commits.mjs" --message "$1"

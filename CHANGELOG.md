@@ -3,6 +3,7 @@
 
 ## Unreleased
 
+- T13: Git runs the `commit-msg` hook, which refuses a message that breaks `config/commits.json`, and the `pre-push` push gate: `config/checklist.json` lists both and `make hooks` installs them.
 - T12.3-2: the validator reports `check` when a check's predicate is false over a row's logical values whatever a value not of its type is (each such atom evaluated true, then false), and exports the same verdict for the commit; `history.chain` reports continuity only, `state.transition` an undeclared history pair and `state.required` a declared pair without a required value, and a state, `from` or `to` not of its type is `type` alone, a row's own `from` still judged against the row before it.
 - T12.3-3: a unique key stays byte for byte, as orm's binary collation compares, the primary key comparing without regard to case only because it is a file name and an anchor; `key.duplicate` says byte for byte when the keys are byte-equal, naming that row, and otherwise names the first key equal without regard to case.
 - T12.4 (in part): add the IR executor (`irexec`): it decodes the orm request message, answers reads with the IR Where, joins, relations, aggregates and pagination over the store's rows, refuses requests that need an unavailable table, runs the key checks on the request against the corpus before rendering, and answers writes with `{affected, keys}` and a post-image that the write path commits. Questions the specifications do not yet rule answer `CAPABILITY_UNSUPPORTED` until they are decided.
