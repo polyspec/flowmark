@@ -1,9 +1,11 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 1a9928ad5c3698227da6bff1f2b89ae059355bf26a102f6ec2063a5a449845f6 -->
+<!-- source-sha256: fa144b990fdd9dbcd80993e2ccab5232a7fc80d7433956457e66c65f229b93e5 -->
 # Changelog
 
 ## Unreleased
 
+- T12.3-1: 응용 schema가 view table(문서 `flowmark`의 `views`)을 선언한다. validator는 entity, filter, sort, group이 유효하지 않은 view를 orm의 `ir.Validate`로 검사해 `view`로, stage가 decode할 수 없는 값을 `codec`으로 보고한다. 마지막 stage가 `yaml`인 codec은 거절한다.
+- T12.3-5: spec 30이 이력 block이 자기 상태 행 아래에만 서는 근거를 밝히고, 배치 key마다 catalog case를 둔다.
 - T12.9: `flowmark serve <corpus> --port <port>`는 orm client가 loopback TCP로 접속하는 server다. `.flowmark/server.json`의 token, corpus와 token을 확인하는 connect message, control message로 다루는 transaction과 savepoint, 쉬는 transaction을 rollback하고 그 연결을 닫는 `--tx-idle-ms`를 갖춘다.
 - T12.8: conformance vector를 저장 문법에 맞게 다시 썼다. spec 90이 vector 형식을 정하고, 69개 vector가 files, document list와 table, block list와 table 위에서 write path를 지나 실행되며 equivalence group, 반복, write path 자신의 답을 다룬다.
 - T12.7(일부): database로의 export가 orm으로 렌더된다. orm의 schema statement 다음에 foreign key 순서와 저장 순서로 행마다 planner insert 하나를 두며, soft delete된 행도 포함한다. identity와 codec table은 orm이 필요한 것을 제공할 때까지 거절한다. provenance header writer는 지웠다.
