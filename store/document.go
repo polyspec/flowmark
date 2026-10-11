@@ -1101,20 +1101,22 @@ func (p *docParser) readDetails(lines []string, i, end int) {
 func (p *docParser) readDetail(lines []string, h heading, sub []heading, end int) {
 	lay := p.lay
 	marks := strings.Repeat("#", h.level)
+	// The faults of the heading are at the first character of its text.
+	col := h.textCol(lines)
 	parts := detailFields(h.text)
 	if len(parts) != 3 || lowerAsViewers(parts[0]) != lowerAsViewers(lay.table) || strings.ToLower(parts[1]) != "row" || parts[2] == "" {
-		p.fail(h.at+1, 4, RuleBlock, "a detail section is `"+marks+" "+lay.table+" row <key>`")
+		p.fail(h.at+1, col, RuleBlock, "a detail section is `"+marks+" "+lay.table+" row <key>`")
 		return
 	}
 	key := parts[2]
 	if h.last != h.at || h.tab || h.text != lay.table+" row "+key {
-		p.warn(h.at+1, 4, RuleNoncanonical, "the detail heading is written `"+marks+" "+lay.table+" row "+key+"`")
+		p.warn(h.at+1, col, RuleNoncanonical, "the detail heading is written `"+marks+" "+lay.table+" row "+key+"`")
 	}
 	// Two detail sections of one file under one heading text collide, whatever block
 	// holds them, since their anchors are equal; a case difference is key.duplicate.
 	text := lay.table + " row " + key
 	if p.details[text] {
-		p.fail(h.at+1, 4, RuleBlock, "the detail section "+text+" collides with another detail section of the file")
+		p.fail(h.at+1, col, RuleBlock, "the detail section "+text+" collides with another detail section of the file")
 		return
 	}
 	p.details[text] = true
@@ -1126,13 +1128,13 @@ func (p *docParser) readDetail(lines []string, h heading, sub []heading, end int
 	}
 	switch {
 	case len(match) == 0:
-		p.fail(h.at+1, 4, RuleBlock, "the detail section names no row "+key)
+		p.fail(h.at+1, col, RuleBlock, "the detail section names no row "+key)
 		return
 	case len(match) > 1:
-		p.fail(h.at+1, 4, RuleBlock, "the key "+key+" is shared by two rows, so its detail section cannot be assigned")
+		p.fail(h.at+1, col, RuleBlock, "the key "+key+" is shared by two rows, so its detail section cannot be assigned")
 		return
 	case match[0].detail:
-		p.fail(h.at+1, 4, RuleBlock, "the row "+key+" has a second detail section")
+		p.fail(h.at+1, col, RuleBlock, "the row "+key+" has a second detail section")
 		return
 	}
 	rec := match[0]

@@ -62,10 +62,11 @@ func anchorClashes(lines []string, tables map[string]int) []anchorClash {
 			others = append(others, h)
 		}
 	}
+	// A setext heading begins at the first line of its paragraph that is text.
 	setext := map[int]unit{}
 	for _, u := range sc.blocks {
 		if u.heading {
-			setext[u.at] = u
+			setext[u.at+textStart(u.lines)] = u
 		}
 	}
 	var out []anchorClash

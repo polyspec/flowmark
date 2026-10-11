@@ -130,6 +130,30 @@ func TestReadRefusalPositionDocument(t *testing.T) {
 	}
 }
 
+// TestDefinitionBeforeSetextSection requires that the link reference definitions
+// CommonMark 0.31.2 reads at the start of a setext section heading's paragraph are not
+// part of the heading text (§4.7): they are content of the body before it, and the
+// heading names its section by the text after them.
+func TestDefinitionBeforeSetextSection(t *testing.T) {
+	cat := loadFixture(t)
+	lk := fixtureLinker()
+	t.Run("10#sections-and-their-values: a definition before a setext section heading is not its text", func(t *testing.T) {
+		row, diags := ParseFile(cat, "tasks", "tasks/T1.flowmark.md", []byte(withBase("[r]: /u", "evidence", "--------", "", "x")), lk)
+		if len(diags) != 1 || diags[0].Rule != RuleNoncanonical || diags[0].Line != 6 || row == nil {
+			t.Fatalf("diagnostics %+v; want the section evidence read, its setext underline noncanonical at line 6", diags)
+		}
+		if row.Body != "[r]: /u\n" || row.Sections["evidence"] == nil || *row.Sections["evidence"] != "x\n" {
+			t.Fatalf("body %q, sections %v; want the body [r]: /u and evidence x", row.Body, row.Sections)
+		}
+	})
+	t.Run("10#sections-and-their-values: a definition before a setext heading that names no section", func(t *testing.T) {
+		_, diags := ParseFile(cat, "tasks", "tasks/T1.flowmark.md", []byte(withBase("[r]: /u", "x", "---")), lk)
+		if len(diags) == 0 || diags[0].Rule != RuleSection || diags[0].Line != 6 {
+			t.Fatalf("diagnostics %+v; want format.section at line 6", diags)
+		}
+	})
+}
+
 // renderFileOf writes row as a file of table, failing the test when the table is not
 // a files table of the catalog.
 func renderFileOf(t testing.TB, cat *catalog.Catalog, table string, row *Row, lk Linker) ([]byte, []Refusal) {

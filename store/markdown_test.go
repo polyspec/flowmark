@@ -98,6 +98,48 @@ func TestHeadingBoundary(t *testing.T) {
 	}
 }
 
+// TestSetextAfterDefinitions pins the setext headings of CommonMark 0.31.2 (§4.3, §4.7)
+// after link reference definitions: the definitions at the start of the paragraph are
+// no text of the heading, which begins on the first line they leave, and a paragraph of
+// definitions alone makes no heading. The readings are those of commonmark.js, cmark-gfm
+// and markdown-it.
+func TestSetextAfterDefinitions(t *testing.T) {
+	type head struct {
+		at, last int
+		text     string
+	}
+	cases := []struct {
+		name  string
+		lines []string
+		want  []head
+	}{
+		{"10#detail-headings-and-anchors: a definition before the text", []string{"[r]: /u", "people row P1", "---"}, []head{{1, 2, "people row P1"}}},
+		{"10#detail-headings-and-anchors: two definitions, one with a title", []string{"[r]: /u", `[s]: /v "t"`, "x", "==="}, []head{{2, 3, "x"}}},
+		{"10#detail-headings-and-anchors: a title that does not close is text", []string{"[r]: /u", `"t`, "x", "---"}, []head{{1, 3, "\"t\nx"}}},
+		{"10#detail-headings-and-anchors: a definition after the text is text", []string{"x", "[r]: /u", "---"}, []head{{0, 2, "x\n[r]: /u"}}},
+		{"10#detail-headings-and-anchors: definitions alone and a dash underline make no heading", []string{"[r]: /u", "---"}, nil},
+		{"10#detail-headings-and-anchors: definitions alone and an equals underline make no heading", []string{"[r]: /u", "==="}, nil},
+		{"10#detail-headings-and-anchors: a break after definitions alone, then a heading", []string{"[r]: /u", "---", "x", "---"}, []head{{2, 3, "x"}}},
+		{"10#detail-headings-and-anchors: a definition in a block quote", []string{"> [r]: /u", "> x", "> ---"}, []head{{1, 2, "x"}}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var got []head
+			for _, h := range scanHeadings(c.lines, 0).all {
+				got = append(got, head{h.at, h.last, h.text})
+			}
+			if len(got) != len(c.want) {
+				t.Fatalf("headings %+v; want %+v", got, c.want)
+			}
+			for k := range got {
+				if got[k] != c.want[k] {
+					t.Fatalf("headings %+v; want %+v", got, c.want)
+				}
+			}
+		})
+	}
+}
+
 // TestInterruptsParagraph pins the rule of CommonMark 0.31.2 that an HTML block
 // of types 1 to 6 may interrupt a paragraph and a type 7 block may not.
 func TestInterruptsParagraph(t *testing.T) {

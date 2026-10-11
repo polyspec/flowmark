@@ -143,8 +143,13 @@ and the column sections — are payload: the renderer moves them with their row 
   of the NFKD form of the text, which F_M keeps; F_G does not, so both folds are used. `café` folds to
   `cafe` under both.
 - **The collision rule.** A heading is every ATX heading, also after a block-quote or list-item marker,
-  and every paragraph followed by a setext underline, the whole paragraph being the heading, outside
-  fenced blocks; a detail heading is one too. For this rule, a detail heading is a top-level heading at the detail level of a table of the file's layout — the level of its rows' detail headings, one less than their row scope — whose text, its spaces, tabs and the line endings of a setext heading aside, is that table's name and the word `row`, each equal to its canonical text once lowercased as the viewers lowercase it, and a key: the heading of a detail section, in its canonical or a non-canonical spelling. Every other heading is a payload heading, a `<table> row <key>` heading at another level or inside a block quote or list item included, and its folds are compared with every detail anchor. Grounding: a detail section is assigned by its place, so a heading elsewhere names no row and renders an anchor of its own, which a viewer numbers when it repeats a detail anchor. A heading H other than a detail heading takes the anchor
+  and every paragraph followed by a setext underline, the whole paragraph after the link reference
+  definitions at its start being the heading, outside fenced blocks; a detail heading is one too. Those
+  definitions are no part of the heading: a setext heading begins on the first line they leave, they are
+  content before it, and definitions alone followed by an underline make no heading. Grounding: CommonMark 0.31.2
+  reads the definitions at the start of a paragraph before it closes the paragraph as a setext heading
+  (§4.3, §4.7), so `[r]: /u`, `people row P1`, `---` is a definition and the heading `people row P1`, as
+  commonmark.js, cmark-gfm and markdown-it read it. For this rule, a detail heading is a top-level heading at the detail level of a table of the file's layout — the level of its rows' detail headings, one less than their row scope — whose text, its spaces, tabs and the line endings of a setext heading aside, is that table's name and the word `row`, each equal to its canonical text once lowercased as the viewers lowercase it, and a key: the heading of a detail section, in its canonical or a non-canonical spelling. Every other heading is a payload heading, a `<table> row <key>` heading at another level or inside a block quote or list item included, and its folds are compared with every detail anchor. Grounding: a detail section is assigned by its place, so a heading elsewhere names no row and renders an anchor of its own, which a viewer numbers when it repeats a detail anchor. A heading H other than a detail heading takes the anchor
   A of a detail heading when, under F = F_G or under F = F_M, F(H) and F(A) are equal once a final run
   of decimal digits is removed from each. The fold of an anchor is the same under both folds, since its
   letters and digits are ASCII. Two detail headings collide only when their anchors are equal.
@@ -178,7 +183,7 @@ and the column sections — are payload: the renderer moves them with their row 
 - A write that introduces a collision is `CONSTRAINT`, located at the row and column whose written text holds the heading or id that takes the anchor — a `markdown` column's value, a `files` row's title for its H1, a title, field or cell of a list or table row, or an item of a `files` row's field list, at the column whose text holds the attribute list's `{` or the tag's `<`, or, for a section or block heading, the row whose scope it opens, at the `markdown` column or child table it names — naming the detail heading whose anchor it takes: a title update, a payload write, a row insert that creates a detail section, a key update, a move, or the creation of a detail section; except that a write giving a row a key equal, with or without regard to case, to another key of its table is `DUPLICATE_KEY`, the key rule of the [document model](20-document-model.md#keys). A row without a detail section has no anchor, so it collides with nothing. On read a collision is `format.block`, except between two detail headings whose keys differ only in case, which is `key.duplicate` alone. Two detail sections of one file under the same
   heading text collide, so they are `format.block`, since neither can be assigned to a row.
 - On read, a collision is located at the element that collides ([Diagnostics](#diagnostics)): a heading at
-  its first line (the paragraph's first line for a setext heading) and the first character of its text; an
+  the first line of its text and the first character of its text; an
   attribute list at its `{`; an HTML `id` or `name` at the `<` of its tag. This is the read location only: a
   write that introduces a collision is located as [Write faults](#diagnostics) and the clause above state, at
   the row and column whose written text holds the heading or id that takes the anchor, and its message names
@@ -223,7 +228,8 @@ and the column sections — are payload: the renderer moves them with their row 
 - The framing blank lines are skeleton: on read, a further blank line (a line of only spaces and tabs) at either end of a value is not part of the value and is `format.noncanonical`, and so is a missing framing blank line where the element still reads back, except a body line directly after the last field-list item, which is `format.block`; `flowmark canon` repairs both.
 - A value holds no top-level setext heading: a line of only `=` or only `-`, of at most three spaces of
   indent and any trailing spaces or tabs, directly after a line of a top-level paragraph of the value, is
-  `CONSTRAINT` on write; on read, a setext heading is a heading where CommonMark reads one. Grounding: a
+  `CONSTRAINT` on write, a link reference definition at the start of a paragraph being no line of it
+  ([The collision rule](#detail-headings-and-anchors)); on read, a setext heading is a heading where CommonMark reads one. Grounding: a
   top-level setext underline turns the value's last line into a top-level heading, and a setext heading is of
   level 1 or 2 while every row scope's level L is at least 2 (2 for a `files` row, h + 1 ≥ 3 inside a detail
   section at level h), so no setext heading lies deeper than L: every top-level setext heading in a value is a
