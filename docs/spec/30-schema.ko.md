@@ -1,5 +1,5 @@
 <!-- doc-id: spec-schema -->
-<!-- source-sha256: 13a7234a12278fe776823b1847763ee42906bcc565904a3a18900b67c11c7ce0 -->
+<!-- source-sha256: 96c0d67bcfaab53edaab705276857f61c90b094d1d4b3db6b80716561ee11cb4 -->
 # Schema
 
 [English](30-schema.md)
@@ -56,11 +56,11 @@ column을 이름 붙인다 — column 이름이 동작을 고르지 않는다.
 - **외래 key.** table의 모든 외래 key는 하나의 column이며 어떤 table의 단일 column primary key를 가리킨다.
   composite 외래 key, 또는 unique이지만 key가 아닌 column을 가리키는 외래 key는 그 외래 key의 위치에 놓인
   schema 오류다. 근거: 외래 key는 가리키는 행으로의 link로 쓰이며, 행은 단일 column key를 통해서만 link를 가진다.
-- **block 배치.** block table의 배치 foreign key — 그 `store block <fk>` setting이 이름 붙이는 foreign key — 의
+- **block 배치.** block table의 배치 외래 key — 그 `store block <fk>` setting이 이름 붙이는 외래 key — 의
   column은 non-null이다. nullable이면 block table 이름에 위치한 schema 오류다. 근거: block 행은 그 배치
-  foreign key가 참조하는 행의 scope 안에 서며([document model](20-document-model.md#storage)) NULL은 어떤 행도
+  외래 key가 참조하는 행의 scope 안에 서며([document model](20-document-model.md#storage)) NULL은 어떤 행도
   참조하지 않으므로, 그 자리에 NULL을 가진 행은 쓰일 자리가 없다. SQL 행은 자리가 필요 없으므로 dbspec은 nullable
-  foreign key column을 받아들인다. 이 catalog 규칙은 여기서 정한다. 이 규칙은 이력 table을 포함한 모든 block
+  외래 key column을 받아들인다. 이 catalog 규칙은 여기서 정한다. 이 규칙은 이력 table을 포함한 모든 block
   table에 성립한다([이력 table](#이력-table)).
 
 ## 이름 규칙
@@ -84,7 +84,7 @@ history setting은 이력 table의 column을 이름 붙인다: `<fk column>`은 
 foreign key를 갖고, `from`과 `to`는 상태 column의 type, `at`은 `datetime(6)`이며, `require` 목록이 이름
 붙인 column마다 그 이름과 type을 가진 nullable column 하나가 있다. table은 `identity` key 외에 다른
 column이 없고 `title`이나 `body`를 선언하지 않는다. 어긋나면 이력 table 이름에서 setting 오류다.
-상태 table 아래의 `block <fk> table`로, 또는 `document table`로 저장된다. 이력 table의 다른 저장은 이력 table 이름에서 setting 오류다. 근거: 이력 규칙 — 전이마다 행 하나, gap과 chain 진단, 복구, restrict delete([constraints](50-constraints.md#the-state-machine)) — 은 행과 그 foreign key 위에서 정해지며 그 자리 위에서 정해지지 않으므로, 저장은 다른 모든 table과 같이 schema가 고른다. 다른 저장은 위의 규칙이 배제한다: `files`와 `list`는 `title`을 선언하는데 이력 table은 선언하지 않고, 다른 table 아래의 block은 이력 행을 복사된 column으로 배치하게 되는데, 그 column은 nullable이며 그 줄이 require하지 않는 모든 전이에서 NULL이므로 block 배치 규칙이 이를 거절한다([block 배치](#dbspec-구성에-대한-corpus-규칙)). 같은 규칙이 row column이 nullable인, 상태 table 아래의 block도 거절한다. 두 저장은 지역성과 깊이를 맞바꾼다. block은 행의 이력을 그 행의 상세 섹션 — `files` table이면 그 행 자신의 file — 에 두므로, 행과 그 이력을 함께 읽고 서로 다른 행의 전이는 서로 다른 자리를 건드린다. 그러나 이력을 가진 모든 행이 상세 섹션을 가지며, block은 상태 행보다 두 단계 아래에 선다. document table은 table의 이력을 `<history>.flowmark.md`에 두며, 그 행은 상태 table의 깊이와 상관없이 row scope 3을 가지므로 require된 `markdown` column은 언제나 section을 가진다. 그러나 table의 모든 전이가 그 한 file에 덧붙는다. 어느 비용도 모든 corpus에 성립하지 않으므로 어느 저장도 강제하지 않는다.
+상태 table 아래의 `block <fk> table`로, 또는 `document table`로 저장된다. 이력 table의 다른 저장은 이력 table 이름에서 setting 오류다. 근거: 이력 규칙 — 전이마다 행 하나, gap과 chain 진단, 복구, restrict delete([constraints](50-constraints.md#the-state-machine)) — 은 행과 그 foreign key 위에서 정해지며 그 자리 위에서 정해지지 않으므로, 저장은 다른 모든 table과 같이 schema가 고른다. 다른 저장은 배제된다: `files`와 `list`는 `title`을 선언하는데 이력 table은 선언하지 않는다. 다른 table 아래의 block은 이력 행을 row column이 아닌 column으로 배치하며, 이는 방금 말한 setting 오류다 — 복사된 column으로 배치한 block이 그 한 예로, 그 column은 nullable이며 그 줄이 require하지 않는 모든 전이에서 NULL이므로 block 배치 규칙도 이를 거절한다([block 배치](#dbspec-구성에-대한-corpus-규칙)). 그리고 block 배치 규칙은 row column이 nullable인, 상태 table 아래의 block도 거절한다. 두 저장은 지역성과 깊이를 맞바꾼다. block은 행의 이력을 그 행의 상세 섹션 — `files` table이면 그 행 자신의 file — 에 두므로, 행과 그 이력을 함께 읽고 서로 다른 행의 전이는 서로 다른 자리를 건드린다. 그러나 이력을 가진 모든 행이 상세 섹션을 가지며, block은 상태 행보다 두 단계 아래에 선다. document table은 table의 이력을 `<history>.flowmark.md`에 두며, 그 행은 상태 table의 깊이와 상관없이 row scope 3을 가지므로 require된 `markdown` column은 언제나 section을 가진다. 그러나 table의 모든 전이가 그 한 file에 덧붙는다. 어느 비용도 모든 corpus에 성립하지 않으므로 어느 저장도 강제하지 않는다.
 
 `require` 목록이 이름 붙인 column은 상태 table에서 `markdown`으로 선언될 때에만 이력 table에서도 `markdown`으로 선언되며, 그 밖의 경우에는 이력 table에서 `markdown`으로 선언되지 않는다. 어긋나면 이력 table 이름에서 schema 오류다. 근거: 이력 행은 require된 column의 사본을 담고([constraints](50-constraints.md#the-state-machine)), section과 한 줄 자리는 서로 다른 값을 받는다 — 여러 줄 값이나 raw HTML은 section의 본문이지만 cell에서는 거절되고, `# x` 줄은 cell의 본문이지만 section에서는 거절된다([canonical format](10-canonical-format.md#single-line-places)) — 그래서 어긋나면 상태 table이 담은 값 때문에 선언된 전이를 거절하게 된다. dbspec은 SQL backend가 `markdown`을 무시하므로 그 어긋남을 받아들이며, catalog 규칙은 여기서 정한다. 이력 table이 block으로 저장되면 그 행은 상태 table의 행보다 두 단계 아래에 서므로, 그 row scope는 상태 table의 row scope에 2를 더한 값이다. require된 `markdown` column은 그 scope의 이력 행에 있는 section이며, 상태 table의 row scope가 5 이상이면 그 section은 H6를 넘어 서므로 layout은 이력 table 이름에서 schema 오류다([heading 깊이](30-schema.md#name-rules)). `document table`로 저장되면 이력 행은 상태 table의 깊이와 상관없이 row scope 3을 가지므로 그런 상태기계는 load된다. 두 table 어느 쪽도 `markdown`으로 선언하지 않은 require된 column은 cell이며 heading이 필요 없고 어떤 깊이에서도 허용된다. 근거: `markdown` 값은 모든 저장에서 section이며([canonical format](10-canonical-format.md#sections-and-their-values)), CommonMark에는 H6 너머의 heading이 없어서 그런 값을 쓸 자리가 없다. 값을 cell로 쓰면 table의 깊이에 따라 column의 형태가 바뀌고, cell은 line feed를 담을 수 없다. section을 H6에 쓰면 이력 행의 상세 heading과 같은 수준에 서게 되는데, 그 수준에서 `<table> row <key>`가 아닌 heading은 row scope를 끝내며 그 내용은 어느 행에도 속하지 않는다([canonical format](10-canonical-format.md#detail-headings-and-anchors)).
 
