@@ -453,6 +453,20 @@ func TestDelete(t *testing.T) {
 	sf.sub(t, "50#keys-and-references: a delete of a row whose scope holds block rows", func(f *fixture) {
 		wantFaults(f.t, f.fails(byID(f, "delete", "notes", "N1"), "FOREIGN_KEY"), []dupFault{{"notes", "N1", -1, "", "FOREIGN_KEY", "steps S1"}})
 	})
+	noSteps := baseDocs()
+	noSteps["notes/N1.flowmark.md"] = lines("# First note", "- item: [T1](../items.flowmark.md#items-row-t1)", "- position: 1", "", "Note body.")
+	nf := catalogFixture(t, noSteps)
+	for _, order := range [][]any{{"N1", "N2"}, {"N2", "N1"}} {
+		nf.sub(t, "50#keys-and-references: one delete of a referenced row and the row referencing it, parameters "+order[0].(string)+" then "+order[1].(string), func(f *fixture) {
+			err := f.fails(f.msg("delete", "notes", map[string]any{"where": where(pred("id", "in", map[string]any{"ps": []int{0, 1}}))}, order...), "FOREIGN_KEY")
+			wantFaults(f.t, err, []dupFault{{"notes", "N1", -1, "", "FOREIGN_KEY", "notes N2"}})
+		})
+	}
+	t.Run("50#keys-and-references: the referencing row deleted by an earlier request, then the referenced row", func(t *testing.T) {
+		f := catalogFixture(t, noSteps).on(t)
+		f.commit(f.want(byID(f, "delete", "notes", "N2"), `{"affected":1,"keys":[]}`))
+		f.commit(f.want(byID(f, "delete", "notes", "N1"), `{"affected":1,"keys":[]}`))
+	})
 	broken := baseDocs()
 	broken["notes/N9.flowmark.md"] = "no heading\n"
 	bf := catalogFixture(t, broken)

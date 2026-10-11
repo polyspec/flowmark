@@ -1,5 +1,5 @@
 <!-- doc-id: spec-constraints -->
-<!-- source-sha256: 630d2e5434a58b9e0770f591b3bfe0a2b8ca8573249ad3804e20c4ce9df6e109 -->
+<!-- source-sha256: 1cfbb54d4fae4d507caa68d8d6ad71c477431d03e1511fea35df6a0e5812fc55 -->
 # Constraints
 
 [English](50-constraints.md)
@@ -24,7 +24,11 @@
   움직이지 않는다.
 - **참조 action은 restrict-only다.** `cascade`와 `set_null`은 catalog를 읽을 때 거절한다: 엔진을
   우회하는 작성자에게는 구현할 수 없다. 참조되는 행 — 이력 행을 가진 행 포함 — 의 삭제는
-  `FOREIGN_KEY`다.
+  `FOREIGN_KEY`다. restrict는 쓰기 전의 행에 대해 성립한다: delete가 지우는 행이 참조되면, 같은 요청이
+  지우는 행이 참조하더라도 `FOREIGN_KEY`이며, 참조하는 행은 앞선 요청이 지운다. 근거: orm은 즉시
+  검사하는 `RESTRICT`를 render한다. 그러면 MySQL과 SQLite는 그런 delete를 자기 행 순서에 따라 거절하거나
+  받아들이고 PostgreSQL은 받아들이는데, 집합 delete에는 행 순서가 없으므로 쓰기 전의 검사가 순서와
+  무관한 유일한 규칙이다.
 - **soft delete된 행도 unique key를 차지하고 foreign key를 만족한다**(SQL과 같음). 그래서 soft delete가
   가짜 dangling 판정을 만들지 않고, 같은 key의 재insert는 여전히 중복으로 실패한다.
 

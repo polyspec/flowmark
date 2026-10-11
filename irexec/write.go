@@ -778,13 +778,8 @@ func (w *writer) delete() *Error {
 		}
 		return nil
 	}
-	deleting := map[*store.Row]bool{}
 	for _, x := range rows {
-		deleting[x.row] = true
-	}
-	for i, x := range rows {
-		g := &given{row: x.row, index: i}
-		if err := w.restrict(g, x, deleting); err != nil {
+		if err := w.restrict(x); err != nil {
 			return err
 		}
 	}
@@ -801,11 +796,12 @@ func (w *writer) delete() *Error {
 	return nil
 }
 
-// restrict refuses the delete of row x while a row that is not deleted references
-// it: through a foreign key, its parent, the placement key of a block row in its
-// scope, or a history row (spec 50 Keys and references, restrict-only). Every table
-// that may reference the row is needed.
-func (w *writer) restrict(g *given, x *rec, deleting map[*store.Row]bool) *Error {
+// restrict refuses the delete of row x while a row references it: through a foreign
+// key, its parent, the placement key of a block row in its scope, or a history row
+// (spec 50 Keys and references, restrict-only). Restrict holds against the rows
+// before the write, so a referencing row the same delete removes still refuses it.
+// Every table that may reference the row is needed.
+func (w *writer) restrict(x *rec) *Error {
 	for _, t := range w.c.cat.Tables {
 		for _, fk := range t.ForeignKeys {
 			if fk.Table != x.tb.Name || len(fk.Columns) != 1 {
@@ -821,9 +817,6 @@ func (w *writer) restrict(g *given, x *rec, deleting map[*store.Row]bool) *Error
 				}
 				if v.null || v.text != x.row.Key {
 					continue
-				}
-				if deleting[y.row] {
-					return unspecified(fmt.Sprintf("a delete of %s %s and of the row %s %s that references it", x.tb.Name, x.row.Key, t.Name, y.row.Key))
 				}
 				w.faults = append(w.faults, store.Refusal{Table: x.tb.Name, Key: x.row.Key, Index: -1, Rule: codeForeignKey,
 					Message: fmt.Sprintf("the row is referenced by %s %s through %s in %s", t.Name, y.row.Key, fk.Columns[0], y.file)})
