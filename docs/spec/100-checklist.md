@@ -41,7 +41,7 @@ Every foreign key has its leading index. The checks are `start_on is null or sta
   so the target has no anchor.
 - In the table cells of `item_links`, `from_item` and `to_item` are links such as
   `[T1](items.flowmark.md#items-row-t1)`, the anchor present exactly when the item has a detail section.
-- A multi-line evidence is a section: `items.flowmark.md` H1, `## items row T1`, `### item_history`, `#### item_history row <id>`, `##### evidence` — within H6.
+- A multi-line evidence is a section: `items.flowmark.md` H1, `## items row T1`, `### item_history`, `#### item_history row <id>`, `##### evidence` — within H6. The `require` columns `evidence`, `cause` and `retry` are `markdown` columns of both `items` and `item_history`, so a history row with a non-null copy has a detail section; `items` is stored `document list`, its rows stand at row scope 3, and the history sections stand at H5. The same machine on a block table at row scope 5 or deeper would need H7 and is a schema error ([schema](30-schema.md#the-history-table)); adding a column never changes the storage of `items`.
 
 ## The state machine
 

@@ -208,6 +208,36 @@ func (l *loader) checkNames() {
 	}
 }
 
+// checkHistoryMarks reports, at the history table's name, a column that a
+// require list names and that the state table and the history table do not
+// both declare markdown or both declare without it: the history row holds a
+// copy of the value, and a section and a single-line place accept different
+// values.
+func (l *loader) checkHistoryMarks() {
+	for _, r := range l.order {
+		s := r.table.Settings
+		if s == nil || s.StateMachine == nil || s.StateMachine.History == nil {
+			continue
+		}
+		h := l.refs[s.StateMachine.History.Table]
+		if h == nil {
+			continue
+		}
+		seen := map[string]bool{}
+		for _, line := range s.StateMachine.Lines {
+			for _, c := range line.Requires {
+				if seen[c] {
+					continue
+				}
+				seen[c] = true
+				if slices.Contains(markdownOf(r.table), c) != slices.Contains(markdownOf(h.table), c) {
+					l.add(l.tableDiag(h.doc, h.table.Name, "history column "+c+" of table "+h.table.Name+" and required column "+c+" of table "+r.table.Name+" differ in their markdown setting"))
+				}
+			}
+		}
+	}
+}
+
 // markdownOf returns the names of the markdown columns of a table.
 func markdownOf(t *dbspec.Table) []string {
 	if t.Settings == nil {

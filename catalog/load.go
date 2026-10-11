@@ -41,6 +41,7 @@ func Load(root string) (*Catalog, []Diagnostic) {
 	l.checkForeignKeys()
 	l.resolveLayout()
 	l.checkNames()
+	l.checkHistoryMarks()
 	if len(l.diags) > 0 {
 		return nil, l.diags
 	}

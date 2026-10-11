@@ -1,5 +1,5 @@
 <!-- doc-id: spec-schema -->
-<!-- source-sha256: c6b833d255c7d95d9973c983eb1d18690b017759011eaea4cceecc1c678cafdc -->
+<!-- source-sha256: 441591eaa15d254d6d7b5897878f3888614d40f83b3bde4ea5356f05aa762249 -->
 # Schema
 
 [English](30-schema.md)
@@ -62,7 +62,7 @@ column을 이름 붙인다 — column 이름이 동작을 고르지 않는다.
 - **예약된 table 이름.** 대소문자를 무시하고 `CON`, `PRN`, `AUX`, `NUL`, `COM0`–`COM9`, `LPT0`–`LPT9`와
   같은 table 이름은 schema 오류다: Windows의 예약된 file 이름이기 때문이다.
 - **부모의 markdown column과 같은 이름을 가진 자식 table**은 schema 오류다.
-- **heading 깊이.** layout이 H6를 넘는 heading을 필요로 하면 schema 오류이며, catalog를 읽을 때 정해진다. table의 행은 body가 아닌 markdown column이나 child block을 가질 수 있으면 자기 row scope 수준에 section을 쓰고, body를 가질 수 있으면 그 한 단계 위에 detail heading을 쓴다. 둘 중 어느 것도 가질 수 없는 table은 block heading 아래에 heading을 쓰지 않으므로, row scope가 H6를 넘어도 된다. 근거: layout이 쓰지 않는 heading은 layout이 필요로 하는 heading이 아니다. markdown column이 없는 state machine의 history table은, 기계가 어떤 column도 require하지 않을 때처럼, detail section이 없으므로 block row 아래 level 7에 선다.
+- **heading 깊이.** layout이 H6를 넘는 heading을 필요로 하면 schema 오류이며, catalog를 읽을 때 정해진다. table의 행은 body가 아닌 markdown column이나 child block을 가질 수 있으면 자기 row scope 수준에 section을 쓰고, body를 가질 수 있으면 그 한 단계 위에 detail heading을 쓴다. 둘 중 어느 것도 가질 수 없는 table은 block heading 아래에 heading을 쓰지 않으므로, row scope가 H6를 넘어도 된다. 근거: layout이 쓰지 않는 heading은 layout이 필요로 하는 heading이 아니다. markdown column이 없는 state machine의 history table은, 기계가 어떤 column도 require하지 않거나 두 table 어느 쪽도 `markdown`으로 선언하지 않은 column만 require할 때처럼, detail section이 없으므로 block row 아래 level 7에 선다.
 
 ## 상태 집합
 
@@ -79,6 +79,8 @@ foreign key를 갖고, `from`과 `to`는 상태 column의 type, `at`은 `datetim
 붙인 column마다 그 이름과 type을 가진 nullable column 하나가 있다. table은 `identity` key 외에 다른
 column이 없고 `title`이나 `body`를 선언하지 않는다. 어긋나면 이력 table 이름에서 setting 오류다.
 `block <fk> table`로 저장된다.
+
+`require` 목록이 이름 붙인 column은 상태 table에서 `markdown`으로 선언될 때에만 이력 table에서도 `markdown`으로 선언되며, 그 밖의 경우에는 이력 table에서 `markdown`으로 선언되지 않는다. 어긋나면 이력 table 이름에서 schema 오류다. 근거: 이력 행은 require된 column의 사본을 담고([constraints](50-constraints.md#the-state-machine)), section과 한 줄 자리는 서로 다른 값을 받는다 — 여러 줄 값이나 raw HTML은 section의 본문이지만 cell에서는 거절되고, `# x` 줄은 cell의 본문이지만 section에서는 거절된다([canonical format](10-canonical-format.md#single-line-places)) — 그래서 어긋나면 상태 table이 담은 값 때문에 선언된 전이를 거절하게 된다. dbspec은 SQL backend가 `markdown`을 무시하므로 그 어긋남을 받아들이며, catalog 규칙은 여기서 정한다. 이력 table의 행은 상태 table의 행보다 두 단계 아래에 서므로, 그 row scope는 상태 table의 row scope에 2를 더한 값이다. require된 `markdown` column은 그 scope의 이력 행에 있는 section이며, 상태 table의 row scope가 5 이상이면 그 section은 H6를 넘어 서므로 layout은 이력 table 이름에서 schema 오류다([heading 깊이](30-schema.md#name-rules)). 두 table 어느 쪽도 `markdown`으로 선언하지 않은 require된 column은 cell이며 heading이 필요 없고 어떤 깊이에서도 허용된다. 근거: `markdown` 값은 모든 저장에서 section이며([canonical format](10-canonical-format.md#sections-and-their-values)), CommonMark에는 H6 너머의 heading이 없어서 그런 값을 쓸 자리가 없다. 값을 cell로 쓰면 table의 깊이에 따라 column의 형태가 바뀌고, cell은 line feed를 담을 수 없다. section을 H6에 쓰면 이력 행의 상세 heading과 같은 수준에 서게 되는데, 그 수준에서 `<table> row <key>`가 아닌 heading은 row scope를 끝내며 그 내용은 어느 행에도 속하지 않는다([canonical format](10-canonical-format.md#detail-headings-and-anchors)).
 
 ## Install
 
