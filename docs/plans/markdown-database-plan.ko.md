@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database -->
-<!-- source-sha256: 23fdf6419ef897aa5dc349138495705a3613cad62e5e691db97037c60288ef3f -->
+<!-- source-sha256: 4d2fad0caf6a347d499cd3ac0295787e16a07614c067bbcabd3b58f993d30ee8 -->
 # markdown database 계획
 
 [English](markdown-database-plan.md)
@@ -50,6 +50,15 @@ NULL이 아니며 비어 있을 수 있고, view의 entity table은 둘 다 선�
   `WRITE_CONFLICT`(읽은 뒤 대상이 바뀜, file과 줄을 밝히며 client가 재시도하지 않음)를 추가한다.
   끝난 lock 대기는 SQLite의 `busy_timeout`처럼 `CANCELED`다. hash 불일치는 `SCHEMA_HASH_MISMATCH`,
   일치하는 행이 없는 `optimistic` update는 `OPTIMISTIC_LOCK`이다.
+- T12.4 판정([capability table](../spec/60-dialect.ko.md))은 executor가 처음에 열린 질문으로
+  `CAPABILITY_UNSUPPORTED`를 답하던 모든 surface를 정한다: `contains`는 ASCII 대소문자를 접고
+  `contains_binary`는 code point로 비교한다. NULL은 오름차순에서 처음에 정렬된다. 저장 순서는
+  전순서다. slot의 type 밖의 parameter는 `CODEC_ENCODE`다. 읽기의 답은 JSON 형태 하나를 가진다.
+  시계는 쓸 때 자르고 비교할 때 여섯 자리다. key는 결코 갱신되지 않는다. `group_by`는
+  `count`/`group_count` root의 option이고 scalar column subquery는 구성상 한 행이다. `flatten`은
+  client가 병합한다. `on_duplicate`는 충돌 key 하나를 가진다. restrict는 쓰기 전의 행에 대해
+  성립한다. 섞인 결함은 순서 하나를 가진다. 비교하는 두 column은 dbspec check operand처럼 만난다.
+  모든 backend가 지키는 규칙은 각각 orm 항목이며, checklist의 T12.4 항목에 적는다.
 - 연결은 session이다. 요청 외에 control message
   `{op: begin | commit | rollback | savepoint | release | rollback_to, name?}`를 실고, 각각 `{ok}`나
   오류로 답한다. `readOnly`는 지키며 다른 transaction처럼 lock을 잡는다. audit 값을 가진 transaction,

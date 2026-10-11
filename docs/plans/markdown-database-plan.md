@@ -55,6 +55,16 @@ compatibility, no fallback, no hidden error, no trick; rules first.
   `WRITE_CONFLICT` (a target changed since it was read, naming the file and line, never retried
   by the client); a lock wait that ends is `CANCELED`, as a SQLite `busy_timeout` is. A hash
   mismatch is `SCHEMA_HASH_MISMATCH`, an `optimistic` update with no match is `OPTIMISTIC_LOCK`.
+- The T12.4 rulings ([capability table](../spec/60-dialect.md)) decide every surface the executor
+  first answered `CAPABILITY_UNSUPPORTED` as an open question: `contains` folds ASCII case and
+  `contains_binary` compares code points; NULL orders first ascending; storage order is total; a
+  parameter outside its slot's type is `CODEC_ENCODE`; the read answer has one JSON shape; the
+  clock is truncated when written and six digits when compared; a key is never updated;
+  `group_by` is a `count`/`group_count` root option and a scalar column subquery is single-row by
+  construction; `flatten` is merged by the client; `on_duplicate` has one conflict key; restrict
+  holds against the rows before the write; mixed faults have one order; two compared columns meet
+  as dbspec check operands do. Each rule that every backend keeps is an orm item, listed in the
+  checklist's T12.4 entry.
 - A connection is a session. Besides requests it carries the control messages
   `{op: begin | commit | rollback | savepoint | release | rollback_to, name?}`, each answered
   `{ok}` or with an error. `readOnly` is honoured and takes the lock like any transaction; a
