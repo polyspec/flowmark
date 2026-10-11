@@ -3,8 +3,10 @@ package irexec
 import (
 	"bytes"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/polyspec/flowmark/catalog"
 	"github.com/polyspec/flowmark/store"
@@ -35,23 +37,130 @@ type Target struct {
 	Diagnostics []catalog.Diagnostic
 }
 
-// finish checks the write and renders its post-image. The key checks run first, on
-// the request against the corpus, and a write they refuse renders nothing; then the
-// references, unique keys, parents, checks and limits; then every changed file is
-// rendered, and the rows a file is rendered from are read back from its bytes.
+// finish checks the write and renders its post-image (spec 10 Diagnostics, "Write
+// faults"). The key checks, unique keys, references, parents, values, checks and
+// limits run on the request against the corpus, and no file renders for them. Their
+// faults are reported with the rows in request order and, within a row, its value
+// faults before its key fault. A write with a key or value fault renders no file;
+// otherwise every changed file is rendered, and the rows a file is rendered from are
+// read back from its bytes, its render faults reported next. FOREIGN_KEY is
+// reported only when no other fault stands, as SQL checks a foreign key at the end
+// of a statement. The code is that of the first fault.
 func (w *writer) finish() (*PostImage, *Error) {
-	if keyFaults := w.keyChecks(); len(keyFaults) > 0 {
-		return nil, faultError(keyFaults)
-	}
-	for _, step := range []func() *Error{w.uniques, w.references, w.parents, w.checks, w.limits} {
+	keyFaults := w.keyChecks()
+	for _, step := range []func() *Error{w.uniques, w.references, w.parents, w.values, w.checks, w.limits} {
 		if err := step(); err != nil {
 			return nil, err
 		}
 	}
-	if len(w.faults) > 0 {
-		return nil, faultError(w.faults)
+	var stand, fks []fault
+	for _, f := range append(keyFaults, w.faults...) {
+		if f.Rule == codeForeignKey {
+			fks = append(fks, f)
+		} else {
+			stand = append(stand, f)
+		}
 	}
-	return w.render()
+	keyLast := func(f fault) int {
+		if f.Rule == codeDuplicateKey {
+			return 1
+		}
+		return 0
+	}
+	sort.SliceStable(stand, func(i, j int) bool {
+		a, b := stand[i], stand[j]
+		if a.seq != b.seq {
+			return a.seq < b.seq
+		}
+		return keyLast(a) < keyLast(b)
+	})
+	if len(stand) > 0 {
+		return nil, faultError(refusals(stand))
+	}
+	post, renderFaults, err := w.render()
+	if err != nil {
+		return nil, err
+	}
+	var others []store.Refusal
+	for _, r := range renderFaults {
+		switch {
+		case r.Rule != codeForeignKey:
+			others = append(others, r)
+		case !slices.ContainsFunc(fks, func(f fault) bool { return f.Table == r.Table && f.Key == r.Key && f.Column == r.Column }):
+			fks = append(fks, fault{r, len(w.given)})
+		}
+	}
+	if len(others) > 0 {
+		return nil, faultError(others)
+	}
+	if len(fks) > 0 {
+		sort.SliceStable(fks, func(i, j int) bool { return fks[i].seq < fks[j].seq })
+		return nil, faultError(refusals(fks))
+	}
+	return post, nil
+}
+
+// refusals returns the refusals of faults, in their order.
+func refusals(faults []fault) []store.Refusal {
+	out := make([]store.Refusal, len(faults))
+	for i, f := range faults {
+		out[i] = f.Refusal
+	}
+	return out
+}
+
+// values refuses a written value that no file can hold, without rendering one: a
+// title that is empty, not UTF-8 or breaks the single-line rule, a stored scalar
+// that is not UTF-8 or breaks the single-line rule, and NULL in a non-null column
+// (spec 10 Single-line places, spec 50 Readable-document refusals). Each is the
+// same refusal the codec makes of the row; the codec's own refusals of the rendered
+// file follow only when no such fault stands.
+func (w *writer) values() *Error {
+	tb := w.tb
+	placement := ""
+	if tb.Storage.Kind == catalog.StorageBlock {
+		placement = placementColumn(tb)
+	}
+	for _, g := range w.given {
+		for _, c := range tb.Columns {
+			col := c.Name
+			if !g.inserted && !g.assigned[col] {
+				continue
+			}
+			if col == tb.Key || col == placement || col == tb.Order {
+				continue
+			}
+			switch {
+			case col == tb.Title:
+				t := g.row.Title
+				switch {
+				case t == "":
+					w.fault(g, tb.Name, col, codeConstraint, "the title is empty")
+				case !utf8.ValidString(t):
+					w.fault(g, tb.Name, col, codeConstraint, "the title is not UTF-8")
+				case store.SingleLineFault(t) != "":
+					w.fault(g, tb.Name, col, codeConstraint, "the title has "+store.SingleLineFault(t))
+				}
+			case col == tb.Body || isMarkdown(tb, col):
+				if !c.Null && col != tb.Body && g.assigned[col] && g.row.Sections[col] == nil {
+					w.fault(g, tb.Name, col, codeConstraint, "the non-null section "+col+" has no value")
+				}
+			default:
+				v := g.row.Scalars[col]
+				switch {
+				case v == nil:
+					if !c.Null && g.assigned[col] {
+						w.fault(g, tb.Name, col, codeConstraint, "the non-null column "+col+" has no value")
+					}
+				case !utf8.ValidString(*v):
+					w.fault(g, tb.Name, col, codeConstraint, col+" is not UTF-8")
+				case store.SingleLineFault(*v) != "":
+					w.fault(g, tb.Name, col, codeConstraint, col+" has "+store.SingleLineFault(*v))
+				}
+			}
+		}
+	}
+	return nil
 }
 
 // keyChecks runs both key checks of the rows the write inserts, byte for byte and
@@ -65,7 +174,7 @@ func (w *writer) finish() (*PostImage, *Error) {
 // whose key is greater in byte order — it names the one whose key is least in byte
 // order, the first given when several given rows hold that key. A row whose key
 // another given row shares byte for byte carries its index.
-func (w *writer) keyChecks() []store.Refusal {
+func (w *writer) keyChecks() []fault {
 	var ins []*given
 	for _, g := range w.given {
 		if g.inserted {
@@ -77,7 +186,7 @@ func (w *writer) keyChecks() []store.Refusal {
 	}
 	// The table's rows before the write: the rows the request does not give.
 	others := w.c.recs[w.tb.Name]
-	var faults []store.Refusal
+	var faults []fault
 	for i, g := range ins {
 		k := g.row.Key
 		idx := -1
@@ -86,8 +195,8 @@ func (w *writer) keyChecks() []store.Refusal {
 				idx = g.index
 			}
 		}
-		fault := func(msg string) {
-			faults = append(faults, store.Refusal{Table: w.tb.Name, Key: k, Index: idx, Column: w.tb.Key, Rule: codeDuplicateKey, Message: msg})
+		refuse := func(msg string) {
+			faults = append(faults, fault{store.Refusal{Table: w.tb.Name, Key: k, Index: idx, Column: w.tb.Key, Rule: codeDuplicateKey, Message: msg}, g.seq})
 		}
 		byteGiven := -1
 		for j := 0; j < i; j++ {
@@ -97,11 +206,11 @@ func (w *writer) keyChecks() []store.Refusal {
 			}
 		}
 		if byteGiven >= 0 {
-			fault(fmt.Sprintf("the key %s equals the key of the row at index %d of the rows given", k, ins[byteGiven].index))
+			refuse(fmt.Sprintf("the key %s equals the key of the row at index %d of the rows given", k, ins[byteGiven].index))
 			continue
 		}
 		if x := firstByKey(others, func(o string) bool { return o == k }); x != nil {
-			fault(fmt.Sprintf("the key %s equals the key of the %s row in %s", k, w.tb.Name, x.file))
+			refuse(fmt.Sprintf("the key %s equals the key of the %s row in %s", k, w.tb.Name, x.file))
 			continue
 		}
 		// The case-only pairs that place the fault at this row: every row of the
@@ -124,9 +233,9 @@ func (w *writer) keyChecks() []store.Refusal {
 		}
 		switch {
 		case leastGiven != nil:
-			fault(fmt.Sprintf("the key %s equals the key %s of the row at index %d of the rows given without regard to case", k, least, leastGiven.index))
+			refuse(fmt.Sprintf("the key %s equals the key %s of the row at index %d of the rows given without regard to case", k, least, leastGiven.index))
 		case leastRow != nil:
-			fault(fmt.Sprintf("the key %s equals the key %s of the %s row in %s without regard to case", k, least, w.tb.Name, leastRow.file))
+			refuse(fmt.Sprintf("the key %s equals the key %s of the %s row in %s without regard to case", k, least, w.tb.Name, leastRow.file))
 		}
 	}
 	return faults
@@ -149,10 +258,11 @@ func (w *writer) uniques() *Error {
 	for _, u := range w.tb.Uniques {
 		seen := map[string]*given{}
 		for _, g := range w.given {
-			if !g.inserted && !assignsAny(g, u) {
-				continue
+			x := w.next.byRow[g.row]
+			if x == nil || (!g.inserted && !assignsAny(g, u)) {
+				continue // a row placed nowhere has its key fault
 			}
-			k, ok, err := w.uniqueText(w.next.byRow[g.row], u)
+			k, ok, err := w.uniqueText(x, u)
 			if err != nil {
 				return err
 			}
@@ -356,27 +466,27 @@ func (lk *linker) Target(fromFile, table, key string) (string, error) {
 // render renders every file the write changed, and every file holding a link to a
 // row whose detail section appears or disappears, whose link target the write
 // moves. A file is a target when its bytes change. The rows of a rendered file are
-// read back from its bytes into the next corpus; a refusal of the codec is the
-// write's fault, and a DUPLICATE_KEY from the codec is internal, since the key
-// checks ran before.
-func (w *writer) render() (*PostImage, *Error) {
+// read back from its bytes into the next corpus; the refusals of the codec are the
+// write's faults and are returned with no post-image, and a DUPLICATE_KEY from the
+// codec is internal, since the key checks ran before.
+func (w *writer) render() (*PostImage, []store.Refusal, *Error) {
 	before, err := newLinker(w.c)
 	if err != nil {
-		return nil, errf(codeInternal, "%v", err)
+		return nil, nil, errf(codeInternal, "%v", err)
 	}
 	w.next.index()
 	after, err := newLinker(w.next)
 	if err != nil {
-		return nil, errf(codeInternal, "%v", err)
+		return nil, nil, errf(codeInternal, "%v", err)
 	}
 	if err := w.linkTargets(before, after); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	paths := sortedTables(w.touched)
 	for _, path := range paths {
 		if f := w.next.files[path]; f != nil {
 			if err := w.needLinks(f); err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 		}
 	}
@@ -405,11 +515,11 @@ func (w *writer) render() (*PostImage, *Error) {
 			out, rf, rerr = store.RenderDocument(w.c.cat, f.table, f.rows, after)
 		}
 		if rerr != nil {
-			return nil, errf(codeInternal, "rendering %s: %v", path, rerr)
+			return nil, nil, errf(codeInternal, "rendering %s: %v", path, rerr)
 		}
 		for _, r := range rf {
 			if r.Rule == codeDuplicateKey {
-				return nil, errf(codeInternal, "the codec refused a duplicate key that the key checks passed: %s %s: %s", r.Table, r.Key, r.Message)
+				return nil, nil, errf(codeInternal, "the codec refused a duplicate key that the key checks passed: %s %s: %s", r.Table, r.Key, r.Message)
 			}
 		}
 		if len(rf) > 0 {
@@ -417,17 +527,17 @@ func (w *writer) render() (*PostImage, *Error) {
 			continue
 		}
 		if err := w.readBack(path, f, out, after); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		if !bytes.Equal(out, prev) || prev == nil {
 			post.Targets = append(post.Targets, Target{Path: path, Before: prev, After: out, Diagnostics: diags})
 		}
 	}
 	if len(faults) > 0 {
-		return nil, faultError(faults)
+		return nil, faults, nil
 	}
 	w.next.index()
-	return post, nil
+	return post, nil, nil
 }
 
 // readBack replaces the rows of the rendered file path with the rows read from its
