@@ -161,6 +161,12 @@ func (f *fixture) reopen() {
 // body, the parameters params and the test clock.
 func (f *fixture) msg(kind, entity string, body map[string]any, params ...any) []byte {
 	f.t.Helper()
+	return f.msgAt(testNow, kind, entity, body, params...)
+}
+
+// msgAt builds a request message as msg does, at the request clock now.
+func (f *fixture) msgAt(now, kind, entity string, body map[string]any, params ...any) []byte {
+	f.t.Helper()
 	req := map[string]any{}
 	for k, v := range body {
 		req[k] = v
@@ -173,7 +179,7 @@ func (f *fixture) msg(kind, entity string, body map[string]any, params ...any) [
 	if params == nil {
 		params = []any{}
 	}
-	b, err := json.Marshal(map[string]any{"ir_version": 1, "manifest_hash": f.e.Model().ManifestHash, "request": req, "params": params, "now": testNow})
+	b, err := json.Marshal(map[string]any{"ir_version": 1, "manifest_hash": f.e.Model().ManifestHash, "request": req, "params": params, "now": now})
 	if err != nil {
 		f.t.Fatal(err)
 	}

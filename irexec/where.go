@@ -275,7 +275,7 @@ func (r *reader) pred(s *scope, ev *env, p *ir.Pred) (tri, *Error) {
 		return r.compareParams(p, ft, fv)
 	}
 	if p.Value != nil {
-		vv, vt, err := r.valueFunction(p.Value, t)
+		vv, vt, err := r.valueFunction(p.Value)
 		if err != nil {
 			return tFalse, err
 		}
@@ -503,15 +503,11 @@ func columnFunction(name string, t dbspec.Type, v cell) (cell, dbspec.Type, *Err
 // clock: now, today, and the relative forms that move the clock by a parameter
 // of their unit (seconds as an f64, the others as an i32). A month moves to the
 // same day of the target month, or to its last day when it has fewer days, as
-// MySQL's DATE_SUB and SQLite's floor modifier do. Compared with a datetime column,
-// the clock has the column's fraction digits, as the planner's now slot has.
-func (r *reader) valueFunction(f *ir.Func, against dbspec.Type) (cell, dbspec.Type, *Error) {
+// MySQL's DATE_SUB and SQLite's floor modifier do. The clock keeps six digits when
+// compared (orm protocol section 2, Clock; spec 40 The clock), as MySQL and
+// PostgreSQL compare a datetime(p) column with NOW(6).
+func (r *reader) valueFunction(f *ir.Func) (cell, dbspec.Type, *Error) {
 	now := r.cl.now
-	precision := 6
-	if against.Kind == dbspec.TypeDatetime {
-		precision = against.Precision
-	}
-	now = now.Truncate(precisionUnit(precision))
 	dt := dbspec.Type{Kind: dbspec.TypeDatetime, Precision: 6}
 	switch f.Name {
 	case "now":

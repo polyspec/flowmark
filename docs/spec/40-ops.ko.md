@@ -1,5 +1,5 @@
 <!-- doc-id: spec-ops -->
-<!-- source-sha256: 13150fd36e54e8b7afd50a4a93265aec10e4bd964d3a7d0327b7b26865fa43b3 -->
+<!-- source-sha256: 3f196f15ab1874e60afe715933f428647d8a25ae2b2458aa1d81a0b631b37525 -->
 # Operations
 
 [English](40-ops.md)
@@ -255,7 +255,11 @@ link 실패(`EPERM`, `ENOTSUP`, `ERROR_INVALID_FUNCTION`, `ERROR_NOT_SUPPORTED`)
 ## 시계
 
 엔진이 할당하는 모든 시각 — `updated`, `soft_delete`, `default now`, 이력 행의 `at` — 은 orm 요청이면
-요청의 `now`, 아니면 microsecond로 자른 엔진의 UTC 시계다.
+요청의 `now`, 아니면 microsecond로 자른 엔진의 UTC 시계다. 요청 하나는 시계 값 하나를 가진다.
+`datetime(p)` column에 쓰일 때는 p자리 소수로 자르며 반올림하지 않고, column과 비교할 때 `now`와 상대
+시각 함수는 여섯 자리를 유지한다. 근거: orm의 시계 규칙 — ORM이 쓰거나 비교하는 시계는
+microsecond를 유지한다. MySQL `CURRENT_TIMESTAMP(p)`와 orm의 SQLite `now` slot은 쓰는 시계를 자르고,
+MySQL과 PostgreSQL은 `datetime(p)` column을 `NOW(6)`와 여섯 자리로 비교한다.
 
 ## 비용 모델
 
