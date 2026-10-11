@@ -170,7 +170,7 @@ func (w *writer) historyRow(x *rec, sm *catalog.StateMachine, from, to string, r
 	switch ht.Storage.Kind {
 	case catalog.StorageBlock:
 		if placement != sm.History.Row || ht.Storage.Parent != x.tb.Name {
-			return cell{}, unspecified("a history table stored as a block of another table than its state table")
+			return cell{}, errf(codeInternal, "the catalog admitted the history storage block %s of %s", ht.Storage.ParentForeignKey, ht.Name)
 		}
 		if x.row.Blocks == nil {
 			x.row.Blocks = map[string][]*store.Row{}
@@ -187,7 +187,7 @@ func (w *writer) historyRow(x *rec, sm *catalog.StateMachine, from, to string, r
 		f.rows = append(f.rows, row)
 		w.touched[path] = true
 	default:
-		return cell{}, unspecified("a history table stored as files")
+		return cell{}, errf(codeInternal, "the catalog admitted the history storage %s of %s", ht.Storage.Kind, ht.Name)
 	}
 	w.next.index()
 	return id, nil

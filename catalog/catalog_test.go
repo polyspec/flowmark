@@ -715,6 +715,43 @@ func TestLoadHistoryStorage(t *testing.T) {
 	}
 }
 
+// TestLoadHistoryStorageKind pins spec 30's storage of a history table: `block <row
+// fk> table` under its state table or `document table`; any other storage is a
+// setting error at the history table's name.
+func TestLoadHistoryStorageKind(t *testing.T) {
+	const blockStore = "    store block fk_history_item table\n"
+	const msg = "a history table is stored `block <row fk> table` under its state table or `document table`"
+	cases := []struct {
+		name    string
+		edits   [][2]string
+		refused bool
+	}{
+		{"30#the-history-table: block of its row foreign key under its state table", nil, false},
+		{"30#the-history-table: document table", [][2]string{{blockStore, "    store document table\n"}}, false},
+		{"30#the-history-table: files", [][2]string{{blockStore, "    store files\n"}}, true},
+		{"30#the-history-table: document list", [][2]string{{blockStore, "    store document list\n"}}, true},
+		{"30#the-history-table: block of another table", [][2]string{
+			{"  foreign key fk_history_item (item) references items (id) on delete restrict on update restrict\n",
+				"  foreign key fk_history_item (item) references items (id) on delete restrict on update restrict\n  foreign key fk_history_person (item) references people (id) on delete restrict on update restrict\n"},
+			{blockStore, "    store block fk_history_person table\n"},
+		}, true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			root, text := editedCorpus(t, c.edits...)
+			cat, diags := catalog.Load(root)
+			if !c.refused {
+				if cat == nil || len(diags) > 0 {
+					t.Fatalf("refused: %+v", diags)
+				}
+				return
+			}
+			expectRejected(t, cat, diags)
+			expectTableDiag(t, diags, text, "item_history", msg)
+		})
+	}
+}
+
 // TestLoadRequireOfMarkdownPastH6 pins the ruling of spec 30 on a required column
 // of a block machine: a required column that the state table and the history
 // table both declare markdown is a section of the history rows, which is refused
