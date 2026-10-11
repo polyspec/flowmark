@@ -1,9 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: d3698931448897b812d4bd3908840e28ae5b3f74ab1a624386d2346cf84f9e85 -->
+<!-- source-sha256: 831ac7c4d5de88cbcb43ffa24f752ba905b9c7d872750d8d4f2036934cb63aad -->
 # Changelog
 
 ## Unreleased
 
+- T12.4: IR executor가 T12.4 판정을 반영한다. contains는 ASCII 대소문자를 접고 contains_binary는 code point로 비교한다. NULL은 오름차순에서 처음에 정렬된다. files table의 저장 순서는 전순서다. 시계는 쓸 때 자르고 여섯 자리로 비교한다. 범위 밖의 상대 시각은 NULL이다. join은 soft delete된 자식을 제외한다. flatten은 one relation으로 답한다. 읽을 수 없는 답 값은 INTERNAL이다. restrict는 쓰기 전의 행에 대해 성립한다. 거절된 쓰기는 결함을 한 순서로 보고하며, 행마다 중복 결함은 최대 하나다. insert는 자신이 해소하는 dangling link를 다시 쓴다. on_duplicate를 포함한 모든 key 검사는 A–Z만 접는다. 대소문자만 다른 key 둘을 가진 문서에 대한 쓰기가 commit된다. catalog는 그 밖의 이력 저장을 거절한다. spec 10, 20, 30, 40, 50, 60, 80과 plan은 모든 판정을 적고, orm을 기다리는 지점은 각자 orm 항목을 적는다. `scripts/go-test.mjs`는 재사용한 mount를 분리하지 않는다.
 - T12.5: write path가 IR executor와 journal을 잇는다. 모든 operation은 corpus lock을 잡고 중단된 commit을 먼저 복구한다. transaction 밖의 요청은 lock 아래 transaction 하나다. transaction과 savepoint는 lock을 잡고 자기 post-image를 읽는다. commit은 대상을 확인하고, lock 아래 다시 읽은 corpus가 바뀌었으면 쓰기를 그 위에서 다시 실행하며, journal로 쓴다. prepare 기록이 commit 시점이다. lock 기록은 획득마다 token을 가진다. panic이 나도 lock을 놓는다. format 진단이 있는 file을 다시 써야 하는 쓰기는 요청에서 거절되며, canon, add-column migration, file 전체 delete는 면제된다. flowmark history repair는 executor 쓰기다. commit은 validator의 evaluator로 check를 판정한다.
 - T12.1-30: 상세 anchor 충돌 규칙이 접은 형태 대신 각 viewer의 정확한 slug를 따른다. S_GH는 GitHub의 heading id(Unicode 17.0.0 word 문자, alt 텍스트 없음)를, S_VS는 VS Code의 것(그 slugify.ts, Unicode 13.0.0 집합, Final_Sigma, alt 텍스트)을 재현하며, 둘 다 `make slug-vectors`가 viewer에서 모든 code point에 대해 기록한 id와 대조한다. S_GL은 GitLab이 고정한 comrak 0.56.0의 것을 재현한다. slug 입력은 CommonMark 0.31.2가 렌더한 텍스트다. 텍스트의 numeric character reference는 그 code point다. HTML id나 name은 소문자로 바꾼 뒤, GitHub의 `user-content-` 형태로도 비교한다.
 - T13: Git이 `config/commits.json`을 어기는 message를 거절하는 `commit-msg` hook과 `pre-push` push gate를 실행한다. `config/checklist.json`이 둘을 나열하고 `make hooks`가 설치한다.
