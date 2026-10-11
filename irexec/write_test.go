@@ -528,7 +528,9 @@ func TestUpdate(t *testing.T) {
 		{"60#surfaces: an optimistic update that matches no row", f, f.msg("update", "people", map[string]any{"set": sets("name"), "where": where(pred("id", "eq", p(1))), "optimistic": map[string]any{"column": "score", "p": 2}}, "Ada L", "P1", "9.99"), "OPTIMISTIC_LOCK"},
 		{"20#order: an update that assigns the order matches exactly one row", f, f.msg("update", "notes", map[string]any{"set": sets("position"), "where": where(pred("parent", "is_null", nil))}, 1), "CONSTRAINT"},
 		{"60#surfaces: an update without where", f, f.msg("update", "notes", map[string]any{"set": sets("title")}, "x"), "IR_INVALID"},
-		{"60#surfaces: an update of the key column has no rule yet", f, byID(f, "notes", sets("id"), "N3", "N7"), "CAPABILITY_UNSUPPORTED"},
+		{"60#surfaces: an update of the key column", f, byID(f, "notes", sets("id"), "N3", "N7"), "IR_INVALID"},
+		{"60#surfaces: a restore that assigns the key column", f, f.msg("restore", "people", map[string]any{"set": sets("id"), "where": where(pred("id", "eq", p(1)))}, "P9", "P3"), "IR_INVALID"},
+		{"60#surfaces: a restore that assigns the soft delete column", f, f.msg("restore", "people", map[string]any{"set": sets("deleted_at"), "where": where(pred("id", "eq", p(1)))}, "2026-10-11 09:00:00", "P3"), "IR_INVALID"},
 		{"60#surfaces: a set to null of a non-null column", f, f.msg("update", "notes", map[string]any{"set": []any{map[string]any{"column": "title", "null": true}}, "where": where(pred("id", "eq", p(0)))}, "N3"), "IR_INVALID"},
 	}
 	for _, c := range codes {
