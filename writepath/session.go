@@ -3,7 +3,6 @@ package writepath
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"slices"
 	"strings"
 	"sync"
@@ -88,25 +87,7 @@ func (s *Session) Name() string { return s.name }
 // nothing, and the transaction stays open.
 func (s *Session) Exec(ctx context.Context, msg []byte) (*irexec.Answer, error) {
 	msg = bytes.Clone(msg)
-	return s.do(ctx, op{write: isWrite(msg), run: func(c *irexec.Corpus) (*irexec.Result, error) { return s.c.exec.Execute(c, msg) }})
-}
-
-// isWrite reports whether a request message holds a write. A message that does not decode is answered by the
-// executor's decoding.
-func isWrite(msg []byte) bool {
-	var m struct {
-		Request struct {
-			Kind string `json:"kind"`
-		} `json:"request"`
-	}
-	if json.Unmarshal(msg, &m) != nil {
-		return false
-	}
-	switch m.Request.Kind {
-	case "insert", "update", "delete", "restore":
-		return true
-	}
-	return false
+	return s.do(ctx, op{write: irexec.IsWrite(msg), run: func(c *irexec.Corpus) (*irexec.Result, error) { return s.c.exec.Execute(c, msg) }})
 }
 
 // Repair runs the history repair of the row of table whose key is key (spec 50 Repair), from the initial state from
