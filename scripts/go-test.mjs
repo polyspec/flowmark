@@ -78,16 +78,28 @@ export function goTest(root = repositoryRoot, platform = process.platform) {
       return 1;
     }
     log(`${caseSensitiveEnv}=${dir} (${provisioned.step})`);
-    const result = spawnSync('go', ['test', '-count=1', './...'], {
-      cwd: root,
-      stdio: 'inherit',
-      env: { ...process.env, [caseSensitiveEnv]: dir },
-    });
-    if (result.error) throw new Error(`go test: ${result.error.message}`);
-    return result.status ?? 1;
+    return runGoTests(root, dir);
   } finally {
     if (platform === 'darwin' && attached) run('hdiutil', ['detach', dir]);
   }
+}
+
+/**
+ * Runs `go test` over the module at `root` with the case-sensitive folder `dir` declared, and returns its exit status.
+ * The environment is the process's, extended with that one variable, so `go` is looked up on the process's PATH at the
+ * moment of the spawn: a PATH without it — Go not installed, or its link absent while a package manager relinks it —
+ * fails naming the PATH searched and the fix, never the bare spawn error.
+ */
+export function runGoTests(root, dir) {
+  const env = { ...process.env, [caseSensitiveEnv]: dir };
+  const result = spawnSync('go', ['test', '-count=1', './...'], { cwd: root, stdio: 'inherit', env });
+  if (result.error?.code === 'ENOENT') {
+    throw new Error(
+      `go test: no executable named go on PATH (${env.PATH ?? ''}); install Go or put its bin folder on PATH, then run again`,
+    );
+  }
+  if (result.error) throw new Error(`go test: ${result.error.message}`);
+  return result.status ?? 1;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
