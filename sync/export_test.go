@@ -4,8 +4,11 @@
 package sync
 
 import (
+	"bytes"
+	"compress/zlib"
 	"database/sql"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -136,6 +139,44 @@ func typesDocs(t *testing.T) map[string]string {
 		"dbspec/flowmark.dbs":  text,
 		"memos/M2.flowmark.md": "# Memo two\n- deleted_at: 2026-10-11 09:00:00.000000\n",
 	}
+}
+
+// codecDocs turns the files golden into a catalog whose memos table holds four codec
+// columns: doc, ordered_json text; packed, ordered_json compressed by gz, which is
+// bytes; hexed, ordered_json then the host stage hex; and addr, the host stage ip, which
+// is bytes. Its first memo stores all four.
+func codecDocs(t *testing.T) map[string]string {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(moduleRoot(t), "store", "testdata", "files", "dbspec", "flowmark.dbs"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := "  summary text null\n  primary key (id)\n  settings {\n    store files\n    title title\n    body body\n    markdown body\n    markdown summary\n  }"
+	if !strings.Contains(string(data), old) {
+		t.Fatal("the files golden catalog no longer holds the memos table")
+	}
+	text := strings.Replace(string(data), old, "  summary text null\n  doc text null\n  packed bytes null\n  hexed varchar(255) null\n  addr bytes null\n  primary key (id)\n  settings {\n    store files\n    title title\n    body body\n    markdown body\n    markdown summary\n    codec doc ordered_json\n    codec packed ordered_json gz\n    codec hexed ordered_json hex\n    codec addr ip\n  }", 1)
+	var packed bytes.Buffer
+	w := zlib.NewWriter(&packed)
+	w.Write([]byte(`{"b":2}`))
+	w.Close()
+	return map[string]string{
+		"dbspec/flowmark.dbs":  text,
+		"memos/M1.flowmark.md": "# Memo one\n- doc: {\"a\":1}\n- packed: " + base64.StdEncoding.EncodeToString(packed.Bytes()) + "\n- hexed: " + strings.ToUpper(hex.EncodeToString([]byte(`{"h":3}`))) + "\n- addr: AQIDBA==\n\nBody.\n\n## summary\n\nSummary text.\n",
+	}
+}
+
+// hostFirstDocs is codecDocs with a hexed column whose codec puts the host stage hex
+// before a client stage.
+func hostFirstDocs(t *testing.T) map[string]string {
+	t.Helper()
+	docs := codecDocs(t)
+	text := docs["dbspec/flowmark.dbs"]
+	if !strings.Contains(text, "    codec hexed ordered_json hex\n") {
+		t.Fatal("codecDocs no longer declares the hexed codec")
+	}
+	docs["dbspec/flowmark.dbs"] = strings.Replace(text, "    codec hexed ordered_json hex\n", "    codec hexed hex base64\n", 1)
+	return docs
 }
 
 // apply runs the statements of the export of c on a new SQLite database with its
@@ -312,6 +353,7 @@ func TestExportRebuildsTheCorpus(t *testing.T) {
 	}
 	cases["files (every type)"] = corpus(t, "files", typesDocs(t))
 	cases["files (identity column)"] = corpus(t, "files", nil)
+	cases["files (codec columns)"] = corpus(t, "files", codecDocs(t))
 	for name, root := range cases {
 		t.Run("70#the-export: "+name+" rebuilds in SQLite", func(t *testing.T) {
 			c := open(t, root)
@@ -452,6 +494,8 @@ func TestExportRefusals(t *testing.T) {
 		{name: "70#scope: a value not of its type fails naming its diagnostic", golden: "equivalence/document",
 			docs: map[string]string{"entries.flowmark.md": strings.Replace(readGolden(t, "equivalence/document/entries.flowmark.md"), "count:10", "count:ten", 1)},
 			code: "CONSTRAINT", rule: "type", file: "entries.flowmark.md"},
+		{name: "70#the-export: a codec column with a host stage before a client stage is unsupported", golden: "files", docs: hostFirstDocs(t),
+			code: "CAPABILITY_UNSUPPORTED", table: "hexed"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

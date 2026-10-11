@@ -3,6 +3,7 @@
 
 ## Unreleased
 
+- T12.7: the export to a database is done: a codec column keeps its stored cell, the host stages hex and ip at the end of its list are undone and orm applies them again, and only a host stage before a client stage is refused; with the identity keys and the `datetime(p)` bind of the earlier entries every table of the catalog exports.
 - T12.4: the IR executor is done: it answers every IR kind under the orm protocol with the rulings that need nothing from orm applied; the ten rulings that wait on an orm item are the sub-items T12.4-1 to T12.4-10, each applied after its orm bump.
 - T12.7 (in part): the export test applies the statements through orm's `DB.Execute` instead of a binder of its own, so SQLite `datetime(p)` and `time(p)` columns of every precision bind as the database requires; the orm pin moves to the commit that carries it.
 - T12.7 (in part): the export to a database keeps an identity table's keys: its rows load through orm's `load` insert and orm's identity restart follows, so the next generated key follows the largest loaded one; only codec tables are still refused.

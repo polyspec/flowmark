@@ -5,17 +5,21 @@
 package sync
 
 import (
+	"encoding/base64"
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/polyspec/flowmark/catalog"
 	"github.com/polyspec/flowmark/irexec"
+	"github.com/polyspec/flowmark/validate"
 	"github.com/polyspec/orm/engine/dbspec"
 	"github.com/polyspec/orm/engine/dialect"
 	"github.com/polyspec/orm/engine/ir"
 	"github.com/polyspec/orm/engine/plan"
 	"github.com/polyspec/orm/engine/planner"
 	"github.com/polyspec/orm/engine/runtimemodel"
+	"github.com/polyspec/orm/packages/orm-go/orm"
 )
 
 // Statement is one statement of an export (spec 70 The export): its SQL text as
@@ -92,17 +96,69 @@ const (
 	codeInternal   = "INTERNAL"
 )
 
-// supported fails as CAPABILITY_UNSUPPORTED when orm renders no insert that keeps
-// the stored values of the table of e: a codec column's stored value is the encoded
-// one, while orm's insert takes the decoded value and encodes it, and the engine
-// decodes no value yet (spec 60 Surfaces, codec columns).
+// supported fails as CAPABILITY_UNSUPPORTED when orm renders no insert that keeps the
+// stored values of the table of e. A codec column's stored value is the encoded cell:
+// the stages orm applies in the client (gz, base64, serialize, yaml, ordered_json) are
+// done in it, so orm's insert binds it as it is; the stages orm applies on the host
+// while it binds (hex, ip) must end the list, so that the export can undo them (see
+// hostSplit) and orm applies them again.
 func supported(e *runtimemodel.Entity) error {
 	for _, f := range e.Fields {
-		if len(f.Codec) > 0 {
-			return &irexec.Error{Code: codeCapability, Msg: fmt.Sprintf("the table %s has the codec column %s: the engine decodes no stored codec value for orm's insert", e.Table, f.Name)}
+		if _, _, ok := hostSplit(f.Codec); !ok {
+			return &irexec.Error{Code: codeCapability, Msg: fmt.Sprintf("the table %s has the codec column %s with a host stage before a client stage: the engine can undo a host stage only at the end of the list", e.Table, f.Name)}
 		}
 	}
 	return nil
+}
+
+// hostSplit splits the stages of a codec into those orm applies in the client and the
+// host stages (hex, ip) at the end. ok is false when a host stage is followed by a
+// client stage.
+func hostSplit(stages []string) (client, host []string, ok bool) {
+	n := len(stages)
+	for n > 0 && slices.Contains(validate.HostStages, stages[n-1]) {
+		n--
+	}
+	for _, st := range stages[:n] {
+		if slices.Contains(validate.HostStages, st) {
+			return nil, nil, false
+		}
+	}
+	return stages[:n], stages[n:], true
+}
+
+// storedParam returns the parameter of the stored value v of a column of kind kind with
+// the codec stages: v itself, or, for a column whose list ends in host stages, the cell
+// without them, which orm's bind applies again (hex and ip need no key).
+func storedParam(kind dbspec.TypeKind, stages []string, v any) (any, error) {
+	_, host, _ := hostSplit(stages)
+	if len(host) == 0 {
+		return v, nil
+	}
+	text, ok := v.(string)
+	if !ok {
+		return nil, &irexec.Error{Code: codeInternal, Msg: fmt.Sprintf("a stored codec value is %T, not text", v)}
+	}
+	cell := []byte(text)
+	if kind == dbspec.TypeBytes {
+		b, err := base64.StdEncoding.DecodeString(text)
+		if err != nil {
+			return nil, &irexec.Error{Code: codeInternal, Msg: "a stored bytes value is not base64: " + err.Error()}
+		}
+		cell = b
+	}
+	out, err := orm.HostDecode(cell, host, "")
+	if err != nil {
+		return nil, &irexec.Error{Code: codeInternal, Msg: "a stored value does not decode its host stages " + strings.Join(host, " ") + ": " + err.Error()}
+	}
+	decoded, ok := out.(string)
+	if !ok {
+		return nil, &irexec.Error{Code: codeInternal, Msg: fmt.Sprintf("orm decodes the host stages %s to a %T, not text", strings.Join(host, " "), out)}
+	}
+	if kind == dbspec.TypeBytes {
+		return base64.StdEncoding.EncodeToString([]byte(decoded)), nil
+	}
+	return decoded, nil
 }
 
 // dialectOf returns orm's SQL dialect of the database d; d is one of dbspec's three
@@ -160,7 +216,11 @@ func insert(p *planner.Planner, e *runtimemodel.Entity, tb *catalog.Table, row [
 		}
 		n := len(params)
 		req.Set = append(req.Set, ir.Assign{Column: col.Name, P: &n})
-		params = append(params, row[i])
+		v, err := storedParam(col.Type.Kind, tb.Codecs[col.Name], row[i])
+		if err != nil {
+			return Statement{}, err
+		}
+		params = append(params, v)
 	}
 	req.NParams = len(params)
 	pl, err := p.Compile(req)

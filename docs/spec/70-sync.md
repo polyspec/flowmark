@@ -48,9 +48,12 @@ specification is written when an adapter beyond the database export starts.
   moves the identity past the table's largest key, so the keys that other rows reference are kept and the next
   key a database generates follows them. Grounding: a key is a row's identity that other rows reference; an
   export that generated new keys would break those references.
-- A table with a codec column fails the export as `CAPABILITY_UNSUPPORTED`, naming the table and the column.
-  Grounding: a codec column stores the encoded value, while orm's insert takes the decoded value and encodes
-  it, and the engine decodes no stored value yet. It waits on orm (open question 6).
+- A codec column keeps its stored value, the encoded cell. The stages orm applies in the client (`gz`,
+  `base64`, `serialize`, `yaml`, `ordered_json`) are done in it, so the insert binds it as it is. The
+  host stages (`hex`, `ip`) at the end of the list are undone by `orm.HostDecode`, which needs no key, and
+  orm's bind applies them again, so the column stores the same cell. A host stage before a client stage
+  fails the export as `CAPABILITY_UNSUPPORTED`, naming the table and the column. Grounding: the export
+  keeps every stored value, and orm applies a host stage on the value that the client stages left.
 - Binding the parameters to a database driver and running the statements is a database
   executor's work, which orm keeps inside its clients; orm's `DB.Execute` runs one statement with
   its slots and binds a SQLite `datetime(p)` or `time(p)` with exactly p digits, taking client

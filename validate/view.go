@@ -24,10 +24,10 @@ const (
 	RuleView  = "view"
 )
 
-// hostStages are the codec stages that orm decodes on the host and does not
+// HostStages are the codec stages that orm decodes on the host and does not
 // export for a decode of its own (orm T74): orm.Decode refuses every stage list
 // that holds one.
-var hostStages = []string{"hex", "ip"}
+var HostStages = []string{"hex", "ip"}
 
 // RowFault is a fault of the codec or view rule in one row: the column whose
 // element it is at, the rule and the message.
@@ -72,7 +72,7 @@ func codecFaults(tb *catalog.Table, r *store.Row) []RowFault {
 	var out []RowFault
 	for _, col := range sortedKeys(tb.Codecs) {
 		stages := tb.Codecs[col]
-		if slices.ContainsFunc(stages, func(s string) bool { return slices.Contains(hostStages, s) }) {
+		if slices.ContainsFunc(stages, func(s string) bool { return slices.Contains(HostStages, s) }) {
 			continue
 		}
 		if _, raw := r.Raw[col]; raw {
