@@ -1,7 +1,9 @@
 // The Go tests of the repository, with the case-sensitive folder they need. A test that writes two names differing only
-// in case (validate's TestFilesCaseDuplicate) reads the folder from FLOWMARK_CASE_SENSITIVE_DIR when its temporary
-// folder folds case; this script declares that folder at var/case-sensitive under the repository root and provisions it
-// by platform: on darwin a case-sensitive APFS image mounted there (a mount already at that one place is reused), on
+// in case (validate's TestFilesCaseDuplicate, irexec's on_duplicate case of two files whose keys differ only in case)
+// reads the folder from FLOWMARK_CASE_SENSITIVE_DIR when its temporary folder folds case; this script declares that
+// folder at var/case-sensitive under the repository root and provisions it by platform: on darwin a case-sensitive APFS
+// image mounted there (a mount already at that one place is reused and left mounted, since the run that attached it may
+// still need it), on
 // win32 a folder whose per-directory case sensitivity fsutil enables, elsewhere a plain folder, whose file system keeps
 // case. The folder is then probed, and a folder that folds case fails the run, naming the step that should have made it
 // case-sensitive. The exit status is go test's.
@@ -45,11 +47,13 @@ export function foldsCase(dir) {
  * Provisions the case-sensitive folder `dir` on `platform` and returns the name of the step that made it so, and
  * whether this run attached an image there that it must detach.
  */
-function provision(dir, platform) {
+export function provision(dir, platform) {
   mkdirSync(path.dirname(dir), { recursive: true });
   switch (platform) {
     case 'darwin': {
-      if (isMountPoint(dir)) return { step: `the volume already mounted at ${dir}`, attached: true };
+      // A volume already mounted there is reused and left mounted: the run that
+      // attached it, such as a concurrent make test, still needs it.
+      if (isMountPoint(dir)) return { step: `the volume already mounted at ${dir}`, attached: false };
       const image = `${dir}.dmg`;
       run('hdiutil', ['create', '-size', '64m', '-fs', 'Case-sensitive APFS', '-volname', 'flowmark-case', '-ov', image]);
       mkdirSync(dir, { recursive: true });
