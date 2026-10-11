@@ -120,10 +120,24 @@ func TestInlineAlt(t *testing.T) {
 	}
 }
 
+// testRefs returns the definitions of each viewer for a file that defines the footnote
+// labels notes and no link reference: GitHub's and GitLab's footnote definitions, and
+// none for VS Code.
+func testRefs(notes ...string) viewerRefs {
+	var defs []*noteDef
+	for _, n := range notes {
+		defs = append(defs, &noteDef{label: n})
+	}
+	return viewerRefs{
+		gh: linkRefs{notes: newNoteRefs(defs, true)},
+		gl: linkRefs{notes: newNoteRefs(defs, false)},
+	}
+}
+
 // TestViewerReadings pins the readings of VS Code and GitLab: each viewer's math, and
-// GitLab's footnote references, accepted and refused.
+// GitLab's footnote references and wikilinks, accepted and refused.
 func TestViewerReadings(t *testing.T) {
-	notes := linkRefs{gl: &linkRefs{keys: map[string]bool{}, notes: map[string]bool{"n": true}}}
+	notes := testRefs("n")
 	cases := []struct {
 		name, in, vs, gl string
 	}{
@@ -148,13 +162,52 @@ func TestViewerReadings(t *testing.T) {
 		{"10#detail-headings-and-anchors: a footnote reference stops emphasis inside it", "*a[^m*]", "a[^m]", "*a[^m*]"},
 		{"10#detail-headings-and-anchors: a code span in brackets is no footnote reference", "[^`n`]", "[^n]", "[^n]"},
 		{"10#detail-headings-and-anchors: a nested bracket is no footnote reference", "[^n[x]]", "[^n[x]]", "[^n[x]]"},
-		{"10#detail-headings-and-anchors: an image's footnote reference loses its '!'", "![^m]", "![^m]", "[^m]"},
+		{"10#detail-headings-and-anchors: '![^' opens no image in GitLab", "![^m]", "![^m]", "![^m]"},
+		{"10#detail-headings-and-anchors: a wikilink renders its title", "a [[T1|x]] b", "a [[T1|x]] b", "a T1 b"},
+		{"10#detail-headings-and-anchors: a wikilink without a pipe renders its target", "[[T1]]", "[[T1]]", "T1"},
+		{"10#detail-headings-and-anchors: a wikilink's title is trimmed", "[[ a b |c]]", "[[ a b |c]]", "a b"},
+		{"10#detail-headings-and-anchors: a wikilink's title holds no markup", "[[*a* `b` $c$|d]]", "[[a b |d]]", "*a* `b` $c$"},
+		{"10#detail-headings-and-anchors: a wikilink's title decodes references, then escapes", `[[a&amp;b\*c&#92;*|d]]`, "[[a&b*c\\*|d]]", "a&b*c*"},
+		{"10#detail-headings-and-anchors: an escaped pipe stays in a wikilink's title", `[[a\|b|c]]`, "[[a|b|c]]", "a|b"},
+		{"10#detail-headings-and-anchors: a third component opens no wikilink", "[[a|b|c]]", "[[a|b|c]]", "[[a|b|c]]"},
+		{"10#detail-headings-and-anchors: an open bracket keeps a wikilink from opening", "[x [[a|b]]]", "[x [[a|b]]]", "[x [[a|b]]]"},
+		{"10#detail-headings-and-anchors: an image's bracket keeps a wikilink from opening", "![[a|b]]", "![[a|b]]", "![[a|b]]"},
+		{"10#detail-headings-and-anchors: an unclosed wikilink opens nothing", "[[a|b] c", "[[a|b] c", "[[a|b] c"},
+		{"10#detail-headings-and-anchors: a wikilink's line ending is in its title", "[[a\nb|c]]", "[[a⏎b|c]]", "a\nb"},
+		{"10#detail-headings-and-anchors: emphasis encloses a wikilink", "*[[a*|b]]*", "[[a|b]]*", "a*"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			res := viewerText(c.in, notes)
-			if shown(res.vs) != c.vs || shown(res.gl) != c.gl {
-				t.Fatalf("viewerText(%q) = vs %q, gl %q; want %q, %q", c.in, shown(res.vs), shown(res.gl), c.vs, c.gl)
+			vs, gl := shown(vsText(c.in, notes.vs)), shown(glText(c.in, notes.gl))
+			if vs != c.vs || gl != c.gl {
+				t.Fatalf("%q reads vs %q, gl %q; want %q, %q", c.in, vs, gl, c.vs, c.gl)
+			}
+		})
+	}
+}
+
+// TestGitHubFootnotes pins GitHub's reading of footnote references: a defined one renders
+// the number of its definition by first reference, an undefined one its source as text,
+// and a link wins over a reference; accepted and refused.
+func TestGitHubFootnotes(t *testing.T) {
+	cases := []struct {
+		name, in, text string
+	}{
+		{"10#detail-headings-and-anchors: references render numbers by first reference", "a[^b] c[^a] d[^b]", "a1 c2 d1"},
+		{"10#detail-headings-and-anchors: a label folds as a link label", "[^A] [^ a ] [^ss] [^ß]", "1 1 2 2"},
+		{"10#detail-headings-and-anchors: an undefined reference is its source", "a[^x<i>*y*] b", "a[^x<i>*y*] b"},
+		{"10#detail-headings-and-anchors: an empty label is no reference", "[^]", "[^]"},
+		{"10#detail-headings-and-anchors: an inline link wins", "[^a](u) [^a][]", "^a 1[]"},
+		{"10#detail-headings-and-anchors: a reference inside a link's text", "[x[^a]](/u)", "x1"},
+		{"10#detail-headings-and-anchors: a reference in brackets", "[[^a]] [b [^a]] [^a [c]]", "[1] [b 1] [^a [c]]"},
+		{"10#detail-headings-and-anchors: '![^' is '!' and a reference", "![^a]", "!1"},
+		{"10#detail-headings-and-anchors: a reference ends emphasis inside it", "*x[^a*b]", "*x1"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			refs := testRefs("a", "b", "ß", "a*b")
+			if got := shown(inlineText(c.in, refs.gh).text); got != c.text {
+				t.Fatalf("inlineText(%q) = %q; want %q", c.in, got, c.text)
 			}
 		})
 	}

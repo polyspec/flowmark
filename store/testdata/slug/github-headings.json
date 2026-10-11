@@ -496,6 +496,345 @@
     "a-b-c-1",
     "a-b"
    ]
+  },
+  {
+   "name": "footnote references by label",
+   "markdown": "# a[^note] b[^Q] c[^x] d\n\n[^note]: n\n\n[^q]:\n\n[r]: /u",
+   "ids": [
+    "a1-b2-cx-d"
+   ]
+  },
+  {
+   "name": "footnote references with markup",
+   "markdown": "# a[^b<i>c] d[^e*f*] g[^h i] ![^note]\n\n[^note]: n",
+   "ids": [
+    "abic-def-gh-i-1"
+   ]
+  },
+  {
+   "name": "footnote numbers by first reference",
+   "markdown": "# a[^b] c[^a] d[^b]\n\n[^a]: x\n\n[^b]: y",
+   "ids": [
+    "a1-c2-d1"
+   ]
+  },
+  {
+   "name": "footnote numbers from an earlier paragraph",
+   "markdown": "x[^b]\n\n# a[^a] c[^b]\n\n[^a]: x\n\n[^b]: y",
+   "ids": [
+    "a2-c1"
+   ]
+  },
+  {
+   "name": "footnote numbers from a definition",
+   "markdown": "[^a]: has [^b]\n\n# h[^a] g[^b]\n\n[^b]: y",
+   "ids": [
+    "h2-g1"
+   ]
+  },
+  {
+   "name": "footnote numbers from an image and a link",
+   "markdown": "# a ![y[^m]](/i.png) [x[^n]](/u) [^n]\n\n[^n]: x\n\n[^m]: y",
+   "ids": [
+    "a--x2-2"
+   ]
+  },
+  {
+   "name": "footnote labels folded",
+   "markdown": "# a[^N] b[^n] c[^ss] d[^ß] e[^ n]\n\n[^n]: x\n\n[^ß]: y",
+   "ids": [
+    "a1-b1-c2-d2-e1"
+   ]
+  },
+  {
+   "name": "footnote references beside links",
+   "markdown": "# a[^n] [^n]x [^n](u) [^n][r] [b [^n]] [^n [c]] [[^n]]\n\n[^n]: x\n\n[r]: /v",
+   "ids": [
+    "a1-1x-n-n-b-1-n-c-1"
+   ]
+  },
+  {
+   "name": "footnote reference that is a link",
+   "markdown": "# a[^x y] b[^n]\n\n[^x y]: /u\n\n[^n]: y",
+   "ids": [
+    "ax-y-b1"
+   ]
+  },
+  {
+   "name": "footnote references in code and HTML",
+   "markdown": "`[^q]`\n\n<div>\n[^q]\n</div>\n\n# a[^n] b[^q]\n\n[^n]: x\n\n[^q]: y",
+   "ids": [
+    "a1-b2"
+   ]
+  },
+  {
+   "name": "footnote definition interrupting a paragraph",
+   "markdown": "items row T1\n[^n]: x\n---",
+   "ids": []
+  },
+  {
+   "name": "footnote definition before a setext underline",
+   "markdown": "[^n]: x\nitems row T1\n---",
+   "ids": []
+  },
+  {
+   "name": "heading in a referenced footnote definition",
+   "markdown": "# z[^n]\n\n[^n]: x\n\n    # items row T1\n\n# y",
+   "ids": [
+    "z1",
+    "y",
+    "items-row-t1"
+   ]
+  },
+  {
+   "name": "heading in an unreferenced footnote definition",
+   "markdown": "[^n]: x\n\n    # items row T1",
+   "ids": []
+  },
+  {
+   "name": "heading on a footnote definition line",
+   "markdown": "# z[^n]\n\n[^n]: # items row T1",
+   "ids": [
+    "z1",
+    "items-row-t1"
+   ]
+  },
+  {
+   "name": "setext heading in a footnote definition",
+   "markdown": "# z[^n]\n\n[^n]: x\n    items row T1\n    ---",
+   "ids": [
+    "z1",
+    "xitems-row-t1"
+   ]
+  },
+  {
+   "name": "footnote definition closed by a short indent",
+   "markdown": "# z[^n]\n\n[^n]: x\n  \n    # h1",
+   "ids": [
+    "z1"
+   ]
+  },
+  {
+   "name": "footnote definitions in containers",
+   "markdown": "# a[^n] b[^m]\n\n> [^n]: x\n\n- [^m]: y\n\n      # h1",
+   "ids": [
+    "a1-b2",
+    "h1"
+   ]
+  },
+  {
+   "name": "footnote definition nested in a referenced one",
+   "markdown": "# z[^n]\n\n[^n]: x\n    [^m]: # h1",
+   "ids": [
+    "z1"
+   ]
+  },
+  {
+   "name": "footnote definition nested in an unreferenced one",
+   "markdown": "# z[^m]\n\n[^n]: x\n    [^m]: # h1",
+   "ids": [
+    "z1",
+    "h1"
+   ]
+  },
+  {
+   "name": "duplicate footnote definitions",
+   "markdown": "# z[^n]\n\n[^n]: # h1\n\n[^n]: # h2",
+   "ids": [
+    "z1",
+    "h1"
+   ]
+  },
+  {
+   "name": "duplicate unreferenced footnote definitions",
+   "markdown": "# z\n\n[^n]: # h1\n\n[^n]: # h2",
+   "ids": [
+    "z"
+   ]
+  },
+  {
+   "name": "wikilinks",
+   "markdown": "# items row [[T1|x]]\n\n# items row [[T2]]\n\n# a [[ b | c ]] d\n\n# a [[b|c|d]] e",
+   "ids": [
+    "items-row-t1x",
+    "items-row-t2",
+    "a--b--c--d",
+    "a-bcd-e"
+   ]
+  },
+  {
+   "name": "wikilinks with markup",
+   "markdown": "# a [[*b*|c]] d\n\n# e [[f\\|g|h]] i\n\n# j [[k&amp;l|m]] n\n\n# o [[p&#92;*|q]] r\n\n# s [[$t$|u]] v\n\n# w [[x`y`|z]] a",
+   "ids": [
+    "a-bc-d",
+    "e-fgh-i",
+    "j-klm-n",
+    "o-pq-r",
+    "s-tu-v",
+    "w-xyz-a"
+   ]
+  },
+  {
+   "name": "wikilinks that open nothing",
+   "markdown": "# a [x [[b|c]]] e\n\n# f ![[g|h]] i\n\n# j [[k]l]] m\n\n# n \\[[o|p]] q\n\n# r [[s|t] u",
+   "ids": [
+    "a-x-bc-e",
+    "f-gh-i",
+    "j-kl-m",
+    "n-op-q",
+    "r-st-u"
+   ]
+  },
+  {
+   "name": "empty wikilinks",
+   "markdown": "# a [[|c]] e\n\n# f [[g|]] h\n\n# i [[]] j\n\n# k [[ ]] l",
+   "ids": [
+    "a-c-e",
+    "f-g-h",
+    "i--j",
+    "k---l"
+   ]
+  },
+  {
+   "name": "wikilink across a line",
+   "markdown": "a [[b\nc|d]] e\n===",
+   "ids": [
+    "a-bcd-e"
+   ]
+  },
+  {
+   "name": "wikilinks in emphasis and footnotes",
+   "markdown": "# a *[[b*|c]]* e\n\n# f [[^n]] g\n\n[^n]: x",
+   "ids": [
+    "a-bc-e",
+    "f-1-g"
+   ]
+  },
+  {
+   "name": "math block",
+   "markdown": "$$\n# a\n\n# b\n$$\n# c",
+   "ids": [
+    "a",
+    "b",
+    "c"
+   ]
+  },
+  {
+   "name": "math block to the end",
+   "markdown": "$$\n# a\n\n# b",
+   "ids": [
+    "a",
+    "b"
+   ]
+  },
+  {
+   "name": "one-line math blocks",
+   "markdown": "$$x$$\n# a\n\n$$$$\n# b\n\n$$a$$b$$\n# c",
+   "ids": [
+    "a",
+    "b",
+    "c"
+   ]
+  },
+  {
+   "name": "math block opened by a line with one inner delimiter",
+   "markdown": "$$a $$ b\n# a\n$$\n# b",
+   "ids": [
+    "a",
+    "b"
+   ]
+  },
+  {
+   "name": "math block interrupting a paragraph",
+   "markdown": "items row T1\n$$\nx $$\n---\n\na\n$$x$$\n---\n\nb\n$$c$$d$$\n---",
+   "ids": [
+    "items-row-t1x-",
+    "ax",
+    "bcd"
+   ]
+  },
+  {
+   "name": "paragraph after a math block",
+   "markdown": "$$\nx $$\nitems row T1\n---",
+   "ids": [
+    "x-items-row-t1"
+   ]
+  },
+  {
+   "name": "indented math blocks",
+   "markdown": "   $$\n# a\n$$\n# b\n\n    $$\n# c\n$$\n# d",
+   "ids": [
+    "a",
+    "b",
+    "c",
+    "d"
+   ]
+  },
+  {
+   "name": "math block and a fence",
+   "markdown": "$$\n```\n$$\n# a\n```\n# b\n\n```\n$$\n```\n# c\n$$\n# d",
+   "ids": [
+    "b",
+    "c",
+    "d"
+   ]
+  },
+  {
+   "name": "math block in a block quote",
+   "markdown": "> $$\n> # a\n# b\n\n# c\n\n> $$\nx\ny $$\n# d\n\n> $$\n>\nx\n# e",
+   "ids": [
+    "a",
+    "b",
+    "c",
+    "d",
+    "e"
+   ]
+  },
+  {
+   "name": "math block ending a block quote",
+   "markdown": "> a\n$$\n# b\n$$\n# c",
+   "ids": [
+    "b",
+    "c"
+   ]
+  },
+  {
+   "name": "math block in a list item",
+   "markdown": "- $$\n  # a\n# b\n# c\n$$\n# d\n\n- $$\n  x\ny\n  # e\n# f",
+   "ids": [
+    "a",
+    "b",
+    "c",
+    "d",
+    "e",
+    "f"
+   ]
+  },
+  {
+   "name": "math block in nested containers",
+   "markdown": "- > $$\n  > x\n  y\n  # a\n# b\n\n> - $$\n>   x\n> y\n> # c\n# d",
+   "ids": [
+    "a",
+    "b",
+    "c",
+    "d"
+   ]
+  },
+  {
+   "name": "math block closed inside a line",
+   "markdown": "$$\n# a\nx$$y\n# b",
+   "ids": [
+    "a",
+    "b"
+   ]
+  },
+  {
+   "name": "math block after an HTML block",
+   "markdown": "<div>\n$$\n</div>\n\n# a\n$$\n# b",
+   "ids": [
+    "a",
+    "b"
+   ]
   }
  ],
  "rawHeadings": [

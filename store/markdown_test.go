@@ -1,6 +1,9 @@
 package store
 
-import "testing"
+import (
+	"fmt"
+	"testing"
+)
 
 // TestHTMLStart pins the HTML block start conditions of CommonMark 0.31.2 to the
 // types that commonmark.js 0.31.2 reads at the start of a line (its
@@ -141,21 +144,50 @@ func TestSetextAfterDefinitions(t *testing.T) {
 }
 
 // TestInterruptsParagraph pins the rule of CommonMark 0.31.2 that an HTML block
-// of types 1 to 6 may interrupt a paragraph and a type 7 block may not.
+// of types 1 to 6 may interrupt a paragraph and a type 7 block may not, and that a
+// footnote definition interrupts one under blockSyntax.notes and a math block under
+// blockSyntax.math, and neither under CommonMark.
 func TestInterruptsParagraph(t *testing.T) {
+	notes, math := blockSyntax{notes: true}, blockSyntax{math: true}
 	cases := []struct {
+		syn  blockSyntax
 		line string
 		want bool
 	}{
-		{"<div>", true}, {"<!-- x", true}, {"<script>", true}, {"<?php", true},
-		{"<span>", false}, {"<span class=\"a\">", false}, {"</span>", false}, {"<a> ", false},
-		{"    <div>", false},
+		{blockSyntax{}, "<div>", true}, {blockSyntax{}, "<!-- x", true}, {blockSyntax{}, "<script>", true},
+		{blockSyntax{}, "<?php", true}, {blockSyntax{}, "<span>", false}, {blockSyntax{}, "<span class=\"a\">", false},
+		{blockSyntax{}, "</span>", false}, {blockSyntax{}, "<a> ", false}, {blockSyntax{}, "    <div>", false},
+		{blockSyntax{}, "[^n]: x", false}, {blockSyntax{}, "$$", false},
+		{notes, "[^n]: x", true}, {notes, "   [^n]:", true}, {notes, "[^n]:x", true},
+		{notes, "    [^n]: x", false}, {notes, "[^]: x", false}, {notes, "[^a b]: x", false}, {notes, "[^n] : x", false},
+		{notes, "$$", false},
+		{math, "$$", true}, {math, "   $$ x", true}, {math, "$$x$$", true}, {math, "$$a $$ b", true},
+		{math, "$$a$$b$$", false}, {math, "    $$", false}, {math, "x $$", false}, {math, "[^n]: x", false},
 	}
 	for _, c := range cases {
-		t.Run(c.line, func(t *testing.T) {
-			if got := opensInterrupt(c.line); got != c.want {
+		t.Run(fmt.Sprintf("%+v/%s", c.syn, c.line), func(t *testing.T) {
+			if got := c.syn.opensInterrupt(c.line); got != c.want {
 				t.Fatalf("opensInterrupt(%q) = %v; want %v", c.line, got, c.want)
 			}
 		})
+	}
+}
+
+// TestMathOpens pins math_block's reading of the line that opens it: a block of that
+// line alone when one "$$" ends the text after the first, none when two or more follow.
+func TestMathOpens(t *testing.T) {
+	cases := []struct {
+		line          string
+		open, oneLine bool
+	}{
+		{"$$", true, false}, {"$$ x", true, false}, {"$$x$$", true, true}, {"$$$$", true, true},
+		{"$$$", true, false}, {"$$a $$ b", true, false}, {"$$a$$b$$", false, false}, {"x$$", false, false},
+		{"  $$x$$  ", true, false}, {"$$\t", true, false},
+	}
+	for _, c := range cases {
+		open, oneLine := mathOpens(c.line)
+		if open != c.open || oneLine != c.oneLine {
+			t.Errorf("mathOpens(%q) = %v, %v; want %v, %v", c.line, open, oneLine, c.open, c.oneLine)
+		}
 	}
 }

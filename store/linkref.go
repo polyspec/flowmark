@@ -1,7 +1,6 @@
 package store
 
 import (
-	"regexp"
 	"strings"
 
 	"golang.org/x/text/cases"
@@ -12,13 +11,81 @@ import (
 // starts a paragraph, inside a container or not, and that never interrupts one. A label
 // is compared by CommonMark's case folding once its white space is collapsed.
 
-// linkRefs are the labels that the definitions of a file define: keys holds each defined
-// label under its folded key. gl is the definitions as GitLab reads them, and notes,
-// in those, the labels of the footnote definitions.
+// linkRefs are the labels that the definitions of a file define, in one viewer's reading:
+// keys holds each defined label under its folded key; notes is the footnote definitions
+// of a viewer that renders footnotes, GitHub's or GitLab's, and nil for one that does not.
 type linkRefs struct {
 	keys  map[string]bool
-	notes map[string]bool
-	gl    *linkRefs
+	notes *noteRefs
+}
+
+// noteRefs are the footnote definitions of a file as GitHub or GitLab reads them, and the
+// number of each label by its first reference, which the reading of the file's inline
+// content in document order assigns (numberNotes).
+type noteRefs struct {
+	// github is GitHub's reading (cmark-gfm): the first definition of a label, at any
+	// depth, defines it. GitLab's (comrak 0.56.0's find_footnote_definitions) reads only a
+	// definition that no other holds, and the last of a label defines it.
+	github bool
+	owner  map[string]*noteDef
+	number map[string]int
+	next   int
+}
+
+// newNoteRefs returns the footnote definitions of defs, which are in the order they
+// open, as GitHub reads them when github is true, else as GitLab reads them.
+func newNoteRefs(defs []*noteDef, github bool) *noteRefs {
+	n := &noteRefs{github: github, owner: map[string]*noteDef{}, number: map[string]int{}}
+	for _, d := range defs {
+		k := foldLabel(d.label)
+		switch {
+		case github:
+			if n.owner[k] == nil {
+				n.owner[k] = d
+			}
+		case d.parent == nil:
+			n.owner[k] = d
+		}
+	}
+	return n
+}
+
+// ref reads a footnote reference to label and returns the number its definition takes,
+// the next number when this is the definition's first reference, or 0 when no definition
+// defines label. A label is compared as a link label is, case-folded with its white space
+// collapsed and trimmed.
+func (n *noteRefs) ref(label string) int {
+	k := foldLabel(label)
+	if n.owner[k] == nil {
+		return 0
+	}
+	if n.number[k] == 0 {
+		n.next++
+		n.number[k] = n.next
+	}
+	return n.number[k]
+}
+
+// home returns where the viewer renders the content of the footnote definition d, the
+// innermost that holds it: moved is the number of the definition it is rendered under at
+// the end of the document, 0 when it stays in place; shown is false when the viewer drops
+// it. GitHub renders a definition that defines its label and is referenced, at the end
+// in the order of the numbers, whatever holds it, and drops any other. GitLab keeps a
+// definition that another holds inside that one, so the outermost decides: one that
+// defines its label is rendered at the end when it is referenced and dropped when it is
+// not, and one that does not, a duplicate, stays in place.
+func (n *noteRefs) home(d *noteDef) (moved int, shown bool) {
+	if !n.github {
+		d = d.outermost()
+	}
+	k := foldLabel(d.label)
+	switch {
+	case n.owner[k] == d && n.number[k] > 0:
+		return n.number[k], true
+	case n.owner[k] == d || n.github:
+		return 0, false
+	}
+	return 0, true
 }
 
 // defined reports whether a definition of the file defines label.
@@ -196,22 +263,14 @@ func lineEndAfter(s string, p int) int {
 
 // linkDefs returns the labels that the blocks of a file define: a definition is one that
 // CommonMark reads at the start of a paragraph, inside a container or not, and is never
-// blank: its label has a character that is not white space.
-//
-// It also returns the definitions as GitLab reads them (glRefs): comrak 0.56.0 with
-// footnotes reads a line that begins, after at most three spaces, with `[^`, a label of
-// no ']', space, tab or line ending, and `]:` as a footnote definition, wherever it
-// stands, so such a line starts no link reference definition there.
+// blank: its label has a character that is not white space. The blocks are those of a
+// viewer's reading, so under GitHub's and GitLab's a footnote definition is a container
+// (blockSyntax.notes), never a link reference definition.
 func linkDefs(blocks []unit) linkRefs {
-	g := linkRefs{keys: map[string]bool{}, gl: &linkRefs{keys: map[string]bool{}, notes: map[string]bool{}}}
+	g := linkRefs{keys: map[string]bool{}}
 	for _, u := range blocks {
 		if u.html {
 			continue
-		}
-		for _, l := range u.lines {
-			if m := footnoteDef.FindStringSubmatch(l); m != nil {
-				g.gl.notes[foldLabel(m[1])] = true
-			}
 		}
 		joined := strings.Join(u.lines, "\n")
 		for p := 0; p < len(joined); {
@@ -220,29 +279,8 @@ func linkDefs(blocks []unit) linkRefs {
 				break
 			}
 			g.keys[foldLabel(label)] = true
-			if !footnoteDef.MatchString(joined[p:]) {
-				g.gl.keys[foldLabel(label)] = true
-			}
 			p = end
 		}
 	}
 	return g
-}
-
-// footnoteDef is comrak's scanner footnote_definition after at most three spaces. The
-// scanner also excludes the byte 0xFF, which no UTF-8 text holds.
-var footnoteDef = regexp.MustCompile(`^ {0,3}\[\^([^\] \r\n\t]+)\]:`)
-
-// glRefs returns the definitions of the file as GitLab reads them.
-func (r linkRefs) glRefs() linkRefs {
-	if r.gl == nil {
-		return linkRefs{}
-	}
-	return *r.gl
-}
-
-// footnote reports whether a footnote definition of the file, as GitLab reads it,
-// defines name.
-func (r linkRefs) footnote(name string) bool {
-	return r.notes[foldLabel(name)]
 }

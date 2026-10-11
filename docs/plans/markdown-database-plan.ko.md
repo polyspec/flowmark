@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database -->
-<!-- source-sha256: dc39173e8cade7e6dec85eca49f34fe54bde8a524d766b8b99c302145b66ca45 -->
+<!-- source-sha256: b722f6227cebc0dd729ddd522463db00eb29a358b5f24ee2cc6e22cd0a80c0ad -->
 # markdown database 계획
 
 [English](markdown-database-plan.md)
@@ -218,15 +218,20 @@ markdown 전용 선언은 모두 dbspec **manifest setting**이며 `markdown <co
   heading의 anchor A와 충돌한다. GitHub은 anchor를 주고 VS Code와 GitLab은 주지 않는 raw HTML `<h1>`–`<h6>` heading은
   S_GH에서 heading이며, S_GH는 모든 heading element를 GitHub의 parser처럼 — slug vector가 기록하는 대로 그 start tag에서
   뒤의 tag나 block이 끝내는 곳까지의 텍스트로 — 읽고, element가 engine이 렌더하지 않는 내용으로 이어지면 지금까지의
-  slug가 A로 시작할 때 A를 가져간다. S_GH는 GitHub의 slug(조건 없는 full mapping으로 소문자로 바꾸고, Unicode 17.0.0의
+  slug가 A로 시작할 때 A를 가져간다. 각 slug는 그 viewer의 block의 heading을 읽는다: CommonMark의 것에, GitHub과
+  GitLab의 footnote definition — 문단을 끊으며 그 내용은 참조되면 문서의 끝에 렌더되고 아니면 렌더되지 않는
+  container — 을, 그리고 닫는 `$$`까지의 줄을 받아들이는 VS Code의 math block을 더한 것이다. 상세 heading은 CommonMark의
+  것이다. GitLab의 snippet prefix는 어디서도 읽지 않는다: GitLab은 그것을 snippet의 file에만 설정하며, corpus file은
+  repository의 것이다. S_GH는 GitHub의 slug(조건 없는 full mapping으로 소문자로 바꾸고, Unicode 17.0.0의
   word 문자 — Alphabetic, mark, decimal number, connector punctuation, Join_Control — 와 공백, `-`를 남기며, 각 공백을
-  `-`로 쓴다. image는 텍스트가 아니다), S_VS는 VS Code의 것(trim한 텍스트를 JavaScript의 `toLowerCase`로 소문자로
+  `-`로 쓴다. image는 텍스트가 아니고, footnote reference는 첫 참조 순서로 매긴 그 definition의 번호다), S_VS는 VS Code의 것(trim한 텍스트를 JavaScript의 `toLowerCase`로 소문자로
   바꾸고, 그 `slugify.ts` 식이 맞추는 문자 — Unicode 13.0.0 범주 No, Pd, Ps, Pe, Pi, Pf, Po, S, Cc, Cf, Co, Cn, Z의 문자
   가운데 Unicode 13.0.0의 Alphabetic 문자, 공백, `-`가 아닌 것 — 를 지우며, 각 white space를 `-`로 쓴다. image는 그 alt
   텍스트이고, 기본 markdown-math extension의 math span은 텍스트가 아니다), S_GL은 GitLab이 쓰는 comrak 0.56.0의
   것(Rust의 `to_lowercase`로 소문자로 바꾸므로 끝의 Σ는 ς이며, Unicode 17.0.0의 letter, mark, number, connector
   punctuation과 공백, `-`를 남기며, 각 공백을 `-`로 쓴다. image는 그 alt 텍스트이고, `math_dollars`나 `math_code`의
-  math span은 그 글자 그대로의 source이며, footnote definition이 정의하는 footnote reference는 텍스트가 아니다)이다.
+  math span은 그 글자 그대로의 source이며, footnote definition이 정의하는 footnote reference는 텍스트가 아니고,
+  wikilink는 그 제목이다)이다.
   줄 바꿈은 S_GH와 S_VS에서 아무것도 아니고 S_GL에서 공백이다. slug의 근거는 viewer 자신이 렌더하는 id로,
   2026-10-11에 `make slug-vectors`가 `store/testdata/slug`에 기록했다 — GitHub의 `POST /markdown`(mode `markdown`),
   markdown-it 14.3.2와 `@vscode/markdown-it-katex` 1.1.2 위에서 실행한 VS Code 1.141.0 자신의 `slugify.ts`와

@@ -171,17 +171,71 @@ and the column sections — are payload: the renderer moves them with their row 
   `collect_text` writes a math node's literal, VS Code's `#tokenToPlainText` writes a math token as no
   text, and the slug vectors record both: `# items row $T<b>1$` is `items-row-tb1` on GitLab,
   `items-row` in VS Code and `items-row-t1` on GitHub.
-- **Footnotes under S_GL.** GitLab renders with comrak's footnotes, so S_GL reads the definitions and
-  the references as comrak does. A line that begins, after at most three spaces, with `[^`, a label of
-  no `]`, space, tab or line ending, and `]:` is a footnote definition, and starts no link reference
-  definition. A bracket that a `]` closes with no link, above which no bracket was opened, whose text
-  begins with `^` and holds only text and raw HTML, more than the `^`, is a footnote reference, and
-  its delimiters open no emphasis: one whose label a footnote definition defines, compared as a link
-  label is, renders no text; any other is restored as text — `[`, its text with each raw HTML
-  construct as written, and `]`, the `!` of an image's bracket dropped. S_GH and S_VS read the
-  brackets as CommonMark does. Grounding: comrak's `collect_text` writes a footnote reference as
-  nothing, and its `process_footnotes` restores an undefined one as text nodes (the slug vectors:
-  `# a[^1]` beside `[^1]: n` is `a` on GitLab).
+- **Math blocks under S_VS.** VS Code's math plugin also reads a math block, which takes in lines
+  that other viewers read as blocks of their own, headings among them, so S_VS reads the headings of
+  VS Code's blocks (the collision rule). A line indented less than four columns whose text begins with
+  `$$` opens a math block, also where it interrupts a paragraph or ends a block quote's lazy
+  continuation, unless the text after that `$$` holds `$$` twice or more; when it holds it once, at its
+  end, the block is that line alone. Otherwise the block takes in every following line, blank lines
+  included, up to and with the first that holds `$$`, or to the end of the file. Inside a block quote
+  it also takes in the quote's lazy lines — a line after a quote line that was not blank, which opens
+  no block that interrupts a paragraph — and inside a container it ends where the container ends, and
+  takes in the line at which the container ends: a block quote closes there, while a list item, which
+  a line indented less than its content ends, stays open for the lines after. A math block holds no
+  heading and no HTML. Grounding: `@vscode/markdown-it-katex` 1.1.2's `math_block` rule, which runs
+  before markdown-it's lists, references, HTML blocks and headings and interrupts paragraphs, block
+  quotes and lists, scans to the closing line without regard to blank lines, and sets `state.line` one
+  past the line at which it stops; the slug vectors record each case (`$$`, `# a`, blank, `# b`, `$$`,
+  `# c` gives VS Code `c` alone, and `- $$`, `  x`, `y`, `  # e` gives `e` in the item). GitHub and
+  GitLab read no math block: a `$$` line is text there, and the vectors show their headings unchanged.
+- **Footnotes under S_GH and S_GL.** GitHub and GitLab render with footnotes, cmark-gfm's and comrak
+  0.56.0's, so S_GH and S_GL read the blocks and the references as their viewer does; VS Code renders
+  none, and S_VS reads the brackets and the lines as CommonMark does. A line indented less than four
+  columns that begins with `[^`, a label of no `]`, space, tab or line ending, and `]:`, then any spaces
+  and tabs, opens a footnote definition — in any container, also where it interrupts a paragraph, and
+  never as a link reference definition. The definition is a container: the rest of its line is its
+  first content, and it goes on over a line indented four columns or more, whose first four columns it
+  takes, and over an empty line, while its paragraph goes on lazily over a line that opens no other
+  block; any other line ends it. Its content is not rendered where it stands. On GitHub the first
+  definition of a label, at any depth, defines it; one that defines a label that a reference names is
+  rendered at the end of the document, and any other definition is dropped with its content, whatever
+  holds it. On GitLab only a definition that no other holds defines a label, the last of that label;
+  one that defines a label is rendered at the end when a reference names it and dropped when none
+  does, a definition that defines nothing stays in place, and a definition inside another is content
+  of the outer one. A heading or raw HTML in dropped content has no anchor and no id; a heading in
+  rendered content is a payload heading. A footnote reference is a bracket whose `[` is followed by
+  `^` and a label of one character or more, up to the `]` that closes it with no link — an inline link
+  or a defined reference link is read first. On GitHub its label is the source between `^` and `]`; a
+  reference whose label a definition defines, compared as a link label is, renders the number of the
+  definition, which counts from 1 in the order of each definition's first reference in the whole
+  document — its headings, paragraphs, table cells and image descriptions, and the content of every
+  definition where it stands, but no code and no HTML block — so repeated references render the same
+  number; any other renders as the text `[^`, the label as written, and `]`. Either way what the
+  brackets hold — emphasis, code, raw HTML — is no markup. On GitLab a bracket above which no bracket
+  was opened, whose text begins with `^` and holds only text and raw HTML, more than the `^`, is a
+  footnote reference, and its delimiters open no emphasis: one whose label a definition defines
+  renders no text; any other is restored as text — `[`, its text with each raw HTML construct as
+  written, and `]`. On both, `![^` is a `!` and a bracket, never an image. Grounding: cmark-gfm's and
+  comrak's block parsers open a footnote definition before a list item and accept a continuation line
+  only when it is indented four columns or is a line ending alone (`parse_footnote_definition_block_prefix`);
+  their `process_footnotes` number the definitions by a walk of the whole document, move the
+  referenced ones to its end in that order and drop the others, cmark-gfm keeping the first
+  definition of a label and comrak the last outermost one; GitHub writes a reference as
+  `<sup><a>n</a></sup>`, whose text its heading ids read, and comrak's `collect_text` writes it as
+  nothing. The slug vectors record each case: `# a[^note] b[^Q] c[^x] d` beside definitions of `note`
+  and `q` is `a1-b2-cx-d` on GitHub and `a-b-cx-d` on GitLab; `items row T1`, `[^n]: x`, `---` is no
+  heading on either; a heading indented in a referenced definition is anchored after the document's
+  headings, and none in an unreferenced one.
+- **Wikilinks under S_GL.** GitLab renders with comrak's wikilinks, title before the pipe, so S_GL
+  reads a wikilink where no bracket is open: `[[`, a component, then `]]`, or `|`, a second component
+  and `]]`; a component is a run of characters other than `[`, `]` and `|`, a backslash taking the
+  ASCII punctuation character after it, of at most a thousand bytes. The wikilink renders its first
+  component — its title, or the target when no pipe follows — trimmed of spaces, tabs and line endings,
+  its character references decoded and then its backslash escapes, and nothing of its markup:
+  `[[T1|x]]` is `T1` and `[[*a* $b$|c]]` is `*a* $b$`. GitHub and VS Code read the brackets as
+  CommonMark does. Grounding: comrak's `handle_wikilink` with `WikiLinksMode::TitleFirst`, which
+  GitLab's `wikilinks_title_before_pipe` sets, and the slug vectors: `# items row [[T1|x]]` is
+  `items-row-t1` on GitLab and `items-row-t1x` on GitHub and in VS Code.
 - **HTML headings under S_GH.** GitHub gives an anchor to every heading element `<h1>`–`<h6>` of the
   HTML it renders that no other heading element holds, a raw HTML one too, from the element's text,
   and computes it on the parsed HTML: S_GH reads the element as GitHub's parser does. VS Code and
@@ -253,7 +307,8 @@ and the column sections — are payload: the renderer moves them with their row 
   `store/testdata/slug`, which S_GH, S_VS and S_GL reproduce exactly: for every code point but the
   surrogates, a heading holding it as a numeric reference and as itself, and structural cases of
   spaces, tabs, underscores, hyphens, references, escapes, emphasis, code spans, links, images, raw HTML,
-  line breaks, math spans, footnote references and repeated headings. GitHub's are rendered by its own renderer, `POST /markdown` of the
+  line breaks, math spans and blocks, footnote definitions and references, wikilinks and repeated
+  headings. GitHub's are rendered by its own renderer, `POST /markdown` of the
   REST API in mode `markdown`, which writes each heading anchor as `user-content-` and the id; they keep
   U+107A5, U+1CCF0 and U+A7F2, assigned after Unicode 13.0.0, and match the word characters of Unicode
   17.0.0 at every code point. VS Code's are rendered by running its own code at its latest stable
@@ -270,11 +325,29 @@ and the column sections — are payload: the renderer moves them with their row 
   1.4.0, the crate comrak reads the categories from, whose tables are those of Unicode 17.0.0.
   Re-recording is `make slug-vectors`, with the network, an authenticated `gh`, npm and cargo; a
   viewer that changes shows as a vector the slugs no longer reproduce.
+- **GitLab's snippet prefix.** GitLab prefixes a heading's id with its file's name in a snippet
+  alone: its markup blob viewer sets `use_filename_in_anchor` only when the blob's container is a
+  snippet, and its `GlfmMarkdown` engine then passes the slug of the file's base name and `-` as the
+  heading slug prefix. A corpus file is a file of a repository, which GitLab renders without the
+  prefix, and a detail anchor is the anchor of that rendering, so the rule reads no prefix. In a
+  snippet the prefix stands before the id of every heading alike, numbered by the slug without it, so
+  the headings take one another's ids there exactly as in a repository. Grounding:
+  `app/models/blob_viewer/markup.rb`, `lib/banzai/filter/markdown_engines/glfm_markdown.rb` and
+  `lib/gitlab/heading_slug.rb` of GitLab, which the recorder reads and fails on when they change; and
+  the slug vectors, which record a snippet's ids with the prefix `itemsflowmark-` of
+  `items.flowmark.md` (`snippet` in `gitlab-headings.json`).
 - **The collision rule.** A heading is every ATX heading, also after a block-quote or list-item marker,
   and every paragraph followed by a setext underline, the whole paragraph after the link reference
   definitions at its start being the heading, outside fenced blocks; a detail heading is one too. A raw
   HTML heading that GitHub anchors is a heading too, under S_GH alone, located at the `<` of its start
-  tag (HTML headings under S_GH). Those
+  tag (HTML headings under S_GH). Each slug reads the headings of its viewer's blocks: those of
+  CommonMark, with the footnote definitions of GitHub and GitLab under S_GH and S_GL (Footnotes under
+  S_GH and S_GL) and with VS Code's math blocks under S_VS (Math blocks under S_VS), and the raw HTML
+  each of them renders. The detail headings are those of CommonMark's blocks, and a viewer's heading of
+  the same line, level and text is that detail heading; any other heading a viewer anchors is a payload
+  heading under its slug. Grounding: the anchor that a link to a row follows is the one each viewer
+  renders from the headings it reads, so a heading that only one viewer reads can take the anchor
+  there, and one that a viewer does not read takes nothing there. Those
   definitions are no part of the heading: a setext heading begins on the first line they leave, they are
   content before it, and definitions alone followed by an underline make no heading. Grounding: CommonMark 0.31.2
   reads the definitions at the start of a paragraph before it closes the paragraph as a setext heading

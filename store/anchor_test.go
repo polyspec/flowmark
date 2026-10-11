@@ -148,6 +148,16 @@ func clashCases() []clashCase {
 		{"10#detail-headings-and-anchors: a heading inside a raw HTML heading has no anchor", []string{"## items row T1", "", "<h2><b>x<h3>items row T1</h3></b></h2>"}, nil},
 		{"10#detail-headings-and-anchors: a self-closed raw HTML heading is empty", []string{"## items row T1", "", "<h2/>items row T1"}, nil},
 		{"10#detail-headings-and-anchors: a raw HTML heading in code is no heading", []string{"## items row T1", "", "`<h2>items row T1</h2>`"}, nil},
+		{"10#detail-headings-and-anchors: GitHub renders a footnote reference as its number by first reference", []string{"## items row T2", "", "x[^a]", "", "# items row T[^b]", "", "[^a]: x", "", "[^b]: y"}, []int{5}},
+		{"10#detail-headings-and-anchors: a footnote number GitHub does not give is accepted", []string{"## items row T1", "", "x[^a]", "", "# items row T[^b]", "", "[^a]: x", "", "[^b]: y"}, nil},
+		{"10#detail-headings-and-anchors: a heading in a referenced footnote definition takes the anchor", []string{"## items row T1", "", "x[^n]", "", "[^n]: # items row T1"}, []int{5}},
+		{"10#detail-headings-and-anchors: a heading in an unreferenced footnote definition has no anchor", []string{"## items row T1", "", "[^n]: x", "", "    # items row T1"}, nil},
+		{"10#detail-headings-and-anchors: an indented heading in a referenced footnote definition takes the anchor", []string{"## items row T1", "", "x[^n]", "", "[^n]: x", "", "    # items row T1"}, []int{7}},
+		{"10#detail-headings-and-anchors: GitLab reads a wikilink as its title", []string{"## items row T1", "", "# items row [[T1|x]]"}, []int{3}},
+		{"10#detail-headings-and-anchors: a wikilink's target is no text", []string{"## items row T1", "", "# items row [[T2|T1]]"}, nil},
+		{"10#detail-headings-and-anchors: a heading after a VS Code math block that a fence holds elsewhere", []string{"## items row T1", "", "$$", "```", "$$", "# items row T1", "```"}, []int{6}},
+		{"10#detail-headings-and-anchors: a heading a VS Code math block swallows has no slug of VS Code", []string{"## items row T1", "", "$$", "# items row T1 $x$", "$$"}, nil},
+		{"10#detail-headings-and-anchors: a heading after a VS Code math block keeps its slug", []string{"## items row T1", "", "$$x$$", "# items row T1 $x$"}, []int{4}},
 	}
 }
 

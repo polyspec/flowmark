@@ -684,16 +684,24 @@ func ghReadings(lines []string, sc scan, g linkRefs) []ghRead {
 
 // ghItems returns the blocks of the file that GitHub renders with text, in order: its
 // headings, and its paragraphs and HTML blocks that are not headings; a paragraph that is
-// all link reference definitions renders nothing.
+// all link reference definitions renders nothing, and neither does the content of a
+// footnote definition that GitHub drops. The content of one it renders is inside a
+// container, rendered at the end of the document.
 func ghItems(lines []string, sc scan, g linkRefs) []ghItem {
 	setext := setextStarts(sc.blocks)
 	var items []ghItem
 	for i := range sc.all {
 		h := &sc.all[i]
+		if !g.shows(h.note) {
+			continue
+		}
 		e := headingElement(lines, *h, setext)
 		items = append(items, ghItem{open: "h" + strconv.Itoa(h.level), events: inlineEvents(e.text, g), e: e, head: h, at: h.at, last: h.last, nested: h.nested})
 	}
 	for _, u := range sc.units {
+		if !g.shows(u.note) {
+			continue
+		}
 		top := true
 		for k, l := range u.lines {
 			if lines[u.at+k] != l {

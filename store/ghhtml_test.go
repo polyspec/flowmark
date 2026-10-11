@@ -43,8 +43,8 @@ func readGHHTML(t *testing.T) ghHTMLFile {
 // ghReadingsOf returns GitHub's reading of the heading elements of a document.
 func ghReadingsOf(markdown string) []ghRead {
 	lines := strings.Split(markdown, "\n")
-	sc := scanHeadings(lines, 0)
-	return ghReadings(lines, sc, linkDefs(sc.blocks))
+	v := readViewers(lines, scanHeadings(lines, 0))
+	return ghReadings(lines, v.gh.sc, v.gh.refs)
 }
 
 // checkGitHubIDs requires the readings of a document to reproduce the id GitHub gives
