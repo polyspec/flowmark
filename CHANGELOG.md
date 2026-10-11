@@ -3,6 +3,8 @@
 
 ## Unreleased
 
+- T12.3-1: the application schema declares its view table (`views` of the document `flowmark`); the validator reports `view` for a view whose entity, filter, sort or group is invalid, checked with orm's `ir.Validate`, and `codec` for a value its stages cannot decode; a codec ending in `yaml` is refused.
+- T12.3-5: spec 30 grounds why a history block stands only under its own state row, with a catalog case for each placement key.
 - T12.9: `flowmark serve <corpus> --port <port>` is the server orm clients reach over loopback TCP, with a token in `.flowmark/server.json`, a connect message that checks the corpus and token, transactions and savepoints as control messages, and `--tx-idle-ms`, which rolls back an idle transaction and closes its connection.
 - T12.8: the conformance vectors are rewritten for the storage grammar: spec 90 fixes the vector format, and 69 vectors run through the write path over files, document list and table, and block list and table, with equivalence groups, repeats and the write path's own answers.
 - T12.7 (in part): the export to a database renders through orm: orm's schema statements, then one planner insert per row in foreign-key and storage order, soft-deleted rows included; identity and codec tables are refused until orm offers what they need; the provenance header writer is removed.
