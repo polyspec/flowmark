@@ -1,0 +1,56 @@
+{
+  "name": "read-count-where-block-table",
+  "storage": "block table",
+  "catalog": "block-table",
+  "corpus": {
+    "plans/P1.flowmark.md": [
+      "# Plan one",
+      "",
+      "Plan intro.",
+      "",
+      "## tasks",
+      "| id | parent | title | done | due | label |",
+      "| --- | --- | --- | --- | --- | --- |",
+      "| T1 |  | Root task | false | 2026-10-01 | first |",
+      "| T2 | [T1](#tasks-row-t1) | Child task | true |  |  |",
+      "| T3 | [T1](#tasks-row-t1) | Second child | false | 2026-10-11 | \"\" |",
+      "| T4 |  | Top two | false |  |  |",
+      "",
+      "### tasks row T1",
+      "",
+      "Root body.",
+      "",
+      "### tasks row T3",
+      "",
+      "Body with *emphasis*."
+    ],
+    "plans/P2.flowmark.md": [
+      "# Plan two",
+      "",
+      "No tasks."
+    ]
+  },
+  "equivalent": "read-count-where",
+  "request": {
+    "entity": "tasks",
+    "kind": "count",
+    "where": {
+      "items": [
+        {
+          "pred": {
+            "column": "done",
+            "op": "eq",
+            "p": 0
+          }
+        }
+      ]
+    }
+  },
+  "params": [
+    false
+  ],
+  "now": "2026-10-11 09:00:00.000000",
+  "expect": {
+    "count": 3
+  }
+}

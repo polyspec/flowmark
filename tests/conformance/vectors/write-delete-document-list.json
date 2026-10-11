@@ -1,0 +1,66 @@
+{
+  "name": "write-delete-document-list",
+  "storage": "document list",
+  "catalog": "document-list",
+  "corpus": {
+    "tasks.flowmark.md": [
+      "# tasks",
+      "- T1 Root task done:false due:2026-10-01 label:first",
+      "  - T2 Child task done:true",
+      "  - T3 Second child done:false due:2026-10-11 label:\"\"",
+      "- T4 Top two done:false",
+      "",
+      "## tasks row T1",
+      "",
+      "Root body.",
+      "",
+      "## tasks row T3",
+      "",
+      "Body with *emphasis*."
+    ]
+  },
+  "request": {
+    "entity": "tasks",
+    "kind": "delete",
+    "where": {
+      "items": [
+        {
+          "pred": {
+            "column": "id",
+            "op": "eq",
+            "p": 0
+          }
+        }
+      ]
+    }
+  },
+  "params": [
+    "T2"
+  ],
+  "now": "2026-10-11 09:00:00.000000",
+  "expect": {
+    "affected": 1,
+    "keys": [],
+    "corpus": {
+      "tasks.flowmark.md": [
+        "# tasks",
+        "- T1 Root task done:false due:2026-10-01 label:first",
+        "  - T3 Second child done:false due:2026-10-11 label:\"\"",
+        "- T4 Top two done:false",
+        "",
+        "## tasks row T1",
+        "",
+        "Root body.",
+        "",
+        "## tasks row T3",
+        "",
+        "Body with *emphasis*."
+      ]
+    }
+  },
+  "repeat": {
+    "affected": 0,
+    "keys": [],
+    "corpus": {}
+  }
+}

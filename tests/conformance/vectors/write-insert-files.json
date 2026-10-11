@@ -1,0 +1,84 @@
+{
+  "name": "write-insert-files",
+  "storage": "files",
+  "catalog": "files",
+  "corpus": {
+    "tasks/T1.flowmark.md": [
+      "# Root task",
+      "- position: 1",
+      "- done: false",
+      "- due: 2026-10-01",
+      "- label: first",
+      "",
+      "Root body."
+    ],
+    "tasks/T2.flowmark.md": [
+      "# Child task",
+      "- parent: [T1](T1.flowmark.md)",
+      "- position: 1",
+      "- done: true"
+    ],
+    "tasks/T3.flowmark.md": [
+      "# Second child",
+      "- parent: [T1](T1.flowmark.md)",
+      "- position: 2",
+      "- done: false",
+      "- due: 2026-10-11",
+      "- label:",
+      "",
+      "Body with *emphasis*."
+    ],
+    "tasks/T4.flowmark.md": [
+      "# Top two",
+      "- position: 2",
+      "- done: false"
+    ]
+  },
+  "request": {
+    "entity": "tasks",
+    "kind": "insert",
+    "set": [
+      {
+        "column": "id",
+        "p": 0
+      },
+      {
+        "column": "title",
+        "p": 1
+      },
+      {
+        "column": "body",
+        "p": 2
+      },
+      {
+        "column": "done",
+        "p": 3
+      }
+    ]
+  },
+  "params": [
+    "T5",
+    "New task",
+    "New body.",
+    false
+  ],
+  "now": "2026-10-11 09:00:00.000000",
+  "expect": {
+    "affected": 1,
+    "keys": [
+      "T5"
+    ],
+    "corpus": {
+      "tasks/T5.flowmark.md": [
+        "# New task",
+        "- position: 3",
+        "- done: false",
+        "",
+        "New body."
+      ]
+    }
+  },
+  "repeat": {
+    "error": "DUPLICATE_KEY"
+  }
+}

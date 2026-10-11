@@ -1,0 +1,72 @@
+{
+  "name": "read-order-null-first-block-list",
+  "storage": "block list",
+  "catalog": "block-list",
+  "corpus": {
+    "plans/P1.flowmark.md": [
+      "# Plan one",
+      "",
+      "Plan intro.",
+      "",
+      "## tasks",
+      "- T1 Root task done:false due:2026-10-01 label:first",
+      "  - T2 Child task done:true",
+      "  - T3 Second child done:false due:2026-10-11 label:\"\"",
+      "- T4 Top two done:false",
+      "",
+      "### tasks row T1",
+      "",
+      "Root body.",
+      "",
+      "### tasks row T3",
+      "",
+      "Body with *emphasis*."
+    ],
+    "plans/P2.flowmark.md": [
+      "# Plan two",
+      "",
+      "No tasks."
+    ]
+  },
+  "equivalent": "read-order-null-first",
+  "request": {
+    "columns": {
+      "add": [
+        "due"
+      ],
+      "mode": "none"
+    },
+    "entity": "tasks",
+    "kind": "all",
+    "order": [
+      {
+        "column": "due"
+      },
+      {
+        "column": "id"
+      }
+    ]
+  },
+  "params": [],
+  "now": "2026-10-11 09:00:00.000000",
+  "expect": {
+    "rows": [
+      {
+        "due": null,
+        "id": "T2"
+      },
+      {
+        "due": null,
+        "id": "T4"
+      },
+      {
+        "due": "2026-10-01",
+        "id": "T1"
+      },
+      {
+        "due": "2026-10-11",
+        "id": "T3"
+      }
+    ]
+  }
+}

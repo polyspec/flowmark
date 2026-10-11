@@ -1,0 +1,78 @@
+{
+  "name": "read-order-null-first-files",
+  "storage": "files",
+  "catalog": "files",
+  "corpus": {
+    "tasks/T1.flowmark.md": [
+      "# Root task",
+      "- position: 1",
+      "- done: false",
+      "- due: 2026-10-01",
+      "- label: first",
+      "",
+      "Root body."
+    ],
+    "tasks/T2.flowmark.md": [
+      "# Child task",
+      "- parent: [T1](T1.flowmark.md)",
+      "- position: 1",
+      "- done: true"
+    ],
+    "tasks/T3.flowmark.md": [
+      "# Second child",
+      "- parent: [T1](T1.flowmark.md)",
+      "- position: 2",
+      "- done: false",
+      "- due: 2026-10-11",
+      "- label:",
+      "",
+      "Body with *emphasis*."
+    ],
+    "tasks/T4.flowmark.md": [
+      "# Top two",
+      "- position: 2",
+      "- done: false"
+    ]
+  },
+  "equivalent": "read-order-null-first",
+  "request": {
+    "columns": {
+      "add": [
+        "due"
+      ],
+      "mode": "none"
+    },
+    "entity": "tasks",
+    "kind": "all",
+    "order": [
+      {
+        "column": "due"
+      },
+      {
+        "column": "id"
+      }
+    ]
+  },
+  "params": [],
+  "now": "2026-10-11 09:00:00.000000",
+  "expect": {
+    "rows": [
+      {
+        "due": null,
+        "id": "T2"
+      },
+      {
+        "due": null,
+        "id": "T4"
+      },
+      {
+        "due": "2026-10-01",
+        "id": "T1"
+      },
+      {
+        "due": "2026-10-11",
+        "id": "T3"
+      }
+    ]
+  }
+}

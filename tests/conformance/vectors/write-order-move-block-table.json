@@ -1,0 +1,91 @@
+{
+  "name": "write-order-move-block-table",
+  "storage": "block table",
+  "catalog": "block-table",
+  "corpus": {
+    "plans/P1.flowmark.md": [
+      "# Plan one",
+      "",
+      "Plan intro.",
+      "",
+      "## tasks",
+      "| id | parent | title | done | due | label |",
+      "| --- | --- | --- | --- | --- | --- |",
+      "| T1 |  | Root task | false | 2026-10-01 | first |",
+      "| T2 | [T1](#tasks-row-t1) | Child task | true |  |  |",
+      "| T3 | [T1](#tasks-row-t1) | Second child | false | 2026-10-11 | \"\" |",
+      "| T4 |  | Top two | false |  |  |",
+      "",
+      "### tasks row T1",
+      "",
+      "Root body.",
+      "",
+      "### tasks row T3",
+      "",
+      "Body with *emphasis*."
+    ],
+    "plans/P2.flowmark.md": [
+      "# Plan two",
+      "",
+      "No tasks."
+    ]
+  },
+  "request": {
+    "entity": "tasks",
+    "kind": "update",
+    "set": [
+      {
+        "column": "position",
+        "p": 0
+      }
+    ],
+    "where": {
+      "items": [
+        {
+          "pred": {
+            "column": "id",
+            "op": "eq",
+            "p": 1
+          }
+        }
+      ]
+    }
+  },
+  "params": [
+    1,
+    "T3"
+  ],
+  "now": "2026-10-11 09:00:00.000000",
+  "expect": {
+    "affected": 1,
+    "keys": [],
+    "corpus": {
+      "plans/P1.flowmark.md": [
+        "# Plan one",
+        "",
+        "Plan intro.",
+        "",
+        "## tasks",
+        "| id | parent | title | done | due | label |",
+        "| --- | --- | --- | --- | --- | --- |",
+        "| T1 |  | Root task | false | 2026-10-01 | first |",
+        "| T3 | [T1](#tasks-row-t1) | Second child | false | 2026-10-11 | \"\" |",
+        "| T2 | [T1](#tasks-row-t1) | Child task | true |  |  |",
+        "| T4 |  | Top two | false |  |  |",
+        "",
+        "### tasks row T1",
+        "",
+        "Root body.",
+        "",
+        "### tasks row T3",
+        "",
+        "Body with *emphasis*."
+      ]
+    }
+  },
+  "repeat": {
+    "affected": 1,
+    "keys": [],
+    "corpus": {}
+  }
+}

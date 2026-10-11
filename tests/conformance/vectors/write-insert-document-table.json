@@ -1,0 +1,86 @@
+{
+  "name": "write-insert-document-table",
+  "storage": "document table",
+  "catalog": "document-table",
+  "corpus": {
+    "tasks.flowmark.md": [
+      "# tasks",
+      "| id | parent | title | done | due | label |",
+      "| --- | --- | --- | --- | --- | --- |",
+      "| T1 |  | Root task | false | 2026-10-01 | first |",
+      "| T2 | [T1](#tasks-row-t1) | Child task | true |  |  |",
+      "| T3 | [T1](#tasks-row-t1) | Second child | false | 2026-10-11 | \"\" |",
+      "| T4 |  | Top two | false |  |  |",
+      "",
+      "## tasks row T1",
+      "",
+      "Root body.",
+      "",
+      "## tasks row T3",
+      "",
+      "Body with *emphasis*."
+    ]
+  },
+  "request": {
+    "entity": "tasks",
+    "kind": "insert",
+    "set": [
+      {
+        "column": "id",
+        "p": 0
+      },
+      {
+        "column": "title",
+        "p": 1
+      },
+      {
+        "column": "body",
+        "p": 2
+      },
+      {
+        "column": "done",
+        "p": 3
+      }
+    ]
+  },
+  "params": [
+    "T5",
+    "New task",
+    "New body.",
+    false
+  ],
+  "now": "2026-10-11 09:00:00.000000",
+  "expect": {
+    "affected": 1,
+    "keys": [
+      "T5"
+    ],
+    "corpus": {
+      "tasks.flowmark.md": [
+        "# tasks",
+        "| id | parent | title | done | due | label |",
+        "| --- | --- | --- | --- | --- | --- |",
+        "| T1 |  | Root task | false | 2026-10-01 | first |",
+        "| T2 | [T1](#tasks-row-t1) | Child task | true |  |  |",
+        "| T3 | [T1](#tasks-row-t1) | Second child | false | 2026-10-11 | \"\" |",
+        "| T4 |  | Top two | false |  |  |",
+        "| T5 |  | New task | false |  |  |",
+        "",
+        "## tasks row T1",
+        "",
+        "Root body.",
+        "",
+        "## tasks row T3",
+        "",
+        "Body with *emphasis*.",
+        "",
+        "## tasks row T5",
+        "",
+        "New body."
+      ]
+    }
+  },
+  "repeat": {
+    "error": "DUPLICATE_KEY"
+  }
+}
