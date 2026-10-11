@@ -293,7 +293,10 @@ func (l *loader) scopeOf(r *tableRef) (int, bool) {
 }
 
 // parentOf resolves the parent table of a block table through the foreign
-// key its storage names, and records it in the storage.
+// key its storage names, and records it in the storage. A nullable column of
+// that key is reported at the table's name (spec 30 Block placement): a block
+// row stands inside the scope of the row the key references, and NULL
+// references none; the layout still resolves, so the other rules run.
 func (l *loader) parentOf(r *tableRef) *tableRef {
 	var fk *dbspec.ForeignKey
 	for i := range r.table.ForeignKeys {
@@ -304,6 +307,11 @@ func (l *loader) parentOf(r *tableRef) *tableRef {
 	if fk == nil {
 		l.add(l.tableDiag(r.doc, r.table.Name, "store block names "+r.storage.ParentForeignKey+", which is not a foreign key of table "+r.table.Name))
 		return nil
+	}
+	for _, name := range fk.Columns {
+		if c := columnOf(r.table, name); c != nil && c.Null {
+			l.add(l.tableDiag(r.doc, r.table.Name, "block table "+r.table.Name+" is placed by foreign key "+fk.Name+", whose column "+name+" is nullable"))
+		}
 	}
 	parent, ok := l.refs[fk.Table]
 	if !ok {
