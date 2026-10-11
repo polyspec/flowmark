@@ -81,6 +81,26 @@ type origin struct {
 	column string
 }
 
+// colSpan is the origin of the text that a line holds from the byte offset at on, up to
+// the next span of the line. A line of a row holds several columns, a table row all of
+// its cells, so the writer keeps the origin of each piece of text it writes.
+type colSpan struct {
+	at int
+	o  origin
+}
+
+// originAt returns the origin of the byte at offset at of a line, by its spans.
+func originAt(spans []colSpan, at int) origin {
+	var o origin
+	for _, s := range spans {
+		if s.at > at {
+			break
+		}
+		o = s.o
+	}
+	return o
+}
+
 // refusal returns the refusal of rule at column of the row r.
 func (r rowRef) refusal(column, rule, msg string) Refusal {
 	return Refusal{Table: r.table, Key: r.key, Index: r.index, Column: column, Rule: rule, Message: msg}

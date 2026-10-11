@@ -185,6 +185,8 @@ type scan struct {
 	heads []heading // the top-level headings
 	all   []heading // every heading, those inside a container too
 	units []unit    // the paragraphs and HTML blocks that are not headings
+	// blocks is every paragraph and HTML block, the setext headings among them.
+	blocks []unit
 	// open is whether a fence or an HTML block is open at the top level at the end:
 	// such a block takes in everything after it, so a value that leaves one open
 	// is followed by no element of its own.
@@ -205,6 +207,7 @@ func scanHeadings(lines []string, from int) scan {
 			}
 		}
 	}
+	sc.blocks = s.units
 	for _, u := range s.units {
 		if !u.heading {
 			sc.units = append(sc.units, u)

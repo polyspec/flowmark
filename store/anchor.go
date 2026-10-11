@@ -3,6 +3,7 @@ package store
 import (
 	"sort"
 	"strings"
+	"unicode/utf8"
 )
 
 // The collision rule of spec 10 (Detail headings and anchors): a heading that is not a
@@ -12,11 +13,13 @@ import (
 // heading is a top-level heading whose text is `<table> row <key>` at the detail level
 // of its table, the row scope level less one, which the layouts of the file give.
 
-// anchorClash is a collision of a file with a detail anchor: line is the line where the
-// colliding heading or block starts, text is the colliding heading's text or the id or
-// the attribute value that collides, and other is the text of the detail heading.
+// anchorClash is a collision of a file with a detail anchor: line is the 1-based line,
+// and at the byte offset in that line, of the colliding text: the text where a heading
+// starts, the '{' of an attribute list, or the '<' of an HTML tag. text is the colliding
+// heading's text or the id or the attribute value that collides, and other is the text
+// of the detail heading.
 type anchorClash struct {
-	line        int
+	line, at    int
 	text, other string
 }
 
@@ -49,6 +52,7 @@ func tableLevels(table string, level int, children []*docLayout) map[string]int 
 // equal only when their keys differ in case, which the read reports as key.duplicate.
 func anchorClashes(lines []string, tables map[string]int) []anchorClash {
 	sc := scanHeadings(lines, 0)
+	g, m := linkDefs(sc.blocks)
 	var anchors []detailAnchor
 	var others []heading
 	for _, h := range sc.all {
@@ -58,83 +62,172 @@ func anchorClashes(lines []string, tables map[string]int) []anchorClash {
 			others = append(others, h)
 		}
 	}
+	setext := map[int]unit{}
+	for _, u := range sc.blocks {
+		if u.heading {
+			setext[u.at] = u
+		}
+	}
 	var out []anchorClash
 	for _, h := range others {
-		out = append(out, headingClashes(h, anchors)...)
+		out = append(out, headingClashes(lines, h, setext, anchors, g, m)...)
 	}
 	for _, u := range sc.units {
-		out = append(out, unitClashes(u, anchors)...)
+		out = append(out, unitClashes(lines, u, anchors, g)...)
 	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].line < out[j].line })
+	out = append(out, attrClashes(lines, anchors)...)
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].line != out[j].line {
+			return out[i].line < out[j].line
+		}
+		return out[i].at < out[j].at
+	})
 	return out
 }
 
 // detailHeading reports whether h is a detail heading of one of the tables, and its
-// table and key.
+// table, as the layout names it, and its key. The table name and the word row are
+// compared after lowercasing, as the viewers lowercase them.
 func detailHeading(h heading, tables map[string]int) (string, string, bool) {
 	if h.nested {
 		return "", "", false
 	}
-	parts := strings.Fields(h.text)
-	if len(parts) != 3 || tables[parts[0]] != h.level || strings.ToLower(parts[1]) != "row" {
+	parts := detailFields(h.text)
+	if len(parts) != 3 || strings.ToLower(parts[1]) != "row" {
 		return "", "", false
 	}
-	return parts[0], parts[2], true
+	table, ok := layoutTable(parts[0], tables)
+	if !ok || tables[table] != h.level {
+		return "", "", false
+	}
+	return table, parts[2], true
+}
+
+// detailFields splits the text of a heading into its words. The separators are the spaces,
+// the tabs and the line endings of the heading; any other white space is part of a word.
+func detailFields(s string) []string {
+	return strings.FieldsFunc(s, func(r rune) bool { return r == ' ' || r == '\t' || r == '\n' })
+}
+
+// layoutTable returns the name of the table of the layout that name names once both are
+// lowercased.
+func layoutTable(name string, tables map[string]int) (string, bool) {
+	for t := range tables {
+		if strings.ToLower(t) == strings.ToLower(name) {
+			return t, true
+		}
+	}
+	return "", false
 }
 
 // headingClashes returns the collisions of a heading that is not a detail heading: its
-// fold against each anchor, and the attribute list and the HTML tags of its text.
-func headingClashes(h heading, anchors []detailAnchor) []anchorClash {
-	kept, tags := inlineText(h.text)
+// fold against each anchor, and the HTML tags of its text. The text is read under F_G with
+// the definitions of F_G, and under F_M with those of F_M. The attribute lists of the file
+// are compared by attrClashes.
+func headingClashes(lines []string, h heading, setext map[int]unit, anchors []detailAnchor, g, m linkRefs) []anchorClash {
+	eg, em := headingElements(lines, h, setext)
+	readG := inlineText(eg.text, g)
+	keptM := inlineText(em.text, m).text
 	var out []anchorClash
 	for _, a := range anchors {
-		if foldsCollide(kept, a.anchor) {
-			out = append(out, anchorClash{line: h.at + 1, text: h.text, other: a.text})
+		if foldsCollide(readG.text, readG.alt, keptM, a.anchor) {
+			out = append(out, eg.clash(0, eg.text, a))
 		}
 	}
-	out = append(out, tagClashes(h.at+1, tags, anchors)...)
-	if id, ok := attrID(h.text); ok {
-		out = append(out, idClashes(h.at+1, id, anchors)...)
-	}
+	out = append(out, tagClashes(eg, readG.tags, readG.tagAt, anchors)...)
 	return out
 }
 
-// unitClashes returns the collisions of a paragraph or an HTML block: the attribute list
-// that ends it, and the HTML tags it holds.
-func unitClashes(u unit, anchors []detailAnchor) []anchorClash {
-	line := u.at + 1
+// headingElements returns the elements of a heading of the file, the one its text is read
+// from under F_G and the one under F_M: for an ATX heading both are its text, and for a
+// setext heading they are the lines of its paragraph. The F_G element drops only the
+// definitions that CommonMark reads at the start of the paragraph, and the F_M element
+// drops the lines of the definitions that Python-Markdown reads.
+func headingElements(lines []string, h heading, setext map[int]unit) (element, element) {
+	u, ok := setext[h.at]
+	if h.last == h.at || !ok {
+		e := newElement([]textPiece{{line: h.at, start: lineBase(lines[h.at], h.text), text: h.text}})
+		return e, e
+	}
+	_, cm := cmDefLines(u.lines)
+	md := mDefLines(u.lines)
+	var g, m []textPiece
+	for k, l := range u.lines {
+		t := strings.TrimRight(strings.TrimLeft(l, " \t"), " \t")
+		start := lineBase(lines[u.at+k], l) + len(l) - len(strings.TrimLeft(l, " \t"))
+		piece := textPiece{line: u.at + k, start: start, text: t}
+		if !cm[k] {
+			g = append(g, piece)
+		}
+		if !md[k] {
+			m = append(m, piece)
+		}
+	}
+	return newElementOr(g, h, lines), newElementOr(m, h, lines)
+}
+
+// newElementOr returns the element of pieces, or of the heading's own empty text when no
+// line of the paragraph is left.
+func newElementOr(pieces []textPiece, h heading, lines []string) element {
+	if len(pieces) == 0 {
+		return newElement([]textPiece{{line: h.at, start: lineBase(lines[h.at], h.text), text: ""}})
+	}
+	return newElement(pieces)
+}
+
+// linesElement returns the element of the lines of u that keep marks: the text of each
+// kept line, untrimmed as an HTML block's text is, located in the file.
+func linesElement(file []string, u unit, drop []bool) element {
+	var pieces []textPiece
+	for k, l := range u.lines {
+		if drop[k] {
+			continue
+		}
+		pieces = append(pieces, textPiece{line: u.at + k, start: lineBase(file[u.at+k], l), text: l})
+	}
+	if len(pieces) == 0 {
+		return newElement([]textPiece{{line: u.at, start: 0, text: ""}})
+	}
+	return newElement(pieces)
+}
+
+// unitClashes returns the collisions of a paragraph or an HTML block: the HTML tags it
+// holds, read under F_G from the lines that CommonMark reads as its text. The attribute
+// lists of the file are compared by attrClashes.
+func unitClashes(lines []string, u unit, anchors []detailAnchor, g linkRefs) []anchorClash {
 	if u.html {
-		return tagClashes(line, rawTags(strings.Join(u.lines, "\n")), anchors)
+		e := htmlElement(lines, u)
+		tags, at := rawTags(e.text)
+		return tagClashes(e, tags, at, anchors)
 	}
-	text := unitText(u)
-	_, tags := inlineText(text)
-	out := tagClashes(line, tags, anchors)
-	if id, ok := attrID(text); ok {
-		out = append(out, idClashes(line, id, anchors)...)
-	}
-	return out
+	_, cm := cmDefLines(u.lines)
+	ge := linesElement(lines, u, cm)
+	r := inlineText(ge.text, g)
+	return tagClashes(ge, r.tags, r.tagAt, anchors)
 }
 
-// foldsCollide reports whether the text folds to the anchor under F_G or under F_M once
-// a final run of digits is removed from each. The fold of an anchor is the same under
-// both folds, since its letters and digits are ASCII.
-func foldsCollide(text, anchor string) bool {
-	return stripDigits(foldG(text)) == stripDigits(foldG(anchor)) ||
-		stripDigits(foldM(text)) == stripDigits(foldM(anchor))
+// foldsCollide reports whether the heading folds to the anchor once a final run of
+// digits is removed from each: under F_G by its text or by its text with the alt text of
+// its images, and under F_M by its text read with no text of an image. The folds of an
+// anchor are the same under both, since its letters and digits are ASCII.
+func foldsCollide(textG, altG, textM, anchor string) bool {
+	a := stripDigits(foldG(anchor))
+	return stripDigits(foldG(textG)) == a || stripDigits(foldG(altG)) == a ||
+		stripDigits(foldM(textM)) == stripDigits(foldM(anchor))
 }
 
 // tagClashes returns the collisions of the id and name attributes of the open tags with
 // the anchors, which compare without regard to case.
-func tagClashes(line int, tags [][]htmlAttr, anchors []detailAnchor) []anchorClash {
+func tagClashes(e element, tags [][]htmlAttr, at []int, anchors []detailAnchor) []anchorClash {
 	var out []anchorClash
-	for _, attrs := range tags {
-		for _, at := range attrs {
-			if at.name != "id" && at.name != "name" {
+	for i, attrs := range tags {
+		for _, attr := range attrs {
+			if attr.name != "id" && attr.name != "name" {
 				continue
 			}
 			for _, a := range anchors {
-				if strings.EqualFold(at.value, a.anchor) {
-					out = append(out, anchorClash{line: line, text: at.value, other: a.text})
+				if strings.EqualFold(attr.value, a.anchor) {
+					out = append(out, e.clash(at[i], attr.value, a))
 				}
 			}
 		}
@@ -142,67 +235,18 @@ func tagClashes(line int, tags [][]htmlAttr, anchors []detailAnchor) []anchorCla
 	return out
 }
 
-// idClashes returns the collisions of an id that an attribute list sets with the anchors.
-func idClashes(line int, id string, anchors []detailAnchor) []anchorClash {
-	var out []anchorClash
-	for _, a := range anchors {
-		if strings.EqualFold(id, a.anchor) {
-			out = append(out, anchorClash{line: line, text: id, other: a.text})
-		}
-	}
-	return out
-}
-
-// attrID returns the id that the attribute list at the end of the last line of text
-// sets, and false when that line ends in no attribute list. The list is read the way
-// Python-Markdown's attr_list reads one: braces around white space separated tokens,
-// an optional colon after the opening brace, and a '#' token or an id= token that sets
-// the id, the last of them winning.
-func attrID(text string) (string, bool) {
-	line := text[strings.LastIndexByte(text, '\n')+1:]
-	t := strings.TrimRight(line, " \t")
-	if !strings.HasSuffix(t, "}") {
-		return "", false
-	}
-	end := len(t) - 1
-	start := strings.LastIndexByte(t[:end], '}') + 1
-	open := strings.IndexByte(t[start:end], '{')
-	if open < 0 {
-		return "", false
-	}
-	body := strings.TrimLeft(strings.TrimPrefix(t[start+open+1:end], ":"), " ")
-	if body == "" {
-		return "", false
-	}
-	id, found := "", false
-	for _, tok := range strings.Fields(body) {
-		switch {
-		case strings.HasPrefix(tok, "#") && len(tok) > 1:
-			id, found = tok[1:], true
-		case strings.HasPrefix(tok, "id="):
-			id, found = unquoted(tok[3:]), true
-		}
-	}
-	return id, found
-}
-
-// unquoted returns v without the quotes around it, when it has a matching pair.
-func unquoted(v string) string {
-	if n := len(v); n >= 2 && (v[0] == '"' || v[0] == '\'') && v[n-1] == v[0] {
-		return v[1 : n-1]
-	}
-	return v
-}
-
 // rawTags returns the attributes of the open tags in text, which an HTML block holds
-// as raw text: its code spans are no code, and a comment or a declaration holds no tag.
-func rawTags(text string) [][]htmlAttr {
+// as raw text, and the offset of the '<' of each: its code spans are no code, and a
+// comment or a declaration holds no tag.
+func rawTags(text string) ([][]htmlAttr, []int) {
 	var tags [][]htmlAttr
+	var at []int
 	for i := 0; i < len(text); {
 		if text[i] == '<' {
 			if n, attrs, open := htmlMarkupAt(text[i:]); n > 0 {
 				if open {
 					tags = append(tags, attrs)
+					at = append(at, i)
 				}
 				i += n
 				continue
@@ -210,17 +254,22 @@ func rawTags(text string) [][]htmlAttr {
 		}
 		i++
 	}
-	return tags
+	return tags, at
 }
 
 // anchorRefusals returns the CONSTRAINT refusals of a write: one for each collision
 // of the written bytes out with a detail anchor. Each is located at the row and the
-// column whose text holds the colliding heading, which origins records for each line.
-func anchorRefusals(origins []origin, out []byte, tables map[string]int) []Refusal {
+// column whose text holds the colliding text, which the spans of its line record.
+func anchorRefusals(lines [][]colSpan, out []byte, tables map[string]int) []Refusal {
 	var rf []Refusal
 	for _, c := range anchorClashes(splitLines(string(out)), tables) {
-		o := origins[c.line-1]
+		o := originAt(lines[c.line-1], c.at)
 		rf = append(rf, o.row.refusal(o.column, RuleConstraint, c.message()))
 	}
 	return rf
+}
+
+// clashColumn returns the 1-based column, in code points, of a collision in the file lines.
+func clashColumn(lines []string, c anchorClash) int {
+	return utf8.RuneCountInString(lines[c.line-1][:c.at]) + 1
 }

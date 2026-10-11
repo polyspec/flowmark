@@ -21,18 +21,18 @@ func RenderDocument(cat *catalog.Catalog, table string, rows []*Row, lk Linker) 
 	if err != nil {
 		return nil, nil, err
 	}
-	out, origins, rf := renderDocument(lay, rows, lk, true)
+	out, lines, rf := renderDocument(lay, rows, lk, true)
 	if len(rf) > 0 {
 		return nil, rf, nil
 	}
-	return out, anchorRefusals(origins, out, tableLevels(lay.table, lay.scope-1, lay.children)), nil
+	return out, anchorRefusals(lines, out, tableLevels(lay.table, lay.scope-1, lay.children)), nil
 }
 
 // renderDocument writes the document of rows in its canonical form, with the origin of
 // each line, or with the refusals of the rows when the writer refuses them. A write
 // refuses two rows whose keys are equal without regard to case; the read check of
 // ParseDocument does not, since the validator reports those keys.
-func renderDocument(lay *docLayout, rows []*Row, lk Linker, write bool) ([]byte, []origin, []Refusal) {
+func renderDocument(lay *docLayout, rows []*Row, lk Linker, write bool) ([]byte, [][]colSpan, []Refusal) {
 	w := &writer{rel: docFileName(lay)}
 	dw := newDocWriter(w, lk, write, "", "")
 	dw.index(lay, rows)
@@ -44,7 +44,7 @@ func renderDocument(lay *docLayout, rows []*Row, lk Linker, write bool) ([]byte,
 	if len(w.refusals) > 0 {
 		return nil, nil, w.refusals
 	}
-	return []byte(w.b.String()), w.origins, nil
+	return []byte(w.b.String()), w.lines, nil
 }
 
 // docWriter writes the lists and tables of a file with their detail sections and
@@ -425,23 +425,30 @@ func (dw *docWriter) writeList(lay *docLayout, rows []*Row, idx, order, depth []
 	w := dw.w
 	for _, i := range order {
 		r := rows[i]
-		w.enter(rowRefOf(r, idx[i]), "")
-		var b strings.Builder
-		b.WriteString(strings.Repeat("  ", depth[i]) + "- ")
+		rr := rowRefOf(r, idx[i])
+		// Each column of the line is written under its own column, so a refusal names it.
+		w.enter(rr, "")
+		w.put(strings.Repeat("  ", depth[i]) + "- ")
 		if lay.state != "" {
-			b.WriteString("[" + lay.glyphs[*r.Scalars[lay.state]] + "] ")
+			w.enter(rr, lay.state)
+			w.put("[" + lay.glyphs[*r.Scalars[lay.state]] + "] ")
 		}
-		b.WriteString(r.Key + " " + listTitle(lay, r.Title))
+		w.enter(rr, lay.key.Name)
+		w.put(r.Key + " ")
+		w.enter(rr, lay.title)
+		w.put(listTitle(lay, r.Title))
 		for _, c := range lay.fields {
 			v := r.Scalars[c.Name]
 			if v == nil {
 				continue
 			}
 			if text, ok := dw.valueText(lay, r, c, *v); ok {
-				b.WriteString(" " + listToken(c.Name, text))
+				w.enter(rr, c.Name)
+				w.put(" " + listToken(c.Name, text))
 			}
 		}
-		w.put(b.String() + "\n")
+		w.enter(rr, "")
+		w.put("\n")
 	}
 }
 
@@ -458,24 +465,27 @@ func (dw *docWriter) writeTable(lay *docLayout, rows []*Row, idx, order []int) {
 	w.put("| " + strings.Join(delims, " | ") + " |\n")
 	for _, i := range order {
 		r := rows[i]
-		w.enter(rowRefOf(r, idx[i]), "")
-		cells := []string{cellText(r.Key)}
+		rr := rowRefOf(r, idx[i])
+		// Each cell is written under its own column, so a refusal names the cell it is in.
+		w.enter(rr, lay.key.Name)
+		w.put("| " + cellText(r.Key))
 		for _, c := range lay.scalars {
 			v := r.Scalars[c.Name]
+			cell := ""
 			switch {
 			case c.Name == lay.title:
-				cells = append(cells, cellText(r.Title))
+				cell = cellText(r.Title)
 			case v == nil:
-				cells = append(cells, "")
 			default:
 				if text, ok := dw.valueText(lay, r, c, *v); ok {
-					cells = append(cells, cellText(text))
-				} else {
-					cells = append(cells, "")
+					cell = cellText(text)
 				}
 			}
+			w.enter(rr, c.Name)
+			w.put(" | " + cell)
 		}
-		w.put("| " + strings.Join(cells, " | ") + " |\n")
+		w.enter(rr, "")
+		w.put(" |\n")
 	}
 }
 
