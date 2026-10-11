@@ -1,5 +1,5 @@
 <!-- doc-id: spec-document-model -->
-<!-- source-sha256: 6293ee7e43ef30eb7ebfb625d974f0c65ee84c210ce0378993090fa3bb40a379 -->
+<!-- source-sha256: b37d9a5abc985df380cb0f26be65880f7157303eb997876058972d14c4ac8d3e -->
 # 문서 모델
 
 [English](20-document-model.md)
@@ -110,13 +110,46 @@ aggregate냐 split이냐는 저장 선언이다. 논리 관계는 모든 저장�
 - `order <column>`은 default 없고 key, index, check에 들지 않는 non-null `i32`나 `i64` column을
   가리킨다. 값은 같은 배치 부모와 같은 `parent`를 가진 행 사이에서 1부터 센 위치다.
 - block과 document 저장에서는 논리적 column이며 쓰지 않는다: 읽을 때 형제 사이의 1부터 센 위치로 채우고, 파일에 `order` 값이 있으면 `format.block`이며, 쓰기는 형제 묶음의 값을 정확히 1..m(m은 쓰기 뒤의 묶음 크기)으로 받고 그 밖의 값은 `CONSTRAINT`다. 근거: 파일의 줄 순서가 곧 순서이므로 논리적 값은 줄 위치이며, 파일에 쓴 값은 두 번째 순서가 된다.
-  `files` 저장에서는 field list 항목이며 형제 값은 정확히 1..n이다. validator의 `order`는 값이 1..n 밖이거나 형제와 공유되는 각 행에 있으며, column의 type이 아닌 값은 `type`뿐이다([constraints](50-constraints.ko.md#계층과-순서)). `parent`가 그 column의 type이 아닌 행은 알려진 형제 묶음에 속하지 않는다: 어느 묶음의 n에도 세어지지 않고 자신의 `order`는 판정하지 않으며, 묶음의 결함은 그런 행들이 어느 묶음에 들어가든 성립할 때만 보고한다 — 묶음 안에서 공유되는 값, 또는 1..n + u 밖의 값(u는 그런 행의 수). 나머지는 그 행의 `type`이 대신한다.
-- insert는 이를 생략할 수 있고 행은 뒤에 붙는다. k를 주면 k에 놓는다. k로의 update는 행을 옮기고
-  형제가 같은 transaction에서 따라간다. k < 1이나 k > n + 1은 `CONSTRAINT`이며 잘라 맞추지 않는다.
-  n은 행 자신을 제외한 목적지 형제 사이의 행 수이므로, insert, parent 변경, 제자리 이동 모두에서 k는
-  1..n + 1 범위에 있다.
+- `files` 저장에서 field list 항목은 행의 위치가 아니라 **rank**를 담는다: column type의 어떤 값이든
+  된다. 형제는 rank 오름차순으로 서고, 읽기는 다른 저장과 같이 그 형제 순서에서 1부터 센 행의 위치로
+  column을 채우므로, 읽기, column에 대한 IR `where`나 `order`, 응답, export는 rank가 아니라 위치를
+  본다. 이 항목은 다른 non-null 저장 scalar처럼 필수이므로 없는 file은 `format.block`이다.
+  validator의 `order`는 rank를 형제와 공유하는 각 행에 있다. 두 rank가 그 행들을 정렬하지 못하기
+  때문이다. column의 type이 아닌 rank는 `type`뿐이며 어느 것과도 공유되지 않는다
+  ([constraints](50-constraints.ko.md#계층과-순서)). `parent`가 그 column의 type이 아닌 행은 알려진
+  형제 묶음에 속하지 않는다: 자신의 `order`는 판정하지 않으며 그 `type`이 대신한다. rank가 그 type이
+  아닌 행의 위치를 평가하는 읽기는, 읽을 수 없는 값의 모든 읽기처럼 그 `type` 진단을 가리키는
+  `CONSTRAINT`로 실패한다([canonical format](10-canonical-format.ko.md#읽을-수-있는-값-형식)): 위치는
+  비교가 없는 rank에서 나온다. `parent`가 그 type이 아닌 행도 형제 묶음을 알 수 없으므로 그렇게
+  실패한다.
+- 행을 놓는 `files` 쓰기 — insert, `order` update, parent 변경 — 는 그 행에 새 이웃의 rank 사이에
+  엄격히 있는 rank를 주며, 그런 rank가 있는 동안 다른 file은 쓰지 않는다. a를 행 앞의 rank(맨 앞이면
+  0), b를 뒤의 rank라 할 때, 자기 rank가 이미 그 사이에 있는 행은 그것을 유지한다. 아니면 b − a ≥ 2일
+  때 중점 a + ⌊(b − a) / 2⌋를, 맨 뒤에 서고 type의 최댓값을 넘지 않을 때 a + 1000을 받는다. 둘 다
+  아니면 쓰기는 묶음을 **다시 번호 매긴다**: 쓰기 뒤 순서에서 묶음의 i번째 행은 rank i·s를 받으며
+  s = min(1000, ⌊max / m⌋)(max는 type의 최댓값, m은 묶음 크기), rank가 바뀌는 file만 다시 쓴다.
+  max보다 많은 행의 묶음을 다시 번호 매기는 것은 어떤 간격도 그 행들을 가르지 못하므로
+  `CONSTRAINT`다. delete와 parent 변경은 빈틈이 위치를 바꾸지 않으므로 옛 형제의 rank를 그대로 둔다.
+  이웃의 rank를 읽어야 하거나 묶음을 다시 번호 매겨야 하는 쓰기가 그 type이 아닌 rank를 만나면 그
+  `type` 진단을 가리키는 `CONSTRAINT`로 실패한다. 읽을 수 있는 두 rank 사이에 놓는 것은 그것을 읽지
+  않으며, rank가 그 type이 아닌 행은 읽을 수 있는 모든 행 뒤에 서므로, 그 첫 행 바로 앞에 놓인 행은 읽을 수 있는 rank 가운데 맨 뒤에 서며 맨 뒤에 서는 행처럼 rank를 받는다. 다시 번호 매기기는 형제 file을
+  다시 쓰므로, `format.*` 진단을 가진 형제는
+  [commit 거절](10-canonical-format.ko.md#encoding과-줄-구조)이 말하는 대로 그것을 거절한다. 근거:
+  위치를 저장하면 k에의 insert, 이동, delete, parent 변경이 뒤따르는 모든 형제를 다시 쓴다 — 1,000
+  형제 사이 위치 1에의 insert는 1,000 file을 다시 썼다 — 반면 rank는 그 자리에 빈 rank가 없어질
+  때까지 놓인 행의 file만 다시 쓴다. 간격 1000에서 한 자리는 빈틈이 다하기 전에 아홉 번의 insert를
+  받으므로(1000이 500, 250, 125, 62, 31, 15, 7, 3, 1로 반씩 준다), 이동은 흔한 경우 한 file을 쓰고
+  빈틈이 다할 때마다 한 번 묶음의 m file을 쓴다. 그 type에서 간격 1000에 너무 큰 묶음은 더 작은 s와
+  빈틈마다 더 적은 insert를 가진다. 십진 간격은 rank를 읽고 손으로 고치기 쉽게 한다: 사람은 2500을
+  써서 행을 2000과 3000 사이로 옮긴다. 조밀한 묶음 1..n은 올바른 rank 집합이므로, 위치로 쓰인
+  corpus는 그대로 읽히며 빈 rank를 찾지 못하는 첫 놓기에서 다시 번호 매겨진다.
+- insert는 이를 생략할 수 있고 행은 뒤에 붙는다. k를 주면 k에 놓는다. k로의 update는 행을 옮기며,
+  block과 document 저장에서는 형제가 같은 transaction에서 따라간다. k < 1이나 k > n + 1은
+  `CONSTRAINT`이며 잘라 맞추지 않는다. n은 행 자신을 제외한 목적지 형제 사이의 행 수이므로, insert,
+  parent 변경, 제자리 이동 모두에서 k는 1..n + 1 범위에 있다.
   `order`를 할당하는 update는 정확히 한 행과 맞아야 하며 아니면 `CONSTRAINT`다. `order` 없이
-  `parent`를 바꾸면 새 형제 뒤에 붙고 옛 형제는 빈틈을 닫는다. 행을 옮기면 subtree가 함께 옮겨진다.
+  `parent`를 바꾸면 새 형제 뒤에 붙으며, block과 document 저장에서는 옛 형제가 빈틈을 닫는다. 행을
+  옮기면 subtree가 함께 옮겨진다.
 - `order` column이 없으면 형제는 key 순서(정수 key는 숫자, 문자는 codepoint)로 서며 각 자식은 부모를
   따른다. 다른 줄 순서는 `format.noncanonical`이다. `order` column이 있으면 형제는 그 값의 순서로 서며, 읽기가 그 값을 줄 순서에서 채우므로 형제 순서는 `format.noncanonical`이 아니다.
 - **저장 순서**는 tree의 전위 순회다: 각 행, 그다음 형제 순서의 자식. 다른 배치 부모의 행은 부모의
@@ -127,7 +160,7 @@ aggregate냐 split이냐는 저장 선언이다. 논리 관계는 모든 저장�
   `parent` 값의 key 순서로 — 각 묶음은 형제 순서로, 각 root 뒤에는 그 subtree가 전위 순회로 온다.
   어떤 root도 닿지 않는 행 — `parent`가 그 column의 type이 아닌 행, 여러 file에 걸친 parent 순환 위의
   행, 그리고 그 아래의 모든 행 — 은 닿은 모든 행 뒤에 corpus 순서로 온다. `order` column이 있는 형제
-  사이에서 값을 공유하는 행은 corpus 순서로 서며, 값이 그 type이 아닌 행은 다른 행 뒤에 corpus
+  사이에서 rank를 공유하는 행은 corpus 순서로 서며, rank가 그 type이 아닌 행은 다른 행 뒤에 corpus
   순서로 선다. 근거: 읽기는 다른 행의 validator 진단 때문에 실패하지 않으므로, 진단을 가진 corpus의
   저장 순서는 corpus 순서처럼 corpus만의 함수여야 한다.
 

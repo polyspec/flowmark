@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database -->
-<!-- source-sha256: 57d44e0dc67659d112e55410f98159c5f24bce98d380bdf7cd11974118c48f43 -->
+<!-- source-sha256: 8919067f7f0f0206e2cf8c80055ac8056061705af6e68a3cc939c211a1fd8ce7 -->
 # markdown database 계획
 
 [English](markdown-database-plan.md)
@@ -283,12 +283,16 @@ markdown 전용 선언은 모두 dbspec **manifest setting**이며 `markdown <co
 - `order <column>`은 default 없고 key, index, check에 들지 않는 non-null `i32`나 `i64` column을
   가리킨다. 값은 같은 배치 부모와 같은 `parent`를 가진 행 사이에서의 1부터의 위치다. block과
   document 저장에서는 논리적 column이며 쓰지 않는다: 읽을 때 형제 사이의 1부터 센 위치로 채우고, 파일에 `order` 값이 있으면 `format.block`이며, 쓰기는 형제 묶음의 값을 정확히 1..m(m은 쓰기 뒤의 묶음 크기)으로 받고 그 밖의 값은 `CONSTRAINT`다. `files`
-  저장에서는 field list의 항목이며 형제 값은 정확히 1..n이어야 한다(빈틈이나 중복은 validate 진단).
+  저장에서는 field list 항목이 rank를 담고, 형제는 rank 오름차순으로 서며 읽기가 위치를 채운다.
+  쓰기는 놓인 행에 이웃의 rank 사이의 rank를 주고, 그 사이에 rank가 없을 때만 묶음을 다시 번호
+  매기므로 이동은 흔한 경우 한 file을 다시 쓴다(공유된 rank는 validate 진단이고 빈틈은 아니다.
+  [document model](../spec/20-document-model.ko.md#순서)).
   insert는 이를 생략할 수 있고 — orm은 order column을 executor가 할당하는 것으로 다루므로 client는
-  값을 보내지 않는다 — 행은 뒤에 붙는다. k를 주면 k에 놓는다. k로의 update는 행을 옮기고 형제가 같은
-  transaction에서 따라간다. k < 1이나 k > n + 1은 `CONSTRAINT`이며 잘라 맞추지 않는다. `order`를
-  할당하는 update는 정확히 한 행과 맞아야 하며 아니면 `CONSTRAINT`다. `order` 없이 `parent`를 바꾸면
-  새 형제 뒤에 붙고 옛 형제는 빈틈을 닫는다.
+  값을 보내지 않는다 — 행은 뒤에 붙는다. k를 주면 k에 놓는다. k로의 update는 행을 옮기며, block과
+  document 저장에서는 형제가 같은 transaction에서 따라간다. k < 1이나 k > n + 1은 `CONSTRAINT`이며
+  잘라 맞추지 않는다. `order`를 할당하는 update는 정확히 한 행과 맞아야 하며 아니면 `CONSTRAINT`다.
+  `order` 없이 `parent`를 바꾸면 새 형제 뒤에 붙으며, block과 document 저장에서는 옛 형제가 빈틈을
+  닫는다.
 - `order` column이 없으면 형제(같은 배치 부모, 같은 `parent`) 사이의 줄은 key 순서(정수 key는 숫자,
   문자는 codepoint)로 서며 각 자식은 부모를 따른다. 다른 줄 순서는 `format.noncanonical`이다. `order` column이 있으면 형제는 그 값의 순서로 서며, 읽기가 그 값을 줄 순서에서 채우므로 형제 순서는 `format.noncanonical`이 아니다.
 - 저장 순서는 tree의 전위 순회다: 각 행, 그다음 형제 순서(order column, 없으면 key)의 자식. 다른 배치

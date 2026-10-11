@@ -355,13 +355,17 @@ reimplements them.
   block is `CONSTRAINT` on write and `format.block` on read.
 - `order <column>` names a non-null `i32` or `i64` column with no default, in no key, index or
   check. Its value is the row's 1-based position among the rows with the same placement parent
-  and the same `parent`. In block and document storages it is a logical column, never written: a read fills it with the row's 1-based position among its siblings, a file holding an `order` value there is `format.block`, and a write takes each sibling group's values as exactly 1..m, m being the group's size after the write (anything else is `CONSTRAINT`); in `files` storage it is a field-list item whose
-  sibling values must be exactly 1..n (a gap or a duplicate is a validate diagnostic). An insert
+  and the same `parent`. In block and document storages it is a logical column, never written: a read fills it with the row's 1-based position among its siblings, a file holding an `order` value there is `format.block`, and a write takes each sibling group's values as exactly 1..m, m being the group's size after the write (anything else is `CONSTRAINT`); in `files` storage the field-list item holds a
+  rank, the siblings standing in ascending rank and a read filling the position, and a write
+  gives the placed row a rank between its neighbours', renumbering the group only when no rank
+  lies between them, so a move rewrites one file in the common case (a shared rank is a validate
+  diagnostic, a gap is none; [document model](../spec/20-document-model.md#order)). An insert
   may omit it — orm treats an order column as executor-assigned, so the client sends no value —
-  and the row appends; with k it places the row at k. An update to k moves the row and the
-  siblings follow in the same transaction. k < 1 or k > n + 1 is `CONSTRAINT`, never clamped.
-  An update that assigns `order` matches exactly one row, otherwise `CONSTRAINT`. Changing
-  `parent` without `order` appends to the new siblings, and the old siblings close the gap.
+  and the row appends; with k it places the row at k. An update to k moves the row; in block and
+  document storages the siblings follow in the same transaction. k < 1 or k > n + 1 is
+  `CONSTRAINT`, never clamped. An update that assigns `order` matches exactly one row, otherwise
+  `CONSTRAINT`. Changing `parent` without `order` appends to the new siblings; in block and
+  document storages the old siblings close the gap.
 - Without an `order` column, the lines among siblings (the same placement parent and the same
   `parent`) stand in key order (numeric for integer keys, codepoint for text) and each child
   follows its parent; any other line order is `format.noncanonical`. With an `order` column the siblings stand in the order of their values, which a read takes from the line order, so no sibling order is noncanonical.
