@@ -76,9 +76,10 @@ func viewerText(s string, refs linkRefs) inlineResult {
 // element is empty, and in alt the plain-text rendering of its description. Emphasis
 // and strong delimiters render nothing where the delimiter algorithm of §6.2 and the
 // appendix's process emphasis matches them, and are text elsewhere, as is every
-// bracket and delimiter that forms nothing.
+// bracket and delimiter that forms nothing. A tag of GFM's tagfilter renders as text,
+// as GitHub escapes it, and its attributes are still recorded.
 func inlineText(s string, refs linkRefs) inlineResult {
-	r := inlineReader{s: s, refs: refs}
+	r := inlineReader{s: s, refs: refs, gh: true}
 	r.run()
 	text, alt := r.readings()
 	return inlineResult{text: text, alt: alt, tags: r.tags, tagAt: r.tagAt}
@@ -105,6 +106,26 @@ type inlineReader struct {
 	guard  bool
 	links  map[int]bool
 	linkAt map[int]bool
+
+	// gh reads the source as GitHub renders it, with GFM's tagfilter.
+	gh bool
+	// The HTML that GitHub parses (ghEvents): marks are the tags of the source, each
+	// before the node it precedes, the tags of GFM's tagfilter excepted, which are
+	// text; hidden are the source ranges of image descriptions, which GitHub writes
+	// into an alt attribute, and spans those of the emphasis and links it renders as
+	// elements.
+	marks  []tagMark
+	hidden [][2]int
+	spans  [][2]int
+}
+
+// tagMark is an HTML tag of inline content: its lowercased name, whether it is an end
+// tag or a start tag closed by "/>", the offset of its '<' in the source, and the
+// node it precedes.
+type tagMark struct {
+	name      string
+	end, self bool
+	at, node  int
 }
 
 // vsGuard is the expression by which @vscode/markdown-it-katex 1.1.2 reads no math
@@ -138,6 +159,7 @@ type delimiter struct {
 	length            int
 	canOpen, canClose bool
 	live              bool
+	src               int // the offset of its run in the source
 }
 
 // bracket is an open link or image bracket: the node of its "[" or "![", the index of
@@ -502,11 +524,18 @@ func (r *inlineReader) angle(i int) int {
 	}
 	if n, attrs, open := htmlMarkupAt(s); n > 0 {
 		r.guard = vsGuard.MatchString(s[:n])
-		r.nodes = append(r.nodes, inlineNode{plain: true, lit: s[:n]})
 		if open {
 			r.tags = append(r.tags, attrs)
 			r.tagAt = append(r.tagAt, i)
 		}
+		if name, end, self, ok := tagOf(s[:n]); ok && r.gh {
+			if ghFiltered[name] {
+				r.text(s[:n])
+				return i + n
+			}
+			r.marks = append(r.marks, tagMark{name: name, end: end, self: self, at: i, node: len(r.nodes)})
+		}
+		r.nodes = append(r.nodes, inlineNode{plain: true, lit: s[:n]})
 		return i + n
 	}
 	r.text("<")
@@ -548,7 +577,7 @@ func (r *inlineReader) delimiterRun(i int) int {
 		closes = right && (!left || cmPunct(after))
 	}
 	if open || closes {
-		r.delims = append(r.delims, delimiter{node: len(r.nodes), char: c, length: n, canOpen: open, canClose: closes, live: true})
+		r.delims = append(r.delims, delimiter{node: len(r.nodes), char: c, length: n, canOpen: open, canClose: closes, live: true, src: i})
 	}
 	r.text(s[i : i+n])
 	return i + n
@@ -617,6 +646,7 @@ func (r *inlineReader) processEmphasis(bottom int) {
 			continue
 		}
 		od := &r.delims[found]
+		r.spans = append(r.spans, [2]int{od.src, d.src})
 		opener, closer := &r.nodes[od.node].text, &r.nodes[d.node].text
 		use := 1
 		if len(*opener) >= 2 && len(*closer) >= 2 {
@@ -675,10 +705,12 @@ func (r *inlineReader) closeBracket(i int) int {
 	}
 	r.nodes[o.node].text = ""
 	if o.image {
+		r.hidden = append(r.hidden, [2]int{o.src, i})
 		for k := o.node + 1; k < len(r.nodes); k++ {
 			r.nodes[k].image = true
 		}
 	} else {
+		r.spans = append(r.spans, [2]int{o.src, i})
 		for k := range r.open {
 			if !r.open[k].image {
 				r.open[k].active = false

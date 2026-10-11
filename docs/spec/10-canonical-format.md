@@ -182,6 +182,53 @@ and the column sections — are payload: the renderer moves them with their row 
   brackets as CommonMark does. Grounding: comrak's `collect_text` writes a footnote reference as
   nothing, and its `process_footnotes` restores an undefined one as text nodes (the slug vectors:
   `# a[^1]` beside `[^1]: n` is `a` on GitLab).
+- **HTML headings under S_GH.** GitHub gives an anchor to every heading element `<h1>`–`<h6>` of the
+  HTML it renders that no other heading element holds, a raw HTML one too, from the element's text,
+  and computes it on the parsed HTML: S_GH reads the element as GitHub's parser does. VS Code and
+  GitLab give a raw HTML heading no anchor; their slugs read the markdown headings alone. A raw HTML
+  heading is a start tag `<h1>`–`<h6>`, its name in any case, in raw HTML as CommonMark 0.31.2 reads it
+  — in an HTML block, or inline in a paragraph or a heading, never in code — and a start tag closed by
+  `/>` is an empty element. The HTML is read block by block: each top-level paragraph renders between
+  `<p>` and `</p>`, each heading between `<hN>` and `</hN>`, with its rendered text and its raw tags
+  where they stand — an image is no text and holds no tag, since GitHub writes its description into an
+  alt attribute — and an HTML block is its raw text. In that HTML a tag of GFM's tagfilter (`title`,
+  `textarea`, `style`, `xmp`, `iframe`, `noembed`, `noframes`, `script`, `plaintext`) is text, as GitHub
+  escapes it; a comment, a processing instruction, a declaration and a CDATA section are no text; in an
+  HTML block a named reference is decoded only when its name is one of HTML 4.01 or `apos` and a `;`
+  ends it, and a numeric one, `&#` and decimal digits or `&#x` and hexadecimal digits, as many as
+  follow, with an optional `;`, is its code point, and nothing when it has no digit or is no Unicode
+  scalar value; an `isindex` start tag writes the text `This is a searchable index. Enter search
+  keywords: `. A heading element's text is the text from its start tag to its end: its own end tag
+  ends it, unless a `div`, `td`, `th`, `tr`, `thead`, `tbody`, `tfoot`, `table`, `head`, `body` or
+  `html` is open inside it; `</body>` and `</html>` end it; a start tag `fieldset`, `form`, `li`, `p`,
+  `table` or `h1`–`h6` closes the elements open inside it from the innermost, each that the vector
+  `nested` records it closing when that element is left open, and ends the heading when it closes them
+  all, so with none open it ends it; another heading's end tag is nothing; an end tag of an element
+  open inside it closes that element; an end tag of an element open outside it ends it unless an
+  element inside outranks that tag (libxml2's end priorities: `div` 150, `td` and `th` 160, `tr` 170,
+  `thead`, `tbody` and `tfoot` 180, `table` 190, `head` and `body` 200, `html` 220, any other 100); a
+  heading element that starts inside another that its tag does not end has no anchor, nor one inside a
+  `select`. Where the engine cannot know whether a tag ends the element — a start tag of that list
+  inside an emphasis or a link that does not hold the element's start, or at an element that `nested`
+  does not record; any tag once a start tag may have closed an element open inside or outside it by
+  the pairs of libxml2's `htmlStartClose` (versions 2.9.14 and 2.13.5 together), which the engine does
+  not apply, or once content it does not read stood before it; an end tag when the heading is inside a
+  container — the element may end there and may continue, and both readings are taken. An element that its block does
+  not end continues into the next top-level block: a paragraph, a heading or an HTML block, whose HTML
+  it reads, a thematic break, an empty element, or the end of the file, which ends it. **The prefix
+  rule:** an element that continues into any other content — a block inside a container, a list, a
+  block quote, a code block, or anything at the end of a block inside a container — continues past
+  what the engine reads, and it takes the anchor A when its slug so far begins A. This is the safe
+  direction: what follows can only append to the element's text, and S_GH maps each character on
+  its own, so the final slug begins with the slug so far, and only a slug that begins A can equal A or
+  be numbered to it. Grounding: the slug vectors record GitHub's reading — every element name as a
+  start tag and an end tag inside a raw heading, and after each element left open (`closers`,
+  `nested`), every named reference of the entities package (`htmlEntities`), every code point inside
+  a raw `<h2>` (`github-html-codepoints.txt`) and the raw heading cases (`rawHeadings`), which the
+  reading reproduces exactly, apart from the cases of the prefix rule, where GitHub's id begins with
+  the slug so far. Accepted: a raw `<h2>Notes</h2>`, and `<h2>items row T1<b>x</b></h2>` beside the
+  detail heading `items row T1`, whose text is `items row T1x`. Refused: a raw
+  `<h2>items row T1</h2>`, and an unclosed `<h2>items row` followed by a list, beside it.
 - **The slugs.** A heading's slug under a viewer is computed from its rendered inline text as the
   viewer computes it. **S_GH** (GitHub): the text lowercased by the Unicode full default lowercase
   mapping without its conditional mappings (U+0130 becomes `i` followed by U+0307, U+212A becomes `k`,
@@ -225,7 +272,9 @@ and the column sections — are payload: the renderer moves them with their row 
   viewer that changes shows as a vector the slugs no longer reproduce.
 - **The collision rule.** A heading is every ATX heading, also after a block-quote or list-item marker,
   and every paragraph followed by a setext underline, the whole paragraph after the link reference
-  definitions at its start being the heading, outside fenced blocks; a detail heading is one too. Those
+  definitions at its start being the heading, outside fenced blocks; a detail heading is one too. A raw
+  HTML heading that GitHub anchors is a heading too, under S_GH alone, located at the `<` of its start
+  tag (HTML headings under S_GH). Those
   definitions are no part of the heading: a setext heading begins on the first line they leave, they are
   content before it, and definitions alone followed by an underline make no heading. Grounding: CommonMark 0.31.2
   reads the definitions at the start of a paragraph before it closes the paragraph as a setext heading

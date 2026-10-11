@@ -190,13 +190,15 @@ func takesAnchor(s, a string) bool {
 }
 
 // slugsTake reports whether a heading whose rendered text is r takes the anchor a under
-// one of the slugs, each reading the text as its viewer does (ghSlug, vsSlug, glSlug).
+// S_VS or S_GL, each reading the text as its viewer does (vsSlug, glSlug). S_GH reads
+// the heading's element as GitHub parses it (ghReadings).
 func slugsTake(r inlineResult, a string) bool {
-	return takesAnchor(ghSlug(r), a) || takesAnchor(vsSlug(r), a) || takesAnchor(glSlug(r), a)
+	return takesAnchor(vsSlug(r), a) || takesAnchor(glSlug(r), a)
 }
 
-// ghSlug is S_GH of a heading's rendered text: without the text of images, a line
-// break read as nothing.
+// ghSlug is S_GH of a heading's rendered text when nothing ends its element early:
+// without the text of images, a line break read as nothing, a tag of the tagfilter as
+// text.
 func ghSlug(r inlineResult) string { return slugGH(strings.Join(r.text, "")) }
 
 // vsSlug is S_VS of a heading's rendered text: with the alt text of images and VS

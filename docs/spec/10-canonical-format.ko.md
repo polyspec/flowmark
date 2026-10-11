@@ -1,5 +1,5 @@
 <!-- doc-id: spec-canonical-format -->
-<!-- source-sha256: dc069ebc362869ba7df14d5d1f1388b6cb496df5436ad971386c54a9dba1779e -->
+<!-- source-sha256: a7df00c391c72ee91bc73b3178ba41fe7f9bf8fca7e938d3f2e9b8bb21630dd9 -->
 # Canonical format
 
 [English](10-canonical-format.md)
@@ -117,6 +117,44 @@ column 섹션 — 은 payload다: renderer는 이를 행과 함께 옮기고 그
   빠진다. S_GH와 S_VS는 bracket을 CommonMark처럼 읽는다. 근거: comrak의 `collect_text`는 footnote reference를 아무것도
   쓰지 않고, 그 `process_footnotes`는 정의되지 않은 것을 text node로 되돌린다(slug vector: `[^1]: n` 옆의 `# a[^1]`은
   GitLab에서 `a`).
+- **S_GH의 HTML heading.** GitHub은 자신이 렌더한 HTML에서 다른 heading element가 담지 않은 모든 heading element
+  `<h1>`–`<h6>`에, raw HTML의 것에도, 그 element의 텍스트로 anchor를 주며, 그것을 parse된 HTML에서 계산한다: S_GH는
+  element를 GitHub의 parser처럼 읽는다. VS Code와 GitLab은 raw HTML heading에 anchor를 주지 않으며, 그 slug는 markdown
+  heading만 읽는다. raw HTML heading은 CommonMark 0.31.2가 읽는 raw HTML에 있는 — HTML block 안에, 또는 문단이나
+  heading 안에 inline으로, code 안에는 결코 아닌 — 이름의 대소문자를 가리지 않는 start tag `<h1>`–`<h6>`이며, `/>`로
+  닫힌 start tag는 빈 element다. HTML은 block마다 읽는다: 최상위 문단은 각각 `<p>`와 `</p>` 사이에, heading은 `<hN>`과
+  `</hN>` 사이에 그 렌더된 텍스트와, 선 자리의 raw tag와 함께 렌더된다 — image는 텍스트가 아니며 tag를 담지 않는데,
+  GitHub이 그 설명을 alt attribute에 쓰기 때문이다 — 그리고 HTML block은 그 raw 텍스트다. 그 HTML에서 GFM tagfilter의
+  tag(`title`, `textarea`, `style`, `xmp`, `iframe`, `noembed`, `noframes`, `script`, `plaintext`)는 GitHub이 escape하는
+  대로 텍스트다. comment, processing instruction, declaration, CDATA section은 텍스트가 아니다. HTML block 안의 named
+  reference는 그 이름이 HTML 4.01의 것이거나 `apos`이고 `;`로 끝날 때만 decode되며, numeric reference — `&#`와 십진
+  숫자, 또는 `&#x`와 십육진 숫자를 뒤따르는 만큼, 그리고 선택적인 `;` — 는 그 code point이고, 숫자가 없거나 Unicode
+  scalar value가 아니면 아무것도 아니다. `isindex` start tag는 텍스트 `This is a searchable index. Enter search
+  keywords: `를 쓴다. heading element의 텍스트는 그 start tag에서 끝까지의 텍스트다: 자기 end tag가 끝내되, 안에
+  `div`, `td`, `th`, `tr`, `thead`, `tbody`, `tfoot`, `table`, `head`, `body`, `html`이 열려 있으면 끝내지 않는다.
+  `</body>`와 `</html>`은 끝낸다. start tag `fieldset`, `form`, `li`, `p`, `table`, `h1`–`h6`은 안에 열린 element를
+  가장 안쪽부터, vector `nested`가 그 element가 열린 채로 남았을 때 그것이 닫는다고 기록하는 것마다 닫으며, 그것을
+  모두 닫으면 heading을 끝내므로, 열린 것이 없으면 끝낸다. 다른 heading의 end tag는 아무것도 아니다. 안에 열린
+  element의 end tag는 그 element를 닫는다. 바깥에 열린 element의 end tag는, 안의 element가 그 tag보다 우선순위가 높지
+  않으면 heading을 끝낸다(libxml2의 end 우선순위: `div` 150, `td`와 `th` 160, `tr` 170, `thead`, `tbody`, `tfoot` 180,
+  `table` 190, `head`와 `body` 200, `html` 220, 그 밖은 100). 자기 tag가 끝내지 않는 다른 heading element 안에서, 또는
+  `select` 안에서 시작하는 heading element는 anchor가 없다. 어떤 tag가 element를 끝내는지 engine이 알 수 없는 곳 —
+  element의 시작을 담지 않는 강조나 link 안에서, 또는 `nested`가 기록하지 않은 element에서 오는 그 목록의 start tag,
+  engine이 적용하지 않는 libxml2 `htmlStartClose`(version 2.9.14와 2.13.5를 합친 것)의 쌍으로 어떤 start tag가 안이나
+  바깥에 열린 element를 닫았을 수 있거나, engine이 읽지 않는 내용이 앞에 왔을 때의 모든 tag, heading이 container
+  안에 있을 때의 end tag — 에서는 element가 거기서 끝날 수도 이어질 수도 있으며, 두 읽기를 모두 취한다. 자기 block이 끝내지 않는
+  element는 다음 최상위 block으로 이어진다: 그 HTML을 읽는 문단, heading, HTML block, 빈 element인 thematic break,
+  또는 element를 끝내는 file의 끝이다. **prefix 규칙:** 그 밖의 내용 — container 안의 block, list, block quote, code
+  block, 또는 container 안 block의 끝에 오는 어떤 것 — 으로 이어지는 element는 engine이 읽는 범위를 넘어 이어지며,
+  지금까지의 slug가 A로 시작하면 anchor A를 가져간다. 이것이 안전한 방향이다: 뒤따르는 것은 element의 텍스트에 덧붙일
+  수만 있고 S_GH는 각 문자를 따로 사상하므로, 최종 slug는 지금까지의 slug로 시작하며, A로 시작하는 slug만이 A와
+  같거나 A로 번호 매겨질 수 있다. 근거: slug vector가 GitHub의 읽기를 기록한다 — raw heading 안의 start tag와 end
+  tag로서의 모든 element 이름, 그리고 열린 채로 남은 각 element 뒤의 것(`closers`, `nested`), entities package의 모든
+  named reference(`htmlEntities`), raw `<h2>` 안의 모든 code point(`github-html-codepoints.txt`), raw heading
+  case(`rawHeadings`) — 이며, 읽기는 이를 그대로 재현한다. prefix 규칙의 case는 예외로, GitHub의 id가 지금까지의
+  slug로 시작한다. 허용되는 예: raw `<h2>Notes</h2>`, 그리고 상세 heading `items row T1` 옆의 텍스트가 `items row T1x`인
+  `<h2>items row T1<b>x</b></h2>`. 거절되는 예: 그 옆의 raw `<h2>items row T1</h2>`, 그리고 list가 뒤따르는 닫히지
+  않은 `<h2>items row`.
 - **slug.** 한 viewer에서 heading의 slug는 그 렌더된 inline 텍스트로부터 그 viewer가 계산하는 대로 계산한다.
   **S_GH**(GitHub): 텍스트를 Unicode의 full default lowercase mapping으로, 조건부 mapping 없이 소문자로 바꾸고(U+0130은
   `i`와 U+0307이, U+212A는 `k`가, 끝의 Σ는 σ가 된다), Unicode 17.0.0에서 Unicode Technical Standard #18(Annex C)의
@@ -150,7 +188,7 @@ column 섹션 — 은 payload다: renderer는 이를 행과 함께 옮기고 그
   `gh`, npm, cargo를 갖추고 `make slug-vectors`를 실행한다. viewer가 바뀌면 slug가 더는 재현하지 못하는 vector로
   드러난다.
 - **충돌 규칙.** heading은 모든 ATX heading(block-quote나 list-item 표지 뒤의 것을 포함)과, fence 밖에서
-  setext 밑줄이 뒤따르는 모든 문단이다. 그 문단 전체에서 앞머리의 link reference definition을 뺀 것이 heading이다. 상세 heading도 heading이다. 그 definition은 heading의 일부가 아니다: setext heading은 definition이 남긴 첫 줄에서 시작하고, definition은 heading 앞의 내용이며, definition만 있고 밑줄이 뒤따르면 heading이 아니다. 근거: CommonMark 0.31.2는 문단을 setext heading으로 닫기 전에 그 앞머리의 definition을 먼저 읽으므로(§4.3, §4.7), `[r]: /u`, `people row P1`, `---`는 definition 하나와 heading `people row P1`이며, commonmark.js, cmark-gfm, markdown-it이 그렇게 읽는다. 이 규칙에서 상세 heading은 file의 layout에 있는 한 table의 상세 level — 그 행들의 상세 heading의 level, 행 scope보다 한 단계 얕은 — 에 있는 최상위 heading이며, 그 텍스트가 공백, tab, 그리고 setext heading의 줄 바꿈을 뺀 것으로 그 table의 이름과 `row`(각각 viewer가 하듯 소문자로 만든 뒤 정식 텍스트와 같은 것)와 key이다. 즉 상세 섹션의 heading이며, 정식 또는 비정식 철자로 쓰인다. 그 밖의 모든 heading은 payload heading이며, 다른 level이나 block quote, list 항목 안에 있는 `<table> row <key>` heading을 포함해, 그 slug가 모든 상세 anchor와 비교된다. 근거: 상세 섹션은 자리로 배정되므로, 다른 곳의 heading은 어느 행도 가리키지 않으며 자기 anchor를 가지는데, viewer는 그것이 상세 anchor와 반복될 때 번호를 매긴다. 상세 heading이 아닌
+  setext 밑줄이 뒤따르는 모든 문단이다. 그 문단 전체에서 앞머리의 link reference definition을 뺀 것이 heading이다. 상세 heading도 heading이다. GitHub이 anchor를 주는 raw HTML heading도 S_GH에서만 heading이며, 그 start tag의 `<`에 위치한다(S_GH의 HTML heading). 그 definition은 heading의 일부가 아니다: setext heading은 definition이 남긴 첫 줄에서 시작하고, definition은 heading 앞의 내용이며, definition만 있고 밑줄이 뒤따르면 heading이 아니다. 근거: CommonMark 0.31.2는 문단을 setext heading으로 닫기 전에 그 앞머리의 definition을 먼저 읽으므로(§4.3, §4.7), `[r]: /u`, `people row P1`, `---`는 definition 하나와 heading `people row P1`이며, commonmark.js, cmark-gfm, markdown-it이 그렇게 읽는다. 이 규칙에서 상세 heading은 file의 layout에 있는 한 table의 상세 level — 그 행들의 상세 heading의 level, 행 scope보다 한 단계 얕은 — 에 있는 최상위 heading이며, 그 텍스트가 공백, tab, 그리고 setext heading의 줄 바꿈을 뺀 것으로 그 table의 이름과 `row`(각각 viewer가 하듯 소문자로 만든 뒤 정식 텍스트와 같은 것)와 key이다. 즉 상세 섹션의 heading이며, 정식 또는 비정식 철자로 쓰인다. 그 밖의 모든 heading은 payload heading이며, 다른 level이나 block quote, list 항목 안에 있는 `<table> row <key>` heading을 포함해, 그 slug가 모든 상세 anchor와 비교된다. 근거: 상세 섹션은 자리로 배정되므로, 다른 곳의 heading은 어느 행도 가리키지 않으며 자기 anchor를 가지는데, viewer는 그것이 상세 anchor와 반복될 때 번호를 매긴다. 상세 heading이 아닌
   heading H는, S_GH, S_VS, S_GL 가운데 한 slug S와 그 slug가 읽는 대로 렌더된 H의 텍스트 T에 대해 S(T)가 A와 같거나,
   A가 S(T) 뒤에 `-`와 앞자리 0 없이 쓴 십진수 n ≥ 1을 붙인 것이면(번호 규칙) 상세 heading의 anchor A를 가져간다. 두
   상세 heading은 anchor가 같을 때에만 충돌한다. 근거: 명명된 모든 viewer는 반복된 slug에 1부터 세는 `-<n>`을 덧붙여

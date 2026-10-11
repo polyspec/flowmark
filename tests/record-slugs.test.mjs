@@ -2,14 +2,24 @@
 // headings and the splitting of their ids, the treatments and their compression, and the reading of GitHub's HTML.
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { compress, forms, githubAttributes, githubIds, gitlabIds, glfmArgs, groupSize, headingsOf, katexOptions, methodSource, splitIds, treatment } from '../scripts/record-slugs.mjs';
+import { compress, forms, githubAttributes, githubIds, gitlabIds, glfmArgs, groupSize, headingIdAttrs, headingsOf, katexOptions, methodSource, splitIds, treatment } from '../scripts/record-slugs.mjs';
 
 test('a code point has a reference form and a raw form, escaped when it is ASCII punctuation', () => {
-  assert.deepEqual(forms(0x41), { ref: '&#x41;', raw: 'A' });
-  assert.deepEqual(forms(0x2a), { ref: '&#x2A;', raw: '\\*' });
-  assert.deepEqual(forms(0x0a), { ref: '&#xA;', raw: null });
-  assert.deepEqual(forms(0x0d), { ref: '&#xD;', raw: null });
-  assert.deepEqual(forms(0), { ref: '&#x0;', raw: null });
+  assert.deepEqual(forms(0x41), { ref: '&#x41;', raw: 'A', htmlRef: '&#x41;', htmlRaw: 'A' });
+  assert.deepEqual(forms(0x2a), { ref: '&#x2A;', raw: '\\*', htmlRef: '&#x2A;', htmlRaw: '*' });
+  assert.deepEqual(forms(0x0a), { ref: '&#xA;', raw: null, htmlRef: '&#xA;', htmlRaw: null });
+  assert.deepEqual(forms(0x0d), { ref: '&#xD;', raw: null, htmlRef: '&#xD;', htmlRaw: null });
+  assert.deepEqual(forms(0), { ref: '&#x0;', raw: null, htmlRef: '&#x0;', htmlRaw: null });
+  assert.equal(forms(0x3c).htmlRaw, null);
+  assert.equal(forms(0x26).htmlRaw, null);
+});
+
+test('a raw HTML form is a raw <h2> heading', () => {
+  assert.deepEqual(headingsOf([0x41, 0x20], 'htmlRaw').map(h => h.line), ['<h2>s20p q</h2>', '<h2>g1-A-</h2>']);
+});
+
+test('the id attribute of every heading element is read', () => {
+  assert.deepEqual(headingIdAttrs('<h1 id="a&amp;b">x</h1><H2>y</H2><h3 class="c" id="d">z</h3><h2/>'), ['a&b', null, 'd', null]);
 });
 
 test('the space and the hyphen are read alone, the rest in groups', () => {
@@ -51,6 +61,11 @@ test("GitHub's heading ids are read per heading, the prefix removed", () => {
   const html = '<h1></h1>\n<div class="markdown-heading"><h1 class="heading-element">A&amp;B</h1><a id="user-content-ab" class="anchor" href="#ab"></a></div>\n'
     + '<div class="markdown-heading"><h2 class="heading-element">!</h2><a id="" class="anchor" href="#"></a></div>';
   assert.deepEqual(githubIds(html), [null, 'ab', '']);
+  const nested = '<div class="markdown-heading"><h2><b>a<h3>b</h3></b></h2><a id="user-content-ab" class="anchor" href="#ab"></a></div>';
+  assert.deepEqual(githubIds(nested), ['ab', null]);
+  const unwrapped = '<div class="markdown-heading"><h2>a</h2><h2>b</h2>\n<a id="user-content-ab" class="anchor" href="#ab"></a></div><h2></h2>';
+  assert.deepEqual(githubIds(unwrapped), ['ab', null, null]);
+  assert.throws(() => githubIds('<a id="user-content-x" class="anchor"></a>'));
 });
 
 test("GitHub's raw id and name attributes are read, its heading anchors are not", () => {
@@ -78,6 +93,7 @@ test("GitLab's engine options become the CLI's flags, and an unknown value is re
 
 test("GitLab's heading ids are read per heading, the prefix removed, raw HTML without an id", () => {
   const html = '<h1 id="user-content-a&amp;b" data-sourcepos="1:1-1:5">a<a href="#a" class="anchor"></a></h1>\n<h2 id="hh">g</h2>\n<h2 id="user-content-" data-sourcepos="3:1-3:2"></h2>';
-  assert.deepEqual(gitlabIds(html), ['a&b', null, '']);
+  assert.deepEqual(gitlabIds(html), ['a&b', 'hh', '']);
+  assert.deepEqual(gitlabIds('<h2>g</h2>'), [null]);
   assert.throws(() => gitlabIds('<h1 data-sourcepos="1:1-1:1">x</h1>'));
 });
