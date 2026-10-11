@@ -1,5 +1,5 @@
 <!-- doc-id: spec-canonical-format -->
-<!-- source-sha256: cf3c99f2d2ffe68e4cbb5cb1e541eb079d2e473153b28007b6ee730e8155d063 -->
+<!-- source-sha256: 06069aff066ed90fc80889b1773a58d71615485dc7b6991a9476f695188ec63f -->
 # Canonical format
 
 [English](10-canonical-format.md)
@@ -100,7 +100,7 @@ column 섹션 — 은 payload다: renderer는 이를 행과 함께 옮기고 그
   `key.duplicate`뿐이다. 같은 file 안에서 같은
   heading 텍스트를 가진 두 상세 섹션은 충돌하므로 `format.block`이며, 어느 행에도 배정할 수 없다.
 - 읽기에서 충돌은 충돌하는 요소의 자리에 위치한다([진단](#진단)): heading은 그 텍스트의 첫 줄과 그 텍스트의 첫 글자에, attribute list는 그 `{`에, HTML `id`나 `name`은 그 tag의 `<`에 위치한다. 이것은 읽기 위치일 뿐이다: 충돌을 새로 만드는 쓰기는 [진단](#진단)의 쓰기 결함과 앞 절이 정하는 대로, anchor를 차지하는 heading이나 id를 쓴 행과 column에 위치하며, 그 메시지는 상세 heading을 밝힌다. 근거: column은 규칙이 이름 붙인 글자를 가리키며, block의 첫 줄은 마지막 줄의 attribute list나 HTML block 깊숙한 `id`에서 멀리 떨어질 수 있다.
-- 정식 공백 하나가 아닌 공백이나 tab의 run(글 앞, 낱말 사이, 또는 글 뒤에 있는 것), hash 뒤에 tab이 있거나, hash 대신 setext 밑줄이 있거나, table 이름이나 `row`의 대소문자가 정식과 다른 상세 heading이나 section heading은 `format.noncanonical`이며, `flowmark canon`이 고친다. hash 뒤의 canonical 구분자는 공백 하나이며, tab은 쓰이지 않는다. 다만 CommonMark는 `##` 뒤에 tab이 와도 같은 heading으로 읽는다. 근거: table 이름은 상세 level의 자리가, `row`는 문법이 정하며, 이름 붙은 모든 viewer가 anchor에서 둘을 소문자로 만들므로, 정식과 대소문자만 다른 heading은 같은 행을 같은 anchor로 가리킨다. 둘은 viewer가 소문자로 만든 뒤 정식 텍스트와 같을 때 맞는다: U+017F는 `s`가 아니며, U+212A는 소문자로 `k`가 된다.
+- 정식 공백 하나가 아닌 공백이나 tab의 run(글 앞, 낱말 사이, 또는 글 뒤에 있는 것), hash 뒤에 tab이 있거나, hash 대신 setext 밑줄이 있거나, table 이름이나 `row`의 대소문자가 정식과 다른 상세 heading, section heading, block heading은 `format.noncanonical`이며, `flowmark canon`이 고친다. 그 진단은 그 텍스트의 첫 글자에 위치한다([진단](#진단)). hash 뒤의 canonical 구분자는 공백 하나이며, tab은 쓰이지 않는다. 다만 CommonMark는 `##` 뒤에 tab이 와도 같은 heading으로 읽는다. setext 밑줄도 쓰이지 않는다. 다만 CommonMark는 `-` 밑줄 위의 문단을 같은 level 2 heading으로, `=` 밑줄 위의 문단을 같은 level 1 heading으로 읽으므로(§4.3), setext section heading이나 block heading은 같은 section이나 block을 가리킨다. 근거: table 이름은 상세 level의 자리가, `row`는 문법이 정하며, 이름 붙은 모든 viewer가 anchor에서 둘을 소문자로 만들므로, 정식과 대소문자만 다른 heading은 같은 행을 같은 anchor로 가리킨다. 둘은 viewer가 소문자로 만든 뒤 정식 텍스트와 같을 때 맞는다: U+017F는 `s`가 아니며, U+212A는 소문자로 `k`가 된다.
 - 자기 table의 `<table> row <key>`가 아닌, 상세 level의 list나 table의 heading — 소문자로 만든 뒤 다른 table의 이름을 가진 것(예컨대 `items.flowmark.md`의 `## people row P1`), 또는 다른 어떤 텍스트든 — 은 `format.block`이다. 근거: 상세 level의 heading은 그 앞의 행 scope를 끝내고 이 table의 scope를 열지 않으므로, 그 내용은 file이 가진 어느 행에도 속하지 않으며, `flowmark canon`은 그것이 어디에 속하는지 알 수 없다. key는 대소문자를 구분한다: `## items row t1`은 `format.block`이다.
 
 ## 섹션과 그 값

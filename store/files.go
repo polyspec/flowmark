@@ -388,16 +388,17 @@ func (p *parser) readSections(lines []string, b int, row *Row, dp *docParser) {
 		if k+1 < len(bounds) {
 			end = bounds[k+1].at
 		}
-		headLine := h.at + 1
+		// The faults of the heading are at the first character of its text.
+		headLine, col := h.at+1, h.textCol(lines)
 		name := trimWhite(h.text)
 		if child := p.lay.childNamed(name); child != nil && h.level == 2 {
 			if seen[name] {
-				p.fail(headLine, 1, RuleSection, "the block "+name+" is written twice")
+				p.fail(headLine, col, RuleSection, "the block "+name+" is written twice")
 				continue
 			}
 			seen[name] = true
-			if h.text != name || h.tab {
-				p.warn(headLine, 1, RuleNoncanonical, "the block heading is not written with one space after its hashes")
+			if !h.spelled(name) {
+				p.warn(headLine, col, RuleNoncanonical, "the block heading is written `## "+name+"`")
 			}
 			if rows := dp.readChildBlock(lines, h, end, child); len(rows) > 0 {
 				setBlock(row, child.table, rows)
@@ -407,19 +408,19 @@ func (p *parser) readSections(lines []string, b int, row *Row, dp *docParser) {
 		_, declared := p.lay.section(name)
 		switch {
 		case h.level != 2:
-			p.fail(headLine, 1, RuleSection, "a heading of level "+strconv.Itoa(h.level)+" is not a section of the row")
+			p.fail(headLine, col, RuleSection, "a heading of level "+strconv.Itoa(h.level)+" is not a section of the row")
 		case !declared:
-			p.fail(headLine, 1, RuleSection, "## "+name+" is not a section of "+p.lay.table)
+			p.fail(headLine, col, RuleSection, "## "+name+" is not a section of "+p.lay.table)
 		case seen[name]:
-			p.fail(headLine, 1, RuleSection, "the section "+name+" is written twice")
+			p.fail(headLine, col, RuleSection, "the section "+name+" is written twice")
 		default:
 			seen[name] = true
-			if h.text != name || h.tab {
-				p.warn(headLine, 1, RuleNoncanonical, "the section heading is not written with one space after its hashes")
+			if !h.spelled(name) {
+				p.warn(headLine, col, RuleNoncanonical, "the section heading is written `## "+name+"`")
 			}
 			region, _ := p.valueLines(lines, h.last+1, end, true)
 			v := joinLines(region)
-			row.setAt(name, headLine, h.level+2) // the heading text follows the hashes and a space
+			row.setAt(name, headLine, col)
 			row.Sections[name] = &v
 		}
 	}

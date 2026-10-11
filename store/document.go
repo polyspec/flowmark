@@ -1109,7 +1109,7 @@ func (p *docParser) readDetail(lines []string, h heading, sub []heading, end int
 		return
 	}
 	key := parts[2]
-	if h.last != h.at || h.tab || h.text != lay.table+" row "+key {
+	if !h.spelled(lay.table + " row " + key) {
 		p.warn(h.at+1, col, RuleNoncanonical, "the detail heading is written `"+marks+" "+lay.table+" row "+key+"`")
 	}
 	// Two detail sections of one file under one heading text collide, whatever block
@@ -1173,35 +1173,37 @@ func (p *docParser) readSection(lines []string, s heading, sEnd int, rec *docRec
 	lay := p.lay
 	name := trimWhite(s.text)
 	marks := strings.Repeat("#", s.level)
+	// The faults of the heading are at the first character of its text.
+	col := s.textCol(lines)
 	if child := lay.childNamed(name); child != nil {
 		if rec.seen[name] {
-			p.fail(s.at+1, 5, RuleSection, "the block "+name+" is written twice")
+			p.fail(s.at+1, col, RuleSection, "the block "+name+" is written twice")
 			return
 		}
 		rec.seen[name] = true
-		if s.text != name || s.tab {
-			p.warn(s.at+1, 5, RuleNoncanonical, "the block heading is not written with one space after its hashes")
+		if !s.spelled(name) {
+			p.warn(s.at+1, col, RuleNoncanonical, "the block heading is written `"+marks+" "+name+"`")
 		}
 		if rows := p.readChildBlock(lines, s, sEnd, child); len(rows) > 0 {
 			setBlock(rec.row, child.table, rows)
 		}
 		return
 	}
-	if s.text != name || s.tab {
-		p.warn(s.at+1, 5, RuleNoncanonical, "the section heading is not written with one space after its hashes")
+	if !s.spelled(name) {
+		p.warn(s.at+1, col, RuleNoncanonical, "the section heading is written `"+marks+" "+name+"`")
 	}
 	if _, ok := lay.sectionOf(name); !ok {
-		p.fail(s.at+1, 5, RuleSection, marks+" "+name+" is not a section of "+lay.table)
+		p.fail(s.at+1, col, RuleSection, marks+" "+name+" is not a section of "+lay.table)
 		return
 	}
 	if rec.seen[name] {
-		p.fail(s.at+1, 5, RuleSection, "the section "+name+" is written twice")
+		p.fail(s.at+1, col, RuleSection, "the section "+name+" is written twice")
 		return
 	}
 	rec.seen[name] = true
 	value, _ := p.valueLines(lines, s.last+1, sEnd, true)
 	v := joinLines(value)
-	rec.row.setAt(name, s.at+1, s.level+2) // the heading text follows the hashes and a space
+	rec.row.setAt(name, s.at+1, col)
 	rec.row.Sections[name] = &v
 }
 
