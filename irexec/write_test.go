@@ -75,6 +75,12 @@ func TestInsert(t *testing.T) {
 			t.Fatalf("items:\n%s", f.file("items.flowmark.md"))
 		}
 	})
+	t.Run("60#surfaces: an insert assigns by value or NULL, not by plus_p or minus_p", func(t *testing.T) {
+		f := fresh(t)
+		for _, op := range []string{"plus_p", "minus_p"} {
+			f.fails(f.msg("insert", "people", map[string]any{"set": []any{map[string]any{"column": "name", "p": 0}, map[string]any{"column": "age", op: 1}}}, "Lin", 3), "IR_INVALID")
+		}
+	})
 	t.Run("60#surfaces: defaults are written explicitly and now is the request clock", func(t *testing.T) {
 		f := fresh(t)
 		res := f.want(f.msg("insert", "people", map[string]any{"set": sets("name")}, "Lin"), `{"affected":1,"keys":["P4"]}`)

@@ -315,9 +315,6 @@ func (w *writer) insert() *Error {
 		if f.Identity {
 			return errf(codeIRInvalid, "cannot set identity column %s", a.Column)
 		}
-		if a.PlusP != nil || a.MinusP != nil {
-			return unspecified("an insert that assigns " + a.Column + " by plus_p or minus_p, IR_INVALID once ir.Validate refuses it (orm T99)")
-		}
 	}
 	if err := w.requireAssigned(req.Set); err != nil {
 		return err
