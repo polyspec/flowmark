@@ -1,5 +1,5 @@
 <!-- doc-id: spec-ops -->
-<!-- source-sha256: 194b790cbe3a146d6b81ab69a46b751fce28a2311d71e9001e5f0295cc77e34d -->
+<!-- source-sha256: fde41a8908d547ee0fa6bb5ccee376de01a94972d3fc7aabaa23e48669f763f4 -->
 # Operations
 
 [English](40-ops.md)
@@ -33,6 +33,12 @@
 ## canon 연산
 
 - `flowmark canon <corpus> [file…]`는 지정한 file을(file을 지정하지 않으면 corpus의 모든 문서를) 한 transaction에서 canonical 형식으로 다시 쓰고, 다시 쓴 file을 답한다. 바이트를 하나도 바꾸지 않는 canon은 아무것도 쓰지 않는다. file은 corpus 경로로 이름을 준다: corpus root에 대한 상대 경로이며, 모든 platform에서 `/`를 쓰고, commit 거절이 밝히는 그 경로다. 두 번 이름을 준 file은 대상 하나다. 대상은 `format.*` 진단이 있는 file의 commit 거절에서 면제된다. 이름을 준 file에 `format.block`, `format.section`, `format.encoding`이나 그 행 사이의 `parent.cycle`이 있으면 명령은 `CONSTRAINT`로 거절하며 file과 진단을 밝히고 아무것도 쓰지 않는다. 이름을 준 `corpus.walk` 항목도 같은 방식으로 거절하며, corpus 문서도 `corpus.walk` 항목도 아닌 경로를 이름으로 주면 `CONFIG`로 거절한다. file을 주지 않으면 대상은 그 행 사이에 `parent.cycle`이 없고 `format.*` 진단이 `format.noncanonical`뿐인 corpus 문서이며, 그 밖의 모든 corpus 문서와 모든 `corpus.walk` 항목은 각각의 진단과 함께 보고하고 어느 것도 다시 쓰지 않는다. `corpus.walk` file은 결코 대상이 아니다. canon은 논리 값을 바꾸지 않으므로 key, 참조, 제약 검사가 그것을 거절하지 않는다. 링크 유도는 거절할 수 있다: `files` row로의 링크는 그 key에서만 유도되어 table이 필요 없고, block이나 document row로의 링크는 그 row의 table이 필요하다. 사용할 수 없는 block 또는 document table의 row로의 링크를 가진 대상은 이름을 준 canon을 `CONSTRAINT`로 거절하며, 그 대상과 table을 사용할 수 없게 하는 진단의 file을 밝힌다. file을 주지 않으면 그 대상은 두 file과 함께 보고하고 다시 쓰지 않는다. validator 진단이 있는 값은 쓴 텍스트를 유지한다. 문서 바이트를 정규화하는 유일한 연산이며, 논리적 쓰기는 결코 정규화하지 않는다. 근거: migration은 별도의 명시적 transaction이므로, logical 쓰기는 사용자가 쓰지 않은 바이트를 바꾸지 않는다. `corpus.walk` 항목은 잘못된 문서처럼 사람이 고칠 진단을 가지고 table의 자리에 있다. 그 밖의 경로는 canon이 다시 쓸 수 있는 것을 가리키지 않으므로 명령의 실수다. table을 사용할 수 없는 링크는 engine이 읽을 수 없는 row나 두 row가 공유하는 key를 가리킬 수 있어 유도된 target을 알 수 없으며, canon은 유도할 수 없는 target을 결코 쓰지 않는다.
+- 명령줄은 `flowmark canon [--lock-wait-ms <n>] <corpus> [file…]`이다: `--lock-wait-ms`는 CLI face의
+  lock 대기([잡기와 기다리기](#잡기와-기다리기))로, 기본값은 5000이고 0이면 곧바로 거절한다. `<corpus>`는 corpus
+  root다. 다시 쓴 file마다 `[canon] rewrote <file>`, 보고한 file마다 `[canon] left <file>: <진단>`, 그리고
+  둘의 개수를 출력한다. canon이 실행되면 보고한 file이 있어도 0으로, 거절되거나 실패하면 실패를 표준
+  오류에 쓰고 1로, 명령줄이 잘못되면 2로 끝난다. `T12.10`이 이 종료 코드를 CLI의 모든 명령으로
+  일반화한다.
 
 ## Server
 

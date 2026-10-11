@@ -43,6 +43,13 @@ The order of the commit protocol is normative.
   which is a mistake in the command. A link whose table is unavailable may name a row the engine
   cannot read, or a key that two rows share, so its derived target is unknown, and canon never
   writes a target it cannot derive.
+- The command line is `flowmark canon [--lock-wait-ms <n>] <corpus> [file…]`: `--lock-wait-ms` is the
+  lock wait of the CLI face ([acquiring and waiting](#acquiring-and-waiting)), 5000 by default and 0
+  to refuse at once; `<corpus>` is the corpus root. It prints `[canon] rewrote <file>` for each file
+  rewritten, `[canon] left <file>: <diagnostic>` for each file reported, and a count of both. It exits
+  0 when canon ran, files reported included; 1 when it was refused or failed, with the failure on
+  standard error; and 2 for a wrong command line. `T12.10` generalizes these exit codes to every
+  command of the CLI.
 
 ## The server
 
