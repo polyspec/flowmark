@@ -25,6 +25,9 @@ type Corpus struct {
 	cat         *catalog.Catalog
 	files       map[string]*file
 	unavailable map[string]catalog.Diagnostic
+	// walk holds the first corpus.walk diagnostic of each entry at a table's place
+	// that is no corpus document, by its corpus path.
+	walk map[string]catalog.Diagnostic
 	// recs holds the rows of each table, by file path order and then the order
 	// the store returns them in; a block row follows its placement row.
 	recs map[string][]*rec
@@ -59,13 +62,17 @@ func Open(cat *catalog.Catalog, root string) (*Corpus, error) {
 	if err != nil {
 		return nil, err
 	}
-	c := &Corpus{cat: cat, files: map[string]*file{}, unavailable: map[string]catalog.Diagnostic{}}
+	c := &Corpus{cat: cat, files: map[string]*file{}, unavailable: map[string]catalog.Diagnostic{}, walk: map[string]catalog.Diagnostic{}}
 	for path, f := range s.Files {
 		c.files[path] = &file{table: f.Table, data: f.Data, rows: f.Rows}
 	}
 	for _, d := range s.Diagnostics {
 		if f := c.files[d.File]; f != nil {
 			f.diags = append(f.diags, d)
+			continue
+		}
+		if _, seen := c.walk[d.File]; !seen && d.Rule == store.RuleWalk {
+			c.walk[d.File] = d
 		}
 	}
 	for _, tb := range cat.Tables {
