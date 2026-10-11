@@ -118,6 +118,35 @@ func TestInsert(t *testing.T) {
 			t.Fatalf("tags:\n%s", f.file("tags.flowmark.md"))
 		}
 	})
+	dangling := func() map[string]string {
+		docs := baseDocs()
+		docs["notes/N3.flowmark.md"] = lines("# Second root", "- item: [T9](x.md)", "- position: 2")
+		return docs
+	}
+	t.Run("10#foreign-keys-as-links: an insert that gives a dangling link its row rewrites the link", func(t *testing.T) {
+		f := catalogFixture(t, dangling()).on(t)
+		res := f.want(f.msg("insert", "items", map[string]any{"set": sets("id", "title", "body")}, "T9", "Ninth", ""), `{"affected":1,"keys":["T9"]}`)
+		var paths []string
+		for _, tg := range res.Post.Targets {
+			paths = append(paths, tg.Path)
+		}
+		if strings.Join(paths, " ") != "items.flowmark.md notes/N3.flowmark.md" {
+			t.Fatalf("targets %v", paths)
+		}
+		f.commit(res)
+		if got := f.file("notes/N3.flowmark.md"); got != lines("# Second root", "- item: [T9](../items.flowmark.md)", "- position: 2") {
+			t.Fatalf("N3:\n%s", got)
+		}
+	})
+	t.Run("10#diagnostics: an insert whose row a dangling link may name needs the linking tables", func(t *testing.T) {
+		docs := dangling()
+		docs["notes/N9.flowmark.md"] = "no heading\n"
+		f := catalogFixture(t, docs).on(t)
+		err := f.fails(f.msg("insert", "items", map[string]any{"set": sets("id", "title", "body")}, "T9", "Ninth", ""), "CONSTRAINT")
+		if err.Diagnostic == nil || err.Diagnostic.File != "notes/N9.flowmark.md" {
+			t.Fatalf("diagnostic %+v", err.Diagnostic)
+		}
+	})
 	t.Run("60#surfaces: on_duplicate inserts a row that meets no key", func(t *testing.T) {
 		f := fresh(t)
 		f.commit(f.want(f.msg("insert", "tags", map[string]any{"set": sets("label", "kind"), "on_duplicate": []any{set("kind", 2)}}, "web", "topic", "area"), `{"affected":1,"keys":[3]}`))

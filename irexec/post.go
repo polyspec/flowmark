@@ -569,12 +569,13 @@ func (w *writer) readBack(path string, f *file, out []byte, lk store.Linker) *Er
 }
 
 // linkTargets adds to the changed files every file that holds a link to a row whose
-// derived target the write moves: a row whose detail section appears or
-// disappears. Every table that may hold such a link is needed.
+// derived target the write changes: a row whose detail section appears or
+// disappears, and a row the write inserts, which a dangling link may name (spec 10
+// Foreign keys as links). Every table that may hold such a link is needed.
 func (w *writer) linkTargets(before, after *linker) *Error {
 	moved := map[string]bool{}
 	for k, a := range after.targets {
-		if b, ok := before.targets[k]; ok && (b.anchor != a.anchor || b.file != a.file) {
+		if b, ok := before.targets[k]; !ok || b.anchor != a.anchor || b.file != a.file {
 			moved[k] = true
 		}
 	}
