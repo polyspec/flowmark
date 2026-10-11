@@ -288,6 +288,34 @@ func TestJoins(t *testing.T) {
 	})
 }
 
+// TestJoinSoftDeleted pins a join to a soft-deleted row (spec 60 Surfaces,
+// soft_delete): the join condition excludes it, so a left join binds NULL and an
+// inner join drops the parent row, from all and from count alike.
+func TestJoinSoftDeleted(t *testing.T) {
+	docs := baseDocs()
+	docs["items.flowmark.md"] = strings.Replace(docs["items.flowmark.md"], "- [ ] T3 Review the design", "- [ ] T3 Review the design owner:[P3](people.flowmark.md)", 1)
+	f := catalogFixture(t, docs)
+	join := func(kind string) map[string]any {
+		return map[string]any{"rel": "who", "kind": kind, "left": "owner", "right": "id", "query": map[string]any{"entity": "people", "columns": map[string]any{"mode": "none", "add": []string{"name"}}}}
+	}
+	body := func(kind string) map[string]any {
+		return map[string]any{"columns": map[string]any{"mode": "none", "remove": []string{"parent"}}, "where": where(pred("id", "in", map[string]any{"ps": []int{0, 1}})), "joins": []any{join(kind)}}
+	}
+	f.sub(t, "60#surfaces: a left join to a soft-deleted row binds NULL", func(f *fixture) {
+		f.want(f.msg("all", "items", body("left"), "T1", "T3"),
+			`{"rows":[{"id":"T1","owner":"P1","who":{"id":"P1","name":"Ada"}},{"id":"T3","owner":"P3","who":null}]}`)
+	})
+	f.sub(t, "60#surfaces: an inner join to a soft-deleted row drops the parent", func(f *fixture) {
+		f.want(f.msg("all", "items", body("inner"), "T1", "T3"),
+			`{"rows":[{"id":"T1","owner":"P1","who":{"id":"P1","name":"Ada"}}]}`)
+	})
+	f.sub(t, "60#surfaces: count with an inner join to a soft-deleted row drops the parent", func(f *fixture) {
+		b := body("inner")
+		delete(b, "columns")
+		f.want(f.msg("count", "items", b, "T1", "T3"), `{"count":1}`)
+	})
+}
+
 // TestRelations pins the assembled relations (orm protocol 1.2 and 2.1, spec 60
 // Surfaces): one and many, key_by, flatten, limit_per_parent and if_parent.
 func TestRelations(t *testing.T) {

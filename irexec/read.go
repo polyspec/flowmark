@@ -198,13 +198,28 @@ func (r *reader) statement(q *ir.Query, outer *frame, deleted bool, keep func(*r
 
 // expand joins the rows of each join of s, in declaration order and each join's
 // own joins after it: an inner join keeps the rows with a matching child, a left
-// join also keeps a row without one, bound to nil. A child matches when its right
-// column equals the parent's left column and its on group holds.
+// join also keeps a row without one, bound to nil. A child matches when it is not
+// soft-deleted, its right column equals the parent's left column and its on group
+// holds: every read excludes soft-deleted rows, a join child in its join condition
+// (spec 60 Surfaces, soft_delete).
 func (r *reader) expand(s *scope, envs []*env) ([]*env, *Error) {
 	for _, j := range s.joins {
-		children, err := r.c.rows(j.sc.tb.Name)
+		all, err := r.c.rows(j.sc.tb.Name)
 		if err != nil {
 			return nil, err
+		}
+		children := all
+		if sd := j.sc.ent.SoftDelete; sd != "" {
+			children = nil
+			for _, cx := range all {
+				v, err := r.c.value(cx, sd)
+				if err != nil {
+					return nil, err
+				}
+				if v.null {
+					children = append(children, cx)
+				}
+			}
 		}
 		var next []*env
 		for _, ev := range envs {
