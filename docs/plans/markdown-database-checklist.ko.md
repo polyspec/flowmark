@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database-checklist -->
-<!-- source-sha256: 6f9e7032633a24a9558741281a698b72039db679dead6a3b85244fb3775fd3e3 -->
+<!-- source-sha256: e1c2cec51b0972ddb9d42bf03339a205c625ee851281b62fe72676116bbe4f18 -->
 # markdown database checklist
 
 ## T12 markdown database
@@ -45,6 +45,7 @@
 - [o] T12.1-24 history table의 저장 방식에 근거가 있다. 원인: spec 30은 history table을 근거 없이 `block <fk> table`로 저장하라고 요구하며, T12.1-15의 깊이 제한이 거기서 나온다. 완료 기준: 첫 round 전에 범위를 고정한 적대 검증을 거쳐 spec 30이 판정을 근거와 함께 적는다 (T12.1-15 후속)
 - [o] T12.1-25 test case가 적은 spec anchor가 모두 존재한다. 원인: test 이름은 고정하는 규칙을 `<spec>#<anchor>`로 적는데, 일부는 `10#order`, `10#storage-order`, `20#document-order`, `20#readable-values`처럼 어떤 spec에도 없는 anchor를 적으므로 그 test가 어떤 규칙을 고정하는지 알 수 없다. 완료 기준: 이름의 anchor가 그 spec의 heading이 아니면 실패하는 test가 있고, 모든 이름을 고치며, `go test ./...`가 통과한다 (T12.1-13 후속)
 - [ ] T12.1-26 HTML `id`와 `name` 규칙이 CommonMark는 code로, Python-Markdown은 raw HTML로 읽는 글자를 다룬다. 원인: T12.1-14 검증에서 `- x\n\n      <a id="items-row-t1"></a>`가 list 항목에 네 칸을 쓰는 Python-Markdown에게는 raw HTML이지만 CommonMark에게는 들여쓴 code block이라, 충돌 규칙이 이를 놓친다는 것이 드러났다. attribute list와 달리 `id="…"`는 code 예시에 흔한 글자이므로, 모든 code에서 거절하면 평범한 문서를 거절하게 된다. 완료 기준: 첫 round 전에 범위를 고정한 적대 검증을 거쳐 spec 10이 근거와 함께 이를 정하고, codec이 red 다음 green test와 함께 그것을 따른다 (T12.1-14 후속)
+- [ ] T12.1-27 Python-Markdown, 따라서 MkDocs가 CommonMark는 보지 않는 heading이나 id를 보거나 CommonMark가 보는 것을 놓치는 경우를 정한다. 원인: T12.1-22와 T12.1-26 분석이 기준 parser로 일곱 가지를 확인했다. escape한 `\<a id=…>`는 CommonMark에게 글자지만 `<`를 escape할 수 없는 Python-Markdown에게는 raw HTML이다. 공백 없는 `#items row T1`과 섞인 `-=` 밑줄은 Python-Markdown에게만 heading이며, 상세 heading 앞에 두면 그 anchor를 옮긴다. 밑줄을 들여 쓴 `files` 행의 setext section heading과 setext H1 제목은 Python-Markdown이 setext 상세 heading을 읽듯 읽힌다. setext 상세 heading 진단은 setext 텍스트가 column 1에서 시작하는데도 column 4를 보고한다. setext 상세 heading 앞의 definition 줄이 그 텍스트에 접혀 들어간다. 빈 줄 앞의 raw `<div>`는 정식 ATX 상세 heading조차 Python-Markdown에게서 가린다. 완료 기준: 첫 round 전에 범위를 고정한 적대 검증을 거쳐 spec 10이 각각을 근거와 함께 정하고, codec이 red 다음 green test와 함께 그것을 따른다 (T12.1-22, T12.1-26 후속)
 - [o] T12.2.4-1 상태기계를 가진 table의 `list` 저장 block을 다룬다: checkbox glyph, 상태, 중첩 행을 가진 fixture block과 허용과 거절 사례, P1/P2 golden (T12.2.4 후속)
   - 완료 기준: fixture와 그 사례가 있고, fuzz target이 golden으로 seed되며, `go test -count=1 ./store/`가 통과한다.
 - [o] T12.2.2-5 codec이 CommonMark처럼 `#` 연속 뒤에 tab이 오는 ATX heading을 읽는다: `store/markdown.go`는 지금 space를 요구한다 (T12.2.2-3 후속)
