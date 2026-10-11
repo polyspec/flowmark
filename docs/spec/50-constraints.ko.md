@@ -1,5 +1,5 @@
 <!-- doc-id: spec-constraints -->
-<!-- source-sha256: 4f25977828632a1927af19d5e9e3b566dc2b61b7dcf5141717f88c60aec715a6 -->
+<!-- source-sha256: 283a344a4712ada46a964e63fc057ab4029841ba759ea6aa970447a517326d83 -->
 # Constraints
 
 [English](50-constraints.md)
@@ -31,7 +31,7 @@
 ## Key 규칙
 
 - **형태.** markdown table의 key는 `A`–`Z`, `a`–`z`, `0`–`9`, `_`, `-`로 이루어지고 문자나 숫자로
-  시작하며, `--`와 `-_`를 담지 않는다. 이 형태 밖의 key는 쓰기에서 `CONSTRAINT`다.
+  시작하며, `-_`를 담지 않는다. 이 형태 밖의 key는 쓰기에서 `CONSTRAINT`다.
 - **예약 이름.** 대소문자를 무시하고 `CON`, `PRN`, `AUX`, `NUL`, `COM0`–`COM9`, `LPT0`–`LPT9`와 같은
   key는 쓰기에서 `CONSTRAINT`다([schema](30-schema.md)는 table 이름을 거절한다).
 - **길이.** 243 byte를 넘는 `files` key는 쓰기에서 `CONSTRAINT`다.
@@ -50,8 +50,8 @@
 - 바이트 그대로 쓸 수 없는 text나 `markdown` 값, 그리고 `CanonicalLiteral`이 거절하는 typed 값(scale보다 많은 소수 자릿수 — 0 포함, precision − scale보다 많은 정수 자릿수, precision보다 많은 소수 자릿수의 time이나 datetime)([canonical format](10-canonical-format.md));
 - `format.*` 진단이 있는 file을 다시 쓰는 logical write는 file과 진단을 밝히며 `CONSTRAINT`다. 그 진단이 `format.noncanonical`이면 `flowmark canon`을 밝힌다(commit의 면제를 제외하고)([canonical format](10-canonical-format.md)). 쓰기는 문서 바이트를 정규화하지 않는다;
 - CommonMark block 구조에서 최상위 level ≤ L heading을 가진 `markdown` 값([canonical format](10-canonical-format.md));
-- 상세 anchor와의 충돌(heading, attribute list의 id, 또는 HTML `id`나 `name`)을 새로 만드는 쓰기 — 제목 갱신, payload 쓰기, 행 삽입, key 갱신, 이동,
-  상세 섹션의 생성 — 는 anchor를 차지하는 heading이나 id를 쓴 행과 column — `markdown` column의 값, `files` 행의 제목(H1에 대해), list나 table 행의 제목·field·cell, 또는 `files` 행 field list의 항목(attribute list의 `{`나 tag의 `<`가 놓인 column에 위치한다), 또는 section이나 block heading에 대해서는 그것이 여는 행 scope의 행, 그 heading이 이름 붙인 `markdown` column이나 자식 table — 에 위치하며, 차지한 anchor의 상세 heading을 밝히는 `CONSTRAINT`다. 다만 중복 key는 `DUPLICATE_KEY`다([canonical format](10-canonical-format.md#detail-headings-and-anchors));
+- 상세 anchor와의 충돌(heading 또는 HTML `id`나 `name`)을 새로 만드는 쓰기 — 제목 갱신, payload 쓰기, 행 삽입, key 갱신, 이동,
+  상세 섹션의 생성 — 는 anchor를 차지하는 heading이나 id를 쓴 행과 column — `markdown` column의 값, `files` 행의 제목(H1에 대해), 또는 section이나 block heading에 대해서는 그것이 여는 행 scope의 행, 그 heading이 이름 붙인 `markdown` column이나 자식 table — 에 위치하며, 차지한 anchor의 상세 heading을 밝히는 `CONSTRAINT`다. 다만 중복 key는 `DUPLICATE_KEY`다([canonical format](10-canonical-format.md#detail-headings-and-anchors));
 - date, time 또는 datetime 값으로 쓴 `now`(그 type이 아니다), 그리고 column 길이를 넘는 text([canonical format](10-canonical-format.md));
 - list 제목 token `<declared column>\:`([canonical format](10-canonical-format.md#list-rows));
 - 최상위 setext heading을 담거나, 뒤따르는 요소가 그 안으로 흡수되는 fence나 HTML block을 열린 채로 둔 `markdown` 값. 그 요소를 어느 쓰기가 놓든 마찬가지다([canonical format](10-canonical-format.md#sections-and-their-values)).

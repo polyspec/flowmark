@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database -->
-<!-- source-sha256: c5dcb8c0283b99e61f9457e85986105c85bcfaa729b3f920a9353f6a92e359f3 -->
+<!-- source-sha256: e2433900b7f271a815a7109b6d0ce21c287361de5b7cf2c99913ab18ec775236 -->
 # markdown database 계획
 
 [English](markdown-database-plan.md)
@@ -105,9 +105,17 @@ NULL이 아니며 비어 있을 수 있고, view의 entity table은 둘 다 선�
   그 밖의 모든 file은 database 밖이고 진단을 내지 않는다. 다만 대소문자를 무시하고 suffix가 `.flowmark.md`인 이름은 `corpus.walk`이며, `files` table의 자리에 있는 폴더가 아닌 항목도 그렇다.
 - **모든 corpus 문서는 완전한 markdown 문서다.** flowmark를 모르는 독자도 그대로 읽으며, 주석,
   표지, 숨은 field가 없다. 구조는 평범한 markdown(heading, list, table, field list)이고 모든 관계는
-  GitHub, GitLab, VS Code, MkDocs가 heading에 대해 만드는 anchor인 link다. Pandoc은 주장 대상이 아니다: 기본 설정은 상대 경로 link target을 다시 쓰지 않는다.
+  GitHub, GitLab, VS Code가 heading에 대해 만드는 anchor인 link다. Pandoc은 주장 대상이 아니다: 기본 설정은 상대 경로 link target을 다시 쓰지 않는다.
   근거: 문서는 database의 유일한 저장소이므로
   읽을 수 있는 문서로 남아야 하며, 기계만 필요로 하는 것은 catalog(`dbspec/`)나 `.flowmark/`에 속한다.
+- **readability의 기준은 spec이다.** 구조 — block, inline, 무엇이 code인지, 무엇이 heading인지, 무엇이 table인지 — 는
+  CommonMark 0.31.2로, table과 task-list 항목은 GFM 0.29로 판단한다: GitHub(cmark-gfm), GitLab, VS Code(markdown-it)가
+  구현하는 spec이다. spec은 fragment의 target을 정의하지 않는다. anchor — heading slug와, CommonMark가 code 밖에서 읽는
+  raw HTML의 id와 name — 는 GitHub, GitLab, VS Code로 판단하며(heading에는 F_G fold), 그 근거는 link `[k](file#anchor)`가
+  그 viewer들에서 풀려야 한다는 것이다. 근거: spec은 이 viewer들이 따르는 고정된 하나의 기준이다. 어느 spec도 따르지 않는
+  구현은 list, setext, fence, reference definition, 확장에 대해 자기만의 동작을 가지며 그것은 릴리스와 확장에 따라 바뀐다.
+  그것을 따르면 표준이 아니라 한 구현의 일탈을 쫓게 되므로 그런 구현은 기준이 아니다. 어떤 요구도 다른 viewer를 이름 붙이지
+  않으며, 요구를 온전히 만족하는 가장 단순한 구현은 아무것도 주장하지 않는다.
 - 인코딩: BOM 없는 UTF-8, LF, 정확히 마지막 LF 하나. 줄 끝은 CommonMark가 읽는 대로 LF, CRLF, 또는 뒤에 LF가 없는 CR이다. BOM, 모든 줄 끝의 CR, 마지막 LF가 없음, 끝의 빈 줄은 `format.noncanonical`이고, UTF-8이 아닌 byte와 U+0000은 `format.encoding`이다. 값은 줄 바꿈으로 시작하거나 끝나지 않으며 space와 tab만 있는 줄(CommonMark의 빈 줄)로 시작하거나 끝나지 않는다. `format.*` 진단이 있는 file을 다시 쓰는 logical write는 `CONSTRAINT`이며, `format.noncanonical`이면 `flowmark canon`을 밝힌다. `files` 행의 file 전체를 지우는 delete는 rewrite 거절에서만 면제되며, restrict 검사는 그 행을 참조할 수 있는 모든 table의 행을 여전히 필요로 하며(자신의 table을 `parent`로 하는 것, 자식 block과 이력 행, 그 행으로의 foreign key를 가진 모든 table), 그 중 하나라도 사용할 수 없으면 그 delete는 `CONSTRAINT`다. `format.block`, `format.section`, `format.encoding`이나 그 행 사이의 `parent.cycle`이 있는 file을 가지거나 바이트 단위로 같은 key를 가진 두 행이 있는 table은 사용할 수 없다: 그 행을 필요로 하는 모든 요청이나 검사는 file과 진단을 밝히며 `CONSTRAINT`로 실패한다. block table은 placement parent의 file을 재귀적으로 가진다. corpus 열기, introspection, `flowmark validate`와 `flowmark canon`은 사용할 수 없는 table에서 결코 실패하지 않으며, 그 table이 필요한 export는 실패하고 아무것도 쓰지 않는다.
 
 - 이 판정과 함께 철회한다: `<!-- doc-id -->` header, 출처 주석, `files` 행의 frontmatter, twin 규칙,
@@ -140,7 +148,7 @@ markdown 전용 선언은 모두 dbspec **manifest setting**이며 `markdown <co
 - `files` 행의 key는 file 이름에서 `.flowmark.md`를 뺀 것이다.
 - **모든 key는 동시에 file 이름, URL path segment, heading anchor의 일부다**: `A`–`Z`, `a`–`z`,
   `0`–`9`, `_`, `-`로만 이루어지고(ASCII이며, 대소문자 비교와 소문자 anchor가 이 글자들에 대해서만 정의되기 때문이다), 문자나 숫자로 시작하며(앞의 `_`는 강조로 렌더되어 보이는 key와
-  anchor를 바꾼다), `--`나 `-_`를 담지 않으며(연속 hyphen을 접는 MkDocs가 anchor를 바꾸지 않도록, `-_`처럼 구두점 뒤의 `_`는 강조를 열 수 있기 때문에),
+  anchor를 바꾼다), `-_`를 담지 않으며(`-_`처럼 구두점 뒤의 `_`는 강조를 열 수 있기 때문에),
   table 안에서 대소문자를 무시하고 유일하다(대소문자를 구분하지 않는 file system과
   소문자로 바뀐 anchor가 충돌하지 않도록). 외래 key는 참조된 key와 byte 단위로 맞는다. 대소문자만 다른
   link 텍스트는 dangling 참조다 — validator의 `reference.dangling`이며, 그것을 새로 만드는 쓰기는 `FOREIGN_KEY`다. 바이트 단위로 같은 key를 가진 두 행은 그 table을 사용할 수 없게 한다. 대소문자만 다른 충돌은 그것을 새로 만드는 쓰기에서 `DUPLICATE_KEY`이고, validator의 `key.duplicate`다. 대소문자를 무시했을 때 `CON`, `PRN`, `AUX`, `NUL`, `COM0`–`COM9`,
@@ -181,17 +189,16 @@ markdown 전용 선언은 모두 dbspec **manifest setting**이며 `markdown <co
 - **상세 heading은 `<h> <table> row <key>`다** — table 이름, 공백 하나, `row`, 공백 하나, key이며 제목 사본은
   결코 아니다 — 그 anchor는 `<table>-row-<소문자 key>`다(`## items row T2`의 anchor는 `items-row-t2`).
   table은 anchor 텍스트에서 첫 `-` 앞이며 table 이름에는 `-`가 없다. 충돌 규칙: 골격과 payload를 가리지 않고 file의 모든 heading — 모든 ATX heading(block-quote나 list-item 표지 뒤의 것을
-  포함)과 fence 밖에서 setext 밑줄이 뒤따르는 모든 문단(그 문단 전체가 heading) — 은, 상세 heading이 아니면서 두 fold 중
-  하나(F = F_G 또는 F = F_M) 아래에서 heading의 fold와 F(A)가 각각의 끝 십진 숫자 run을 뺀 뒤 같을 때, 다른 상세 heading의
+  포함)과 fence 밖에서 setext 밑줄이 뒤따르는 모든 문단(그 문단 전체가 heading) — 은, 상세 heading이 아니면서 렌더된 inline 텍스트의
+  fold F_G 아래에서 heading의 F_G와 F_G(A)가 각각의 끝 십진 숫자 run을 뺀 뒤 같을 때, 다른 상세 heading의
   anchor A와 충돌한다. F_G는 Unicode 범주가 L이나 Nd가 아닌 문자를 모두 지우고, 소문자로 바꾸고, NFKD로 분해하고, 결합
-  기호를 버리며, ASCII 문자와 숫자만 남긴다. F_M은 소문자로 바꾸고, NFKD로 분해하고, 결합 기호를 버리며, ASCII 문자와
-  숫자만 남긴다. fold는 GitHub이 slug를 만드는 방식의 텍스트를 취한다(link의 target을 뺀 link 텍스트, 강조 표지 제거,
-  code span 내용 유지, entity 해석). F_G는 GitHub, GitLab, VS Code를, F_M은 MkDocs를 다룬다. Pandoc은 주장하지 않는다. 모든
-  번호 매기기를 다루는 근거: GitHub, GitLab, VS Code는 `-<n>`을 덧붙이고, MkDocs는 `_<n>`을 덧붙이거나 끝의 `_<n>`을 올리며,
-  attribute list가 설정한 id도 점유된 것으로 센다. 끝 숫자를 뺀 비교는 어느 heading이나 id가 먼저 왔든 모든 번호를 다루며,
-  그 비용은 상세 heading과 끝 숫자만 다른 payload heading의 거절이다. 두 상세 heading은 anchor가 같을 때에만 충돌한다.
-  payload의 attribute list `{…}`(앞의 `:`가 있거나 없는)로서 `#A`로, 또는 `id=` 뒤에 A를 그대로나 작은따옴표·큰따옴표 안에 두어 id를 A로 정하는 것과 payload
-  HTML의 `id` 또는 `name`이 A와 같은 것(대소문자 무시)도 충돌한다. 충돌을 새로 만드는 쓰기 — 제목 갱신, payload 쓰기, 행 삽입, key 갱신, 이동, 상세 섹션의 생성 — 는 다른 heading을 밝히며 `CONSTRAINT`다. 다만 행에 같은 table의 다른 key와 대소문자를 무시하고 같은 key를 주는 쓰기는 `DUPLICATE_KEY`이며, 그것이 key 규칙이다. 읽기에서는 `format.block`이다. 다만 key가 대소문자만 다른 두 행의 상세 heading
+  기호를 버리며, ASCII 문자와 숫자만 남긴다. F_G는 GitHub이 slug를 만드는 방식의 텍스트를 취한다(link의 target을 뺀 link 텍스트, 강조 표지 제거,
+  code span 내용 유지, entity 해석). F_G는 GitHub, GitLab, VS Code를 다룬다. Pandoc은 주장하지 않는다. 모든
+  번호 매기기를 다루는 근거: 명명된 모든 viewer는 반복된 id에 `-<n>`을 덧붙여 번호 매기므로(GitHub, GitLab, VS Code),
+  끝 숫자를 뺀 fold를 비교하면 어느 heading이 먼저 왔든 모든 번호를 다루며,
+  그 비용은 상세 heading과 끝 숫자만 다른 payload heading의 거절이다. 거절되는 예: `items row T-1` 상세 heading 옆의 payload heading
+  `items row T`는 거절된다. 두 번째 `items row T`가 `items-row-t-1`로 번호 매겨지기 때문이다. `Notes`는 그렇지 않다. 두 상세 heading은 anchor가 같을 때에만 충돌한다.
+  CommonMark 0.31.2가 읽는 raw HTML에서(code span이나 code block에는 없다) `id` 또는 `name`이 A와 같은 것(대소문자 무시)도 충돌한다. 충돌을 새로 만드는 쓰기 — 제목 갱신, payload 쓰기, 행 삽입, key 갱신, 이동, 상세 섹션의 생성 — 는 다른 heading을 밝히며 `CONSTRAINT`다. 다만 행에 같은 table의 다른 key와 대소문자를 무시하고 같은 key를 주는 쓰기는 `DUPLICATE_KEY`이며, 그것이 key 규칙이다. 읽기에서는 `format.block`이다. 다만 key가 대소문자만 다른 두 행의 상세 heading
   사이는 `key.duplicate`뿐이며(쓰기에서는 `DUPLICATE_KEY`다). 공백이 더 있거나 `row`의 대소문자가 다른 상세 heading은
   `format.noncanonical`이며, `flowmark canon`이 고친다. 블록의 어떤 행도 가리키지 않는 key의 상세 섹션은 `format.block`이다. 같은 행의 두 번째 상세 섹션도 표기와 무관하게 `format.block`이다: 그 본문과 섹션을 배정할 수 없기 때문이다.
 - `markdown` column은 모든 저장에서 언제나 행 scope의 섹션이다 — field나 cell이 아니다.
@@ -213,7 +220,7 @@ markdown 전용 선언은 모두 dbspec **manifest setting**이며 `markdown <co
   orm의 `dbspec.CanonicalLiteral(t, v)`로 읽고, date, time, datetime, uuid는
   `CanonicalLiteral(t, "'" + v + "'")`로 읽어 결과에서 따옴표를 뺀다. `now`는 `datetime` 기본값에서 현재 시각을 뜻하는 dbspec keyword이며 결코 저장되는 값이 아니다: 엔진이 insert에서 그것이 뜻하는 시각을 쓴다. `now`로 쓰인 시간 값(date, time, datetime)은 그 type이 아니며(읽기에서 `type`, 쓰기에서 `CONSTRAINT`), text 값 `now`는 text다. text는 column의
   길이를 검사하며, 한 줄 자리에서는 아래 규칙을 따른다. 쓰인 형식이 정규 형식과 다른 값은 읽기에서 `format.noncanonical`이다. 값이 column의 type이 아니면 validator의 `type`이고 쓰기에서 `CONSTRAINT`다. 쓰기에서 수, `true`/`false`, date, time, datetime, uuid는 `CanonicalLiteral`이 주는 형식으로 쓴다(`1.5`를 `decimal(4,2)`에 넣으면 `1.50`; float는 왕복하는 가장 적은 자릿수의 고정 표기, 0은 `0`). `CanonicalLiteral`이 거절하는 값(scale보다 많은 소수 자릿수 — 0 포함, precision − scale보다 많은 정수 자릿수, precision보다 많은 소수 자릿수의 time이나 datetime)은 `CONSTRAINT`다. bytes는 padding이 있는 표준 base64(RFC 4648 §4)로 쓰며, bytes column에서 그 밖의 텍스트를 읽으면 `type`이다. text와 `markdown` 값은 자리의 escape를 빼고 바이트 그대로 쓰며, 그렇게 쓸 수 없는 값은 `CONSTRAINT`다. validator의 `type` 값을 평가하는 요청은 `CONSTRAINT`로 실패한다. 쓰기는 문서 바이트를 정규화하지 않는다.
-- **한 줄 자리**는 title(list 행, H1, cell 안), list field, field list의 값, table cell이다. 그곳의 보이지 않는 문자는 spec 10이 정한 것이다(U+1680을 뺀 공백, Cc 제어 문자, Prepended_Concatenation_Mark를 뺀 Cf 형식 문자, Default_Ignorable_Code_Point). 근거: 그런 문자는 글리프 없이 그려지므로 독자는 볼 수 없다. U+1680과 prepended concatenation mark는 글리프가 있어 텍스트다. viewer들이 끝에서 떼어내는 집합이 서로 다르다(Python-Markdown은 U+001C–U+001F를 떼어낸다). CommonMark 0.31.2는 space와 tab을 떼어낸다. 그곳의 값에
+- **한 줄 자리**는 title(list 행, H1, cell 안), list field, field list의 값, table cell이다. 그곳의 보이지 않는 문자는 spec 10이 정한 것이다(U+1680을 뺀 공백, Cc 제어 문자, Prepended_Concatenation_Mark를 뺀 Cf 형식 문자, Default_Ignorable_Code_Point). 근거: 그런 문자는 글리프 없이 그려지므로 독자는 볼 수 없다. U+1680과 prepended concatenation mark는 글리프가 있어 텍스트다. CommonMark 0.31.2는 space와 tab을 떼어낸다. 그곳의 값에
   줄바꿈, 양 끝의 보이지 않는 문자, 또는 `<` 뒤에 `!`, `/`, 문자가 오는 것(raw HTML이 값을 숨기거나 바꾼다)이 있으면
   쓰기에서 `CONSTRAINT`다. 읽기에서는 렌더링이 텍스트와 다르게 보이는 한 줄 값(인용된 list field나 인용된 cell(`"…"`)의 따옴표 안 양 끝에 보이지 않는 문자가 있는 것, `<` 뒤에 `!`, `/`, 글자)이 `format.block`이고, 읽기에서, CommonMark가 줄 내용의 끝에서(또는 GFM이 cell의 끝에서) 떼어내는 자리에 있는, 한 줄 자리의 끝의 space나 tab은 `format.noncanonical`이다. 뒤따르는 list 토큰 앞의 space는 구분자다. 뒤따르는 토큰 앞에서 list 제목을 끝내는 tab은 `format.block`이다. 끝에 있는 그 밖의 보이지 않는 문자는 쓰기 규칙이 다시 만들 수 없으므로 `format.block`이다. 각 자리는 하나의 정식 구분자를 가진다(H1 표지 뒤 `# `, field list column 뒤 `: `, 빈 텍스트는 아무것도 없음, list 토큰 사이 space 하나, cell은 `| v |`). 그 밖의 space나 tab은 `format.noncanonical`이다. 한 줄 값은 쓴 그대로의 인라인 markdown이며, 명시된 경우를 빼고는 escape하지
   않는다.
@@ -396,7 +403,7 @@ markdown 전용 선언은 모두 dbspec **manifest setting**이며 `markdown <co
 - **board 예제**는 markdown에서 일대다 관계를 증명한다: `posts`(title, body, author → people, created)와
   `comments`(body, author → people, created, 답글을 위한 `parent`)가 있다. 한 변형에서는 post의 comment가 post 파일 안의
   `store block fk_comments_post list` 행으로, 다른 변형에서는 field list가 post를 link하는 `store files` 행으로 저장된다.
-  두 변형은 같은 create, read, update, delete 연산을 엔진으로 실행하며 같은 행을 내고, 모든 문서는 GitHub, GitLab, VS Code, MkDocs에서 평범한
+  두 변형은 같은 create, read, update, delete 연산을 엔진으로 실행하며 같은 행을 내고, 모든 문서는 CommonMark 0.31.2와 GFM 0.29를 구현하고 link가 그 anchor에서 풀리는 viewer인 GitHub, GitLab, VS Code에서 평범한
   board 페이지 — post, 그 field들의 link, 그 comment들 — 로 읽힌다. Pandoc은 주장 대상이 아니다.
 - **board 앱**은 같은 board를 polyspec 스택으로 만든 것이다 — hyper가 list와 post-with-comments
   페이지를 그리고, crudui가 post와 comment의 form, 목록, 검증을 정의하며, orm이 `markdown://`을 통해

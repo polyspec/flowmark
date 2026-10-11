@@ -8,16 +8,15 @@ import (
 
 // The collision rule of spec 10 (Detail headings and anchors): a heading that is not a
 // detail heading takes the anchor of a detail heading when its fold equals the anchor's
-// fold once a final run of digits is removed from each; an attribute list that sets the
-// id of an anchor, and an HTML id or name equal to an anchor, collide too. A detail
-// heading is a top-level heading whose text is `<table> row <key>` at the detail level
-// of its table, the row scope level less one, which the layouts of the file give.
+// fold once a final run of digits is removed from each; an HTML id or name equal to an
+// anchor, in raw HTML as CommonMark 0.31.2 reads it, collides too. A detail heading is a
+// top-level heading whose text is `<table> row <key>` at the detail level of its table,
+// the row scope level less one, which the layouts of the file give.
 
 // anchorClash is a collision of a file with a detail anchor: line is the 1-based line,
 // and at the byte offset in that line, of the colliding text: the text where a heading
-// starts, the '{' of an attribute list, or the '<' of an HTML tag. text is the colliding
-// heading's text or the id or the attribute value that collides, and other is the text
-// of the detail heading.
+// starts, or the '<' of an HTML tag. text is the colliding heading's text or the
+// attribute value that collides, and other is the text of the detail heading.
 type anchorClash struct {
 	line, at    int
 	text, other string
@@ -31,6 +30,68 @@ func (c anchorClash) message() string {
 // detailAnchor is the anchor of a detail heading of the file, with its text.
 type detailAnchor struct {
 	text, anchor string
+}
+
+// textPiece is a run of an element's text on one line of the file: the 0-based index of
+// the line, the byte offset in that line where the run starts, and the run's text.
+type textPiece struct {
+	line, start int
+	text        string
+}
+
+// element is the text that the rule reads as one unit: a heading, a paragraph or an HTML
+// block. Its pieces are its lines, and text joins their texts with line feeds, so an
+// offset of text is located in the file by its piece.
+type element struct {
+	pieces []textPiece
+	text   string
+}
+
+// newElement returns the element of pieces.
+func newElement(pieces []textPiece) element {
+	parts := make([]string, len(pieces))
+	for i, p := range pieces {
+		parts[i] = p.text
+	}
+	return element{pieces: pieces, text: strings.Join(parts, "\n")}
+}
+
+// locate returns the 0-based line of the file, and the byte offset in that line, of the
+// character at off of the text of e.
+func (e element) locate(off int) (int, int) {
+	base := 0
+	for _, p := range e.pieces {
+		if off <= base+len(p.text) {
+			return p.line, p.start + off - base
+		}
+		base += len(p.text) + 1
+	}
+	last := e.pieces[len(e.pieces)-1]
+	return last.line, last.start
+}
+
+// clash returns the collision of the value at off of e with the anchor a.
+func (e element) clash(off int, value string, a detailAnchor) anchorClash {
+	line, at := e.locate(off)
+	return anchorClash{line: line + 1, at: at, text: value, other: a.text}
+}
+
+// lineBase returns the byte offset of text in the file line raw, which holds it after
+// the markers of its containers; 0 when the text is not found there.
+func lineBase(raw, text string) int {
+	if i := strings.Index(raw, text); i >= 0 {
+		return i
+	}
+	return 0
+}
+
+// htmlElement returns the element of an HTML block of the file, whose lines are its text.
+func htmlElement(file []string, u unit) element {
+	pieces := make([]textPiece, len(u.lines))
+	for k, l := range u.lines {
+		pieces[k] = textPiece{line: u.at + k, start: lineBase(file[u.at+k], l), text: l}
+	}
+	return newElement(pieces)
 }
 
 // tableLevels returns the detail level of a table and of the block tables stored under
@@ -52,7 +113,7 @@ func tableLevels(table string, level int, children []*docLayout) map[string]int 
 // equal only when their keys differ in case, which the read reports as key.duplicate.
 func anchorClashes(lines []string, tables map[string]int) []anchorClash {
 	sc := scanHeadings(lines, 0)
-	g, m := linkDefs(sc.blocks)
+	g := linkDefs(sc.blocks)
 	var anchors []detailAnchor
 	var others []heading
 	for _, h := range sc.all {
@@ -71,12 +132,11 @@ func anchorClashes(lines []string, tables map[string]int) []anchorClash {
 	}
 	var out []anchorClash
 	for _, h := range others {
-		out = append(out, headingClashes(lines, h, setext, anchors, g, m)...)
+		out = append(out, headingClashes(lines, h, setext, anchors, g)...)
 	}
 	for _, u := range sc.units {
 		out = append(out, unitClashes(lines, u, anchors, g)...)
 	}
-	out = append(out, attrClashes(lines, anchors)...)
 	sort.SliceStable(out, func(i, j int) bool {
 		if out[i].line != out[j].line {
 			return out[i].line < out[j].line
@@ -121,56 +181,47 @@ func layoutTable(name string, tables map[string]int) (string, bool) {
 	return "", false
 }
 
-// lowerAsViewers lowercases s by the full Unicode mapping, as JavaScript and Python
-// do: U+0130 lowercases to i and U+0307, where Go's simple mapping gives i alone.
+// lowerAsViewers lowercases s by the full Unicode mapping, as JavaScript does:
+// U+0130 lowercases to i and U+0307, where Go's simple mapping gives i alone.
 func lowerAsViewers(s string) string {
 	return strings.ToLower(strings.ReplaceAll(s, "İ", "i̇"))
 }
 
 // headingClashes returns the collisions of a heading that is not a detail heading: its
-// fold against each anchor, and the HTML tags of its text. The text is read under F_G with
-// the definitions of F_G, and under F_M with those of F_M. The attribute lists of the file
-// are compared by attrClashes.
-func headingClashes(lines []string, h heading, setext map[int]unit, anchors []detailAnchor, g, m linkRefs) []anchorClash {
-	eg, em := headingElements(lines, h, setext)
-	readG := inlineText(eg.text, g)
-	keptM := inlineText(em.text, m).text
+// fold against each anchor, and the HTML tags of its text, read with the definitions of
+// the file.
+func headingClashes(lines []string, h heading, setext map[int]unit, anchors []detailAnchor, g linkRefs) []anchorClash {
+	e := headingElement(lines, h, setext)
+	read := inlineText(e.text, g)
 	var out []anchorClash
 	for _, a := range anchors {
-		if foldsCollide(readG.text, readG.alt, keptM, a.anchor) {
-			out = append(out, eg.clash(0, eg.text, a))
+		if foldsCollide(read.text, read.alt, a.anchor) {
+			out = append(out, e.clash(0, e.text, a))
 		}
 	}
-	out = append(out, tagClashes(eg, readG.tags, readG.tagAt, anchors)...)
+	out = append(out, tagClashes(e, read.tags, read.tagAt, anchors)...)
 	return out
 }
 
-// headingElements returns the elements of a heading of the file, the one its text is read
-// from under F_G and the one under F_M: for an ATX heading both are its text, and for a
-// setext heading they are the lines of its paragraph. The F_G element drops only the
-// definitions that CommonMark reads at the start of the paragraph, and the F_M element
-// drops the lines of the definitions that Python-Markdown reads.
-func headingElements(lines []string, h heading, setext map[int]unit) (element, element) {
+// headingElement returns the element of a heading of the file that its text is read
+// from: for an ATX heading its text, and for a setext heading the lines of its paragraph
+// without the definitions that CommonMark reads at the start of the paragraph.
+func headingElement(lines []string, h heading, setext map[int]unit) element {
 	u, ok := setext[h.at]
 	if h.last == h.at || !ok {
-		e := newElement([]textPiece{{line: h.at, start: lineBase(lines[h.at], h.text), text: h.text}})
-		return e, e
+		return newElement([]textPiece{{line: h.at, start: lineBase(lines[h.at], h.text), text: h.text}})
 	}
 	_, cm := cmDefLines(u.lines)
-	md := mDefLines(u.lines)
-	var g, m []textPiece
+	var g []textPiece
 	for k, l := range u.lines {
+		if cm[k] {
+			continue
+		}
 		t := strings.TrimRight(strings.TrimLeft(l, " \t"), " \t")
 		start := lineBase(lines[u.at+k], l) + len(l) - len(strings.TrimLeft(l, " \t"))
-		piece := textPiece{line: u.at + k, start: start, text: t}
-		if !cm[k] {
-			g = append(g, piece)
-		}
-		if !md[k] {
-			m = append(m, piece)
-		}
+		g = append(g, textPiece{line: u.at + k, start: start, text: t})
 	}
-	return newElementOr(g, h, lines), newElementOr(m, h, lines)
+	return newElementOr(g, h, lines)
 }
 
 // newElementOr returns the element of pieces, or of the heading's own empty text when no
@@ -199,8 +250,7 @@ func linesElement(file []string, u unit, drop []bool) element {
 }
 
 // unitClashes returns the collisions of a paragraph or an HTML block: the HTML tags it
-// holds, read under F_G from the lines that CommonMark reads as its text. The attribute
-// lists of the file are compared by attrClashes.
+// holds, read from the lines that CommonMark reads as its text.
 func unitClashes(lines []string, u unit, anchors []detailAnchor, g linkRefs) []anchorClash {
 	if u.html {
 		e := htmlElement(lines, u)
@@ -213,14 +263,12 @@ func unitClashes(lines []string, u unit, anchors []detailAnchor, g linkRefs) []a
 	return tagClashes(ge, r.tags, r.tagAt, anchors)
 }
 
-// foldsCollide reports whether the heading folds to the anchor once a final run of
-// digits is removed from each: under F_G by its text or by its text with the alt text of
-// its images, and under F_M by its text read with no text of an image. The folds of an
-// anchor are the same under both, since its letters and digits are ASCII.
-func foldsCollide(textG, altG, textM, anchor string) bool {
+// foldsCollide reports whether the heading folds to the anchor under F_G once a final
+// run of digits is removed from each, by its text read with no text of an image or by
+// its text with the alt text of its images.
+func foldsCollide(text, alt, anchor string) bool {
 	a := stripDigits(foldG(anchor))
-	return stripDigits(foldG(textG)) == a || stripDigits(foldG(altG)) == a ||
-		stripDigits(foldM(textM)) == stripDigits(foldM(anchor))
+	return stripDigits(foldG(text)) == a || stripDigits(foldG(alt)) == a
 }
 
 // tagClashes returns the collisions of the id and name attributes of the open tags with

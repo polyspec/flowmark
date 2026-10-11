@@ -1,5 +1,5 @@
 <!-- doc-id: spec-canonical-format -->
-<!-- source-sha256: 06069aff066ed90fc80889b1773a58d71615485dc7b6991a9476f695188ec63f -->
+<!-- source-sha256: 2974e5c7f34cd69deba118352d0f8b372817e50c88407936b0d9cd602ce760fd -->
 # Canonical format
 
 [English](10-canonical-format.md)
@@ -22,7 +22,14 @@ idempotency 명제, readable 문서, skeleton, 문서 순서, 상세 heading과 
   정한다.
 - corpus 문서는 완전한 markdown 문서다. flowmark를 모르는 독자도 있는 그대로 읽는다: comment,
   marker, frontmatter, 숨은 field를 갖지 않는다.
-- 구조는 평범한 markdown이다: heading, list, table, field list. 모든 관계는 GitHub, GitLab, VS Code, MkDocs가
+- 구조는 평범한 markdown이다: heading, list, table, field list. 구조 — block, inline, 무엇이 code인지, 무엇이
+  heading인지, 무엇이 table인지 — 는 CommonMark 0.31.2로, table과 task-list 항목은 GFM 0.29로 판단한다: GitHub(cmark-gfm),
+  GitLab, VS Code(markdown-it)가 구현하는 spec이다. 근거: spec은 이 viewer들이 따르는 고정된 하나의 기준이다. 어느 spec도
+  따르지 않는 구현은 list, setext, fence, reference definition, 확장에 대해 자기만의 동작을 가지며 그것은 릴리스와 확장에
+  따라 바뀐다. 그것을 따르면 표준이 아니라 한 구현의 일탈을 쫓게 되므로, 그런 구현은 기준이 아니다.
+- spec은 fragment의 target을 정의하지 않는다. anchor — heading slug와, CommonMark가 code 밖에서 읽는 raw HTML의 id와
+  name — 는 GitHub, GitLab, VS Code로 판단하며(heading에는 F_G fold), 그 근거는 link `[k](file#anchor)`가 그 viewer들에서
+  풀려야 한다는 것이다. 모든 관계는 GitHub, GitLab, VS Code가
   그 heading에 대해 만드는 anchor인 `#<anchor>`를 가진 link다([상세 heading과 anchor](10-canonical-format.md#detail-headings-and-anchors)의 규칙에 따른다).
   Pandoc은 주장 대상이 아니다: 기본 설정은 상대 경로 link target을 다시 쓰지 않으므로, corpus file 사이의 link가
   그 출력에서 따라가진다고 주장하지 않는다.
@@ -60,46 +67,37 @@ column 섹션 — 은 payload다: renderer는 이를 행과 함께 옮기고 그
 
 - 상세 섹션의 anchor는 `<table>-row-<소문자 key>`다: heading `## items row T2`의 anchor는
   `items-row-t2`다. table은 anchor 텍스트에서 첫 `-` 앞이며, table 이름에는 `-`가 없다.
-- **fold.** 두 fold가 heading의 렌더된 inline 텍스트에 대해 충돌을 정한다. 텍스트는 GitHub이 slug를 만드는
+- **fold.** heading의 렌더된 inline 텍스트에 대한 fold 하나, F_G가 충돌을 정한다. 텍스트는 GitHub이 slug를 만드는
   방식을 따른다(link의 target을 뺀 link 텍스트, 강조 표지 제거, code span 내용 유지, entity 해석, raw HTML 태그는
   텍스트가 아님을 포함한다). 렌더된 inline 텍스트는 file 전체의 link reference definition을 가지고 CommonMark 0.31.2가
   해석하는 것이다: definition은 CommonMark가 읽는 곳에서, 즉 문단의 시작에 있는 block으로, 컨테이너 안이든 밖이든,
   그 자리를 가리지 않고 읽는다. label이 그런 definition과 맞는 full, collapsed 또는 shortcut reference link는 그 link
   텍스트로 센다. 어떤 definition과도 맞지 않는 bracket 텍스트는 label과 bracket을 포함해 글자 그대로의 텍스트로 센다.
-  F_M에서 definition은 Python-Markdown이 읽는 것이다: code block 밖의 줄로서 들여쓰기 최대 세 칸, bracket이 없는
-  label의 `[label]:`, 그 뒤 그 줄이나 다음 줄의 destination, 그 뒤 따옴표나 괄호 안의 title 하나까지를 가지며 그 줄에 다른 것이 뒤따르지 않고, 줄이 block의 어디에 있든 — 문단 안이든 컨테이너 안이든 — 읽는다.
-  그 label은 양끝 공백을 뺀 뒤 소문자로 바꾼다. full, collapsed 또는 shortcut reference는, label의 공백 run을 한 칸으로 만든 뒤 소문자로
-  바꾼 것이 그런 definition과 맞을 때 link 텍스트로 센다. 그리고 link 텍스트와 label 사이에는 줄 바꿈을 포함해 공백
-  문자 하나까지 올 수 있다. 근거: GitHub, GitLab, VS Code는 CommonMark를 해석하며, 거기서 link reference definition은
-  문단의 시작에 있는 block이므로, 정의된 `[items row T1][r]`은 `items row T1` 텍스트로 렌더된다. Python-Markdown의
-  reference processor는 block의 모든 줄에서 `^[ ]{0,3}\[([^\[\]]*)\]:`를 찾고 id를 소문자로 만들며, 그 inline
-  reference는 `]`와 `[` 사이에 공백 문자 하나를 허용하고 정의되지 않은 reference는 텍스트로 둔다. image는 F_G에서 alt 텍스트로도,
-  텍스트 없이도 센다. F_M에서는 텍스트 없이 센다. heading은 세 읽기 가운데 하나라도 충돌하면 anchor를 가져간다. 근거: VS Code의
+  근거: GitHub, GitLab, VS Code는 CommonMark를 해석하며, 거기서 link reference definition은
+  문단의 시작에 있는 block이므로, 정의된 `[items row T1][r]`은 `items row T1` 텍스트로 렌더된다. image는 F_G에서 alt 텍스트로도,
+  텍스트 없이도 센다. heading은 두 읽기 가운데 하나라도 충돌하면 anchor를 가져간다. 근거: VS Code의
   markdown language service는 heading의 slug를 inline token의 텍스트로 만들며, 거기에는 image의 alt 텍스트가 포함된다.
-  Python-Markdown의 toc는 heading의 HTML에서 태그를 벗기므로 `img`와 그 `alt`가 빠진다. GitHub과 GitLab은 heading의 텍스트를
+  GitHub과 GitLab은 heading의 텍스트를
   취하며, F_G를 두 방식으로 읽으면 어느 쪽이든 덮인다. F_G는 Unicode 일반 범주가 letter(L)나 십진 숫자(Nd)가 아닌 모든 문자를 지우고,
-  나머지를 소문자로 바꾸고, NFKD로 분해하고, 결합 기호를 버리며, 남은 ASCII 문자와 숫자만 남긴다. F_M은 텍스트를
-  소문자로 바꾸고, NFKD로 분해하고, 결합 기호를 버리며, 남은 ASCII 문자와 숫자만 남긴다. 근거: GitHub, GitLab,
+  나머지를 소문자로 바꾸고, NFKD로 분해하고, 결합 기호를 버리며, 남은 ASCII 문자와 숫자만 남긴다. 근거: GitHub, GitLab,
   VS Code의 anchor는 글자, 숫자, `-`, `_`, 공백을 남기고 나머지를 지우며, 그 가운데 위첨자와 원 숫자(범주 No)도
-  지운다. F_G가 그것을 지운다. MkDocs는 텍스트의 NFKD 형식에서 ASCII 문자와 숫자만 남기는데 F_M이 그것을 남기고,
-  F_G는 그렇지 않으므로 두 fold를 쓴다. `café`는 두 fold 모두에서 `cafe`가 된다.
+  지운다. F_G가 그것을 지운다. `café`는 F_G에서 `cafe`가 된다.
 - **충돌 규칙.** heading은 모든 ATX heading(block-quote나 list-item 표지 뒤의 것을 포함)과, fence 밖에서
   setext 밑줄이 뒤따르는 모든 문단이다. 그 문단 전체에서 앞머리의 link reference definition을 뺀 것이 heading이다. 상세 heading도 heading이다. 그 definition은 heading의 일부가 아니다: setext heading은 definition이 남긴 첫 줄에서 시작하고, definition은 heading 앞의 내용이며, definition만 있고 밑줄이 뒤따르면 heading이 아니다. 근거: CommonMark 0.31.2는 문단을 setext heading으로 닫기 전에 그 앞머리의 definition을 먼저 읽으므로(§4.3, §4.7), `[r]: /u`, `people row P1`, `---`는 definition 하나와 heading `people row P1`이며, commonmark.js, cmark-gfm, markdown-it이 그렇게 읽는다. 이 규칙에서 상세 heading은 file의 layout에 있는 한 table의 상세 level — 그 행들의 상세 heading의 level, 행 scope보다 한 단계 얕은 — 에 있는 최상위 heading이며, 그 텍스트가 공백, tab, 그리고 setext heading의 줄 바꿈을 뺀 것으로 그 table의 이름과 `row`(각각 viewer가 하듯 소문자로 만든 뒤 정식 텍스트와 같은 것)와 key이다. 즉 상세 섹션의 heading이며, 정식 또는 비정식 철자로 쓰인다. 그 밖의 모든 heading은 payload heading이며, 다른 level이나 block quote, list 항목 안에 있는 `<table> row <key>` heading을 포함해, 그 fold가 모든 상세 anchor와 비교된다. 근거: 상세 섹션은 자리로 배정되므로, 다른 곳의 heading은 어느 행도 가리키지 않으며 자기 anchor를 가지는데, viewer는 그것이 상세 anchor와 반복될 때 번호를 매긴다. 상세 heading이 아닌
-  heading H는 F = F_G 또는 F = F_M 아래에서, F(H)와 F(A)가 각각의 끝 십진 숫자 run을 뺀 뒤 같으면 상세 heading의 anchor A를
-  가져간다. anchor의 fold는 두 fold에서 같다. anchor의 글자와 숫자는 ASCII이기 때문이다. 두 상세 heading은 anchor가 같을 때에만
-  충돌한다. 근거: 명명된 viewer들은 반복되거나 점유된 id를 숫자를 덧붙이거나 끝 숫자를 올리는 방식으로만 번호 매긴다(GitHub,
-  GitLab, VS Code는 `-<n>`을 덧붙이고, MkDocs는 `_<n>`을 덧붙이거나 끝의 `_<n>`을 올리며, attribute list가 설정한 id도 점유된 것으로 센다).
-  그래서 끝 숫자를 뺀 fold를 비교하면 어느 heading이나 id가 먼저 왔든 모든 번호 매기기를 다룬다. 그 비용은 상세 heading과
+  heading H는 F_G(H)와 F_G(A)가 각각의 끝 십진 숫자 run을 뺀 뒤 같으면 상세 heading의 anchor A를
+  가져간다. 두 상세 heading은 anchor가 같을 때에만
+  충돌한다. 근거: 명명된 모든 viewer는 반복된 id에 `-<n>`을 덧붙여 번호 매긴다(GitHub, GitLab, VS Code).
+  그래서 끝 숫자를 뺀 fold를 비교하면 어느 heading이 먼저 왔든 모든 번호 매기기를 다룬다. 그 비용은 상세 heading과
   끝 숫자만 다른 payload heading도 거절된다는 것이다. 허용되는 예: 한 file의 key `T1`과 `T10`은 둘 다 상세 heading이므로
-  결코 충돌하지 않는다. 거절되는 예: `items row T_1` 상세 heading 옆의 payload heading `items row T`는 거절된다. `Notes`는
-  그렇지 않다. 이 검사는 file의 모든 heading — 골격과 payload 모두 — 에 적용한다. file 어디서든, 골격까지 포함해, 값이 A인 HTML `id` 또는 `name`과, code span과 code block까지 포함해 attribute list가 정하는 id A를 거절하며, 모두 대소문자를 무시하고 비교한다. attribute list는 홀수 개의 backslash가 앞서지 않은 `{`, 선택적 `:`, 선택적 공백, 그리고 같은 줄의 `}`까지 공백으로 나뉜 token이다. 첫 token은 공백도 `}`도 아닌 글자로 시작하며, tab은 공백으로 센다. `key="…"`나 `key='…'` token은 그 줄의 마지막 `}` 앞에 있는 닫는 따옴표까지의 모든 글자를, 공백과 `}`를 포함해 담는다. 그런 따옴표가 닫지 않는 따옴표는 그 token의 평범한 글자다. `#A` token은 key `id`를 A로 정하며, 대소문자와 무관하게 key가 `id` 또는 `name`인 token(bare, `"…"`, `'…'`)은 그 key를 정한다. key의 쓰인 철자마다 마지막 token이 이기며, 그렇게 정해진 모든 값을 비교한다. 그런 list는 어느 요소 안이나 옆에 있든, attr_list가 그것을 붙이든 말든 모두 센다. 근거: MkDocs가 요청 시 켜는 Python-Markdown의 attr_list 확장은 그런 list에서만 id를 정한다. Python-Markdown이 tab을 펼친 뒤 한 줄의 `{…}`에 맞추고, token을 순서대로 적용하며, backslash로 escape된 `{`는 읽지 않는다. 그러므로 그런 list를 모두 거절하면 그것이 정하는 id를 놓치지 않는다. 그것이 어느 list를 붙이는지는 Python-Markdown 자신의 block·inline 해석에 달려 있다. 그 해석은 무엇이 code인지(list 항목 안의 들여쓴 block, 닫히지 않은 fence)부터 CommonMark와 다르고 릴리스에 따라 바뀔 수 있으므로, 규칙은 그 자리를 따르지 않는다. 그 비용으로 Python-Markdown이 글자로 두는 list도 거절된다. code 밖에서는 `{`를 escape해 그런 글자를 쓸 수 있고, 자기 file의 상세 anchor를 attribute list로 보여 주는 code span이나 code block은 거절된다. 제목, list field, cell은 사용자가 쓰는 글자이므로 골격도 id를 정할 수 있다. HTML viewer는 `id`와 `name`을 heading의 텍스트와 무관하게 anchor로 읽는다.
-- 충돌을 새로 만드는 쓰기는 `CONSTRAINT`이며, anchor를 차지하는 heading이나 id를 쓴 행과 column — `markdown` column의 값, `files` 행의 제목(H1에 대해), list나 table 행의 제목·field·cell, 또는 `files` 행 field list의 항목(attribute list의 `{`나 tag의 `<`가 놓인 column에 위치한다), 또는 section이나 block heading에 대해서는 그것이 여는 행 scope의, 이름 붙인 `markdown` column이나 자식 table — 에 위치하고, 차지한 anchor의 상세 heading을 밝힌다: 제목 갱신, payload 쓰기, 상세 섹션을 만드는 행
+  결코 충돌하지 않는다. 거절되는 예: `items row T-1` 상세 heading 옆의 payload heading `items row T`는 거절된다. 두 번째 `items row T`가 `items-row-t-1`로 번호 매겨지기 때문이다. `Notes`는
+  그렇지 않다. 이 검사는 file의 모든 heading — 골격과 payload 모두 — 에 적용한다. file 어디서든, 골격까지 포함해, CommonMark 0.31.2가 읽는 raw HTML에서(code span이나 code block에는 없다) 값이 A인 HTML `id` 또는 `name`을 거절하며, 모두 대소문자를 무시하고 비교한다. 근거: HTML viewer는 `id`와 `name`을 heading의 텍스트와 무관하게 anchor로 읽는다. GitHub은 heading의 id와 raw `id`나 `name`에 모두 `user-content-`를 앞에 붙이므로 둘은 여전히 충돌하며, VS Code는 그것들을 쓰인 그대로 둔다. `{#…}`는 CommonMark와 GFM에서 글자 그대로의 텍스트이며, 어느 기준 viewer도 그것에서 id를 읽지 않는다.
+- 충돌을 새로 만드는 쓰기는 `CONSTRAINT`이며, anchor를 차지하는 heading이나 id를 쓴 행과 column — `markdown` column의 값, `files` 행의 제목(H1에 대해), 또는 section이나 block heading에 대해서는 그것이 여는 행 scope의, 이름 붙인 `markdown` column이나 자식 table — 에 위치하고, 차지한 anchor의 상세 heading을 밝힌다: 제목 갱신, payload 쓰기, 상세 섹션을 만드는 행
   삽입, key 갱신, 이동, 상세 섹션의 생성. 다만 행에 같은 table의 다른 key와 대소문자를 무시하고 같은 key를 주는 쓰기는
   `DUPLICATE_KEY`이며, 그것이 key 규칙이다([document model](20-document-model.md#keys)). 상세 섹션이 없는 행은 anchor가
   없으므로 아무와도 충돌하지 않는다. 읽기에서 충돌은 `format.block`이다. 다만 key가 대소문자만 다른 두 상세 heading 사이는
   `key.duplicate`뿐이다. 같은 file 안에서 같은
   heading 텍스트를 가진 두 상세 섹션은 충돌하므로 `format.block`이며, 어느 행에도 배정할 수 없다.
-- 읽기에서 충돌은 충돌하는 요소의 자리에 위치한다([진단](#진단)): heading은 그 텍스트의 첫 줄과 그 텍스트의 첫 글자에, attribute list는 그 `{`에, HTML `id`나 `name`은 그 tag의 `<`에 위치한다. 이것은 읽기 위치일 뿐이다: 충돌을 새로 만드는 쓰기는 [진단](#진단)의 쓰기 결함과 앞 절이 정하는 대로, anchor를 차지하는 heading이나 id를 쓴 행과 column에 위치하며, 그 메시지는 상세 heading을 밝힌다. 근거: column은 규칙이 이름 붙인 글자를 가리키며, block의 첫 줄은 마지막 줄의 attribute list나 HTML block 깊숙한 `id`에서 멀리 떨어질 수 있다.
+- 읽기에서 충돌은 충돌하는 요소의 자리에 위치한다([진단](#진단)): heading은 그 텍스트의 첫 줄과 그 텍스트의 첫 글자에, HTML `id`나 `name`은 그 tag의 `<`에 위치한다. 이것은 읽기 위치일 뿐이다: 충돌을 새로 만드는 쓰기는 [진단](#진단)의 쓰기 결함과 앞 절이 정하는 대로, anchor를 차지하는 heading이나 id를 쓴 행과 column에 위치하며, 그 메시지는 상세 heading을 밝힌다. 근거: column은 규칙이 이름 붙인 글자를 가리키며, block의 첫 줄은 HTML block 깊숙한 `id`에서 멀리 떨어질 수 있다.
 - 정식 공백 하나가 아닌 공백이나 tab의 run(글 앞, 낱말 사이, 또는 글 뒤에 있는 것), hash 뒤에 tab이 있거나, hash 대신 setext 밑줄이 있거나, table 이름이나 `row`의 대소문자가 정식과 다른 상세 heading, section heading, block heading은 `format.noncanonical`이며, `flowmark canon`이 고친다. 그 진단은 그 텍스트의 첫 글자에 위치한다([진단](#진단)). hash 뒤의 canonical 구분자는 공백 하나이며, tab은 쓰이지 않는다. 다만 CommonMark는 `##` 뒤에 tab이 와도 같은 heading으로 읽는다. setext 밑줄도 쓰이지 않는다. 다만 CommonMark는 `-` 밑줄 위의 문단을 같은 level 2 heading으로, `=` 밑줄 위의 문단을 같은 level 1 heading으로 읽으므로(§4.3), setext section heading이나 block heading은 같은 section이나 block을 가리킨다. 근거: table 이름은 상세 level의 자리가, `row`는 문법이 정하며, 이름 붙은 모든 viewer가 anchor에서 둘을 소문자로 만들므로, 정식과 대소문자만 다른 heading은 같은 행을 같은 anchor로 가리킨다. 둘은 viewer가 소문자로 만든 뒤 정식 텍스트와 같을 때 맞는다: U+017F는 `s`가 아니며, U+212A는 소문자로 `k`가 된다.
 - 자기 table의 `<table> row <key>`가 아닌, 상세 level의 list나 table의 heading — 소문자로 만든 뒤 다른 table의 이름을 가진 것(예컨대 `items.flowmark.md`의 `## people row P1`), 또는 다른 어떤 텍스트든 — 은 `format.block`이다. 근거: 상세 level의 heading은 그 앞의 행 scope를 끝내고 이 table의 scope를 열지 않으므로, 그 내용은 file이 가진 어느 행에도 속하지 않으며, `flowmark canon`은 그것이 어디에 속하는지 알 수 없다. key는 대소문자를 구분한다: `## items row t1`은 `format.block`이다.
 
@@ -151,14 +149,14 @@ scalar 값은 dbspec literal이 아니라 읽을 수 있는 형식으로 쓴다.
   `format.block`이다.
 - 제목 token은 space와 tab 사이의 문자 열이다. 제목 token은 그것이 `<선언된 column>:`으로 시작하면 `<선언된 column>:`과 맞으며, 따라서 `owner:x`와 `owner:`는 맞고 `xowner:y`는 맞지 않는다. 맞는 token은 `<column>\:`로 쓰며, `<선언된 column>\:`으로 시작하는 제목 token은 `<column>:`으로 읽고, 그 밖의 `\:`는 해석하지 않는다. escape는 token의 콜론만 바꾸며, 제목 token 사이의 공백은 바이트 그대로 유지한다. 읽기에서, 이스케이프되지 않은 맞는 제목 token이 그 뒤에 다른 제목 token이 오면 `format.noncanonical`이다. 제목의 마지막 token — 첫 field 바로 앞, 또는 field가 없는 행의 마지막 token — 은 field가 서는 자리에 서므로, 그 자리에 있는 이스케이프되지 않은 맞는 token이 올바른 field가 아니면(`owner:`, `owner:a"b`) `format.block`이다: field가 잘못 쓰인 것이거나(빈 텍스트는 `owner:""`다) 제목 텍스트일 수 있기 때문이다. `<선언된 column>\:`으로 시작하는 제목 token은 쓰기에서 `CONSTRAINT`다: 그것은 `<column>:`으로 다시 읽히기 때문이다. 제목은 key와 첫 field 사이의 텍스트다. 근거: field는 오른쪽에서부터 파싱되므로, 마지막 token이 맞는 제목은 field로 다시 읽힐 것이며, 맞는 모든 token을 어디에 있든 이스케이프하면 제목의 쓰인 형식은 하나가 된다. 파싱된 field 뒤에 제목에 남고 그 뒤에 다른 제목 token이 오는 맞는 token은 자리가 확정적이며, viewer는 `\:`를 `:`로 보여 주므로, 이스케이프되지 않은 표기는 정식 표기와 다를 뿐이다. 제목 token은 field를 가르는 것과 같은 space와 tab으로 나뉜다.
 - 자식 행은 부모보다 두 칸 더 들여 쓰며, 이는 표지 뒤에 space 하나로 쓴 부모의 CommonMark list 항목 내용 들여쓰기다. 들여쓰기가 `parent` column이며 다른 것이 이를 쓰지 않는다.
-- list 표지 뒤의 space와 tab의 연속은 column으로 재며 tab은 다음 4의 배수까지 나아가고, CommonMark 0.31.2에서 항목의 내용이 시작하는 곳을 정한다: 한 column에서 네 column까지면 내용은 그 연속 뒤에서 시작하고, 다섯 column 이상이면 첫 space 뒤에서 시작하며 나머지가 indented code block을 연다(§5.2, 규칙 1과 2). space 하나가 정식이다. 읽기에서, 두 column에서 네 column까지의 연속은 `format.noncanonical`이다: 항목은 같은 문단을 담으므로 viewer는 같은 task 항목을 보여 주며 `flowmark canon`은 space 하나를 쓴다. 그런 행 아래 두 칸 들여 쓴 행은 `format.block`이다: CommonMark는 그것을 바깥 list의 다음 항목, 곧 형제로 읽지만 문법은 자식으로 읽기 때문이다. 표지가 그런 행의 내용이 시작하는 곳이나 그보다 최대 세 column 뒤에 서고, 그 들여쓰기에 두 칸 문법이 자리를 주지 않는(홀수 들여쓰기, 또는 level을 건너뛴) 행은 CommonMark가 읽듯 그 행의 자식이며 `format.noncanonical`이고, `flowmark canon`은 그것을 부모보다 두 칸 더 들여 쓴다. 다섯 column 이상의 연속은 `format.block`이다: CommonMark는 glyph, key, 제목, field를 code로 읽으므로 viewer는 task 항목도 inline markdown도 보여 주지 않기 때문이다. 근거: 항목의 문단이 시작하는 곳만 옮기는 구분자는 viewer가 보여 주는 것을 바꾸지 않지만, 중첩이나 보여 주는 block을 바꾸는 구분자는 행에 두 가지 읽기를 남긴다. 중첩은 CommonMark가 읽듯 읽으며, 들여쓰기는 부모 아래 두 칸일 때만 정식이다: 두 칸 문법과 CommonMark가 모두 행의 자리를 정하되 서로 다르면 file은 두 가지로 읽히므로 `format.block`이며, 따라서 구분자가 행의 부모를 조용히 바꾸는 일은 없다. CommonMark만 자리를 정하면 뜻은 확정적이며 들여쓰기만 정식이 아니다. Python-Markdown은 중첩의 기준이 아니다: 그것은 네 칸보다 적게 들여 쓴 list를, 정식 들여쓰기까지 포함해, 중첩하지 않는다.
+- list 표지 뒤의 space와 tab의 연속은 column으로 재며 tab은 다음 4의 배수까지 나아가고, CommonMark 0.31.2에서 항목의 내용이 시작하는 곳을 정한다: 한 column에서 네 column까지면 내용은 그 연속 뒤에서 시작하고, 다섯 column 이상이면 첫 space 뒤에서 시작하며 나머지가 indented code block을 연다(§5.2, 규칙 1과 2). space 하나가 정식이다. 읽기에서, 두 column에서 네 column까지의 연속은 `format.noncanonical`이다: 항목은 같은 문단을 담으므로 viewer는 같은 task 항목을 보여 주며 `flowmark canon`은 space 하나를 쓴다. 그런 행 아래 두 칸 들여 쓴 행은 `format.block`이다: CommonMark는 그것을 바깥 list의 다음 항목, 곧 형제로 읽지만 문법은 자식으로 읽기 때문이다. 표지가 그런 행의 내용이 시작하는 곳이나 그보다 최대 세 column 뒤에 서고, 그 들여쓰기에 두 칸 문법이 자리를 주지 않는(홀수 들여쓰기, 또는 level을 건너뛴) 행은 CommonMark가 읽듯 그 행의 자식이며 `format.noncanonical`이고, `flowmark canon`은 그것을 부모보다 두 칸 더 들여 쓴다. 다섯 column 이상의 연속은 `format.block`이다: CommonMark는 glyph, key, 제목, field를 code로 읽으므로 viewer는 task 항목도 inline markdown도 보여 주지 않기 때문이다. 근거: 항목의 문단이 시작하는 곳만 옮기는 구분자는 viewer가 보여 주는 것을 바꾸지 않지만, 중첩이나 보여 주는 block을 바꾸는 구분자는 행에 두 가지 읽기를 남긴다. 중첩은 CommonMark가 읽듯 읽으며, 들여쓰기는 부모 아래 두 칸일 때만 정식이다: 두 칸 문법과 CommonMark가 모두 행의 자리를 정하되 서로 다르면 file은 두 가지로 읽히므로 `format.block`이며, 따라서 구분자가 행의 부모를 조용히 바꾸는 일은 없다. CommonMark만 자리를 정하면 뜻은 확정적이며 들여쓰기만 정식이 아니다. CommonMark 0.31.2가 모든 구조와 마찬가지로 중첩의 유일한 기준이다([Readable 문서](#readable-문서)): 달리 중첩하는 구현은 그것을 정하지 않는다.
 - 배치 foreign key와 `parent`는 block list 행의 field로 쓰지 않으며, 쓰면 `format.block`이다.
 
 ## Table 행
 
 - table의 header 행은 저장되는 scalar column을 이름 붙이며 `| <key column> | <column> | … |`로 쓴다. 저장되는 모든 scalar column은 header를
   가지며, header가 없거나 어떤 column도 이름 붙이지 않는 header는 `format.block`이다. key는 첫 cell이며 key column 이름의
-  header 아래에 있다. 저장되는 scalar column은 column 순서대로 그 뒤를 잇는다. GFM이 이 column들의 header 행으로 읽되 다른 모양인 줄은 `format.noncanonical`이다: 들여쓰기가 최대 세 칸이고 첫 문자 앞에 tab이 없으며, 양 끝의 `|`는 선택이고(column 하나인 header는 `|`가 없어도 된다), cell 주위에 space와 tab이, 줄 끝에 space, tab, 수직 탭(U+000B), 폼 피드(U+000C) 중 어느 것이든 올 수 있다. 네 column 이상 들여 쓴 줄은 `format.block`이며, 들여쓰기의 tab은 다음 4의 배수까지 나아간다. 근거: GFM은 header를 양 끝 pipe가 선택이고 그 delimiter 행이 허용하는 공백으로 끝나는 행으로 읽으며(GFM 0.29, Tables), 그것은 문단 줄 위에 있고, CommonMark 0.31.2는 문단 줄에서 최대 세 칸의 들여쓰기를 떼어내지만(§4.8) 네 column은 indented code block을 연다(§4.4). tab은 다음 tab stop까지 나아간다(§2.2). 그런 header는 모두 같은 table을 만들므로 `flowmark canon`이 고친다. delimiter 행에서처럼 GFM이 table의 기준이다: VS Code의 markdown-it은 `|`가 없는 header에서, Python-Markdown은 앞에 `|`가 없거나 끝에 수직 탭이나 폼 피드가 있는 header에서 table을 읽지 않지만, 둘 다 결정하지 않는다.
+  header 아래에 있다. 저장되는 scalar column은 column 순서대로 그 뒤를 잇는다. GFM이 이 column들의 header 행으로 읽되 다른 모양인 줄은 `format.noncanonical`이다: 들여쓰기가 최대 세 칸이고 첫 문자 앞에 tab이 없으며, 양 끝의 `|`는 선택이고(column 하나인 header는 `|`가 없어도 된다), cell 주위에 space와 tab이, 줄 끝에 space, tab, 수직 탭(U+000B), 폼 피드(U+000C) 중 어느 것이든 올 수 있다. 네 column 이상 들여 쓴 줄은 `format.block`이며, 들여쓰기의 tab은 다음 4의 배수까지 나아간다. 근거: GFM은 header를 양 끝 pipe가 선택이고 그 delimiter 행이 허용하는 공백으로 끝나는 행으로 읽으며(GFM 0.29, Tables), 그것은 문단 줄 위에 있고, CommonMark 0.31.2는 문단 줄에서 최대 세 칸의 들여쓰기를 떼어내지만(§4.8) 네 column은 indented code block을 연다(§4.4). tab은 다음 tab stop까지 나아간다(§2.2). 그런 header는 모두 같은 table을 만들므로 `flowmark canon`이 고친다. delimiter 행에서처럼 GFM 0.29가 table의 기준이다. 구조는 spec으로 판단하기 때문이다([Readable 문서](#readable-문서)): VS Code의 markdown-it은 `|`가 없는 header에서 table을 읽지 않으며, 그 일탈은 그것을 정하지 않는다.
 - table의 delimiter 행은 column마다 `---`이며 `| --- | --- |`로 쓴다. GFM이 header의 delimiter 행으로 읽는 줄은 `format.noncanonical`이다: 들여쓰기가 최대 세 칸이고 첫 문자 앞에 tab이 없으며, cell들이 `|`로 나뉘며, 각 cell은 하나 이상의 하이픈이고 양 끝에 최대 하나의 콜론이 있으며 그 주위에는 space, tab, 수직 탭(U+000B), 폼 피드(U+000C) 중 어느 것이든 올 수 있고, 줄 양 끝의 `|`는 선택이며 그 뒤에는 이 네 문자 중 어느 것이든 올 수 있고, cell 수는 header와 같다. 다만 앞에 `|`가 없는 줄이 CommonMark가 먼저 다른 block으로 읽는 경우는 예외다: 하이픈만 있고 뒤에 space나 tab만 붙은 줄(setext 밑줄이며 header를 heading으로 만든다), 또는 들여쓰기 뒤 첫 문자가 `-`이고 그 뒤에 space나 tab이 오는 줄(list 항목). 따라서 정렬 콜론은 `format.noncanonical`이다. 그 자리의 다른 줄은 `format.block`이다. 근거: delimiter 행은 skeleton이며 어떤 column도 정렬을 말하지 않으므로, 쓰기가 정렬을 보존할 수 없고 형식은 하나만 정식이다. GFM의 delimiter 행은 cell 주위에 이 네 공백 문자를 허용하므로, 그런 행은 모두 같은 table로 읽히며 `flowmark canon`이 고친다. delimiter 행의 공백은 skeleton이며 한 줄 자리가 아니다. 들여쓰기의 tab은 네 번째 column에 닿으므로 CommonMark는 그 줄을 들여 쓴 줄로 읽으며, 그것은 header의 문단을 잇고 table을 열지 않는다(§2.2, §4.4). GFM이 delimiter 행으로 읽지 않는 줄은 table을 만들지 않으며, viewer는 header와 행들을 문단 텍스트로 보여 준다.
 - 선언된 title은 column의 header 아래 cell이며 column 순서를 따른다.
 - block table에서 배치 foreign key는 결코 cell이 아니며, `parent`는 cell이다. 같은 block의 두 행이 공유하는 key를 가리키는 `parent` cell은 `format.block`이다: 부모를 배정할 수 없기 때문이다. 서로 다른 block의 두 행이 공유하는 key는 block이 배정한다.
@@ -169,7 +167,7 @@ scalar 값은 dbspec literal이 아니라 읽을 수 있는 형식으로 쓴다.
 
 ## 한 줄 자리
 
-제목(list 행, H1, cell 안의 제목), list field, field list의 값, table cell은 한 줄 자리다. 한 줄 값은 쓴 그대로의 inline markdown이며, 이 절이 정한 경우를 빼고는 escape하지 않는다. 이 절에서 공백(white space)은 Unicode White_Space 속성을 가진 문자다. 보이지 않는 문자(invisible character)는 U+1680을 뺀 공백, Unicode 범주 Cc(제어 문자), Prepended_Concatenation_Mark(U+0600–U+0605, U+06DD, U+070F, U+0890–U+0891, U+08E2, U+110BD, U+110CD)를 뺀 Cf(형식 문자, 예컨대 U+FEFF), Default_Ignorable_Code_Point(예컨대 U+3164, U+115F, U+034F, variation selector)의 문자다. Unicode 속성은 엔진이 빌드되는 Go unicode 패키지의 Unicode 17.0.0 값이다. 이 절의 규칙은 값의 양 끝에 있는 보이지 않는 문자를 거절하며, 값 안의 문자는 끝이 아니다. 구분자 안에서 정식 공백은 space(U+0020)뿐이다. 근거: 그런 문자는 글리프 없이 그려지므로 독자는 볼 수 없다. U+1680과 prepended concatenation mark는 글리프가 있어 텍스트다. 이름 붙은 viewer들은 끝에서 떼어내는 문자 집합이 서로 다르다(Python-Markdown은 White_Space가 아닌 U+001C–U+001F도 떼어낸다). 그러므로 양 끝의 보이지 않는 문자를 모두 거절하면 viewer의 버전과 무관하게 값의 텍스트와 어느 viewer가 보여 주는 것이 같다. CommonMark 0.31.2는 문단과 ATX heading 내용의 양 끝에서 space와 tab을 떼어내며, 이 둘은 이 집합의 일부다.
+제목(list 행, H1, cell 안의 제목), list field, field list의 값, table cell은 한 줄 자리다. 한 줄 값은 쓴 그대로의 inline markdown이며, 이 절이 정한 경우를 빼고는 escape하지 않는다. 이 절에서 공백(white space)은 Unicode White_Space 속성을 가진 문자다. 보이지 않는 문자(invisible character)는 U+1680을 뺀 공백, Unicode 범주 Cc(제어 문자), Prepended_Concatenation_Mark(U+0600–U+0605, U+06DD, U+070F, U+0890–U+0891, U+08E2, U+110BD, U+110CD)를 뺀 Cf(형식 문자, 예컨대 U+FEFF), Default_Ignorable_Code_Point(예컨대 U+3164, U+115F, U+034F, variation selector)의 문자다. Unicode 속성은 엔진이 빌드되는 Go unicode 패키지의 Unicode 17.0.0 값이다. 이 절의 규칙은 값의 양 끝에 있는 보이지 않는 문자를 거절하며, 값 안의 문자는 끝이 아니다. 구분자 안에서 정식 공백은 space(U+0020)뿐이다. 근거: 그런 문자는 글리프 없이 그려지므로 독자는 볼 수 없다. U+1680과 prepended concatenation mark는 글리프가 있어 텍스트다. 양 끝의 보이지 않는 문자를 모두 거절하면 값의 텍스트와 독자가 보는 것이 같다. CommonMark 0.31.2는 문단과 ATX heading 내용의 양 끝에서 space와 tab을 떼어내며, 이 둘은 이 집합의 일부다.
 
 - 쓰기에서, 그 자리에 줄바꿈이나 CR을 가진 값, 앞이나 뒤에 보이지 않는 문자를 가진 값, 또는 `<` 뒤에 `!`, `/`, 글자가 오는 값은 `CONSTRAINT`다. 줄바꿈은 한 줄에 쓸 수 없고, raw HTML은 값을 숨기거나 바꾸기 때문이다.
 - 읽기에서, 렌더링이 inline markdown을 넘어 텍스트와 다르게 보이는 한 줄 값은 `format.block`이며, 정확히 다음이다: 인용된 list field나 인용된 cell(`"…"`)의 따옴표 안 양 끝에 보이지 않는 문자가 있는 것, 또는 `<` 뒤에 `!`, `/`, 글자가 오는 값. 읽기에서, CommonMark가 줄 내용의 끝에서(또는 GFM이 cell의 끝에서) 떼어내는 자리에 있는, 한 줄 자리의 끝의 space나 tab은 `format.noncanonical`이다. list 행의 key(list 표지 뒤의 연속은 제외한다), 제목, field 앞의 space와 tab의 연속은 구분자이며, 그 연속이 space 하나가 아니면, field 앞에서 list 제목을 끝내는 tab을 포함해, `format.noncanonical`이다. 그 이유는 field 파서가 space와 tab을 똑같이 나누고, 쓰기 규칙이 둘 중 하나로 끝나는 제목을 거절하므로, 그 연속은 제목 텍스트가 아니기 때문이다. list 표지 뒤의 두 개에서 네 개까지의 space 연속은 `format.noncanonical`이고 다섯 개 이상의 연속은 `format.block`이다([List 행](#list-행)). list 표지 뒤의 연속은 column으로 재며 tab은 다음 4의 배수까지 나아가고(CommonMark 0.31.2 §2.2), 그 너비의 space 연속으로 판정하며([List 행](#list-행)), 그 안의 tab은 `format.noncanonical`이다. 제목의 token 사이의 공백은 제목 텍스트이지 구분자가 아니다. 끝에 있는 그 밖의 보이지 않는 문자는 쓰기 규칙이 다시 만들 수 없으므로 `format.block`이다. 각 자리는 하나의 정식 구분자를 가진다(H1 표지 뒤 `# `, field list column 뒤 `: `, 빈 텍스트는 아무것도 없음, list 표지 뒤와, list 행의 glyph, key, 제목, 각 field 사이에 space 하나, cell은 `| v |`). 그 밖의 space나 tab은 `format.noncanonical`이다.

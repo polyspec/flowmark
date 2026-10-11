@@ -7,10 +7,10 @@ import (
 	"golang.org/x/text/unicode/norm"
 )
 
-// The two folds of a heading's rendered text that decide a detail-anchor collision
-// (spec 10, Detail headings and anchors). Both end with the same step: the text is
-// decomposed by NFKD, and only the ASCII letters and digits of the result are kept.
-// Combining marks are not ASCII, so that step also drops them.
+// The fold of a heading's rendered text that decides a detail-anchor collision (spec
+// 10, Detail headings and anchors). It ends with this step: the text is decomposed by
+// NFKD, and only the ASCII letters and digits of the result are kept. Combining marks
+// are not ASCII, so that step also drops them.
 
 // foldG is F_G: the characters that are neither letters nor decimal digits are
 // removed first, so a superscript digit or a roman numeral is gone before the
@@ -25,12 +25,6 @@ func foldG(s string) string {
 	return asciiAlnum(norm.NFKD.String(strings.ToLower(b.String())))
 }
 
-// foldM is F_M: the text is lowercased and decomposed as a whole, as MkDocs reads
-// it, so a superscript digit or a roman numeral decomposes to ASCII.
-func foldM(s string) string {
-	return asciiAlnum(norm.NFKD.String(strings.ToLower(s)))
-}
-
 // asciiAlnum keeps the ASCII letters and digits of s.
 func asciiAlnum(s string) string {
 	var b strings.Builder
@@ -42,9 +36,9 @@ func asciiAlnum(s string) string {
 	return b.String()
 }
 
-// stripDigits removes the final run of decimal digits of s, which a fold of a
+// stripDigits removes the final run of decimal digits of s, which the fold of a
 // heading loses before its comparison with an anchor, since a viewer numbers a
-// repeated or taken anchor by a final number.
+// repeated anchor by appending -<n>.
 func stripDigits(s string) string {
 	return strings.TrimRight(s, "0123456789")
 }
