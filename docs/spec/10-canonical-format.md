@@ -188,6 +188,21 @@ and the column sections — are payload: the renderer moves them with their row 
   past the line at which it stops; the slug vectors record each case (`$$`, `# a`, blank, `# b`, `$$`,
   `# c` gives VS Code `c` alone, and `- $$`, `  x`, `y`, `  # e` gives `e` in the item). GitHub and
   GitLab read no math block: a `$$` line is text there, and the vectors show their headings unchanged.
+- **Tables under S_GH, S_GL and S_VS.** GitHub, GitLab and VS Code render GFM tables (GFM 0.29 §4.10), which take
+  in lines that CommonMark reads as paragraphs, so the three read the headings of their tables (the collision
+  rule). A line of a paragraph followed by a delimiter row — up to three spaces of indent, then cells of hyphens
+  with an optional colon at either end, separated by pipes, a pipe at either end optional — with as many cells as
+  that line is the header row of a table, and the lines after the delimiter row are its body rows, up to a blank
+  line, up to a line that opens a block that interrupts a paragraph, and up to the end of its container: a body
+  row is no paragraph line, so a setext underline after it underlines nothing. The cells of a row are split at
+  every pipe that no backslash escapes; a code span protects none. A delimiter row of one cell holds a pipe
+  under S_GH and S_GL. VS Code's markdown-it 14 differs twice: it looks for a table at the start of every line,
+  before any other block, so a line that would be an ATX heading is the header row of a table when a delimiter
+  row of as many cells follows it, and it takes a delimiter row of one cell without a pipe (`| a |` over `---`
+  is a table) when its header row holds a pipe, which GitHub and GitLab read as a setext heading. Grounding:
+  the slug vectors record each case from the viewers (`a|b`, `-|-`, `items row T1`, `---` gives no heading in
+  any of them; `# a|b`, `-|-` gives GitHub `ab` and VS Code none; `| a |`, `---` gives GitHub and GitLab `-a-`
+  and VS Code none; a code span `` `a|b` `` over `-|-` is a table in all three).
 - **Footnotes under S_GH and S_GL.** GitHub and GitLab render with footnotes, cmark-gfm's and comrak
   0.56.0's, so S_GH and S_GL read the blocks and the references as their viewer does; VS Code renders
   none, and S_VS reads the brackets and the lines as CommonMark does. A line indented less than four
@@ -342,7 +357,8 @@ and the column sections — are payload: the renderer moves them with their row 
   HTML heading that GitHub anchors is a heading too, under S_GH alone, located at the `<` of its start
   tag (HTML headings under S_GH). Each slug reads the headings of its viewer's blocks: those of
   CommonMark, with the footnote definitions of GitHub and GitLab under S_GH and S_GL (Footnotes under
-  S_GH and S_GL) and with VS Code's math blocks under S_VS (Math blocks under S_VS), and the raw HTML
+  S_GH and S_GL), with VS Code's math blocks under S_VS (Math blocks under S_VS), with the tables of all
+  three (Tables under S_GH, S_GL and S_VS), and the raw HTML
   each of them renders. The detail headings are those of CommonMark's blocks, and a viewer's heading of
   the same line, level and text is that detail heading; any other heading a viewer anchors is a payload
   heading under its slug. Grounding: the anchor that a link to a row follows is the one each viewer

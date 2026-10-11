@@ -835,6 +835,195 @@
     "a",
     "b"
    ]
+  },
+  {
+   "name": "table then ATX heading",
+   "markdown": "a|b\n-|-\nc|d\n# items row T1",
+   "ids": [
+    "items-row-t1"
+   ]
+  },
+  {
+   "name": "table row before a setext underline",
+   "markdown": "a|b\n-|-\nitems row T1\n---",
+   "ids": []
+  },
+  {
+   "name": "table row before a setext equals underline",
+   "markdown": "a|b\n-|-\nitems row T1\n===",
+   "ids": []
+  },
+  {
+   "name": "table without a body before an underline",
+   "markdown": "a|b\n-|-\n---",
+   "ids": []
+  },
+  {
+   "name": "table then a blank line then a setext heading",
+   "markdown": "a|b\n-|-\n\nitems row T1\n---",
+   "ids": [
+    "items-row-t1"
+   ]
+  },
+  {
+   "name": "delimiter row as a setext underline",
+   "markdown": "items row T1\n---|---\n\nitems row T2\n-|-",
+   "ids": []
+  },
+  {
+   "name": "one column table",
+   "markdown": "| a |\n| - |\nitems row T1\n---\n\n|b|\n|-|\n# h",
+   "ids": [
+    "h"
+   ]
+  },
+  {
+   "name": "one column table without pipes on the delimiter",
+   "markdown": "| a |\n---\nx",
+   "ids": [
+    "-a-"
+   ]
+  },
+  {
+   "name": "table interrupting a paragraph",
+   "markdown": "items row T1\n| a | b |\n| - | - |\n| c | d |\n---",
+   "ids": []
+  },
+  {
+   "name": "table header taking the last line of a paragraph",
+   "markdown": "x\ny\na|b\n-|-\nz\n---",
+   "ids": []
+  },
+  {
+   "name": "table with a mismatched delimiter row",
+   "markdown": "a|b|c\n-|-\nitems row T1\n---",
+   "ids": [
+    "abc--items-row-t1"
+   ]
+  },
+  {
+   "name": "table rows without a pipe",
+   "markdown": "a|b\n-|-\nitems row T1\nitems row T2\n---",
+   "ids": []
+  },
+  {
+   "name": "table row that begins a block quote",
+   "markdown": "a|b\n-|-\n> # h1\n# h2",
+   "ids": [
+    "h1",
+    "h2"
+   ]
+  },
+  {
+   "name": "table row that begins a list",
+   "markdown": "a|b\n-|-\n- # h1\n# h2",
+   "ids": [
+    "h1",
+    "h2"
+   ]
+  },
+  {
+   "name": "table row that begins an ordered list",
+   "markdown": "a|b\n-|-\n1. # h1\n# h2",
+   "ids": [
+    "h1",
+    "h2"
+   ]
+  },
+  {
+   "name": "table row that begins a fence",
+   "markdown": "a|b\n-|-\n```\n# h1\n```\n# h2",
+   "ids": [
+    "h2"
+   ]
+  },
+  {
+   "name": "table row that begins an HTML block",
+   "markdown": "a|b\n-|-\n<div>\n# h1\n</div>\n# h2",
+   "ids": []
+  },
+  {
+   "name": "table row indented four columns",
+   "markdown": "a|b\n-|-\n    # h1\n# h2",
+   "ids": [
+    "h2"
+   ]
+  },
+  {
+   "name": "table row that begins a thematic break",
+   "markdown": "a|b\n-|-\n***\n# h1",
+   "ids": [
+    "h1"
+   ]
+  },
+  {
+   "name": "table row that begins a footnote definition",
+   "markdown": "a|b\n-|-\n[^n]: x\n# h1\n\nz[^n]",
+   "ids": [
+    "h1"
+   ]
+  },
+  {
+   "name": "table row that begins a math block",
+   "markdown": "a|b\n-|-\n$$\n# h1\n$$\n# h2",
+   "ids": [
+    "h1",
+    "h2"
+   ]
+  },
+  {
+   "name": "table in a block quote",
+   "markdown": "> a|b\n> -|-\n> # h1\n# h2\n\n> a|b\n> -|-\nitems row T1\n---",
+   "ids": [
+    "h1",
+    "h2",
+    "items-row-t1"
+   ]
+  },
+  {
+   "name": "table in a list item",
+   "markdown": "- a|b\n  -|-\n  items row T1\n  ---",
+   "ids": []
+  },
+  {
+   "name": "table with escaped pipes",
+   "markdown": "a\\|b\n-\\|-\nitems row T1\n---",
+   "ids": [
+    "ab--items-row-t1"
+   ]
+  },
+  {
+   "name": "table with a code span pipe",
+   "markdown": "`a|b`\n-|-\nitems row T1\n---",
+   "ids": []
+  },
+  {
+   "name": "table headed by a heading text",
+   "markdown": "# a|b\n-|-\nitems row T1\n---",
+   "ids": [
+    "ab",
+    "--items-row-t1"
+   ]
+  },
+  {
+   "name": "table delimiter with alignment",
+   "markdown": ":-|-:\n:-:|--\nitems row T1\n---\n\na|b\n:-:|-:\nitems row T2\n===",
+   "ids": []
+  },
+  {
+   "name": "table delimiter with spaces",
+   "markdown": "a | b\n - | - \nitems row T1\n---",
+   "ids": []
+  },
+  {
+   "name": "table header with a leading pipe only",
+   "markdown": "|a\n|-\nitems row T1\n---",
+   "ids": []
+  },
+  {
+   "name": "table after a link reference definition",
+   "markdown": "[x]: /u\na|b\n-|-\nitems row T1\n---",
+   "ids": []
   }
  ],
  "rawHeadings": [

@@ -261,6 +261,24 @@ type viewerReadings struct {
 	notes, math bool
 }
 
+// delimiterRows reports whether a line of the file may be the delimiter row of a GFM table, which GitHub, GitLab and
+// VS Code render: a reading differs from CommonMark's for tables only where such a line stands. A delimiter row may
+// stand in a container, behind its markers, so a line passes when nothing but the characters of a delimiter row and of
+// the markers of block quotes and list items stands in it; the scanner decides the rest. withPipe is whether a passing
+// line holds a pipe (the delimiter row of GitHub and GitLab needs one), any whether one passes at all (markdown-it's
+// needs none when the header row holds a pipe), and pipe whether any line holds a pipe.
+func delimiterRows(lines []string) (withPipe, any, pipe bool) {
+	for _, l := range lines {
+		hasPipe := strings.Contains(l, "|")
+		pipe = pipe || hasPipe
+		if strings.Contains(l, "-") && strings.Trim(l, " \t>|:-*+.)0123456789") == "" {
+			any = true
+			withPipe = withPipe || hasPipe
+		}
+	}
+	return withPipe, any, pipe
+}
+
 // readViewers returns the viewers' readings of the file lines, whose CommonMark reading
 // is cm. GitHub's and GitLab's footnote definitions are numbered by their first
 // reference in the document (numberNotes).
@@ -268,9 +286,11 @@ func readViewers(lines []string, cm scan) viewerReadings {
 	var v viewerReadings
 	refs := linkDefs(cm.blocks)
 	notes := viewerReading{sc: cm, refs: refs}
-	if mayOpen(lines, "[^", "]:") {
-		v.notes = true
-		notes.sc = scanWith(lines, 0, blockSyntax{notes: true})
+	tables, anyDelimiter, pipe := delimiterRows(lines)
+	vsTables := anyDelimiter && pipe
+	v.notes = mayOpen(lines, "[^", "]:")
+	if v.notes || tables {
+		notes.sc = scanWith(lines, 0, blockSyntax{notes: v.notes, tables: tables})
 		notes.refs = linkDefs(notes.sc.blocks)
 	}
 	v.gh, v.gl = notes, notes
@@ -281,9 +301,9 @@ func readViewers(lines []string, cm scan) viewerReadings {
 		numberNotes(lines, v.gl.sc, v.gl.refs, false)
 	}
 	v.vs = viewerReading{sc: cm, refs: refs}
-	if mayOpen(lines, "$$") {
-		v.math = true
-		v.vs.sc = scanWith(lines, 0, blockSyntax{math: true})
+	v.math = mayOpen(lines, "$$")
+	if v.math || vsTables {
+		v.vs.sc = scanWith(lines, 0, blockSyntax{math: v.math, tables: vsTables, mdTables: vsTables})
 		v.vs.refs = linkDefs(v.vs.sc.blocks)
 	}
 	return v

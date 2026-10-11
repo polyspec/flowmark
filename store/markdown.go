@@ -52,6 +52,23 @@ type blockSyntax struct {
 	// spaces, with "$$" opens a block that takes in every line up to the next that holds
 	// "$$", or to the end of its container, whose next line it also takes in.
 	math bool
+	// tables reads the GFM tables (GFM 0.29 §4.10) that GitHub, GitLab and VS Code render: a delimiter row after a
+	// line of a paragraph with as many cells makes that line the header row of a table, and the lines after the
+	// delimiter row are its body rows until a blank line or a block that interrupts a paragraph. A line of the table is
+	// no paragraph line, so a setext underline after a body row underlines nothing.
+	tables bool
+	// mdTables reads the tables as markdown-it 14 reads them, which VS Code renders, under tables: a table is looked
+	// for at the start of every line, before any other block, so a line that would be a heading is a header row when a
+	// delimiter row follows it; and the delimiter row of a header row that holds a pipe needs no pipe itself, so
+	// `| a |` over `---` is a table of one column where GitHub and GitLab read a setext heading.
+	mdTables bool
+}
+
+// atxMark is an ATX heading read at line at, in a scan of depth open containers, with the text rest of the line.
+type atxMark struct {
+	at, depth int
+	rest      string
+	set       bool
 }
 
 // textCol returns the 1-based column, in code points, of the first character of the
@@ -214,7 +231,8 @@ const (
 	leafPara
 	leafFence
 	leafHTML
-	leafMath // a math block, under blockSyntax.math
+	leafMath  // a math block, under blockSyntax.math
+	leafTable // a table, under blockSyntax.tables
 )
 
 // scanner reads the block structure of lines one at a time, as CommonMark's
@@ -234,6 +252,11 @@ type scanner struct {
 	// blank is whether the last line read was blank inside every container it continued,
 	// which ends a block quote before a lazy line under blockSyntax.math.
 	blank bool
+	// retract is set when the line read turned the ATX heading before it into the header row of a table, which is no
+	// heading: scanWith drops that heading.
+	retract bool
+	// atx is the last ATX heading read, which an mdTables delimiter row on the next line turns into a header row.
+	atx atxMark
 }
 
 // unit is the text of a paragraph or of an HTML block: its lines without the markers
@@ -273,7 +296,15 @@ func scanWith(lines []string, from int, syn blockSyntax) scan {
 	var sc scan
 	s := scanner{syn: syn}
 	for i := from; i < len(lines); i++ {
-		if h, ok := s.feed(lines, i); ok {
+		h, ok := s.feed(lines, i)
+		if s.retract {
+			s.retract = false
+			sc.all = sc.all[:len(sc.all)-1]
+			if len(sc.heads) > 0 && sc.heads[len(sc.heads)-1].at == i-1 {
+				sc.heads = sc.heads[:len(sc.heads)-1]
+			}
+		}
+		if ok {
 			sc.all = append(sc.all, h)
 			if !h.nested {
 				sc.heads = append(sc.heads, h)
@@ -362,6 +393,16 @@ func (s *scanner) feed(lines []string, i int) (heading, bool) {
 		s.leaf = leafNone
 	}
 	switch s.leaf {
+	case leafTable:
+		// A body row, unless the line is blank or opens a block that interrupts a paragraph, which ends the table.
+		if isBlank(rest) || s.syn.opensInterrupt(rest) {
+			s.leaf = leafNone
+			if isBlank(rest) {
+				return heading{}, false
+			}
+			return s.start(lines, i, rest, col)
+		}
+		return heading{}, false
 	case leafMath:
 		if strings.Contains(rest, "$$") {
 			s.leaf = leafNone
@@ -385,6 +426,32 @@ func (s *scanner) feed(lines []string, i int) (heading, bool) {
 		return heading{}, false
 	}
 	return s.start(lines, i, rest, col)
+}
+
+// tableStarts reads the line rest after the open paragraph as the delimiter row of a table when it is one with as many
+// cells as the last line of the paragraph, which is then the header row (GFM 0.29 §4.10): the header row leaves the
+// paragraph, and the lines after the delimiter row are the body rows of the table. It reports whether it did.
+func (s *scanner) tableStarts(rest string) bool {
+	cells := tableDelimiterCells(rest, s.syn.mdTables)
+	if cells == 0 {
+		return false
+	}
+	u := &s.units[s.cur]
+	if len(u.lines) == 0 {
+		return false
+	}
+	header := u.lines[len(u.lines)-1]
+	if tableRowCells(header) != cells || s.syn.mdTables && !strings.Contains(header, "|") {
+		return false
+	}
+	u.lines = u.lines[:len(u.lines)-1]
+	if len(u.lines) == 0 {
+		// The paragraph was the header row alone: the table stands where the paragraph did.
+		s.units = append(s.units[:s.cur], s.units[s.cur+1:]...)
+		s.cur = len(s.units) - 1
+	}
+	s.leaf = leafTable
+	return true
 }
 
 // mathEnd reads a line, rest, on which the containers from the m-th on do not continue
@@ -472,6 +539,16 @@ func (s *scanner) start(lines []string, i int, rest string, col int) (heading, b
 			}
 			return heading{}, false
 		}
+		if s.syn.mdTables && s.atx.set && s.atx.at == i-1 && s.atx.depth == len(s.stack) && strings.Contains(s.atx.rest, "|") {
+			if cells := tableDelimiterCells(rest, true); cells > 0 && cells == tableRowCells(s.atx.rest) {
+				s.retract = true
+				s.leaf = leafTable
+				return heading{}, false
+			}
+		}
+		if s.leaf == leafPara && s.syn.tables && s.tableStarts(rest) {
+			return heading{}, false
+		}
 		if s.leaf == leafPara {
 			// The definitions at the start of the paragraph are read before the underline
 			// (§4.7): the heading is the text after them, from its own first line. A
@@ -490,6 +567,7 @@ func (s *scanner) start(lines []string, i int, rest string, col int) (heading, b
 		}
 		if level, text, tab, ok := headingOf(rest); ok {
 			s.leaf = leafNone
+			s.atx = atxMark{at: i, depth: len(s.stack), rest: rest, set: true}
 			return heading{at: i, last: i, level: level, text: text, tab: tab, nested: !top, note: s.innerNote()}, true
 		}
 		if f, ok := fenceOpenAt(rest); ok {
@@ -1013,4 +1091,57 @@ func joinLines(lines []string) string {
 		b.WriteByte('\n')
 	}
 	return b.String()
+}
+
+// tableDelimiterCells returns the number of cells of line when it is the delimiter row of a GFM table (GFM 0.29
+// §4.10), and 0 when it is not: up to three spaces of indent, then cells separated by pipes, each of hyphens with an
+// optional colon at either end and spaces around, a pipe at either end optional. A row of one cell needs a pipe, since
+// hyphens alone are a thematic break or a setext underline; markdown-it (pipeless) takes it, its header row holding a
+// pipe.
+func tableDelimiterCells(line string, pipeless bool) int {
+	if indentOf(line) > 3 {
+		return 0
+	}
+	t := strings.Trim(line, " \t")
+	if t == "" || !pipeless && !strings.Contains(t, "|") {
+		return 0
+	}
+	t = strings.TrimPrefix(t, "|")
+	t = strings.TrimSuffix(t, "|")
+	cells := strings.Split(t, "|")
+	for _, cell := range cells {
+		c := strings.Trim(cell, " \t")
+		c = strings.TrimPrefix(c, ":")
+		c = strings.TrimSuffix(c, ":")
+		if c == "" || strings.Trim(c, "-") != "" {
+			return 0
+		}
+	}
+	return len(cells)
+}
+
+// tableRowCells returns the number of cells of a table row: the cells between the pipes that a backslash does not
+// escape, a pipe at either end optional. A code span protects no pipe: GitHub, GitLab and VS Code split the row there
+// (GFM 0.29 §4.10 example 200).
+func tableRowCells(line string) int {
+	t := strings.Trim(line, " \t")
+	n := 1
+	for i := 0; i < len(t); i++ {
+		switch t[i] {
+		case '\\':
+			i++
+		case '|':
+			n++
+		}
+	}
+	if strings.HasPrefix(t, "|") {
+		n--
+	}
+	if strings.HasSuffix(t, "|") && !strings.HasSuffix(t, `\|`) && len(t) > 1 {
+		n--
+	}
+	if n < 1 {
+		n = 1
+	}
+	return n
 }
