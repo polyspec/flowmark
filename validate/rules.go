@@ -156,15 +156,12 @@ func (c *corpus) uniques(tb *catalog.Table, rows []placed) {
 	}
 }
 
-// orders reports the sibling order of a files table: within each group of rows
-// with the same parent, of size n, the order values are exactly 1..n, so a row
-// whose value lies outside 1..n or is shared with a sibling is reported at its
-// order item. A value not of the column's type is its type fault alone: it counts
-// toward n and is neither outside 1..n nor shared. A row whose parent is not of
-// its column's type belongs to no known group: it counts toward no group's n and
-// its own order is not judged, and a fault of a group is reported only when it
-// stands whichever groups the u such rows join — a value shared within the group,
-// or one outside 1..n + u.
+// orders reports the sibling order of a files table, whose order item holds a
+// rank (spec 20 Order): within each group of rows with the same parent, a row
+// whose rank is shared with a sibling is reported at its order item, since the
+// rank does not order the two. A rank not of the column's type is its type fault
+// alone and is never shared. A row whose parent is not of its column's type
+// belongs to no known group: its own order is not judged.
 func (c *corpus) orders(tb *catalog.Table, rows []placed) {
 	if tb.Storage.Kind != catalog.StorageFiles || tb.Order == "" {
 		return
@@ -172,12 +169,10 @@ func (c *corpus) orders(tb *catalog.Table, rows []placed) {
 	parent := parentColumn(tb)
 	groups := map[string][]placed{}
 	var keys []string
-	unknown := int64(0)
 	for _, p := range rows {
 		g := ""
 		if parent != "" {
 			if _, raw := p.row.Raw[parent]; raw {
-				unknown++
 				continue
 			}
 			g = text(p.row, parent)
@@ -190,24 +185,19 @@ func (c *corpus) orders(tb *catalog.Table, rows []placed) {
 	for _, g := range keys {
 		members := groups[g]
 		counts := map[int64]int{}
-		for _, m := range members {
-			if v, ok := orderValue(m.row, tb.Order); ok {
-				counts[v]++
-			}
-		}
-		n := int64(len(members))
+		ranks := map[placed]int64{}
 		for _, m := range members {
 			if _, raw := m.row.Raw[tb.Order]; raw {
 				continue
 			}
-			v, ok := orderValue(m.row, tb.Order)
-			switch {
-			case !ok:
-				c.report(m, tb.Order, ruleOrder, fmt.Sprintf("the order of %s is missing", m.row.Key))
-			case counts[v] > 1:
-				c.report(m, tb.Order, ruleOrder, fmt.Sprintf("the order %d of %s is shared with a sibling", v, m.row.Key))
-			case v < 1 || v > n+unknown:
-				c.report(m, tb.Order, ruleOrder, fmt.Sprintf("the order %d of %s is outside 1..%d among its %d siblings", v, m.row.Key, n+unknown, n))
+			if v, ok := orderValue(m.row, tb.Order); ok {
+				ranks[m] = v
+				counts[v]++
+			}
+		}
+		for _, m := range members {
+			if v, ok := ranks[m]; ok && counts[v] > 1 {
+				c.report(m, tb.Order, ruleOrder, fmt.Sprintf("the order rank %d of %s is shared with a sibling", v, m.row.Key))
 			}
 		}
 	}

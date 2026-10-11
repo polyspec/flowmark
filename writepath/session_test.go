@@ -55,7 +55,8 @@ func TestSingleRequest(t *testing.T) {
 			t.Fatalf("items:\n%s", f.file("items.flowmark.md"))
 		}
 		want(t, s, f.msg("update", "notes", map[string]any{"set": sets(0, "position"), "where": whereID(1)}, 1, "N3"), `{"affected":1,"keys":[]}`)
-		if !strings.Contains(f.file("notes/N1.flowmark.md"), "- position: 2\n") || !strings.Contains(f.file("notes/N3.flowmark.md"), "- position: 1\n") {
+		// The ranks 1 and 2 leave no rank before N1's, so the group is renumbered.
+		if !strings.Contains(f.file("notes/N1.flowmark.md"), "- position: 2000\n") || !strings.Contains(f.file("notes/N3.flowmark.md"), "- position: 1000\n") {
 			t.Fatalf("N1:\n%s\nN3:\n%s", f.file("notes/N1.flowmark.md"), f.file("notes/N3.flowmark.md"))
 		}
 		f.clean()
@@ -69,7 +70,7 @@ func TestCreateMissing(t *testing.T) {
 	s := f.session("cli")
 	want(t, s, f.msg("insert", "notes", map[string]any{"set": sets(0, "id", "title", "body")}, "N1", "First", "Text."), `{"affected":1,"keys":["N1"]}`)
 	f.rec.wantKinds(t, committed...)
-	if got := f.file("notes/N1.flowmark.md"); got != lines("# First", "- position: 1", "", "Text.") {
+	if got := f.file("notes/N1.flowmark.md"); got != lines("# First", "- position: 1000", "", "Text.") {
 		t.Fatalf("N1:\n%s", got)
 	}
 	want(t, s, f.insertTag("go", "topic"), `{"affected":1,"keys":[1]}`)
