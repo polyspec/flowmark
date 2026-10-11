@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database -->
-<!-- source-sha256: ce3e2f1ec91c469f3934d3c41dff459682cc4198192c34d724702941904d6be7 -->
+<!-- source-sha256: b687a045d528b1be52464867e7368d468995c0b54d43f763fb116821886065e0 -->
 # markdown database 계획
 
 [English](markdown-database-plan.md)
@@ -93,6 +93,12 @@ NULL이 아니며 비어 있을 수 있고, view의 entity table은 둘 다 선�
   `LOCK_TIMEOUT`은 `CANCELED`, `CORPUS_CONFLICT`는 `WRITE_CONFLICT`.
 - write path는 모든 face를 위해 단일 operation 쓰기를 같은 lock 아래에서 다시 읽은 뒤 한 번 재시도한다.
   server transaction은 server가 재시도하지 않으며 orm client는 `WRITE_CONFLICT`를 받는다.
+- 열린 corpus는 memory에 두고 운영체제의 file 알림 — macOS의 kqueue, Linux의 inotify, Windows의
+  `ReadDirectoryChangesW`, 곧 lock 대기의 primitive — 으로 최신을 유지한다. 그래서 operation은 바뀐
+  file만 disk에서 읽고, bytes나 유도한 link target이 바뀐 문서만 parse한다. 각 operation은 읽기 전에
+  lock 아래에서 쌓인 알림을 가져간다. overflow는 corpus 전체를 다시 읽는다. commit은 알림이 무엇을
+  말하든 lock 아래에서 그 대상을 disk에서 읽는다. spec 40이 그 방식과 예산을 밝힌다(Corpus 열기,
+  비용 모델).
 
 ### Catalog
 

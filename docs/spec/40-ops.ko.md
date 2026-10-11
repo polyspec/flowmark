@@ -1,5 +1,5 @@
 <!-- doc-id: spec-ops -->
-<!-- source-sha256: 5ad1e404342167e4916d962468251fcfd35b0e36a3f543fa79d3e69d6d8cff45 -->
+<!-- source-sha256: 53093b25cf632ec205ca68686c595cd7e780f45b8a969dec3929497e82c5c9b4 -->
 # Operations
 
 [English](40-ops.md)
@@ -25,10 +25,50 @@
   그 편집을 따로 복사해 두고, stage file 하나를 대상 위에 복사한 뒤 corpus를 다시 열면 commit이
   완료되며, 그 편집은 새 변경으로 다시 한다. 그때까지 모든 열기가 같은 방식으로 거절한다. 손으로
   지운 stage는 commit을 반쯤 적용된 채로 남기므로 거절은 그것을 해결 방법으로 밝히지 않는다.
-- 열기는 catalog를 읽고 corpus를 walk하며 문서를 parse하고 index를 유도한다. 각 operation은 lock 아래에서
-  corpus를 다시 읽는다. operation이 바뀌지 않은 file을 읽지 않는 방법 — 운영체제의 file 알림으로 최신을
-  유지하는 오래 사는 corpus이며, commit 대상은 언제나 lock 아래에서 다시 읽는다 — 은 `T12.5-2`가 맡는다.
-  file content hash를 key로 하는 cache는 그 일을 하지 못한다. hash를 구하려면 모든 file을 읽기 때문이다.
+- 열기는 catalog를 읽고 corpus를 walk하며 문서를 parse하고 index를 유도한다: 모든 문서를 한 번 읽고
+  parse하는 첫 전체 읽기다. 열린 corpus는 memory에 두고 운영체제의 file 알림으로 최신을 유지하며, 각
+  operation은 lock 아래에서 바로 앞 operation 이후 바뀐 것만 읽는다:
+  - folder나 문서는 읽기 전에 지켜보므로 읽은 뒤의 변경을 놓치지 않는다. macOS에서는 각 folder
+    (`NOTE_WRITE | NOTE_DELETE | NOTE_RENAME | NOTE_REVOKE`)와 각 문서(그것들과 `NOTE_EXTEND |
+    NOTE_ATTRIB`)에 `EV_CLEAR`로 kqueue `EVFILT_VNODE`를 걸며, 각각 `O_EVTONLY`로 열어 descriptor를 하나씩
+    쓴다. folder는 사라질 때까지 계속 지켜보므로, 그 이름이 바뀌면 언제나 그 아래의 것을 버린다.
+    Linux에서는 열린 corpus마다 instance 하나로 각 folder(`IN_CREATE | IN_DELETE | IN_MOVED_FROM |
+    IN_MOVED_TO | IN_MODIFY | IN_CLOSE_WRITE | IN_ATTRIB`와 folder 자신의 event)와 각 문서(`IN_MODIFY |
+    IN_CLOSE_WRITE | IN_ATTRIB`와 그 자신의 event)에 inotify를 건다. 그래서 문서의 다른 hard link를 통한
+    쓰기도 보이며, 한 inode의 두 경로는 그 watch를 함께 쓴다. Windows에서는 root와 그 subtree에
+    overlapped `ReadDirectoryChangesW` 하나(`FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_DIR_NAME |
+    FILE_NOTIFY_CHANGE_LAST_WRITE | FILE_NOTIFY_CHANGE_SIZE`)를 건다. 그것이 알리는 short(8.3) 이름은 긴
+    이름으로 풀며, 풀 수 없는 것은 overflow로 받는다. 그것은 쓴 경로를 알리므로, corpus 밖의 hard link를
+    통한 쓰기는 그 문서가 commit 대상이 되거나 corpus를 다시 열 때까지 거기서 보이지 않는다. 그런 link를
+    가진 corpus 문서는 Windows에서 지원하지 않는다. 이것들은 lock 대기의 primitive다
+    ([lock](#잡기와-기다리기)).
+  - 각 operation은 읽기 전에 lock 아래에서, 바로 앞 operation 이후 쌓인 알림을 기다리지 않고 모두
+    가져가 각 알림이 가리키는 것을 버린다: 바뀐 file의 bytes, 바뀐 folder의 항목, 그리고 나타나거나
+    사라지거나 이름이 바뀐 이름이면 그 아래의 것과 그 folder의 항목까지. 이어지는 읽기가 그 경로들을
+    disk에서 다시 읽는다. operation 사이에는 아무것도 돌지 않고 timer도 없다: kernel이 다음 operation이
+    가져갈 때까지 알림을 간직한다. 버림은 각각 `corpus.changed`로, disk에서 읽은 folder나 file은 각각
+    `corpus.read`로 발행한다.
+  - macOS와 Linux에서는 kernel이 변경을 만드는 system call 안에서 알림을 queue에 넣으므로, operation은
+    lock을 잡기 전에 끝난 모든 변경을 본다. `ReadDirectoryChangesW`는 file system이 쓰기 시각을 기록할
+    때 쓰기를 알리며, 그것은 더 늦을 수 있다.
+  - 잃은 event를 알리는 알림 — `IN_Q_OVERFLOW`, 0 byte, 읽을 수 없는 buffer, `ERROR_NOTIFY_ENUM_DIR`
+    — 은 모든 것을 버리고, 다음 읽기가 corpus 전체를 다시 읽으며 `corpus.overflow`로 발행한다: 알림
+    계약이 이 경로를 요구한다. kqueue는 등록마다 상태 하나를 두어 event를 잃지 않으므로 overflow가
+    없다. 알림을 가져가다 실패하면 이미 가져간 알림을 잃으므로, 역시 모든 것을 버리고 원인을 밝히며
+    operation을 `DRIVER`로 실패시킨다.
+  - commit은 알림이 무엇을 말하든 lock 아래에서 그 대상을, 위의 모든 folder의 항목과 함께 disk에서
+    읽고, 쓴 뒤 다시 버린다. 그래서 [commit protocol](#commit-protocol)의 1단계는 알림의 지연에 결코
+    기대지 않는다.
+  - 문서는 bytes가 바뀌었거나, 그 parse가 다른 file에서 유도한 link target이 바뀌었을 때 — detail
+    section이 생기거나 사라진 행, 공유가 된 key, 행이 나타난 dangling link — 만 다시 parse한다. 다른
+    문서의 행은 operation 사이에 그대로 두며 결코 바꾸지 않는다. 쓰기는 그 사본을 바꾼다.
+  - 걸 수 없는 watch는 원인을 밝히며 operation을 `DRIVER`로 실패시킨다: macOS에서는 열린 file 한도
+    (`ulimit -n`, `kern.maxfilesperproc`), Linux에서는 `fs.inotify.max_user_watches`.
+
+  근거: corpus 전체를 읽던 operation은 시간의 86%를 file을 열고 읽는 데 썼다(10k note 읽기에
+  2.7–4.4 s). file content hash를 key로 하는 cache는 그것을 피하지 못한다. hash를 구하려면 모든 file을
+  읽기 때문이다. macOS에서 FSEvents는 쓰지 않는다: cgo와 run loop나 dispatch queue가 필요하지만, kqueue는
+  이미 lock 대기의 primitive다.
 
 ## canon 연산
 
@@ -395,8 +435,24 @@ MySQL과 PostgreSQL은 `datetime(p)` column을 `NOW(6)`와 여섯 자리로 비�
 
 - command별 p95 지연 목표를 여기서 선언한다([open questions](110-open-questions.md)의 corpus 규모에서
   수백 millisecond).
-- 지금은 모든 corpus 문서를 다시 읽는 operation의 읽기 비용은 `T12.5-2`가 맡는다([corpus 열기](#corpus-열기)).
-  commit은 transaction이 결과를 바꿀 수 있는
+- 열린 corpus의 operation은 바뀐 것만 disk에서 읽고, parse가 달라질 수 있는 문서만 parse한다
+  ([corpus 열기](#corpus-열기)). 그래도 memory 안에서 corpus의 행을 훑으므로 그 비용은 bytes가 아니라
+  행에 따라 커진다. `writepath`의 benchmark `BenchmarkOpen`, `BenchmarkRead`, `BenchmarkWrite`가 이를
+  규모 한계에서 잰다: 작은 corpus 옆에 행 하나짜리 문서 10k를 두고, 각 operation의 CPU 시간과 wall
+  시간의 95번째 백분위를 보고한다. macOS(Apple M3 Pro, `T12.5-2`)에서 읽기는 CPU 68 ms, 쓰기 — lock
+  아래의 transaction 하나를 journal로 commit — 는 216 ms로 예산 안이다. wall 시간 p95인 273 ms와 1.1 s는
+  11 core에서 load average가 100 가까운 기계에서 쟀으므로, wall 시간 p95는 `T12.13`에서 Linux, Windows와
+  함께 한가한 기계에서 다시 잰다. corpus를 열 때의 첫 전체 읽기는 CPU 1.2 s다.
+- 첫 전체 읽기는 열린 corpus의 시작 비용이다: 모든 문서를 한 번 읽고 parse하며, 모든 folder와 문서의
+  watch를 건다.
+- memory에 둔 corpus는 각 문서의 bytes, executor의 두 읽기 pass의 parse, 문서의 watch를 가진다. 그
+  예산은 문서마다 행 하나일 때 — 행이 가장 많이 드는 경우 — 행마다 heap 8 KB이며,
+  `TestKeptHeapBudget`이 지킨다(macOS에서 4.5 KB). 행이 많은 문서도 통째로 가진다. 큰 문서를 parse할
+  때 할당하는 heap은 `T12.5-4`의 것이다.
+- 쓰기는 여전히 바뀐 대상마다 통째로 parse하고 render하며, executor의 post-image는 corpus의 행을
+  복사하므로 쓰기 비용은 대상 file과 행에 따라 커진다. 대상 file의 크기를 묶는 것은 `T12.5-3`과
+  `T12.5-4`의 것이다.
+- commit은 transaction이 결과를 바꿀 수 있는
   모든 제약을 검사한다: 대상 행의 key, 참조, check, 순서, limit, 전이, `history.gap`과, 그 행들이 참조하거나
   참조되는 행들이며 — lock 아래 다시 읽은 corpus에서 평가한다. 전체 `flowmark validate`는 요청할 때와
   catalog가 바뀔 때 실행한다.
