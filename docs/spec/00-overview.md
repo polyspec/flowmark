@@ -64,7 +64,7 @@ and state.
 
 - No SQL text is produced or accepted; the executor consumes the IR request.
 - No derived query mirror: a mirror, if ever admitted, must prove full-rebuild equivalence and
-  have no write path. In-memory indexes and the parsed-row cache are accelerators, not mirrors.
+  have no write path. In-memory indexes are accelerators, not mirrors.
 - No remote access in v1: the server binds loopback only and authenticates with a token.
 - No general wiki engine: the grammar serves catalog-described documents, and free prose lives
   where the catalog puts it.

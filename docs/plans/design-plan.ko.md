@@ -1,5 +1,5 @@
 <!-- doc-id: plans-design-plan -->
-<!-- source-sha256: 7f427b8c8b66f246cacff7fd49ee3c79161b9e1b699f189efc9ec018ac46a89b -->
+<!-- source-sha256: 1979c0f2aa248765c3d6fe29939004e96fa285130e5bd874fa9e7f577cc23ff5 -->
 # flowmark 설계 계획
 
 Revision 2 — 3개 lane의 적대 감사 결과(engine core, orm 통합, 운영)와 multi-platform 지시를 아래 판정에 접는다. 감사의 blocker는 전부 판정이 되었고, 부수지 못한 주장은 문서 끝에 남긴다.
@@ -54,7 +54,7 @@ flowmark = the markdown database engine (one Go binary)
    ├─ validator: catalog constraints (type/PK/UNIQUE/FK/CHECK/state machine and history)
    ├─ IR executor over in-memory indexes derived from the parsed corpus
    ├─ write path: lock → conflict check → validate → stage → prepare record → renames → commit
-   ├─ .flowmark/: lock, tx journal, server token, parsed-row cache
+   ├─ .flowmark/: lock, tx journal, server token
    ├─ faces: server · CLI · MCP · soksak sidecar
    └─ sync engine: md→db export / db→md materialize (§7)
 ```
@@ -91,7 +91,7 @@ flowmark = the markdown database engine (one Go binary)
 - **Server**(Revision 3)는 loopback에 bind하고 유지되는 token을 갖는 상주 face다. DSN은 `markdown://127.0.0.1:<port>/<corpus>?token=<token>`이다.
 - **검증은 commit 시점에 충돌 검사 뒤 lock 아래에서 corpus를 새로 읽어 수행한다** — BEGIN snapshot도 예측된 touch file 집합도 아니다.
 - corpus revision과 `CORPUS_CHANGED`는 철회한다(Revision 3): `paginate`는 요청 하나이고, 호출을 넘어 읽는 face는 없다.
-- **비용 모델**: 40-ops가 per-command p95 latency 목표를 선언한다(corpus envelope 기준 수백 ms 단위); file content hash를 key로 하는 `.flowmark/cache/`의 parsed row cache가 변하지 않은 file의 재parse를 피한다; commit은 transaction이 바꿀 수 있는 모든 제약을 lock 아래 다시 읽은 corpus에서 검사하며, 전체 `flowmark validate`는 on demand와 catalog 변경 시에 실행한다.
+- **비용 모델**: 40-ops가 per-command p95 latency 목표를 선언한다(corpus envelope 기준 수백 ms 단위); operation이 변하지 않은 file을 읽지 않는 방법 — file 알림으로 최신을 유지하는 오래 사는 corpus이며 commit 대상은 언제나 lock 아래에서 다시 읽는다 — 은 `T12.5-2`가 맡는다. content hash를 key로 하는 cache도 모든 file을 읽어야 하기 때문이다; commit은 transaction이 바꿀 수 있는 모든 제약을 lock 아래 다시 읽은 corpus에서 검사하며, 전체 `flowmark validate`는 on demand와 catalog 변경 시에 실행한다.
 - Walk 규칙: `dbspec/`, `.flowmark/`, 숨김 항목 밖의 `*.flowmark.md` 파일만 읽는다; symlink된 문서나 `files` 폴더는 `corpus.walk`이고, 그 밖의 symlink는 database 밖이다; hard link는 규칙이 아니다(document model).
 
 ### 6. Constraints와 capability table (`50-constraints.md`, `60-dialect.md`)

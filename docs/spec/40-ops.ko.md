@@ -1,5 +1,5 @@
 <!-- doc-id: spec-ops -->
-<!-- source-sha256: 502fa390cdc38ee9e8d8b3f6c69ac35dde9b6a9eed4124c868984c2c54f71d2a -->
+<!-- source-sha256: 13150fd36e54e8b7afd50a4a93265aec10e4bd964d3a7d0327b7b26865fa43b3 -->
 # Operations
 
 [English](40-ops.md)
@@ -25,8 +25,10 @@
   그 편집을 따로 복사해 두고, stage file 하나를 대상 위에 복사한 뒤 corpus를 다시 열면 commit이
   완료되며, 그 편집은 새 변경으로 다시 한다. 그때까지 모든 열기가 같은 방식으로 거절한다. 손으로
   지운 stage는 commit을 반쯤 적용된 채로 남기므로 거절은 그것을 해결 방법으로 밝히지 않는다.
-- 열기는 catalog를 읽고 corpus를 walk하며 문서를 parse하고 index를 유도하고, 바뀌지 않은 file에는
-  file content hash를 key로 하는 parse된 행 cache를 다시 쓴다.
+- 열기는 catalog를 읽고 corpus를 walk하며 문서를 parse하고 index를 유도한다. 각 operation은 lock 아래에서
+  corpus를 다시 읽는다. operation이 바뀌지 않은 file을 읽지 않는 방법 — 운영체제의 file 알림으로 최신을
+  유지하는 오래 사는 corpus이며, commit 대상은 언제나 lock 아래에서 다시 읽는다 — 은 `T12.5-2`가 맡는다.
+  file content hash를 key로 하는 cache는 그 일을 하지 못한다. hash를 구하려면 모든 file을 읽기 때문이다.
 
 ## canon 연산
 
@@ -147,6 +149,15 @@
 - transaction 안의 요청은 server의 memory에 있는 그 post-image를 읽는다. savepoint는 그 중첩 단계이고
   `rollback_to`는 그 위의 단계를 버린다. `.flowmark/tx/`의 journal stage는 commit 하나의 3단계부터
   8단계까지만 존재한다.
+- 격리. 엔진 session들은 lock으로 직렬화된다: transaction은 `begin`부터 끝까지 lock을 잡으므로 어떤 엔진
+  쓰기도 그 사이에 끼어들지 않는다. 엔진 밖의 편집에 대해 transaction은 snapshot과 비슷하다: commit은 대상을
+  확인하고(1단계) 다시 읽은 corpus에서 쓰기를 다시 실행하지만(2단계) 읽기가 돌려준 것은 검증하지 않으므로,
+  읽은 행에 근거한 결정이 다른 file의 바깥 편집으로 바뀐 뒤에도 commit될 수 있다 — write skew다. MySQL의
+  `REPEATABLE READ`도 같다(MySQL 8.4.11에서 확인: 두 transaction이 어떤 상태의 두 행을 각각 읽고 서로 다른
+  하나를 그 상태에서 옮겼으며, 둘 다 commit되어 하나도 남지 않았다). PostgreSQL의 `READ COMMITTED`와
+  `REPEATABLE READ`도 같다(PostgreSQL 문서 Transaction Isolation; `SERIALIZABLE`만 감지한다). 근거: 바깥
+  편집은 lock을 잡지 않으므로 lock 기반 격리는 그것을 포함할 수 없고, 모든 읽기를 검증하려면 모든 요청의
+  read set이 필요한데 orm client는 그것을 보내지 않는다.
 - transaction 밖의 요청 — 읽기, 쓰기, 이력 repair — 은 lock 아래 transaction 하나다: lock을 잡고 corpus를
   읽으며, 쓰기는 lock을 풀기 전에 commit한다.
 - transaction 안에서 실패한 요청은 아무것도 바꾸지 않으며, transaction은 그 요청 전 상태로 열린 채
@@ -176,8 +187,9 @@
   corpus를 다시 읽고 operation을 다시 실행한다. server transaction은 server가 재시도하지 않으며 orm client는
   `WRITE_CONFLICT`를 받고 이를 재시도하지 않는다. 근거: 한 곳이 모든 face를 위해 재시도하며, 재시도는 읽기와
   commit 사이에 결코 lock을 풀지 않는다.
-- `flowmark canon`과 add-column migration은 각각 자기 transaction이다: 열린 transaction 안에서는
-  `CONFIG`다. 각각은 자기 대상의 format 진단 중 면제되는 것을 밝힌다([commit protocol](#commit-protocol),
+- `flowmark canon`과 add-column migration은 각각 자기 transaction이다: 읽기 전용을 포함해 열린
+  transaction 안에서는 `READ_ONLY`가 아니라 `CONFIG`다. 자기가 시작하지 않은 transaction 안에서는 결코
+  실행되지 않기 때문이다. 각각은 자기 대상의 format 진단 중 면제되는 것을 밝힌다([commit protocol](#commit-protocol),
   2단계).
 
 ## Commit protocol
@@ -189,8 +201,9 @@
    transaction이 읽은 corpus와 다르면 — 문서의 바이트나 table의 사용 가능성이 — transaction의 쓰기를 다시
    읽은 corpus에서 순서대로 다시 실행한다. 그 쓰기가 거절되면 commit은 그 code로 실패한다. 처음과 다르게
    답하는 쓰기나 다른 net post-image는 바뀐 file마다 처음 바뀐 줄을 밝히는 `CORPUS_CONFLICT`로 실패한다:
-   쓰기가 들어온 변경에 의존하며, 이는 SQL의 serialization failure(SQLSTATE 40001)이고 client는 이미 처음
-   답을 가지고 있다. 다시 읽은 corpus가 읽은 corpus와 같으면 쓰기는 실행될 때 이미 그 위에서 검사되었다.
+   쓰기가 들어온 변경에 의존하며 client는 이미 처음 답을 가지고 있다. 이는 SQL serialization failure(SQLSTATE
+   40001)에 해당하는 것이며, client가 재시도하지 않으므로 orm은 이를 `DEADLOCK`이 아닌 `WRITE_CONFLICT`로
+   보고한다(orm은 40001을 `DEADLOCK`으로 대응시킨다). 다시 읽은 corpus가 읽은 corpus와 같으면 쓰기는 실행될 때 이미 그 위에서 검사되었다.
    아래의 다시 쓰기 거절도 SQL이 deferred가 아닌 제약을 검사하듯 각 요청이 실행될 때 검사하므로, 그런
    file을 다시 써야 하는 요청은 곧바로 실패한다. 다른 행의 validator 진단(`type`, `key.duplicate`, `reference.dangling`, `check`, `order`, `state.transition`, `state.required`, `state.limit`, `history.gap`, `history.chain`, 여러 `files` file에 걸친 `parent.cycle`)은 commit을 실패시키지 않되, `type` 진단은 commit의 제약 검사가 그 값을 평가해야 할 때 commit을 실패시키고, 바이트 단위로 같은 key를 가진 두 행은 그 table을 사용할 수 없게 한다([canonical format](10-canonical-format.ko.md#진단)); `format.*` 진단은 다시 쓰기 거절과 사용할 수 없는 table 상태([canonical format](10-canonical-format.ko.md#진단))가 정하는 경우에만 commit을 실패시킨다. file을 다시 써야 하는 commit — 행 자신의 file, 상세 섹션이 생기거나 사라지는 행으로의 link를 가진 file, `order`의 형제 — 은 그 file이 `format.*` 진단을 가지면 거절한다: `CONSTRAINT`이며 file과 진단을 밝히고, `format.noncanonical`이면 `flowmark canon`을 밝힌다. 세 commit은 면제된다: 대상에 대한 `flowmark canon`([operations](#canon-연산)), 추가된 column이 일으킨 진단에 대한 add-column migration([migration](80-migration.ko.md)) — 그 진단은 그 migration에 대해 table을 사용할 수 없게 하지 않는다 —, `files` 행의 file 전체를 지우는 delete는 rewrite 거절에서만 면제되며, restrict 검사는 그 행을 참조할 수 있는 모든 table의 행을 여전히 필요로 하며(자신의 table을 `parent`로 하는 것, 자식 block과 이력 행, 그 행으로의 foreign key를 가진 모든 table), 그 중 하나라도 사용할 수 없으면 그 delete는 `CONSTRAINT`다.
 3. 각 post-image를 `.flowmark/tx/<id>/`에 `<hash>`로 content-addressed하여 한 번 쓰고, rename n의
@@ -248,7 +261,8 @@ link 실패(`EPERM`, `ENOTSUP`, `ERROR_INVALID_FUNCTION`, `ERROR_NOT_SUPPORTED`)
 
 - command별 p95 지연 목표를 여기서 선언한다([open questions](110-open-questions.md)의 corpus 규모에서
   수백 millisecond).
-- parse된 행 cache는 바뀌지 않은 file의 재parse를 피한다. commit은 transaction이 결과를 바꿀 수 있는
+- 지금은 모든 corpus 문서를 다시 읽는 operation의 읽기 비용은 `T12.5-2`가 맡는다([corpus 열기](#corpus-열기)).
+  commit은 transaction이 결과를 바꿀 수 있는
   모든 제약을 검사한다: 대상 행의 key, 참조, check, 순서, limit, 전이, `history.gap`과, 그 행들이 참조하거나
   참조되는 행들이며 — lock 아래 다시 읽은 corpus에서 평가한다. 전체 `flowmark validate`는 요청할 때와
   catalog가 바뀔 때 실행한다.
