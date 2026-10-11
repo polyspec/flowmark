@@ -1,0 +1,68 @@
+{
+  "name": "read-order-random-files",
+  "storage": "files",
+  "catalog": "files",
+  "corpus": {
+    "tasks/T1.flowmark.md": [
+      "# Root task",
+      "- position: 1",
+      "- done: false",
+      "- due: 2026-10-01",
+      "- label: first",
+      "",
+      "Root body."
+    ],
+    "tasks/T2.flowmark.md": [
+      "# Child task",
+      "- parent: [T1](T1.flowmark.md)",
+      "- position: 1",
+      "- done: true"
+    ],
+    "tasks/T3.flowmark.md": [
+      "# Second child",
+      "- parent: [T1](T1.flowmark.md)",
+      "- position: 2",
+      "- done: false",
+      "- due: 2026-10-11",
+      "- label:",
+      "",
+      "Body with *emphasis*."
+    ],
+    "tasks/T4.flowmark.md": [
+      "# Top two",
+      "- position: 2",
+      "- done: false"
+    ]
+  },
+  "equivalent": "read-order-random",
+  "request": {
+    "columns": {
+      "mode": "none"
+    },
+    "entity": "tasks",
+    "kind": "all",
+    "order": [
+      {
+        "random": true
+      }
+    ]
+  },
+  "params": [],
+  "now": "2026-10-11 09:00:00.000000",
+  "expect": {
+    "rows": [
+      {
+        "id": "T1"
+      },
+      {
+        "id": "T2"
+      },
+      {
+        "id": "T3"
+      },
+      {
+        "id": "T4"
+      }
+    ]
+  }
+}
