@@ -1,4 +1,7 @@
-//go:build unix
+// The watch of macOS holds one descriptor for every folder and document (spec 40, the scale envelope), so these tests
+// hold only there; the watch of Linux holds one inotify descriptor and counts its watches against
+// fs.inotify.max_user_watches, which a test cannot lower without privilege.
+//go:build darwin
 
 package writepath
 
