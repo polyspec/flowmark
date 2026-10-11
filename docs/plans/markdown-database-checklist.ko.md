@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database-checklist -->
-<!-- source-sha256: a76d2f21d35a2d64de3bbdbacd7c9861d2f8d92764746013c685a3fa693ed9a3 -->
+<!-- source-sha256: 4dd54ba0a5d9e4dbcf5e51a84ab10edd34679d852672f906c00b1f2d61efd54f -->
 # markdown database checklist
 
 ## T12 markdown database
@@ -94,6 +94,7 @@
   - 완료 기준: 모든 규칙마다 허용과 거절 사례가 있고, parse와 emit은 golden seed로 fuzz한다.
 - [ ] T12.5-1 `flowmark canon <corpus> [file…]`: lock 아래 journal을 남기는 transaction 하나로 대상을 canonical 형식으로 다시 쓰며, 대상에 대해 commit 거절을 면제받고, `format.block`, `format.section`, `format.encoding`이 있는 file은 이름을 주면 거절하고 주지 않으면 보고하며, link 유도에 사용할 수 없는 table이 필요한 대상은 spec 40대로 거절하거나 보고한다. 그 거절에 관한 spec 40 문장의 문법을 바로잡는다 (T12.1-3 후속; T12.5 선행)
   - 완료 기준: 대상 종류마다 허용과 거절 사례, 중단된 canon의 crash replay가 있고, `go test ./...`가 통과한다.
+- [ ] T12.5-2 operation은 바뀌지 않은 file을 읽지 않는다. 원인: 모든 operation이 `irexec.Open`으로 corpus 전체를 다시 읽고, 바뀐 commit은 한 번 더 읽는다. write path로 note 10k개를 재면 읽기가 2.7–4.4초, 쓰기가 5.1–8.1초이며 그중 86%가 file open과 read다. spec 40의 예산은 문서 10k개까지 수백 밀리초다. spec 40이 적었던 content hash 기반 parsed-row cache는 hash를 내려면 모든 file을 읽어야 하므로 예산을 맞출 수 없다. 완료 기준: 운영체제의 file 알림(FSEvents나 kqueue, inotify, ReadDirectoryChangesW)으로 최신을 유지하는 장수 corpus를 두고, 알림이 넘치면 전체를 다시 읽으며, commit 대상은 lock 아래에서 늘 다시 읽어 알림 지연이 있어도 1단계가 정확하다. spec 40과 plan(EN과 ko)이 그 구조와 예산을 적는다. 오래된 상태, 알림 넘침, commit과 겨루는 손 편집에 대해 red 다음 green test를 두고, macOS, Linux, Windows(T12.13)에서 문서 10k개 benchmark가 예산 안에 든다 (T12.5 검증에서 발견; T12.5 선행)
 - [ ] T12.6 introspection: 모든 문서를 catalog에 대해 검증하고 catalog를 돌려준다 (T12.3 선행)
 - [ ] T12.7 runtime model 위의 sync: export는 orm의 SQL dialect renderer로 렌더한다 (T12.4 선행)
 - [ ] T12.8 저장 문법에 맞게 다시 쓴 conformance vector (T12.5 선행)
