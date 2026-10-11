@@ -15,6 +15,10 @@ The order of the commit protocol is normative.
   an entry of another name or form, or a second stage, refuses opening and is named. The stage is
   collected when it holds a commit record, completed when it holds a prepare record, and discarded
   otherwise. Recovery is idempotent: a replay interrupted at any step is completed by the next.
+  Recovery runs again at every acquisition of the lock, before the operation reads the corpus: a stage
+  found under the lock is a commit whose holder ended, as SQLite rolls a hot journal back before it
+  reads. Grounding: a server opened before another process crashed in a commit would otherwise read a
+  half-applied corpus once `flowmark unlock` has removed the stale lock.
 - A target whose current hash matches neither recorded hash — a change landed while the commit was
   interrupted — is refused and reported, never silently overwritten. The refusal names the target,
   both recorded hashes and the stage files that hold them, and leaves the stage. It is resolved
@@ -157,17 +161,53 @@ The order of the commit protocol is normative.
 - Requests inside a transaction read its post-image, held in the server's memory; a savepoint is a
   nested level of it, and `rollback_to` discards the levels above it. A journal stage in
   `.flowmark/tx/` exists only from step 3 to step 8 of one commit.
-- A face retries a single-operation write once after a re-read when the commit meets
-  `CORPUS_CONFLICT`. A server transaction is never retried by the server; the orm client receives
-  `WRITE_CONFLICT` and never retries it.
+- A request outside a transaction — a read, a write, a history repair — is one transaction under the
+  lock: it takes the lock, reads the corpus, and a write commits before the lock is released.
+- A request that fails inside a transaction changes nothing, and the transaction stays open at its
+  state before the request. Grounding: SQL statement atomicity — a failed statement has no effect, and
+  MySQL and SQLite keep the transaction open; the orm client rolls the transaction or its savepoint back
+  when its callback fails.
+- `savepoint <name>` sets a level at the transaction's present state; a savepoint of the same name is
+  replaced, as the SQL standard destroys it. `release <name>` removes that savepoint and every one set
+  after it, keeping their writes. `rollback_to <name>` discards the writes since that savepoint and every
+  savepoint set after it, and keeps the savepoint. Grounding: the SQL standard's savepoint statements;
+  PostgreSQL and SQLite keep a shadowed savepoint instead, which a client that names savepoints by depth,
+  as orm does, never meets.
+- A read-only transaction takes the lock and refuses every write as `READ_ONLY`, as PostgreSQL refuses a
+  write in a read-only transaction (SQLSTATE 25006).
+- A control message that its session's state does not allow is `CONFIG`, orm's code of a transaction
+  misuse: `begin` while a transaction is open; `commit`, `rollback`, `savepoint`, `release` or
+  `rollback_to` without one; a savepoint without a name; `release` or `rollback_to` of a name no
+  savepoint of the transaction has. Grounding: SQLite, whose single writer lock this corpus lock follows,
+  refuses a nested `BEGIN` and an unknown savepoint.
+- A commit that fails writes nothing, ends the transaction and releases the lock, as a failed SQL
+  `COMMIT` rolls the transaction back.
+- The write path retries a single-operation write — a write, a history repair or a rewrite outside a
+  transaction, on every face, a server request outside a transaction included — once when its commit
+  meets `CORPUS_CONFLICT`: under the same lock, it reads the corpus again and runs the operation again.
+  A server transaction is never retried by the server; the orm client receives `WRITE_CONFLICT` and
+  never retries it. Grounding: one place retries for every face, and the retry never releases the lock
+  between the read and the commit.
+- `flowmark canon` and the add-column migration are each their own transaction: inside an open
+  transaction they are `CONFIG`. Each names the format diagnostics of its targets that it is exempt for
+  ([commit protocol](#the-commit-protocol), step 2).
 
 ## The commit protocol
 
 1. Check that every target is unchanged since it was read; otherwise fail `CORPUS_CONFLICT`
-   naming the file and line.
+   naming each changed target and its line: the first line at which its present bytes differ from
+   the bytes read, and line 1 when the file is absent in one of the two.
 2. Run the constraint checks against the corpus re-read under the lock with the post-image
    applied — not against a snapshot taken at `begin`, and not against a predicted touched-file
-   set. A validator diagnostic on another row (`type`, `key.duplicate`, `reference.dangling`, `check`, `order`, `state.transition`, `state.required`, `state.limit`, `history.gap`, `history.chain`, and the validator's `parent.cycle` across several `files` files) never fails the commit, except that a `type` diagnostic fails it when a constraint check of the commit must evaluate that value ([canonical format](10-canonical-format.md#readable-values)), and two rows with byte-for-byte equal keys make their table unavailable ([canonical format](10-canonical-format.md#diagnostics)); a `format.*` diagnostic fails it only as the rewrite refusal and the unavailable table state ([canonical format](10-canonical-format.md#diagnostics)). A commit that must rewrite a file — the row's own file, a file holding a link to a row whose detail section appears or disappears, an `order` sibling — is refused when that file has a `format.*` diagnostic: `CONSTRAINT`, naming the file and the diagnostic, and naming `flowmark canon` when it is `format.noncanonical`. Three commits are exempt: `flowmark canon` for its targets ([operations](#the-canon-operation)); the add-column migration, for the diagnostics the added column causes, which do not make its table unavailable to that migration ([migration](80-migration.md)); and a delete that removes a `files` row's whole file from the rewrite refusal only — its restrict check still needs the rows of every table that may reference the row (its own table through `parent`, its child blocks and its history rows, and every table with a foreign key to it), so such a delete is `CONSTRAINT` when any of them is unavailable.
+   set. The checks are the executor's checks of each write: when the re-read corpus differs from the
+   corpus the transaction read — a document's bytes, or a table's unavailability — the transaction's
+   writes run again, in order, on the re-read corpus. A write they refuse fails the commit with its
+   code. A write that answers otherwise than it answered, or a net post-image that differs, fails
+   `CORPUS_CONFLICT` naming each changed file and its first changed line: the writes depend on the
+   change that landed, which is SQL's serialization failure (SQLSTATE 40001), and the client already
+   holds the first answers. When the re-read corpus is the one read, the writes were checked on it as
+   they ran. The rewrite refusal below is checked as each request runs too, as SQL checks a constraint
+   that is not deferred, so the request that must rewrite such a file fails at once. A validator diagnostic on another row (`type`, `key.duplicate`, `reference.dangling`, `check`, `order`, `state.transition`, `state.required`, `state.limit`, `history.gap`, `history.chain`, and the validator's `parent.cycle` across several `files` files) never fails the commit, except that a `type` diagnostic fails it when a constraint check of the commit must evaluate that value ([canonical format](10-canonical-format.md#readable-values)), and two rows with byte-for-byte equal keys make their table unavailable ([canonical format](10-canonical-format.md#diagnostics)); a `format.*` diagnostic fails it only as the rewrite refusal and the unavailable table state ([canonical format](10-canonical-format.md#diagnostics)). A commit that must rewrite a file — the row's own file, a file holding a link to a row whose detail section appears or disappears, an `order` sibling — is refused when that file has a `format.*` diagnostic: `CONSTRAINT`, naming the file and the diagnostic, and naming `flowmark canon` when it is `format.noncanonical`. Three commits are exempt: `flowmark canon` for its targets ([operations](#the-canon-operation)); the add-column migration, for the diagnostics the added column causes, which do not make its table unavailable to that migration ([migration](80-migration.md)); and a delete that removes a `files` row's whole file from the rewrite refusal only — its restrict check still needs the rows of every table that may reference the row (its own table through `parent`, its child blocks and its history rows, and every table with a foreign key to it), so such a delete is `CONSTRAINT` when any of them is unavailable.
 3. Write each post-image once into `.flowmark/tx/<id>/`, content-addressed as `<hash>`, and, as
    the source of rename n, a copy `<n>.<hash>` of it; both stay until the stage is collected.
    Before this step, the folder of every target and every folder to create is checked to be on
@@ -245,10 +285,12 @@ microseconds.
 | Face name | orm code | Meaning |
 | --- | --- | --- |
 | `LOCK_TIMEOUT` | `CANCELED` | the lock wait ended — at its deadline, or at once when the holder has ended; names the holder and its state — `CANCELED`, as a SQLite `busy_timeout` is |
-| `CORPUS_CONFLICT` | `WRITE_CONFLICT` | a target changed since it was read; names the file and line |
+| `CORPUS_CONFLICT` | `WRITE_CONFLICT` | a target changed since it was read, or a change since the read makes the transaction's writes other writes; names each file and line |
 | `DUPLICATE_KEY` | `DUPLICATE_KEY` | a primary or unique key value already exists; names both rows (table and key) |
 | `FOREIGN_KEY` | `FOREIGN_KEY` | a reference names no row, or a referenced row is deleted while referenced |
 | `CONSTRAINT` | `CONSTRAINT` | any other rule of the catalog refused the write — a check, a title, a transition, a required column, a limit, an order, a single-line place; names the rule, and the row and column ([canonical format](10-canonical-format.md#diagnostics)); or a write that must rewrite a non-canonical or malformed document, or a request, read or write, that needs the rows of an unavailable table ([canonical format](10-canonical-format.md#diagnostics)), naming the file and the diagnostic |
-| recovery refusal | — | names the target and both recorded hashes and the stage files that hold them; opening refuses until resolved |
+| `READ_ONLY` | `READ_ONLY` | a write in a read-only transaction |
+| `CONFIG` | `CONFIG` | a control message that the session's state does not allow ([transactions](#transactions)) |
+| recovery refusal | `DRIVER` | names the target and both recorded hashes and the stage files that hold them; opening, and every operation that acquires the lock, refuses until resolved — `DRIVER`, orm's code of a database error no other code names, as SQLite's `SQLITE_CORRUPT` is; a failure of the file system under the journal is `DRIVER` too |
 
 Every failure message names the cause and the fix.

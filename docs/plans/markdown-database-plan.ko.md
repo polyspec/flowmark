@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database -->
-<!-- source-sha256: a51254988e90f206e76ccb35e273526480c1b8a0c021d9487980825e87055f81 -->
+<!-- source-sha256: 4458b05ea9645454642cf478cf7dff8e92c1ec9788ca86e14fb788538e98d1f7 -->
 # markdown database 계획
 
 [English](markdown-database-plan.md)
@@ -78,8 +78,8 @@ NULL이 아니며 비어 있을 수 있고, view의 entity table은 둘 다 선�
   상태를 밝히는 `LOCK_TIMEOUT`으로 실패한다. 끝난 holder는 곧바로 거절하며 그 lock은 `flowmark
   unlock`만 지운다. spec 40은 각 face 이름을 orm code에 대응시킨다:
   `LOCK_TIMEOUT`은 `CANCELED`, `CORPUS_CONFLICT`는 `WRITE_CONFLICT`.
-- face(CLI, MCP, sidecar)는 단일 operation 쓰기를 다시 읽은 뒤 한 번 재시도한다. server transaction은
-  server가 재시도하지 않으며 orm client는 `WRITE_CONFLICT`를 받는다.
+- write path는 모든 face를 위해 단일 operation 쓰기를 같은 lock 아래에서 다시 읽은 뒤 한 번 재시도한다.
+  server transaction은 server가 재시도하지 않으며 orm client는 `WRITE_CONFLICT`를 받는다.
 
 ### Catalog
 
