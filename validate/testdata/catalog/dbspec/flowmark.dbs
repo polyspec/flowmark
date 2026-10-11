@@ -241,6 +241,46 @@ table measures {
   }
 }
 
+table views {
+  id i64 identity
+  title varchar(255)
+  kind varchar(16)
+  entity varchar(63)
+  filter text
+  sort text
+  group_by varchar(63) null
+  primary key (id)
+  check ck_views_kind (kind in ('kanban', 'list', 'gantt'))
+  settings {
+    store document table
+    title title
+    codec filter ordered_json
+    codec sort ordered_json
+  }
+}
+
+table memos {
+  id varchar(16)
+  title varchar(255)
+  body text
+  rank i16 null
+  doc text null
+  packed bytes null
+  wrapped varchar(255) null
+  hexed varchar(255) null
+  primary key (id)
+  settings {
+    store document table
+    title title
+    body body
+    markdown body
+    codec doc ordered_json
+    codec packed ordered_json gz
+    codec wrapped ordered_json base64
+    codec hexed ordered_json hex
+  }
+}
+
 table tasks {
   id varchar(16)
   state varchar(16)

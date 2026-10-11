@@ -10,6 +10,7 @@ import (
 
 	"github.com/polyspec/flowmark/catalog"
 	"github.com/polyspec/flowmark/store"
+	"github.com/polyspec/orm/engine/runtimemodel"
 )
 
 // placed is a row with the corpus file that holds it and, for a block row, its
@@ -34,6 +35,9 @@ type corpus struct {
 	// files holds each corpus document read at the place of a table, by corpus
 	// path: its table, its bytes and its top-level rows.
 	files map[string]*File
+	// model is orm's runtime model of the catalog, built for the view rule when a
+	// view row is judged.
+	model *runtimemodel.Model
 }
 
 // File is a corpus document read at the place of a files or document table: the

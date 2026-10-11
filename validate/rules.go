@@ -37,13 +37,16 @@ func (c *corpus) report(p placed, column, rule, msg string) {
 // reference.dangling into it, key.duplicate, order and state.limit within it.
 // The validator's parent.cycle across files is reported among the rows read, since
 // no unread row can undo a cycle that the rows' own parent values make.
-func (c *corpus) rules() {
+func (c *corpus) rules() error {
 	for _, tb := range c.cat.Tables {
 		rows := corpusOrder(c.rows[tb.Name])
 		for _, p := range rows {
 			c.types(tb, p)
 			c.dangling(p)
 			c.checks(tb, p)
+			if err := c.views(tb, p, c.codecs(tb, p)); err != nil {
+				return err
+			}
 		}
 		if !c.isBlocked(tb.Name) {
 			c.duplicates(tb, rows)
@@ -54,6 +57,7 @@ func (c *corpus) rules() {
 		c.parentCycles(tb, rows)
 		c.history(tb, rows)
 	}
+	return nil
 }
 
 // corpusOrder returns the rows in corpus order: by the corpus path of the file
