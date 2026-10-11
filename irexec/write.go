@@ -550,8 +550,8 @@ func (w *writer) nextPrefixed(tb *catalog.Table, p string) cell {
 }
 
 // onDuplicate applies the on_duplicate assignments to the row that the inserted row
-// meets on its primary key or on any unique key (the MySQL rule of spec 60), and
-// reports whether it did. A row met on no key is inserted.
+// meets on its primary key, without regard to case, or on a unique key, byte for
+// byte, and reports whether it did. A row met on no key is inserted.
 func (w *writer) onDuplicate(ps []*int) (bool, *Error) {
 	req := w.r.cl.req
 	vals := map[string]cell{}
@@ -566,11 +566,24 @@ func (w *writer) onDuplicate(ps []*int) (bool, *Error) {
 		}
 		vals[a.Column] = v
 	}
-	keys := [][]string{{w.tb.Key}}
-	keys = append(keys, w.tb.Uniques...)
+	// The primary key meets the row whose key equals the inserted key without regard
+	// to case, as flowmark's primary key compares: the byte-equal key first, else the
+	// least in byte order (spec 60 Surfaces, primary key comparison). The met row keeps
+	// its key, since a key is never updated.
 	var met *rec
+	if k, ok := vals[w.tb.Key]; ok && !k.null {
+		for _, x := range w.next.recs[w.tb.Name] {
+			switch {
+			case x.row.Key == k.text:
+				met = x
+			case met != nil && met.row.Key == k.text:
+			case foldASCII(x.row.Key) == foldASCII(k.text) && (met == nil || x.row.Key < met.row.Key):
+				met = x
+			}
+		}
+	}
 	for _, x := range w.next.recs[w.tb.Name] {
-		for _, k := range keys {
+		for _, k := range w.tb.Uniques {
 			equal := true
 			for _, col := range k {
 				v, ok := vals[col]
