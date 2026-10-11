@@ -360,6 +360,8 @@ func TestFaultOrder(t *testing.T) {
 			[]dupFault{{"items", "T1", -1, "id", dup, "items.flowmark.md"}}},
 		{"10#diagnostics: a FOREIGN_KEY fault alone is the code", f.msg("insert", "items", map[string]any{"set": sets("id", "title", "body", "owner")}, "T8", "A", "", "P9"), fk,
 			[]dupFault{{"items", "T8", -1, "owner", fk, "P9"}}},
+		{"10#diagnostics: a row has at most one duplicate fault, its key's before a unique key's", f.msg("insert", "people", map[string]any{"set": sets("id", "name", "email")}, "P1", "X", "ada@x.io"), dup,
+			[]dupFault{{"people", "P1", -1, "id", dup, "people.flowmark.md"}}},
 		{"10#diagnostics: a files row placed nowhere for its key still has its check judged", f.msg("insert", "notes", map[string]any{"set": sets("id", "title", "body", "weight")}, "N1", "X", "", -1), con,
 			[]dupFault{{"notes", "N1", -1, "", con, "ck_notes_weight"}, {"notes", "N1", -1, "id", dup, "notes/N1.flowmark.md"}}},
 		{"10#diagnostics: a key fault stops the render, so no anchor fault is reported", f.msg("insert", "items", map[string]any{"set": sets("id", "title", "body")}, "T1", "Items row T1", "A body."), dup,

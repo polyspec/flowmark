@@ -197,6 +197,7 @@ func (w *writer) keyChecks() []fault {
 		}
 		refuse := func(msg string) {
 			faults = append(faults, fault{store.Refusal{Table: w.tb.Name, Key: k, Index: idx, Column: w.tb.Key, Rule: codeDuplicateKey, Message: msg}, g.seq})
+			w.duplicated(g)
 		}
 		byteGiven := -1
 		for j := 0; j < i; j++ {
@@ -254,19 +255,32 @@ func firstByKey(rows []*rec, match func(string) bool) *rec {
 // uniques refuses a written row whose unique key equals another row's, byte for
 // byte in canonical form; a NULL in the key takes no part (spec 50 Keys). A value
 // of another row not of its type is evaluated by the check, so it fails the write.
+// A row has at most one duplicate fault (spec 10 Diagnostics, "Write faults"): a row
+// the key checks fault, or one a unique key faulted, still holds its unique keys for
+// the rows after it but takes no further fault. A row placed nowhere — its placement
+// key names no row — is read from its own values.
 func (w *writer) uniques() *Error {
 	for _, u := range w.tb.Uniques {
 		seen := map[string]*given{}
 		for _, g := range w.given {
+			if !g.inserted && !assignsAny(g, u) {
+				continue
+			}
 			x := w.next.byRow[g.row]
-			if x == nil || (!g.inserted && !assignsAny(g, u)) {
-				continue // a row placed nowhere has its key fault
+			if x == nil {
+				x = &rec{row: g.row, tb: w.tb}
 			}
 			k, ok, err := w.uniqueText(x, u)
 			if err != nil {
 				return err
 			}
 			if !ok {
+				continue
+			}
+			if w.dupFaulted[g] {
+				if seen[k] == nil {
+					seen[k] = g
+				}
 				continue
 			}
 			if first := seen[k]; first != nil {
@@ -297,6 +311,9 @@ func (w *writer) uniques() *Error {
 func (w *writer) uniqueText(x *rec, u []string) (string, bool, *Error) {
 	parts := make([]string, len(u))
 	for i, col := range u {
+		if x.parent == nil && w.tb.Storage.Kind == catalog.StorageBlock && col == placementColumn(w.tb) {
+			return "", false, nil // a block row placed nowhere: its placement key names no row
+		}
 		v, err := w.next.value(x, col)
 		if err != nil {
 			return "", false, err
