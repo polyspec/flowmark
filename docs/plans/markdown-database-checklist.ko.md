@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database-checklist -->
-<!-- source-sha256: 6c6214d81cb9af478a8161e3b5920c806bc83c55a9b125fa27b6659329960bb6 -->
+<!-- source-sha256: 750e228353d254243138184671da7ffcf4a23c4170b557bca3acefe7b2c98785 -->
 # markdown database checklist
 
 ## T12 markdown database
@@ -106,7 +106,7 @@
 - [o] T12.6 introspection: 모든 문서를 catalog에 대해 검증하고 catalog를 돌려준다 (T12.3 선행)
 - [~] T12.7 runtime model 위의 sync: export는 orm의 SQL dialect renderer로 렌더한다 (T12.4 선행). 상태: `sync.Export`가 orm의 schema statement와, foreign key 순서와 저장 순서에 따른 행마다의 planner insert 하나를 렌더하며 soft delete된 행도 포함한다. 모든 equivalence golden을 SQLite에 적용하면 같게 읽힌다(1deee3d와 그 앞 commit). spec 70이 export를 적는다. identity column이 있는 table(모든 상태 기계 이력 table이 그렇다)이나 codec이 있는 table은, orm `T120`이 identity 값과 함께 행을 적재하고 compile된 statement를 실행할 공개 방법을 줄 때까지 `CAPABILITY_UNSUPPORTED`로 거절한다. p가 6보다 작은 SQLite `datetime(p)`는 그 bind 정밀도에 대한 orm 항목을 기다린다
 - [o] T12.8 저장 문법에 맞게 다시 쓴 conformance vector (T12.5 선행). 상태: spec 90이 vector 형식을 정하고, 69개 vector가 files, document list와 table, block list와 table 위에서 write path를 지나 실행되며 equivalence group, 반복, write path 자신의 답을 다룬다(6bb9c46과 그 앞 commit)
-- [ ] T12.9 server: `flowmark serve`, token, session control message. orm `T61` 선행 (T12.5 선행)
+- [o] T12.9 server: `flowmark serve`, token, session control message. orm `T61` 선행 (T12.5 선행). 상태: `server/` package와 `flowmark serve`(d2c68db와 그 앞 commit). JSON 줄을 쓰는 loopback TCP, corpus와 `.flowmark/server.json`의 token을 확인하는 connect message, write path 위의 control message로 다루는 transaction과 savepoint, 오류 줄의 orm code, 쉬는 transaction을 rollback하고 연결을 닫는 `--tx-idle-ms`가 있다. spec 40과 60이 wire를 적는다. orm protocol §5에는 아직 connect message와 오류 줄 형식이 없다. orm `T63`이 이를 spec 40에서 가져가고, `read_only`는 orm `T107`이다
 - [ ] T12.10 모든 table에 대한 CLI, MCP, sidecar operation과 `.gitattributes`의 `*.flowmark.md text eol=lf` 줄을 쓰는 `flowmark install` — 옛 package(codec, executor, package 수준 test probe를 가진 corpus, app, 옛 sidecar와 MCP 경로)는 제거된다 (T12.5 선행)
 - [ ] T12.11 하나의 dataset을 세 저장 방식으로 둔 demo와 계획의 하드코딩 목록 0 (T12.10 선행)
 - [ ] T12.11.1 board 예제: 댓글과 답글을 가진 post를 block과 files 두 변형으로, engine을 통해 구동한다 (T12.10 선행)

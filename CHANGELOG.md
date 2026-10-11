@@ -3,6 +3,7 @@
 
 ## Unreleased
 
+- T12.9: `flowmark serve <corpus> --port <port>` is the server orm clients reach over loopback TCP, with a token in `.flowmark/server.json`, a connect message that checks the corpus and token, transactions and savepoints as control messages, and `--tx-idle-ms`, which rolls back an idle transaction and closes its connection.
 - T12.8: the conformance vectors are rewritten for the storage grammar: spec 90 fixes the vector format, and 69 vectors run through the write path over files, document list and table, and block list and table, with equivalence groups, repeats and the write path's own answers.
 - T12.7 (in part): the export to a database renders through orm: orm's schema statements, then one planner insert per row in foreign-key and storage order, soft-deleted rows included; identity and codec tables are refused until orm offers what they need; the provenance header writer is removed.
 - T12.6: introspection validates every document against the catalog and returns the catalog, each `dbspec/` document in canonical form with its path, name and manifest hash, with every diagnostic; `flowmark introspect` prints it as JSON and exits 0, 1 or 2.
