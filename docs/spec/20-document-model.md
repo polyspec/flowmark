@@ -129,14 +129,55 @@ so the same rows can be stored either way.
   row's 1-based position among its siblings, a file holding an `order` value there is `format.block`, and
   a write takes each sibling group's values as exactly 1..m, m being the group's size after the write, anything else being `CONSTRAINT`. Grounding: the
   line order of the siblings is their order, so the position is the value, and a value written in the file
-  would be a second order. In `files` storage it is a field-list item whose sibling values are exactly 1..n; the validator's `order` is at each row whose value lies outside 1..n or is shared with a sibling, and a value not of the column's type is `type` alone ([constraints](50-constraints.md#hierarchy-and-order)). A row whose `parent` is not of its column's type belongs to no known sibling group: it counts toward no group's n, its own `order` is not judged, and a fault of a group is reported only when it stands whichever groups such rows join — a value shared within the group, or one outside 1..n + u, u being the number of such rows; its `type` stands for the rest.
+  would be a second order.
+- In `files` storage the field-list item holds the row's **rank**, not its position: any value of
+  the column's type. The siblings stand in ascending rank, and a read fills the column with the
+  row's 1-based position in that sibling order, as in the other storages, so a read, an IR `where`
+  or `order` on the column, an answer and the export see positions, never ranks. The item is
+  required as every non-null stored scalar is, so a file without it is `format.block`. The
+  validator's `order` is at each row whose rank is shared with a sibling, since the two ranks do
+  not order the rows; a rank not of the column's type is `type` alone and is shared with none
+  ([constraints](50-constraints.md#hierarchy-and-order)). A row whose `parent` is not of its
+  column's type belongs to no known sibling group: its own `order` is not judged, and its `type`
+  stands for it. A read that evaluates the position of a row whose rank is not of its type fails
+  as `CONSTRAINT` naming that `type` diagnostic, as every read of an unreadable value does
+  ([canonical format](10-canonical-format.md#readable-values)): the position derives from a rank
+  that has no comparison; one whose `parent` is not of its type fails so too, since its sibling
+  group is not known.
+- A `files` write that places a row — an insert, an update of `order`, a parent change — gives
+  it a rank strictly between its new neighbours' and writes no other file while such a rank
+  exists. With a the rank before the row (0 when it stands first) and b the rank after it, a row
+  whose own rank already lies between them keeps it; otherwise it takes the midpoint
+  a + ⌊(b − a) / 2⌋ when b − a ≥ 2, or a + 1000 when it stands last and that does not exceed the
+  type's maximum. When neither holds, the write **renumbers** the group: the i-th row of the
+  group, in its order after the write, takes the rank i·s, s = min(1000, ⌊max / m⌋), max the
+  type's maximum and m the group's size, and only a file whose rank changes is rewritten; a
+  renumber of a group of more than max rows is `CONSTRAINT`, since no spacing parts them. A delete and a parent change leave the ranks of
+  the old siblings as they stand, since a gap changes no position. A write that must read a
+  neighbour's rank, or renumber a group, holding a rank not of its type fails as `CONSTRAINT`
+  naming that `type` diagnostic; a placement between two readable ranks does not read it, and
+  the rows whose rank is not of its type stand after every readable one, so a row placed just
+  before the first of them stands last among the readable ranks and takes its rank as a row
+  that stands last does. A renumber rewrites
+  sibling files, so a sibling with a `format.*` diagnostic refuses it as the
+  [commit refusal](10-canonical-format.md#encoding-and-line-structure) states. Grounding: under
+  a stored position, an insert at k, a move, a delete and a parent change rewrite every following
+  sibling — an insert at position 1 among 1,000 siblings rewrote 1,000 files —, while a rank
+  rewrites the placed row's file alone until its place has no free rank. With the spacing 1000
+  a place takes nine inserts before its gap is exhausted (1000 halves to 500, 250, 125, 62,
+  31, 15, 7, 3, 1), so a move writes one file in the common case and the group's m files once
+  per exhausted gap; a group too large for the spacing 1000 in its type has a smaller s and
+  fewer inserts per gap. A decimal spacing keeps a rank readable and editable by hand: a person
+  moves a row between 2000 and 3000 by writing 2500. A dense group 1..n is a valid set of ranks,
+  so a corpus written as positions reads unchanged and is renumbered by its first placement that
+  finds no free rank.
 - An insert may omit it and the row appends; with k it places the row at k. An update to k moves
-  the row and the siblings follow in the same transaction; k < 1 or k > n + 1 is `CONSTRAINT`,
-  never clamped. n is the number of rows among the destination siblings excluding the row itself,
-  so k lies in 1..n + 1 for an insert, a parent change and an in-place move alike. An update that
-  assigns `order` matches exactly one row, otherwise `CONSTRAINT`.
-  Changing `parent` without `order` appends to the new siblings, and the old siblings close the
-  gap. Moving a row moves its subtree.
+  the row; in block and document storages the siblings follow in the same transaction. k < 1 or
+  k > n + 1 is `CONSTRAINT`, never clamped. n is the number of rows among the destination
+  siblings excluding the row itself, so k lies in 1..n + 1 for an insert, a parent change and an
+  in-place move alike. An update that assigns `order` matches exactly one row, otherwise
+  `CONSTRAINT`. Changing `parent` without `order` appends to the new siblings; in block and
+  document storages the old siblings close the gap. Moving a row moves its subtree.
 - Without an `order` column, siblings stand in key order (numeric for integer keys, codepoint for
   text) and each child follows its parent; any other line order is `format.noncanonical`. With an
   `order` column, the siblings stand in the order of their values, which a read takes from the line
@@ -150,8 +191,8 @@ so the same rows can be stored either way.
   `parent` value in key order — each group in its sibling order, and each root is followed by its
   subtree in pre-order. The rows no root reaches — a row whose `parent` is not of its column's
   type, a row on a cycle of parents across files, and every row under one of them — follow every
-  reached row, in corpus order. Among siblings with an `order` column, rows sharing a value stand
-  in corpus order, and rows whose value is not of its type stand after the others in corpus order.
+  reached row, in corpus order. Among siblings with an `order` column, rows sharing a rank stand
+  in corpus order, and rows whose rank is not of its type stand after the others in corpus order.
   Grounding: a read never fails on a validator diagnostic of another row, so the storage order of a
   corpus that has one must be a function of the corpus alone, as corpus order is.
 

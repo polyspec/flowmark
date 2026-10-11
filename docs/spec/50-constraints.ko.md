@@ -1,5 +1,5 @@
 <!-- doc-id: spec-constraints -->
-<!-- source-sha256: 9132b250427db9bc915120a76642ce17c0507d2191314d8b6be1c8c4cf1c1618 -->
+<!-- source-sha256: 8f99148e61c2a768ec420ff42792eb4d0ed780ea09b5dd6e75651b41c6c400b1 -->
 # Constraints
 
 [English](50-constraints.md)
@@ -127,8 +127,8 @@ param은 보이지 않는 데이터다. grouping은 같은 값을 가진 행을 
 - `parent` 순환은 쓰기에서 `CONSTRAINT`이고, 한 file의 행 사이의 순환은 읽기에서 `parent.cycle`이며 그 file을 읽을 수 없게 한다([document model](20-document-model.ko.md#계층)); 여러 `files` file의 행에 걸친 순환은 validator의 `parent.cycle`뿐이다. 행의 블록 밖 `parent`는 쓰기에서 `CONSTRAINT`, 읽기에서
   `format.block`이다.
 - 1..n + 1 밖의 순서 값(n은 문서 모델이 정의하는 대로)이나, 둘 이상의 행과 맞는 order column update는
-  `CONSTRAINT`다. block과 document 저장에서 쓰기 뒤의 형제 묶음 순서 값이 정확히 1..m(m은 그 묶음의 쓰기 뒤 크기)이 아니면 `CONSTRAINT`다. `files` 저장에서 validator의 `order`는 순서 값이 1..n 밖이거나 형제와 공유되는 각 행에, 그 `order` 항목에 있으며(n은 그 형제 묶음의 크기), column의 type이 아닌 값은 `type`뿐이다: 그 값은 n에 세어지며 1..n 밖도 공유도 아니다([document model](20-document-model.ko.md#순서)). 근거: 읽을 수 없는 값에는 비교가 없으므로 type 결함이 그것을 대신하며, 그 값이 무엇이든 다른 형제가 가지는 결함은 여전히 보고된다.
-- `parent`가 그 column의 type이 아닌 행은 알려진 형제 묶음에 속하지 않는다: 어느 묶음의 n에도 세어지지 않고 자신의 `order`는 판정하지 않으며, 묶음의 결함은 그런 행들이 어느 묶음에 들어가든 성립할 때만 보고한다 — 묶음 안에서 공유되는 값, 또는 1..n + u 밖의 값(u는 그런 행의 수). 나머지는 그 행의 `type`이 대신한다.
+  `CONSTRAINT`다. block과 document 저장에서 쓰기 뒤의 형제 묶음 순서 값이 정확히 1..m(m은 그 묶음의 쓰기 뒤 크기)이 아니면 `CONSTRAINT`다. `files` 저장에서 order 항목은 rank를 담으며, validator의 `order`는 rank를 형제와 공유하는 각 행에, 그 `order` 항목에 있다 — rank 사이의 빈틈은 위치를 바꾸지 않으므로 결함이 아니다 — 그리고 column의 type이 아닌 rank는 `type`뿐이며 어느 것과도 공유되지 않는다([document model](20-document-model.ko.md#순서)). 근거: 읽을 수 없는 값에는 비교가 없으므로 type 결함이 그것을 대신하며, 그 값이 무엇이든 다른 형제가 가지는 결함은 여전히 보고된다.
+- `parent`가 그 column의 type이 아닌 행은 알려진 형제 묶음에 속하지 않는다: 자신의 `order`는 판정하지 않으며 그 `type`이 대신한다. 묶음 안에서 공유되는 rank는 그런 행이 어느 묶음에 들어가든 보고한다.
 
 ## 상태기계
 
