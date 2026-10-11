@@ -1,10 +1,11 @@
 <!-- doc-id: plans-markdown-database-checklist -->
-<!-- source-sha256: f7777d9866393d308c3f5c3989ef085c81ef05d39b747b94b32c7ddae8a0d0d3 -->
+<!-- source-sha256: c276c4772f4a8c416101ccea7bf65f7e1ba8469a80b0d8d2cf33f7d08cc1ced9 -->
 # markdown database checklist
 
 ## T12 markdown database
 
 - [ ] T12 markdown database: `dbspec/` catalog이 선언하는 유한한 저장 문법, orm이 DSN으로 IR executor로서 접속하는 엔진으로서의 flowmark, 같은 행 위의 view. 원인: list·table·detailed 형태는 규칙 없이 demo 사례였고 — body column도, parent도, 관계도, 이력도 없었다 — 계획은 엔진을 orm에 두었으나 엔진은 flowmark에 있었으며, 여러 동작이 하드코딩되어 있었다 (T8.5, T10, T11 후속)
+  - 완료 선(polyspec session들과 공유, 2026-10-11): 다음을 모두 만족하면 T12를 완료로 선포한다. (1) 모든 T12 항목이 완료되었다. (2) orm을 기다리는 엔진 지점은 각자 기다리는 orm 항목(`T63`, `T74`, `T89`, `T107`, `T120`과 그 행들이 적은 다른 항목)을 적고, 어떤 stub이나 fallback도 그것을 대신하지 않는다. (3) 모든 항목이 red부터 만들어졌고 main에서 `make test`, `go vet`, `make documents-check`, `make refs-check`가 통과한다. (4) 엔진 전체에 대한 적대 검토 한 번과 Linux·Windows의 T12.13이 통과한다. 그때까지 완료를 막는 결함 말고는 항목을 새로 열지 않으며, 개선은 완료 뒤 목록에 둔다
 - [o] T12.1 markdown database 계획을 바탕으로 판정과 spec 00, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110을 다시 쓴다: seam 정정, T8.5 철회, 저장 문법, catalog, server와 transaction, 이력, view (T12 선행)
   - 완료 기준: 계획의 모든 판정이 해당 spec에 근거를 갖춘 명제로 서고, design plan이 정정된 seam과 철회된 T8.5를 그것을 철회하게 한 사실과 함께 적으며, `make documents-check`와 `make refs-check`가 통과한다.
 - [o] T12.1-1 readable-document 판정에 맞춰 spec을 다시 쓴다: `*.flowmark.md` 기준, 주석 없음, file 이름이 key, key와 이름 규칙, field list, 읽을 수 있는 값 형식, 파생 target을 가진 link로서의 외래 key, `<table> <key>` 상세 heading과 그 anchor, walk, 그리고 doc-id header, frontmatter, twin, `dbspec/flowmark.json`의 철회 (T12.1 후속)
