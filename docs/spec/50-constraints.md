@@ -16,8 +16,8 @@ The failure codes are those of [operations](40-ops.md).
 
 ## Keys and references
 
-- **Primary and unique keys** are enforced over the whole table; a duplicate is `DUPLICATE_KEY` on a write that introduces it, and the validator's `key.duplicate` at the second occurrence with a pointer to the first. A unique key treats
-  NULLs as distinct, as in SQL.
+- **Primary and unique keys** are enforced over the whole table — for a block table, over every block of every file that holds it; a duplicate is `DUPLICATE_KEY` on a write that introduces it, and the validator's `key.duplicate` is at each occurrence after the first in [corpus order](10-canonical-format.md#diagnostics), at its key, naming the first. A unique key treats
+  NULLs as distinct, as in SQL. The validator's `key.duplicate` of a unique key compares its values byte for byte, each in its canonical readable form, and is at each occurrence after the first in corpus order, at the key's first column, naming the first; a row whose value in any of its columns is NULL or not of its column type takes no part. Grounding: SQL parity — a unique constraint compares the stored values and lets NULLs repeat — and a value the engine cannot read has no comparison, its `type` standing for it.
 - **Foreign keys** resolve by exact byte match with the referenced key; a reference that names no
   row is a dangling reference: `FOREIGN_KEY` on a write that introduces it, and the validator's
   `reference.dangling` at the reference's place; it never makes a file unreadable, except a `parent` of a block or document row that names no row of its file, which is `format.block` ([canonical format](10-canonical-format.md#foreign-keys-as-links)).
@@ -80,8 +80,8 @@ A check is enforced at commit; a check whose predicate is unknown (NULL) passes,
   which leaves that file unreadable ([document model](20-document-model.md#hierarchy)); a cycle through several `files` files is the validator's `parent.cycle` alone; a `parent` outside
   the row's block is `CONSTRAINT` on write and `format.block` on read.
 - An order value outside 1..n + 1 (n as the document model defines it), or an update of the order
-  column that matches more than one row, is `CONSTRAINT`; a write that leaves the order values of a block or document sibling group other than exactly 1..m, m being the group's size after the write, is `CONSTRAINT`; in `files` storage, sibling order values other than exactly 1..n
-  are a diagnostic ([document model](20-document-model.md)).
+  column that matches more than one row, is `CONSTRAINT`; a write that leaves the order values of a block or document sibling group other than exactly 1..m, m being the group's size after the write, is `CONSTRAINT`; in `files` storage the validator's `order` is at each row whose order value lies outside 1..n or is shared with a sibling, at its `order` item, n being the size of its sibling group, and a value not of the column's type is `type` alone: it counts toward n and is neither outside 1..n nor shared ([document model](20-document-model.md#order)). Grounding: a value that cannot be read has no comparison, so the type fault stands for it, and a fault the other siblings have whatever that value is remains reported.
+- A row whose `parent` is not of its column's type belongs to no known sibling group: it counts toward no group's n, its own `order` is not judged, and a fault of a group is reported only when it stands whichever groups such rows join — a value shared within the group, or one outside 1..n + u, u being the number of such rows; its `type` stands for the rest.
 
 ## The state machine
 
@@ -99,7 +99,7 @@ A check is enforced at commit; a check whose predicate is unknown (NULL) passes,
   required columns. An insert writes no history.
 - **Limit.** `limit <state> <n>` counts the table's rows in the state; a transition, insert or
   update that would exceed it is `CONSTRAINT` naming the limit. A corpus already over the limit
-  after a human edit is a diagnostic that blocks no other write.
+  after a human edit is the validator's `state.limit`, which blocks no other write: when m readable rows of the table, in every block and file that holds it, are in the state and m > n, each row after the n-th in [corpus order](10-canonical-format.md#diagnostics) is reported, at its state (the glyph of a list row, the state cell, the state item of a `files` field list), naming the state, the limit and m. Grounding: the limit admits n rows in the state, so m − n rows stand beyond it, each one fault, as `key.duplicate` is reported at each occurrence after the first ([Keys](#keys-and-references)); which rows they are is not decided by their content — a human edit leaves no record of which row entered the state last, which is what `history.gap` reports — so they are chosen by an order that is a function of the corpus alone.
 
 ## A state changed outside the engine
 
@@ -142,4 +142,4 @@ Every rule reports `{file, line, column, rule, message}`, with the column as the
 `state.required`, `state.limit`, `history.gap`, `history.chain`, `corpus.walk` (the walk of the
 [document model](20-document-model.md)) and the `format.*` rules of the canonical format:
 `format.noncanonical`, `format.block`, `format.section` and `format.encoding`. Validation is
-corpus-global; a clean file in a broken corpus does not make the corpus valid. Opening a corpus, introspection, `flowmark validate` and `flowmark canon` are not requests over rows: they never fail on an unavailable table, apart from canon's link-derivation refusal ([operations](40-ops.md#the-canon-operation)). The validator reports every file's `format.*` and `parent.cycle` diagnostics, and the validator rules of every row it can read in a file without `format.block`, `format.section`, `format.encoding` or a `parent.cycle` among its rows; a rule that needs the complete rows of a table that holds such a file — `reference.dangling` into it, `key.duplicate`, `order` and `state.limit` within it — is not reported for that table, and the file's own diagnostic stands for it; a table unavailable only through byte-for-byte equal keys has every rule reported.
+corpus-global; a clean file in a broken corpus does not make the corpus valid. Opening a corpus, introspection, `flowmark validate` and `flowmark canon` are not requests over rows: they never fail on an unavailable table, apart from canon's link-derivation refusal ([operations](40-ops.md#the-canon-operation)). The validator reports every file's `format.*` and `parent.cycle` diagnostics, and the validator rules of every row it can read in a file without `format.block`, `format.section`, `format.encoding` or a `parent.cycle` among its rows; a rule that needs the complete rows of a table that holds such a file — `reference.dangling` into it, `key.duplicate`, `order` and `state.limit` within it — is not reported for that table, and the file's own diagnostic stands for it; the validator's `parent.cycle` across several `files` files is reported among the rows it can read, since a cycle is made by its own rows' `parent` values and no unread row can undo it; a table unavailable only through byte-for-byte equal keys has every rule reported.

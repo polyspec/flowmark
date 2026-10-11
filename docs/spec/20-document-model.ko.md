@@ -1,5 +1,5 @@
 <!-- doc-id: spec-document-model -->
-<!-- source-sha256: 5cfd58620c4941cfaf27de5741329351154f248e322f7809dfce44d0205f9000 -->
+<!-- source-sha256: 90f67bc483e17a59a366c18834426e0b8706bc03fd85207414d6be7f7a7ba969 -->
 # 문서 모델
 
 [English](20-document-model.md)
@@ -110,7 +110,7 @@ aggregate냐 split이냐는 저장 선언이다. 논리 관계는 모든 저장�
 - `order <column>`은 default 없고 key, index, check에 들지 않는 non-null `i32`나 `i64` column을
   가리킨다. 값은 같은 배치 부모와 같은 `parent`를 가진 행 사이에서 1부터 센 위치다.
 - block과 document 저장에서는 논리적 column이며 쓰지 않는다: 읽을 때 형제 사이의 1부터 센 위치로 채우고, 파일에 `order` 값이 있으면 `format.block`이며, 쓰기는 형제 묶음의 값을 정확히 1..m(m은 쓰기 뒤의 묶음 크기)으로 받고 그 밖의 값은 `CONSTRAINT`다. 근거: 파일의 줄 순서가 곧 순서이므로 논리적 값은 줄 위치이며, 파일에 쓴 값은 두 번째 순서가 된다.
-  `files` 저장에서는 field list 항목이며 형제 값은 정확히 1..n이다. 빈틈이나 중복은 validate 진단이다.
+  `files` 저장에서는 field list 항목이며 형제 값은 정확히 1..n이다. validator의 `order`는 값이 1..n 밖이거나 형제와 공유되는 각 행에 있으며, column의 type이 아닌 값은 `type`뿐이다([constraints](50-constraints.ko.md#계층과-순서)). `parent`가 그 column의 type이 아닌 행은 알려진 형제 묶음에 속하지 않는다: 어느 묶음의 n에도 세어지지 않고 자신의 `order`는 판정하지 않으며, 묶음의 결함은 그런 행들이 어느 묶음에 들어가든 성립할 때만 보고한다 — 묶음 안에서 공유되는 값, 또는 1..n + u 밖의 값(u는 그런 행의 수). 나머지는 그 행의 `type`이 대신한다.
 - insert는 이를 생략할 수 있고 행은 뒤에 붙는다. k를 주면 k에 놓는다. k로의 update는 행을 옮기고
   형제가 같은 transaction에서 따라간다. k < 1이나 k > n + 1은 `CONSTRAINT`이며 잘라 맞추지 않는다.
   n은 행 자신을 제외한 목적지 형제 사이의 행 수이므로, insert, parent 변경, 제자리 이동 모두에서 k는

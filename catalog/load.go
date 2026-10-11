@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -326,6 +327,9 @@ func buildTable(r *tableRef) *Table {
 		ForeignKeys: t.ForeignKeys,
 		Storage:     r.storage,
 		RowScope:    r.scope,
+	}
+	for _, u := range t.Uniques {
+		out.Uniques = append(out.Uniques, slices.Clone(u.Columns))
 	}
 	if len(t.PrimaryKey.Columns) == 1 {
 		out.Key = t.PrimaryKey.Columns[0]

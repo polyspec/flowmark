@@ -136,6 +136,8 @@ func documentParseCases() []docCase {
 		docAccept("10#list-rows: an escaped title token", itemsOf(`- [ ] T1 Set owner\: review done:false`)),
 		docAccept("10#list-rows: a title token ending in an escaped colon is not a field", itemsOf(`- [ ] T1 Plan owner\: done:false`)),
 		docAccept("10#list-rows: a foreign key link", itemsOf("- [ ] T1 Plan owner:[P1](people.flowmark.md#people-row-p1) done:false")),
+		docAccept("10#readable-values: a foreign key whose key is not of its column type keeps its bytes on an unchanged rewrite",
+			itemsOf("- [ ] T1 Plan owner:["+strings.Repeat("P", 40)+"](people.flowmark.md) done:false")),
 		docAccept("10#foreign-keys-as-links: a dangling link keeps its written target", itemsOf("- [ ] T1 Plan owner:[P9](people.flowmark.md#people-row-p9) done:false")),
 		docAccept("10#list-rows: the weight field of an i16", itemsOf("- [ ] T1 Plan done:false weight:-3")),
 		docAccept("10#readable-values: a temporal field written now is kept as written, not of its type", itemsOf("- [ ] T1 Plan done:false seen_on:now")),
@@ -824,8 +826,9 @@ type writeCase struct {
 	rows  []*Row
 	rule  string
 	out   string
-	alone bool    // the refusal is the only diagnostic
-	at    []locus // the refusals in order, when their location is checked
+	alone bool     // the refusal is the only diagnostic
+	at    []locus  // the refusals in order, when their location is checked
+	msgs  []string // a text that each refusal's message holds, in order, when checked
 }
 
 // locus is the location of a refusal of a write: the row by key, its index among the
@@ -878,6 +881,29 @@ func writeCases() []writeCase {
 		{name: "10#diagnostics: orders 1 and 3 fault only the row whose order is outside 1..2", rows: []*Row{
 			item("T1", "A", "waiting", "1", done), item("T2", "B", "waiting", "3", done)},
 			rule: RuleConstraint, alone: true, at: []locus{{key: "T2", index: -1, column: "position"}}},
+		{name: "10#readable-values: a write of a foreign key whose key is not of its column type is CONSTRAINT alone", rows: []*Row{
+			item("T1", "Plan", "waiting", "1", map[string]string{"done": "false", "owner": strings.Repeat("P", 40)})},
+			rule: RuleConstraint, alone: true, at: []locus{{key: "T1", index: -1, column: "owner"}},
+			msgs: []string{"owner is not a varchar(32) value"}},
+		{name: "10#diagnostics: orders 1, 2, 3 are accepted", rows: []*Row{
+			item("T1", "A", "waiting", "1", done), item("T2", "B", "waiting", "2", done), item("T3", "C", "waiting", "3", done)},
+			out: "# items\n- [ ] T1 A done:false\n- [ ] T2 B done:false\n- [ ] T3 C done:false\n"},
+		{name: "10#diagnostics: an order not of its type is the type fault alone and counts toward m", rows: []*Row{
+			item("T1", "A", "waiting", "1", done), item("T2", "B", "waiting", "x", done), item("T3", "C", "waiting", "2", done)},
+			rule: RuleConstraint, at: []locus{{key: "T2", index: -1, column: "position"}},
+			msgs: []string{"position is not a i32 value"}},
+		{name: "10#diagnostics: an i32 overflow order is the type fault alone", rows: []*Row{
+			item("T1", "A", "waiting", "1", done), item("T2", "B", "waiting", "3000000000", done)},
+			rule: RuleConstraint, at: []locus{{key: "T2", index: -1, column: "position"}},
+			msgs: []string{"position is not a i32 value"}},
+		{name: "10#diagnostics: an order not of its type leaves a shared value of its siblings faulted", rows: []*Row{
+			item("T1", "A", "waiting", "1", done), item("T2", "B", "waiting", "1", done), item("T3", "C", "waiting", "x", done)},
+			rule: RuleConstraint, at: []locus{{key: "T1", index: -1, column: "position"}, {key: "T2", index: -1, column: "position"}, {key: "T3", index: -1, column: "position"}},
+			msgs: []string{"shared with a sibling", "shared with a sibling", "position is not a i32 value"}},
+		{name: "10#diagnostics: an order not of its type counts toward m, so 4 is outside 1..3", rows: []*Row{
+			item("T1", "A", "waiting", "1", done), item("T2", "B", "waiting", "4", done), item("T3", "C", "waiting", "x", done)},
+			rule: RuleConstraint, at: []locus{{key: "T2", index: -1, column: "position"}, {key: "T3", index: -1, column: "position"}},
+			msgs: []string{"outside 1..3", "position is not a i32 value"}},
 		{name: "10#diagnostics: a cycle of T1 and T2 with T3 under T1 faults T1 and T2 and not T3", rows: []*Row{
 			withParent(item("T1", "A", "waiting", "1", done), "T2"), withParent(item("T2", "B", "waiting", "1", done), "T1"),
 			withParent(item("T3", "C", "waiting", "2", done), "T1")},
@@ -1215,6 +1241,16 @@ func TestRenderDocumentRules(t *testing.T) {
 						if d.Table != table || d.Key != want.key || d.Index != want.index || d.Column != want.column {
 							t.Fatalf("diagnostic %d is %s %s (index %d) column %q; want %s (index %d) column %q: %+v",
 								k, d.Table, d.Key, d.Index, d.Column, want.key, want.index, want.column, d)
+						}
+					}
+				}
+				if c.msgs != nil {
+					if len(diags) != len(c.msgs) {
+						t.Fatalf("%d diagnostics %+v; want the %d messages %q", len(diags), diags, len(c.msgs), c.msgs)
+					}
+					for k, want := range c.msgs {
+						if !strings.Contains(diags[k].Message, want) {
+							t.Fatalf("diagnostic %d says %q; want it to hold %q", k, diags[k].Message, want)
 						}
 					}
 				}

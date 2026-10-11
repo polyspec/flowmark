@@ -28,6 +28,7 @@ type docLayout struct {
 	title     string            // the title column, "" when none
 	body      string            // the body column, "" when none
 	order     string            // the order column, "" when none
+	orderType dbspec.Type       // the type of the order column
 	state     string            // the state column of a list, "" when none
 	parent    string            // "parent" when the table has the self foreign key parent, "" otherwise
 	placement string            // the placement foreign key of a block table, "" for a document table
@@ -74,7 +75,9 @@ func layoutOfTable(cat *catalog.Catalog, tb *catalog.Table, placement string, in
 		switch {
 		case c.Name == tb.Key:
 			lay.key, keyFound = c, true
-		case c.Name == tb.Body || c.Name == tb.Order || c.Name == placement:
+		case c.Name == tb.Order:
+			lay.orderType = c.Type
+		case c.Name == tb.Body || c.Name == placement:
 		case markdown[c.Name]:
 			lay.sections = append(lay.sections, section{name: c.Name, nullable: c.Null})
 		default:
@@ -805,6 +808,9 @@ func (p *docParser) scalarValue(line, col int, rec *docRec, c dbspec.Column, v s
 		}
 		p.links = append(p.links, docLink{rec: rec, column: c.Name, table: table, key: key, target: target, line: line, col: col})
 		rec.row.Scalars[c.Name] = sp(key)
+		if _, ok := readable(c.Type, key); !ok {
+			rec.row.Raw[c.Name] = v
+		}
 		return
 	}
 	if msg := singleLineFault(v); msg != "" {
@@ -1433,6 +1439,46 @@ func localLink(lay *docLayout, rel string, r *Row) string {
 	}
 	link, _ := RelLink(rel, rel, anchor)
 	return link
+}
+
+// HasDetail reports whether row r of table has a detail section, the section that
+// its link anchor names (DetailAnchor). A files row has none: its scope is its file.
+// Its layout is the catalog's, so the answer is the one the parser gives the file.
+func HasDetail(cat *catalog.Catalog, table string, r *Row) (bool, error) {
+	tb, ok := cat.Table(table)
+	if !ok {
+		return false, fmt.Errorf("table %s is not in the catalog", table)
+	}
+	var lay *docLayout
+	switch tb.Storage.Kind {
+	case catalog.StorageFiles:
+		return false, nil
+	case catalog.StorageDocument:
+		l, err := docLayoutOf(cat, table)
+		if err != nil {
+			return false, err
+		}
+		lay = l
+	default:
+		placement, err := placementColumn(tb)
+		if err != nil {
+			return false, err
+		}
+		root := tb
+		for root.Storage.Kind == catalog.StorageBlock {
+			p, ok := cat.Table(root.Storage.Parent)
+			if !ok {
+				return false, fmt.Errorf("table %s has no placement parent %s in the catalog", root.Name, root.Storage.Parent)
+			}
+			root = p
+		}
+		l, err := layoutOfTable(cat, tb, placement, root.Storage.Kind == catalog.StorageFiles)
+		if err != nil {
+			return false, err
+		}
+		lay = l
+	}
+	return hasDetail(lay, r), nil
 }
 
 // hasDetail reports whether row r has a detail section: content that it holds, or

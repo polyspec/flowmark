@@ -35,6 +35,11 @@ Body of N1.
 
 The tests are fuzzed.
 
+### item_history
+| id | from_state | to_state | at |
+| --- | --- | --- | --- |
+| 3 | waiting | doing | 2026-10-02 08:00:00.000000 |
+
 ## items row T4
 
 ### cause
@@ -57,3 +62,10 @@ Proof.
 | --- | --- | --- | --- |
 | 1 | open | doing | 2026-10-01 08:00:00.000000 |
 | 2 | doing | done | 2026-10-01 09:00:00.000000 |
+
+#### item_checks row C2
+
+##### item_check_history
+| id | from_state | to_state | at |
+| --- | --- | --- | --- |
+| 3 | open | doing | 2026-10-02 08:00:00.000000 |

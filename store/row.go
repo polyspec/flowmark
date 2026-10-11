@@ -43,8 +43,10 @@ type Row struct {
 	Scalars  map[string]*string
 	Sections map[string]*string
 	// Raw holds the text of each scalar that is not a value of its column type,
-	// as the file writes it. A scalar still holding its Raw text is written as
-	// it is; any other value is checked against its type.
+	// as the file writes it: a foreign key whose key is not a value of its column
+	// type holds its link, and is kept as read while its key is unchanged. A scalar
+	// still holding its Raw text is written as it is; any other value is checked
+	// against its type.
 	Raw map[string]string
 	// Dangling holds the written target of each foreign key that names no row,
 	// keyed by its column.
