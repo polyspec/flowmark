@@ -53,14 +53,50 @@ The order of the commit protocol is normative.
 
 ## The server
 
-- `flowmark serve <corpus> --port <port>` is the resident face that orm clients reach. `--port` is
-  required. It binds loopback TCP only. On its first start it writes a random token to `.flowmark/server.json`; the
-  token is kept across restarts and replaced only by `flowmark serve --new-token`.
+- `flowmark serve <corpus> --port <port> [--new-token] [--lock-wait-ms <n>] [--tx-idle-ms <n>]` is
+  the resident face that orm clients reach. `--port` is required; it binds `127.0.0.1:<port>`, loopback
+  TCP only, and `--port 0` lets the operating system choose the port. Once listening it prints
+  `[serve] listening on 127.0.0.1:<port> for the corpus <corpus>` on standard output, and each lock and
+  journal event, and each failure to end a session, on standard error. A catalog with diagnostics
+  refuses the start, naming them.
+- On its first start it writes a random token to `.flowmark/server.json`: one line of JSON,
+  `{"token"}`, and a line feed; the token is 32 lowercase hex digits of 128 random bits from the OS
+  random source, and the file is created readable and writable by its owner only. The token is kept
+  across restarts and replaced only by `flowmark serve <corpus> --new-token`. The file is written
+  under a partial name and linked into place, so two servers starting at once keep the one token the
+  first link placed; a file that does not hold that line, or a symlink there, refuses the start,
+  naming `--new-token`.
 - The DSN is `markdown://127.0.0.1:<port>/<corpus>?token=<token>`, where `<corpus>` is the corpus
   root's directory name. A corpus or token mismatch is `CONFIG`. Remote access and other
   authentication are outside v1.
-- A connection is a session: JSON lines of requests and control messages, each answered in order
-  ([capability table](60-dialect.md) holds the request and answer shapes).
+- A connection is a session: JSON lines of requests and control messages, each answered in order by
+  one line ([capability table](60-dialect.md) holds the request and answer shapes). The lock holder's
+  session is `serve-<n>`, `n` counting the server's connections from 1.
+- The first message of a connection is `{"op": "connect", "corpus", "token"}`, carrying the DSN's
+  corpus and token, answered `{"ok": true}`. A corpus or token that differs, the token compared in
+  constant time, or any other message first, is answered `CONFIG` and the server closes the
+  connection; a second `connect` is `CONFIG`. Grounding: the DSN's corpus and token must reach the
+  server before any request reads the corpus, as a PostgreSQL startup message precedes every query and
+  a failed authentication ends the connection.
+- A message is one JSON object on one line; a message with `op` is a control message, any other a
+  request message. A failure is answered `{"error": {"code", "message"}}` with the orm code — the
+  server is the orm clients' face, so `LOCK_TIMEOUT` is answered `CANCELED` and `CORPUS_CONFLICT`
+  `WRITE_CONFLICT`. A line that is not a JSON object, an `op` that names no control message, and a
+  field that its control message does not take are `IR_INVALID`, orm's code of a structurally wrong
+  message. `begin` takes `read_only`, a boolean, false when absent; `savepoint`, `release` and
+  `rollback_to` take `name`.
+- `--tx-idle-ms` (default 5000, a positive integer) bounds the time an open transaction waits for its
+  next message, from the answer to the previous one. When it passes, the transaction is rolled back,
+  the lock released, `{"error": {"code": "CONNECTION_LOST", "message"}}` written on the connection, which
+  the client reads as the answer to its next message, and the connection closed. Grounding: PostgreSQL's
+  `idle_in_transaction_session_timeout` ends the session too (SQLSTATE 25P03), and orm's
+  `CONNECTION_LOST` names an idle limit; a connection kept open after a silent rollback would run the
+  client's next write outside the transaction it believes open. The default is the lock wait's, so an
+  idle transaction holds the lock no longer than another operation waits for it by default. The idle
+  bound is a timer because idleness is the absence of an event; it is the session's only timer.
+- A closed connection rolls its open transaction back, releases the lock and ends its request's lock
+  wait; the server learns it from the connection's read, which runs while the request does. On
+  `SIGINT` or `SIGTERM` the server stops listening and closes every connection the same way.
 
 ## The lock
 
@@ -72,7 +108,7 @@ The order of the commit protocol is normative.
   granted only locally on some network file systems, and names no holder.
 - The lock is held for one operation, or for one server transaction from `begin` to `commit` or
   `rollback`. A closed connection, or a transaction idle longer than the server flag
-  `tx_idle_ms`, rolls the transaction back and releases the lock.
+  `--tx-idle-ms`, rolls the transaction back and releases the lock ([the server](#the-server)).
 
 ### The holder record
 
@@ -115,7 +151,7 @@ The order of the commit protocol is normative.
   its release and fails with `LOCK_TIMEOUT`, naming the holder and its state, when its deadline
   passes first. A holder that has ended refuses at once. The deadline is the wait's one timer: the
   CLI, MCP and sidecar take `--lock-wait-ms <n>` (default 5000; 0 refuses at once), and the server
-  takes the flag `lock_wait_ms` (default 5000); a closed connection ends the wait. Grounding: an
+  takes the same flag; a closed connection ends the wait. Grounding: an
   immediate refusal would move the retry loop into every caller.
 - The wait is driven by the OS change notification on the lock: on Linux inotify on `.flowmark/`
   (`IN_DELETE | IN_MOVED_FROM | IN_DELETE_SELF | IN_MOVE_SELF | IN_UNMOUNT`), one instance shared
