@@ -36,12 +36,7 @@ func (w *writer) transition(g *given, x *rec, vals map[string]cell) *Error {
 		w.fault(g, w.tb.Name, sm.Column, codeConstraint, fmt.Sprintf("the state %s is not a state of %s", to.text, sm.Column))
 		return nil
 	}
-	var line *catalog.Transition
-	for i := range sm.Transitions {
-		if t := &sm.Transitions[i]; t.From == from.text && t.To == to.text {
-			line = t
-		}
-	}
+	line := declaredLine(sm, from.text, to.text)
 	if line == nil {
 		w.fault(g, w.tb.Name, sm.Column, codeConstraint, fmt.Sprintf("%s %s cannot go from the state %s to %s: no declared transition", w.tb.Name, x.row.Key, from.text, to.text))
 		return nil
@@ -54,9 +49,23 @@ func (w *writer) transition(g *given, x *rec, vals map[string]cell) *Error {
 		w.fault(g, w.tb.Name, sm.Column, codeConstraint, fmt.Sprintf("%s %s has a history gap: its state %s is not where its history ends; close the gap with flowmark history repair", w.tb.Name, x.row.Key, from.text))
 		return nil
 	}
+	require := requiredColumns(sm, line)
+	for _, c := range require {
+		v, assigned := vals[c]
+		if !assigned || v.null || v.text == "" {
+			w.fault(g, w.tb.Name, c, codeConstraint, fmt.Sprintf("the transition of %s from %s to %s requires %s, assigned in the same update and neither null nor empty", x.row.Key, from.text, to.text, c))
+		}
+	}
+	_, err = w.historyRow(x, sm, from.text, to.text, require, vals)
+	return err
+}
+
+// requiredColumns returns the columns a transition line requires: those of its
+// require list, then those its terminal target requires.
+func requiredColumns(sm *catalog.StateMachine, line *catalog.Transition) []string {
 	require := slices.Clone(line.Require)
 	for _, t := range sm.Terminals {
-		if t.State == to.text {
+		if t.State == line.To {
 			for _, c := range t.Require {
 				if !slices.Contains(require, c) {
 					require = append(require, c)
@@ -64,13 +73,18 @@ func (w *writer) transition(g *given, x *rec, vals map[string]cell) *Error {
 			}
 		}
 	}
-	for _, c := range require {
-		v, assigned := vals[c]
-		if !assigned || v.null || v.text == "" {
-			w.fault(g, w.tb.Name, c, codeConstraint, fmt.Sprintf("the transition of %s from %s to %s requires %s, assigned in the same update and neither null nor empty", x.row.Key, from.text, to.text, c))
+	return require
+}
+
+// declaredLine returns the transition line of sm from from to to, nil when none is
+// declared.
+func declaredLine(sm *catalog.StateMachine, from, to string) *catalog.Transition {
+	for i := range sm.Transitions {
+		if t := &sm.Transitions[i]; t.From == from && t.To == to {
+			return t
 		}
 	}
-	return w.historyRow(x, sm, from.text, to.text, require, vals)
+	return nil
 }
 
 // historyRows returns the history rows of state row x, in storage order: its block
@@ -126,11 +140,12 @@ func (w *writer) gapped(x *rec, sm *catalog.StateMachine, state string) (bool, *
 
 // historyRow inserts the history row of a transition of x from from to to: its
 // identity key, the state row's key, from, to, at the request's clock, and a copy of
-// the required columns that the history table holds.
-func (w *writer) historyRow(x *rec, sm *catalog.StateMachine, from, to string, require []string, vals map[string]cell) *Error {
+// the required columns that the history table holds. It returns the history row's
+// key.
+func (w *writer) historyRow(x *rec, sm *catalog.StateMachine, from, to string, require []string, vals map[string]cell) (cell, *Error) {
 	ht, _ := w.c.cat.Table(sm.History.Table)
 	if err := w.next.need(ht.Name); err != nil {
-		return err
+		return cell{}, err
 	}
 	row := &store.Row{Table: ht.Name, Scalars: map[string]*string{}, Sections: map[string]*string{}}
 	id := w.nextIdentity(ht, ht.Key)
@@ -155,7 +170,7 @@ func (w *writer) historyRow(x *rec, sm *catalog.StateMachine, from, to string, r
 	switch ht.Storage.Kind {
 	case catalog.StorageBlock:
 		if placement != sm.History.Row || ht.Storage.Parent != x.tb.Name {
-			return unspecified("a history table stored as a block of another table than its state table")
+			return cell{}, unspecified("a history table stored as a block of another table than its state table")
 		}
 		if x.row.Blocks == nil {
 			x.row.Blocks = map[string][]*store.Row{}
@@ -172,10 +187,10 @@ func (w *writer) historyRow(x *rec, sm *catalog.StateMachine, from, to string, r
 		f.rows = append(f.rows, row)
 		w.touched[path] = true
 	default:
-		return unspecified("a history table stored as files")
+		return cell{}, unspecified("a history table stored as files")
 	}
 	w.next.index()
-	return nil
+	return id, nil
 }
 
 // hasColumn reports whether tb has the column col.

@@ -20,6 +20,8 @@ const (
 	codeNotJoined       = "ENTITY_NOT_JOINED"
 	codeOpNotAllowed    = "OPERATOR_NOT_ALLOWED"
 	codeOptimistic      = "OPTIMISTIC_LOCK"
+	codeConfig          = "CONFIG"
+	codeNoRows          = "NO_ROWS"
 	codeDuplicateKey    = "DUPLICATE_KEY"
 	codeForeignKey      = "FOREIGN_KEY"
 	codeConstraint      = "CONSTRAINT"
