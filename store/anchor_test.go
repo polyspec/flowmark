@@ -133,6 +133,21 @@ func clashCases() []clashCase {
 		{"10#detail-headings-and-anchors: a short tag is no guard of VS Code", []string{"## items row T1", "", "# items row T1<b>$x$"}, []int{3}},
 		{"10#detail-headings-and-anchors: GitLab reads a defined footnote reference as no text", []string{"## items row T-1", "", "# items row T[^1]", "", "[^1]: n"}, []int{3}},
 		{"10#detail-headings-and-anchors: GitLab restores an undefined footnote reference with its raw HTML as text", []string{"## items row Tabc", "", "# items row T[^a<b>c]"}, []int{3}},
+		{"10#detail-headings-and-anchors: a raw HTML heading takes the anchor on GitHub", []string{"## items row T1", "", "<h2>items row T1</h2>"}, []int{3}},
+		{"10#detail-headings-and-anchors: a raw HTML heading in capitals takes the anchor", []string{"## items row T1", "", "<H3>Items Row T1</H3>"}, []int{3}},
+		{"10#detail-headings-and-anchors: a raw HTML heading inline in a paragraph takes the anchor", []string{"## items row T1", "", "x <h2>items row T1</h2> y"}, []int{3}},
+		{"10#detail-headings-and-anchors: a raw HTML heading of other text is accepted", []string{"## items row T1", "", "<h2>Notes</h2>"}, nil},
+		{"10#detail-headings-and-anchors: a raw HTML heading's text runs to its end tag", []string{"## items row T1", "", "<h2>items row T1<b>x</b></h2>"}, nil},
+		{"10#detail-headings-and-anchors: a paragraph tag ends a raw HTML heading", []string{"## items row T1", "", "<h2>items row T1<p>x</p></h2>"}, []int{3}},
+		{"10#detail-headings-and-anchors: a paragraph tag ends a markdown heading on GitHub", []string{"## items row T1", "", "# items row T1<p>x"}, []int{3}},
+		{"10#detail-headings-and-anchors: a tag of the tagfilter is text on GitHub", []string{"## items row Tscript", "", "# items row T<script>"}, []int{3}},
+		{"10#detail-headings-and-anchors: an unclosed raw HTML heading ends at the end of the file", []string{"## items row T1", "", "<h2>items row T1"}, []int{3}},
+		{"10#detail-headings-and-anchors: a raw HTML heading continued by a list takes an anchor its text so far begins", []string{"## items row T1", "", "<h2>items row", "", "- x"}, []int{3}},
+		{"10#detail-headings-and-anchors: a raw HTML heading continued by a list is accepted when no anchor begins with its text", []string{"## items row T1", "", "<h2>Notes", "", "- x"}, nil},
+		{"10#detail-headings-and-anchors: a raw HTML heading cut by the next paragraph is read to its block", []string{"## items row T1", "", "<h2>items row", "", "T1"}, nil},
+		{"10#detail-headings-and-anchors: a heading inside a raw HTML heading has no anchor", []string{"## items row T1", "", "<h2><b>x<h3>items row T1</h3></b></h2>"}, nil},
+		{"10#detail-headings-and-anchors: a self-closed raw HTML heading is empty", []string{"## items row T1", "", "<h2/>items row T1"}, nil},
+		{"10#detail-headings-and-anchors: a raw HTML heading in code is no heading", []string{"## items row T1", "", "`<h2>items row T1</h2>`"}, nil},
 	}
 }
 

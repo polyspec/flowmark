@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database -->
-<!-- source-sha256: afaf093dc0e76f6e78f8628df791866d1f140464f31478102a483c0edac1b5d0 -->
+<!-- source-sha256: dc39173e8cade7e6dec85eca49f34fe54bde8a524d766b8b99c302145b66ca45 -->
 # markdown database 계획
 
 [English](markdown-database-plan.md)
@@ -215,7 +215,10 @@ markdown 전용 선언은 모두 dbspec **manifest setting**이며 `markdown <co
   포함)과 fence 밖에서 setext 밑줄이 뒤따르는 모든 문단(그 문단 전체가 heading) — 은, 상세 heading이 아니면서 S_GH,
   S_VS, S_GL 가운데 한 slug S와 그 slug가 읽는 대로의 렌더된 inline 텍스트(CommonMark 0.31.2가 렌더하는 텍스트)에
   대해, heading의 S가 A와 같거나 A가 heading의 S 뒤에 `-`와 앞자리 0 없는 십진수 n ≥ 1을 붙인 것일 때, 다른 상세
-  heading의 anchor A와 충돌한다. S_GH는 GitHub의 slug(조건 없는 full mapping으로 소문자로 바꾸고, Unicode 17.0.0의
+  heading의 anchor A와 충돌한다. GitHub은 anchor를 주고 VS Code와 GitLab은 주지 않는 raw HTML `<h1>`–`<h6>` heading은
+  S_GH에서 heading이며, S_GH는 모든 heading element를 GitHub의 parser처럼 — slug vector가 기록하는 대로 그 start tag에서
+  뒤의 tag나 block이 끝내는 곳까지의 텍스트로 — 읽고, element가 engine이 렌더하지 않는 내용으로 이어지면 지금까지의
+  slug가 A로 시작할 때 A를 가져간다. S_GH는 GitHub의 slug(조건 없는 full mapping으로 소문자로 바꾸고, Unicode 17.0.0의
   word 문자 — Alphabetic, mark, decimal number, connector punctuation, Join_Control — 와 공백, `-`를 남기며, 각 공백을
   `-`로 쓴다. image는 텍스트가 아니다), S_VS는 VS Code의 것(trim한 텍스트를 JavaScript의 `toLowerCase`로 소문자로
   바꾸고, 그 `slugify.ts` 식이 맞추는 문자 — Unicode 13.0.0 범주 No, Pd, Ps, Pe, Pi, Pf, Po, S, Cc, Cf, Co, Cn, Z의 문자

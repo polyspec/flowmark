@@ -8,7 +8,8 @@ import (
 
 // The collision rule of spec 10 (Detail headings and anchors): a heading that is not a
 // detail heading takes the anchor of a detail heading when one of its slugs, S_GH, S_VS
-// or S_GL, equals the anchor or is numbered to it (takesAnchor); an HTML id or name that
+// or S_GL, equals the anchor or is numbered to it (takesAnchor), S_GH reading the heading
+// element as GitHub parses it, a raw HTML heading included (ghReadings); an HTML id or name that
 // equals the anchor, or user-content- followed by it, once lowercased, in raw HTML as
 // CommonMark 0.31.2 reads it, collides too. A detail heading is a
 // top-level heading whose text is `<table> row <key>` at the detail level of its table,
@@ -125,9 +126,19 @@ func anchorClashes(lines []string, tables map[string]int) []anchorClash {
 		}
 	}
 	setext := setextStarts(sc.blocks)
+	gh := map[int]ghRead{}
 	var out []anchorClash
+	for _, r := range ghReadings(lines, sc, g) {
+		if r.head != nil {
+			gh[r.head.at] = r
+			continue
+		}
+		if r.anchored {
+			out = append(out, rawHeadingClashes(r, anchors)...)
+		}
+	}
 	for _, h := range others {
-		out = append(out, headingClashes(lines, h, setext, anchors, g)...)
+		out = append(out, headingClashes(lines, h, setext, anchors, g, gh[h.at])...)
 	}
 	for _, u := range sc.units {
 		out = append(out, unitClashes(lines, u, anchors, g)...)
@@ -189,19 +200,32 @@ func layoutTable(name string, tables map[string]int) (string, bool) {
 }
 
 // headingClashes returns the collisions of a heading that is not a detail heading: its
-// slugs against each anchor, by its rendered text without the text of its images and by
-// its rendered text with their alt text, and the HTML tags of its text, read with the
-// definitions of the file.
-func headingClashes(lines []string, h heading, setext map[int]unit, anchors []detailAnchor, g linkRefs) []anchorClash {
+// slugs against each anchor — S_GH by GitHub's reading of its element (gh), S_VS and
+// S_GL by its rendered text as each reads it — and the HTML tags of its text, read with
+// the definitions of the file.
+func headingClashes(lines []string, h heading, setext map[int]unit, anchors []detailAnchor, g linkRefs, gh ghRead) []anchorClash {
 	e := headingElement(lines, h, setext)
 	read := viewerText(e.text, g)
 	var out []anchorClash
 	for _, a := range anchors {
-		if slugsTake(read, a.anchor) {
+		if gh.takes(a.anchor) || slugsTake(read, a.anchor) {
 			out = append(out, e.clash(0, e.text, a))
 		}
 	}
 	out = append(out, tagClashes(e, read.tags, read.tagAt, anchors)...)
+	return out
+}
+
+// rawHeadingClashes returns the collisions of a raw HTML heading that GitHub anchors:
+// its S_GH against each anchor, located at the '<' of its start tag. VS Code and GitLab
+// give a raw HTML heading no anchor.
+func rawHeadingClashes(r ghRead, anchors []detailAnchor) []anchorClash {
+	var out []anchorClash
+	for _, a := range anchors {
+		if r.takes(a.anchor) {
+			out = append(out, r.e.clash(r.at, strings.TrimSpace(r.el.text.String()), a))
+		}
+	}
 	return out
 }
 

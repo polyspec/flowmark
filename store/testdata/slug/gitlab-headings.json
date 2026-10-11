@@ -511,5 +511,424 @@
     "abic-def-gh-i-"
    ]
   }
+ ],
+ "rawHeadings": [
+  {
+   "name": "raw heading",
+   "markdown": "<h2>items row T1</h2>",
+   "ids": [
+    null
+   ]
+  },
+  {
+   "name": "raw heading with an id",
+   "markdown": "<h2 id=\"hh\">g</h2>",
+   "ids": [
+    "hh"
+   ]
+  },
+  {
+   "name": "raw heading in capitals",
+   "markdown": "<H2>Items Row T1</H2>",
+   "ids": [
+    null
+   ]
+  },
+  {
+   "name": "raw headings of each level",
+   "markdown": "<h1>a</h1>\n\n<h3>b</h3>\n\n<h6>c</h6>\n\n<h7>d</h7>",
+   "ids": [
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "name": "raw heading with inline markup",
+   "markdown": "<h3><em>a</em> b</h3>",
+   "ids": [
+    null
+   ]
+  },
+  {
+   "name": "raw heading inline in a paragraph",
+   "markdown": "x <h2>a *b* c</h2> d",
+   "ids": [
+    null
+   ]
+  },
+  {
+   "name": "raw heading across a soft break",
+   "markdown": "x <h2>a\ny</h2> d",
+   "ids": [
+    null
+   ]
+  },
+  {
+   "name": "raw heading numbered with markdown headings",
+   "markdown": "# g\n\n<h2>g</h2>\n\n# g",
+   "ids": [
+    "g",
+    null,
+    "g-1"
+   ]
+  },
+  {
+   "name": "raw and markdown heading of a detail shape",
+   "markdown": "## items row T1\n\n<h2>items row T1</h2>",
+   "ids": [
+    "items-row-t1",
+    null
+   ]
+  },
+  {
+   "name": "raw heading with character references",
+   "markdown": "<h2>a&amp;b &#84;1 &copy &AMP; &Tcedil; &apos; &#x83; &#0;</h2>",
+   "ids": [
+    null
+   ]
+  },
+  {
+   "name": "raw heading in a block quote",
+   "markdown": "> <h2>a</h2>",
+   "ids": [
+    null
+   ]
+  },
+  {
+   "name": "raw heading in a list item",
+   "markdown": "- <h2>a</h2>",
+   "ids": [
+    null
+   ]
+  },
+  {
+   "name": "raw heading in a div",
+   "markdown": "<div><h2>a</h2></div>",
+   "ids": [
+    null
+   ]
+  },
+  {
+   "name": "raw heading in pre",
+   "markdown": "<pre>\n<h2>a</h2>\n</pre>",
+   "ids": [
+    null
+   ]
+  },
+  {
+   "name": "raw heading in code is no heading",
+   "markdown": "    <h2>a</h2>\n\n`<h2>b</h2>`",
+   "ids": []
+  },
+  {
+   "name": "raw heading with attributes",
+   "markdown": "<h2 class=\"x\" align=\"center\">a</h2>",
+   "ids": [
+    null
+   ]
+  },
+  {
+   "name": "raw heading with a line break",
+   "markdown": "<h2>a<br>b</h2>\n\n<h2>c\nd</h2>",
+   "ids": [
+    null,
+    null
+   ]
+  },
+  {
+   "name": "raw heading with an image",
+   "markdown": "<h2>a <img alt=\"b\" src=\"/i.png\"> c</h2>",
+   "ids": [
+    null
+   ]
+  },
+  {
+   "name": "raw heading with markdown syntax",
+   "markdown": "<h2>`a` *b* $c$ _d_</h2>",
+   "ids": [
+    null
+   ]
+  },
+  {
+   "name": "raw heading with a comment, a CDATA section and a processing instruction",
+   "markdown": "<h2>a<!-- c -->b<![CDATA[x]]>c<?y z?>d</h2>",
+   "ids": [
+    null
+   ]
+  },
+  {
+   "name": "raw heading with filtered tags",
+   "markdown": "<h2>a<script>x</script>b<title>y</title><style>z</style></h2>",
+   "ids": [
+    null
+   ]
+  },
+  {
+   "name": "raw heading with more filtered tags",
+   "markdown": "<h2>a <xmp>b</xmp> <textarea>c</textarea> <iframe>d</iframe> <noembed>e</noembed> <noframes>f</noframes> <plaintext>g</h2>",
+   "ids": [
+    null
+   ]
+  },
+  {
+   "name": "markdown heading with filtered tags",
+   "markdown": "# items row T<script>x</script> y",
+   "ids": [
+    "items-row-tx-y"
+   ]
+  },
+  {
+   "name": "markdown heading cut by a paragraph tag",
+   "markdown": "# a <p>b</p> c",
+   "ids": [
+    "a-b-c"
+   ]
+  },
+  {
+   "name": "raw heading cut by a paragraph tag",
+   "markdown": "<h2>a<p>b</p>c</h2>",
+   "ids": [
+    null
+   ]
+  },
+  {
+   "name": "raw heading cut by a table tag",
+   "markdown": "<h2>a<table><tr><td>b</td></tr></table></h2>",
+   "ids": [
+    null
+   ]
+  },
+  {
+   "name": "raw heading cut by a form",
+   "markdown": "<h2>a<form>b</form>c</h2>",
+   "ids": [
+    null
+   ]
+  },
+  {
+   "name": "raw heading cut by another heading",
+   "markdown": "<h2>a<h3>b</h3>c</h2>\n\n<h2>d<h2>e</h2>",
+   "ids": [
+    null,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "name": "raw heading kept across block elements",
+   "markdown": "<h2>a<div>b</div>c<ul><li>d</li></ul>e<blockquote>f</blockquote>g<hr>h</h2>",
+   "ids": [
+    null
+   ]
+  },
+  {
+   "name": "raw heading with an end tag of another heading",
+   "markdown": "<h2>a</h3>b",
+   "ids": [
+    null
+   ]
+  },
+  {
+   "name": "raw heading closed twice",
+   "markdown": "<h2>a</h2>b</h2>",
+   "ids": [
+    null
+   ]
+  },
+  {
+   "name": "self-closed raw heading",
+   "markdown": "<h2/>x",
+   "ids": [
+    null
+   ]
+  },
+  {
+   "name": "unclosed raw heading at the end",
+   "markdown": "<h2>a",
+   "ids": [
+    null
+   ]
+  },
+  {
+   "name": "raw heading of spaces",
+   "markdown": "<h2>  a  b  </h2>",
+   "ids": [
+    null
+   ]
+  },
+  {
+   "name": "raw heading of nothing but a line ending",
+   "markdown": "<h2>\n\n*a* b\n\n</h2>",
+   "ids": [
+    null
+   ]
+  },
+  {
+   "name": "raw heading across a blank line",
+   "markdown": "<h2>a\n\nb</h2>",
+   "ids": [
+    null
+   ]
+  },
+  {
+   "name": "raw heading continued by an HTML block",
+   "markdown": "<h2>items row \n\n<div>T1</div>\n\n</h2>",
+   "ids": [
+    null
+   ]
+  },
+  {
+   "name": "raw heading continued by a paragraph in a div",
+   "markdown": "<h2>items row <div>\n\nT1\n\n</div></h2>",
+   "ids": [
+    null
+   ]
+  },
+  {
+   "name": "raw heading continued by a list",
+   "markdown": "<h2>items row\n\n- T1\n\n</h2>",
+   "ids": [
+    null
+   ]
+  },
+  {
+   "name": "raw heading continued by a block quote",
+   "markdown": "<h2>items row\n\n> T1\n\n</h2>",
+   "ids": [
+    null
+   ]
+  },
+  {
+   "name": "raw heading continued by a fenced code block",
+   "markdown": "<h2>items row\n\n```\nT1\n```\n\n</h2>",
+   "ids": [
+    null
+   ]
+  },
+  {
+   "name": "raw heading continued by an indented code block",
+   "markdown": "<h2>items row\n\n    T1\n\n</h2>",
+   "ids": [
+    null
+   ]
+  },
+  {
+   "name": "raw heading continued by a thematic break",
+   "markdown": "<h2>items row\n\n---\n\nT1</h2>",
+   "ids": [
+    null
+   ]
+  },
+  {
+   "name": "raw heading cut by a markdown heading",
+   "markdown": "<h2>items row\n\n# T1\n\n</h2>",
+   "ids": [
+    null,
+    "t1"
+   ]
+  },
+  {
+   "name": "raw heading cut by a table",
+   "markdown": "<h2>items row\n\n| a |\n|---|\n| T1 |\n\n</h2>",
+   "ids": [
+    null
+   ]
+  },
+  {
+   "name": "raw heading cut by a paragraph",
+   "markdown": "<h2>items row\n\n<span>T1</span>\n\n</h2>",
+   "ids": [
+    null
+   ]
+  },
+  {
+   "name": "raw heading cut by a paragraph after a comment",
+   "markdown": "<h2>items row\n<!-- x -->\n\nT1",
+   "ids": [
+    null
+   ]
+  },
+  {
+   "name": "raw heading in a paragraph cut by the next paragraph",
+   "markdown": "a <h2>items row\n\n<b>T1</b>",
+   "ids": [
+    null
+   ]
+  },
+  {
+   "name": "raw heading with an open element continued",
+   "markdown": "<h2><span>items row\n\nT1",
+   "ids": [
+    null
+   ]
+  },
+  {
+   "name": "raw heading in a markdown heading",
+   "markdown": "# x <h2>a</h2> y",
+   "ids": [
+    "x-a-y",
+    null
+   ]
+  },
+  {
+   "name": "raw heading with an end tag of an outer element",
+   "markdown": "<div><h2>a</div>b</h2>",
+   "ids": [
+    null
+   ]
+  },
+  {
+   "name": "raw heading ended by a body end tag",
+   "markdown": "<h2>a</body>b",
+   "ids": [
+    null
+   ]
+  },
+  {
+   "name": "raw headings of other text",
+   "markdown": "<h2>Notes</h2>\n\n<h2>items row T1<b>x</b></h2>",
+   "ids": [
+    null,
+    null
+   ]
+  },
+  {
+   "name": "raw heading whose end tag a div inside it outranks",
+   "markdown": "<h2>a<div>b</h2>c</div>d",
+   "ids": [
+    null
+   ]
+  },
+  {
+   "name": "raw heading with two elements open at a closer",
+   "markdown": "<h2><b><i>a<p>b</h2>\n\n<h2><b><span>c<p>d</h2>",
+   "ids": [
+    null,
+    null
+   ]
+  },
+  {
+   "name": "raw heading with an element closed by another start tag",
+   "markdown": "<h2><p>a<div>b<p>c</h2>",
+   "ids": [
+    null
+   ]
+  },
+  {
+   "name": "raw heading nested in an unclosed element of an earlier block",
+   "markdown": "<div>\n\n<h2>a</div>b</h2>",
+   "ids": [
+    null
+   ]
+  },
+  {
+   "name": "raw heading with an isindex",
+   "markdown": "<h2>a<isindex>b</h2>",
+   "ids": [
+    null
+   ]
+  }
  ]
 }

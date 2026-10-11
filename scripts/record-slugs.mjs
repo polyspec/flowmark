@@ -42,10 +42,18 @@ const isASCIIPunct = cp => (cp >= 0x21 && cp <= 0x2f) || (cp >= 0x3a && cp <= 0x
  */
 export function forms(cp) {
   const ref = `&#x${cp.toString(16).toUpperCase()};`;
-  if (cp === 0x0a || cp === 0x0d || cp === 0) return { ref, raw: null };
+  const htmlRaw = cp === 0x0a || cp === 0x0d || cp === 0 || cp === 0x3c || cp === 0x26 ? null : String.fromCodePoint(cp);
+  if (cp === 0x0a || cp === 0x0d || cp === 0) return { ref, raw: null, htmlRef: ref, htmlRaw };
   const ch = String.fromCodePoint(cp);
-  return { ref, raw: isASCIIPunct(cp) ? `\\${ch}` : ch };
+  return { ref, raw: isASCIIPunct(cp) ? `\\${ch}` : ch, htmlRef: ref, htmlRaw };
 }
+
+/**
+ * The line of a heading of text in a form: an ATX heading, or, for the forms htmlRef and htmlRaw, a raw HTML <h2>
+ * heading, an HTML block of its own, which holds the code point as its numeric reference or as itself (no '<' or '&',
+ * which would begin markup, and no line ending or U+0000).
+ */
+const headingLine = (form, text) => (form.startsWith('html') ? `<h2>${text}</h2>` : `# ${text}`);
 
 /** The number of code points a group heading holds. */
 export const groupSize = 512;
@@ -62,12 +70,12 @@ export function headingsOf(cps, form) {
   for (const cp of cps) {
     const f = forms(cp)[form];
     if (f === null) continue;
-    if (cp === 0x20 || cp === 0x2d) headings.push({ kind: 'single', cps: [cp], line: `# s${cp.toString(16)}p${f}q` });
+    if (cp === 0x20 || cp === 0x2d) headings.push({ kind: 'single', cps: [cp], line: headingLine(form, `s${cp.toString(16)}p${f}q`) });
     else grouped.push([cp, f]);
   }
   for (let i = 0; i < grouped.length; i += groupSize) {
     const part = grouped.slice(i, i + groupSize);
-    headings.push({ kind: 'group', cps: part.map(([cp]) => cp), line: `# g${headings.length}-${part.map(([, f]) => f).join('-')}-` });
+    headings.push({ kind: 'group', cps: part.map(([cp]) => cp), line: headingLine(form, `g${headings.length}-${part.map(([, f]) => f).join('-')}-`) });
   }
   return headings;
 }
@@ -94,7 +102,7 @@ export function splitIds(heading, id) {
 
 /** The headings that read each code point of a group alone. */
 export function singles(heading, form) {
-  return heading.cps.map(cp => ({ kind: 'single', cps: [cp], line: `# s${cp.toString(16)}p${forms(cp)[form]}q` }));
+  return heading.cps.map(cp => ({ kind: 'single', cps: [cp], line: headingLine(form, `s${cp.toString(16)}p${forms(cp)[form]}q`) }));
 }
 
 const hex = cp => cp.toString(16).toUpperCase().padStart(4, '0');
@@ -220,6 +228,106 @@ export const gitlabCases = [
 ];
 
 /**
+ * The raw HTML heading cases: documents with raw HTML <h1>–<h6> elements, beside markdown headings, recorded per heading
+ * element: the id each viewer gives it from its text; for a raw element in VS Code and GitLab, which give it none, the
+ * id attribute as written, or null.
+ */
+export const rawHeadingCases = [
+  ['raw heading', '<h2>items row T1</h2>'],
+  ['raw heading with an id', '<h2 id="hh">g</h2>'],
+  ['raw heading in capitals', '<H2>Items Row T1</H2>'],
+  ['raw headings of each level', '<h1>a</h1>\n\n<h3>b</h3>\n\n<h6>c</h6>\n\n<h7>d</h7>'],
+  ['raw heading with inline markup', '<h3><em>a</em> b</h3>'],
+  ['raw heading inline in a paragraph', 'x <h2>a *b* c</h2> d'],
+  ['raw heading across a soft break', 'x <h2>a\ny</h2> d'],
+  ['raw heading numbered with markdown headings', '# g\n\n<h2>g</h2>\n\n# g'],
+  ['raw and markdown heading of a detail shape', '## items row T1\n\n<h2>items row T1</h2>'],
+  ['raw heading with character references', '<h2>a&amp;b &#84;1 &copy &AMP; &Tcedil; &apos; &#x83; &#0;</h2>'],
+  ['raw heading in a block quote', '> <h2>a</h2>'],
+  ['raw heading in a list item', '- <h2>a</h2>'],
+  ['raw heading in a div', '<div><h2>a</h2></div>'],
+  ['raw heading in pre', '<pre>\n<h2>a</h2>\n</pre>'],
+  ['raw heading in code is no heading', '    <h2>a</h2>\n\n`<h2>b</h2>`'],
+  ['raw heading with attributes', '<h2 class="x" align="center">a</h2>'],
+  ['raw heading with a line break', '<h2>a<br>b</h2>\n\n<h2>c\nd</h2>'],
+  ['raw heading with an image', '<h2>a <img alt="b" src="/i.png"> c</h2>'],
+  ['raw heading with markdown syntax', '<h2>`a` *b* $c$ _d_</h2>'],
+  ['raw heading with a comment, a CDATA section and a processing instruction', '<h2>a<!-- c -->b<![CDATA[x]]>c<?y z?>d</h2>'],
+  ['raw heading with filtered tags', '<h2>a<script>x</script>b<title>y</title><style>z</style></h2>'],
+  ['raw heading with more filtered tags', '<h2>a <xmp>b</xmp> <textarea>c</textarea> <iframe>d</iframe> <noembed>e</noembed> <noframes>f</noframes> <plaintext>g</h2>'],
+  ['markdown heading with filtered tags', '# items row T<script>x</script> y'],
+  ['markdown heading cut by a paragraph tag', '# a <p>b</p> c'],
+  ['raw heading cut by a paragraph tag', '<h2>a<p>b</p>c</h2>'],
+  ['raw heading cut by a table tag', '<h2>a<table><tr><td>b</td></tr></table></h2>'],
+  ['raw heading cut by a form', '<h2>a<form>b</form>c</h2>'],
+  ['raw heading cut by another heading', '<h2>a<h3>b</h3>c</h2>\n\n<h2>d<h2>e</h2>'],
+  ['raw heading kept across block elements', '<h2>a<div>b</div>c<ul><li>d</li></ul>e<blockquote>f</blockquote>g<hr>h</h2>'],
+  ['raw heading with an end tag of another heading', '<h2>a</h3>b'],
+  ['raw heading closed twice', '<h2>a</h2>b</h2>'],
+  ['self-closed raw heading', '<h2/>x'],
+  ['unclosed raw heading at the end', '<h2>a'],
+  ['raw heading of spaces', '<h2>  a  b  </h2>'],
+  ['raw heading of nothing but a line ending', '<h2>\n\n*a* b\n\n</h2>'],
+  ['raw heading across a blank line', '<h2>a\n\nb</h2>'],
+  ['raw heading continued by an HTML block', '<h2>items row \n\n<div>T1</div>\n\n</h2>'],
+  ['raw heading continued by a paragraph in a div', '<h2>items row <div>\n\nT1\n\n</div></h2>'],
+  ['raw heading continued by a list', '<h2>items row\n\n- T1\n\n</h2>'],
+  ['raw heading continued by a block quote', '<h2>items row\n\n> T1\n\n</h2>'],
+  ['raw heading continued by a fenced code block', '<h2>items row\n\n```\nT1\n```\n\n</h2>'],
+  ['raw heading continued by an indented code block', '<h2>items row\n\n    T1\n\n</h2>'],
+  ['raw heading continued by a thematic break', '<h2>items row\n\n---\n\nT1</h2>'],
+  ['raw heading cut by a markdown heading', '<h2>items row\n\n# T1\n\n</h2>'],
+  ['raw heading cut by a table', '<h2>items row\n\n| a |\n|---|\n| T1 |\n\n</h2>'],
+  ['raw heading cut by a paragraph', '<h2>items row\n\n<span>T1</span>\n\n</h2>'],
+  ['raw heading cut by a paragraph after a comment', '<h2>items row\n<!-- x -->\n\nT1'],
+  ['raw heading in a paragraph cut by the next paragraph', 'a <h2>items row\n\n<b>T1</b>'],
+  ['raw heading with an open element continued', '<h2><span>items row\n\nT1'],
+  ['raw heading in a markdown heading', '# x <h2>a</h2> y'],
+  ['raw heading with an end tag of an outer element', '<div><h2>a</div>b</h2>'],
+  ['raw heading ended by a body end tag', '<h2>a</body>b'],
+  ['raw headings of other text', '<h2>Notes</h2>\n\n<h2>items row T1<b>x</b></h2>'],
+  ['raw heading whose end tag a div inside it outranks', '<h2>a<div>b</h2>c</div>d'],
+  ['raw heading with two elements open at a closer', '<h2><b><i>a<p>b</h2>\n\n<h2><b><span>c<p>d</h2>'],
+  ['raw heading with an element closed by another start tag', '<h2><p>a<div>b<p>c</h2>'],
+  ['raw heading nested in an unclosed element of an earlier block', '<div>\n\n<h2>a</div>b</h2>'],
+  ['raw heading with an isindex', '<h2>a<isindex>b</h2>'],
+];
+
+/** The element names whose start tag and end tag GitHub's closers vector records inside a raw <h2>. */
+export const elementNames = `a abbr acronym address applet area article aside audio b base basefont bdi bdo big blink
+blockquote body br button canvas caption center cite code col colgroup data datalist dd del details dfn dialog dir div
+dl dt em embed fieldset figcaption figure font footer form frame frameset h1 h2 h3 h4 h5 h6 head header hgroup hr html
+i iframe img input ins isindex kbd keygen label legend li link listing main map mark marquee menu menuitem meta meter
+nav nobr noembed noframes noscript object ol optgroup option output p param picture plaintext pre progress q rb rp rt
+rtc ruby s samp script search section select slot small source span strike strong style sub summary sup svg math table
+tbody td template textarea tfoot th thead time title tr track tt u ul var video wbr xmp foo custom-el`.split(/\s+/);
+
+/** The ids and name attributes of the heading elements of html, in order: the id attribute of each, or null. */
+export function headingIdAttrs(html) {
+  return [...html.matchAll(/<h[1-6]((?=[\s>\/])[^>]*)>/gi)].map(m => {
+    const id = (m[1] ?? '').match(/\sid="([^"]*)"/i);
+    return id ? unescapeAttr(id[1]) : null;
+  });
+}
+
+/**
+ * The named character references that GitHub decodes inside a raw HTML heading, with the text each renders: every name
+ * of the entities package the engine reads (internal/htmlentity), in its own raw <h2>.
+ */
+function githubEntities() {
+  const names = Object.keys(JSON.parse(readFileSync(path.join(repositoryRoot, 'internal', 'htmlentity', 'testdata', 'entities-3.0.1.json'), 'utf8')));
+  const html = githubRender(names.map((n, i) => `<h2>e${i}x&${n};x</h2>`).join('\n\n') + '\n');
+  const inner = [...html.matchAll(/<h2[^>]*>e(\d+)x([^]*?)x<\/h2>/g)];
+  if (inner.length !== names.length) throw new Error(`${inner.length} headings rendered for ${names.length} names`);
+  const out = {};
+  for (const [, i, body] of inner) {
+    const n = names[Number(i)];
+    if (body !== `&amp;${n};`) out[n] = unescapeAttr(body);
+  }
+  return out;
+}
+
+/**
  * The raw HTML attribute cases of GitHub: documents of one raw tag whose id or name attribute GitHub renders. GitHub
  * renders no anchor of its own for them; the recorded value is the attribute as rendered.
  */
@@ -251,20 +359,34 @@ export function unescapeAttr(v) {
 }
 
 /**
- * The heading ids of GitHub's rendering html, one per heading element in order: the id of the anchor that follows the
- * heading, without user-content-; the empty string for an anchor whose id is empty, which GitHub writes without the
- * prefix; null for a heading that GitHub gives no anchor.
+ * The heading ids of GitHub's rendering html, one per heading element in order. GitHub writes each heading it anchors
+ * in a <div class="markdown-heading"> that ends with the anchor <a id="user-content-<id>" class="anchor">; the first
+ * heading element in the wrapper is the anchored one, whose text the id is of (a heading parsed inside it can follow it
+ * there once the sanitizer has removed the elements between). Its id is without user-content-; the empty string for an
+ * anchor whose id is empty, which GitHub writes without the prefix; null for any other heading element.
  */
 export function githubIds(html) {
-  return html.split(/(?=<h[1-6][\s>])/).filter(part => /^<h[1-6][\s>]/.test(part)).map(part => {
-    const m = part.match(/^[^]*?<\/h[1-6]>(?:<a id="([^"]*)" class="anchor")?/);
-    if (!m) throw new Error(`a heading that does not close: ${part.slice(0, 80)}`);
-    if (m[1] === undefined) return null;
-    const id = unescapeAttr(m[1]);
-    if (id === '') return '';
-    if (!id.startsWith('user-content-')) throw new Error(`a heading anchor without user-content-: ${id}`);
-    return id.slice('user-content-'.length);
-  });
+  const out = [];
+  let wrapper = false;
+  let first = -1;
+  for (const m of html.matchAll(/<div class="markdown-heading">|<a id="([^"]*)" class="anchor"|<h[1-6](?=[\s>\/])[^>]*>/g)) {
+    if (m[0] === '<div class="markdown-heading">') {
+      if (wrapper) throw new Error(`a heading wrapper inside another at ${m.index}`);
+      wrapper = true;
+      first = -1;
+    } else if (m[0].startsWith('<a ')) {
+      if (!wrapper || first < 0) throw new Error(`a heading anchor outside a heading wrapper at ${m.index}`);
+      const id = unescapeAttr(m[1]);
+      if (id !== '' && !id.startsWith('user-content-')) throw new Error(`a heading anchor without user-content-: ${id}`);
+      out[first] = id === '' ? '' : id.slice('user-content-'.length);
+      wrapper = false;
+    } else {
+      if (wrapper && first < 0) first = out.length;
+      out.push(null);
+    }
+  }
+  if (wrapper) throw new Error('a heading wrapper without its anchor');
+  return out;
 }
 
 /** The id and name attributes of GitHub's rendering html other than its heading anchors, in order. */
@@ -332,16 +454,23 @@ function codePointIds(form, render, label) {
 }
 
 /** The text of a code point file: its header lines, then the compressed lines. */
-function codePointFile(header, ref, raw) {
+function codePointFile(header, ref, raw, html = false) {
   const head = [
     ...header.map(l => `# ${l}`),
     '#',
     '# Each line is lo..hi ; ref ; raw: the code points lo to hi (the surrogates skipped), and the id of a heading',
     '# holding the code point between two hyphens, without them: ref when the heading holds it as its numeric',
-    '# character reference &#xN;, raw when it holds the character itself (an ASCII punctuation character',
-    '# backslash-escaped). drop: the id holds nothing; keep: the character; +N or -N: the one character N',
-    '# (hexadecimal) code points away; else the code points of the id; none: no such heading (a line ending,',
-    '# or U+0000, whose raw form GitHub renders no document with).',
+    ...(html ? [
+      '# character reference &#xN;, raw when it holds the character itself; the heading is a raw HTML <h2> heading,',
+      '# an HTML block of its own. drop: the id holds nothing; keep: the character; +N or -N: the one character N',
+      '# (hexadecimal) code points away; else the code points of the id; none: no such heading (a line ending,',
+      "# U+0000, '<' or '&', which have no raw form here).",
+    ] : [
+      '# character reference &#xN;, raw when it holds the character itself (an ASCII punctuation character',
+      '# backslash-escaped). drop: the id holds nothing; keep: the character; +N or -N: the one character N',
+      '# (hexadecimal) code points away; else the code points of the id; none: no such heading (a line ending,',
+      '# or U+0000, whose raw form GitHub renders no document with).',
+    ]),
   ];
   return [...head, ...compress(ref, raw)].join('\n') + '\n';
 }
@@ -360,15 +489,37 @@ function recordGitHub() {
   const ref = codePointIds('ref', render, 'GitHub');
   const raw = codePointIds('raw', render, 'GitHub');
   writeFileSync(path.join(vectorDir, 'github-codepoints.txt'), codePointFile(header, ref, raw));
+  const htmlHeader = [
+    "GitHub's ids of raw HTML <h2> headings per code point (spec 10, Detail headings and anchors), the vectors of",
+    "S_GH's reading of the text of a raw HTML heading.",
+    ...header.slice(1),
+  ];
+  const htmlRef = codePointIds('htmlRef', render, 'GitHub');
+  const htmlRaw = codePointIds('htmlRaw', render, 'GitHub');
+  writeFileSync(path.join(vectorDir, 'github-html-codepoints.txt'), codePointFile(htmlHeader, htmlRef, htmlRaw, true));
   const cases = structuralCases.map(([name, markdown]) => ({ name, markdown, ids: render(markdown + '\n') }));
+  const rawHeadings = rawHeadingCases.map(([name, markdown]) => ({ name, markdown, ids: render(markdown + '\n') }));
   const attributes = attributeCases.map(([name, markdown]) => ({ name, markdown, values: githubAttributes(githubRender(markdown + '\n')) }));
+  log('GitHub: the element names that end a heading element');
+  const closers = Object.fromEntries(elementNames.map(x => [x, {
+    open: render(`<h2>a<${x}>b</h2>\n`),
+    end: render(`<h2>a</${x}>b</h2>\n`),
+  }]));
+  // The start tags that end a heading element, each read again after every element name left open inside it.
+  const ending = elementNames.filter(x => closers[x].open.length > 1 || closers[x].open[0] === 'a');
+  log(`GitHub: ${ending.length} ending tags after each of ${elementNames.length} open elements`);
+  const nested = Object.fromEntries(elementNames.map(o => [o, Object.fromEntries(ending.map(x => [x, render(`<h2><${o}>a<${x}>b</h2>\n`)]))]));
   const file = {
     viewer: 'GitHub',
     recorded: today(),
     request: 'POST https://api.github.com/markdown, mode "markdown"; ids without user-content-',
     rerecord: 'make slug-vectors (scripts/record-slugs.mjs)',
     cases,
+    rawHeadings,
     attributes,
+    htmlEntities: githubEntities(),
+    closers,
+    nested,
   };
   writeFileSync(path.join(vectorDir, 'github-headings.json'), JSON.stringify(file, null, 1) + '\n');
 }
@@ -457,6 +608,16 @@ async function recordVSCode() {
       });
       return ids;
     };
+    // The id attribute of every heading element of the preview's HTML: #addNamedHeaders sets it on each heading_open
+    // token; raw HTML is written as it stands.
+    const renderHtml = text => {
+      const builder = githubSlugifier.createBuilder();
+      const tokens = md.parse(text, {});
+      tokens.forEach((t, i) => {
+        if (t.type === 'heading_open') t.attrSet('id', builder.add(plain.plain(tokens[i + 1])).value);
+      });
+      return headingIdAttrs(md.renderer.render(tokens, md.options, {}));
+    };
     const header = [
       "VS Code's heading ids per code point (spec 10, Detail headings and anchors), the vectors of S_VS.",
       `Recorded ${today()} by running VS Code ${tag}'s own code: ${base}/src/slugify.ts (githubSlugifier) and`,
@@ -475,6 +636,7 @@ async function recordVSCode() {
       request: `VS Code ${tag}: ${base}/src/slugify.ts and markdownEngine.ts #tokenToPlainText, markdown-it ${mdVersion}, @vscode/markdown-it-katex ${katexPluginVersion} with ${JSON.stringify(mathOptions)}, node ${process.versions.node}`,
       rerecord: 'make slug-vectors (scripts/record-slugs.mjs)',
       cases: structuralCases.map(([name, markdown]) => ({ name, markdown, ids: render(markdown + '\n') })),
+      rawHeadings: rawHeadingCases.map(([name, markdown]) => ({ name, markdown, ids: renderHtml(markdown + '\n') })),
     };
     writeFileSync(path.join(vectorDir, 'vscode-headings.json'), JSON.stringify(file, null, 1) + '\n');
     // The slugify.ts that was run, whose expression TestVSRemovalIsVSCodeRegex reads, with VS Code's MIT license.
@@ -511,13 +673,16 @@ export function glfmArgs(src) {
 
 /**
  * The heading ids of the gitlab-glfm-markdown rendering html, one per heading element in order: the id of a heading
- * comrak renders, which carries data-sourcepos, without user-content-; null for raw HTML, which comrak writes as it
- * stands and gives no id of its own.
+ * comrak renders, which carries data-sourcepos, without user-content-; for raw HTML, which comrak writes as it stands
+ * and gives no id of its own, the id attribute as written, or null.
  */
 export function gitlabIds(html) {
-  return [...html.matchAll(/<h[1-6](\s[^>]*)?>/gi)].map(m => {
+  return [...html.matchAll(/<h[1-6]((?=[\s>\/])[^>]*)>/gi)].map(m => {
     const attrs = m[1] ?? '';
-    if (!/\sdata-sourcepos="/.test(attrs)) return null;
+    if (!/\sdata-sourcepos="/.test(attrs)) {
+      const written = attrs.match(/\sid="([^"]*)"/i);
+      return written ? unescapeAttr(written[1]) : null;
+    }
     const id = attrs.match(/\sid="([^"]*)"/);
     if (!id) throw new Error(`a heading of comrak without an id: ${m[0]}`);
     const v = unescapeAttr(id[1]);
@@ -598,6 +763,7 @@ async function recordGitLab() {
       request: `gitlab-glfm-markdown ${version} (GitLab ${commit}), ${options}; ids without user-content-`,
       rerecord: 'make slug-vectors (scripts/record-slugs.mjs)',
       cases: [...structuralCases, ...gitlabCases].map(([name, markdown]) => ({ name, markdown, ids: render(markdown + '\n') })),
+      rawHeadings: rawHeadingCases.map(([name, markdown]) => ({ name, markdown, ids: render(markdown + '\n') })),
     };
     writeFileSync(path.join(vectorDir, 'gitlab-headings.json'), JSON.stringify(file, null, 1) + '\n');
   } finally {

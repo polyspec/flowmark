@@ -269,7 +269,11 @@ reimplements them.
   and payload alike — other than a detail heading takes the anchor A of a detail heading when, for a
   slug S among S_GH, S_VS and S_GL of its rendered inline text (the text CommonMark 0.31.2 renders) as
   that slug reads it, S of the heading equals A, or A is S of the heading followed by `-` and a
-  decimal number n ≥ 1 without a leading zero. S_GH is GitHub's slug (the text lowercased by the full
+  decimal number n ≥ 1 without a leading zero. A raw HTML `<h1>`–`<h6>` heading, which GitHub anchors
+  and VS Code and GitLab do not, is a heading under S_GH, and S_GH reads every heading element as
+  GitHub's parser does — its text from its start tag to where a later tag or block ends it, as the
+  slug vectors record — and, where the element continues into content the engine does not render,
+  takes A when its slug so far begins A. S_GH is GitHub's slug (the text lowercased by the full
   mapping without its conditions, the word characters of Unicode 17.0.0 — Alphabetic, marks, decimal
   numbers, connector punctuation and Join_Control — the space and `-` kept, each space then `-`; an
   image is no text), S_VS is VS Code's (the trimmed text lowercased by JavaScript's `toLowerCase`,
