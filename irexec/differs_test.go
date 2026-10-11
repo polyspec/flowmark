@@ -19,7 +19,7 @@ func TestCorpusData(t *testing.T) {
 	if got := f.c.Data("missing.flowmark.md"); got != nil {
 		t.Fatalf("Data(missing) = %q, want nil", got)
 	}
-	same, err := Open(f.cat, store.DirFS(f.root))
+	same, err := Open(f.cat, store.DirFS(f.root), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,7 +36,7 @@ func TestCorpusData(t *testing.T) {
 		t.Fatal(err)
 	}
 	write("notes/N4.flowmark.md", lines("# Fourth", "- position: 3"))
-	changed, err := Open(f.cat, store.DirFS(f.root))
+	changed, err := Open(f.cat, store.DirFS(f.root), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +47,7 @@ func TestCorpusData(t *testing.T) {
 	if err := os.Symlink("../tags.flowmark.md", filepath.Join(f.root, "notes", "N5.flowmark.md")); err != nil {
 		t.Skipf("this platform creates no symbolic link here: %v", err)
 	}
-	walked, err := Open(f.cat, store.DirFS(f.root))
+	walked, err := Open(f.cat, store.DirFS(f.root), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

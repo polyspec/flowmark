@@ -24,6 +24,14 @@ const (
 	Replayed Kind = "journal.replayed"
 	// Discarded: recovery removed a stage without a prepare record.
 	Discarded Kind = "journal.discarded"
+	// CorpusRead: the corpus tree read a folder or a file from the disk; Path names it.
+	CorpusRead Kind = "corpus.read"
+	// CorpusChanged: a notification, or the write path's Forget, dropped what the corpus tree held of Path; the next
+	// read reads it from the disk again.
+	CorpusChanged Kind = "corpus.changed"
+	// CorpusOverflow: the change notifications overflowed, so the corpus tree dropped everything and the next read
+	// reads the whole corpus again; Path is the corpus root.
+	CorpusOverflow Kind = "corpus.overflow"
 )
 
 // Event is one published event. Path is the absolute path of the lock file or of the stage directory; Holder is the

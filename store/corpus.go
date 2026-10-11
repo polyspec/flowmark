@@ -32,8 +32,9 @@ func DirFS(root string) FS {
 // Only the documents of the folder are read; a symbolic link is never
 // followed, and a document that is not of the folder is a walk diagnostic.
 // The bytes of each document read are returned by corpus path, so that a
-// caller holds the exact pre-image of every file its rows came from.
-func ParseFilesTable(cat *catalog.Catalog, fsys FS, table string, lk Linker) ([]*Row, map[string][]byte, []Diagnostic) {
+// caller holds the exact pre-image of every file its rows came from. Each
+// document is parsed through memo, nil to parse every one.
+func ParseFilesTable(cat *catalog.Catalog, fsys FS, table string, lk Linker, memo *Memo) ([]*Row, map[string][]byte, []Diagnostic) {
 	lay, err := layoutOf(cat, table)
 	if err != nil {
 		return nil, nil, []Diagnostic{fileDiag(table, RuleWalk, err.Error())}
@@ -52,7 +53,7 @@ func ParseFilesTable(cat *catalog.Catalog, fsys FS, table string, lk Linker) ([]
 	case !root[i].IsDir():
 		return nil, nil, []Diagnostic{fileDiag(table, RuleWalk, "the table folder is not a folder")}
 	}
-	w := &walker{cat: cat, fsys: fsys, lay: lay, lk: lk, data: map[string][]byte{}}
+	w := &walker{cat: cat, fsys: fsys, lay: lay, lk: lk, memo: memo, data: map[string][]byte{}}
 	w.visit(table, 0)
 	return w.rows, w.data, w.diags
 }
@@ -63,6 +64,7 @@ type walker struct {
 	fsys  FS
 	lay   *filesLayout
 	lk    Linker
+	memo  *Memo
 	rows  []*Row
 	data  map[string][]byte // the bytes of each document read, by corpus path
 	diags []Diagnostic
@@ -102,7 +104,7 @@ func (w *walker) visit(rel string, depth int) {
 			continue
 		}
 		w.data[file] = data
-		row, diags := ParseFile(w.cat, w.lay.table, file, data, w.lk)
+		row, diags := w.memo.ParseFile(w.cat, w.lay.table, file, data, w.lk)
 		w.diags = append(w.diags, diags...)
 		if row != nil {
 			w.rows = append(w.rows, row)

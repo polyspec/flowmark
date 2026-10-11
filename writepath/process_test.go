@@ -283,5 +283,10 @@ func openFixtureEvents(t *testing.T, root string) *fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() {
+		if err := c.Close(); err != nil {
+			t.Errorf("Close: %v", err)
+		}
+	})
 	return &fixture{t: t, root: root, cat: cat, j: j, c: c, rec: rec}
 }

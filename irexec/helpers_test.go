@@ -203,7 +203,7 @@ func (f *fixture) sub(t *testing.T, name string, fn func(f *fixture)) {
 // reopen reads the corpus of the fixture again.
 func (f *fixture) reopen() {
 	f.t.Helper()
-	c, err := Open(f.cat, store.DirFS(f.root))
+	c, err := Open(f.cat, store.DirFS(f.root), nil)
 	if err != nil {
 		f.t.Fatal(err)
 	}

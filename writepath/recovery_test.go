@@ -224,6 +224,13 @@ func TestOpenRecovers(t *testing.T) {
 			t.Fatal(err)
 		}
 		c, err := Open(context.Background(), cat, j, 0)
+		if err == nil {
+			t.Cleanup(func() {
+				if err := c.Close(); err != nil {
+					t.Errorf("Close: %v", err)
+				}
+			})
+		}
 		return c, rec, err
 	}
 	t.Run("40#opening-a-corpus: opening completes a prepared stage", func(t *testing.T) {

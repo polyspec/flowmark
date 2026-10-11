@@ -18,8 +18,8 @@ import (
 
 	"github.com/polyspec/flowmark/catalog"
 	"github.com/polyspec/flowmark/irexec"
-	"github.com/polyspec/flowmark/store"
 	"github.com/polyspec/flowmark/store/journal"
+	"github.com/polyspec/flowmark/validate"
 )
 
 // The orm codes (orm errors.yaml) and the face names (spec 40 Failure vocabulary) of the write path's own failures.
@@ -94,6 +94,8 @@ type Corpus struct {
 	cat   *catalog.Catalog
 	exec  *irexec.Executor
 	j     *journal.Corpus
+	tree  *journal.Tree
+	memo  *validate.Memo
 	root  string
 	wait  time.Duration
 	clock func() time.Time
@@ -113,13 +115,20 @@ func Open(ctx context.Context, cat *catalog.Catalog, j *journal.Corpus, wait tim
 	if err != nil {
 		return nil, err
 	}
-	c := &Corpus{cat: cat, exec: e, j: j, root: j.Root(), wait: wait, clock: engineClock}
+	tree, err := j.Tree()
+	if err != nil {
+		return nil, driverError("watching the corpus", err)
+	}
+	c := &Corpus{cat: cat, exec: e, j: j, tree: tree, memo: validate.NewMemo(), root: j.Root(), wait: wait, clock: engineClock}
 	l, err := c.acquire(ctx, "open")
 	if err != nil {
-		return nil, err
+		return nil, errors.Join(err, c.Close())
 	}
-	if err := l.Release(); err != nil {
-		return nil, driverError("releasing the corpus lock", err)
+	// The first read fills the tree: it reads every corpus document once, and later operations read only the files
+	// the notifications name.
+	_, err = c.read()
+	if err = release(l, err); err != nil {
+		return nil, errors.Join(err, c.Close())
 	}
 	return c, nil
 }
@@ -173,9 +182,24 @@ func releaseAfter(l *journal.Lock, written bool, err error) error {
 
 // read reads the corpus as a request reads it.
 func (c *Corpus) read() (*irexec.Corpus, error) {
-	cur, err := irexec.Open(c.cat, store.DirFS(c.root))
+	if err := c.tree.Refresh(); err != nil {
+		return nil, driverError("reading the corpus", err)
+	}
+	cur, err := irexec.Open(c.cat, c.tree, c.memo)
+	if err == nil {
+		// A path whose watch could not be armed was not read: the read has no answer.
+		err = c.tree.Fault()
+	}
 	if err != nil {
 		return nil, driverError("reading the corpus", err)
 	}
 	return cur, nil
+}
+
+// Close closes the corpus: the watch of its tree. An operation of a closed corpus fails.
+func (c *Corpus) Close() error {
+	if err := c.tree.Close(); err != nil {
+		return driverError("closing the watch of the corpus", err)
+	}
+	return nil
 }

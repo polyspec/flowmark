@@ -34,6 +34,14 @@ func (c *Corpus) commit(t *tx) (bool, error) {
 	if len(net) == 0 {
 		return false, nil
 	}
+	// The targets are read again from the disk under the lock, whatever the notifications said: a hand edit whose
+	// notification has not arrived is still found (step 1). The commit's own writes are dropped too, on every way out.
+	paths := make([]string, len(net))
+	for i, tg := range net {
+		paths[i] = tg.Path
+	}
+	c.tree.Forget(paths...)
+	defer c.tree.Forget(paths...)
 	now, err := c.read()
 	if err != nil {
 		return false, err
