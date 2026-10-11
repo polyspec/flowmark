@@ -1,9 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 7b7a519005ebcacbf669fb9cb145dbfb7b5b531a934407f3739d3a39a274b256 -->
+<!-- source-sha256: 98f77796a62f12e49ec263cb1a4960e59030982f8424c7bc71b583a2b6f0fc0a -->
 # Changelog
 
 ## Unreleased
 
+- T12.5-6: 한 corpus를 여러 process가 동시에 열 때 둘이 lock folder를 함께 만들어도 실패하지 않는다. folder를 먼저 만들고 나중에 판정한다.
 - T12.5-5: 열기에 실패한 corpus는 lock을 남기지 않는다. lock 해제는 lock file을 여는데 macOS의 감시가 문서마다 descriptor를 쥐어 남은 것이 없었으므로, 감시를 먼저 닫고 lock을 해제한다.
 - T12.11.2-1: board 애플리케이션이 hyper의 Node.js 서버에서도 orm의 TypeScript client와 `markdown://` 위에 `examples/board/web/node`로 돈다. PHP 서버와 Node.js 서버는 같은 행과 글 하나의 같은 페이지를 낸다.
 - T12.11.2: board 애플리케이션이 hyper의 PHP 서버 위에서 orm과 `markdown://`로 `examples/board/web`에서 돈다. 글 1000개를 1월부터 10월까지 달마다 100개씩 나누며, 두 board corpus 모두 `posts`는 `created`의 달로 샤드되고 `examples/board/seed`가 엔진으로 글을 쓴다.
