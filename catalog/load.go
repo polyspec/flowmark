@@ -43,6 +43,7 @@ func Load(root string) (*Catalog, []Diagnostic) {
 	l.resolveLayout()
 	l.checkNames()
 	l.checkHistoryMarks()
+	l.checkHistoryStorage()
 	if len(l.diags) > 0 {
 		return nil, l.diags
 	}

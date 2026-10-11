@@ -238,6 +238,37 @@ func (l *loader) checkHistoryMarks() {
 	}
 }
 
+// checkHistoryStorage reports, at the history table's name, a history table that
+// is stored neither `block <row fk> table` under its state table — a block whose
+// placement foreign key is the history's row column and references the state table
+// — nor `document table` (spec 30 The history table): the executor and the
+// validator place a history row only there.
+func (l *loader) checkHistoryStorage() {
+	for _, r := range l.order {
+		s := r.table.Settings
+		if s == nil || s.StateMachine == nil || s.StateMachine.History == nil {
+			continue
+		}
+		hist := s.StateMachine.History
+		h := l.refs[hist.Table]
+		if h == nil {
+			continue
+		}
+		st := h.storage
+		ok := st.Kind == StorageDocument && st.Shape == ShapeTable
+		if st.Kind == StorageBlock && st.Shape == ShapeTable && st.Parent == r.table.Name {
+			for _, fk := range h.table.ForeignKeys {
+				if fk.Name == st.ParentForeignKey && len(fk.Columns) == 1 && fk.Columns[0] == hist.Row {
+					ok = true
+				}
+			}
+		}
+		if !ok {
+			l.add(l.tableDiag(h.doc, h.table.Name, "table "+h.table.Name+": a history table is stored `block <row fk> table` under its state table or `document table`"))
+		}
+	}
+}
+
 // markdownOf returns the names of the markdown columns of a table.
 func markdownOf(t *dbspec.Table) []string {
 	if t.Settings == nil {
