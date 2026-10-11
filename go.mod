@@ -3,7 +3,7 @@ module github.com/polyspec/flowmark
 go 1.27
 
 require (
-	github.com/polyspec/orm v0.0.8-0.20261011180106-4b22faf2713f
+	github.com/polyspec/orm v0.0.8-0.20261011181713-60a123b8bdff
 	golang.org/x/sys v0.49.0
 	golang.org/x/text v0.42.0
 	modernc.org/sqlite v1.60.1

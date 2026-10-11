@@ -342,6 +342,9 @@ func TestRelations(t *testing.T) {
 		f.want(f.msg("all", "items", map[string]any{"columns": none, "where": where(pred("id", "eq", p(0))), "relations": []any{hist(map[string]any{"key_by": "to_state"})}}, "T1"),
 			`{"rows":[{"id":"T1","parent":null,"owner":"P1","history":{"doing":{"id":1,"item":"T1","to_state":"doing"},"done":{"id":2,"item":"T1","to_state":"done"}}}]}`)
 	})
+	f.sub(t, "60#surfaces: key_by names a non-null column", func(f *fixture) {
+		f.fails(f.msg("all", "items", map[string]any{"columns": none, "relations": []any{hist(map[string]any{"key_by": "evidence"})}}), "IR_INVALID")
+	})
 	f.sub(t, "60#surfaces: limit_per_parent keeps the first rows by the primary key", func(f *fixture) {
 		f.want(f.msg("all", "items", map[string]any{"columns": none, "where": where(pred("id", "eq", p(0))), "relations": []any{hist(map[string]any{"limit_per_parent": 1})}}, "T1"),
 			`{"rows":[{"id":"T1","parent":null,"owner":"P1","history":[{"id":1,"item":"T1","to_state":"doing"}]}]}`)
