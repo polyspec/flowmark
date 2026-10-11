@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database-checklist -->
-<!-- source-sha256: a5ebd27344a6ebdfc23a51cceb4f4b4783495a209cc473736aff75f00fac63f8 -->
+<!-- source-sha256: 6f9e7032633a24a9558741281a698b72039db679dead6a3b85244fb3775fd3e3 -->
 # markdown database checklist
 
 ## T12 markdown database
@@ -76,7 +76,7 @@
   - 완료 기준: T12.2.2와 같으며, block row의 detail section 안의 block을 포함한다. 모든 규칙마다 허용과 거절 사례가 있고, parse와 emit은 golden seed로 fuzz한다.
 - [o] T12.2.5 하나의 dataset을 세 저장 방식으로: 같은 행을 files, document, block으로 저장하면 같은 행으로 parse되고, 각 저장마다 P1/P2가 성립한다 (T12.2.4 선행)
   - 완료 기준: 저장 등가성 테스트. 모든 규칙마다 허용과 거절 사례가 있고, parse와 emit은 golden seed로 fuzz한다.
-- [ ] T12.3 validator: key, foreign key, 순환, 제목, 블록 형식, 순서, limit, 이력 빈틈과 사슬, view. codec이 담은 값의 원문, 쓰인 target, 중복 행에 대한 `type`, `reference.dangling`, `key.duplicate`의 보고와 file을 가로지르는 `parent.cycle`을 포함한다 (T12.2 선행)
+- [~] T12.3 validator: key, foreign key, 순환, 제목, 블록 형식, 순서, limit, 이력 빈틈과 사슬, view. codec이 담은 값의 원문, 쓰인 target, 중복 행에 대한 `type`, `reference.dangling`, `key.duplicate`의 보고와 file을 가로지르는 `parent.cycle`을 포함한다 (T12.2 선행). 상태: view를 뺀 모든 규칙이 `validate`에 있다(73edd93). view는 필요한 spec을 정하는 T12.3-1을 기다린다.
   - 완료 기준: 모든 규칙마다 허용과 거절 사례가 있고, parse와 emit은 golden seed로 fuzz한다.
 - [ ] T12.3-1 view와 codec column을 spec으로 정하고 검증한다. 원인: T12.3 분석에서 spec이 view를 검증하기에 너무 얇다는 것이 드러났다. view table을 선언하는 setting이 없다(`views`라는 이름으로 알아보면 column 이름이 동작을 고르지 않는다는 spec 30 규칙을 어긴다). IR `Group`은 값을 담지 않으므로 저장된 filter가 parameter를 둘 곳이 없다. `ir.Validate`는 `Group`이 아니라 `Request`를 검사하는데, validator가 그것을 어떻게 만드는지 적힌 곳이 없다. 잘못된 view의 rule 이름과 위치가 적혀 있지 않다. spec 10은 `filter ordered_json` 같은 `codec` column의 읽을 수 있는 형태를 적지 않는다. 완료 기준: 첫 round 전에 범위를 고정한 적대 검증을 거쳐 orm dbspec과 spec 30의 `view` manifest setting, parameter를 함께 둔 filter의 저장 형태, spec 10과 50의 `view`, `codec` 규칙과 위치를 정하고, validator가 그것을 허용과 거절 사례와 함께 구현한다 (T12.3 후속)
 - [ ] T12.3-2 spec 50이 이름은 적었지만 T12.3이 맡지 않은 validator 규칙을 정하고 구현한다. `check`, `state.transition`, `state.required` 각각의 읽기 쪽 의미, 위치, 보고를 정한다. 또 column type이 아닌 state 값이나 이력의 `from`/`to` 값이 `type` 하나뿐인지, `history.gap`이나 `history.chain`도 함께인지 정한다(결함 하나에 보고 하나 — T12.3이 `order`와 foreign key에 대해 정한 대로). 원인: T12.3 검증에서 spec 50에 이 rule 이름이 있으나 읽기 쪽 정의도 담당 항목도 없다는 것이 드러났고, 19자 state를 가진 `jobs/1`이 `type`과 이력 규칙을 함께 보고하는 것을 확인했다. 완료 기준: 첫 round 전에 범위를 고정한 적대 검증을 거쳐 spec 10과 50이 각각을 근거와 함께 적고, validator가 허용과 거절 사례와 함께 구현한다 (T12.3 후속)
