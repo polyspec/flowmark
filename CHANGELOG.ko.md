@@ -1,9 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 9495a8107458a1ebf27c738b4a422bda7cfdc46b9e95842cbca315ec187e6f50 -->
+<!-- source-sha256: 5f0cd00c6102518d51e169a20b170937fa68c11634e2024cfc03c41b40d7706f -->
 # Changelog
 
 ## Unreleased
 
+- T12.1-36: `files` 저장은 `order`를 sparse rank로 저장한다. 이동, insert, parent 변경은 빈 rank가 있으면 놓인 행의 file만 다시 쓰고, 빈 rank가 없으면 묶음을 한 번 다시 번호 매긴다. delete는 형제를 다시 쓰지 않는다. 읽기는 여전히 1부터 센 위치를 보고, validator의 `order`는 공유된 rank만 보고한다. 형제 1,000개 중 1번 위치 insert가 file 1,001개 대신 1개를 쓴다.
 - T12.5-2: operation이 더 이상 바뀌지 않은 file을 읽지 않는다. 열린 corpus는 운영체제의 file 알림(kqueue, inotify, ReadDirectoryChangesW)으로 최신을 유지하고, overflow면 전부 다시 읽으며, commit 대상은 언제나 lock 아래에서 다시 읽고, bytes와 link 대상이 그대로인 문서의 parse를 재사용한다. 10k 문서 읽기가 CPU 3.9초에서 68ms로 줄었고, 모든 face가 자기가 연 corpus를 닫는다.
 - T12.11: 하나의 dataset을 세 저장 방식(document list, document table, 행마다 file)으로 담은 issue tracker(`examples/tracker`). 엔진으로 같은 행을 읽어 낸다. 하드코딩 목록 grep은 test `tests/inventory`로 두었고 결과는 0건이다.
 - T12.11.1: board 예제(`examples/board`): 댓글과 답글이 달린 post. 댓글을 post file 안 block으로 두는 변형과 자기 file로 두는 변형이 있고, 엔진으로 만들고, 댓글과 답글을 달고, 고치고, 지우면 두 변형이 같은 행을 낸다.
