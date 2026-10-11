@@ -2,7 +2,6 @@ package irexec
 
 import (
 	"encoding/json"
-	"fmt"
 	"math/big"
 	"math/rand/v2"
 	"slices"
@@ -987,6 +986,13 @@ func (r *reader) subColumn(sub *ir.Sub, fr *frame) ([]cell, dbspec.Type, *Error)
 	if err != nil {
 		return nil, dbspec.Type{}, err
 	}
+	// A scalar column subquery is ordered and limited to one row, which orm's validator has checked.
+	if q := sub.Query; q.Limit != nil {
+		if envs, err = r.order(s, envs); err != nil {
+			return nil, dbspec.Type{}, err
+		}
+		envs = limitEnvs(envs, q.Limit.Offset, q.Limit.Count)
+	}
 	t := fieldType(s.ent.Field(sub.Column))
 	vals := make([]cell, 0, len(envs))
 	for _, ev := range envs {
@@ -1021,11 +1027,8 @@ func (r *reader) subScalar(sub *ir.Sub, fr *frame) (cell, dbspec.Type, *Error) {
 	if err != nil {
 		return cell{}, t, err
 	}
-	switch len(vals) {
-	case 0:
+	if len(vals) == 0 {
 		return cell{null: true}, t, nil
-	case 1:
-		return vals[0], t, nil
 	}
-	return cell{}, t, unspecified(fmt.Sprintf("a scalar column subquery of %s that matches %d rows, IR_INVALID by its shape once ir.Validate refuses it (orm T84)", sub.Query.Entity, len(vals)))
+	return vals[0], t, nil
 }
