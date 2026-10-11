@@ -118,6 +118,36 @@ func TestInsert(t *testing.T) {
 			t.Fatalf("tags:\n%s", f.file("tags.flowmark.md"))
 		}
 	})
+	upsert := func(f *fixture, id string) []byte {
+		return f.msg("insert", "people", map[string]any{"set": sets("id", "name"), "on_duplicate": []any{set("name", 1)}}, id, "Upserted")
+	}
+	t.Run("60#surfaces: on_duplicate meets the row whose primary key equals without regard to case, which keeps its key", func(t *testing.T) {
+		f := fresh(t)
+		res := f.want(upsert(f, "p1"), `{"affected":1,"keys":["P1"]}`)
+		f.commit(res)
+		f.want(f.msg("all", "people", map[string]any{"columns": map[string]any{"mode": "none", "add": []string{"name"}}}),
+			`{"rows":[{"id":"P1","name":"Upserted"},{"id":"P2","name":"Max"}]}`)
+	})
+	t.Run("60#surfaces: on_duplicate meets the byte-equal key first, else the least in byte order", func(t *testing.T) {
+		// Two files whose names differ only in case: a case-sensitive root.
+		docs := baseDocs()
+		docs["notes/NX.flowmark.md"] = lines("# Upper", "- position: 3")
+		docs["notes/nx.flowmark.md"] = lines("# Lower", "- position: 4")
+		f := newFixtureIn(t, caseSensitiveRoot(t), catalogRoot, docs).on(t)
+		up := func(id string) []byte {
+			return f.msg("insert", "notes", map[string]any{"set": sets("id", "title", "body"), "on_duplicate": []any{set("title", 1)}}, id, "Upserted", "")
+		}
+		f.want(up("nx"), `{"affected":1,"keys":["nx"]}`)
+		res := f.want(up("Nx"), `{"affected":1,"keys":["NX"]}`)
+		if tg := res.Post.Targets; len(tg) != 1 || tg[0].Path != "notes/NX.flowmark.md" {
+			t.Fatalf("targets %+v", tg)
+		}
+	})
+	t.Run("60#surfaces: an insert without on_duplicate whose key equals without regard to case", func(t *testing.T) {
+		f := fresh(t)
+		err := f.fails(f.msg("insert", "people", map[string]any{"set": sets("id", "name")}, "p1", "X"), "DUPLICATE_KEY")
+		wantFaults(t, err, []dupFault{{"people", "p1", -1, "id", "DUPLICATE_KEY", "the key P1"}})
+	})
 	dangling := func() map[string]string {
 		docs := baseDocs()
 		docs["notes/N3.flowmark.md"] = lines("# Second root", "- item: [T9](x.md)", "- position: 2")

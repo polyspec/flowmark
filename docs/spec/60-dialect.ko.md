@@ -1,5 +1,5 @@
 <!-- doc-id: spec-dialect -->
-<!-- source-sha256: c164367fbd79b4d88d75b417c1d1439e98b197e1cdac8dd7b0d7f8b0cffa1bec -->
+<!-- source-sha256: f3a32803e29542ecc650e35c345fd74bc070ea2b2784396e870b76d278d646df -->
 # Capability table
 
 [English](60-dialect.md)
@@ -44,6 +44,7 @@ surface가 corpus에서 무엇을 하는지 또는 orm 전통에 따라 `CAPABIL
 | `delete`, `restore` | 지원. `restore`는 SQL 형태를 지킨다(soft delete column을 비우고, 지운 동안 unique key를 유지). 참조되는 행의 delete는 같은 delete가 참조하는 행을 지우더라도 `FOREIGN_KEY`([constraints](50-constraints.ko.md#key와-참조)) |
 | `optimistic` | 지원. 일치가 없으면 `OPTIMISTIC_LOCK` |
 | `on_duplicate` | 충돌 대상 **모든 unique key**(MySQL 규칙)로 지원. unique key가 여럿인 table에서는 PostgreSQL과 SQLite의 대상 규칙과 다르며 그 차이를 여기 밝힌다 |
+| primary key 비교 | A–Z의 대소문자를 가리지 않는다. SQL에서 orm의 binary collation과 다른데, key는 file 이름이자 anchor이기 때문이다([document model](20-document-model.ko.md#key)): key가 다른 key와 대소문자를 무시하고 같은 insert는 `DUPLICATE_KEY`이며, 충돌 key가 primary key인 `on_duplicate` insert는 그 행 — 바이트 단위로 같은 key가 먼저, 아니면 byte 순서에서 가장 작은 것 — 과 만나고, 그 행은 자기 key를 유지한다. 근거: `ON DUPLICATE KEY UPDATE`와 `ON CONFLICT`는 충돌 key의 index가 그 index의 비교로 보고하는 중복에서 작동한다 |
 | `lock` `update`, `share` | 문서화된 no-op으로 받는다: server transaction이 이미 corpus lock을 잡고 있다 |
 | `lock` `update_nowait`, `share_nowait` | `CAPABILITY_UNSUPPORTED` |
 | relation(`limit_per_parent`, `if_parent`, `flatten`, `key_by`, `no_cascade_delete`) | 지원. executor가 조립하며, `flatten` relation은 `one` relation으로 답하고 client model이 그것을 부모의 array와 JSON 형태에 병합한다(orm의 규칙). `key_by`는 non-null column을 가리킨다(아니면 `IR_INVALID`). 근거: orm은 병합을 client model의 array와 JSON 형태에 두며, 부모가 가진 이름은 부모의 값을 유지한다. 병합된 답은 client에게 부모 자신의 column과 구별할 수 없는 행을 넘긴다. NULL collection key는 client 언어마다 다르게 답하므로, nullable `key_by`는 형태로 거절한다 |

@@ -95,7 +95,12 @@ type fixture struct {
 // documents docs (corpus path to text) there, and opens it.
 func newFixture(t testing.TB, src string, docs map[string]string) *fixture {
 	t.Helper()
-	root := t.TempDir()
+	return newFixtureIn(t, t.TempDir(), src, docs)
+}
+
+// newFixtureIn is newFixture with the temporary root root.
+func newFixtureIn(t testing.TB, root, src string, docs map[string]string) *fixture {
+	t.Helper()
 	if err := copyTree(src, root); err != nil {
 		t.Fatal(err)
 	}
@@ -119,6 +124,53 @@ func newFixture(t testing.TB, src string, docs map[string]string) *fixture {
 	f := &fixture{t: t, root: root, cat: cat, e: e}
 	f.reopen()
 	return f
+}
+
+// caseSensitiveEnv names the folder, on a case-sensitive file system, where a case
+// writes a corpus whose file names differ only in case; scripts/go-test.mjs, which
+// make test runs, provisions it. It is read only when the test's temporary folder
+// folds case, and must then be set and absolute.
+const caseSensitiveEnv = "FLOWMARK_CASE_SENSITIVE_DIR"
+
+// caseSensitiveRoot returns an empty folder on a case-sensitive file system: the
+// test's temporary folder when its file system keeps case, and otherwise a new
+// folder under the one caseSensitiveEnv declares. It fails the test when neither
+// keeps case.
+func caseSensitiveRoot(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	if !foldsCase(t, root) {
+		return root
+	}
+	dir := os.Getenv(caseSensitiveEnv)
+	if dir == "" {
+		t.Fatalf("the file system of %s folds case, so two names that differ only in case cannot be written; set %s to an absolute folder on a case-sensitive file system", root, caseSensitiveEnv)
+	}
+	if !filepath.IsAbs(dir) {
+		t.Fatalf("%s=%s is not an absolute path", caseSensitiveEnv, dir)
+	}
+	root, err := os.MkdirTemp(dir, "flowmark-case-")
+	if err != nil {
+		t.Fatalf("%s=%s: %v", caseSensitiveEnv, dir, err)
+	}
+	t.Cleanup(func() { os.RemoveAll(root) })
+	if foldsCase(t, root) {
+		t.Fatalf("%s=%s folds case", caseSensitiveEnv, dir)
+	}
+	return root
+}
+
+// foldsCase reports whether the file system of dir folds case: a file written as
+// CaseProbe is found as caseprobe.
+func foldsCase(t *testing.T, dir string) bool {
+	t.Helper()
+	probe := filepath.Join(dir, "CaseProbe")
+	if err := os.WriteFile(probe, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(probe)
+	_, err := os.Stat(filepath.Join(dir, "caseprobe"))
+	return err == nil
 }
 
 // catalogFixture is a corpus of the test catalog holding docs.
