@@ -198,6 +198,13 @@ func inlineEvents(s string, refs linkRefs) []ghEvent {
 		return false
 	}
 	var out []ghEvent
+	var text strings.Builder
+	flush := func() {
+		if text.Len() > 0 {
+			out = append(out, ghEvent{text: text.String()})
+			text.Reset()
+		}
+	}
 	m := 0
 	emit := func(upto int) {
 		for ; m < len(r.marks) && r.marks[m].node <= upto; m++ {
@@ -205,6 +212,7 @@ func inlineEvents(s string, refs linkRefs) []ghEvent {
 			if inside(r.hidden, t.at) {
 				continue
 			}
+			flush()
 			var spans []int
 			for k, sp := range r.spans {
 				if sp[0] < t.at && t.at < sp[1] {
@@ -219,13 +227,10 @@ func inlineEvents(s string, refs linkRefs) []ghEvent {
 		if n.image || n.brk || n.text == "" {
 			continue
 		}
-		if len(out) > 0 && !out[len(out)-1].tag() {
-			out[len(out)-1].text += n.text
-			continue
-		}
-		out = append(out, ghEvent{text: n.text})
+		text.WriteString(n.text)
 	}
 	emit(len(r.nodes))
+	flush()
 	return out
 }
 
@@ -545,17 +550,25 @@ func (g ghRead) slugs() ([]string, string, bool) {
 	return out, "", false
 }
 
-// takes reports whether the heading takes the anchor a under S_GH: a slug at which it may
-// end takes a, or its slug so far, when it continues past what the engine reads,
-// begins a.
-func (g ghRead) takes(a string) bool {
+// taken returns the indices, ascending, of the anchors of x that the heading takes under
+// S_GH: those that a slug at which it may end takes, and those that its slug so far
+// begins, when it continues past what the engine reads.
+func (g ghRead) taken(x anchorSet) []int {
 	ends, so, cont := g.slugs()
+	var out []int
 	for _, s := range ends {
-		if takesAnchor(s, a) {
-			return true
-		}
+		out = mergeIndices(out, x.takenBy(s))
 	}
-	return cont && strings.HasPrefix(a, so)
+	if cont {
+		var begun []int
+		for i, a := range x.list {
+			if strings.HasPrefix(a.anchor, so) {
+				begun = append(begun, i)
+			}
+		}
+		out = mergeIndices(out, begun)
+	}
+	return out
 }
 
 // ghItem is a block of the file as GitHub renders it: the tag it opens with ("p" for a
@@ -568,6 +581,10 @@ type ghItem struct {
 	head     *heading
 	at, last int
 	nested   bool
+	// text marks a paragraph whose source holds neither '<' nor "[^", so that its HTML is
+	// its text alone, which changes only a heading element left open before it: its
+	// events are read then (ghReadings), and never otherwise.
+	text bool
 }
 
 // ghReadings returns GitHub's reading of every heading element of the file, markdown
@@ -655,7 +672,11 @@ func ghReadings(lines []string, sc scan, g linkRefs) []ghRead {
 		case it.open != "":
 			feedAll(ghEvent{name: it.open})
 		}
-		for _, ev := range it.events {
+		events := it.events
+		if it.text && len(live) > 0 {
+			events = inlineEvents(it.e.text, g)
+		}
+		for _, ev := range events {
 			if ev.tag() && !ev.end && isHeadingName(ev.name) {
 				open(ghItem{e: it.e, nested: it.nested}, ev, int(ev.name[1]-'0'))
 				continue
@@ -723,6 +744,10 @@ func ghItems(lines []string, sc scan, g linkRefs) []ghItem {
 			continue
 		}
 		e := linesElement(lines, u, cm)
+		if !strings.Contains(e.text, "<") && !strings.Contains(e.text, "[^") {
+			items = append(items, ghItem{open: "p", text: true, e: e, at: u.at, last: last, nested: !top})
+			continue
+		}
 		items = append(items, ghItem{open: "p", events: inlineEvents(e.text, g), e: e, at: u.at, last: last, nested: !top})
 	}
 	sort.SliceStable(items, func(i, j int) bool { return items[i].at < items[j].at })

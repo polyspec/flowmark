@@ -92,6 +92,14 @@ func inlineText(s string, refs linkRefs) inlineResult {
 	return inlineResult{text: text, alt: alt, tags: r.tags, tagAt: r.tagAt}
 }
 
+// inlineTags returns the tags of inlineText of s, and the offset of the '<' of each,
+// without its text, which a reading of the tags alone does not build.
+func inlineTags(s string, refs linkRefs) ([][]htmlAttr, []int) {
+	r := inlineReader{s: s, refs: refs, gh: true}
+	r.run()
+	return r.tags, r.tagAt
+}
+
 // inlineReader holds the rendered pieces read so far, the stacks of emphasis
 // delimiters and of open brackets, the tags read and their offsets, and the link
 // reference definitions of the file.
@@ -206,6 +214,15 @@ func (r *inlineReader) other(s string) {
 // delimiters left.
 func (r *inlineReader) run() {
 	s := r.s
+	// A byte that is no plain text, a space aside, opens a node, and the text after it,
+	// its spaces included, one more: the nodes are allocated once, as a rule.
+	n := 1
+	for i := 0; i < len(s); i++ {
+		if inlineSpecial[s[i]] && s[i] != ' ' {
+			n += 2
+		}
+	}
+	r.nodes = make([]inlineNode, 0, n)
 	for i := 0; i < len(s); {
 		c := s[i]
 		if c == '\\' && i+1 < len(s) || c == '\n' {
@@ -233,6 +250,7 @@ func (r *inlineReader) run() {
 		case c == ' ':
 			j := i + runOf(s[i:], ' ')
 			if j == len(s) || s[j] != '\n' {
+				j = textRun(s, j)
 				r.text(s[i:j])
 			}
 			i = j
@@ -275,12 +293,43 @@ func (r *inlineReader) run() {
 		case c == ']':
 			i = r.closeBracket(i)
 		default:
-			r.text(s[i : i+1])
-			i++
+			r.text(s[i:textRun(s, i+1)])
+			i = textRun(s, i+1)
 		}
 	}
 	r.processEmphasis(0)
 }
+
+// textRun returns the end of the run of plain text from j on: one text node, as the
+// reader renders it character by character, that ends before any byte a case of run
+// reads otherwise in some mode, a run of spaces included unless a line ending follows
+// it, before which the spaces are part of the line break.
+func textRun(s string, j int) int {
+	for j < len(s) {
+		if s[j] == ' ' {
+			k := j + runOf(s[j:], ' ')
+			if k < len(s) && s[k] == '\n' {
+				return j
+			}
+			j = k
+			continue
+		}
+		if inlineSpecial[s[j]] {
+			return j
+		}
+		j++
+	}
+	return j
+}
+
+// inlineSpecial are the bytes at which run reads something other than plain text in
+// some mode.
+var inlineSpecial = func() (t [256]bool) {
+	for _, c := range []byte("\\\n `<&*_![]$~") {
+		t[c] = true
+	}
+	return t
+}()
 
 // readings returns the rendered text in its two readings: text without the
 // descriptions of images, and alt with them.

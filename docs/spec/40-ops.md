@@ -516,10 +516,28 @@ and MySQL and PostgreSQL compare a `datetime(p)` column with `NOW(6)` at six dig
 - The corpus kept in memory holds each document's bytes, the parses of both read passes of the
   executor and the document's watch: its budget is 8 KB of heap per row at one row a document, the
   most a row costs, and `TestKeptHeapBudget` holds it (4.5 KB measured on macOS). A document of many
-  rows is held whole; the heap that parsing a large document allocates is `T12.5-4`'s.
+  rows is held whole; what parsing it allocates is the codec's cost below.
 - A write still parses and renders each changed target whole, and the executor's post-image copies
   the rows of the corpus, so a write's cost grows with its target files and with the rows; bounding
-  the size of a target file is `T12.5-3`'s and `T12.5-4`'s.
+  the size of a target file is `T12.5-3`'s, and the cost per byte of a target is the codec's cost.
+- **The codec's cost** is linear in the bytes of a file: the parse and the render of a file each take
+  at most 0.1 s of CPU per megabyte of it and allocate at most 64 bytes per byte of it, for a document
+  file of rows with detail sections. No pass compares each heading with each detail anchor, or each
+  row with each row: a heading's slug finds the anchors it takes by lookup, and a detail section
+  finds its row by key. `TestCodecAllocationBudget` of `store` holds the allocation budget at 1 and
+  4 MB, and `BenchmarkParseDocument` and `BenchmarkRenderDocument` measure both per megabyte. On macOS
+  (Apple M3 Pro, `T12.5-4`) the parse of 1 MB takes 48 ms and allocates 50 bytes per byte and its
+  render 35 ms and 39, and at 5 MB 43 ms and 33 ms per megabyte with 53 and 41; before `T12.5-4`
+  the parse took 2.1 s for 1 MB and 19.5 s for 5 MB, allocating 456 and 667 bytes per byte, growing
+  with the square of the rows.
+  Grounding: a parse reads the rows once, scans the blocks of each viewer's reading that the
+  [collision rule](10-canonical-format.md#detail-headings-and-anchors) needs, reads the inline text of
+  the headings and paragraphs in those readings, and renders the rows again to check the canonical
+  form; each pass builds a structure of the size of the file, so the allocation is a constant
+  multiple of the bytes, and 64 leaves the measured multiples their margin while a cost that grows
+  faster than the file passes it by 4 MB. 0.1 s per megabyte keeps a write to a target of a megabyte
+  within the hundreds of milliseconds of the latency target; allocation is the budget a test holds,
+  since a machine's load changes the time and not the bytes.
 - The commit checks every constraint whose
   outcome the transaction can change: the keys, references, checks, order, limits, transitions and
   `history.gap` of the target rows, and the rows they reference or that reference them, evaluated

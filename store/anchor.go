@@ -1,6 +1,7 @@
 package store
 
 import (
+	"slices"
 	"sort"
 	"strings"
 	"unicode/utf8"
@@ -131,6 +132,7 @@ func anchorClashes(lines []string, tables map[string]int) []anchorClash {
 	if len(anchors) == 0 {
 		return nil
 	}
+	x := newAnchorSet(anchors)
 	// isDetail reports whether a viewer's heading is a detail heading of the file: the
 	// heading of the same line, level and text.
 	isDetail := func(h heading) bool {
@@ -144,10 +146,10 @@ func anchorClashes(lines []string, tables map[string]int) []anchorClash {
 		switch {
 		case r.head == nil:
 			if r.anchored {
-				out = append(out, rawHeadingClashes(r, anchors)...)
+				out = append(out, rawHeadingClashes(r, x)...)
 			}
 		case !isDetail(*r.head):
-			out = append(out, slugClashes(headingElement(lines, *r.head, ghSetext), r.takes, anchors)...)
+			out = append(out, slugClashes(headingElement(lines, *r.head, ghSetext), r.taken(x), x)...)
 		}
 	}
 	vsSetext := setextStarts(v.vs.sc.blocks)
@@ -155,21 +157,71 @@ func anchorClashes(lines []string, tables map[string]int) []anchorClash {
 		if !isDetail(h) {
 			e := headingElement(lines, h, vsSetext)
 			s := slugVS(strings.Join(vsText(e.text, v.vs.refs), ""))
-			out = append(out, slugClashes(e, func(a string) bool { return takesAnchor(s, a) }, anchors)...)
+			out = append(out, slugClashes(e, x.takenBy(s), x)...)
 		}
 	}
 	for _, h := range v.gl.sc.all {
 		if !isDetail(h) && v.gl.refs.shows(h.note) {
 			e := headingElement(lines, h, ghSetext)
 			s := slugGL(strings.Join(glText(e.text, v.gl.refs), " "))
-			out = append(out, slugClashes(e, func(a string) bool { return takesAnchor(s, a) }, anchors)...)
+			out = append(out, slugClashes(e, x.takenBy(s), x)...)
 		}
 	}
-	out = append(out, v.gh.tagClashes(lines, anchors, v.gl.refs)...)
+	out = append(out, v.gh.tagClashes(lines, x, v.gl.refs)...)
 	if v.math {
-		out = append(out, v.vs.tagClashes(lines, anchors, v.vs.refs)...)
+		out = append(out, v.vs.tagClashes(lines, x, v.vs.refs)...)
 	}
 	return sortedClashes(out)
+}
+
+// anchorSet is the detail anchors of a file, in the order of their headings, indexed
+// by the slugs that take them (takesAnchor): exact by the anchor itself, and numbered by
+// the anchor without a final '-' and decimal number of no leading zero, which is the one
+// slug that the numbering rule numbers to it. A slug finds the anchors it takes by two
+// lookups, so the rule costs no comparison of every heading with every anchor.
+type anchorSet struct {
+	list            []detailAnchor
+	exact, numbered map[string][]int
+}
+
+// newAnchorSet returns the anchor set of anchors.
+func newAnchorSet(anchors []detailAnchor) anchorSet {
+	x := anchorSet{list: anchors, exact: map[string][]int{}, numbered: map[string][]int{}}
+	for i, a := range anchors {
+		x.exact[a.anchor] = append(x.exact[a.anchor], i)
+		if k := strings.LastIndexByte(a.anchor, '-'); k >= 0 && takesAnchor(a.anchor[:k], a.anchor) {
+			x.numbered[a.anchor[:k]] = append(x.numbered[a.anchor[:k]], i)
+		}
+	}
+	return x
+}
+
+// takenBy returns the indices of the anchors that a heading of the slug s takes.
+func (x anchorSet) takenBy(s string) []int {
+	return mergeIndices(x.exact[s], x.numbered[s])
+}
+
+// mergeIndices returns the distinct indices of a and b, ascending; each is ascending.
+func mergeIndices(a, b []int) []int {
+	if len(b) == 0 {
+		return a
+	}
+	if len(a) == 0 {
+		return b
+	}
+	out := append(append([]int(nil), a...), b...)
+	sort.Ints(out)
+	return slices.Compact(out)
+}
+
+// slugClashes returns the collisions of the heading element e with the anchors of x at
+// the indices taken.
+func slugClashes(e element, taken []int, x anchorSet) []anchorClash {
+	var out []anchorClash
+	for _, i := range taken {
+		out = append(out, e.clash(0, e.text, x.list[i]))
+	}
+	return out
 }
 
 // sortedClashes returns the distinct collisions of out in line order, then in the order
@@ -191,18 +243,6 @@ func sortedClashes(out []anchorClash) []anchorClash {
 		}
 	}
 	return kept
-}
-
-// slugClashes returns the collisions of the heading element e with the anchors that
-// takes reports its slug taking.
-func slugClashes(e element, takes func(string) bool, anchors []detailAnchor) []anchorClash {
-	var out []anchorClash
-	for _, a := range anchors {
-		if takes(a.anchor) {
-			out = append(out, e.clash(0, e.text, a))
-		}
-	}
-	return out
 }
 
 // viewerReading is a viewer's reading of the blocks of a file and its definitions.
@@ -309,19 +349,19 @@ func (r linkRefs) shows(d *noteDef) bool {
 // tagClashes returns the collisions of the HTML tags of the reading's headings and
 // paragraphs and HTML blocks with the anchors, but those of the footnote definitions
 // that neither the reading's viewer nor the viewer of other renders.
-func (v viewerReading) tagClashes(lines []string, anchors []detailAnchor, other linkRefs) []anchorClash {
+func (v viewerReading) tagClashes(lines []string, x anchorSet, other linkRefs) []anchorClash {
 	setext := setextStarts(v.sc.blocks)
 	var out []anchorClash
 	for _, h := range v.sc.all {
 		if v.refs.shows(h.note) || other.shows(h.note) {
 			e := headingElement(lines, h, setext)
-			r := inlineText(e.text, v.refs)
-			out = append(out, tagClashes(e, r.tags, r.tagAt, anchors)...)
+			tags, at := inlineTags(e.text, v.refs)
+			out = append(out, tagClashes(e, tags, at, x)...)
 		}
 	}
 	for _, u := range v.sc.units {
 		if v.refs.shows(u.note) || other.shows(u.note) {
-			out = append(out, unitClashes(lines, u, anchors, v.refs)...)
+			out = append(out, unitClashes(lines, u, x, v.refs)...)
 		}
 	}
 	return out
@@ -377,12 +417,10 @@ func layoutTable(name string, tables map[string]int) (string, bool) {
 // rawHeadingClashes returns the collisions of a raw HTML heading that GitHub anchors:
 // its S_GH against each anchor, located at the '<' of its start tag. VS Code and GitLab
 // give a raw HTML heading no anchor.
-func rawHeadingClashes(r ghRead, anchors []detailAnchor) []anchorClash {
+func rawHeadingClashes(r ghRead, x anchorSet) []anchorClash {
 	var out []anchorClash
-	for _, a := range anchors {
-		if r.takes(a.anchor) {
-			out = append(out, r.e.clash(r.at, strings.TrimSpace(r.el.text.String()), a))
-		}
+	for _, i := range r.taken(x) {
+		out = append(out, r.e.clash(r.at, strings.TrimSpace(r.el.text.String()), x.list[i]))
 	}
 	return out
 }
@@ -456,16 +494,16 @@ func linesElement(file []string, u unit, drop []bool) element {
 
 // unitClashes returns the collisions of a paragraph or an HTML block: the HTML tags it
 // holds, read from the lines that CommonMark reads as its text.
-func unitClashes(lines []string, u unit, anchors []detailAnchor, g linkRefs) []anchorClash {
+func unitClashes(lines []string, u unit, x anchorSet, g linkRefs) []anchorClash {
 	if u.html {
 		e := htmlElement(lines, u)
 		tags, at := rawTags(e.text)
-		return tagClashes(e, tags, at, anchors)
+		return tagClashes(e, tags, at, x)
 	}
 	_, cm := cmDefLines(u.lines)
 	ge := linesElement(lines, u, cm)
-	r := inlineText(ge.text, g)
-	return tagClashes(ge, r.tags, r.tagAt, anchors)
+	tags, at := inlineTags(ge.text, g)
+	return tagClashes(ge, tags, at, x)
 }
 
 // tagClashes returns the collisions of the id and name attributes of the open tags with
@@ -475,7 +513,7 @@ func unitClashes(lines []string, u unit, anchors []detailAnchor, g linkRefs) []a
 // and a raw id or name too, unless it already begins with user-content-
 // (TestGitHubAttributes), and GitLab's form of the id; both compare exactly, so the
 // lowercased comparison covers them.
-func tagClashes(e element, tags [][]htmlAttr, at []int, anchors []detailAnchor) []anchorClash {
+func tagClashes(e element, tags [][]htmlAttr, at []int, x anchorSet) []anchorClash {
 	var out []anchorClash
 	for i, attrs := range tags {
 		for _, attr := range attrs {
@@ -483,10 +521,12 @@ func tagClashes(e element, tags [][]htmlAttr, at []int, anchors []detailAnchor) 
 				continue
 			}
 			v := lowerFull(attr.value)
-			for _, a := range anchors {
-				if v == a.anchor || v == "user-content-"+a.anchor {
-					out = append(out, e.clash(at[i], attr.value, a))
-				}
+			var prefixed []int
+			if rest, ok := strings.CutPrefix(v, "user-content-"); ok {
+				prefixed = x.exact[rest]
+			}
+			for _, k := range mergeIndices(x.exact[v], prefixed) {
+				out = append(out, e.clash(at[i], attr.value, x.list[k]))
 			}
 		}
 	}

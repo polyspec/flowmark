@@ -1,5 +1,5 @@
 <!-- doc-id: spec-ops -->
-<!-- source-sha256: 53093b25cf632ec205ca68686c595cd7e780f45b8a969dec3929497e82c5c9b4 -->
+<!-- source-sha256: ff5062b76e244d6ade4bc38629c0d1b8f0f737c7ac2745d983b42f3c7b87b90b -->
 # Operations
 
 [English](40-ops.md)
@@ -447,11 +447,25 @@ MySQL과 PostgreSQL은 `datetime(p)` column을 `NOW(6)`와 여섯 자리로 비�
   watch를 건다.
 - memory에 둔 corpus는 각 문서의 bytes, executor의 두 읽기 pass의 parse, 문서의 watch를 가진다. 그
   예산은 문서마다 행 하나일 때 — 행이 가장 많이 드는 경우 — 행마다 heap 8 KB이며,
-  `TestKeptHeapBudget`이 지킨다(macOS에서 4.5 KB). 행이 많은 문서도 통째로 가진다. 큰 문서를 parse할
-  때 할당하는 heap은 `T12.5-4`의 것이다.
+  `TestKeptHeapBudget`이 지킨다(macOS에서 4.5 KB). 행이 많은 문서도 통째로 가진다. 그것을 parse할 때
+  할당하는 것은 아래 codec의 비용이다.
 - 쓰기는 여전히 바뀐 대상마다 통째로 parse하고 render하며, executor의 post-image는 corpus의 행을
-  복사하므로 쓰기 비용은 대상 file과 행에 따라 커진다. 대상 file의 크기를 묶는 것은 `T12.5-3`과
-  `T12.5-4`의 것이다.
+  복사하므로 쓰기 비용은 대상 file과 행에 따라 커진다. 대상 file의 크기를 묶는 것은 `T12.5-3`의
+  것이며, 대상의 byte당 비용은 codec의 비용이다.
+- **codec의 비용**은 file의 byte에 선형이다: 상세 섹션을 가진 행들의 document file에서, file의 parse와
+  render는 각각 그 megabyte당 CPU 0.1초 이하가 들고 그 byte당 64 byte 이하를 할당한다. 어떤 pass도 각
+  heading을 각 상세 anchor와, 또는 각 행을 각 행과 비교하지 않는다: heading의 slug는 자기가 가져가는
+  anchor를 조회로 찾고, 상세 섹션은 자기 행을 key로 찾는다. `store`의 `TestCodecAllocationBudget`이 1 MB와
+  4 MB에서 할당 예산을 지키며, `BenchmarkParseDocument`와 `BenchmarkRenderDocument`가 megabyte당 둘 다를
+  잰다. macOS(Apple M3 Pro, `T12.5-4`)에서 1 MB의 parse는 48 ms가 들고 byte당 50 byte를 할당하며, 그
+  render는 35 ms와 39이고, 5 MB에서는 megabyte당 43 ms와 33 ms, 53과 41이다. `T12.5-4` 전에는 parse가
+  1 MB에 2.1초, 5 MB에 19.5초가 들고 byte당 456과 667 byte를 할당했으며, 행 수의 제곱으로 커졌다. 근거: parse는 행을 한 번
+  읽고, [충돌 규칙](10-canonical-format.ko.md#상세-heading과-anchor)이 필요로 하는 각 viewer 읽기의 block을
+  훑고, 그 읽기들에서 heading과 문단의 inline 텍스트를 읽으며, 정식 형식을 검사하려고 행을 다시
+  render한다. 각 pass는 file 크기의 구조를 만들므로 할당은 byte의 상수배이며, 64는 잰 배수에 여유를
+  남기면서도 file보다 빨리 커지는 비용은 4 MB에서 넘는다. megabyte당 0.1초는 megabyte 대상으로의 쓰기를
+  latency 목표의 수백 millisecond 안에 둔다. 할당이 test가 지키는 예산인 것은, 기계의 부하가 시간은
+  바꾸지만 byte는 바꾸지 않기 때문이다.
 - commit은 transaction이 결과를 바꿀 수 있는
   모든 제약을 검사한다: 대상 행의 key, 참조, check, 순서, limit, 전이, `history.gap`과, 그 행들이 참조하거나
   참조되는 행들이며 — lock 아래 다시 읽은 corpus에서 평가한다. 전체 `flowmark validate`는 요청할 때와
