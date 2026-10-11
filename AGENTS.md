@@ -37,12 +37,21 @@ has its checklist in `docs/plans/`.
   habit is poison.
 - Events, not polling. A change is published as an event, and its subscribers or consumers
   receive and handle it. Polling or a timer is an alternative chosen only when no orthodox
-  mechanism exists, stated as such, never the main path.
-- Every operation is idempotent. Nothing is patched ad hoc to make something appear to work.
-  What happens is observable and mechanical: that an event occurred is known from what it
-  publishes, not found by searching for it.
+  mechanism exists, stated as such, never the main path. A file change is learned from the
+  operating system's notification; a notification that reports lost events (an overflow) is
+  itself an event, and its consumer reads the affected tree again — that path exists because
+  the notification contract requires it, and it is stated. A file system that sends no
+  notifications is not supported, and that is stated too.
+- Recovery, apply and transformation operations are idempotent: a journal replay, a canon, an
+  install, a write of the same bytes. A request that is not idempotent by nature, such as an
+  insert, is refused on its repetition as its rule says. Nothing is patched ad hoc to make
+  something appear to work. What happens is observable and mechanical: that an event occurred
+  is known from what it publishes, not found by searching for it. A process that crashed
+  publishes nothing, so on start the engine reads the declared places of its own state — the
+  lock and the journal — once; that is a read of a declared place, not a search.
 - Paths are resolved declaratively and by discovery from a declared root, never as paths
-  relative to an assumed working directory. Symlinks are never used.
+  relative to an assumed working directory. The engine never creates a symlink and never
+  follows one; a symlink found in a corpus is reported as its rule says.
 - No tricks, in any case. When a requirement cannot be met the orthodox way and only a trick
   would meet it, that is stated exactly instead of done quietly.
 - The simplest implementation that fully satisfies the current requirements wins; no
