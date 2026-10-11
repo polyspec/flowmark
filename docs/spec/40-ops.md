@@ -568,6 +568,9 @@ The engine states the size of a corpus it serves within the latency target above
   - On macOS the watch holds a descriptor for every folder and document (20,009 at 10,000 documents, one for each
     document and folder): the number of documents is also the number of descriptors a process needs. An opening that
     cannot get them fails as `DRIVER` naming the file, and leaves no lock.
+  - The board of the examples is this shape at 10,000 posts, 1,000 in each of ten month folders, served by
+    `flowmark serve`: the server is ready in 3.1 s, keeps 140 MB, holds 10,029 descriptors and answers a page of
+    ten posts in 72 ms, one post in 44 ms and a new post in 156 ms through orm.
   - Sessions are not limited: the lock serializes them, so one write takes the same time and the last of sixteen
     sessions that write at once waits 1.3 s.
 - **Past the envelope** the corpus is read and written as before. The validator reports it: `scale.file` at a

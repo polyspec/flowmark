@@ -1,5 +1,5 @@
 <!-- doc-id: spec-ops -->
-<!-- source-sha256: 81809500ed140ffdfa6040e78c3b8c46a541382fdf3d6dab2e17782784d7eed6 -->
+<!-- source-sha256: bc639a0ad15c02edc89d52393ac4c690324b79ee793c7426da60efa4ffe7cbf1 -->
 # Operations
 
 [English](40-ops.md)
@@ -494,6 +494,9 @@ MySQL과 PostgreSQL은 `datetime(p)` column을 `NOW(6)`와 여섯 자리로 비�
   - macOS에서 감시는 folder와 문서마다 descriptor 하나를 쥔다(문서 10,000개에서 20,009개). 문서의 수는 process가
     필요로 하는 descriptor의 수이기도 하다. 그것을 얻지 못한 열기는 file을 밝혀 `DRIVER`로 실패하고 lock을
     남기지 않는다.
+  - examples의 board가 글 10,000개, 달 folder 열 개에 1,000개씩일 때 이 모양이며 `flowmark serve`로 제공하면
+    서버는 3.1초에 준비되고 140 MB를 쥐고 descriptor 10,029개를 잡으며 orm을 거쳐 글 열 개의 페이지에 72 ms,
+    글 하나에 44 ms, 새 글에 156 ms로 답한다.
   - session은 제한하지 않는다. lock이 직렬화하므로 쓰기 하나의 시간은 같고, 동시에 쓰는 session 열여섯 중
     마지막은 1.3초를 기다린다.
 - **한계를 넘으면** corpus는 전과 같이 읽고 쓴다. validator가 알린다: 1 MiB를 넘는 문서에 `scale.file`, 한계보다
