@@ -682,12 +682,6 @@ func (w *writer) matched(deleted bool) ([]*rec, *Error) {
 // update applies the set assignments to the matched rows.
 func (w *writer) update() *Error {
 	req := w.r.cl.req
-	for _, a := range req.Set {
-		f := w.ent.Field(a.Column)
-		if f.PrimaryKey || f.Identity {
-			return unspecified("an update of the key column " + a.Column + ", IR_INVALID once ir.Validate refuses it (orm T94)")
-		}
-	}
 	rows, err := w.matched(false)
 	if err != nil {
 		return err
@@ -969,12 +963,6 @@ func (w *writer) restore() *Error {
 	}
 	if err := restoreKey(w.ent, req.Where); err != nil {
 		return err
-	}
-	for _, a := range req.Set {
-		f := w.ent.Field(a.Column)
-		if f.PrimaryKey || f.Identity || f.Name == w.ent.SoftDelete {
-			return errf(codeIRInvalid, "restore cannot assign %s", a.Column)
-		}
 	}
 	rows, err := w.matched(true)
 	if err != nil {
