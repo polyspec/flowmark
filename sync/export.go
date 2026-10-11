@@ -35,9 +35,10 @@ type Statement struct {
 // catalog's runtime model. The tables fill in the order of their foreign keys, a
 // table after the tables it references, and each table's rows in storage order. An
 // export that cannot be rendered whole fails and returns no statement: a table with
-// an identity or a codec column is CAPABILITY_UNSUPPORTED, naming the table and what
-// orm lacks; an unavailable table or a value not of its type is CONSTRAINT, naming
-// the diagnostic.
+// a codec column is CAPABILITY_UNSUPPORTED, naming the table and what orm lacks; an
+// unavailable table or a value not of its type is CONSTRAINT, naming
+// the diagnostic. A table with an identity column loads its rows with their keys (orm's
+// load insert) and is followed by orm's restart of the identity past its largest key.
 func Export(c *irexec.Corpus, d dbspec.Dialect) ([]Statement, error) {
 	cat := c.Catalog()
 	model, diags := runtimemodel.Build(cat.Documents)
@@ -74,6 +75,13 @@ func Export(c *irexec.Corpus, d dbspec.Dialect) ([]Statement, error) {
 			}
 			out = append(out, s)
 		}
+		if e := entities[tb.Name]; e.Identity != "" {
+			s, err := restartIdentity(p, e, tb)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, s)
+		}
 	}
 	return out, nil
 }
@@ -85,15 +93,10 @@ const (
 )
 
 // supported fails as CAPABILITY_UNSUPPORTED when orm renders no insert that keeps
-// the stored values of the table of e. orm's insert rule refuses an assignment of an
-// identity column, which the executor assigns, and orm renders no statement that
-// moves a PostgreSQL identity past the keys an export inserts; a codec column's
-// stored value is the encoded one, while orm's insert takes the decoded value and
-// encodes it, and the engine decodes no value yet (spec 60 Surfaces, codec columns).
+// the stored values of the table of e: a codec column's stored value is the encoded
+// one, while orm's insert takes the decoded value and encodes it, and the engine
+// decodes no value yet (spec 60 Surfaces, codec columns).
 func supported(e *runtimemodel.Entity) error {
-	if e.Identity != "" {
-		return &irexec.Error{Code: codeCapability, Msg: fmt.Sprintf("the table %s has the identity column %s: orm's insert refuses an identity value and renders no identity restart, so the export cannot keep its keys", e.Table, e.Identity)}
-	}
 	for _, f := range e.Fields {
 		if len(f.Codec) > 0 {
 			return &irexec.Error{Code: codeCapability, Msg: fmt.Sprintf("the table %s has the codec column %s: the engine decodes no stored codec value for orm's insert", e.Table, f.Name)}
@@ -148,7 +151,7 @@ func fillOrder(cat *catalog.Catalog, schema []dbspec.RenderedStatement) []*catal
 // declaration order, through orm's planner: every column is assigned, by its value or
 // NULL, so the row keeps every stored value and no database default applies.
 func insert(p *planner.Planner, e *runtimemodel.Entity, tb *catalog.Table, row []any) (Statement, error) {
-	req := &ir.Request{IRVersion: ir.Version, ManifestHash: p.M.ManifestHash, Kind: "insert", Query: ir.Query{Entity: e.Name}}
+	req := &ir.Request{IRVersion: ir.Version, ManifestHash: p.M.ManifestHash, Kind: "insert", Load: e.Identity != "", Query: ir.Query{Entity: e.Name}}
 	var params []any
 	for i, col := range tb.Columns {
 		if row[i] == nil {
@@ -169,4 +172,18 @@ func insert(p *planner.Planner, e *runtimemodel.Entity, tb *catalog.Table, row [
 	}
 	st := pl.Steps[0]
 	return Statement{Table: tb.Name, SQL: st.SQL, Slots: st.BindSlots, Params: params}, nil
+}
+
+// restartIdentity compiles, through orm's planner, the statement that restarts the
+// identity of tb past the largest key its loaded rows hold.
+func restartIdentity(p *planner.Planner, e *runtimemodel.Entity, tb *catalog.Table) (Statement, error) {
+	req := &ir.Request{IRVersion: ir.Version, ManifestHash: p.M.ManifestHash, Kind: "restart_identity", Query: ir.Query{Entity: e.Name}}
+	pl, err := p.Compile(req)
+	if err != nil {
+		return Statement{}, &irexec.Error{Code: codeInternal, Msg: fmt.Sprintf("orm compiles no identity restart of %s: %v", tb.Name, err)}
+	}
+	if len(pl.Steps) != 1 {
+		return Statement{}, &irexec.Error{Code: codeInternal, Msg: fmt.Sprintf("orm compiles the identity restart of %s in %d steps", tb.Name, len(pl.Steps))}
+	}
+	return Statement{Table: tb.Name, SQL: pl.Steps[0].SQL}, nil
 }

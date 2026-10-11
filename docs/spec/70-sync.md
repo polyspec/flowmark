@@ -43,13 +43,14 @@ specification is written when an adapter beyond the database export starts.
   reference each other load only into a database that defers its foreign key checks; the export
   never breaks a cycle by writing a value other than the stored one.
 - One corpus gives the same statements on every run.
-- A table with an identity column or a codec column fails the export as
-  `CAPABILITY_UNSUPPORTED`, naming the table and the column. Grounding: orm's insert rule refuses
-  an assignment of an identity column, which the executor assigns, and orm renders no statement
-  that moves a PostgreSQL identity past the keys an export inserts, so the export could not keep
-  the keys that other rows reference; a codec column stores the encoded value, while orm's insert
-  takes the decoded value and encodes it, and the engine decodes no stored value yet. Both wait on
-  orm (open question 6).
+- A table with an identity column loads its rows with their stored keys, through orm's `load` insert, which
+  takes a value for the identity column, and its rows are followed by orm's `restart_identity` statement, which
+  moves the identity past the table's largest key, so the keys that other rows reference are kept and the next
+  key a database generates follows them. Grounding: a key is a row's identity that other rows reference; an
+  export that generated new keys would break those references.
+- A table with a codec column fails the export as `CAPABILITY_UNSUPPORTED`, naming the table and the column.
+  Grounding: a codec column stores the encoded value, while orm's insert takes the decoded value and encodes
+  it, and the engine decodes no stored value yet. It waits on orm (open question 6).
 - Binding the parameters to a database driver and running the statements is a database
   executor's work, which orm keeps inside its clients; until orm exposes it, the export ends at its
   statements (open question 6).

@@ -1,9 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 80ae0236137d537589b88b05f2a5d90bc63ac1d2b6d3e87d68b20ba9ed87cbff -->
+<!-- source-sha256: d1335df23b057aca2dea92aa7d559469b201db2d9d4bfeecd905830cef9b601e -->
 # Changelog
 
 ## Unreleased
 
+- T12.7(일부): database로의 export가 identity table의 key를 지킨다. 행은 orm의 `load` insert로 적재되고 orm의 identity restart가 뒤따라 다음에 생성되는 key가 적재된 가장 큰 key를 잇는다. codec table만 아직 거절한다.
 - T12.1-37: 상세 anchor 충돌 규칙이 각 viewer의 block을 읽는다. GitHub과 GitLab의 footnote 정의, VS Code의 math block, GitHub의 footnote 번호, GitLab의 wikilink다. GitLab의 snippet prefix는 corpus file에 적용되지 않음을 명시한다.
 - T12.5-4: codec의 parse와 render 비용이 file byte에 선형이다. MB당 약 48 ms와 35 ms, 할당 50배와 39배다(전에는 1 MB parse에 2.1초, 456배).
 - T12.1-33: 충돌 규칙이 GitHub이 anchor를 주는 raw HTML `<h1>`–`<h6>` heading을 읽고, 모든 heading element를 기록된 vector대로 GitHub의 parser처럼 읽는다. 엔진이 렌더하지 않는 내용으로 이어지는 element는 지금까지의 slug가 시작하는 anchor를 차지하는 것으로 본다.

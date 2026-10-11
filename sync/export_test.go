@@ -313,6 +313,7 @@ func TestExportRebuildsTheCorpus(t *testing.T) {
 		cases[name] = corpus(t, name, nil)
 	}
 	cases["files (every type)"] = corpus(t, "files", typesDocs(t))
+	cases["files (identity column)"] = corpus(t, "files", nil)
 	for name, root := range cases {
 		t.Run("70#the-export: "+name+" rebuilds in SQLite", func(t *testing.T) {
 			c := open(t, root)
@@ -453,7 +454,6 @@ func TestExportRefusals(t *testing.T) {
 		{name: "70#scope: a value not of its type fails naming its diagnostic", golden: "equivalence/document",
 			docs: map[string]string{"entries.flowmark.md": strings.Replace(readGolden(t, "equivalence/document/entries.flowmark.md"), "count:10", "count:ten", 1)},
 			code: "CONSTRAINT", rule: "type", file: "entries.flowmark.md"},
-		{name: "70#the-export: a table with an identity column is unsupported", golden: "files", code: "CAPABILITY_UNSUPPORTED", table: "step_refs"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -495,4 +495,25 @@ func mergeDocs(a, b map[string]string) map[string]string {
 		out[k] = v
 	}
 	return out
+}
+
+// TestExportRestartsTheIdentity pins that a table with an identity column keeps its
+// keys and that the next key a database generates follows the largest one loaded.
+func TestExportRestartsTheIdentity(t *testing.T) {
+	c := open(t, corpus(t, "files", nil))
+	stmts, err := Export(c, dbspec.DialectSQLite)
+	if err != nil {
+		t.Fatal(err)
+	}
+	db := apply(t, c, stmts)
+	var seq, max int64
+	if err := db.QueryRow(`SELECT seq FROM sqlite_sequence WHERE name = 'step_refs'`).Scan(&seq); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow(`SELECT MAX(id) FROM step_refs`).Scan(&max); err != nil {
+		t.Fatal(err)
+	}
+	if max == 0 || seq != max {
+		t.Fatalf("70#the-export: step_refs holds the largest key %d and its identity restarts past %d", max, seq)
+	}
 }
