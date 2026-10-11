@@ -72,6 +72,7 @@ var operations = map[string]struct{ required, optional []string }{
 	"row.move":   {required: []string{"table", "key", "position"}, optional: []string{"parent"}},
 	"row.delete": {required: []string{"table", "key"}},
 	"transition": {required: []string{"table", "key", "state"}, optional: []string{"values"}},
+	"views":      {optional: []string{"key"}},
 }
 
 // Operations returns the names of the operations, sorted.
@@ -205,6 +206,16 @@ func Open(ctx context.Context, root string, wait time.Duration) (*Corpus, error)
 	return &Corpus{cat: cat, wp: wp}, nil
 }
 
+// ViewTable returns the view table of the catalog (spec 100 Views), nil when it has none.
+func (c *Corpus) ViewTable() *catalog.Table {
+	for _, tb := range c.cat.Tables {
+		if tb.View != nil {
+			return tb
+		}
+	}
+	return nil
+}
+
 // Catalog returns the catalog of the corpus.
 func (c *Corpus) Catalog() *catalog.Catalog { return c.cat }
 
@@ -218,9 +229,16 @@ func (c *Corpus) Run(ctx context.Context, session string, r *Request) (any, erro
 	if r.Operation == "schema" {
 		return schemaOf(c.cat), nil
 	}
-	tb, ok := c.cat.Table(r.Table)
-	if !ok {
-		return nil, errf(codeEntityUnknown, "the catalog declares no table %s", r.Table)
+	var tb *catalog.Table
+	if r.Operation == "views" {
+		if tb = c.ViewTable(); tb == nil {
+			return nil, errf(codeConfig, "views: the catalog has no view table, the table %s of the document %s (spec 100 Views)", catalog.ViewTable, catalog.ApplicationDocument)
+		}
+	} else {
+		var ok bool
+		if tb, ok = c.cat.Table(r.Table); !ok {
+			return nil, errf(codeEntityUnknown, "the catalog declares no table %s", r.Table)
+		}
 	}
 	s, err := c.wp.Session(session)
 	if err != nil {
@@ -250,6 +268,11 @@ func (c *Corpus) run(ctx context.Context, s *writepath.Session, tb *catalog.Tabl
 	switch r.Operation {
 	case "rows":
 		return c.exec(ctx, s, m.request("all", nil))
+	case "views":
+		if r.Key == nil {
+			return c.exec(ctx, s, m.request("all", nil))
+		}
+		return c.view(ctx, s, tb, r.Key)
 	case "row.get":
 		a, err := c.exec(ctx, s, m.request("one", m.byKey(tb, r.Key)))
 		if err != nil {

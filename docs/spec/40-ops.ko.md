@@ -1,5 +1,5 @@
 <!-- doc-id: spec-ops -->
-<!-- source-sha256: e52240b44852e8d177b8fb0830c0b966948587cbf5420304b968b175e43185f5 -->
+<!-- source-sha256: 5ad1e404342167e4916d962468251fcfd35b0e36a3f543fa79d3e69d6d8cff45 -->
 # Operations
 
 [English](40-ops.md)
@@ -105,6 +105,7 @@
 | `row.move` | `table`, `key`, `position`, 선택 `parent` | `{"affected", "keys", "rows"}` |
 | `row.delete` | `table`, `key` | `{"affected", "keys", "rows"}` |
 | `transition` | `table`, `key`, `state`, 선택 `values` | `{"affected", "keys", "rows"}` |
+| `views` | 선택 `key` | view table의 `{"rows"}`, 또는 view `key`의 `{"view", "rows"}` |
 
 - `row.insert`는 `values`를 대입하는 `insert`이고, `row.update`는 key가 `key`인 행의 `update`로
   `values`를 대입하며, `row.delete`는 그 행의 `delete`다. `row.move`는 그 행의 `update`로 `position`을
@@ -123,15 +124,22 @@
 - 알 수 없는 `operation`, 빠진 member, operation이 받지 않는 member, object가 아닌 `values`, 그리고
   `state`가 주는 상태 column을 대입하는 `transition`의 `values`는 그것을 밝히며 `CONFIG`다. catalog가 선언하지 않은 table이나 column은 요청의 `ENTITY_UNKNOWN`이나
   `COLUMN_UNKNOWN`이다.
-- view operation — 저장된 filter와 sort를 통한 view의 행 — 은 `T12.3-1`을 기다린다: view table을
-  선언하는 setting이 없고, 저장된 filter는 그 parameter를 둘 곳이 없다. 그때까지 view 행은 다른 행과
-  똑같이 읽고 쓴다.
+- `views`는 face가 이름을 준 table이 아니라 catalog의 view table([application schema](100-checklist.ko.md#view))을
+  읽는다: `key` 없이는 `rows`처럼 view table의 행을 답하고, `key`가 있으면 `{"view", "rows"}` — view
+  행, 그리고 where와 params가 저장된 filter의 것이고 order가 저장된 sort인 `all` 요청으로 읽은 그
+  `entity`의 행 — 를 답한다. `group_by`는 view가 적용한다. 두 읽기는 읽기 전용 transaction 하나에서
+  실행되므로 view와 그 행은 한 corpus에서 온다. view는 먼저 validator가 판정하는 대로 판정되며
+  ([constraints](50-constraints.ko.md#view)), 결함이 있는 view는 각 결함을 밝히며 `CONSTRAINT`다.
+  view table의 읽기는 결코 그렇지 않다. view table이 없는 catalog는 `views`를 `CONFIG`로 거절한다.
+  근거: view는 저장된 요청이므로 그것을 실행하는 것은 그 요청이며, validator가 보고하는 view는 client가
+  스스로 만들 수 없는 요청을 실행하지 않는다.
 - 실패는 `{"code", "error"}`로 답한다: [실패 어휘](#실패-어휘)의 face 이름 — 어휘가 나열하지 않는
   code는 orm code — 와 메시지다.
 - **CLI.** 각 operation은 명령이다: `flowmark schema <corpus>`, `rows <corpus> <table>`,
   `row.get <corpus> <table> <key>`, `row.insert <corpus> <table> [assignment…]`,
   `row.update <corpus> <table> <key> [assignment…]`, `row.move <corpus> <table> <key> <position> [<parent>]`,
-  `row.delete <corpus> <table> <key>`, `transition <corpus> <table> <key> <state> [assignment…]`.
+  `row.delete <corpus> <table> <key>`, `transition <corpus> <table> <key> <state> [assignment…]`,
+  `views <corpus> [<key>]`.
   assignment는 `<column>=<text>`나 `<column>:=<json>`이고, 위치 값은 `<text>`나 `:=<json>`이다. text는
   값의 읽을 수 있는 텍스트이며 column type의 wire 값으로 보낸다 — 정수와 float는 JSON number, `bool`은
   JSON bool, 그 밖에는 JSON string. `:=`는 wire 값 자체를 받으며 `null`도 받는다. 모든 명령은

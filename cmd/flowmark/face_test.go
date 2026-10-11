@@ -157,6 +157,44 @@ func TestFaceCommands(t *testing.T) {
 			t.Fatalf("schema printed %s", got)
 		}
 	})
+	t.Run("40#the-faces: views runs a stored view through its filter and sort", func(t *testing.T) {
+		root := t.TempDir()
+		dbs := strings.Replace(boardDBS, "dbspec 1 board", "dbspec 1 flowmark", 1) + `
+table views {
+  id i64 identity
+  title varchar(255)
+  kind varchar(16)
+  entity varchar(63)
+  filter text
+  sort text
+  group_by varchar(63) null
+  primary key (id)
+  settings {
+    store document table
+    title title
+    codec filter ordered_json
+    codec sort ordered_json
+  }
+}
+`
+		if err := os.MkdirAll(filepath.Join(root, "dbspec"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, "dbspec", "flowmark.dbs"), []byte(dbs), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		cliOK(t, "install", root)
+		cliOK(t, "row.insert", root, "people", "id=P1", "name=Ada", "age=36")
+		cliOK(t, "row.insert", root, "people", "id=P2", "name=Max", "age=20")
+		cliOK(t, "row.insert", root, "views", "title=Adults", "kind=table", "entity=people",
+			`filter={"where":{"items":[{"pred":{"column":"age","op":"gte","p":0}}]},"params":[30]}`, "sort=[]")
+		if got := cliOK(t, "views", root, "1"); !strings.HasSuffix(got, `"rows":[{"id":"P1","name":"Ada","age":36}]}`+"\n") {
+			t.Fatalf("views printed %s", got)
+		}
+		if got := cliOK(t, "views", root); !strings.HasPrefix(got, `{"rows":[{"id":1,"title":"Adults"`) {
+			t.Fatalf("views printed %s", got)
+		}
+	})
 	t.Run("40#the-faces: a refused operation exits 1 with its code on standard error", func(t *testing.T) {
 		root := boardRoot(t)
 		cliOK(t, "install", root)

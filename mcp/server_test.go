@@ -85,7 +85,7 @@ func TestServer(t *testing.T) {
 				t.Fatalf("tool %s schema: %v", tl.Name, tl.InputSchema)
 			}
 		}
-		if want := "row_delete row_get row_insert row_move row_update rows schema transition"; strings.Join(names, " ") != want {
+		if want := "row_delete row_get row_insert row_move row_update rows schema transition views"; strings.Join(names, " ") != want {
 			t.Fatalf("tools: %v, want %s", names, want)
 		}
 	})
