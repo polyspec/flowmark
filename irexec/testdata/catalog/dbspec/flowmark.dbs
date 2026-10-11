@@ -183,6 +183,8 @@ table stamps {
   label varchar(16)
   at datetime(3) default now
   updated_at datetime(3) null
+  opens time(0) null
+  closes time(3) null
   primary key (id)
   settings {
     store document table

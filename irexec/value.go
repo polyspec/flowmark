@@ -22,7 +22,9 @@ const datetimeWire = "2006-01-02 15:04:05.000000"
 
 // decodeParam reads the parameter raw as a value of type t and returns its
 // canonical readable text, or null. ok is false when raw is not a value of t in
-// the runtime value model JSON.
+// the runtime value model JSON. A time is read in its readable form with p digits:
+// its wire form HH:MM:SS.ffffff (spec 60 The wire) waits on orm T91, which fixes
+// that form for every client, so the executor reads it once T91 lands.
 func decodeParam(raw json.RawMessage, t dbspec.Type) (cell, bool) {
 	raw = bytes.TrimSpace(raw)
 	if string(raw) == "null" {
@@ -116,6 +118,8 @@ func isJSONNumber(raw []byte) bool {
 // output returns the JSON value of a readable value of type t in the runtime value
 // model JSON. A datetime that does not read is INTERNAL: the corpus holds readable
 // values only, and an answer never carries a stored text in place of the wire form.
+// A time is answered in its readable form with p digits until orm T91 and T105 fix
+// its wire form HH:MM:SS.ffffff (spec 60 The wire) for every client.
 func output(t dbspec.Type, v cell) (any, *Error) {
 	if v.null {
 		return nil, nil

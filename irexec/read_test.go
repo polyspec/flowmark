@@ -561,10 +561,10 @@ func TestClock(t *testing.T) {
 		f.want(f.msg("all", "people", map[string]any{"columns": map[string]any{"mode": "none", "add": []string{"joined"}}, "where": where(pred("id", "eq", p(0)))}, "P4"),
 			`{"rows":[{"id":"P4","joined":"2026-10-11 10:00:00.000000"}]}`)
 		f.want(f.msg("all", "stamps", map[string]any{"columns": map[string]any{"mode": "all"}}),
-			`{"rows":[{"id":1,"label":"one","at":"2026-10-11 10:00:00.999000","updated_at":null}]}`)
+			`{"rows":[{"id":1,"label":"one","at":"2026-10-11 10:00:00.999000","updated_at":null,"opens":null,"closes":null}]}`)
 		f.commit(f.ok(f.msgAt(half, "update", "stamps", map[string]any{"set": sets("label"), "where": where(pred("id", "eq", p(1)))}, "two", 1)))
 		f.want(f.msg("all", "stamps", map[string]any{"columns": map[string]any{"mode": "all"}}),
-			`{"rows":[{"id":1,"label":"two","at":"2026-10-11 10:00:00.999000","updated_at":"2026-10-11 10:00:00.500000"}]}`)
+			`{"rows":[{"id":1,"label":"two","at":"2026-10-11 10:00:00.999000","updated_at":"2026-10-11 10:00:00.500000","opens":null,"closes":null}]}`)
 	})
 }
 
