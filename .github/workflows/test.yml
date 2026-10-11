@@ -1,0 +1,30 @@
+# The tests of the repository on every platform it supports (T12.13): the platform-specific code of the lock, the
+# journal, the watch and the file system runs only on its own platform, so the gate is a run on each.
+name: test
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+jobs:
+  test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      # The same two commands as `make test`, run directly so that no platform needs make.
+      - name: node tests
+        shell: bash
+        run: node --test tests/*.test.mjs
+      - name: go tests
+        run: node scripts/go-test.mjs
