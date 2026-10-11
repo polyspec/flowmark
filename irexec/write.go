@@ -26,7 +26,9 @@ type writer struct {
 	touched map[string]bool
 	given   []*given
 	faults  []fault
-	answer  *Answer
+	// dupFaulted holds the rows that have their one duplicate fault.
+	dupFaulted map[*given]bool
+	answer     *Answer
 	// copies maps each corpus row to its copy in the next corpus, before the
 	// write changes the copy.
 	copies map[*rec]*rec
@@ -148,6 +150,17 @@ func (w *writer) fault(g *given, table, column, rule, msg string) {
 		key, seq = g.row.Key, g.seq
 	}
 	w.faults = append(w.faults, fault{store.Refusal{Table: table, Key: key, Index: idx, Column: column, Rule: rule, Message: msg}, seq})
+	if rule == codeDuplicateKey && g != nil {
+		w.duplicated(g)
+	}
+}
+
+// duplicated records that g has its one duplicate fault.
+func (w *writer) duplicated(g *given) {
+	if w.dupFaulted == nil {
+		w.dupFaulted = map[*given]bool{}
+	}
+	w.dupFaulted[g] = true
 }
 
 // take records g as the next row the write takes, in request order.
