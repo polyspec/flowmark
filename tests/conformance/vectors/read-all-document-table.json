@@ -1,0 +1,75 @@
+{
+  "name": "read-all-document-table",
+  "storage": "document table",
+  "catalog": "document-table",
+  "corpus": {
+    "tasks.flowmark.md": [
+      "# tasks",
+      "| id | parent | title | done | due | label |",
+      "| --- | --- | --- | --- | --- | --- |",
+      "| T1 |  | Root task | false | 2026-10-01 | first |",
+      "| T2 | [T1](#tasks-row-t1) | Child task | true |  |  |",
+      "| T3 | [T1](#tasks-row-t1) | Second child | false | 2026-10-11 | \"\" |",
+      "| T4 |  | Top two | false |  |  |",
+      "",
+      "## tasks row T1",
+      "",
+      "Root body.",
+      "",
+      "## tasks row T3",
+      "",
+      "Body with *emphasis*."
+    ]
+  },
+  "equivalent": "read-all",
+  "request": {
+    "entity": "tasks",
+    "kind": "all"
+  },
+  "params": [],
+  "now": "2026-10-11 09:00:00.000000",
+  "expect": {
+    "rows": [
+      {
+        "body": "Root body.",
+        "done": false,
+        "due": "2026-10-01",
+        "id": "T1",
+        "label": "first",
+        "parent": null,
+        "position": 1,
+        "title": "Root task"
+      },
+      {
+        "body": "",
+        "done": true,
+        "due": null,
+        "id": "T2",
+        "label": null,
+        "parent": "T1",
+        "position": 1,
+        "title": "Child task"
+      },
+      {
+        "body": "Body with *emphasis*.",
+        "done": false,
+        "due": "2026-10-11",
+        "id": "T3",
+        "label": "",
+        "parent": "T1",
+        "position": 2,
+        "title": "Second child"
+      },
+      {
+        "body": "",
+        "done": false,
+        "due": null,
+        "id": "T4",
+        "label": null,
+        "parent": null,
+        "position": 2,
+        "title": "Top two"
+      }
+    ]
+  }
+}

@@ -1,0 +1,38 @@
+dbspec 1 conformance
+
+table plans {
+  id varchar(16)
+  title varchar(255)
+  body text
+  primary key (id)
+  settings {
+    store files
+    title title
+    body body
+    markdown body
+  }
+}
+
+table tasks {
+  id varchar(16)
+  plan varchar(16)
+  parent varchar(16) null
+  title varchar(255)
+  body text
+  position i32
+  done bool
+  due date null
+  label varchar(32) null
+  primary key (id)
+  index ix_tasks_plan (plan)
+  index ix_tasks_parent (parent)
+  foreign key fk_tasks_plan (plan) references plans (id) on delete restrict on update restrict
+  foreign key fk_tasks_parent (parent) references tasks (id) on delete restrict on update restrict
+  settings {
+    store block fk_tasks_plan list
+    title title
+    body body
+    order position
+    markdown body
+  }
+}

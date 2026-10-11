@@ -1,8 +1,0 @@
-{
-  "name": "count-where-state",
-  "corpus": {
-    "docs/list.md": "<!-- doc-id: list -->\n# List\n\n## G\n\n- [o] T1 One\n- [ ] T2 Two\n- [o] T3 Three\n"
-  },
-  "call": { "kind": "count", "table": "items", "query": { "where": [ { "column": "state", "op": "=", "value": "[o]" } ] } },
-  "expect": { "count": 2 }
-}

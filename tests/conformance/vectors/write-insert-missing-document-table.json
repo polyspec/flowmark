@@ -1,0 +1,56 @@
+{
+  "name": "write-insert-missing-document-table",
+  "storage": "document table",
+  "catalog": "document-table",
+  "corpus": {},
+  "request": {
+    "entity": "tasks",
+    "kind": "insert",
+    "set": [
+      {
+        "column": "id",
+        "p": 0
+      },
+      {
+        "column": "title",
+        "p": 1
+      },
+      {
+        "column": "body",
+        "p": 2
+      },
+      {
+        "column": "done",
+        "p": 3
+      }
+    ]
+  },
+  "params": [
+    "T5",
+    "New task",
+    "New body.",
+    false
+  ],
+  "now": "2026-10-11 09:00:00.000000",
+  "expect": {
+    "affected": 1,
+    "keys": [
+      "T5"
+    ],
+    "corpus": {
+      "tasks.flowmark.md": [
+        "# tasks",
+        "| id | parent | title | done | due | label |",
+        "| --- | --- | --- | --- | --- | --- |",
+        "| T5 |  | New task | false |  |  |",
+        "",
+        "## tasks row T5",
+        "",
+        "New body."
+      ]
+    }
+  },
+  "repeat": {
+    "error": "DUPLICATE_KEY"
+  }
+}

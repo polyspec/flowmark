@@ -1,0 +1,85 @@
+dbspec 1 conformance
+
+table items {
+  id varchar(32)
+  state varchar(16) default 'waiting'
+  title varchar(255)
+  body text
+  position i32
+  evidence text null
+  primary key (id)
+  settings {
+    key_prefix 'T'
+    store document list
+    title title
+    body body
+    order position
+    markdown body
+    markdown evidence
+    checkbox state waiting ' '
+    checkbox state doing '~'
+    checkbox state done 'x'
+    state_machine state initial waiting
+    state_machine state waiting -> doing
+    state_machine state doing -> done require (evidence)
+    state_machine state terminal done
+    state_machine state history item_history row item from from_state to to_state at at
+    state_machine state limit doing 1
+  }
+}
+
+table item_history {
+  id i64 identity
+  item varchar(32)
+  from_state varchar(16)
+  to_state varchar(16)
+  at datetime(6)
+  primary key (id)
+  index ix_item_history_item (item)
+  foreign key fk_history_item (item) references items (id) on delete restrict on update restrict
+  settings {
+    store block fk_history_item table
+  }
+}
+
+table tags {
+  id i64 identity
+  label varchar(16)
+  kind varchar(16)
+  primary key (id)
+  unique uq_tags_label (label)
+  check ck_tags_kind (kind in ('topic', 'area'))
+  settings {
+    store document table
+  }
+}
+
+table events {
+  id i64 identity
+  label varchar(32)
+  primary key (id)
+  settings {
+    store document table
+  }
+}
+
+table cards {
+  id varchar(16)
+  title varchar(64)
+  primary key (id)
+  settings {
+    store files
+    title title
+  }
+}
+
+table pins {
+  id varchar(16)
+  card varchar(16)
+  primary key (id)
+  index ix_pins_card (card)
+  foreign key fk_pins_card (card) references cards (id) on delete restrict on update restrict
+  settings {
+    store document table
+  }
+}

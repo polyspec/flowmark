@@ -1,0 +1,90 @@
+{
+  "name": "write-order-move-files",
+  "storage": "files",
+  "catalog": "files",
+  "corpus": {
+    "tasks/T1.flowmark.md": [
+      "# Root task",
+      "- position: 1",
+      "- done: false",
+      "- due: 2026-10-01",
+      "- label: first",
+      "",
+      "Root body."
+    ],
+    "tasks/T2.flowmark.md": [
+      "# Child task",
+      "- parent: [T1](T1.flowmark.md)",
+      "- position: 1",
+      "- done: true"
+    ],
+    "tasks/T3.flowmark.md": [
+      "# Second child",
+      "- parent: [T1](T1.flowmark.md)",
+      "- position: 2",
+      "- done: false",
+      "- due: 2026-10-11",
+      "- label:",
+      "",
+      "Body with *emphasis*."
+    ],
+    "tasks/T4.flowmark.md": [
+      "# Top two",
+      "- position: 2",
+      "- done: false"
+    ]
+  },
+  "request": {
+    "entity": "tasks",
+    "kind": "update",
+    "set": [
+      {
+        "column": "position",
+        "p": 0
+      }
+    ],
+    "where": {
+      "items": [
+        {
+          "pred": {
+            "column": "id",
+            "op": "eq",
+            "p": 1
+          }
+        }
+      ]
+    }
+  },
+  "params": [
+    1,
+    "T3"
+  ],
+  "now": "2026-10-11 09:00:00.000000",
+  "expect": {
+    "affected": 1,
+    "keys": [],
+    "corpus": {
+      "tasks/T2.flowmark.md": [
+        "# Child task",
+        "- parent: [T1](T1.flowmark.md)",
+        "- position: 2",
+        "- done: true"
+      ],
+      "tasks/T3.flowmark.md": [
+        "# Second child",
+        "- parent: [T1](T1.flowmark.md)",
+        "- position: 1",
+        "- done: false",
+        "- due: 2026-10-11",
+        "- label:",
+        "",
+        "Body with *emphasis*."
+      ]
+    }
+  },
+  "repeat": {
+    "affected": 1,
+    "keys": [],
+    "corpus": {}
+  }
+}

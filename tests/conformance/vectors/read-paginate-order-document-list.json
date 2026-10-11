@@ -1,0 +1,57 @@
+{
+  "name": "read-paginate-order-document-list",
+  "storage": "document list",
+  "catalog": "document-list",
+  "corpus": {
+    "tasks.flowmark.md": [
+      "# tasks",
+      "- T1 Root task done:false due:2026-10-01 label:first",
+      "  - T2 Child task done:true",
+      "  - T3 Second child done:false due:2026-10-11 label:\"\"",
+      "- T4 Top two done:false",
+      "",
+      "## tasks row T1",
+      "",
+      "Root body.",
+      "",
+      "## tasks row T3",
+      "",
+      "Body with *emphasis*."
+    ]
+  },
+  "equivalent": "read-paginate-order",
+  "request": {
+    "columns": {
+      "add": [
+        "title"
+      ],
+      "mode": "none"
+    },
+    "entity": "tasks",
+    "kind": "paginate",
+    "limit": {
+      "count": 2,
+      "offset": 1
+    },
+    "order": [
+      {
+        "column": "title"
+      }
+    ]
+  },
+  "params": [],
+  "now": "2026-10-11 09:00:00.000000",
+  "expect": {
+    "rows": [
+      {
+        "id": "T1",
+        "title": "Root task"
+      },
+      {
+        "id": "T3",
+        "title": "Second child"
+      }
+    ],
+    "count": 4
+  }
+}
