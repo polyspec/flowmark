@@ -37,6 +37,26 @@ type Table struct {
 	Order        string
 	Markdown     []string
 	StateMachine *StateMachine
+	Codecs       map[string][]string // the codec stages of each column with a codec setting, in write order
+	View         *View               // the view columns when the table is the view table, else nil
+}
+
+// The application schema (spec 100): the catalog document flowmark provides, and
+// its table whose rows are views.
+const (
+	ApplicationDocument = "flowmark"
+	ViewTable           = "views"
+)
+
+// View names the view columns of the view table (spec 100 Views): the view's
+// kind, the entity it reads, its stored filter and sort, and the field it groups
+// by.
+type View struct {
+	Kind   string
+	Entity string
+	Filter string
+	Sort   string
+	Group  string
 }
 
 // StorageKind is the storage of a table.
