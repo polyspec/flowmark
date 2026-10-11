@@ -1,5 +1,5 @@
 <!-- doc-id: spec-ops -->
-<!-- source-sha256: fde41a8908d547ee0fa6bb5ccee376de01a94972d3fc7aabaa23e48669f763f4 -->
+<!-- source-sha256: 8b85e030cb9132b965695124bf88632311e1e45bc57a962d60d83d4053a9ef73 -->
 # Operations
 
 [English](40-ops.md)
@@ -42,14 +42,44 @@
 
 ## Server
 
-- `flowmark serve <corpus> --port <port>`는 orm client가 접속하는 상주 face다. `--port`는 필수다.
-  loopback TCP에만 bind한다.
-  처음 시작할 때 무작위 token을 `.flowmark/server.json`에 쓰며, token은 재시작해도 유지되고
-  `flowmark serve --new-token`으로만 바뀐다.
+- `flowmark serve <corpus> --port <port> [--new-token] [--lock-wait-ms <n>] [--tx-idle-ms <n>]`는
+  orm client가 접속하는 상주 face다. `--port`는 필수다. `127.0.0.1:<port>`, 즉 loopback TCP에만 bind하며
+  `--port 0`이면 운영체제가 port를 고른다. listen을 시작하면 표준 출력에
+  `[serve] listening on 127.0.0.1:<port> for the corpus <corpus>`를 쓰고, lock과 journal event 각각과
+  session을 끝내지 못한 실패 각각을 표준 오류에 쓴다. catalog에 diagnostic이 있으면 그것을 밝히며
+  시작을 거절한다.
+- 처음 시작할 때 무작위 token을 `.flowmark/server.json`에 쓴다: JSON 한 줄 `{"token"}`과 line feed다.
+  token은 OS 무작위 source의 128 bit를 소문자 hex 32자리로 쓴 것이며, file은 소유자만 읽고 쓸 수 있게
+  만든다. token은 재시작해도 유지되고 `flowmark serve <corpus> --new-token`으로만 바뀐다. file은 partial
+  이름으로 쓴 뒤 제자리에 link하므로, 동시에 시작한 두 server는 첫 link가 놓은 token 하나를 유지한다.
+  그 한 줄을 담지 않은 file이나 그 자리의 symlink는 `--new-token`을 밝히며 시작을 거절한다.
 - DSN은 `markdown://127.0.0.1:<port>/<corpus>?token=<token>`이고 `<corpus>`는 corpus root의 directory
   이름이다. corpus나 token 불일치는 `CONFIG`다. 원격 접속과 다른 인증은 v1 밖이다.
-- 연결은 session이다: 요청과 control message의 JSON lines이며 각각 순서대로 답한다(요청과 답의 형태는
-  [capability table](60-dialect.md)에 있다).
+- 연결은 session이다: 요청과 control message의 JSON lines이며 각각 순서대로 한 줄로 답한다(요청과 답의
+  형태는 [capability table](60-dialect.md)에 있다). lock holder의 session은 `serve-<n>`이며 `n`은 server의
+  연결을 1부터 센다.
+- 연결의 첫 message는 DSN의 corpus와 token을 담은 `{"op": "connect", "corpus", "token"}`이며
+  `{"ok": true}`로 답한다. corpus나 token이 다르거나(token은 constant time으로 비교한다) 다른 message가
+  먼저 오면 `CONFIG`로 답하고 server가 연결을 닫는다. 두 번째 `connect`는 `CONFIG`다. 근거: DSN의 corpus와
+  token은 어떤 요청이 corpus를 읽기 전에 server에 닿아야 한다. PostgreSQL의 startup message가 모든
+  query보다 앞서고 인증 실패가 연결을 끝내는 것과 같다.
+- message는 한 줄의 JSON object 하나다. `op`가 있는 message는 control message이고 나머지는 요청
+  message다. 실패는 orm code를 담은 `{"error": {"code", "message"}}`로 답한다 — server는 orm client의
+  face이므로 `LOCK_TIMEOUT`은 `CANCELED`로, `CORPUS_CONFLICT`는 `WRITE_CONFLICT`로 답한다. JSON object가
+  아닌 줄, 어떤 control message도 아닌 `op`, 그 control message가 받지 않는 field는 구조가 틀린
+  message에 대한 orm code인 `IR_INVALID`다. `begin`은 boolean `read_only`를 받으며 없으면 false다.
+  `savepoint`, `release`, `rollback_to`는 `name`을 받는다.
+- `--tx-idle-ms`(기본 5000, 양의 정수)는 열린 transaction이 앞 message에 답한 때부터 다음 message를
+  기다리는 시간의 상한이다. 그 시간이 지나면 transaction을 rollback하고 lock을 풀고,
+  `{"error": {"code": "CONNECTION_LOST", "message"}}`를 연결에 쓰고(client는 이것을 다음 message의 답으로
+  읽는다) 연결을 닫는다. 근거: PostgreSQL의 `idle_in_transaction_session_timeout`도 session을 끝내며
+  (SQLSTATE 25P03), orm의 `CONNECTION_LOST`는 idle 한도를 이름 짓는다. 조용히 rollback한 뒤 연결을 열어
+  두면 client가 열려 있다고 믿는 transaction 밖에서 client의 다음 쓰기가 실행된다. 기본값은 lock 대기의
+  기본값과 같아서, 쉬는 transaction은 다른 operation이 기본으로 기다리는 시간보다 오래 lock을 잡지 않는다.
+  idle 상한이 timer인 까닭은 쉼이 event의 부재이기 때문이며, session의 유일한 timer다.
+- 닫힌 연결은 열린 transaction을 rollback하고 lock을 풀며 요청의 lock 대기를 끝낸다. server는 요청이
+  실행되는 동안에도 도는 연결의 read로 이를 안다. `SIGINT`나 `SIGTERM`을 받으면 server는 listen을
+  멈추고 모든 연결을 같은 방식으로 닫는다.
 
 ## Lock
 
@@ -60,8 +90,8 @@
   portable하게 취소할 수 있는 대기가 없고, 일부 network file system에서는 local로만 주어지며, holder를
   밝히지 않는다.
 - lock은 operation 하나 동안, 또는 server transaction 하나의 `begin`부터 `commit`이나 `rollback`까지
-  잡는다. 연결이 닫히거나 transaction이 server flag `tx_idle_ms`보다 오래 쉬면 transaction을
-  rollback하고 lock을 푼다.
+  잡는다. 연결이 닫히거나 transaction이 server flag `--tx-idle-ms`보다 오래 쉬면 transaction을
+  rollback하고 lock을 푼다([server](#server)).
 
 ### Holder record
 
@@ -99,7 +129,7 @@
 - 실행 중인 holder나 다른 host의 holder가 잡은 lock을 만난 operation은 그 release를 기다리며, deadline이
   먼저 지나면 holder와 그 상태를 밝히는 `LOCK_TIMEOUT`으로 실패한다. 끝난 holder는 곧바로 거절한다.
   deadline이 대기의 유일한 timer다: CLI, MCP, sidecar는 `--lock-wait-ms <n>`(기본 5000, 0이면 곧바로
-  거절)을 받고 server는 flag `lock_wait_ms`(기본 5000)를 받는다. 연결이 닫히면 대기가 끝난다. 근거:
+  거절)을 받고 server도 같은 flag를 받는다. 연결이 닫히면 대기가 끝난다. 근거:
   곧바로 거절하면 재시도 loop가 모든 호출자에게 옮겨 간다.
 - 대기는 lock에 대한 OS 변경 알림이 이끈다: Linux에서는 `.flowmark/`에 대한 inotify(`IN_DELETE |
   IN_MOVED_FROM | IN_DELETE_SELF | IN_MOVE_SELF | IN_UNMOUNT`)이며, server의 session들처럼 한 process가 한

@@ -47,9 +47,12 @@ Go client implements it first and every other client is its own orm item.
   each inserted or updated row once — an insert with `on_duplicate` is 1 — and an update counts the
   rows it matched. Grounding: orm's clients count an update's matched rows on every database, and an
   upsert that updates is 2 on MySQL and 1 on PostgreSQL and SQLite until orm normalizes it to 1.
-- **Error**: one code of orm `errors.yaml`; a hash mismatch is `SCHEMA_HASH_MISMATCH`.
+- **Error**: one code of orm `errors.yaml`, written `{"error": {"code", "message"}}`; a hash mismatch
+  is `SCHEMA_HASH_MISMATCH`.
 - **Control messages**: `{op: begin | commit | rollback | savepoint | release | rollback_to, name?}`,
-  each answered `{ok}` or with an error. A connection is a session.
+  and `read_only`, a boolean, on `begin`; each answered `{"ok": true}` or with an error. A connection
+  is a session, whose first message is `{"op": "connect", "corpus", "token"}` with the DSN's corpus
+  and token ([operations](40-ops.md#the-server)).
 
 ## Surfaces
 

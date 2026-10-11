@@ -1,5 +1,5 @@
 <!-- doc-id: spec-dialect -->
-<!-- source-sha256: d6b35f1fee7bbf76f16bd967737f55a380cc4340bb533cfde765cffd9c7c4977 -->
+<!-- source-sha256: b2dae8a34b4dc320b1e1777d2f5bc5b98c5734ab01bc672771efea047970dba1 -->
 # Capability table
 
 [English](60-dialect.md)
@@ -42,9 +42,12 @@ surface는 `CAPABILITY_UNSUPPORTED`, 그리고 orm의 규칙이 모든 backend�
   한 번 센다 — `on_duplicate`가 있는 insert는 1이다 — 그리고 update는 일치한 행을 센다. 근거: orm의
   client는 모든 database에서 update의 일치한 행을 세며, update하는 upsert는 orm이 1로 맞추기 전까지
   MySQL에서 2, PostgreSQL과 SQLite에서 1이다.
-- **오류**: orm `errors.yaml`의 code 하나. hash 불일치는 `SCHEMA_HASH_MISMATCH`다.
+- **오류**: orm `errors.yaml`의 code 하나이며 `{"error": {"code", "message"}}`로 쓴다. hash 불일치는
+  `SCHEMA_HASH_MISMATCH`다.
 - **control message**: `{op: begin | commit | rollback | savepoint | release | rollback_to, name?}`.
-  각각 `{ok}`나 오류로 답한다. 연결은 session이다.
+  `begin`은 boolean `read_only`도 받는다. 각각 `{"ok": true}`나 오류로 답한다. 연결은 session이며 그 첫
+  message는 DSN의 corpus와 token을 담은 `{"op": "connect", "corpus", "token"}`이다
+  ([operations](40-ops.md#the-server)).
 
 ## Surface
 

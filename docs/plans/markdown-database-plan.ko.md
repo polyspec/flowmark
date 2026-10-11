@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database -->
-<!-- source-sha256: 20521cc9373d7c5ad237cfad1b9c2d92abfde674038184beecc794ed149b797a -->
+<!-- source-sha256: 21f1754e0cb24ec938ea9436251efbe8a6756e717e4ed528a24190632e7f2588 -->
 # markdown database 계획
 
 [English](markdown-database-plan.md)
@@ -76,14 +76,18 @@ NULL이 아니며 비어 있을 수 있고, view의 entity table은 둘 다 선�
   가는 lock 없음"을 개정한다. loopback TCP에 bind하고 무작위 token을 `.flowmark/server.json`에 한 번
   쓴다 — 재시작해도 유지되며 `flowmark serve --new-token`으로만 바뀐다. port는 필수 flag `--port`다.
   DSN은 `markdown://127.0.0.1:<port>/<corpus>?token=<token>`이고 `<corpus>`는 corpus root의 directory
-  이름이다. corpus나 token 불일치는 `CONFIG`다.
+  이름이다. corpus나 token 불일치는 `CONFIG`다. 연결의 첫 message는
+  `{"op": "connect", "corpus", "token"}`이며, 불일치나 다른 message가 먼저 오면 `CONFIG`로 답하고 연결을
+  닫는다. 실패는 orm code를 담은 `{"error": {"code", "message"}}`로 답하고 `begin`은 `read_only`를 받으며,
+  `--tx-idle-ms`(기본 5000)보다 오래 쉰 transaction은 rollback하고 `CONNECTION_LOST` 답을 쓴 뒤 그 연결을
+  닫는다. PostgreSQL의 idle-in-transaction timeout이 session을 끝내는 것과 같다(spec 40 Server).
 - portable lock(spec 40)은 operation 하나 동안, 또는 transaction 하나의 `begin`부터 `commit`이나
   `rollback`까지 잡는다. lock file `.flowmark/lock`은 holder record, 즉 JSON 한 줄
   `{pid, start, host, hostname, session}`을 담으며 holder의 이름은 `<pid>@<host>/<session>`이다. 연결이
-  닫히거나 transaction이 `tx_idle_ms`(server flag)보다 오래 쉬면 transaction을 rollback하고 lock을 푼다.
+  닫히거나 transaction이 `--tx-idle-ms`(server flag)보다 오래 쉬면 transaction을 rollback하고 lock을 푼다.
   transaction 안의 요청은 server의 memory에 있는 그 post-image를 읽고, savepoint는 그 중첩 단계이며,
   journal stage는 commit 하나가 쓰는 동안에만 있다. CLI, MCP, sidecar는 같은 lock을 OS 변경 알림이
-  이끄는 대기로 `--lock-wait-ms`(server는 flag `lock_wait_ms`, 기본 5000)까지 기다리며, holder와 그
+  이끄는 대기로 `--lock-wait-ms`(기본 5000, server도 같은 flag를 받는다)까지 기다리며, holder와 그
   상태를 밝히는 `LOCK_TIMEOUT`으로 실패한다. 끝난 holder는 곧바로 거절하며 그 lock은 `flowmark
   unlock`만 지운다. spec 40은 각 face 이름을 orm code에 대응시킨다:
   `LOCK_TIMEOUT`은 `CANCELED`, `CORPUS_CONFLICT`는 `WRITE_CONFLICT`.
