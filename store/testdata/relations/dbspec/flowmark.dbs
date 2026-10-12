@@ -1,0 +1,169 @@
+dbspec 1 relations
+
+# The corpus of complex foreign keys (spec 30 Foreign keys): every foreign key is one column that
+# references a one-column primary key, and the shapes the model holds are all here at once — a chain
+# five tables deep (tenants ← teams ← members ← posts ← comments ← reactions), a self reference
+# (categories.parent), a two-directional pair (posts.author → members and members.pinned_post →
+# posts), members referenced by five tables (posts, comments, badges, alerts, approvals), a link
+# into a block row (reactions.comment), and every storage kind: files, document list, document
+# table, block list and block table.
+
+table tenants {
+  id varchar(8)
+  name varchar(40)
+  primary key (id)
+  settings {
+    key_prefix 'T'
+    store document table
+    title name
+  }
+}
+
+table teams {
+  id varchar(8)
+  tenant varchar(8)
+  name varchar(40)
+  primary key (id)
+  foreign key fk_teams_tenant (tenant) references tenants (id) on delete restrict on update restrict
+  index ix_teams_tenant (tenant)
+  settings {
+    key_prefix 'G'
+    store files
+    title name
+  }
+}
+
+table members {
+  id varchar(8)
+  team varchar(8)
+  name varchar(40)
+  pinned_post varchar(16) null
+  primary key (id)
+  foreign key fk_members_team (team) references teams (id) on delete restrict on update restrict
+  foreign key fk_members_pinned (pinned_post) references posts (id) on delete restrict on update restrict
+  index ix_members_team (team)
+  index ix_members_pinned (pinned_post)
+  settings {
+    key_prefix 'M'
+    store document list
+    title name
+  }
+}
+
+table categories {
+  id varchar(8)
+  parent varchar(8) null
+  name varchar(40)
+  primary key (id)
+  foreign key fk_categories_parent (parent) references categories (id) on delete restrict on update restrict
+  index ix_categories_parent (parent)
+  settings {
+    key_prefix 'C'
+    store files
+    title name
+  }
+}
+
+table posts {
+  id varchar(16)
+  author varchar(8)
+  category varchar(8) null
+  team varchar(8)
+  title varchar(80)
+  primary key (id)
+  foreign key fk_posts_author (author) references members (id) on delete restrict on update restrict
+  foreign key fk_posts_category (category) references categories (id) on delete restrict on update restrict
+  foreign key fk_posts_team (team) references teams (id) on delete restrict on update restrict
+  index ix_posts_author (author)
+  index ix_posts_category (category)
+  index ix_posts_team (team)
+  settings {
+    key_prefix 'P'
+    store document table
+    title title
+  }
+}
+
+table comments {
+  id i64 identity
+  post varchar(16)
+  author varchar(8)
+  body varchar(500)
+  primary key (id)
+  foreign key fk_comments_post (post) references posts (id) on delete restrict on update restrict
+  foreign key fk_comments_author (author) references members (id) on delete restrict on update restrict
+  index ix_comments_post (post)
+  index ix_comments_author (author)
+  settings {
+    store block fk_comments_post list
+    title body
+  }
+}
+
+table post_steps {
+  ordinal i64 identity
+  post varchar(16)
+  text varchar(200)
+  primary key (ordinal)
+  foreign key fk_post_steps_post (post) references posts (id) on delete restrict on update restrict
+  index ix_post_steps_post (post)
+  settings {
+    store block fk_post_steps_post table
+  }
+}
+
+table reactions {
+  id varchar(24)
+  comment i64
+  kind varchar(8)
+  primary key (id)
+  foreign key fk_reactions_comment (comment) references comments (id) on delete restrict on update restrict
+  index ix_reactions_comment (comment)
+  settings {
+    key_prefix 'R'
+    store files
+    title kind
+  }
+}
+
+table badges {
+  id varchar(12)
+  member varchar(8)
+  label varchar(24)
+  primary key (id)
+  foreign key fk_badges_member (member) references members (id) on delete restrict on update restrict
+  index ix_badges_member (member)
+  settings {
+    key_prefix 'B'
+    store files
+    title label
+  }
+}
+
+table alerts {
+  id varchar(12)
+  member varchar(8)
+  note varchar(120)
+  primary key (id)
+  foreign key fk_alerts_member (member) references members (id) on delete restrict on update restrict
+  index ix_alerts_member (member)
+  settings {
+    key_prefix 'A'
+    store document table
+    title note
+  }
+}
+
+table approvals {
+  id varchar(12)
+  member varchar(8)
+  granted date
+  primary key (id)
+  foreign key fk_approvals_member (member) references members (id) on delete restrict on update restrict
+  index ix_approvals_member (member)
+  settings {
+    key_prefix 'V'
+    store document list
+    title member
+  }
+}

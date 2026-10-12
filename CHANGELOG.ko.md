@@ -1,9 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 13e0ea2f1d6f338533d060feeaee1cf15faf931eb29f5de541002f1a0540a33d -->
+<!-- source-sha256: 042bc8e00c937730074647b381d9ada2fc9ded05661295572c43040bdb17dc41 -->
 # Changelog
 
 ## Unreleased
 
+- T12.14: 복잡한 foreign key의 corpus: golden이 다섯 table 사슬, 자기 참조, 쌍방향 쌍, 다섯 table에게 참조되는 table, block 행으로의 링크와 모든 저장 종류를 선언한다. engine은 사슬을 쓰고 그 사슬을 지나 join 하며 관계의 관계를 조립하고, 이동에서 참조를 유지하며, 빈 참조와 자기 참조된 삭제, 사슬 변이 잡은 삭제, 홀로 남은 쌍방향 쌍의 한쪽을 거절한다 — model이 담을 수 없는 복합 key는 test가 고정하는 schema error로 남는다.
 - T12.11.2-2 (수정): board의 정렬이 두 얼굴에서 동작한다 — query API를 잘못 불러 PHP 정렬이 항상 비었고, 정렬은 이제 페이지를 자르기 전에 목록 전체에 적용된다(제목은 요청의 column order로, 작성자 이름은 요청의 order 항목이 join된 column을 못 가리키므로 목록을 읽어 정렬). 페이지가 정렬을 따른다.
 - T12.11.2-2 (수정): board의 pager가 링크를 윈도잉한다 — 첫 페이지, 마지막 페이지, 현재 주변 다섯 개와 간격 표시, crudui의 pagination 모델처럼 — 그리고 링크가 정렬을 유지한다. 목록 자체는 항상 요청한 페이지의 열 개 글을 보인다.
 - T12.11.2-2: board의 form, 목록, 검증이 두 얼굴에서 crudui로 돈다: `src/PostForm.php`와 `node/postForm.ts`의 같은 field·목록 명세, error와 숨은 CSRF token을 함께 렌더하는 글쓰기 form, server가 렌더하는 목록, crudui validator의 검증(422와 field error, 303과 목록 이동), app과 함께 제공되는 crudui stylesheet.
