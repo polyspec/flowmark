@@ -1,10 +1,10 @@
 <!-- doc-id: plans-markdown-database-checklist -->
-<!-- source-sha256: 810fae84967a3b88d6891f6d46b886623c7f2c151b629913e435078d8ff7a532 -->
+<!-- source-sha256: 4b77ac334d28296e435e78305b2a1990c4655df9c553c6150ea8a59380e8beff -->
 # markdown database checklist
 
 ## T12 markdown database
 
-- [ ] T12 markdown database: `dbspec/` catalog이 선언하는 유한한 저장 문법, orm이 DSN으로 IR executor로서 접속하는 엔진으로서의 flowmark, 같은 행 위의 view. 원인: list·table·detailed 형태는 규칙 없이 demo 사례였고 — body column도, parent도, 관계도, 이력도 없었다 — 계획은 엔진을 orm에 두었으나 엔진은 flowmark에 있었으며, 여러 동작이 하드코딩되어 있었다 (T8.5, T10, T11 후속)
+- [o] T12 markdown database: `dbspec/` catalog이 선언하는 유한한 저장 문법, orm이 DSN으로 IR executor로서 접속하는 엔진으로서의 flowmark, 같은 행 위의 view. 원인: list·table·detailed 형태는 규칙 없이 demo 사례였고 — body column도, parent도, 관계도, 이력도 없었다 — 계획은 엔진을 orm에 두었으나 엔진은 flowmark에 있었으며, 여러 동작이 하드코딩되어 있었다 (T8.5, T10, T11 후속) 상태: 아래 모든 항목이 [o]다: 저장 문법과 GFM 읽기(T12.1), validator와 export(T12.2, T12.3), release된 v0.0.9가 담은 모든 orm 규칙에 답하는 IR 실행기(T12.4), 규모 봉투와 write path 수정(T12.5), server와 그 얼굴들(T12.6–T12.10), 천 글로 심은 crudui가 렌더하는 게시판 예제(T12.11), release된 orm pin(T12.12), benchmark를 곁든 세 platform gate(T12.13), 복잡한 foreign key corpus(T12.14). engine은 database다: 문법이 적혀 있고 규칙이 red에서 green으로 시험되었으며 orm이 DSN `markdown://`으로 IR executor에 닿는다.
   - 완료 선(polyspec session들과 공유, 2026-10-11): 다음을 모두 만족하면 T12를 완료로 선포한다. (1) 모든 T12 항목이 완료되었다. (2) orm을 기다리는 엔진 지점은 각자 기다리는 orm 항목(`T63`, `T74`, `T89`, `T107`, `T120`과 그 행들이 적은 다른 항목)을 적고, 어떤 stub이나 fallback도 그것을 대신하지 않는다. (3) 모든 항목이 red부터 만들어졌고 main에서 `make test`, `go vet`, `make documents-check`, `make refs-check`가 통과한다. (4) 엔진 전체에 대한 적대 검토 한 번과 Linux·Windows의 T12.13이 통과한다. 그때까지 완료를 막는 결함 말고는 항목을 새로 열지 않으며, 개선은 완료 뒤 목록에 둔다
 - [o] T12.1 markdown database 계획을 바탕으로 판정과 spec 00, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110을 다시 쓴다: seam 정정, T8.5 철회, 저장 문법, catalog, server와 transaction, 이력, view (T12 선행)
   - 완료 기준: 계획의 모든 판정이 해당 spec에 근거를 갖춘 명제로 서고, design plan이 정정된 seam과 철회된 T8.5를 그것을 철회하게 한 사실과 함께 적으며, `make documents-check`와 `make refs-check`가 통과한다.
