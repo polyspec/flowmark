@@ -3,6 +3,7 @@
 
 ## Unreleased
 
+- T12.11.2-2 (fix): the board's pager windows its links — the first page, the last and five around the current with gap markers, as crudui's pagination model does — and keeps the sort in its links; the list itself always shows the ten posts of the requested page.
 - T12.11.2-2: the board's form, list and validation run by crudui on both faces: the same field and list specification in `src/PostForm.php` and `node/postForm.ts`, the create form rendered with its errors and the hidden CSRF token, the list rendered server-side, the submission validated by the crudui validator (422 with the field errors, 303 to the list), and the crudui stylesheet served with the app.
 - T12.13: the platform gate: `make test` and the writepath benchmarks run on Linux, Windows and macOS at every push (`.github/workflows/test.yml`), green with no test skipped; the Windows defects it found are fixed, the benchmark artifacts are kept per run, and the numbers are compared with the scale envelope of spec 40.
 - T12.4-10: orm's table "Markdown IR executor" is spec 60's capability table row by row, held by orm's `make markdown-table-check` against the flowmark revision it pins (`444f27f`), and the Korean capability table of spec 60 is worded within orm's wording rules.

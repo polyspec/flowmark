@@ -38,6 +38,30 @@ function findPost(Request $request, Posts $posts): array
     return $post ?? throw new NotFound();
 }
 
+// pagerWindow numbers the pager links: the first page, the last and a window of five around the current, with a gap
+// marker between the ranges that are not adjacent, as crudui's pagination model windows its page buttons.
+function pagerWindow(int $page, int $pages): array
+{
+    $out = [];
+    $add = static function (int $n) use (&$out): void {
+        $out[] = ['n' => $n];
+    };
+    $gap = static function () use (&$out): void {
+        if (($last = $out[count($out) - 1] ?? null) === null || !isset($last['gap'])) {
+            $out[] = ['gap' => true];
+        }
+    };
+    for ($n = 1; $n <= $pages; $n++) {
+        $inWindow = $n === 1 || $n === $pages || ($n >= $page - 2 && $n <= $page + 2);
+        if ($inWindow) {
+            $add($n);
+        } elseif ($n === 2 || $n === $pages - 1) {
+            $gap();
+        }
+    }
+    return $out;
+}
+
 // Loaders and actions of the regions and routes that app.json declares.
 return [
     // The post page, the one route with the parameter `id`, links the reader stylesheet (HY-64).
@@ -55,7 +79,7 @@ return [
             'load' => function (Request $request, Posts $posts): array {
                 [$page, $pages] = currentPage($request, $posts);
 
-                return ['page' => $page, 'pages' => $pages];
+                return ['page' => $page, 'pages' => $pages, 'pager' => pagerWindow($page, $pages)];
             },
             'regions' => [
                 // The notice is on the first page only; another page has no notice region (HY-75).
@@ -64,6 +88,8 @@ return [
                 ] : null,
                 'rows' => function (Request $request, Posts $posts): array {
                     [$page] = currentPage($request, $posts);
+                    // crudui renders the rows it is given and derives neither the page nor the total, so the loader
+                    // slices the page and the template's pager keeps the ?page= links.
                     $postsOfPage = $posts->page($page, POSTS_PER_PAGE);
                     // The sort the region kept comes back on the request; the crudui list is rendered server-side.
                     $sort = $request->query('sort', '');

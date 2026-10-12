@@ -6,8 +6,12 @@
 {?# notice}<div id="notice">{# notice}</div>{/}
 <div id="rows">{# rows}</div>
 <nav class="pager">
-{@ n = range(1, pages)}
-<a href="/board?page={= n}"{? n == page} class="current"{/}>{= n}</a>
+{@ item = pager}
+{? item.gap}
+<span class="gap">…</span>
+{:}
+<a href="/board?sort={= sort}&page={= item.n}"{? item.n == page} class="current"{/}>{= item.n}</a>
+{/}
 {/}
 </nav>
 </section>
