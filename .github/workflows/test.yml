@@ -33,7 +33,10 @@ jobs:
       - name: benchmarks
         shell: bash
         run: |
-          ulimit -n 65536 2>/dev/null || true
+          # The watch of macOS holds one descriptor per document (spec 40), so the benchmark corpus needs the limit
+          # of open files raised to the most this runner allows, which the log names with the hard limit.
+          ulimit -n 65536 2>/dev/null || ulimit -n $(ulimit -Hn) 2>/dev/null || true
+          ulimit -Hn
           go test ./writepath -run '^$' -bench . -benchmem | tee benchmarks.txt
       - uses: actions/upload-artifact@v4
         with:
