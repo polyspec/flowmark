@@ -89,18 +89,12 @@ return [
                 'rows' => function (Request $request, Posts $posts): array {
                     [$page] = currentPage($request, $posts);
                     // crudui renders the rows it is given and derives neither the page nor the total, so the loader
-                    // slices the page and the template's pager keeps the ?page= links.
-                    $postsOfPage = $posts->page($page, POSTS_PER_PAGE);
-                    // The sort the region kept comes back on the request; the crudui list is rendered server-side.
-                    $sort = $request->query('sort', '');
-                    $key = match ($sort) { 'title' => 'title', 'author' => 'author', default => '' };
-                    if ($key !== '') {
-                        usort($postsOfPage, static fn (array $a, array $b): int => $a[$key] <=> $b[$key]);
-                    }
+                    // pages the sorted list and the template's pager keeps the ?sort=&page= links.
+                    $sort = match ($request->query()->last('sort') ?? '') { 'title' => 'title', 'author' => 'author', default => '' };
 
                     return [
-                        'listHtml' => PostForm::renderList($postsOfPage),
-                        'sort' => $key,
+                        'listHtml' => PostForm::renderList($posts->pageSorted($page, POSTS_PER_PAGE, $sort)),
+                        'sort' => $sort,
                         'compact' => false,
                         'highlight' => $request->flash('created'),
                     ];

@@ -67,14 +67,12 @@ export const handlers: Handlers<Services> = {
         rows: async ({ request, services }) => {
           const posts = services.get('posts');
           const [page] = await currentPage(request, posts);
-          // crudui renders the rows it is given and derives neither the page nor the total, so the loader
-          // slices the page and the template's pager keeps the ?page= links.
-          const ofPage = await posts.page(page, POSTS_PER_PAGE);
-          // The sort the region kept comes back on the request; the crudui list is rendered server-side.
+          // crudui renders the rows it is given and derives neither the page nor the total, so the loader pages
+          // the sorted list and the template's pager keeps the ?sort=&page= links.
           const asked = request.query().get('sort')?.[0] ?? '';
-          const key: 'title' | 'author' | '' = asked === 'title' ? 'title' : asked === 'author' ? 'author' : '';
-          if (key !== '') ofPage.sort((a, b) => (a[key] < b[key] ? -1 : a[key] > b[key] ? 1 : 0));
-          return { listHtml: listHtml(ofPage), sort: key, compact: false, highlight: request.flash('created') };
+          const sort: 'title' | 'author' | '' = asked === 'title' ? 'title' : asked === 'author' ? 'author' : '';
+          const ofPage = await posts.pageSorted(page, POSTS_PER_PAGE, sort);
+          return { listHtml: listHtml(ofPage), sort, compact: false, highlight: request.flash('created') };
         },
       },
     },

@@ -29,14 +29,32 @@ final class Posts
      */
     public function page(int $page, int $perPage): array
     {
-        $result = (new PostModel())->connect($this->db)
+        return $this->pageSorted($page, $perPage, '');
+    }
+
+    /**
+     * Returns one page of posts in the order the sort names: '' is the newest first, 'title' the titles in code point
+     * order and 'author' the authors' names in code point order. A title is a column of the posts, so its order runs
+     * in the request; an author's name lives in the joined people, which an order item of the request cannot name, so
+     * the whole list is read and the page is cut after it is sorted.
+     */
+    public function pageSorted(int $page, int $perPage, string $sort): array
+    {
+        $query = (new PostModel())->connect($this->db)
             ->removeAllColumns()->addColumnId()->addColumnTitle()->addColumnCreated()
-            ->joinAuthorWithId((new People())->removeAllColumns()->addColumnName())
-            ->orderByCreatedDesc()->orderByIdDesc()
-            ->getsPage($page, $perPage);
+            ->joinAuthorWithId((new People())->removeAllColumns()->addColumnName());
+        if ($sort === 'title') {
+            $rows = $query->orderByTitleAsc()->orderByIdAsc()->getsPage($page, $perPage)->items->toArray();
+        } elseif ($sort === 'author') {
+            $rows = $query->orderByCreatedDesc()->orderByIdDesc()->gets()->toArray();
+            usort($rows, static fn (array $a, array $b): int => [$a['people_model']['name'], $a['id']] <=> [$b['people_model']['name'], $b['id']]);
+            $rows = array_slice($rows, ($page - 1) * $perPage, $perPage);
+        } else {
+            $rows = $query->orderByCreatedDesc()->orderByIdDesc()->getsPage($page, $perPage)->items->toArray();
+        }
 
         $posts = [];
-        foreach ($result->items->toArray() as $row) {
+        foreach ($rows as $row) {
             $posts[] = [
                 'id' => (string) $row['id'],
                 'title' => (string) $row['title'],
