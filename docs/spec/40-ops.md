@@ -568,6 +568,13 @@ The engine states the size of a corpus it serves within the latency target above
   - On macOS the watch holds a descriptor for every folder and document (20,009 at 10,000 documents, one for each
     document and folder): the number of documents is also the number of descriptors a process needs. An opening that
     cannot get them fails as `DRIVER` naming the file, and leaves no lock.
+  - Hosting such a corpus on macOS raises the limits an operator controls, because the kernel caps open files twice
+    besides the rlimit: per process (`kern.maxfilesperproc`) and system-wide (`kern.maxfiles`). A process that holds
+    C open corpora of N documents needs about C·N descriptors, so the three are raised together — the CI workflow of
+    `.github/workflows/test.yml` does it before its benchmarks and names the values the runner allowed in its log. The
+    `descriptors` column of the benchmark artifacts counts the whole process, which holds the fixture's corpus and the
+    freshly opened one, about two per document; one corpus alone holds one per folder and document, as the board
+    measurement above shows.
   - The board of the examples is this shape at 10,000 posts, 1,000 in each of ten month folders, served by
     `flowmark serve`: the server is ready in 3.1 s, keeps 140 MB, holds 10,029 descriptors and answers a page of
     ten posts in 72 ms, one post in 44 ms and a new post in 156 ms through orm.

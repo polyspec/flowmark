@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Flowmark\Board\Assets;
+use Flowmark\Board\PostForm;
 use Flowmark\Board\Posts;
 use Polyspec\Hyper\NotFound;
 use Polyspec\Hyper\Reply;
@@ -63,10 +64,17 @@ return [
                 ] : null,
                 'rows' => function (Request $request, Posts $posts): array {
                     [$page] = currentPage($request, $posts);
+                    $postsOfPage = $posts->page($page, POSTS_PER_PAGE);
+                    // The sort the region kept comes back on the request; the crudui list is rendered server-side.
+                    $sort = $request->query('sort', '');
+                    $key = match ($sort) { 'title' => 'title', 'author' => 'author', default => '' };
+                    if ($key !== '') {
+                        usort($postsOfPage, static fn (array $a, array $b): int => $a[$key] <=> $b[$key]);
+                    }
 
                     return [
-                        'posts' => $posts->page($page, POSTS_PER_PAGE),
-                        'sort' => '',
+                        'listHtml' => PostForm::renderList($postsOfPage),
+                        'sort' => $key,
                         'compact' => false,
                         'highlight' => $request->flash('created'),
                     ];
@@ -88,27 +96,21 @@ return [
         ],
 
         'board.create' => [
+            'load' => fn (Request $request): array => ['formHtml' => PostForm::render([], [], $request->csrfToken())],
             'post' => function (Request $request, Posts $posts): Result {
+                // The crudui form posts its fields under the key prefix form; the server validates the same spec.
+                $form = $_POST['form'] ?? null;
+                if (!is_array($form)) {
+                    return Result::invalid(['formHtml' => PostForm::render([], [], $request->csrfToken())]);
+                }
                 $values = [
-                    'title' => trim($request->formString('title')),
-                    'author' => trim($request->formString('author')),
-                    'body' => trim($request->formString('body')),
+                    'title' => trim((string) ($form['title'] ?? '')),
+                    'author' => trim((string) ($form['author'] ?? '')),
+                    'body' => trim((string) ($form['body'] ?? '')),
                 ];
-                $errors = array_filter([
-                    'title' => match (true) {
-                        $values['title'] === '' => '제목을 입력하세요.',
-                        mb_strlen($values['title']) > 100 => '제목은 100자 이하로 입력하세요.',
-                        default => null,
-                    },
-                    'author' => match (true) {
-                        $values['author'] === '' => '작성자를 입력하세요.',
-                        mb_strlen($values['author']) > 30 => '작성자는 30자 이하로 입력하세요.',
-                        default => null,
-                    },
-                    'body' => $values['body'] === '' ? '내용을 입력하세요.' : null,
-                ]);
-                if ($errors !== []) {
-                    return Result::invalid(['values' => $values, 'errors' => $errors]);
+                $judged = PostForm::validate($values);
+                if (!$judged['valid']) {
+                    return Result::invalid(['formHtml' => PostForm::render($values, $judged['errors'], $request->csrfToken())]);
                 }
                 $id = $posts->create($values['title'], $values['author'], $values['body']);
 

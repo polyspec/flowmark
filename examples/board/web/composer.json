@@ -4,16 +4,91 @@
     "type": "project",
     "license": "MIT",
     "repositories": [
-        { "type": "path", "url": "../../../../polyspec/hyper/packages/hyper-server-php", "options": { "symlink": false } },
-        { "type": "path", "url": "../../../../polyspec/orm/packages/orm-php", "options": { "symlink": false } },
-        { "type": "package", "package": { "name": "polyspec/template", "version": "0.0.6", "type": "library", "description": "Template language implementation: lexer, parser, renderer, functions and CLI", "license": "MIT", "dist": { "type": "zip", "url": "https://github.com/polyspec/template/releases/download/v0.0.6/polyspec-template-php-0.0.6.zip", "shasum": "02f0244bd3fd663b68576d0c740284306b3f8320" }, "require": { "php": "^8.2", "ext-mbstring": "*" }, "autoload": { "psr-4": { "Polyspec\\Template\\": "src/" } }, "bin": ["bin/template.php"] } },
-        { "type": "package", "package": { "name": "polyspec/ordered-json", "version": "0.0.8", "type": "library", "require": { "php": ">=8.2", "ext-json": "*", "ext-pcre": "*" }, "autoload": { "files": ["src/OrderedJson.php"] }, "dist": { "type": "zip", "url": "https://github.com/polyspec/ordered-json/releases/download/v0.0.8/polyspec-ordered-json-php-0.0.8.zip", "shasum": "6fa67fff99b422f42ed7ab51ac470cadf8ade699" } } }
+        {
+            "type": "path",
+            "url": "../../../../polyspec/hyper/packages/hyper-server-php",
+            "options": {
+                "symlink": false
+            }
+        },
+        {
+            "type": "path",
+            "url": "../../../../polyspec/orm/packages/orm-php",
+            "options": {
+                "symlink": false
+            }
+        },
+        {
+            "type": "package",
+            "package": {
+                "name": "polyspec/template",
+                "version": "0.0.6",
+                "type": "library",
+                "description": "Template language implementation: lexer, parser, renderer, functions and CLI",
+                "license": "MIT",
+                "dist": {
+                    "type": "zip",
+                    "url": "https://github.com/polyspec/template/releases/download/v0.0.6/polyspec-template-php-0.0.6.zip",
+                    "shasum": "02f0244bd3fd663b68576d0c740284306b3f8320"
+                },
+                "require": {
+                    "php": "^8.2",
+                    "ext-mbstring": "*"
+                },
+                "autoload": {
+                    "psr-4": {
+                        "Polyspec\\Template\\": "src/"
+                    }
+                },
+                "bin": [
+                    "bin/template.php"
+                ]
+            }
+        },
+        {
+            "type": "package",
+            "package": {
+                "name": "polyspec/ordered-json",
+                "version": "0.0.8",
+                "type": "library",
+                "require": {
+                    "php": ">=8.2",
+                    "ext-json": "*",
+                    "ext-pcre": "*"
+                },
+                "autoload": {
+                    "files": [
+                        "src/OrderedJson.php"
+                    ]
+                },
+                "dist": {
+                    "type": "zip",
+                    "url": "https://github.com/polyspec/ordered-json/releases/download/v0.0.8/polyspec-ordered-json-php-0.0.8.zip",
+                    "shasum": "6fa67fff99b422f42ed7ab51ac470cadf8ade699"
+                }
+            }
+        },
+        {
+            "type": "path",
+            "url": "../../../../polyspec/crudui/packages/validator-php",
+            "options": {
+                "symlink": false
+            }
+        },
+        {
+            "type": "path",
+            "url": "../../../../polyspec/crudui/packages/generator-php",
+            "options": {
+                "symlink": false
+            }
+        }
     ],
     "require": {
         "php": ">=8.4",
         "polyspec/hyper-server": "0.0.13",
-        "polyspec/orm": "0.0.8",
-        "polyspec/template": "0.0.6"
+        "polyspec/orm": "0.0.9",
+        "polyspec/template": "0.0.6",
+        "polyspec/crudui-generator": "0.0.5"
     },
     "autoload": {
         "psr-4": {
