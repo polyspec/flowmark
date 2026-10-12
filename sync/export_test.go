@@ -204,7 +204,7 @@ func apply(t *testing.T, c *irexec.Corpus, stmts []Statement) *sql.DB {
 			continue
 		}
 		if odb == nil {
-			odb, err = orm.ConnectSchema((&url.URL{Scheme: "sqlite", Path: path}).String(), &orm.Schema{Hash: model.ManifestHash, Text: model.ManifestText}, orm.Config{})
+			odb, err = orm.ConnectSchema((&url.URL{Scheme: "sqlite", Path: sqliteURLPath(path)}).String(), &orm.Schema{Hash: model.ManifestHash, Text: model.ManifestText}, orm.Config{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -598,4 +598,14 @@ func TestExportShardedTables(t *testing.T) {
 	if got := readBack(t, db, c, "events"); !reflect.DeepEqual(got, want) || len(got) != 2 {
 		t.Fatalf("events read back %v; want the two rows %v", got, want)
 	}
+}
+
+// sqliteURLPath is the path of a SQLite DSN for the file path: absolute, with slashes, so that a Windows path
+// C:\dir\file becomes /C:/dir/file.
+func sqliteURLPath(path string) string {
+	path = filepath.ToSlash(path)
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+	return path
 }
