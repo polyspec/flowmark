@@ -37,6 +37,21 @@ The paths below are relative to the repository; `<flowmark>` is a built `flowmar
    FLOWMARK_DSN='markdown://127.0.0.1:<port>/board?token=<token>' php -S 127.0.0.1:8090 -t public public/index.php
    ```
 
+## Forms, lists and validation by crudui
+
+The create form, the board list and the validation of a submission are declared once per face and
+run by [crudui](https://github.com/polyspec/crudui): `src/PostForm.php` (Composer path repositories
+of `polyspec/crudui-generator`) and `node/postForm.ts` (npm file dependencies on the generator,
+HTML renderer and validator packages) hold the same field specification — 제목, 작성자, 내용, each
+with its rule and its Korean message — and the same list columns. The server renders the form with
+`renderForm` (the action, the hidden CSRF token, the errors of a refused submission) and the list
+with `renderList`; a POST is validated by the crudui validator, an empty one answering 422 with the
+error of each field under it. The templates output the rendered HTML with `| raw`, the escape hatch
+for HTML from a trusted renderer, and the crudui stylesheet is `public/assets/styles/crudui.css`
+(copied from the crudui checkout; re-copy it when crudui is bumped). After editing the templates,
+rebuild the server program and the assets with the `hyper-build-server` and `hyper-build-assets`
+commands above. The list sort is a server request (`?sort=`), because the server renders the list.
+
 ## Run it on the Node.js server
 
 The same application runs on hyper's Node.js server, over orm's TypeScript client: `node/` holds its `main.ts`,
