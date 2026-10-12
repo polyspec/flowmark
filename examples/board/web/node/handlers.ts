@@ -25,6 +25,22 @@ async function findPost(request: Request, posts: Posts): Promise<Post> {
   return post;
 }
 
+// Numbers the pager links: the first page, the last and a window of five around the current, with a gap marker
+// between the ranges that are not adjacent, as crudui's pagination model windows its page buttons.
+function pagerWindow(page: number, pages: number): ({ n: number } | { gap: true })[] {
+  const out: ({ n: number } | { gap: true })[] = [];
+  const gap = (): void => {
+    const last = out[out.length - 1];
+    if (last === undefined || !('gap' in last)) out.push({ gap: true });
+  };
+  for (let n = 1; n <= pages; n++) {
+    const inWindow = n === 1 || n === pages || (n >= page - 2 && n <= page + 2);
+    if (inWindow) out.push({ n });
+    else if (n === 2 || n === pages - 1) gap();
+  }
+  return out;
+}
+
 // Removes the characters that PHP trim removes: space, tab, line feed, carriage return, NUL and vertical tab.
 function trim(text: string): string {
   return text.replace(/^[ \t\n\r\0\x0B]+|[ \t\n\r\0\x0B]+$/g, '');
@@ -41,8 +57,9 @@ export const handlers: Handlers<Services> = {
   routes: {
     'board.list': {
       load: async ({ request, services }) => {
-        const [page, pages] = await currentPage(request, services.get('posts'));
-        return { page, pages };
+        const posts = services.get('posts');
+        const [page, pages] = await currentPage(request, posts);
+        return { page, pages, pager: pagerWindow(page, pages) };
       },
       regions: {
         // The notice is on the first page only; another page has no notice region (HY-75).
@@ -50,6 +67,8 @@ export const handlers: Handlers<Services> = {
         rows: async ({ request, services }) => {
           const posts = services.get('posts');
           const [page] = await currentPage(request, posts);
+          // crudui renders the rows it is given and derives neither the page nor the total, so the loader
+          // slices the page and the template's pager keeps the ?page= links.
           const ofPage = await posts.page(page, POSTS_PER_PAGE);
           // The sort the region kept comes back on the request; the crudui list is rendered server-side.
           const asked = request.query().get('sort')?.[0] ?? '';

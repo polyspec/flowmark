@@ -1,9 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 3accc6a629e2b21ef6018ee0b97e1c24b2fbef78b87e598db283786226d4afdd -->
+<!-- source-sha256: 79d045cfa28fdb74075b5447878c8e89c948db0415d10af24c0d12658fb94df8 -->
 # Changelog
 
 ## Unreleased
 
+- T12.11.2-2 (수정): board의 pager가 링크를 윈도잉한다 — 첫 페이지, 마지막 페이지, 현재 주변 다섯 개와 간격 표시, crudui의 pagination 모델처럼 — 그리고 링크가 정렬을 유지한다. 목록 자체는 항상 요청한 페이지의 열 개 글을 보인다.
 - T12.11.2-2: board의 form, 목록, 검증이 두 얼굴에서 crudui로 돈다: `src/PostForm.php`와 `node/postForm.ts`의 같은 field·목록 명세, error와 숨은 CSRF token을 함께 렌더하는 글쓰기 form, server가 렌더하는 목록, crudui validator의 검증(422와 field error, 303과 목록 이동), app과 함께 제공되는 crudui stylesheet.
 - T12.13: platform gate: `make test`와 writepath benchmark가 push마다 Linux, Windows, macOS에서 돈다(`.github/workflows/test.yml`), 건너뛴 test 없이 green. 그 과정의 Windows 결함을 고쳤고 benchmark artifact를 실행마다 보관하며, 그 수치를 spec 40의 규모 봉투와 비교했다.
 - T12.4-10: orm의 "Markdown IR executor" 표는 spec 60의 capability 표를 행마다 옮긴 것이며, orm의 `make markdown-table-check`가 그것이 고정한 flowmark 판(`444f27f`)에 대해 지킨다. spec 60의 한국어 capability 표는 orm의 문체 규칙 안의 표현으로 고쳤다.
