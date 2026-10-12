@@ -6,6 +6,13 @@ declare(strict_types=1);
 // start with display_errors off.
 ini_set('display_errors', '0');
 
+// The built-in server routes every request through this script; a file that exists under the document root is served
+// by the server itself, so the stylesheets and the client entry reach the browser.
+$path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+if ($path !== '/' && is_file(__DIR__ . $path)) {
+    return false;
+}
+
 use Flowmark\Board\Assets;
 use Flowmark\Board\Posts;
 use Polyspec\Hyper\App;
