@@ -3,6 +3,7 @@
 
 ## Unreleased
 
+- T12.14: the corpus of complex foreign keys: a golden declares a five-table chain, a self reference, a two-directional pair, a table five others reference, a link into a block row and every storage kind; the engine writes the chain, joins across it, assembles the relation of a relation, keeps references on a move, and refuses a dangling reference, a self-referenced delete, a chain-edge delete and one side of a two-directional pair alone — the composite keys the model cannot hold stay schema errors the tests pin.
 - T12.11.2-2 (fix): the board's sort works on both faces — a wrong call to the query API left the PHP sort always empty, and the sort now orders the whole list before the page is cut (a title as a column order in the request, an author's name by reading the list, for a request order item cannot name a joined column), so the pages follow the sort.
 - T12.11.2-2 (fix): the board's pager windows its links — the first page, the last and five around the current with gap markers, as crudui's pagination model does — and keeps the sort in its links; the list itself always shows the ten posts of the requested page.
 - T12.11.2-2: the board's form, list and validation run by crudui on both faces: the same field and list specification in `src/PostForm.php` and `node/postForm.ts`, the create form rendered with its errors and the hidden CSRF token, the list rendered server-side, the submission validated by the crudui validator (422 with the field errors, 303 to the list), and the crudui stylesheet served with the app.
