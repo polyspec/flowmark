@@ -3,6 +3,7 @@
 
 ## Unreleased
 
+- T12.13: the platform gate: `make test` and the writepath benchmarks run on Linux, Windows and macOS at every push (`.github/workflows/test.yml`), green with no test skipped; the Windows defects it found are fixed, the benchmark artifacts are kept per run, and the numbers are compared with the scale envelope of spec 40.
 - T12.4-10: orm's table "Markdown IR executor" is spec 60's capability table row by row, held by orm's `make markdown-table-check` against the flowmark revision it pins (`444f27f`), and the Korean capability table of spec 60 is worded within orm's wording rules.
 - T12.4-6: a `time` has one form in an IR executor message, `HH:MM:SS.ffffff` whatever its column's precision: the executor reads a parameter in that form (zeros past p) and answers a time in it, and refuses the p-digit form and a non-zero digit past p with `CODEC_ENCODE`, where it read and answered p digits.
 - T12.4-5 (fix): the parameter check applies to the messages of orm clients only; the values of a face operation are the engine's own write, which the catalog's rules judge, so a face write with a value of the wrong type is `CONSTRAINT` again, as spec 50 says.
