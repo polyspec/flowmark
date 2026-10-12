@@ -39,6 +39,7 @@ jobs:
           # log, and a corpus that still does not fit fails the benchmark with the engine's DRIVER rule.
           ulimit -Sn; ulimit -Hn
           if [ "$(uname -s)" = Darwin ]; then sysctl kern.maxfilesperproc kern.maxfiles; fi
+          if [ "$(uname -s)" = Darwin ]; then sudo sysctl -w kern.maxfiles=65536 || echo 'raise: kern.maxfiles refused'; fi
           if [ "$(uname -s)" = Darwin ]; then sudo sysctl -w kern.maxfilesperproc=65536 || echo 'raise: kern.maxfilesperproc refused'; fi
           ulimit -n 65536 || echo 'raise: the rlimit was refused'
           ulimit -Sn; ulimit -Hn
