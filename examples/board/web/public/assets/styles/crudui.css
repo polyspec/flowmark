@@ -1,0 +1,920 @@
+/* CRUDUI core stylesheet, the runtime interface text and controls of every rendered form and list.
+   Source: polyspec/crudui packages/generator-core/styles/crudui.css at 0.0.5; re-copy when crudui is bumped. */
+/*
+ * CRUDUI stylesheet: the form node grammar, its widgets, the structure map and the
+ * data view.
+ *
+ * Every data node is `crudui-node` with one `crudui-node--{kind}` modifier and
+ * the shared `__header`, `__body`, `__errors` and `__footer` slots. Every rule is scoped to a
+ * crudui block, and a page needs no other stylesheet to render a form: box sizing,
+ * controls, choices and affixes are defined here. Behavior reads data and ARIA
+ * attributes; these rules only style the grammar.
+ */
+
+:where(.crudui-form, .crudui-outline, .crudui-data),
+:where(.crudui-form, .crudui-outline, .crudui-data) :where(*, ::before, ::after) {
+  box-sizing: border-box;
+}
+
+:where(.crudui-form, .crudui-outline, .crudui-data) [hidden] {
+  display: none !important;
+}
+
+/*
+ * The form, structure map, data view, list and detail render independently and share one set of
+ * custom properties. The defaults have zero specificity, so a page themes a block with a rule
+ * that selects the block and sets the properties. No other rule writes a color.
+ */
+:where(.crudui-form, .crudui-outline, .crudui-data, .crudui-list, .crudui-detail) {
+  --crudui-text: #111827;
+  --crudui-muted: #6b7280;
+  --crudui-border: #e5e7eb;
+  --crudui-surface: #ffffff;
+  --crudui-subtle: #f9fafb;
+  --crudui-accent: #1d4ed8;
+  --crudui-on-accent: #ffffff;
+  --crudui-error: #b91c1c;
+  --crudui-action-text: #374151;
+  --crudui-action-size: 1.75rem;
+  --crudui-control-border: var(--crudui-border);
+  --crudui-control-height: 2.25rem;
+  --crudui-radius: 0.375rem;
+  --crudui-submit-background: var(--crudui-surface);
+  --crudui-submit-border: var(--crudui-border);
+  --crudui-submit-text: var(--crudui-action-text);
+  --crudui-label-width: 10rem;
+  --crudui-node-header-height: 2.75rem;
+  --crudui-row-padding: 0.75rem;
+  --crudui-row-border: 1px;
+  --crudui-form-footer-height: 3.5rem;
+  color: var(--crudui-text);
+}
+
+.crudui-form__body,
+.crudui-node__body {
+  display: grid;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.crudui-node {
+  display: grid;
+  gap: 0.375rem;
+  min-width: 0;
+}
+
+.crudui-node__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem 0.5rem;
+  min-width: 0;
+}
+
+.crudui-node__label {
+  font-weight: 600;
+}
+
+.crudui-node__description {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--crudui-muted);
+  font-size: 0.8125rem;
+}
+
+/* Form errors precede the body; node errors follow the node body. */
+.crudui-form__errors,
+.crudui-node__errors {
+  display: grid;
+  gap: 0.25rem;
+  color: var(--crudui-error);
+}
+
+.crudui-form__errors {
+  margin-bottom: 0.75rem;
+}
+
+.crudui-form__description {
+  margin: 0 0 0.75rem;
+  color: var(--crudui-muted);
+}
+
+.crudui-form__error,
+.crudui-node__error {
+  margin: 0;
+  font-size: 0.8125rem;
+}
+
+.crudui-node__number {
+  color: var(--crudui-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.crudui-node__title {
+  font-weight: 600;
+}
+
+.crudui-node__count,
+.crudui-node__summary {
+  color: var(--crudui-muted);
+  font-size: 0.8125rem;
+}
+
+/* A standalone checkbox sits beside its own caption. */
+.crudui-node--field > .crudui-node__body:has(> input[type='checkbox']) {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.crudui-node--field > .crudui-node__body > input[type='checkbox'] {
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+}
+
+/*
+ * A switch: the checkbox input is a track with a round thumb at its start. When the switch is on,
+ * the track takes the accent color and the thumb moves to its end. The thumb is a background image,
+ * because Firefox draws no ::before box on an input.
+ */
+.crudui-node--field > .crudui-node__body > input.crudui-input--switch {
+  flex: none;
+  appearance: none;
+  width: 2.25rem;
+  height: 1.25rem;
+  min-height: 0;
+  padding: 2px;
+  border: 1px solid var(--crudui-control-border);
+  border-radius: 0.625rem;
+  background-color: var(--crudui-subtle);
+  background-image: radial-gradient(circle closest-side, var(--crudui-surface) 92%, transparent);
+  background-origin: content-box;
+  background-position: 0% 50%;
+  background-repeat: no-repeat;
+  background-size: calc(1.25rem - 6px) calc(1.25rem - 6px);
+  cursor: pointer;
+}
+
+.crudui-node--field > .crudui-node__body > input.crudui-input--switch:checked {
+  border-color: var(--crudui-accent);
+  background-color: var(--crudui-accent);
+  background-position: 100% 50%;
+}
+
+.crudui-node--field > .crudui-node__body > input.crudui-input--switch:focus {
+  outline: 2px solid var(--crudui-accent);
+  outline-offset: 1px;
+}
+
+/*
+ * Inline layout: a field node is one row of a label column and a control column. The header takes
+ * no box, so its label is in the label column and its description below the control, followed by
+ * the errors. A node without a label leaves the label column empty, so every control aligns.
+ */
+.crudui-node--inline {
+  grid-template-columns: var(--crudui-label-width) minmax(0, 1fr);
+  column-gap: 0.75rem;
+  align-items: start;
+}
+
+.crudui-node--inline > .crudui-node__header {
+  display: contents;
+}
+
+.crudui-node--inline > .crudui-node__header > .crudui-node__label {
+  grid-column: 1;
+  grid-row: 1;
+  display: flex;
+  align-items: center;
+  min-height: var(--crudui-control-height);
+}
+
+.crudui-node--inline > .crudui-node__header > .crudui-node__description {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.crudui-node--inline > :is(.crudui-node__body, .crudui-node__errors, .crudui-node__footer) {
+  grid-column: 2;
+}
+
+.crudui-node--inline > .crudui-node__body {
+  grid-row: 1;
+}
+
+/* The input of a checkbox or switch is centered on the label line of the label column. */
+.crudui-node--inline > .crudui-node__body:has(> input[type='checkbox']) {
+  min-height: var(--crudui-control-height);
+}
+
+/* A line group places its child nodes side by side, each as wide as its content. */
+.crudui-node--line > .crudui-node__body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.crudui-node--line > .crudui-node__body > .crudui-node {
+  flex: 0 1 auto;
+}
+
+/* Widgets: a control with its affixes, a set of choices, or a file or search widget. */
+.crudui-widget {
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+  min-width: 0;
+}
+
+.crudui-input {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: var(--crudui-control-height);
+  margin: 0;
+  padding: 0.375rem 0.625rem;
+  border: 1px solid var(--crudui-control-border);
+  border-radius: var(--crudui-radius);
+  background: var(--crudui-surface);
+  color: inherit;
+  font: inherit;
+  line-height: 1.5;
+}
+
+textarea.crudui-input {
+  min-height: 5rem;
+  resize: vertical;
+}
+
+.crudui-input:focus {
+  border-color: var(--crudui-accent);
+  outline: 2px solid color-mix(in srgb, var(--crudui-accent) 30%, transparent);
+  outline-offset: 0;
+}
+
+.crudui-input[readonly] {
+  background: var(--crudui-subtle);
+}
+
+.crudui-input--file {
+  padding: 0.25rem 0.5rem;
+}
+
+.crudui-widget > .crudui-input {
+  flex: 1 1 auto;
+}
+
+/* Parts of one widget share their inner borders. */
+.crudui-widget > :not(:first-child) {
+  margin-left: -1px;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.crudui-widget > :not(:last-child) {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.crudui-widget__affix {
+  display: flex;
+  align-items: center;
+  padding: 0 0.625rem;
+  border: 1px solid var(--crudui-control-border);
+  border-radius: var(--crudui-radius);
+  background: var(--crudui-subtle);
+  color: var(--crudui-muted);
+  white-space: nowrap;
+}
+
+.crudui-widget__button {
+  flex: none;
+  min-width: var(--crudui-control-height);
+  padding: 0 0.625rem;
+  border: 1px solid var(--crudui-control-border);
+  border-radius: var(--crudui-radius);
+  background: var(--crudui-subtle);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.crudui-widget--unsupported {
+  min-height: var(--crudui-control-height);
+  border: 1px dashed var(--crudui-control-border);
+  border-radius: var(--crudui-radius);
+}
+
+/* A range widget: the slider, its current value and the unit, separated instead of joined. */
+.crudui-widget--range {
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.crudui-widget--range > :not(:first-child) {
+  margin-left: 0;
+}
+
+.crudui-widget--range > .crudui-widget__affix {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.crudui-input--range {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  accent-color: var(--crudui-accent);
+}
+
+.crudui-widget__output {
+  flex: none;
+  min-width: 3ch;
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Choices: each option is a visually hidden radio or checkbox and its label button. */
+.crudui-choices {
+  position: relative;
+  display: flex;
+  gap: 0.375rem;
+  min-width: 0;
+}
+
+.crudui-choices--multiple {
+  flex-wrap: wrap;
+}
+
+.crudui-choices__input {
+  position: relative;
+  width: var(--crudui-control-height);
+  height: var(--crudui-control-height);
+  margin: 0 calc(-1 * var(--crudui-control-height)) 0 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  white-space: nowrap;
+  opacity: 0;
+  z-index: 1;
+}
+
+.crudui-choices__label {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--crudui-control-height);
+  padding: 0.375rem 0.75rem;
+  border: 1px solid var(--crudui-control-border);
+  border-radius: var(--crudui-radius);
+  background: var(--crudui-surface);
+  cursor: pointer;
+  user-select: none;
+}
+
+.crudui-choices__input:checked + .crudui-choices__label {
+  border-color: var(--crudui-accent);
+  background: var(--crudui-accent);
+  color: var(--crudui-on-accent);
+}
+
+.crudui-choices__input:focus-visible + .crudui-choices__label {
+  outline: 2px solid var(--crudui-accent);
+  outline-offset: 1px;
+}
+
+.crudui-choices__input:disabled + .crudui-choices__label {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* Collections list their rows as cards. */
+.crudui-node--collection > .crudui-node__body {
+  gap: 0.5rem;
+}
+
+/* Extra height, such as the last sticky row's minimum, collects below the row content. */
+.crudui-node--row {
+  align-content: start;
+  gap: 0;
+  border: var(--crudui-row-border) solid var(--crudui-border);
+  border-radius: 0.5rem;
+  background: var(--crudui-surface);
+  overflow: clip;
+}
+
+.crudui-node--row > .crudui-node__header,
+.crudui-node--row > .crudui-node__header-container > .crudui-node__header {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--crudui-border);
+  border-radius: 0.5rem 0.5rem 0 0;
+  background: var(--crudui-subtle);
+}
+
+.crudui-node--row:has(> .crudui-node__body[hidden]) > .crudui-node__header,
+.crudui-node--row:has(> .crudui-node__body[hidden]) > .crudui-node__header-container > .crudui-node__header {
+  border-bottom: 0;
+  border-radius: 0.5rem;
+}
+
+.crudui-node--row > .crudui-node__header > .crudui-node__label,
+.crudui-node--row > .crudui-node__header-container > .crudui-node__header > .crudui-node__label {
+  padding: 0.125rem 0.5rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--crudui-accent) 10%, transparent);
+  color: var(--crudui-accent);
+  font-size: 0.75rem;
+}
+
+.crudui-node--row > .crudui-node__header > .crudui-controls,
+.crudui-node--row > .crudui-node__header-container > .crudui-node__header > .crudui-controls {
+  margin-left: auto;
+}
+
+.crudui-node--row > .crudui-node__body {
+  padding: var(--crudui-row-padding);
+}
+
+.crudui-node--row > .crudui-node__footer {
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid var(--crudui-border);
+}
+
+/*
+ * Sticky rows are CSS only, from one value. A sticky row carries
+ * --crudui-sticky-depth, the number of enclosing sticky rows; its sticky line is
+ * depth × (header height - row border).
+ * 1. The header container pins on the line in whatever scrolls it (a page, a frame or
+ *    a scrolling box). Every container has exactly the header height and never wraps,
+ *    so pinned levels meet on one shared border.
+ * 2. The level label shows, and the card top edge goes, only while the container is
+ *    stuck (a scroll-state container query). Browsers without scroll-state queries
+ *    (Firefox, Safari) get the `data-crudui-stuck` container attribute from connectForm
+ *    instead.
+ * 3. A control inside a sticky row keeps a top scroll margin of the pinned headers
+ *    above it, and every form control keeps a bottom scroll margin of the footer, so
+ *    focusing a control scrolls it into view clear of them.
+ */
+.crudui-node--sticky {
+  --crudui-sticky-line: calc(var(--crudui-sticky-depth, 0) * (var(--crudui-node-header-height) - var(--crudui-row-border)));
+  --crudui-sticky-cover: calc(var(--crudui-sticky-line) + var(--crudui-node-header-height));
+  border-top: 0;
+}
+
+.crudui-form :is(input, select, textarea, button) {
+  scroll-margin-top: var(--crudui-sticky-cover, 0px);
+  scroll-margin-bottom: var(--crudui-form-footer-height);
+}
+
+/*
+ * A sticky row's card top edge is drawn inside its header container, the box that pins,
+ * and goes while the container is stuck, when the line of the header above is the seam.
+ * The line under a header is the header's own bottom border, inside the container, and
+ * the sticky line is depth × (header height - row border), so a pinned container lands
+ * on the line of the container above it and a row arriving on its line puts its own
+ * edge there too. On the row the top border scrolls with the row and would stand one
+ * border below that line, drawing the seam twice at the position where a row meets it.
+ * A seam is one border wide wherever a row rests, and nothing is covered.
+ */
+.crudui-node--sticky > .crudui-node__header-container {
+  position: sticky;
+  top: var(--crudui-sticky-line);
+  z-index: calc(20 - var(--crudui-sticky-depth, 0));
+  box-sizing: border-box;
+  height: var(--crudui-node-header-height);
+  width: 100%;
+  min-width: 0;
+  background: var(--crudui-subtle);
+  border-radius: 0.5rem 0.5rem 0 0;
+  container-type: scroll-state;
+}
+
+.crudui-node--sticky > .crudui-node__header-container > .crudui-node__header {
+  padding: 0.5rem 0.75rem;
+  height: 100%;
+  width: 100%;
+  box-sizing: border-box;
+  flex-wrap: nowrap;
+  overflow: hidden;
+  border-bottom: var(--crudui-row-border) solid var(--crudui-border);
+}
+
+/* The card top edge, over the row's side borders, positioned by the container. */
+.crudui-node--sticky > .crudui-node__header-container > .crudui-node__header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: calc(-1 * var(--crudui-row-border));
+  left: calc(-1 * var(--crudui-row-border));
+  height: 0.5rem;
+  border: var(--crudui-row-border) solid var(--crudui-border);
+  border-bottom: 0;
+  border-radius: 0.5rem 0.5rem 0 0;
+  pointer-events: none;
+}
+
+/* Hidden by default; the stuck state shows it. */
+.crudui-node--sticky > .crudui-node__header-container > .crudui-node__header > .crudui-node__label {
+  display: none;
+}
+
+@container scroll-state(stuck: top) {
+  .crudui-node--sticky > .crudui-node__header-container > .crudui-node__header > .crudui-node__label {
+    display: revert;
+  }
+
+  .crudui-node--sticky > .crudui-node__header-container > .crudui-node__header::before {
+    display: none;
+  }
+}
+
+/* Browsers without scroll-state queries get the stuck state from connectForm. */
+.crudui-node--sticky > .crudui-node__header-container[data-crudui-stuck] > .crudui-node__header > .crudui-node__label {
+  display: revert;
+}
+
+.crudui-node--sticky > .crudui-node__header-container[data-crudui-stuck] > .crudui-node__header::before {
+  display: none;
+}
+
+.crudui-node--sticky > .crudui-node__header-container > .crudui-node__header > .crudui-node__title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.crudui-node--sticky > .crudui-node__header-container > .crudui-node__header > .crudui-controls {
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+}
+
+/*
+ * Every form ends with its footer, which holds the form buttons (a submit button
+ * when the spec declares none). The footer pins to the bottom of the scroll
+ * container at exactly the footer height, as sticky row headers pin to the top.
+ */
+.crudui-form__footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 30;
+  margin-top: 1rem;
+  display: flex;
+  box-sizing: border-box;
+  height: var(--crudui-form-footer-height);
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 var(--crudui-row-padding);
+  border-top: var(--crudui-row-border) solid var(--crudui-border);
+  background: var(--crudui-surface);
+}
+
+.crudui-controls {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.crudui-action {
+  --crudui-icon: none;
+  display: inline-grid;
+  place-items: center;
+  width: var(--crudui-action-size);
+  height: var(--crudui-action-size);
+  padding: 0;
+  border: 1px solid var(--crudui-border);
+  border-radius: var(--crudui-radius);
+  background: var(--crudui-surface);
+  color: var(--crudui-action-text);
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.crudui-action::before {
+  content: '';
+  width: 1rem;
+  height: 1rem;
+  background: currentColor;
+  -webkit-mask: var(--crudui-icon) center / contain no-repeat;
+  mask: var(--crudui-icon) center / contain no-repeat;
+}
+
+.crudui-action:hover:not([aria-disabled='true']) {
+  background: var(--crudui-subtle);
+}
+
+.crudui-action[aria-disabled='true'] {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.crudui-action:focus-visible {
+  outline: 2px solid var(--crudui-accent);
+  outline-offset: 1px;
+}
+
+.crudui-action[data-crudui-action='move-up'] {
+  --crudui-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 15l6-6 6 6'/%3E%3C/svg%3E");
+}
+
+.crudui-action[data-crudui-action='move-down'] {
+  --crudui-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+}
+
+.crudui-action[data-crudui-action='add-row'] {
+  --crudui-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 5v14M5 12h14'/%3E%3C/svg%3E");
+}
+
+.crudui-action[data-crudui-action='copy-row'] {
+  --crudui-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='9' y='9' width='11' height='11' rx='2'/%3E%3Cpath d='M5 15V5a2 2 0 0 1 2-2h10'/%3E%3C/svg%3E");
+}
+
+.crudui-action[data-crudui-action='remove-row'] {
+  --crudui-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12h14'/%3E%3C/svg%3E");
+}
+
+.crudui-action[data-crudui-action='toggle-row'] {
+  --crudui-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 6l6 6-6 6'/%3E%3C/svg%3E");
+  border-color: transparent;
+  background: transparent;
+}
+
+.crudui-action[data-crudui-action='toggle-row'][aria-expanded='true']::before {
+  transform: rotate(90deg);
+}
+
+.crudui-action--text {
+  width: auto;
+  padding: 0 0.625rem;
+  font-size: 0.8125rem;
+}
+
+.crudui-action--text::before {
+  content: none;
+}
+
+/* The button of a button field is as wide as its content and as high as the other controls. */
+.crudui-node--field > .crudui-node__body > .crudui-action--text {
+  justify-self: start;
+  height: var(--crudui-control-height);
+}
+
+/* The submit button of the form footer carries the submit properties, also on hover. */
+.crudui-form__footer .crudui-action--text[type='submit'] {
+  background: var(--crudui-submit-background);
+  border-color: var(--crudui-submit-border);
+  color: var(--crudui-submit-text);
+}
+
+/* Structure map: one line per form row; a nested row body indents one step. */
+.crudui-outline {
+  display: grid;
+  gap: 0.75rem;
+  font-size: 0.8125rem;
+}
+
+.crudui-outline__body,
+.crudui-outline .crudui-node__body {
+  display: grid;
+  gap: 0.125rem;
+}
+
+.crudui-outline .crudui-node {
+  gap: 0.125rem;
+}
+
+.crudui-outline .crudui-node__header {
+  flex-wrap: nowrap;
+}
+
+.crudui-outline .crudui-node__body {
+  padding-left: 0.75rem;
+}
+
+.crudui-outline .crudui-node--row {
+  border: 0;
+  background: transparent;
+}
+
+.crudui-outline .crudui-node--row > .crudui-node__header,
+.crudui-outline .crudui-node--row > .crudui-node__header-container > .crudui-node__header {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.crudui-outline [data-crudui-action='select-row'] {
+  display: flex;
+  flex: 1;
+  gap: 0.375rem;
+  width: auto;
+  min-width: 0;
+  height: auto;
+  min-height: var(--crudui-action-size);
+  padding: 0.125rem 0.5rem;
+  border-color: transparent;
+  background: transparent;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.crudui-outline [data-crudui-action='select-row'] > .crudui-node__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.crudui-data {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.crudui-data__header {
+  font-weight: 600;
+}
+
+.crudui-data__body {
+  margin: 0;
+  padding: 0.75rem;
+  border: 1px solid var(--crudui-border);
+  border-radius: 0.5rem;
+  background: var(--crudui-surface);
+  font-size: 0.75rem;
+  overflow: auto;
+  white-space: pre;
+}
+
+/* A framed language group (lang.frame, the default) draws a frame around its items. */
+.crudui-node--framed > .crudui-node__body {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--crudui-border);
+  border-radius: 0.5rem;
+}
+
+.crudui-node--lang-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.crudui-node--lang-item > .crudui-node__header > .crudui-node__label,
+.crudui-node--lang-item > .crudui-node__header-container > .crudui-node__header > .crudui-node__label {
+  min-width: 2rem;
+  color: var(--crudui-muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+.crudui-node--lang-item > .crudui-node__body {
+  flex: 1;
+}
+
+/* Read-only list and detail output. Format kinds are explicit modifiers; data
+   attributes carry open badge variants and boolean state. */
+.crudui-list,
+.crudui-detail {
+  display: grid;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+/* A table wider than the viewport, such as one with long numbers, scrolls inside the list and
+   does not widen the page. */
+.crudui-list {
+  overflow-x: auto;
+}
+
+.crudui-list__table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.crudui-list__heading,
+.crudui-list__cell {
+  padding: 0.625rem 0.75rem;
+  border-bottom: 1px solid var(--crudui-border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.crudui-list__heading {
+  background: var(--crudui-subtle);
+  font-weight: 600;
+}
+
+.crudui-list__heading-label,
+.crudui-list__sort {
+  display: inline-block;
+}
+
+.crudui-list__sort {
+  margin-left: 0.375rem;
+  color: var(--crudui-muted);
+}
+
+.crudui-list__description {
+  margin: 0;
+  color: var(--crudui-muted);
+}
+
+.crudui-list__actions,
+.crudui-detail__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.crudui-detail__actions {
+  margin-bottom: 0.75rem;
+}
+
+.crudui-list__action,
+.crudui-detail__action {
+  display: inline-flex;
+}
+
+.crudui-list__empty {
+  padding: 1rem;
+  border: 1px dashed var(--crudui-border);
+  color: var(--crudui-muted);
+}
+
+.crudui-list__cards {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.crudui-list__card {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border: 1px solid var(--crudui-border);
+  border-radius: 0.5rem;
+}
+
+.crudui-list__card-label {
+  color: var(--crudui-muted);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.crudui-list__card-value {
+  min-width: 0;
+}
+
+.crudui-list__pagination {
+  display: flex;
+  gap: 0.25rem;
+  min-height: 1.5rem;
+  align-items: center;
+}
+
+.crudui-list__pagination button[aria-current='page'] {
+  font-weight: 700;
+}
+
+.crudui-list__pagination button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.crudui-detail {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.crudui-detail__field {
+  display: grid;
+  grid-template-columns: minmax(8rem, 0.35fr) minmax(0, 1fr);
+  gap: 0.75rem;
+  padding: 0.625rem 0;
+  border-bottom: 1px solid var(--crudui-border);
+}
+
+.crudui-detail__label {
+  color: var(--crudui-muted);
+  font-weight: 600;
+}
+
+.crudui-detail__value {
+  min-width: 0;
+}
+
+.crudui-badge {
+  display: inline-flex;
+  padding: 0.125rem 0.5rem;
+  border-radius: 999px;
+  background: var(--crudui-subtle);
+}
+
+.crudui-bool {
+  display: inline-flex;
+  align-items: center;
+}
+
+.crudui-bool--icon[data-crudui-state='false'] {
+  opacity: 0.55;
+}

@@ -1,5 +1,6 @@
 // Loaders and actions of the regions and routes that app.json declares, as app/handlers.php defines them.
 import { NotFound, Result, type Handlers, type Request } from '@polyspec/hyper-server';
+import { createFormHtml, judge, listHtml, type PostValues } from './postForm.js';
 import type { Post, Posts } from './posts.js';
 
 export interface Services {
@@ -29,11 +30,6 @@ function trim(text: string): string {
   return text.replace(/^[ \t\n\r\0\x0B]+|[ \t\n\r\0\x0B]+$/g, '');
 }
 
-// Returns the number of characters, as PHP mb_strlen counts them.
-function length(text: string): number {
-  return [...text].length;
-}
-
 export const handlers: Handlers<Services> = {
   // The post page, the one route with the parameter `id`, links the reader stylesheet (HY-64).
   shared: ({ request, services }) => ({ assets: services.get('assets'), reader: request.param('id') !== null }),
@@ -54,7 +50,12 @@ export const handlers: Handlers<Services> = {
         rows: async ({ request, services }) => {
           const posts = services.get('posts');
           const [page] = await currentPage(request, posts);
-          return { posts: await posts.page(page, POSTS_PER_PAGE), sort: '', compact: false, highlight: request.flash('created') };
+          const ofPage = await posts.page(page, POSTS_PER_PAGE);
+          // The sort the region kept comes back on the request; the crudui list is rendered server-side.
+          const asked = request.query().get('sort')?.[0] ?? '';
+          const key: 'title' | 'author' | '' = asked === 'title' ? 'title' : asked === 'author' ? 'author' : '';
+          if (key !== '') ofPage.sort((a, b) => (a[key] < b[key] ? -1 : a[key] > b[key] ? 1 : 0));
+          return { listHtml: listHtml(ofPage), sort: key, compact: false, highlight: request.flash('created') };
         },
       },
     },
@@ -72,15 +73,13 @@ export const handlers: Handlers<Services> = {
     },
 
     'board.create': {
+      load: async ({ request }) => ({ formHtml: createFormHtml({}, [], request.csrfToken()) }),
       post: async ({ request, services }) => {
-        const values = { title: trim(request.formString('title')), author: trim(request.formString('author')), body: trim(request.formString('body')) };
-        const errors: Record<string, string> = {};
-        if (values.title === '') errors.title = '제목을 입력하세요.';
-        else if (length(values.title) > 100) errors.title = '제목은 100자 이하로 입력하세요.';
-        if (values.author === '') errors.author = '작성자를 입력하세요.';
-        else if (length(values.author) > 30) errors.author = '작성자는 30자 이하로 입력하세요.';
-        if (values.body === '') errors.body = '내용을 입력하세요.';
-        if (Object.keys(errors).length > 0) return Result.invalid({ values, errors });
+        // The crudui form posts its fields under the key prefix form; the server validates the same spec.
+        const field = (name: string): string => trim((request.form().get(`form[${name}]`) ?? [''])[0] ?? '');
+        const values: PostValues = { title: field('title'), author: field('author'), body: field('body') };
+        const judged = judge(values);
+        if (!judged.valid) return Result.invalid({ formHtml: createFormHtml(values, judged.errors, request.csrfToken()) });
         const id = await services.get('posts').create(values.title, values.author, values.body);
         return Result.redirect('/board').flash('created', id).changed('posts');
       },

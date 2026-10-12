@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{# title}</title>
 <link rel="stylesheet" href="/assets/app.css">
+<link rel="stylesheet" href="/assets/styles/crudui.css">
 {? reader}<link rel="stylesheet" href="/assets/reader.css">
 {/}<script type="module" src="{= assets.hyper}"></script>
 </head>

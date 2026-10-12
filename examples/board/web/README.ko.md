@@ -1,5 +1,5 @@
 <!-- doc-id: examples-board-web -->
-<!-- source-sha256: 2846a4634cf17180ff0121dc9edcce91fd184e5e9e16b878c5d67c6e5cdc9b10 -->
+<!-- source-sha256: d1b42562d96a4375ea3c9ecbeb5be0213144a267141ddb80afe9d9bc7ff3e7e5 -->
 # 게시판 애플리케이션
 
 [English](README.md)
@@ -36,6 +36,20 @@ corpus는 글 1000개 규모로 잡았다. `posts`는 `store files shard created
    ```sh
    FLOWMARK_DSN='markdown://127.0.0.1:<port>/board?token=<token>' php -S 127.0.0.1:8090 -t public public/index.php
    ```
+
+## crudui로 하는 form, 목록, 검증
+
+글쓰기 form, board 목록, 제출의 검증은 얼굴마다 한 번 선언되고
+[crudui](https://github.com/polyspec/crudui)로 돈다: `src/PostForm.php`(Composer path 저장소의
+`polyspec/crudui-generator`)와 `node/postForm.ts`(generator, HTML renderer, validator package의
+npm file 의존성)가 같은 field 명세 — 제목, 작성자, 내용, 각각 규칙과 한국어 message — 와 같은
+목록 column을 가진다. server는 form을 `renderForm`으로(action, 숨은 CSRF token, 거절된 제출의
+error와 함께), 목록을 `renderList`로 렌더하고 POST는 crudui validator로 검증하며, 빈 제출은
+field마다 그 밑에 error를 남기며 422로 답한다. template은 신뢰하는 renderer의 HTML을 위한
+탈출구인 `| raw`로 렌더된 HTML을 출력하고 crudui stylesheet는 `public/assets/styles/crudui.css`다
+(crudui checkout에서 복사했다; crudui를 올리면 다시 복사한다). template을 고친 뒤에는 위의
+`hyper-build-server`와 `hyper-build-assets` 명령으로 server program과 asset을 다시 만든다.
+목록 정렬은 server가 목록을 렌더하므로 server 요청이다(`?sort=`).
 
 ## Node.js 서버에서 실행
 

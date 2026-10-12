@@ -64,7 +64,6 @@ final class PostForm
     {
         $form = new Form(self::template(), $values, ['language' => 'ko']);
         return Generator::renderForm($form, [
-            'language' => 'ko',
             'action' => ['method' => 'post', 'url' => '/board/create'],
             'hidden' => ['_csrf' => $csrf],
             'errors' => $errors,
