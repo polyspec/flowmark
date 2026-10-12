@@ -3,6 +3,7 @@ package journal
 import (
 	"bufio"
 	"os"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -98,18 +99,28 @@ func TestZombieHolderReadsEnded(t *testing.T) {
 	}
 }
 
+// otherUserPID is the process of another user that every host has: init on a unix host, and the System process on
+// Windows, where process 1 does not exist.
+func otherUserPID() int {
+	if runtime.GOOS == "windows" {
+		return 4
+	}
+	return 1
+}
+
 // A process of another user exists (kill answers EPERM); with its start matching it is running.
 func TestOtherUserProcessReadsRunning(t *testing.T) {
 	c, _ := newCorpus(t, t.TempDir())
 	h := selfRecord(t, c, "s")
-	h.PID = 1
-	start, err := processStart(1)
+	pid := otherUserPID()
+	h.PID = pid
+	start, err := processStart(pid)
 	if err != nil {
-		t.Fatalf("the start of process 1: %v", err)
+		t.Fatalf("the start of process %d: %v", pid, err)
 	}
 	h.Start = start
 	if got := judge(t, c, h); got != HolderRunning {
-		t.Fatalf("process 1 = %v, want running", got)
+		t.Fatalf("process %d = %v, want running", pid, got)
 	}
 }
 

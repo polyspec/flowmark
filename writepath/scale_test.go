@@ -2,6 +2,7 @@ package writepath
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -45,7 +46,7 @@ func TestScaleEvent(t *testing.T) {
 			t.Fatal("no scale.exceeded event for a document past the file size")
 		}
 		last := got[len(got)-1]
-		if !strings.HasSuffix(last.Path, "notes/2026.flowmark.md") || !strings.Contains(last.Detail, "400") {
+		if !strings.HasSuffix(filepath.ToSlash(last.Path), "notes/2026.flowmark.md") || !strings.Contains(last.Detail, "400") {
 			t.Fatalf("event %+v; want the document and the limit of 400 bytes", last)
 		}
 		if f.file("notes/2026.flowmark.md") == "" {
