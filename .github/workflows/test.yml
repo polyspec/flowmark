@@ -32,7 +32,9 @@ jobs:
       # per platform, its output kept as an artifact of the run.
       - name: benchmarks
         shell: bash
-        run: go test ./writepath -run '^$' -bench . -benchmem | tee benchmarks.txt
+        run: |
+          ulimit -n 65536 2>/dev/null || true
+          go test ./writepath -run '^$' -bench . -benchmem | tee benchmarks.txt
       - uses: actions/upload-artifact@v4
         with:
           name: benchmarks-${{ matrix.os }}
