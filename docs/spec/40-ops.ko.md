@@ -1,5 +1,5 @@
 <!-- doc-id: spec-ops -->
-<!-- source-sha256: bc639a0ad15c02edc89d52393ac4c690324b79ee793c7426da60efa4ffe7cbf1 -->
+<!-- source-sha256: 69bc868391adbf5dc10ac33348fa0d6319a90078931d74df8e8cd695783eb80e -->
 # Operations
 
 [English](40-ops.md)
@@ -494,6 +494,12 @@ MySQL과 PostgreSQL은 `datetime(p)` column을 `NOW(6)`와 여섯 자리로 비�
   - macOS에서 감시는 folder와 문서마다 descriptor 하나를 쥔다(문서 10,000개에서 20,009개). 문서의 수는 process가
     필요로 하는 descriptor의 수이기도 하다. 그것을 얻지 못한 열기는 file을 밝혀 `DRIVER`로 실패하고 lock을
     남기지 않는다.
+  - 이런 corpus를 macOS에서 운영하려면 운영자가 제어하는 한도를 올린다. kernel은 rlimit 외에 open file을 두 번
+    제한한다: process마다(`kern.maxfilesperproc`)와 system 전체(`kern.maxfiles`). corpus N개를 연 process는 문서
+    M개짜리 corpus마다 약 N·M의 descriptor가 필요하므로 셋을 함께 올린다 — `.github/workflows/test.yml`의 CI
+    workflow가 benchmark 앞에서 그렇게 하고 runner가 허용한 값을 log에 남긴다. benchmark artifact의
+    `descriptors` 값은 process 전체를 세는데 거기에는 fixture가 연 corpus와 새로 연 corpus가 있어 문서마다 약
+    두 개다. corpus 하나만 놓고 보면 folder와 문서마다 하나로, 위의 board 측정이 그것을 보인다.
   - examples의 board가 글 10,000개, 달 folder 열 개에 1,000개씩일 때 이 모양이며 `flowmark serve`로 제공하면
     서버는 3.1초에 준비되고 140 MB를 쥐고 descriptor 10,029개를 잡으며 orm을 거쳐 글 열 개의 페이지에 72 ms,
     글 하나에 44 ms, 새 글에 156 ms로 답한다.
