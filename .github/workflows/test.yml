@@ -33,10 +33,15 @@ jobs:
       - name: benchmarks
         shell: bash
         run: |
-          # The watch of macOS holds one descriptor per document (spec 40), so the benchmark corpus needs the limit
-          # of open files raised to the most this runner allows, which the log names with the hard limit.
-          ulimit -n 65536 2>/dev/null || ulimit -n $(ulimit -Hn) 2>/dev/null || true
-          ulimit -Hn
+          # The watch of macOS holds one descriptor per document (spec 40), so the benchmark corpus needs more open
+          # files than the runner's defaults allow. The standard raises are the rlimit and, on macOS, the per-process
+          # file ceiling the kernel enforces beside it (kern.maxfilesperproc); each raise names its result in the
+          # log, and a corpus that still does not fit fails the benchmark with the engine's DRIVER rule.
+          ulimit -Sn; ulimit -Hn
+          if [ "$(uname -s)" = Darwin ]; then sysctl kern.maxfilesperproc kern.maxfiles; fi
+          if [ "$(uname -s)" = Darwin ]; then sudo sysctl -w kern.maxfilesperproc=65536 || echo 'raise: kern.maxfilesperproc refused'; fi
+          ulimit -n 65536 || echo 'raise: the rlimit was refused'
+          ulimit -Sn; ulimit -Hn
           go test ./writepath -run '^$' -bench . -benchmem | tee benchmarks.txt
       - uses: actions/upload-artifact@v4
         with:
