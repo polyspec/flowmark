@@ -1,9 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 9889b7a0df86e295f1757e26e302c072401e0a9b2fd5dd00fa1c901791a63835 -->
+<!-- source-sha256: bfb322b176b399156afffb8f0d3711cb8d7ea9cdac7f526fdfb1633aa83f81d7 -->
 # Changelog
 
 ## Unreleased
 
+- T12: markdown database가 완성되었다. checklist의 모든 항목이 끝났다 — 문법, validator, release된 orm v0.0.9 위의 `markdown://` IR 실행기, 규모 시험을 거친 write path, 얼굴들, crudui가 렌더하는 천 글의 게시판, 세 platform gate, 복잡한 foreign key corpus.
 - T12.12: flowmark가 pseudo-version 대신 release된 orm v0.0.9를 요구한다. 그 tag는 IR executor protocol 항목 T61과 T62, validator series T82–T102를 담으며 전 suite가 그 위에서 통과한다.
 - T12.14: 복잡한 foreign key의 corpus: golden이 다섯 table 사슬, 자기 참조, 쌍방향 쌍, 다섯 table에게 참조되는 table, block 행으로의 링크와 모든 저장 종류를 선언한다. engine은 사슬을 쓰고 그 사슬을 지나 join 하며 관계의 관계를 조립하고, 이동에서 참조를 유지하며, 빈 참조와 자기 참조된 삭제, 사슬 변이 잡은 삭제, 홀로 남은 쌍방향 쌍의 한쪽을 거절한다 — model이 담을 수 없는 복합 key는 test가 고정하는 schema error로 남는다.
 - T12.11.2-2 (수정): board의 정렬이 두 얼굴에서 동작한다 — query API를 잘못 불러 PHP 정렬이 항상 비었고, 정렬은 이제 페이지를 자르기 전에 목록 전체에 적용된다(제목은 요청의 column order로, 작성자 이름은 요청의 order 항목이 join된 column을 못 가리키므로 목록을 읽어 정렬). 페이지가 정렬을 따른다.
