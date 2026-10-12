@@ -33,11 +33,29 @@ export class Posts {
 
   // Returns one page of posts, newest first.
   async page(page: number, perPage: number): Promise<PostRow[]> {
-    const result = await new PostModel().connect(this.db)
+    return this.pageSorted(page, perPage, '');
+  }
+
+  // Returns one page of posts in the order the sort names: '' is the newest first, 'title' the titles in code point
+  // order and 'author' the authors' names in code point order. A title is a column of the posts, so its order runs in
+  // the request; an author's name lives in the joined people, which an order item of the request cannot name, so the
+  // whole list is read and the page is cut after it is sorted.
+  async pageSorted(page: number, perPage: number, sort: string): Promise<PostRow[]> {
+    const query = new PostModel().connect(this.db)
       .removeAllColumns().addColumnId().addColumnTitle().addColumnCreated()
-      .joinAuthorWithId(new People().removeAllColumns().addColumnName())
-      .orderByCreatedDesc().orderByIdDesc()
-      .getsPage(page, perPage);
+      .joinAuthorWithId(new People().removeAllColumns().addColumnName());
+    let items: Record<string, unknown>[];
+    if (sort === 'title') {
+      items = (await query.orderByTitleAsc().orderByIdAsc().getsPage(page, perPage)).items.toArray();
+    } else if (sort === 'author') {
+      items = (await query.orderByCreatedDesc().orderByIdDesc().gets()).toArray();
+      const nameOf = (row: Record<string, unknown>): string => String((row.people_model as Record<string, unknown>).name);
+      items.sort((a, b) => nameOf(a) < nameOf(b) ? -1 : nameOf(a) > nameOf(b) ? 1 : String(a.id) < String(b.id) ? -1 : 1);
+      items = items.slice((page - 1) * perPage, page * perPage);
+    } else {
+      items = (await query.orderByCreatedDesc().orderByIdDesc().getsPage(page, perPage)).items.toArray();
+    }
+    const result = { items: { toArray: () => items } };
     return result.items.toArray().map((row: Record<string, unknown>) => ({
       id: String(row.id),
       title: String(row.title),

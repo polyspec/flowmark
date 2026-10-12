@@ -3,6 +3,7 @@
 
 ## Unreleased
 
+- T12.11.2-2 (fix): the board's sort works on both faces — a wrong call to the query API left the PHP sort always empty, and the sort now orders the whole list before the page is cut (a title as a column order in the request, an author's name by reading the list, for a request order item cannot name a joined column), so the pages follow the sort.
 - T12.11.2-2 (fix): the board's pager windows its links — the first page, the last and five around the current with gap markers, as crudui's pagination model does — and keeps the sort in its links; the list itself always shows the ten posts of the requested page.
 - T12.11.2-2: the board's form, list and validation run by crudui on both faces: the same field and list specification in `src/PostForm.php` and `node/postForm.ts`, the create form rendered with its errors and the hidden CSRF token, the list rendered server-side, the submission validated by the crudui validator (422 with the field errors, 303 to the list), and the crudui stylesheet served with the app.
 - T12.13: the platform gate: `make test` and the writepath benchmarks run on Linux, Windows and macOS at every push (`.github/workflows/test.yml`), green with no test skipped; the Windows defects it found are fixed, the benchmark artifacts are kept per run, and the numbers are compared with the scale envelope of spec 40.
