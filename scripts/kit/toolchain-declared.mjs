@@ -6,8 +6,12 @@
 //   rust         channel of rust-toolchain.toml
 //   php          config/toolchain.json php (minor releases), else .php-version
 //   python       config/toolchain.json python (minor release), else .python-version
+//   pythonBuild  config/toolchain.json pythonBuild: the exact Python release of the python minor, which the declared uv installs
+//   pythonBackend config/toolchain.json pythonBackend: the requirement name==version of the build backend of the Python wheels and its sha256
 //   composer     config/toolchain.json composer
-//   ruff         the ruff==<version> pin of the pyproject.toml that config/toolchain.json ruff names
+//   phpunit      config/toolchain.json phpunit: the exact release, installed from the composer.json and composer.lock of config/phpunit
+//   ruff         config/toolchain.json ruff: the exact version and the sha256 of the wheel of each platform
+//   uv           config/toolchain.json uv: the exact version and the sha256 of the release archive of each platform
 //   cargoAudit   config/toolchain.json cargoAudit
 //   govulncheck  config/toolchain.json govulncheck
 // A tool is declared when its file exists (node, rust) or its config key is present; an undeclared tool is absent from the
@@ -54,6 +58,56 @@ function goVersion(root, go) {
 /** The exact release that config/toolchain.json of `root` records for `key`; an error names the expected form when it is missing or not exact. */
 export const recordedRelease = (root, key) => exact('config/toolchain.json', key, toolchainConfig(root)[key]);
 
+// The exact Python release of pythonBuild, which must be a release of the declared python minor: { version }. uv installs it,
+// so pythonBuild needs the declaration uv.
+function pythonBuild(value, minor, uv) {
+  const file = 'config/toolchain.json pythonBuild';
+  if (!minor) throw new Error(`${file} needs python, the minor release of the checks; declare python in config/toolchain.json or write .python-version`);
+  const version = exact(file, 'the Python release', value.version);
+  if (version.split('.').slice(0, 2).join('.') !== minor) throw new Error(`${file} declares ${version}, but python declares ${minor}; declare a release of ${minor}`);
+  if (!uv) throw new Error(`${file} needs uv, which installs the Python; declare uv in config/toolchain.json`);
+  return { version, source: file };
+}
+
+// The uv release: its exact version and the sha256 of the archive of each platform key, each read as 64 hexadecimal digits.
+function uvRelease(value) {
+  const file = 'config/toolchain.json uv';
+  if (!/^\d+\.\d+\.\d+$/.test(value.version ?? '')) throw new Error(`${file} must record version as <major>.<minor>.<patch>; it records ${JSON.stringify(value.version)}`);
+  const digests = value.sha256 ?? {};
+  if (Object.keys(digests).length === 0) throw new Error(`${file} must record the sha256 of the uv archive of each platform, for example linux-x64; it records none`);
+  for (const [platform, digest] of Object.entries(digests)) {
+    if (!/^[0-9a-f]{64}$/.test(digest)) throw new Error(`${file} must record the sha256 of ${platform} as 64 lowercase hexadecimal digits; it records ${JSON.stringify(digest)}`);
+  }
+  return { version: value.version, sha256: digests, source: file };
+}
+
+// A wheel release of the tool that install-tools installs into a virtual environment (ruff): its exact version and the
+// sha256 of the wheel of each platform key, each read as 64 hexadecimal digits.
+function wheel(key, value) {
+  const file = `config/toolchain.json ${key}`;
+  if (!/^\d+\.\d+\.\d+$/.test(value.version ?? '')) throw new Error(`${file} must record version as <major>.<minor>.<patch>; it records ${JSON.stringify(value.version)}`);
+  const digests = value.sha256 ?? {};
+  if (Object.keys(digests).length === 0) throw new Error(`${file} must record the sha256 of the ${key} wheel of each platform, for example linux-x64; it records none`);
+  for (const [platform, digest] of Object.entries(digests)) {
+    if (!/^[0-9a-f]{64}$/.test(digest)) throw new Error(`${file} must record the sha256 of ${platform} as 64 lowercase hexadecimal digits; it records ${JSON.stringify(digest)}`);
+  }
+  return { version: value.version, sha256: digests, source: file };
+}
+
+// The PHPUnit release of the PHP tests of kit: its exact version; the Composer project that installs it is config/phpunit.
+function phpunit(value) {
+  const file = 'config/toolchain.json phpunit';
+  return { version: exact(file, 'the PHPUnit release', value.version), manifest: 'config/phpunit/composer.json', source: file };
+}
+
+// The build backend of the Python wheels: its exact requirement name==version and the sha256 of its wheel.
+function pythonBackend(value) {
+  const file = 'config/toolchain.json pythonBackend';
+  if (!/^[A-Za-z0-9._-]+==\d+(\.\d+)*$/.test(value.requirement ?? '')) throw new Error(`${file} must record requirement as name==version; it records ${JSON.stringify(value.requirement)}`);
+  if (!/^[0-9a-f]{64}$/.test(value.sha256 ?? '')) throw new Error(`${file} must record sha256 as 64 lowercase hexadecimal digits; it records ${JSON.stringify(value.sha256)}`);
+  return { requirement: value.requirement, sha256: value.sha256, source: file };
+}
+
 /** The declared toolchains of the checkout at `root`. */
 export function declaredToolchain(root) {
   const config = toolchainConfig(root);
@@ -88,14 +142,18 @@ export function declaredToolchain(root) {
   } else if (pythonFile) {
     declared.python = { minor: pythonFile, source: '.python-version' };
   }
+  if (config.uv) declared.uv = uvRelease(config.uv);
+  if (config.pythonBuild) {
+    declared.pythonBuild = pythonBuild(config.pythonBuild, declared.python?.minor, declared.uv);
+  }
+  if (config.pythonBackend) {
+    declared.pythonBackend = pythonBackend(config.pythonBackend);
+  }
   if (config.composer) {
     declared.composer = { version: exact('config/toolchain.json', 'composer', config.composer.version), sha256: config.composer.sha256, source: 'config/toolchain.json composer' };
   }
-  if (config.ruff) {
-    const pins = new Set([...read(root, config.ruff.pyproject).matchAll(/"ruff==(\d+\.\d+\.\d+)"/g)].map(match => match[1]));
-    if (pins.size !== 1) throw new Error(`${config.ruff.pyproject} must pin one ruff==<major>.<minor>.<patch>; it pins ${pins.size === 0 ? 'none' : [...pins].join(', ')}`);
-    declared.ruff = { version: [...pins][0], source: `${config.ruff.pyproject} ruff pin` };
-  }
+  if (config.ruff) declared.ruff = wheel('ruff', config.ruff);
+  if (config.phpunit) declared.phpunit = phpunit(config.phpunit);
   for (const key of ['cargoAudit', 'govulncheck']) {
     if (config[key]) declared[key] = { version: recordedRelease(root, key), source: `config/toolchain.json ${key}` };
   }

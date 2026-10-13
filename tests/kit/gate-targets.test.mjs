@@ -7,6 +7,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { git, run } from './gates-checkout.mjs';
+import { initRepository } from './sandbox-repository.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 
@@ -16,7 +17,7 @@ function repository(t) {
   mkdirSync(path.join(directory, 'scripts/kit'), { recursive: true });
   cpSync(path.join(ROOT, 'scripts/kit/kit.mk'), path.join(directory, 'scripts/kit/kit.mk'));
   writeFileSync(path.join(directory, 'Makefile'), 'include scripts/kit/kit.mk\n');
-  git(directory, 'init', '--quiet');
+  initRepository(directory);
   return directory;
 }
 
@@ -34,6 +35,11 @@ test('each target runs the tool of its gate with the commit and the keys that th
   assert.deepEqual(commands(directory, 'push-gate-commit', 'COMMIT=abc123'), ['node scripts/kit/push-gate.mjs commit abc123']);
   assert.deepEqual(commands(directory, 'rerun-failed'), ['node scripts/kit/full-run.mjs rerun-failed']);
   assert.deepEqual(commands(directory, 'rerun-failed', 'FULL_RUN_KEYS=--key dep=c1'), ['node scripts/kit/full-run.mjs rerun-failed --key dep=c1']);
+});
+
+test('kit-test runs the vendored tests through the test runner, as every test of a repository runs', (t) => {
+  const directory = repository(t);
+  assert.deepEqual(commands(directory, 'kit-test'), ['node scripts/kit/run-tests.mjs node -- tests/kit']);
 });
 
 test('a make invocation sets core.hooksPath in a checkout that tracks the pre-push hook, and in no other', (t) => {

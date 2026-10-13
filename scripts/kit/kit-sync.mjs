@@ -10,13 +10,43 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { LOCK, walk } from './kit-check.mjs';
+import { parseArgs } from 'node:util';
+import { LOCK, vendoredFilesOf, walk } from './kit-check.mjs';
 import { isMain, ROOT } from './paths.mjs';
 import { fileDigest } from './digest.mjs';
 import { jsonText, readJson, writeAtomic } from './files.mjs';
 import { git } from './git.mjs';
 
 export const DEFAULT_REPOSITORY = 'https://github.com/polyspec/kit';
+
+const USAGE = 'usage: node scripts/kit/kit-sync.mjs --tag <tag> [--repository <url or path>]';
+
+/**
+ * Reads the arguments of kit-sync: `tag` is required, `repository` is DEFAULT_REPOSITORY when it is not given. Throws an
+ * Error that names the option when an option has no value, when an option is followed by another option, or when the tag
+ * is missing.
+ */
+export function parseSyncArguments(argv) {
+  let values;
+  try {
+    ({ values } = parseArgs({
+      args: argv,
+      options: { tag: { type: 'string', multiple: true }, repository: { type: 'string', multiple: true } },
+      strict: true,
+    }));
+  } catch (error) {
+    const reason = error.message.split('\n')[0].replace(/\.?$/, '.');
+    throw new Error(`${reason} ${USAGE}`);
+  }
+  for (const name of ['tag', 'repository']) {
+    if (values[name]?.length > 1) throw new Error(`--${name} is given more than once. ${USAGE}`);
+  }
+  const [tag] = values.tag ?? [];
+  const [repository] = values.repository ?? [];
+  if (!tag) throw new Error('--tag is required. Fix: make kit-sync KIT_TAG=vX.Y.Z');
+  if (repository === '') throw new Error(`--repository has no value. ${USAGE}`);
+  return { tag, repository: repository ?? DEFAULT_REPOSITORY };
+}
 
 /**
  * Syncs the vendored files of kit at `tag` from `repository` into `root`; returns the lines that describe the changes
@@ -28,16 +58,21 @@ export function sync({ root, repository, tag }) {
     git(root, 'clone', '--quiet', '--depth', '1', '--branch', tag, repository, clone);
     const commit = git(clone, 'rev-parse', 'HEAD').trim();
     const kit = readJson(clone, 'kit.json');
-    const sources = ['kit.json', ...kit.vendored.flatMap(directory => walk(clone, directory))];
+    // Each entry copies the source file `from` of kit to the path `file` of the checkout.
+    const entries = [
+      { file: 'kit.json', from: 'kit.json' },
+      ...kit.vendored.flatMap(directory => walk(clone, directory)).map(file => ({ file, from: file })),
+      ...vendoredFilesOf(kit).map(({ file, from }) => ({ file, from })),
+    ];
     const changes = [];
-    for (const file of sources) {
+    for (const { file, from } of entries) {
       const target = path.join(root, file);
       const existed = existsSync(target);
-      if (existed && fileDigest(path.join(root, file)) === fileDigest(path.join(clone, file))) continue;
-      writeAtomic(target, readFileSync(path.join(clone, file)));
+      if (existed && fileDigest(path.join(root, file)) === fileDigest(path.join(clone, from))) continue;
+      writeAtomic(target, readFileSync(path.join(clone, from)));
       changes.push(`${existed ? 'written' : 'added'} ${file}`);
     }
-    const expected = new Set(sources);
+    const expected = new Set(entries.map(({ file }) => file));
     for (const directory of kit.vendored) {
       for (const file of walk(root, directory)) {
         if (!expected.has(file)) {
@@ -46,7 +81,7 @@ export function sync({ root, repository, tag }) {
         }
       }
     }
-    const files = Object.fromEntries(sources.sort().map(file => [file, fileDigest(path.join(clone, file))]));
+    const files = Object.fromEntries(entries.map(({ file, from }) => [file, fileDigest(path.join(clone, from))]).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
     const lock = jsonText({ schema: 1, repository, tag, commit, files });
     if (!existsSync(path.join(root, LOCK)) || readFileSync(path.join(root, LOCK), 'utf8') !== lock) {
       writeAtomic(path.join(root, LOCK), lock);
@@ -59,16 +94,16 @@ export function sync({ root, repository, tag }) {
 }
 
 if (isMain(import.meta.url)) {
-  const args = process.argv.slice(2);
-  const option = name => args[args.indexOf(name) + 1];
-  const tag = option('--tag');
-  const repository = option('--repository') ?? DEFAULT_REPOSITORY;
-  if (!tag) {
-    console.error('[kit-sync] --tag is required. Fix: make kit-sync KIT_TAG=vX.Y.Z');
+  let options;
+  try {
+    options = parseSyncArguments(process.argv.slice(2));
+  } catch (error) {
+    console.error(`[kit-sync] ${error.message}`);
     process.exit(2);
   }
   const root = ROOT;
   try {
+    const { tag, repository } = options;
     const changes = sync({ root, repository, tag });
     for (const line of changes) console.log(`[kit-sync] ${line}`);
     console.log(changes.length ? `[kit-sync] ${changes.length} changes from ${tag}` : `[kit-sync] unchanged: ${tag}`);

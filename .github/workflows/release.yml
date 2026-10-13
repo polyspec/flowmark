@@ -1,0 +1,68 @@
+# Release workflow of a repository that adopts kit. kit-sync copies this file to .github/workflows/release.yml, records it in
+# .kit/kit.lock.json, and kit-check fails when the checkout differs from it; a repository never edits it.
+#
+# A tag push creates the GitHub Release of the tag as a draft, proves the draft from outside the checkout, and makes it public
+# only after the proof passes. The steps run in order and stop at the first failure; each step runs one make target of
+# scripts/kit/kit.mk with TAG from the environment:
+#   release-tools    installs the tools that config/release.json needs for the packages and proof of this repository
+#   release-tools-path puts var/tools/bin on the PATH of the steps that follow, through GITHUB_PATH
+#   release-verify   the tagged commit is on origin/main and its check runs concluded success, without running the tests again
+#   release-versions every manifest has the version of the tag and the changelog has its section
+#   release-assets  builds the archive of every package into var/release/assets
+#   release-publish creates the GitHub Release of the tag as a draft, with its notes and archives
+#   release-proof   proves the draft: its assets, its consumer installs, its git-tag installs and its Go module tags
+#   release-undraft makes the release public; it runs only after release-proof passed
+# A failed step leaves the release a draft and fails the run, so a release that cannot be installed is never public.
+name: release
+
+on:
+  push:
+    tags: ['v*', '**/v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    env:
+      TAG: ${{ github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      # actions/checkout v6.1.0: the whole history and every branch, so origin/main is there for the ancestry check.
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          fetch-depth: 0
+      # actions/setup-node v6.5.0: the Node.js of .node-version runs the tools of scripts/kit. The repository installs no npm
+      # package, so the cache of setup-node is off.
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+      # actions/setup-php: the PHP of .php-version runs the Composer proof of the release; a checkout that declares
+      # none keeps the PHP of the runner.
+      - uses: shivammathur/setup-php@d52fc211a0436f8839a587b3b5b8efddab4744ea
+        if: ${{ hashFiles('.php-version') != '' }}
+        with:
+          php-version-file: .php-version
+          # The proof runs with no debugger or coverage driver, as the checks do.
+          coverage: none
+      - name: make release-tools
+        run: make release-tools
+      # The tools of var/tools/bin — the Go of .go-version the release builds with, and whatever else the packages
+      # need — join PATH for the steps that follow; a step's PATH is its own, so the export goes to the file the
+      # runner reads between steps.
+      - name: put the installed tools on PATH
+        run: make release-tools-path
+      - name: verify the tagged commit
+        run: make release-verify
+      - name: check the versions
+        run: make release-versions
+      - name: build the assets
+        run: make release-assets
+      - name: create the draft release
+        run: make release-publish
+      - name: prove the draft release
+        run: make release-proof TAG="$TAG"
+      - name: make the release public
+        run: make release-undraft TAG="$TAG"
