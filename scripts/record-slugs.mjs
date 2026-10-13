@@ -484,12 +484,30 @@ export function githubAttributes(html) {
 /** The largest document sent to GitHub in one request, in bytes; the API renders at most 400 KB. */
 const requestLimit = 390_000;
 
+/**
+ * The attempts of one GitHub request whose connection fails before any response. A recording sends thousands of
+ * requests, and one connection that times out ended whole recordings (three runs on 2026-10-13, `dial tcp …: connect:
+ * operation timed out`); the request is idempotent, so it is sent again. An HTTP response that is an error, and a
+ * failure that outlasts the attempts, end the recording.
+ */
+const connectAttempts = 3;
+
 /** GitHub's rendering of a document, by POST /markdown in mode markdown, through gh. */
-function githubRender(text) {
-  return execFileSync('gh', ['api', '-X', 'POST', '/markdown', '--input', '-'], {
-    input: JSON.stringify({ text, mode: 'markdown' }),
-    maxBuffer: 1 << 30,
-  }).toString('utf8');
+export function githubRender(text) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return execFileSync('gh', ['api', '-X', 'POST', '/markdown', '--input', '-'], {
+        input: JSON.stringify({ text, mode: 'markdown' }),
+        maxBuffer: 1 << 30,
+        stdio: ['pipe', 'pipe', 'pipe'],
+      }).toString('utf8');
+    } catch (err) {
+      // gh writes a failure without a response as `Post "<url>": <error>`, and an HTTP error as `HTTP <status>: …`.
+      const stderr = String(err.stderr ?? '');
+      if (attempt >= connectAttempts || !stderr.startsWith('Post "https://api.github.com/markdown": ')) throw err;
+      log(`GitHub: attempt ${attempt} got no response, sent again: ${stderr.trim()}`);
+    }
+  }
 }
 
 /**

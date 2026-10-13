@@ -3,6 +3,7 @@
 
 ## Unreleased
 
+- T12.1-38-2 (fix): `make slug-vectors` sends a GitHub request again, up to three attempts, when its connection fails before any response, so one timed-out connection no longer ends a recording of thousands of requests; an HTTP error still ends it.
 - T12: the markdown database is complete: every item of its checklist is done — the grammar, the validator, the IR executor behind `markdown://` on the released orm v0.0.9, the scale-tested write path, the faces, the crudui-rendered board at a thousand posts, the three-platform gate, and the complex foreign key corpus.
 - T12.12: flowmark requires the released orm v0.0.9 instead of the pseudo-version: the tag carries the IR executor protocol items T61 and T62 and the validator series T82–T102, and the whole suite passes on it.
 - T12.14: the corpus of complex foreign keys: a golden declares a five-table chain, a self reference, a two-directional pair, a table five others reference, a link into a block row and every storage kind; the engine writes the chain, joins across it, assembles the relation of a relation, keeps references on a move, and refuses a dangling reference, a self-referenced delete, a chain-edge delete and one side of a two-directional pair alone — the composite keys the model cannot hold stay schema errors the tests pin.
