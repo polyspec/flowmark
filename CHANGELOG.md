@@ -3,6 +3,7 @@
 
 ## Unreleased
 
+- T14-1: flowmark pins orm v0.0.11.
 - T14: a restore picks its key after the request hook through orm's ir.RestoreKey (orm protocol 1.5).
 - T12-1: flowmark vendors kit from its release tag v0.0.35 instead of a branch, with the shared PRINCIPLES.md; AGENTS.md links it and keeps only flowmark's rules, and the full test suite runs once when every item of the active checklist is done, the owning checks per item.
 - T12.1-38-2-1 (fix): the slug recorder's tests remove the temporary directory of their stub gh, which they left behind.

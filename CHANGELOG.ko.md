@@ -1,9 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: f3a5bb31dea6b394f38f5b3c9d23da9dc3aae5a5fddeb6ccbea073c3719d4cc9 -->
+<!-- source-sha256: 24f15a6d964f4e2ede8474e47c7a94143c0d10f09e19d022340680a2978ee9cb -->
 # Changelog
 
 ## Unreleased
 
+- T14-1: flowmark가 orm v0.0.11을 고정한다.
 - T14: restore가 orm의 ir.RestoreKey로 request hook 뒤에 key를 고른다(orm protocol 1.5).
 - T12-1: flowmark는 branch가 아니라 release tag v0.0.35에서 kit을 공유 PRINCIPLES.md와 함께 vendor한다; AGENTS.md는 그것으로 연결하고 flowmark의 규칙만 남기며, 전체 test 모음은 활성 checklist의 모든 항목이 끝났을 때 한 번, 항목마다 소유 검사만 실행한다.
 - T12.1-38-2-1 (fix): slug 기록기의 test가 남기던 stub gh의 임시 폴더를 지운다.
