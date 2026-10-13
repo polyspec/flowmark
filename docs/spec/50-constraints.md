@@ -21,7 +21,7 @@ The failure codes are those of [operations](40-ops.md).
 - **Foreign keys** resolve by exact byte match with the referenced key; a reference that names no
   row is a dangling reference: `FOREIGN_KEY` on a write that introduces it, and the validator's
   `reference.dangling` at the reference's place; it never makes a file unreadable, except a `parent` of a block or document row that names no row of its file, which is `format.block` ([canonical format](10-canonical-format.md#foreign-keys-as-links)).
-- **Keys are never updated.** An update or a restore that assigns the primary key is `IR_INVALID`
+- **Keys are never updated.** An update that assigns the primary key, and a restore that writes a new value of it (any value of a key column outside the key that the restore picked), is `IR_INVALID`
   (orm's rule on every database), so a link target never moves under a link; a key changes by
   inserting the row under the new key, pointing the referencing rows at it and deleting the old row,
   in one transaction.

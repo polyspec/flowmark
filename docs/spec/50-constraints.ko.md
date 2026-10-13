@@ -1,5 +1,5 @@
 <!-- doc-id: spec-constraints -->
-<!-- source-sha256: 8f99148e61c2a768ec420ff42792eb4d0ed780ea09b5dd6e75651b41c6c400b1 -->
+<!-- source-sha256: 7825bd1dc8e4da6ef5523134f1e2d1aee016a12cefc8a54530ca7ca23c4708cf -->
 # Constraints
 
 [English](50-constraints.md)
@@ -20,7 +20,7 @@
 - **primary key와 unique key**는 table 전체에서 강제한다 — block table이면 그것을 가진 모든 file의 모든 block에 걸쳐서. 중복은 그것을 새로 만드는 쓰기에서 `DUPLICATE_KEY`이고, validator의 `key.duplicate`는 [corpus 순서](10-canonical-format.ko.md#진단)에서 첫 자리 다음의 각 자리에, 그 key에 있으며 첫 자리를 밝힌다. unique key는 SQL처럼 NULL을 서로 다르게 본다. unique key의 validator `key.duplicate`는 값을 각각 정식 readable 형식으로 바이트 단위로 비교하며, corpus 순서에서 첫 자리 다음의 각 자리에, key의 첫 column에 있고 첫 자리를 밝힌다. 그 column 중 어느 것의 값이 NULL이거나 column의 type이 아닌 행은 비교에 참여하지 않는다. 근거: SQL과 같다 — orm은 모든 문자 column에 code point를 비교하는 binary collation 하나(`utf8mb4_0900_bin`, `COLLATE "C"`, `BINARY`)를 주고 NULL의 반복을 허용한다 — 그리고 엔진이 읽지 못하는 값에는 비교가 없으며 그 `type`이 그것을 대신한다. primary key가 대소문자를 무시하고 비교하는 것은 그것이 file 이름이자 anchor이기 때문일 뿐이다([document model](20-document-model.ko.md#key)). unique key의 값은 어느 쪽도 아니므로 그 이유가 미치지 않는다.
 - **foreign key**는 참조된 key와 byte 단위로 정확히 일치해야 풀린다. 어떤 행도 가리키지 않는 참조는
   dangling 참조다: 그것을 새로 만드는 쓰기는 `FOREIGN_KEY`이고, validator의 `reference.dangling`이 참조 자리에 보고하며, file을 읽을 수 없게 하지 않는다. 다만 block이나 document 행의 `parent`가 그 file의 어떤 행도 가리키지 않으면 `format.block`이다([canonical format](10-canonical-format.md#foreign-keys-as-links)).
-- **key는 결코 갱신되지 않는다.** primary key를 배정하는 update나 restore는 `IR_INVALID`(모든
+- **key는 결코 갱신되지 않는다.** primary key를 배정하는 update, 그리고 primary key에 새 값을 쓰는 restore(restore가 고른 key 밖의 key column 값)는 `IR_INVALID`(모든
   database에서 orm의 규칙)이므로 link의 target은 link 아래에서 움직이지 않는다. key는 새 key로 행을
   insert하고, 참조하는 행이 그것을 가리키게 하고, 옛 행을 지우는 것으로 한 transaction에서 바뀐다.
 - **참조 action은 restrict-only다.** `cascade`와 `set_null`은 catalog를 읽을 때 거절한다: 엔진을
