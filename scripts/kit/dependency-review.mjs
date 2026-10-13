@@ -20,7 +20,7 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
-import { POLICY, RECORD, NPM_LOCK, UPDATE, dependencyKey, lockEcosystem, readState } from './dependency-state.mjs';
+import { POLICY, RECORD, TOOLCHAIN, UPDATE, dependencyKey, goPackagePatterns, lockEcosystem, lockFix, readState } from './dependency-state.mjs';
 import { cargoAuditCommand } from './install-cargo-audit.mjs';
 import { govulncheckCommand } from './install-govulncheck.mjs';
 import { isMain, ROOT } from './paths.mjs';
@@ -168,21 +168,35 @@ function latestReleases(root, state) {
   return latest;
 }
 
-/** The advisories of every lock: lock -> { advisories } or { error }. */
+/**
+ * The import paths of the packages of the Go module of `lock` that govulncheck scans, or { error }: the packages of
+ * goPackagePatterns that have a buildable file, by `go list -e`. A directory whose every file a build constraint excludes
+ * is no package for `./...`, and govulncheck refuses it as a pattern, so it is dropped here.
+ */
+export function goPackages(root, lock) {
+  const patterns = goPackagePatterns(root, lock);
+  if (patterns.length === 0) return { list: [] };
+  const answer = run('go', ['list', '-e', '-f', '{{if or .GoFiles .TestGoFiles .XTestGoFiles}}{{.ImportPath}}{{end}}', ...patterns], path.join(root, path.posix.dirname(lock)));
+  return answer.error ? answer : { list: answer.stdout.split('\n').filter(Boolean) };
+}
+
+/** The advisories of every lock: lock -> { advisories } or { error }. Each npm lock is audited in the directory it lies in. */
 function advisories(root, state) {
   const result = new Map();
-  const npmVersions = state.npmLock.packages ?? {};
-  const npm = query('npm', ['audit', '--json', '--package-lock-only'], root, [0, 1]);
-  if (npm.error) result.set(NPM_LOCK, { error: npm.error });
-  else {
-    const list = [];
-    for (const [name, vulnerability] of Object.entries(npm.value.vulnerabilities ?? {})) {
-      for (const via of vulnerability.via ?? []) {
-        if (typeof via !== 'object' || !NPM_SEVERITIES.has(via.severity)) continue;
-        list.push({ package: name, version: npmVersions[`node_modules/${name}`]?.version ?? vulnerability.range, id: String(via.source ?? via.url), severity: via.severity, title: via.title, url: via.url });
+  for (const lock of state.locks.filter(item => lockEcosystem(item) === 'npm')) {
+    const npmVersions = state.npmLocks.get(lock).packages ?? {};
+    const npm = query('npm', ['audit', '--json', '--package-lock-only'], path.join(root, path.posix.dirname(lock)), [0, 1]);
+    if (npm.error) result.set(lock, { error: npm.error });
+    else {
+      const list = [];
+      for (const [name, vulnerability] of Object.entries(npm.value.vulnerabilities ?? {})) {
+        for (const via of vulnerability.via ?? []) {
+          if (typeof via !== 'object' || !NPM_SEVERITIES.has(via.severity)) continue;
+          list.push({ package: name, version: npmVersions[`node_modules/${name}`]?.version ?? vulnerability.range, id: String(via.source ?? via.url), severity: via.severity, title: via.title, url: via.url });
+        }
       }
+      result.set(lock, { advisories: list });
     }
-    result.set(NPM_LOCK, { advisories: list });
   }
   // cargo-audit reads the RustSec advisory database from a clone in .tools; the first lock fetches it.
   let fetched = false;
@@ -208,9 +222,39 @@ function advisories(root, state) {
     }
     result.set(lock, { advisories: list });
   }
+  // A PEP 751 lock: the advisories of each registry package at its locked version, from the PyPI release JSON.
+  for (const lock of state.locks.filter(item => lockEcosystem(item) === 'pypi')) {
+    const list = [];
+    let failure = null;
+    for (const item of state.pythonLocks.find(entry => entry.lock === lock).packages.filter(entry => entry.kind === 'registry')) {
+      const answer = query('curl', ['-fsSL', `https://pypi.org/pypi/${item.name}/${item.version}/json`], root);
+      if (answer.error) {
+        failure = answer.error;
+        break;
+      }
+      for (const vulnerability of answer.value.vulnerabilities ?? []) {
+        list.push({ package: item.name, version: item.version, id: vulnerability.id, severity: 'vulnerability', title: vulnerability.summary ?? vulnerability.id, url: vulnerability.link ?? `https://osv.dev/vulnerability/${vulnerability.id}` });
+      }
+    }
+    result.set(lock, failure ? { error: failure } : { advisories: list });
+  }
   for (const lock of state.locks.filter(item => lockEcosystem(item) === 'go')) {
     const command = govulncheckCommand(root);
-    const answer = existsSync(command) ? run(command, ['-json', './...'], path.join(root, path.posix.dirname(lock))) : { error: `${path.relative(root, command)} is not installed; run make install-tools` };
+    if (!existsSync(command)) {
+      result.set(lock, { error: `${path.relative(root, command)} is not installed; run make install-tools` });
+      continue;
+    }
+    const packages = goPackages(root, lock);
+    if (packages.error) {
+      result.set(lock, { error: packages.error });
+      continue;
+    }
+    // A module with no buildable package calls no vulnerable function, and govulncheck refuses an empty pattern list.
+    if (packages.list.length === 0) {
+      result.set(lock, { advisories: [] });
+      continue;
+    }
+    const answer = run(command, ['-json', ...packages.list], path.join(root, path.posix.dirname(lock)));
     if (answer.error) {
       result.set(lock, { error: answer.error });
       continue;
@@ -262,7 +306,7 @@ export function review(root) {
     if (outdated && exceptions.has(key)) notes.push(`${subject} ${dependency.version} < ${answer.latest}: kept by the exception of ${POLICY}: ${exceptions.get(key).reason}`);
     else if (outdated) {
       newer.push({ ...dependency, latest: answer.latest });
-      lines.push(`${subject} ${dependency.version} < ${answer.latest}: a newer stable release exists. Fix: ${UPDATE}`);
+      lines.push(`${subject} ${dependency.version} < ${answer.latest}: a newer stable release exists. Fix: ${fixOf(dependency)}`);
     } else if (exceptions.has(key)) lines.push(`${subject} ${dependency.version}: the exception of ${POLICY} is stale, ${answer.latest} is the latest stable release. Fix: remove the exception from ${POLICY}`);
   }
   for (const lock of state.locks) {
@@ -273,7 +317,8 @@ export function review(root) {
     }
     for (const advisory of answer.advisories) {
       found.push({ lock, ...advisory });
-      lines.push(`${lock} ${advisory.package} ${advisory.version}: advisory ${advisory.id} (${advisory.severity}) ${advisory.title}${advisory.url ? ` ${advisory.url}` : ''}. Fix: ${UPDATE}`);
+      const fix = lockEcosystem(lock) === 'pypi' ? lockFix(lock, state.pythonLocks.find(item => item.lock === lock).createdBy, advisory.package) : UPDATE;
+      lines.push(`${lock} ${advisory.package} ${advisory.version}: advisory ${advisory.id} (${advisory.severity}) ${advisory.title}${advisory.url ? ` ${advisory.url}` : ''}. Fix: ${fix}`);
     }
   }
   const record = {
@@ -282,10 +327,19 @@ export function review(root) {
     reviewed: new Date().toISOString(),
     locks: state.locks.map(lock => ({ lock, sha256: fileDigest(path.join(root, lock)), advisories: (audits.get(lock).advisories ?? []).map(({ package: name, version, id, severity, title, url }) => ({ package: name, version, id, severity, title, ...(url ? { url } : {}) })) })),
     dependencies: state.dependencies.map(dependency => ({ ecosystem: dependency.ecosystem, manifest: dependency.manifest, package: dependency.package, version: dependency.version, latest: latest.get(dependencyKey(dependency)).latest ?? null })),
+    vcs: state.vcs.map(({ lock, package: name, url, requestedRevision, commitId }) => ({ lock, package: name, url, requestedRevision, commitId })),
   };
   const complete = state.locks.every(lock => !audits.get(lock).error) && [...latest.values()].every(answer => !answer.error);
   return { lines, notes, newer, advisories: found, record, complete };
 }
+
+// The fix of a newer release: the ruff pin of config/toolchain.json is set by hand, with the sha256 of its wheels, because
+// the sha256 is read from the registry of each platform; every other manifest is updated by `make dependency-review UPDATE=1`.
+export const fixOf = dependency => {
+  if (dependency.manifest === TOOLCHAIN) return `set ruff in ${TOOLCHAIN} to ${dependency.latest} with the sha256 of each wheel, then make install-tools`;
+  if (dependency.kind === 'lock') return lockFix(dependency.lock, dependency.createdBy, dependency.package);
+  return UPDATE;
+};
 
 /** The range operator of a manifest constraint: `^`, `~` or none for an exact version. */
 const operator = spec => (/^[\^~]/.test(spec) ? spec[0] : '');
@@ -294,13 +348,17 @@ const operator = spec => (/^[\^~]/.test(spec) ? spec[0] : '');
 export function updatePlan({ newer, advisories: found }) {
   const plan = [];
   for (const dependency of newer) {
+    // A package of a PEP 751 lock is regenerated by the tool that wrote the lock (fixOf names it), never pinned in place.
+    if (dependency.manifest === TOOLCHAIN || dependency.kind === 'lock') continue;
     const version = String(dependency.latest).replace(/^v/, '');
     const range = operator(dependency.spec);
     if (dependency.ecosystem === 'npm') {
-      const directory = path.posix.dirname(dependency.manifest);
+      // npm runs in the directory of the lock of the manifest, and --workspace names the manifest relative to it.
+      const base = path.posix.dirname(dependency.lock);
+      const directory = path.posix.relative(base, path.posix.dirname(dependency.manifest));
       const save = dependency.kind === 'devDependencies' ? ['--save-dev'] : ['--save'];
-      const workspace = directory === '.' ? [] : ['--workspace', directory];
-      plan.push({ command: 'npm', args: ['install', ...workspace, ...save, ...(range ? [] : ['--save-exact']), `${dependency.package}@${range}${version}`], cwd: '.' });
+      const workspace = directory === '' ? [] : ['--workspace', directory];
+      plan.push({ command: 'npm', args: ['install', ...workspace, ...save, ...(range ? [] : ['--save-exact']), `${dependency.package}@${range}${version}`], cwd: base });
     } else if (dependency.ecosystem === 'go') {
       plan.push({ command: 'go', args: ['get', `${dependency.package}@${dependency.latest}`], cwd: path.posix.dirname(dependency.manifest) });
     } else if (dependency.ecosystem === 'pypi') {
@@ -309,10 +367,12 @@ export function updatePlan({ newer, advisories: found }) {
       plan.push({ command: 'composer', args: ['require', ...(dependency.kind === 'require-dev' ? ['--dev'] : []), '--update-with-dependencies', '--no-interaction', `${dependency.package}:${range}${version}`], cwd: path.posix.dirname(dependency.manifest) });
     }
   }
-  if (found.some(advisory => advisory.lock === NPM_LOCK)) plan.push({ command: 'npm', args: ['audit', 'fix'], cwd: '.' });
-  if (plan.some(step => step.command === 'npm')) plan.push({ command: 'npm', args: ['dedupe'], cwd: '.' });
+  for (const lock of new Set(found.filter(advisory => lockEcosystem(advisory.lock) === 'npm').map(advisory => advisory.lock))) {
+    plan.push({ command: 'npm', args: ['audit', 'fix'], cwd: path.posix.dirname(lock) });
+  }
+  for (const cwd of new Set(plan.filter(step => step.command === 'npm').map(step => step.cwd))) plan.push({ command: 'npm', args: ['dedupe'], cwd });
   const affected = new Map();
-  for (const advisory of found.filter(item => item.lock !== NPM_LOCK)) {
+  for (const advisory of found.filter(item => lockEcosystem(item.lock) !== 'npm')) {
     if (!affected.has(advisory.lock)) affected.set(advisory.lock, new Set());
     affected.get(advisory.lock).add(advisory.package);
   }
@@ -320,6 +380,7 @@ export function updatePlan({ newer, advisories: found }) {
     const directory = path.posix.dirname(lock);
     if (lockEcosystem(lock) === 'go') plan.push({ command: 'go', args: ['get', ...[...packages].map(name => `${name}@latest`)], cwd: directory });
     else if (lockEcosystem(lock) === 'cargo') plan.push({ command: 'cargo', args: ['update', ...[...packages].flatMap(name => ['-p', name])], cwd: directory });
+    else if (lockEcosystem(lock) === 'pypi') continue;
     else plan.push({ command: 'composer', args: ['update', '--with-dependencies', '--no-interaction', ...packages], cwd: directory });
   }
   for (const directory of new Set(plan.filter(step => step.command === 'go').map(step => step.cwd))) plan.push({ command: 'go', args: ['mod', 'tidy'], cwd: directory });

@@ -92,6 +92,14 @@ test('a commit of main whose checks succeeded is verified, and the check runs ar
   assert.ok(lines.some(line => line.includes(`reading the check runs of ${box.commit}`)), lines.join('\n'));
 });
 
+test('a release tag is annotated: a lightweight tag fails and names the tag and its kind, an annotated tag passes', (t) => {
+  const box = releaseSandbox(t);
+  git(box.root, 'tag', 'v0.0.1', box.commit);
+  stop(() => release.verify(context(box), 'v0.0.1'), /v0\.0\.1: the commit [0-9a-f]{40}: the tag v0\.0\.1 has the object type commit, not tag; a release tag is annotated, so create it with git tag -a v0\.0\.1 -m v0\.0\.1/);
+  git(box.root, 'tag', '-d', 'v0.0.1');
+  assert.equal(release.verify(context(box), box.release('0.0.1')).commit, box.commit);
+});
+
 test('a commit that is not an ancestor of origin/main fails and names the commit', (t) => {
   const box = releaseSandbox(t);
   writeFileSync(path.join(box.root, 'later.txt'), 'later');
@@ -251,10 +259,10 @@ test('assets builds one archive per package of the configuration', (t) => {
   const tag = box.tag('v0.0.1');
   const lines = [];
   const names = release.assets(context(box, { log: line => lines.push(line) }), tag);
-  assert.deepEqual(names, ['fixture-lib-npm-0.0.1.tgz', 'fixture-app-npm-0.0.1.tgz', 'polyspec-kit-fixture-php-0.0.1.zip']);
+  assert.deepEqual(names, ['fixture-lib-npm-0.0.1.tgz', 'fixture-app-npm-0.0.1.tgz', 'polyspec-kit-fixture-php-0.0.1.zip', 'kit_fixture-0.0.1-py3-none-any.whl']);
   const target = path.join(box.root, 'var/release/assets');
   assert.deepEqual(readdirSync(target).sort(), [...names].sort());
-  assert.equal(lines.filter(line => line.includes('packing')).length, 3, lines.join('\n'));
+  assert.equal(lines.filter(line => line.includes('packing')).length, 4, lines.join('\n'));
   assert.deepEqual(box.npmCalls().map(call => path.basename(call.cwd)), ['fixture-lib', 'fixture-app']);
 });
 
@@ -264,7 +272,7 @@ test('each archive carries the manifest of its package unchanged', (t) => {
   const names = release.assets(ctx, box.tag('v0.0.1'));
   const target = path.join(box.root, 'var/release/assets');
   const sources = ['packages/fixture-lib/package.json', 'packages/fixture-app/package.json', 'packages/fixture-php/composer.json'];
-  names.forEach((name, index) => assert.equal(release.packedManifest(ctx, path.join(target, name)), readFileSync(path.join(box.root, sources[index]), 'utf8'), name));
+  names.slice(0, 3).forEach((name, index) => assert.equal(release.packedManifest(ctx, path.join(target, name)), readFileSync(path.join(box.root, sources[index]), 'utf8'), name));
   const zip = spawnSync('unzip', ['-Z1', path.join(target, names[2])], { encoding: 'utf8' }).stdout.split('\n').filter(Boolean).sort();
   assert.deepEqual(zip, ['composer.json', 'composer.lock', 'src/', 'src/Engine.php']);
 });
@@ -329,20 +337,20 @@ test('publish creates the release with the notes and the archives', (t) => {
   box.checkRuns([]);
   const lines = [];
   const names = release.publish(context(box, { log: line => lines.push(line) }), tag);
-  const [call] = box.state().calls;
+  const call = box.state().calls.find(args => args[0] === 'release' && args[1] === 'create');
   const target = path.join(box.root, 'var/release/assets');
-  assert.deepEqual(call.slice(0, 6), ['release', 'create', tag, '--verify-tag', '--title', tag]);
-  assert.equal(call[6], '--notes-file');
-  assert.deepEqual(call.slice(8), names.map(name => path.join(target, name)));
+  assert.deepEqual(call.slice(0, 7), ['release', 'create', tag, '--verify-tag', '--draft', '--title', tag]);
+  assert.equal(call[7], '--notes-file');
+  assert.deepEqual(call.slice(9), names.map(name => path.join(target, name)));
   assert.equal(box.state().notes, '- The first entry of 0.0.1.\n- The second entry of 0.0.1.\n');
-  assert.ok(lines.some(line => line.includes('creating the GitHub Release with 3 archives')), lines.join('\n'));
+  assert.ok(lines.some(line => line.includes('creating the draft GitHub Release with 4 archives')), lines.join('\n'));
 });
 
 test('publish with a missing archive fails before any request', (t) => {
   const box = releaseSandbox(t);
   const tag = box.tag('v0.0.1');
   box.checkRuns([]);
-  stop(() => release.publish(context(box), tag), /var\/release\/assets lacks \[fixture-lib-npm-0\.0\.1\.tgz, fixture-app-npm-0\.0\.1\.tgz, polyspec-kit-fixture-php-0\.0\.1\.zip\]; make release-assets builds them/);
+  stop(() => release.publish(context(box), tag), /var\/release\/assets lacks \[fixture-lib-npm-0\.0\.1\.tgz, fixture-app-npm-0\.0\.1\.tgz, polyspec-kit-fixture-php-0\.0\.1\.zip, kit_fixture-0\.0\.1-py3-none-any\.whl\]; make release-assets builds them/);
   assert.deepEqual(box.state().calls, []);
 });
 
@@ -351,8 +359,9 @@ test('publish of a Go module tag creates a release without archives, and a faili
   const tag = box.tag('packages/fixture-go/v0.0.1');
   box.checkRuns([]);
   assert.deepEqual(release.publish(context(box), tag), []);
-  assert.deepEqual(box.state().calls[0].slice(0, 6), ['release', 'create', tag, '--verify-tag', '--title', tag]);
-  assert.equal(box.state().calls[0].length, 8, 'the call ends with the notes file');
+  const call = box.state().calls.find(args => args[0] === 'release' && args[1] === 'create');
+  assert.deepEqual(call.slice(0, 7), ['release', 'create', tag, '--verify-tag', '--draft', '--title', tag]);
+  assert.equal(call.length, 9, 'the call ends with the notes file');
   box.checkRuns([], { failRelease: true });
   stop(() => release.publish(context(box), tag), /gh release create packages\/fixture-go\/v0\.0\.1 .* exited with 1: gh: release failed/);
 });
@@ -413,7 +422,7 @@ test('the command line runs each step, prints a line per step and exits with 1 o
   assert.match(result.stdout, /\[release\] v0\.0\.1: every manifest of the tag declares 0\.0\.1 and CHANGELOG\.md has ## 0\.0\.1/);
   result = cli(box, ['assets', tag]);
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /\[release\] v0\.0\.1: built fixture-lib-npm-0\.0\.1\.tgz, fixture-app-npm-0\.0\.1\.tgz, polyspec-kit-fixture-php-0\.0\.1\.zip in var\/release\/assets/);
+  assert.match(result.stdout, /\[release\] v0\.0\.1: built fixture-lib-npm-0\.0\.1\.tgz, fixture-app-npm-0\.0\.1\.tgz, polyspec-kit-fixture-php-0\.0\.1\.zip, kit_fixture-0\.0\.1-py3-none-any\.whl in var\/release\/assets/);
   box.checkRuns([]);
   result = cli(box, ['publish', tag]);
   assert.equal(result.status, 0, result.stderr);
@@ -437,7 +446,7 @@ test('the command line refuses a missing mode, a missing tag and an extra argume
   for (const args of [[], ['verify'], ['bogus', 'v0.0.1'], ['verify', 'v0.0.1', 'extra'], ['coverage', 'v0.0.1']]) {
     const result = cli(box, args);
     assert.equal(result.status, 2, args.join(' '));
-    assert.match(result.stderr, /usage: node scripts\/kit\/release\.mjs verify\|versions\|assets\|publish\|go-tags TAG \| coverage/);
+    assert.match(result.stderr, /usage: node scripts\/kit\/release\.mjs verify\|versions\|assets\|publish\|undraft\|go-tags TAG \| coverage/);
   }
 });
 
@@ -445,7 +454,7 @@ test('make runs each release step with the tag of the environment and fails with
   const box = releaseSandbox(t);
   box.release('0.0.1');
   const make = (...args) => spawnSync('make', ['-f', 'scripts/kit/kit.mk', ...args], { cwd: box.root, env: { ...box.env, GITHUB_REPOSITORY: REPOSITORY }, encoding: 'utf8' });
-  for (const target of ['release-verify', 'release-versions', 'release-assets', 'release-publish']) {
+  for (const target of ['release-verify', 'release-versions', 'release-assets', 'release-publish', 'release-undraft']) {
     const result = make(target);
     assert.equal(result.status, 2, target);
     assert.match(result.stdout + result.stderr, new RegExp(`${target}: TAG is required, for example make ${target} TAG=v0\\.0\\.1`));
@@ -473,11 +482,11 @@ test('the archive names of a repository with scoped packages differ by language 
     edit(root, 'config/release.json', c => ({
       ...c,
       packages: c.packages.map(p => (p.kind === 'npm' && p.name === 'fixture-app' ? { ...p, name: '@polyspec/fixture-app' } : p.kind === 'composer' ? { ...p, name: 'polyspec/fixture-app' } : p)),
-      consumers: { npm: { ...c.consumers.npm, smoke: { 'fixture-lib': c.consumers.npm.smoke['fixture-lib'], '@polyspec/fixture-app': c.consumers.npm.smoke['fixture-app'] } }, composer: { ...c.consumers.composer, smoke: { 'polyspec/fixture-app': c.consumers.composer.smoke['polyspec/kit-fixture'] } } },
+      consumers: { ...c.consumers, npm: { ...c.consumers.npm, smoke: { 'fixture-lib': c.consumers.npm.smoke['fixture-lib'], '@polyspec/fixture-app': c.consumers.npm.smoke['fixture-app'] } }, composer: { ...c.consumers.composer, smoke: { 'polyspec/fixture-app': c.consumers.composer.smoke['polyspec/kit-fixture'] } } },
     }));
   } });
   const { config } = context(box);
-  assert.deepEqual(release.assetNames(config, '0.0.1'), ['fixture-lib-npm-0.0.1.tgz', 'polyspec-fixture-app-npm-0.0.1.tgz', 'polyspec-fixture-app-php-0.0.1.zip']);
+  assert.deepEqual(release.assetNames(config, '0.0.1'), ['fixture-lib-npm-0.0.1.tgz', 'polyspec-fixture-app-npm-0.0.1.tgz', 'polyspec-fixture-app-php-0.0.1.zip', 'kit_fixture-0.0.1-py3-none-any.whl']);
 });
 
 test('the output of npm pack is renamed to the archive name', (t) => {
@@ -491,7 +500,7 @@ test('the output of npm pack is renamed to the archive name', (t) => {
   } });
   const ctx = context(box);
   const names = release.assets(ctx, box.tag('v0.0.1'));
-  assert.deepEqual(names, ['fixture-lib-npm-0.0.1.tgz', 'polyspec-fixture-app-npm-0.0.1.tgz', 'polyspec-kit-fixture-php-0.0.1.zip']);
+  assert.deepEqual(names, ['fixture-lib-npm-0.0.1.tgz', 'polyspec-fixture-app-npm-0.0.1.tgz', 'polyspec-kit-fixture-php-0.0.1.zip', 'kit_fixture-0.0.1-py3-none-any.whl']);
   assert.deepEqual(readdirSync(path.join(box.root, 'var/release/assets')).sort(), [...names].sort(), 'no file keeps the name that npm pack gave');
   assert.equal(JSON.parse(release.packedManifest(ctx, path.join(box.root, 'var/release/assets', names[1]))).name, '@polyspec/fixture-app');
 });
@@ -522,4 +531,34 @@ test('the zip of a tree with other content has other bytes', (t) => {
     return sha256(path.join(box.root, 'var/release/assets/polyspec-kit-fixture-php-0.0.1.zip'));
   };
   assert.notEqual(zipOf('<?php\n'), zipOf('<?php\n// changed\n'));
+});
+
+test('publish replaces the draft of an earlier run and never replaces a public release', (t) => {
+  const box = releaseSandbox(t);
+  const tag = box.tag('v0.0.1');
+  release.assets(context(box), tag);
+  box.checkRuns([]);
+  box.releases([{ id: 5, tag_name: tag, draft: true, assets: [] }]);
+  const lines = [];
+  release.publish(context(box, { log: line => lines.push(line) }), tag);
+  const calls = box.state().calls;
+  assert.ok(calls.some(args => args[0] === 'release' && args[1] === 'delete' && args[2] === tag), 'the draft of the earlier run is deleted');
+  assert.ok(calls.some(args => args[0] === 'release' && args[1] === 'create' && args[4] === '--draft'), 'the release is created as a draft');
+  assert.ok(lines.some(line => line.includes('removing the draft release 5 of an earlier run')), lines.join('\n'));
+  box.releases([{ id: 5, tag_name: tag, draft: false, assets: [] }]);
+  stop(() => release.publish(context(box), tag), /the release v0\.0\.1 is already public; a public release is not replaced/);
+});
+
+test('undraft makes the draft public with one edit, a public release stays as it is, and a missing release stops', (t) => {
+  const box = releaseSandbox(t);
+  const tag = box.tag('v0.0.1');
+  box.checkRuns([]);
+  stop(() => release.undraft(context(box), tag), /the release v0\.0\.1 does not exist; make release-publish creates it as a draft/);
+  box.releases([{ id: 5, tag_name: tag, draft: true, assets: [] }]);
+  assert.equal(release.undraft(context(box), tag), true);
+  assert.deepEqual(box.state().edited, ['release', 'edit', tag, '--draft=false']);
+  box.releases([{ id: 5, tag_name: tag, draft: false, assets: [] }]);
+  const edits = box.state().calls.filter(args => args[1] === 'edit').length;
+  assert.equal(release.undraft(context(box), tag), false);
+  assert.equal(box.state().calls.filter(args => args[1] === 'edit').length, edits, 'a public release is not edited again');
 });

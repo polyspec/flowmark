@@ -4,16 +4,23 @@
 //   npm       `install --package-lock-only` writes a lock that pins every `file:` tarball with an integrity and one
 //             registry package; `ci` installs the tarballs of the lock into node_modules
 //   composer  `update --no-install` writes a lock of the artifact zips with a shasum; `install` writes vendor/composer/installed.json
-//   gh        `release view` lists state.release names; `release download` copies them from the archives of the sandbox
-//   python3   `-m venv DIR` writes DIR/bin/python, which answers `-m pip install SPEC` and any other call
+//   gh        `api .../releases` lists state.release (its tag, draft and names); `api .../releases/assets/<id>` writes the archive
+//   uv        `venv --python PY DIR` (var/tools/bin/uv) writes DIR/bin/python with its home in var/tools/uv-python
+//   python3   var/tools/bin/python3 answers its version and runs `-m pip --python DIR/bin/python`; DIR/bin/python answers the
+//             smoke command
 //   cargo, go answer from the state
 // No test reaches a registry, GitHub or a network.
 import { spawnSync } from 'node:child_process';
-import { chmodSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import * as release from '../../scripts/kit/release.mjs';
 import * as consumer from '../../scripts/kit/release-consumer.mjs';
+import { fileDigest } from '../../scripts/kit/digest.mjs';
 import { releaseSandbox } from './release-sandbox.mjs';
+import { PIP_FUNCTIONS } from './wheel-stubs.mjs';
+
+// The release of the checkout Python (var/tools/bin/python3) that the stubs report.
+const CHECKOUT_VERSION = '3.14.8';
 
 // The start of every stub: the state, the call log and a function that saves both and exits.
 const PRELUDE = `#!/usr/bin/env node
@@ -94,31 +101,73 @@ if (args[0] === 'update' && args.includes('--no-install')) {
 } else finish(1, 'composer stub: unexpected arguments ' + JSON.stringify(args));
 `;
 
+// The state's `dependencies` are the releases of other repositories: each { repo, tag, file, source } lists its one file with the
+// id 1000 + its index, and its download reads the file in source.
 const GH = `${PRELUDE}
-if (args[0] !== 'release' || mode === 'fail') finish(1, 'gh stub: release ' + args[1] + ' failed');
-if (args[1] === 'view') {
-  console.log(JSON.stringify({ assets: state.release.names.map(name => ({ name })) }));
+if (mode === 'fail') finish(1, 'gh stub: api failed');
+const listed = args.find(arg => arg.startsWith('repos/') && arg.endsWith('/releases'));
+if (args[0] === 'api' && args.some(arg => arg.endsWith('/releases'))) {
+  const other = (state.dependencies ?? []).find(item => listed === 'repos/' + item.repo + '/releases');
+  // The release of the tag, a draft included: its assets carry the ids that the download names.
+  if (other) console.log(JSON.stringify({ id: 8, tag_name: other.tag, draft: false, assets: [{ id: 1000 + state.dependencies.indexOf(other), name: other.file }] }));
+  else console.log(JSON.stringify({ id: 7, tag_name: state.release.tag, draft: state.release.draft, assets: state.release.names.map((name, index) => ({ id: index + 1, name, url: state.release.published?.[name]?.url, digest: state.release.published?.[name]?.digest })) }));
   finish();
-} else if (args[1] === 'download') {
-  const directory = args[args.indexOf('--dir') + 1];
-  for (const name of state.release.names) fs.copyFileSync(path.join(state.release.source, name), path.join(directory, name));
+} else if (args[0] === 'api' && args.some(arg => arg.includes('/releases/assets/'))) {
+  const id = Number(args.at(-1).split('/').pop());
+  if (id >= 1000) {
+    const other = state.dependencies[id - 1000];
+    fs.writeSync(1, fs.readFileSync(path.join(other.source, other.file)));
+  } else {
+    const name = state.release.names[id - 1];
+    fs.writeSync(1, fs.readFileSync(path.join(state.release.source, name)));
+  }
   finish();
 } else finish(1, 'gh stub: unexpected arguments ' + JSON.stringify(args));
 `;
 
-// The interpreter of a virtual environment: it answers pip and the smoke command from the state.
+// The interpreter of a virtual environment: it answers the interpreter facts and the smoke command from the state.
 const VENV_PYTHON = `${PRELUDE}
-if (args[0] === '-m' && args[1] === 'pip') finish(mode === 'pip-fail' ? 1 : 0, mode === 'pip-fail' ? 'pip stub: no matching distribution' : '');
+if (args[0] === '-c' && args[1].includes('python_version')) {
+  console.log(${JSON.stringify(CHECKOUT_VERSION)});
+  finish();
+}
 finish(mode === 'smoke-fail' ? 1 : 0, mode === 'smoke-fail' ? 'python stub: ModuleNotFoundError' : '');
 `;
 
+// The uv of the checkout, var/tools/bin/uv: it makes the venv with its home in var/tools/uv-python, as uv venv makes it from
+// the Python that uv installed.
+const UV = `${PRELUDE}
+const CHECKOUT_BIN = path.join(process.cwd(), 'var/tools/uv-python/cpython-${CHECKOUT_VERSION}-stub/bin');
+if (args[0] === 'venv' && args[2] === '--python') {
+  const directory = args.at(-1);
+  fs.mkdirSync(path.join(directory, 'bin'), { recursive: true });
+  fs.writeFileSync(path.join(directory, 'bin', 'python'), state.venvPython, { mode: 0o755 });
+  fs.writeFileSync(path.join(directory, 'pyvenv.cfg'), 'home = ' + CHECKOUT_BIN + '\\n');
+  finish(mode === 'venv-fail' ? 1 : 0, mode === 'venv-fail' ? 'uv stub: venv failed' : '');
+} else finish(1, 'uv stub: unexpected arguments ' + JSON.stringify(args));
+`;
+
+// The checkout Python, var/tools/bin/python3: it answers its version and runs pip with --python into a venv. The venv's pip
+// calls are logged with the call.
 const PYTHON3 = `${PRELUDE}
-if (args[0] === '-m' && args[1] === 'venv') {
-  const bin = path.join(args[2], 'bin');
-  fs.mkdirSync(bin, { recursive: true });
-  for (const name of ['python']) fs.writeFileSync(path.join(bin, name), state.venvPython, { mode: 0o755 });
-  finish(mode === 'venv-fail' ? 1 : 0, mode === 'venv-fail' ? 'python3 stub: venv failed' : '');
-} else finish(1, 'python3 stub: unexpected arguments ' + JSON.stringify(args));
+${PIP_FUNCTIONS}
+if (args[0] === '-c' && args[1].includes('python_version')) {
+  console.log(${JSON.stringify(CHECKOUT_VERSION)});
+  finish();
+} else if (args[0] === '-m' && args[1] === 'pip' && args[2] === '--python') {
+  if (args[4] === 'show') {
+    console.log('Name: ' + args[5] + '\\nVersion: ' + state.version);
+    finish();
+  }
+  call.requirements = args.includes('-r') ? fs.readFileSync(args[args.indexOf('-r') + 1], 'utf8') : null;
+  finish(mode === 'pip-fail' ? 1 : 0, mode === 'pip-fail' ? 'pip stub: no matching distribution' : '');
+} else if (args[0] === '-m' && args[1] === 'pip') finish(pipStub(args));
+else finish(1, 'python3 stub: unexpected arguments ' + JSON.stringify(args));
+`;
+
+// The python3 on PATH: the checkout's Python never reaches it, so any call here is a failure of the release tools.
+const PATH_PYTHON3 = `${PRELUDE}
+finish(1, 'python3 stub: a python3 of PATH ran with ' + JSON.stringify(args) + '; the release uses var/tools/bin/python3');
 `;
 
 const CARGO = `${PRELUDE}
@@ -135,7 +184,7 @@ if (args[0] === 'list' && args[1] === '-m') {
 } else finish(1, 'go stub: unexpected arguments ' + JSON.stringify(args));
 `;
 
-const STUBS = { npm: NPM, composer: COMPOSER, gh: GH, python3: PYTHON3, cargo: CARGO, go: GO };
+const STUBS = { npm: NPM, composer: COMPOSER, gh: GH, python3: PATH_PYTHON3, 'checkout-python3': PYTHON3, 'checkout-uv': UV, cargo: CARGO, go: GO };
 
 /** The sandbox at `version` with its release tags, the archives of the tag in var/release/assets and the stubs of the tools. */
 export function consumerSandbox(t, { version = '0.0.1', ...options } = {}) {
@@ -149,9 +198,22 @@ export function consumerSandbox(t, { version = '0.0.1', ...options } = {}) {
     writeFileSync(path.join(bin, name), source);
     chmodSync(path.join(bin, name), 0o755);
   }
-  writeFileSync(stateFile, JSON.stringify({ calls: [], modes: {}, release: { names, source: path.join(box.root, release.ASSETS) }, venvPython: VENV_PYTHON }));
-  // The remote of the repository URL is the sandbox itself, so git ls-remote reads real tags.
+  // The Python of the checkout is var/tools/bin/python3, the wrapper that install-python.mjs writes: it runs the stub.
+  const python = path.join(box.root, 'var/tools/bin/python3');
+  mkdirSync(path.dirname(python), { recursive: true });
+  // The Python that uv installed exists as a directory, so the venv's home compares by its real path, as on macOS (/var is
+  // /private/var). var/tools/bin/uv is the wrapper that install-uv.mjs writes: it runs the uv stub.
+  mkdirSync(path.join(box.root, `var/tools/uv-python/cpython-${CHECKOUT_VERSION}-stub/bin`), { recursive: true });
+  writeFileSync(python, `#!/bin/sh\nexec '${path.join(bin, 'checkout-python3')}' "$@"\n`);
+  chmodSync(python, 0o755);
+  writeFileSync(path.join(box.root, 'var/tools/bin/uv'), `#!/bin/sh\nexec '${path.join(bin, 'checkout-uv')}' "$@"\n`);
+  chmodSync(path.join(box.root, 'var/tools/bin/uv'), 0o755);
+  // The published assets: each asset of the release at its URL in the repository and with the sha256 of its file, as GitHub lists them.
   const config = JSON.parse(readFileSync(path.join(box.root, 'config/release.json'), 'utf8'));
+  const source = path.join(box.root, release.ASSETS);
+  const published = Object.fromEntries(names.map(name => [name, { url: `${config.repositoryUrl}/releases/download/${tag}/${name}`, digest: `sha256:${fileDigest(path.join(source, name))}` }]));
+  writeFileSync(stateFile, JSON.stringify({ calls: [], modes: {}, release: { tag: 'v0.0.1', draft: true, names, source, published }, venvPython: VENV_PYTHON, version }));
+  // The remote of the repository URL is the sandbox itself, so git ls-remote reads real tags.
   const env = {
     ...box.env,
     STUB_STATE_FILE: stateFile,

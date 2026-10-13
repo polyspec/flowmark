@@ -17,16 +17,26 @@
 // repository by name and version only: no `integrity` for an npm entry and an empty `shasum` for a Composer entry. A lock
 // changes only with a version or a dependency, and `lock` runs on the release commit before the tag is pushed.
 // `lock` resolves version ranges, so it is the one step that reads a registry; no check runs it.
+// A `wheel` package is installed into a clean virtual environment of var/tools/bin/python3: its dependencies from the lock of
+// consumers.wheel.lock (`pip install --require-hashes --no-deps --only-binary :all:`, the online step of the proof), then the wheels
+// of all wheel packages in one command from their files (`pip install --no-index --require-hashes --no-deps`, each named with the
+// sha256 of its file), then `pip check`, which fails on a lock that lacks a dependency. The command names every wheel of the release,
+// so a sibling (a wheel of the same release) is installed from its file: with --no-deps pip never reads a sibling's URL.
 // A Go module tag releases no archive and has nothing to install. Each failure names the expected and the actual value.
 //   TAG is `latest` for the newest root release tag reachable from HEAD.
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ASSETS, assetName, assetNames, context, latestTag, parseTag } from './release.mjs';
+import { ASSETS, archiveName, assetNames, context, latestTag, parseTag } from './release.mjs';
+import { fileDigest } from './digest.mjs';
+import { wheelName } from './release-wheel.mjs';
+import { lockRequirements, wheelLocks } from './wheel-dependencies.mjs';
+import { toolsPath } from './tool-wrappers.mjs';
+import { makeVenv } from './python-venv.mjs';
 import { readJson, writeAtomic } from './files.mjs';
 import { run, Stop } from './process.mjs';
-import { CONSUMER_KINDS } from './release-consumer-config.mjs';
+import { CONSUMER_KINDS, WHEEL_KIND } from './release-consumer-config.mjs';
 
 // A registry address that refuses every connection: port 9 of the loopback address.
 export const UNREACHABLE = 'http://127.0.0.1:9/';
@@ -38,10 +48,10 @@ const FILES = { npm: { manifest: 'package.json', lock: 'package-lock.json', exte
 const INHERITED = ['npm_config_offline', 'COMPOSER_DISABLE_NETWORK', 'COMPOSER', 'COMPOSER_VENDOR_DIR'];
 
 const json = (value, indent) => `${JSON.stringify(value, null, indent)}\n`;
-/** The package kinds that `config` has a consumer for, each with its packages: [[kind, consumer, [{ name, file }]]]. */
+/** The package kinds with a committed consumer project, each with its packages: [[kind, consumer, [{ name, file }]]]. */
 function plan(config, version) {
   if (!config.consumers) throw new Stop('config/release.json has no consumers section; it declares the consumer projects that install the archives');
-  return CONSUMER_KINDS.filter(kind => config.consumers[kind]).map(kind => [kind, config.consumers[kind], Object.keys(config.consumers[kind].smoke).map(name => ({ name, file: assetName(name, kind === 'npm' ? 'npm' : 'php', version, FILES[kind].extension) }))]);
+  return CONSUMER_KINDS.filter(kind => config.consumers[kind]).map(kind => [kind, config.consumers[kind], Object.keys(config.consumers[kind].smoke).map(name => ({ name, file: archiveName(kind, name, version) }))]);
 }
 
 /** Requires `directory` to hold exactly the archives of `version`; the names of the archives. */
@@ -57,7 +67,7 @@ export function requireArchives(config, version, directory, where) {
 /** The environment of a project command: no offline setting, and caches and homes that are empty directories of the run. */
 function environment(env, folder) {
   const clean = Object.fromEntries(Object.entries(env).filter(([name]) => !INHERITED.includes(name)));
-  return { ...clean, npm_config_cache: path.join(folder, 'npm-cache'), COMPOSER_HOME: path.join(folder, 'composer-home'), COMPOSER_CACHE_DIR: path.join(folder, 'composer-cache') };
+  return { ...clean, npm_config_cache: path.join(folder, 'npm-cache'), COMPOSER_HOME: path.join(folder, 'composer-home'), COMPOSER_CACHE_DIR: path.join(folder, 'composer-cache'), PIP_CACHE_DIR: path.join(folder, 'pip-cache') };
 }
 
 /** The scopes of the npm packages of this repository, each pointed at the unreachable registry. */
@@ -162,10 +172,66 @@ export function installConsumers(ctx, version, directory, step = () => {}) {
         installed += 1;
       }
     }
+    installed += installWheels(ctx, version, directory, folder, env, step);
     return installed;
   } finally {
     rmSync(folder, { recursive: true, force: true });
   }
+}
+
+/**
+ * Installs the wheels of `names` at `version` from `directory` into a clean virtual environment of `folder` made by the Python
+ * of `root`. `requirements` is the requirement file of the dependencies (lockRequirements), installed first with hashes, no
+ * dependency of their own and only binary files. Then the wheels: `pip install --no-index --require-hashes --no-deps`, each file
+ * named with the sha256 of its file. Each package must show `version`, its smoke command runs in the environment, and `pip check` must
+ * pass in it. Returns the number of packages.
+ */
+export function installWheelFiles({ root, env, folder, version, directory, names, smoke, requirements = '', step = () => {} }) {
+  if (names.length === 0) return 0;
+  const project = path.join(folder, WHEEL_KIND);
+  const venv = path.join(project, 'venv');
+  mkdirSync(project, { recursive: true });
+  // uv venv makes the venv from the checkout Python with no pip (python-venv.mjs); pip of the checkout installs into it.
+  try {
+    makeVenv({ root, directory: venv, env });
+  } catch (error) {
+    throw new Stop(error.message);
+  }
+  const bin = path.join(venv, 'bin');
+  const python = path.join(bin, 'python');
+  const checkoutPython = toolsPath(root, 'bin', 'python3');
+  const venvEnv = { ...env, PATH: `${bin}${path.delimiter}${env.PATH}`, VIRTUAL_ENV: venv };
+  if (requirements !== '') {
+    const dependencies = path.join(project, 'dependencies.txt');
+    writeFileSync(dependencies, requirements);
+    run(checkoutPython, ['-m', 'pip', '--python', python, 'install', '--no-input', '--disable-pip-version-check', '--require-hashes', '--no-deps', '--only-binary', ':all:', '-r', dependencies], { cwd: project, env });
+    step(`wheel dependencies pip install of ${requirements.split('\n').filter(Boolean).length} requirements`);
+  }
+  const requirementsFile = path.join(project, 'requirements.txt');
+  writeFileSync(requirementsFile, names.map((name) => {
+    const file = path.join(directory, wheelName(name, version));
+    return `${file} --hash=sha256:${fileDigest(file)}\n`;
+  }).join(''));
+  run(checkoutPython, ['-m', 'pip', '--python', python, 'install', '--no-input', '--disable-pip-version-check', '--no-index', '--require-hashes', '--no-deps', '-r', requirementsFile], { cwd: project, env });
+  step(`wheel pip install of ${names.length} packages`);
+  run(checkoutPython, ['-m', 'pip', '--python', python, 'check'], { cwd: project, env });
+  step('wheel pip check passed');
+  for (const name of names) {
+    const shown = run(checkoutPython, ['-m', 'pip', '--python', python, 'show', name], { cwd: project, env });
+    const actual = /^Version: (.*)$/m.exec(shown)?.[1]?.trim() ?? null;
+    if (actual !== version) throw new Stop(`wheel installed ${name} ${actual ?? 'none'}, expected ${version}`);
+    run(smoke[name][0], smoke[name].slice(1), { cwd: project, env: venvEnv });
+    step(`wheel ${name} ${version}: ${smoke[name].join(' ')}`);
+  }
+  return names.length;
+}
+
+/** The wheel packages of the configuration, installed by installWheelFiles with the locks of their dependencies. */
+function installWheels(ctx, version, directory, folder, env, step) {
+  const names = ctx.config.packages.filter(item => item.kind === WHEEL_KIND).map(({ name }) => name);
+  if (names.length === 0) return 0;
+  const requirements = wheelLocks(ctx.root, ctx.config).map(({ file, text }) => lockRequirements(text, file)).join('');
+  return installWheelFiles({ root: ctx.root, env, folder, version, directory, names, smoke: ctx.config.consumers[WHEEL_KIND].smoke, requirements, step });
 }
 
 /** The lock without the hashes of the archives of this repository, which each run builds again. */

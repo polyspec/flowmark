@@ -12,12 +12,26 @@ import { validate } from './schema-validate.mjs';
 import { isMain, ROOT } from './paths.mjs';
 import { fileDigest } from './digest.mjs';
 import { readJson } from './files.mjs';
+import { gitResult } from './git.mjs';
 
 export const LOCK = '.kit/kit.lock.json';
 
 /** The vendored directories of the checkout at `root`, from kit.json. */
 export function vendoredDirectories(root) {
   return readJson(root, 'kit.json').vendored;
+}
+
+/**
+ * The single vendored files of kit.json: `vendoredFiles` maps the path of a file in the checkout to its source file in kit.
+ * Both are relative paths that stay inside their repository.
+ */
+export function vendoredFilesOf(kit) {
+  return Object.entries(kit.vendoredFiles ?? {}).map(([file, from]) => {
+    for (const value of [file, from]) {
+      if (path.isAbsolute(value) || value.split("/").includes("..") || value.includes("\\")) throw new Error(`vendoredFiles path ${JSON.stringify(value)} is not a relative path inside its repository`);
+    }
+    return { file, from };
+  });
 }
 
 /** Every file below `directory` (relative to root), sorted; a missing directory has none. */
@@ -57,13 +71,24 @@ export function checkConfig(root) {
 }
 
 /** The findings of the vendored files of `root` against its lock: a list of lines, empty when they match. */
+// The repository that holds the source of the vendored files has no lock: it does not vendor itself. Its origin is the
+// repository of kit.json, so the check reads only its configuration.
+export function isSource(root) {
+  const declared = readJson(path.join(root, 'kit.json')).repository;
+  const origin = gitResult(root, 'remote', 'get-url', 'origin');
+  return origin.status === 0 && origin.stdout.trim() === declared;
+}
+
 export function check(root) {
   const config = checkConfig(root);
+  if (existsSync(path.join(root, 'kit.json')) && isSource(root)) return config;
   const lockFile = path.join(root, LOCK);
   if (!existsSync(lockFile)) return [...config, `${LOCK}: the lock is missing. Fix: make kit-sync KIT_TAG=<tag>`];
   const lock = readJson(lockFile);
   const found = [];
+  const kit = readJson(root, "kit.json");
   const present = new Set(vendoredDirectories(root).flatMap(directory => walk(root, directory)));
+  for (const { file } of vendoredFilesOf(kit)) if (existsSync(path.join(root, file))) present.add(file);
   if (existsSync(path.join(root, 'kit.json'))) present.add('kit.json');
   for (const [file, expected] of Object.entries(lock.files)) {
     if (!present.has(file)) {

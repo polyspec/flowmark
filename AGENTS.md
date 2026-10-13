@@ -13,73 +13,31 @@ has its checklist in `docs/plans/`.
 
 ## Principles
 
-- Everything here is the responsibility of whoever works on it. A rule is followed because it is
-  right, never because it already exists: an existing rule, code path or document that is wrong
-  is reported and corrected, and an oddity found while reading or changing code is reported at
-  once with the question whether a rule must be made or corrected.
-- Rules first. Development proceeds by stating logical rules and keeping them; behaviour that
-  follows no stated rule is a defect. The measure of every decision is what is right — never that
-  an existing principle, rule or precedent says so. A criterion is not eternal: it is changed when
-  the situation shows it wrong, and only with its grounding stated. It is never lowered because it
-  is hard to meet while testing — that is a betrayal of the criterion.
-- A judgement that is hard to make, or a new line of reasoning, is verified adversarially by an
-  agent, which is asked for its solutions as well as its objections; the rounds repeat until no
-  disagreement remains. Its scope is fixed before the first round: the propositions under review,
-  stated as written, and what lies outside them. A finding counts only when it shows a proposition
-  wrong, contradicted by another document, or missing a case it claims to cover; a new question
-  next to the scope becomes its own checklist item, never a further round. Without a fixed scope
-  the rounds do not converge.
-- No backward compatibility: an old path is removed, never kept behind a compatibility layer, a
-  fallback or a migration shim.
-- Errors are never hidden: no fallback that turns a wrong input into a plausible one, no silent
-  drop of an input or an output, no swallowed error.
-- A fallback stands only where it is truly needed, with that need stated; a fallback added by
-  habit is poison.
-- Events, not polling. A change is published as an event, and its subscribers or consumers
-  receive and handle it. Polling or a timer is an alternative chosen only when no orthodox
-  mechanism exists, stated as such, never the main path. A file change is learned from the
-  operating system's notification; a notification that reports lost events (an overflow) is
-  itself an event, and its consumer reads the affected tree again — that path exists because
-  the notification contract requires it, and it is stated. A file system that sends no
-  notifications is not supported, and that is stated too.
-- Recovery, apply and transformation operations are idempotent: a journal replay, a canon, an
-  install, a write of the same bytes. A request that is not idempotent by nature, such as an
-  insert, is refused on its repetition as its rule says. Nothing is patched ad hoc to make
-  something appear to work. What happens is observable and mechanical: that an event occurred
-  is known from what it publishes, not found by searching for it. A process that crashed
-  publishes nothing, so on start the engine reads the declared places of its own state — the
-  lock and the journal — once; that is a read of a declared place, not a search.
-- Paths are resolved declaratively and by discovery from a declared root, never as paths
-  relative to an assumed working directory. The engine never creates a symlink and never
-  follows one; a symlink found in a corpus is reported as its rule says.
-- No tricks, in any case. When a requirement cannot be met the orthodox way and only a trick
-  would meet it, that is stated exactly instead of done quietly.
-- The simplest implementation that fully satisfies the current requirements wins; no
-  abstraction, setting or indirection for an uncertain future. Components are modular with
-  their concerns clearly separated, and architecture is decided for the long term — a stopgap
-  that must be replaced later is not accepted. Correct first; fast only when it stays correct.
-  A problem is not solved by creating another problem.
-- A wrong change is judged by harm and by correctness, not by whether it matched the intent: a
-  harmful change is reverted at once; a harmless change that is wrong or unneeded is removed;
-  a correct change stays, and when it is unrelated to the task it is committed on its own with
-  its real reason — a record that presents an unrelated change as related is false.
-- A question to the user must be needed: not already decided or evident, not asked by habit,
-  never confusing, and never a way to drop something; a needed question is never left out. A
-  decision that a new milestone reopens is asked again.
-- A task includes its documents, AGENTS and the memory.
-- A settled ruling is written down in its final form: the plan and the specifications state it,
-  with its grounding, in the change that settles it. A ruling that lives only in a conversation,
-  a checklist item, a commit message or an agent's report is not settled, and work that depends
-  on it waits until it is written.
+The working principles of every polyspec repository are [PRINCIPLES.md](PRINCIPLES.md), which kit
+vendors here byte for byte; they bind all work in this repository. This file states only
+flowmark's own rules: the ones below refine a principle for the engine, and the section after
+them holds the rules of this repository.
+
+- Events, not polling, as the engine applies it: a file change is learned from the operating
+  system's notification; a notification that reports lost events (an overflow) is itself an
+  event, and its consumer reads the affected tree again — that path exists because the
+  notification contract requires it, and it is stated. A file system that sends no
+  notifications is not supported, and that is stated too. Polling or a timer is chosen only when
+  no orthodox mechanism exists, stated as such, never the main path.
+- Idempotence and observability, as the engine applies them: a journal replay, a canon, an
+  install and a write of the same bytes are idempotent; a request that is not idempotent by
+  nature, such as an insert, is refused on its repetition as its rule says. That an event
+  occurred is known from what it publishes, not found by searching for it. A process that
+  crashed publishes nothing, so on start the engine reads the declared places of its own state
+  — the lock and the journal — once; that is a read of a declared place, not a search.
+- Paths, as the engine applies them: the engine never creates a symlink and never follows one;
+  a symlink found in a corpus is reported as its rule says.
 
 ## Rules
 
-- The user's instructions take precedence. Develop on `main` directly; a branch is
-  `{type}/{shortname}-{checklist ID}` and a worktree `{project}-{shortname}-{checklist ID}`, used
-  when agents or parallel work need one and deleted as soon as they merge into main — a merged
-  branch or worktree left behind takes space, fragments the folders and confuses which branches
-  are merged. A worktree that an agent tool creates keeps the name the tool gives it, since the
-  tool names it, and is deleted with its branch as soon as its work merges.
+- The user's instructions take precedence. Branches and worktrees follow PRINCIPLES.md; a
+  worktree that an agent tool creates keeps the name the tool gives it, since the tool names it,
+  and is deleted with its branch as soon as its work merges.
 - A worktree whose work stopped without merging is abandoned. It is reviewed at once: what is
   worth keeping becomes a checklist item that states the condition of the worktree's removal,
   and the rest is discarded; the worktree is then deleted with its branch. An abandoned worktree
@@ -89,14 +47,13 @@ has its checklist in `docs/plans/`.
   whoever merges into main, in the commit after the merge, so parallel work never conflicts in
   them. A worktree branch is rebased onto main before it merges, and every check passes after
   the rebase.
-- `make test` is the owning command of the tests: it runs the repository's node tests and
-  `scripts/go-test.mjs`, which provisions the case-sensitive folder some Go tests need (on macOS
-  a Case-sensitive APFS image under `var/`, on Windows `fsutil`, elsewhere a folder it probes)
-  and runs `go test ./...` with it. A bare `go test ./...` on a file system that folds case
-  fails those tests by design and names the variable they need.
-- Test code that cannot merge into main is cherry-picked when it is worth keeping and otherwise
-  discarded, always before the commit. When it cannot be removed at once, a checklist sub-item
-  states the condition of its removal.
+- `make test` is the full suite: it runs the repository's node tests and `scripts/go-test.mjs`,
+  which provisions the case-sensitive folder some Go tests need (on macOS a Case-sensitive APFS
+  image under `var/`, on Windows `fsutil`, elsewhere a folder it probes) and runs `go test ./...`
+  with it. A bare `go test ./...` on a file system that folds case fails those tests by design
+  and names the variable they need. As PRINCIPLES.md rules, it runs once when every item of the
+  active checklist is done; while an item is developed, the checks that own what changed run:
+  `go test` of the changed packages and the changed node test files.
 - An instruction is first classified: a checklist item (work), the memory (what only the owner
   and the agent need), AGENTS (a working guideline, kept here without duplication and never in
   the checklist or the changelog), or a plain answer. Work is prioritized, the documents and the
@@ -122,13 +79,12 @@ has its checklist in `docs/plans/`.
   bypass is not a completion. The item records its cause and its retry condition, and work
   resumes without waiting for permission once the retry condition holds. An audit covers only
   the `[!]` items, their causes and their retry conditions — never a rerun of unrelated tests.
-- An item becomes `[o]` in the commit that completes it, after its owning command passes. That
+- An item becomes `[o]` in the commit that completes it, after its owning checks pass. That
   commit also writes the changelog entry under `## Unreleased` in CHANGELOG.md and CHANGELOG.ko.md.
   Uncommitted changes cover one item only; an unfinished item is never a reason to widen them by
   adding another. Each feature is reviewed, self-tested and recorded before its commit.
-- A defect starts as a RED test that reproduces it (or a deterministic case that would), confirmed
-  failing for the intended reason; the fix follows; the same case runs to GREEN. The checklist item
-  records the observable criterion of correctness.
+- A defect's checklist item records the observable criterion of correctness, and its RED case
+  is confirmed failing for the intended reason before the fix (PRINCIPLES.md, Verification).
 - The engine is a database, so its unit tests are dense: every grammar and constraint rule has at least one accepting and one rejecting case, table-driven, with its edge cases; every storage has P1/P2 golden fixtures covering every column type and both the NULL and the empty forms; parse and emit are fuzzed (`go test -fuzz`) with the golden fixtures as seeds, and a failing input the fuzzer finds stays as a regression case. An item that adds a rule is not done until these cases exist.
 - English documents are canonical. Every document has a `.ko.md` twin with the same information;
   edit both in the same change, and a Korean-caught fix is ported to the English file before the

@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "comment": "Written by make dependency-review RECORD=1 (scripts/kit/dependency-review.mjs) from the registries; make dependency-policy-check compares the checkout with it without a network.",
-  "reviewed": "2026-10-08T22:13:34.434Z",
+  "reviewed": "2026-10-11T05:39:41.400Z",
   "locks": [
     {
       "lock": "package-lock.json",
@@ -11,6 +11,11 @@
     {
       "lock": "packages/fixture-php/composer.lock",
       "sha256": "27e91f2489524c42fc51dd637f0c06c29ae376ce9f21322ed24e61716c8fb92d",
+      "advisories": []
+    },
+    {
+      "lock": "packages/fixture-python/pylock.toml",
+      "sha256": "383512fcc6e8e1166dcbfd7f90924a12e42644b3db0deabce45a37bb8a1acb75",
       "advisories": []
     },
     {
@@ -48,17 +53,17 @@
     },
     {
       "ecosystem": "pypi",
-      "manifest": "packages/fixture-python/pyproject.toml",
-      "package": "setuptools",
-      "version": "84.0.0",
-      "latest": "84.0.0"
+      "manifest": "packages/fixture-python/pylock.toml",
+      "package": "click",
+      "version": "8.1.7",
+      "latest": "8.1.7"
     },
     {
       "ecosystem": "pypi",
       "manifest": "packages/fixture-python/pyproject.toml",
-      "package": "ruff",
-      "version": "0.16.10",
-      "latest": "0.16.10"
+      "package": "setuptools",
+      "version": "84.0.0",
+      "latest": "84.0.0"
     },
     {
       "ecosystem": "go",
@@ -67,5 +72,6 @@
       "version": "v1.6.0",
       "latest": "v1.6.0"
     }
-  ]
+  ],
+  "vcs": []
 }

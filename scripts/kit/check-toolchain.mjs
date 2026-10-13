@@ -2,9 +2,10 @@
 // Checks that every tool of the checkout runs at the version that the checkout declares, without a network
 // (`make toolchain-check`):
 //
-//   node scripts/kit/check-toolchain.mjs [tool...]      the tools: node npm go rust php python composer ruff cargoAudit govulncheck
+//   node scripts/kit/check-toolchain.mjs [tool...]      the tools: node npm go rust php python composer ruff phpunit cargoAudit govulncheck
 //
-// Without a tool name it checks every declared tool; naming an undeclared tool fails. var/tools/bin comes first on PATH, GOTOOLCHAIN=local
+// Without a tool name it checks every declared tool; naming an undeclared tool fails. Python is var/tools/bin/python3, the Python that
+// install-python.mjs installs, and never the Python of PATH. var/tools/bin comes first on PATH, GOTOOLCHAIN=local
 // keeps go from selecting another toolchain and RUSTUP_AUTO_INSTALL=0 keeps rustup from installing one. PHP and Python are
 // declared by minor release, so a patch release of the minor passes and the running patch is the evidence of the run; every other
 // tool is compared by its exact release. Every named tool is checked, also after a mismatch, and each mismatch names the file that
@@ -26,9 +27,11 @@ const probes = {
   go: { command: () => 'go', args: ['env', 'GOVERSION'], pattern: /^go(\d+\.\d+\.\d+)$/m, fix: () => INSTALL },
   rust: { command: () => 'rustc', args: ['--version'], pattern: /^rustc (\d+\.\d+\.\d+) /m, fix: () => 'rustup toolchain install --no-self-update, in the checkout' },
   php: { command: () => 'php', args: ['-n', '-r', 'echo PHP_VERSION, "\\n";'], pattern: /^(\d+\.\d+\.\d+)/m, fix: v => `install PHP ${v}` },
-  python: { command: () => 'python3', args: ['--version'], pattern: /^Python (\d+\.\d+\.\d+)/m, fix: v => `install Python ${v}` },
+  python: { command: root => toolsPath(root, 'bin', 'python3'), args: ['--version'], pattern: /^Python (\d+\.\d+\.\d+)/m, fix: () => INSTALL },
   composer: { command: () => 'composer', args: ['--version', '--no-ansi'], pattern: /^Composer version (\d+\.\d+\.\d+) /m, fix: v => `install Composer ${v}, or declare its sha256 and run ${INSTALL}` },
   ruff: { command: () => 'ruff', ...RELEASE_OUTPUT.ruff, fix: () => INSTALL },
+  uv: { command: () => 'uv', ...RELEASE_OUTPUT.uv, fix: () => INSTALL },
+  phpunit: { command: () => 'phpunit', ...RELEASE_OUTPUT.phpunit, fix: () => INSTALL },
   cargoAudit: { command: cargoAuditCommand, ...RELEASE_OUTPUT.cargoAudit, fix: () => 'make install-tools' },
   govulncheck: { command: govulncheckCommand, ...RELEASE_OUTPUT.govulncheck, fix: () => 'make install-tools' },
 };
