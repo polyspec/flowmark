@@ -1,9 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: b626c3e39e72b4a183375e265e4c8498d98eb5d9fce30a4d119bffe2fa50a027 -->
+<!-- source-sha256: f3a5bb31dea6b394f38f5b3c9d23da9dc3aae5a5fddeb6ccbea073c3719d4cc9 -->
 # Changelog
 
 ## Unreleased
 
+- T14: restore가 orm의 ir.RestoreKey로 request hook 뒤에 key를 고른다(orm protocol 1.5).
 - T12-1: flowmark는 branch가 아니라 release tag v0.0.35에서 kit을 공유 PRINCIPLES.md와 함께 vendor한다; AGENTS.md는 그것으로 연결하고 flowmark의 규칙만 남기며, 전체 test 모음은 활성 checklist의 모든 항목이 끝났을 때 한 번, 항목마다 소유 검사만 실행한다.
 - T12.1-38-2-1 (fix): slug 기록기의 test가 남기던 stub gh의 임시 폴더를 지운다.
 - T12-2: 버려진 worktree는 즉시 검토하며, 보존할 가치가 있는 것은 제거 조건을 가진 checklist 항목이 되고 worktree는 branch와 함께 삭제한다(AGENTS.md); 버려진 agent worktree 둘을 제거했다.
