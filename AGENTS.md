@@ -80,6 +80,10 @@ has its checklist in `docs/plans/`.
   branch or worktree left behind takes space, fragments the folders and confuses which branches
   are merged. A worktree that an agent tool creates keeps the name the tool gives it, since the
   tool names it, and is deleted with its branch as soon as its work merges.
+- A worktree whose work stopped without merging is abandoned. It is reviewed at once: what is
+  worth keeping becomes a checklist item that states the condition of the worktree's removal,
+  and the rest is discarded; the worktree is then deleted with its branch. An abandoned worktree
+  is never left to wait, since nothing would tell anyone what it holds.
 - Parallel items run in separate worktrees, one item or one group of rulings each. A worktree
   changes code, specifications and plans; the changelogs and the checklists are written only by
   whoever merges into main, in the commit after the merge, so parallel work never conflicts in

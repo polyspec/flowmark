@@ -1,5 +1,5 @@
 <!-- doc-id: agents -->
-<!-- source-sha256: b96d934cf25005b5f5d7aa453d343a35476c05ae21070649661098c063863bb5 -->
+<!-- source-sha256: 3adc7b894e8cf897f0a59472c8202aba9f30d9844234769bbd1dac65f5e2853e -->
 # 개발 규칙
 
 [English](AGENTS.md)
@@ -67,6 +67,9 @@ GitHub, Jira), 응용 schema이고, [polyspec/orm](https://github.com/polyspec/o
   worktree는 용량을 차지하고 폴더를 파편화하며 병합 여부 확인에 혼란을 준다. agent tool이 만드는
   worktree는 tool이 이름을 붙이므로 그 이름을 그대로 쓰며, 그 작업이 병합되는 즉시 branch와 함께
   삭제한다.
+- 작업이 병합되지 않은 채 멈춘 worktree는 버려진 것이다. 즉시 검토한다: 보존할 가치가 있는 것은
+  worktree를 제거할 조건을 적은 checklist 항목이 되고, 나머지는 버린다. 그 뒤 worktree를 branch와 함께
+  삭제한다. 버려진 worktree를 그대로 두지 않는다. 무엇을 담고 있는지 아무도 알 수 없게 되기 때문이다.
 - 병렬 항목은 항목 하나나 판정 묶음 하나마다 별도 worktree에서 진행한다. worktree는 code, spec,
   plan을 고친다. changelog와 checklist는 main에 병합하는 쪽만, 병합 다음 commit에서 쓰므로 병렬
   작업이 그 파일에서 충돌하지 않는다. worktree branch는 병합 전에 main 위로 rebase하며, rebase 뒤에
