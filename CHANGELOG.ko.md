@@ -1,9 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: b69c3ba9f7a712d7715312e5618bc00b7e6640742faa5a84214cf68816e465d1 -->
+<!-- source-sha256: b626c3e39e72b4a183375e265e4c8498d98eb5d9fce30a4d119bffe2fa50a027 -->
 # Changelog
 
 ## Unreleased
 
+- T12-1: flowmark는 branch가 아니라 release tag v0.0.35에서 kit을 공유 PRINCIPLES.md와 함께 vendor한다; AGENTS.md는 그것으로 연결하고 flowmark의 규칙만 남기며, 전체 test 모음은 활성 checklist의 모든 항목이 끝났을 때 한 번, 항목마다 소유 검사만 실행한다.
 - T12.1-38-2-1 (fix): slug 기록기의 test가 남기던 stub gh의 임시 폴더를 지운다.
 - T12-2: 버려진 worktree는 즉시 검토하며, 보존할 가치가 있는 것은 제거 조건을 가진 checklist 항목이 되고 worktree는 branch와 함께 삭제한다(AGENTS.md); 버려진 agent worktree 둘을 제거했다.
 - T12.1-38-1: engine이 GFM table을 각 viewer처럼 읽으며, GitHub, GitLab, VS Code에서 기록한 table vector 54개를 더해 확인한다: table cell은 inline 내용이라 그 footnote 참조가 footnote 번호를 매기고 그 raw HTML heading과 id를 읽으며, 각 `\|`는 `|`로 읽고 header의 column 너머 cell은 버린다; GitHub과 GitLab에서 header row 앞의 문단은 pipe의 escape를 풀고 어떤 link label도 정의하지 않는다; body row는 각 viewer의 cell 한도에서 멈춘다; VS Code의 markdown-it table rule은 모든 block 시작과 모든 문단 줄에서 가장 먼저 돌므로, heading, fence, HTML block, math block, list item, block quote 줄도 뒤에 delimiter row가 오면 header row다.
