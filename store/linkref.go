@@ -113,6 +113,20 @@ func lineStarts(lines []string) []int {
 	return starts
 }
 
+// defLines returns which lines of the paragraph u are definitions, which its text drops
+// (cmDefLines). The paragraph that the header row of a table leaves under cmark-gfm and
+// comrak holds none: try_inserting_table_header_paragraph inserts it after the parser read
+// its lines, and the definitions are read only as a paragraph the parser holds ends, so its
+// definitions render as text and define no label (the slug vectors, `table header after a
+// link reference definition that a heading uses`).
+func (u unit) defLines() []bool {
+	if u.pipes {
+		return make([]bool, len(u.lines))
+	}
+	_, cm := cmDefLines(u.lines)
+	return cm
+}
+
 // cmDefLines reads the CommonMark definitions at the start of a block, which are the only
 // ones CommonMark reads, and returns the labels they define, and for each line whether the
 // definitions consume it. A definition is a label, a colon, white space with at most one line
@@ -263,13 +277,14 @@ func lineEndAfter(s string, p int) int {
 
 // linkDefs returns the labels that the blocks of a file define: a definition is one that
 // CommonMark reads at the start of a paragraph, inside a container or not, and is never
-// blank: its label has a character that is not white space. The blocks are those of a
+// blank: its label has a character that is not white space. The paragraph that the header row of a
+// table leaves defines nothing (unit.defLines). The blocks are those of a
 // viewer's reading, so under GitHub's and GitLab's a footnote definition is a container
 // (blockSyntax.notes), never a link reference definition.
 func linkDefs(blocks []unit) linkRefs {
 	g := linkRefs{keys: map[string]bool{}}
 	for _, u := range blocks {
-		if u.html {
+		if u.html || u.pipes {
 			continue
 		}
 		joined := strings.Join(u.lines, "\n")

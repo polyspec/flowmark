@@ -1,5 +1,5 @@
 <!-- doc-id: spec-canonical-format -->
-<!-- source-sha256: 67dbeca1e4b832b22cbfeb483cfb68b9cfbbc69075842f90b263fb8d809d99eb -->
+<!-- source-sha256: a1cb5dc7e960982cf54de960135cfb3b6dcb95f4eae31a010f73006f791a9bad -->
 # Canonical format
 
 [English](10-canonical-format.md)
@@ -122,18 +122,46 @@ column 섹션 — 은 payload다: renderer는 이를 행과 함께 옮기고 그
   `# c`는 VS Code에서 `c`만이고, `- $$`, `  x`, `y`, `  # e`는 항목 안의 `e`다). GitHub과 GitLab은 math block을 읽지
   않는다: 거기서 `$$` 줄은 텍스트이며, vector는 그 heading이 바뀌지 않음을 보인다.
 - **S_GH, S_GL, S_VS의 table.** GitHub, GitLab, VS Code는 GFM table(GFM 0.29 §4.10)을 렌더하며, table은 CommonMark가
-  문단으로 읽는 줄들을 받아 들이므로 셋은 각자의 table의 heading을 읽는다(collision rule). 문단의 한 줄 뒤에
-  delimiter row — 들여쓰기 세 칸 이하, 이어서 hyphen에 양 끝의 colon이 선택인 cell들을 pipe로 구분하고 양 끝의
-  pipe는 선택 — 가 그 줄과 같은 수의 cell로 오면 그 줄이 table의 header row이고, delimiter row 뒤의 줄들은 빈
-  줄, 문단을 끊는 block이 열리는 줄, container의 끝까지 그 body row이다. body row는 문단의 줄이 아니므로 그 뒤의
-  setext 밑줄은 아무것도 밑줄 긋지 않는다. row의 cell은 backslash가 escape하지 않은 모든 pipe에서 나뉘며, code
-  span은 어느 pipe도 보호하지 않는다. cell 하나의 delimiter row는 S_GH와 S_GL에서 pipe를 가진다. VS Code의
-  markdown-it 14는 두 가지가 다르다: table을 모든 줄의 시작에서, 다른 어떤 block보다 먼저 찾으므로 ATX heading이
-  될 줄도 같은 수의 cell의 delimiter row가 뒤따르면 table의 header row이고, header row가 pipe를 가지면 pipe 없는
-  cell 하나의 delimiter row도 받는다(`| a |` 아래 `---`는 table이다). GitHub과 GitLab은 그것을 setext heading으로
-  읽는다. 근거: slug vector가 각 경우를 viewer에서 기록한다(`a|b`, `-|-`, `items row T1`, `---`은 셋 모두에서 heading이
-  없고, `# a|b`, `-|-`는 GitHub이 `ab`, VS Code는 없음이며, `| a |`, `---`는 GitHub과 GitLab이 `-a-`, VS Code는 없음이고,
-  `` `a|b` `` code span 아래 `-|-`는 셋 모두에서 table이다).
+  문단으로 읽는 줄들을 받아 들이므로 셋은 table 둘레의 heading과 cell의 내용을 각자의 viewer처럼 읽는다(collision
+  rule). 각 읽기는 viewer의 source를 따른다: GitHub은 cmark-gfm의 `extensions/table.c`, GitLab은 comrak 0.56.0의
+  `src/parser/table.rs`, VS Code는 markdown-it 14.3.2의 `rules_block/table.mjs`.
+  - Cell. row의 cell은 backslash 뒤에 오지 않은 모든 pipe에서 나뉘며, 그 backslash가 escape되었든 아니든 같다. code
+    span은 어느 pipe도 보호하지 않고, 양 끝의 pipe는 cell을 열거나 닫지 않는다. cell은 둘레의 white space를 뺀
+    text이며 — S_GH와 S_GL에서는 공백과 tab, S_VS에서는 JavaScript의 `trim`이 지우는 것 — 각 `\|`를 `|`로 읽는다.
+    cell은 inline 내용이다: 그 footnote 참조, raw HTML, id를 문단의 것처럼 읽는다. body row는 header row의 column
+    수까지의 cell을 가지며, 그 너머의 cell은 버려진다.
+  - GitHub과 GitLab. delimiter row는 들여쓰기 세 칸 이하, 이어서 hyphen에 양 끝의 colon이 선택인 cell들을 pipe로
+    구분한 것이며, 그 둘레에 공백, tab, vertical tab, form feed가 올 수 있고 양 끝의 pipe는 선택이다. cell 하나의 row는
+    pipe를 가진다. 열린 문단의 한 줄 뒤에 delimiter row가 오면, 그 줄의 cell 수가 같을 때 그 줄이 table의 header
+    row이고, 다르면 그 문단은 그 뒤로 table을 열지 않는다. header row 앞의 문단 줄들은 문단으로 남으며 각 `\|`를
+    `|`로 읽는다. 그 안의 link reference definition은 text이며 어떤 label도 정의하지 않는다. viewer는 그 문단을 줄들을
+    읽은 뒤에 끼워 넣고, 정의는 자기가 가진 문단이 끝날 때만 읽기 때문이다. body row는 빈 줄, 네 column 이상 들여쓴 줄, 문단을 끊는 block이나 어떤 종류든 list item을 여는 줄,
+    type 7의 HTML block, pipe 하나뿐인 줄, container의 끝, 그리고 cell 한도를 넘길 row까지 이어진다: table은 body
+    row가 지금까지 자동으로 채운 cell — row가 header row에 비해 모자란 cell — 이 GitHub에서 0x80000, GitLab에서
+    500000 이하인 동안 row를 받는다.
+  - VS Code. markdown-it의 table rule은 모든 block의 시작에서 가장 먼저, 그리고 열린 문단의 줄 가운데 lazy가 아니고
+    네 column 이상 들여쓰지 않은 모든 줄에서 돈다. 그래서 ATX heading, fence, HTML block, math block, list item, block
+    quote를 열 줄도 뒤에 delimiter row가 오면 table의 header row이고, header row는 그 앞의 문단을 끝낸다. header
+    row는 trim하면 pipe를 가지며 네 column 미만으로 들여쓴다. pipe 하나뿐인 줄은 cell이 없으므로 header row가 아니다.
+    delimiter row는 열린 모든 container를 lazy가 아니게 이어 가며 네 column 미만으로 들여쓴다. pipe, hyphen,
+    colon 가운데 하나로 시작하고, 이어서 그 셋 가운데 하나나 공백이나 tab이 오되 hyphen 뒤의 공백이나 tab은 안 되며,
+    그 밖의 것은 가지지 않는다. pipe에서 나눈 모든 부분은 hyphen에 양 끝의 colon이 선택인 것이며, 첫 부분과 마지막
+    부분만 비어 있을 수 있다. pipe는 필요 없으므로 `| a |` 아래 `---`는 table이다. header row는 비어 있는 첫 부분과
+    마지막 부분을 버리고 delimiter row와 같은 수의 cell을 가진다. list item 문단의 lazy 줄도 같은 방식으로 읽는다:
+    그 줄이 header row이면 list item이 끝나고, table은 그 줄이 이어 가는 container 안에서 열린다. block quote의 lazy
+    줄은 그렇게 읽지 않는다. body row는 trim하면 빈 줄(no-break space 하나뿐인 줄 포함), 네 column 이상 들여쓴 줄,
+    block quote를 끝내는 block(ATX heading, fence, type 1–6의 HTML block, math block, thematic break, block quote, 어떤
+    종류든 list item)을 여는 줄, container의 끝, 그리고 cell 한도를 넘길 row까지 이어진다. table은 자동으로 채운 cell을
+    0x10000 너머로 늘릴 row를 받지 않으며, header row보다 cell이 많은 row는 음수로 센다.
+  - 근거: slug vector가 각 경우를 viewer에서 기록한다. `a|b`, `-|-`, `items row T1`, `---`은 셋 모두에서 heading이
+    없다. `# a|b`, `-|-`는 GitHub이 `ab`, VS Code는 없음이다. `| a |`, `---`는 GitHub과 GitLab이 `-a-`, VS Code는
+    없음이다. `` `a|b` `` code span 아래 `-|-`는 셋 모두에서 table이다. 그 밖의 경우: `table escaped pipe in a
+    cell`, `table escaped pipe in the paragraph before a header`, `table header after a link reference definition
+    that a heading uses`, `raw heading in an excess table cell`, `table header
+    after a failed header in its paragraph`, `table delimiter row with a vertical tab`, `table rows ended by an HTML
+    block of type 7`, `table row of a lone pipe`, `table cell limit`, `table header that a heading reads first`, `table
+    in a list item before an unindented line`, `table header on a lazy line of a block quote`, `table header indented
+    four spaces in a paragraph`, `table header of a lone pipe`, `table row of a no-break space`.
 - **S_GH와 S_GL의 footnote.** GitHub과 GitLab은 cmark-gfm과 comrak 0.56.0의 footnote로 렌더하므로, S_GH와 S_GL은
   block과 참조를 그 viewer처럼 읽는다. VS Code는 footnote를 렌더하지 않으며, S_VS는 bracket과 줄을 CommonMark처럼
   읽는다. 네 column 미만으로 들여쓴 줄로 `[^`, `]`, 공백, tab, 줄 바꿈이 없는 label, `]:`, 그리고 몇 개든 공백과

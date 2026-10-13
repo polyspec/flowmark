@@ -1,6 +1,6 @@
 # GitHub's ids of raw HTML <h2> headings per code point (spec 10, Detail headings and anchors), the vectors of
 # S_GH's reading of the text of a raw HTML heading.
-# Recorded 2026-10-11 from GitHub's renderer: POST https://api.github.com/markdown, mode "markdown", which
+# Recorded 2026-10-13 from GitHub's renderer: POST https://api.github.com/markdown, mode "markdown", which
 # renders each heading anchor as <a id="user-content-<id>" class="anchor">; the id here is without the prefix.
 # Re-record with make slug-vectors (scripts/record-slugs.mjs).
 #

@@ -2,6 +2,7 @@ package store
 
 import (
 	"fmt"
+	"slices"
 	"testing"
 )
 
@@ -232,27 +233,121 @@ func TestTableDelimiterRow(t *testing.T) {
 	}
 }
 
-// TestTableRowCells pins the number of cells of a GFM table row (GFM 0.29 §4.10): the cells between the unescaped pipes
-// a code span does not protect, a pipe at either end optional.
+// TestTableRowCells pins the cells of a GFM table row (GFM 0.29 §4.10) as each viewer splits it: the text between the
+// pipes that follow no backslash, a pipe at either end opening or closing no cell. cmark-gfm and comrak (tableRowSpans)
+// trim spaces and tabs and read a pipe alone as one empty cell; markdown-it 14.3.2 (mdRowSpans, escapedSplit) trims as
+// JavaScript trims, drops an empty first and last part, and reads a pipe alone as no cell.
 func TestTableRowCells(t *testing.T) {
 	cases := []struct {
-		name  string
-		line  string
-		cells int
+		name string
+		line string
+		gfm  []string
+		mdIt []string
 	}{
-		{"two cells", "a|b", 2},
-		{"outer pipes", "|a|b|", 2},
-		{"one cell with a pipe", "|a|", 1},
-		{"an empty cell", "a||b", 3},
-		{"an escaped pipe", `a\|b|c`, 2},
-		{"a pipe in a code span splits", "`a|b`|c", 3},
-		{"spaces", " a | b ", 2},
-		{"no pipe", "a", 1},
+		{"two cells", "a|b", []string{"a", "b"}, []string{"a", "b"}},
+		{"outer pipes", "|a|b|", []string{"a", "b"}, []string{"a", "b"}},
+		{"one cell with a pipe", "|a|", []string{"a"}, []string{"a"}},
+		{"an empty cell", "a||b", []string{"a", "", "b"}, []string{"a", "", "b"}},
+		{"an escaped pipe", `a\|b|c`, []string{`a\|b`, "c"}, []string{`a\|b`, "c"}},
+		{"an escaped backslash before a pipe", `a\\|b`, []string{`a\\|b`}, []string{`a\\|b`}},
+		{"an escaped pipe at the end", `a|b\|`, []string{"a", `b\|`}, []string{"a", `b\|`}},
+		{"a pipe in a code span splits", "`a|b`|c", []string{"`a", "b`", "c"}, []string{"`a", "b`", "c"}},
+		{"spaces", " a | b ", []string{"a ", " b"}, []string{"a ", " b"}},
+		{"no pipe", "a", []string{"a"}, []string{"a"}},
+		{"a pipe alone", "|", []string{""}, nil},
+		{"two pipes", "||", []string{""}, []string{""}},
+		{"a no-break space", "\u00a0a|b\u00a0", []string{"\u00a0a", "b\u00a0"}, []string{"a", "b"}},
+		{"empty", "", []string{""}, nil},
+	}
+	texts := func(line string, spans [][2]int) []string {
+		var out []string
+		for _, sp := range spans {
+			out = append(out, line[sp[0]:sp[1]])
+		}
+		return out
 	}
 	for _, c := range cases {
 		t.Run("10#detail-headings-and-anchors: "+c.name, func(t *testing.T) {
-			if got := tableRowCells(c.line); got != c.cells {
-				t.Fatalf("tableRowCells(%q) = %d; want %d", c.line, got, c.cells)
+			if got := texts(c.line, tableRowSpans(c.line)); !slices.Equal(got, c.gfm) {
+				t.Fatalf("tableRowSpans(%q) = %q; want %q", c.line, got, c.gfm)
+			}
+			if got := tableRowCells(c.line); got != len(c.gfm) {
+				t.Fatalf("tableRowCells(%q) = %d; want %d", c.line, got, len(c.gfm))
+			}
+			if got := texts(c.line, mdRowSpans(c.line)); !slices.Equal(got, c.mdIt) {
+				t.Fatalf("mdRowSpans(%q) = %q; want %q", c.line, got, c.mdIt)
+			}
+		})
+	}
+}
+
+// TestDelimiterCells pins the delimiter row of a GFM table as each viewer reads it (spec 10, Tables under S_GH, S_GL
+// and S_VS): the number of its cells, 0 for a line that is none.
+func TestDelimiterCells(t *testing.T) {
+	cases := []struct {
+		name      string
+		line      string
+		gfm, mdIt int
+	}{
+		{"two cells", "-|-", 2, 2},
+		{"outer pipes", "|---|:-:|", 2, 2},
+		{"alignment colons", ":--|--:", 2, 2},
+		{"one cell with a pipe", "|-", 1, 1},
+		{"one cell without a pipe", "--", 0, 1},
+		{"a hyphen alone", "-", 0, 0},
+		{"a pipe alone", "|", 0, 0},
+		{"a hyphen and a space", "- |", 1, 0},
+		{"a pipe and a space", "| -", 1, 1},
+		{"an empty middle cell", "-||-", 0, 0},
+		{"a colon alone", ":|-", 0, 0},
+		{"three spaces of indent", "   -|-", 2, 2},
+		{"four spaces of indent", "    -|-", 0, 0},
+		{"a vertical tab around a cell", "-|-\v", 2, 0},
+		{"a letter", "-|x", 0, 0},
+		{"spaces in a cell", "- -|-", 0, 0},
+	}
+	for _, c := range cases {
+		t.Run("10#detail-headings-and-anchors: "+c.name, func(t *testing.T) {
+			if got := tableDelimiterCells(c.line, false); got != c.gfm {
+				t.Fatalf("tableDelimiterCells(%q, false) = %d; want %d", c.line, got, c.gfm)
+			}
+			if got := tableDelimiterCells(c.line, true); got != c.mdIt {
+				t.Fatalf("tableDelimiterCells(%q, true) = %d; want %d", c.line, got, c.mdIt)
+			}
+		})
+	}
+}
+
+// TestCellElement pins the text of a table cell (spec 10, Tables under S_GH, S_GL and S_VS): each `\|` read as `|`,
+// and every offset of that text located at its byte in the file line.
+func TestCellElement(t *testing.T) {
+	cases := []struct {
+		name, line, cell string
+	}{
+		{"no escape", "| a b |", "a b"},
+		{"an escaped pipe", `| a\|b |`, "a|b"},
+		{"two escaped pipes", `| \|a\| |`, "|a|"},
+		{"an escaped backslash before a pipe", `| a\\|b |`, `a\|b`},
+	}
+	for _, c := range cases {
+		t.Run("10#detail-headings-and-anchors: "+c.name, func(t *testing.T) {
+			spans := tableRowSpans(c.line)
+			trimmed := [2]int{spans[0][0] + 1, spans[0][1] - 1}
+			e := cellElement([]string{c.line}, tableRow{at: 0, rest: c.line, cells: [][2]int{trimmed}}, trimmed)
+			if e.text != c.cell {
+				t.Fatalf("cell text %q; want %q", e.text, c.cell)
+			}
+			// Every byte of the text locates the same byte of the line, past each dropped backslash.
+			src := 0
+			for off := 0; off < len(e.text); off++ {
+				_, at := e.locate(off)
+				for c.line[trimmed[0]+src] != e.text[off] {
+					src++
+				}
+				if at != trimmed[0]+src {
+					t.Fatalf("offset %d of %q locates byte %d; want %d", off, e.text, at, trimmed[0]+src)
+				}
+				src++
 			}
 		})
 	}

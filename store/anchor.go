@@ -37,10 +37,13 @@ type detailAnchor struct {
 }
 
 // textPiece is a run of an element's text on one line of the file: the 0-based index of
-// the line, the byte offset in that line where the run starts, and the run's text.
+// the line, the byte offset in that line where the run starts, and the run's text. A
+// glued run continues the run before it on its line after a byte the viewer drops, the
+// backslash of a `\|` it reads as `|` (unpipe); any other run begins a line of the text.
 type textPiece struct {
 	line, start int
 	text        string
+	glued       bool
 }
 
 // element is the text that the rule reads as one unit: a heading, a paragraph or an HTML
@@ -53,22 +56,53 @@ type element struct {
 
 // newElement returns the element of pieces.
 func newElement(pieces []textPiece) element {
-	parts := make([]string, len(pieces))
+	var b strings.Builder
 	for i, p := range pieces {
-		parts[i] = p.text
+		if i > 0 && !p.glued {
+			b.WriteByte('\n')
+		}
+		b.WriteString(p.text)
 	}
-	return element{pieces: pieces, text: strings.Join(parts, "\n")}
+	return element{pieces: pieces, text: b.String()}
+}
+
+// unpipe returns the runs of p with each `\|` read as `|`: the backslash is dropped, and
+// the run after it is glued to the run before.
+func unpipe(p textPiece) []textPiece {
+	var out []textPiece
+	from := 0
+	for {
+		i := strings.Index(p.text[from:], `\|`)
+		if i < 0 {
+			break
+		}
+		out = append(out, textPiece{line: p.line, start: p.start + from, text: p.text[from : from+i], glued: p.glued || len(out) > 0})
+		from += i + 1
+	}
+	return append(out, textPiece{line: p.line, start: p.start + from, text: p.text[from:], glued: p.glued || len(out) > 0})
+}
+
+// cellElement returns the element of the cell c of the table row r, located in the file,
+// with each `\|` read as `|`: cmark-gfm and comrak unescape the pipes of a cell
+// (unescape_pipes), and markdown-it drops the backslash before a pipe as it splits the
+// row (escapedSplit).
+func cellElement(file []string, r tableRow, c [2]int) element {
+	return newElement(unpipe(textPiece{line: r.at, start: lineBase(file[r.at], r.rest) + c[0], text: r.rest[c[0]:c[1]]}))
 }
 
 // locate returns the 0-based line of the file, and the byte offset in that line, of the
 // character at off of the text of e.
 func (e element) locate(off int) (int, int) {
 	base := 0
-	for _, p := range e.pieces {
-		if off <= base+len(p.text) {
+	for k, p := range e.pieces {
+		next := k+1 < len(e.pieces) && e.pieces[k+1].glued
+		if off < base+len(p.text) || off == base+len(p.text) && !next {
 			return p.line, p.start + off - base
 		}
-		base += len(p.text) + 1
+		base += len(p.text)
+		if !next {
+			base++
+		}
 	}
 	last := e.pieces[len(e.pieces)-1]
 	return last.line, last.start
@@ -271,7 +305,9 @@ func delimiterRows(lines []string) (withPipe, any, pipe bool) {
 	for _, l := range lines {
 		hasPipe := strings.Contains(l, "|")
 		pipe = pipe || hasPipe
-		if strings.Contains(l, "-") && strings.Trim(l, " \t>|:-*+.)0123456789") == "" {
+		// The characters include the vertical tab and the form feed, which cmark-gfm and comrak read as white space
+		// around a delimiter row (tableDelimiterCells), so the filter passes every line the scanner may take.
+		if strings.Contains(l, "-") && strings.Trim(l, " \t\v\f>|:-*+.)0123456789") == "" {
 			any = true
 			withPipe = withPipe || hasPipe
 		}
@@ -290,20 +326,27 @@ func readViewers(lines []string, cm scan) viewerReadings {
 	vsTables := anyDelimiter && pipe
 	v.notes = mayOpen(lines, "[^", "]:")
 	if v.notes || tables {
-		notes.sc = scanWith(lines, 0, blockSyntax{notes: v.notes, tables: tables})
+		notes.sc = scanWith(lines, 0, blockSyntax{notes: v.notes, tables: tables, cellLimit: ghCells})
 		notes.refs = linkDefs(notes.sc.blocks)
 	}
 	v.gh, v.gl = notes, notes
-	v.gh.refs.notes = newNoteRefs(notes.sc.notes, true)
-	v.gl.refs.notes = newNoteRefs(notes.sc.notes, false)
-	if len(notes.sc.notes) > 0 {
+	if tables {
+		// GitLab's tables take rows up to a cell limit of their own, so its reading is a scan of its own.
+		v.gl.sc = scanWith(lines, 0, blockSyntax{notes: v.notes, tables: tables, cellLimit: glCells})
+		v.gl.refs = linkDefs(v.gl.sc.blocks)
+	}
+	v.gh.refs.notes = newNoteRefs(v.gh.sc.notes, true)
+	v.gl.refs.notes = newNoteRefs(v.gl.sc.notes, false)
+	if len(v.gh.sc.notes) > 0 {
 		numberNotes(lines, v.gh.sc, v.gh.refs, true)
+	}
+	if len(v.gl.sc.notes) > 0 {
 		numberNotes(lines, v.gl.sc, v.gl.refs, false)
 	}
 	v.vs = viewerReading{sc: cm, refs: refs}
 	v.math = mayOpen(lines, "$$")
 	if v.math || vsTables {
-		v.vs.sc = scanWith(lines, 0, blockSyntax{math: v.math, tables: vsTables, mdTables: vsTables})
+		v.vs.sc = scanWith(lines, 0, blockSyntax{math: v.math, tables: vsTables, mdTables: vsTables, cellLimit: vsCells})
 		v.vs.refs = linkDefs(v.vs.sc.blocks)
 	}
 	return v
@@ -342,8 +385,15 @@ func numberNotes(lines []string, sc scan, refs linkRefs, gh bool) {
 	}
 	for _, u := range sc.units {
 		if !u.html {
-			_, cm := cmDefLines(u.lines)
+			cm := u.defLines()
 			all = append(all, content{u.at, linesElement(lines, u, cm).text})
+		}
+	}
+	for _, t := range sc.tables {
+		for _, r := range t.rows {
+			for _, c := range r.cells {
+				all = append(all, content{r.at, cellElement(lines, r, c).text})
+			}
 		}
 	}
 	sort.SliceStable(all, func(i, j int) bool { return all[i].at < all[j].at })
@@ -382,6 +432,18 @@ func (v viewerReading) tagClashes(lines []string, x anchorSet, other linkRefs) [
 	for _, u := range v.sc.units {
 		if v.refs.shows(u.note) || other.shows(u.note) {
 			out = append(out, unitClashes(lines, u, x, v.refs)...)
+		}
+	}
+	for _, t := range v.sc.tables {
+		if !v.refs.shows(t.note) && !other.shows(t.note) {
+			continue
+		}
+		for _, r := range t.rows {
+			for _, c := range r.cells {
+				e := cellElement(lines, r, c)
+				tags, at := inlineTags(e.text, v.refs)
+				out = append(out, tagClashes(e, tags, at, x)...)
+			}
 		}
 	}
 	return out
@@ -457,7 +519,7 @@ func headingElement(lines []string, h heading, setext map[int]unit) element {
 		lead, content := atxContent(h.text)
 		return newElement([]textPiece{{line: h.at, start: lineBase(lines[h.at], h.text) + lead, text: content}})
 	}
-	_, cm := cmDefLines(u.lines)
+	cm := u.defLines()
 	var g []textPiece
 	for k, l := range u.lines {
 		if cm[k] {
@@ -504,7 +566,12 @@ func linesElement(file []string, u unit, drop []bool) element {
 		if drop[k] {
 			continue
 		}
-		pieces = append(pieces, textPiece{line: u.at + k, start: lineBase(file[u.at+k], l), text: l})
+		p := textPiece{line: u.at + k, start: lineBase(file[u.at+k], l), text: l}
+		if u.pipes {
+			pieces = append(pieces, unpipe(p)...)
+			continue
+		}
+		pieces = append(pieces, p)
 	}
 	if len(pieces) == 0 {
 		return newElement([]textPiece{{line: u.at, start: 0, text: ""}})
@@ -520,7 +587,7 @@ func unitClashes(lines []string, u unit, x anchorSet, g linkRefs) []anchorClash 
 		tags, at := rawTags(e.text)
 		return tagClashes(e, tags, at, x)
 	}
-	_, cm := cmDefLines(u.lines)
+	cm := u.defLines()
 	ge := linesElement(lines, u, cm)
 	tags, at := inlineTags(ge.text, g)
 	return tagClashes(ge, tags, at, x)

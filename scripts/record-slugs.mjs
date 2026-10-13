@@ -292,7 +292,70 @@ export const structuralCases = [
   ['table delimiter with spaces', 'a | b\n - | - \nitems row T1\n---'],
   ['table header with a leading pipe only', '|a\n|-\nitems row T1\n---'],
   ['table after a link reference definition', '[x]: /u\na|b\n-|-\nitems row T1\n---'],
+  ['table header after a link reference definition that a heading uses', '[x]: /u\na|b\n-|-\n\n# [t][x]\n\n[y]: /v\nc\n\n# [t][y]'],
+  // Tables, the further cases of the abandoned T12.1-38 attempt (T12.1-38-1): lists, block quotes, HTML blocks,
+  // definitions, footnotes, indents and delimiter-row forms, recorded from the viewers like every case above.
+  ['table rows over an underline', 'a | b\n--|--\nitems row T1\n---'],
+  ['table rows over an equals line', 'a | b\n--|--\nitems row T1\n==='],
+  ['table after paragraph lines', 'x\na | b\n--|--\nitems row T1\n---'],
+  ['table header of more cells than its delimiter row', 'a | b\n--|--|--\nitems row T1\n---'],
+  ['table header of fewer cells than its delimiter row', 'a|\n-|-\nitems row T1\n---'],
+  ['table in a block quote before a lazy line', '> a | b\n> --|--\nitems row T1\n---'],
+  ['table in a list item before an unindented line', '- a|b\n  -|-\n  c\nitems row T1\n---'],
+  ['table one-column header over an underline', 'a|\n---\n\n| b |\n---'],
+  ['table one-column header after a paragraph line', 'x\na|\n---'],
+  ['table header that a heading reads first', '# items row T1|x\n-|-\n\n> # items row T2|x\n> -|-\n\n- # items row T3|x\n-|-'],
+  ['table header that a fence reads first', '```|x\n-|-\n# a\n```\n# b'],
+  ['table header that an HTML block reads first', '<div>|x\n-|-\n# a'],
+  ['table header that a math block reads first', '$$|x\n-|-\n# a\n$$\n# b'],
+  ['table header that a footnote definition reads first', '[^n]: a|b\n-|-\nitems row T1\n---\n\n# z[^n]'],
+  ['table header indented three spaces', '   a|b\n-|-\nitems row T1\n---'],
+  ['table header indented four spaces in a paragraph', 'x\n    a|b\n-|-\nitems row T1\n---'],
+  ['table header indented by a tab', '\ta|b\n-|-\nitems row T1\n---'],
+  ['table header indented four spaces in a block quote', '>     a|b\n> -|-\n> items row T1\n> ---'],
+  ['table header on a lazy line of a list item', '- x\na|b\n  -|-\n  items row T1\n  ---'],
+  ['table header on a lazy line of a block quote', '> x\na|b\n> -|-\n> items row T1\n> ---'],
+  ['table delimiter rows that open a table', 'a|b\n|-|-|\nitems row T1\n---\n\na|b\n:-|-:\nitems row T2\n---\n\na|b\n-- | --\nitems row T3\n---\n\na|b\n   -|-\nitems row T4\n---\n\na|b\n| -|-\nitems row T5\n---\n\na|b\n-|-|\nitems row T6\n---'],
+  ['table delimiter row with a vertical tab', 'a|b\n-|-\v\nitems row T1\n---'],
+  ['table delimiter rows that open none', 'a|b\n\t-|-\nitems row T1\n---\n\na|b\n- | -\nitems row T2\n---\n\na|b|c\n-||-\nitems row T3\n---\n\na|b\n:|:\nitems row T4\n---\n\na|b\n=|=\nitems row T5\n---'],
+  ['table delimiter row less indented than a list item', '- a|b\n -|-\nitems row T1\n---'],
+  ['table delimiter row deeper in a list item', '- a|b\n    -|-\n  items row T1\n  ---'],
+  ['table delimiter row on a lazy line of a block quote', '> a|b\n-|-\nitems row T1\n---'],
+  ['table header cells with escaped pipes', 'a\\|b|c\n-|-\nitems row T1\n---\n\na\\|b\n-|-\nitems row T2\n---\n\na\\\\|b\n-|-\nitems row T3\n---\n\na|b\\|\n-|-\nitems row T4\n---'],
+  ['table header cells with a code span and outer pipes', '`a|b`\n-|-\nitems row T1\n---\n\n|a|b|\n-|-\nitems row T2\n---\n\na||b\n-|-|-\nitems row T3\n---'],
+  ['table header of a lone pipe', '|\n-\nitems row T1\n---\n\n||\n-\nitems row T2\n---'],
+  ['table header after definitions', '[r]: /u\na|b\n-|-\nitems row T1\n---\n\n[s]: /u|b\n-|-\nitems row T2\n---'],
+  ['table header after a failed header in its paragraph', 'a|b|c\n-|-\nd|e\n-|-\nitems row T1\n---'],
+  ['table rows ended by an HTML block of type 7', 'a|b\n-|-\n<span>\n# h'],
+  ['table rows ended by an HTML block of type 6', 'a|b\n-|-\n<div>\n# h'],
+  ['table rows ended by a footnote definition', 'a|b\n-|-\n[^n]: x\n    # c\n\n# z[^n]'],
+  ['table rows ended by a block quote and a fence', 'a|b\n-|-\n> # c\n\na|b\n-|-\n```\n# d\n```'],
+  ['table rows ended by an indented line', 'a | b\n--|--\n    x\nitems row T1\n---'],
+  ['table rows ended by list items', 'a|b\n-|-\n-\nitems row T1\n---\n\na|b\n-|-\n1.\nitems row T2\n---\n\na|b\n-|-\n2.\nitems row T3\n---'],
+  ['table rows ended by a math block', 'a | b\n--|--\n$$\n# a\n$$\n# b'],
+  ['table row of a lone pipe', 'a|b\n-|-\n|\nitems row T1\n---\n\na|b\n-|-\n|  \nitems row T2\n---'],
+  ['table row of a no-break space', 'a|b\n-|-\n \nitems row T1\n---'],
+  ['table in a footnote definition', '[^n]: x\n\n    a|b\n    -|-\n    items row T1\n    ---\n\n# z[^n]'],
+  ['table footnote reference in an excess cell', '| a |\n|---|\n| x | y[^n] |\n\n# h[^m]\n\n[^m]: x\n\n[^n]: y'],
+  ['table escaped pipe in the paragraph before a header', 'x[^a\\|b]\nc|d\n-|-\n\n# h[^q]\n\n[^a|b]: y\n\n[^q]: z\n\nx[^a\\|b]\nc\n\n# g[^q]'],
+  ['table escaped pipe in a cell', 'c|d\n-|-\nx[^a\\|b]\n\n# h[^q]\n\n[^a|b]: y\n\n[^q]: z'],
+  ['table escaped backslash before a pipe in a cell', 'c|d\n-|-\nx[^a\\\\|b]\n\n# h[^q]\n\n[^a\\|b]: y\n\n[^q]: z'],
+  ['table cell limit', tableCellLimit()],
+  ['id in a table cell', '| a |\n|---|\n| <a id="items-row-t1"></a> |'],
+  ['id in an excess table cell', '| a |\n|---|\n| x | <a id="items-row-t1"></a> |'],
+  ['id after a pipe in a code span of a table cell', '| a | b |\n|---|---|\n| `x | <a id="items-row-t1"></a> ` |'],
 ];
+
+/**
+ * The document of the table cell limit case: a header of 1001 cells over rows of one cell each, x1 to x600, then an
+ * underline. Each viewer stops taking rows once the cells it has autocompleted pass its limit, and the rows from there
+ * are a paragraph that the underline makes a heading, whose text names the first row the table did not take.
+ */
+export function tableCellLimit() {
+  const n = 1001;
+  const rows = Array.from({ length: 600 }, (_, k) => `x${k + 1}`);
+  return [`|${'a|'.repeat(n)}`, `|${'-|'.repeat(n)}`, ...rows, '---'].join('\n');
+}
 
 /**
  * The file a GitLab snippet case is rendered as, and GitLab's heading slug prefix of it: GitLab renders a snippet's
@@ -378,6 +441,10 @@ export const rawHeadingCases = [
   ['raw heading with an element closed by another start tag', '<h2><p>a<div>b<p>c</h2>'],
   ['raw heading nested in an unclosed element of an earlier block', '<div>\n\n<h2>a</div>b</h2>'],
   ['raw heading with an isindex', '<h2>a<isindex>b</h2>'],
+  ['raw headings in table cells', '| <h2>items row T1</h2> | b |\n|---|---|\n| <h3>c</h3> | d |'],
+  ['raw heading ended by its table cell', '| <h2>items row | T1 |\n|---|---|\n| x | y |'],
+  ['raw heading in an excess table cell', '| a |\n|---|\n| x | <h2>items row T1</h2> |'],
+  ['raw heading after a pipe in a code span of a table cell', '| a | b |\n|---|---|\n| `x | <h2>items row T1</h2> ` |'],
 ];
 
 /** The element names whose start tag and end tag GitHub's closers vector records inside a raw <h2>. */
