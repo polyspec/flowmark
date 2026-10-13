@@ -1,6 +1,6 @@
 {
  "viewer": "VS Code",
- "recorded": "2026-10-11",
+ "recorded": "2026-10-13",
  "request": "VS Code 1.141.0: extensions/markdown-language-features/src/slugify.ts and markdownEngine.ts #tokenToPlainText, markdown-it 14.3.2, @vscode/markdown-it-katex 1.1.2 with {\"enableFencedBlocks\":true,\"globalGroup\":true,\"macros\":{}}, node 26.8.1",
  "rerecord": "make slug-vectors (scripts/record-slugs.mjs)",
  "cases": [
@@ -996,6 +996,325 @@
    "name": "table after a link reference definition",
    "markdown": "[x]: /u\na|b\n-|-\nitems row T1\n---",
    "ids": []
+  },
+  {
+   "name": "table header after a link reference definition that a heading uses",
+   "markdown": "[x]: /u\na|b\n-|-\n\n# [t][x]\n\n[y]: /v\nc\n\n# [t][y]",
+   "ids": [
+    "t",
+    "t-1"
+   ]
+  },
+  {
+   "name": "table rows over an underline",
+   "markdown": "a | b\n--|--\nitems row T1\n---",
+   "ids": []
+  },
+  {
+   "name": "table rows over an equals line",
+   "markdown": "a | b\n--|--\nitems row T1\n===",
+   "ids": []
+  },
+  {
+   "name": "table after paragraph lines",
+   "markdown": "x\na | b\n--|--\nitems row T1\n---",
+   "ids": []
+  },
+  {
+   "name": "table header of more cells than its delimiter row",
+   "markdown": "a | b\n--|--|--\nitems row T1\n---",
+   "ids": [
+    "a--b------items-row-t1"
+   ]
+  },
+  {
+   "name": "table header of fewer cells than its delimiter row",
+   "markdown": "a|\n-|-\nitems row T1\n---",
+   "ids": [
+    "a--items-row-t1"
+   ]
+  },
+  {
+   "name": "table in a block quote before a lazy line",
+   "markdown": "> a | b\n> --|--\nitems row T1\n---",
+   "ids": [
+    "items-row-t1"
+   ]
+  },
+  {
+   "name": "table in a list item before an unindented line",
+   "markdown": "- a|b\n  -|-\n  c\nitems row T1\n---",
+   "ids": []
+  },
+  {
+   "name": "table one-column header over an underline",
+   "markdown": "a|\n---\n\n| b |\n---",
+   "ids": []
+  },
+  {
+   "name": "table one-column header after a paragraph line",
+   "markdown": "x\na|\n---",
+   "ids": []
+  },
+  {
+   "name": "table header that a heading reads first",
+   "markdown": "# items row T1|x\n-|-\n\n> # items row T2|x\n> -|-\n\n- # items row T3|x\n-|-",
+   "ids": []
+  },
+  {
+   "name": "table header that a fence reads first",
+   "markdown": "```|x\n-|-\n# a\n```\n# b",
+   "ids": [
+    "a"
+   ]
+  },
+  {
+   "name": "table header that an HTML block reads first",
+   "markdown": "<div>|x\n-|-\n# a",
+   "ids": [
+    "a"
+   ]
+  },
+  {
+   "name": "table header that a math block reads first",
+   "markdown": "$$|x\n-|-\n# a\n$$\n# b",
+   "ids": [
+    "a"
+   ]
+  },
+  {
+   "name": "table header that a footnote definition reads first",
+   "markdown": "[^n]: a|b\n-|-\nitems row T1\n---\n\n# z[^n]",
+   "ids": [
+    "zn"
+   ]
+  },
+  {
+   "name": "table header indented three spaces",
+   "markdown": "   a|b\n-|-\nitems row T1\n---",
+   "ids": []
+  },
+  {
+   "name": "table header indented four spaces in a paragraph",
+   "markdown": "x\n    a|b\n-|-\nitems row T1\n---",
+   "ids": [
+    "xab--items-row-t1"
+   ]
+  },
+  {
+   "name": "table header indented by a tab",
+   "markdown": "\ta|b\n-|-\nitems row T1\n---",
+   "ids": [
+    "--items-row-t1"
+   ]
+  },
+  {
+   "name": "table header indented four spaces in a block quote",
+   "markdown": ">     a|b\n> -|-\n> items row T1\n> ---",
+   "ids": [
+    "--items-row-t1"
+   ]
+  },
+  {
+   "name": "table header on a lazy line of a list item",
+   "markdown": "- x\na|b\n  -|-\n  items row T1\n  ---",
+   "ids": []
+  },
+  {
+   "name": "table header on a lazy line of a block quote",
+   "markdown": "> x\na|b\n> -|-\n> items row T1\n> ---",
+   "ids": [
+    "xab--items-row-t1"
+   ]
+  },
+  {
+   "name": "table delimiter rows that open a table",
+   "markdown": "a|b\n|-|-|\nitems row T1\n---\n\na|b\n:-|-:\nitems row T2\n---\n\na|b\n-- | --\nitems row T3\n---\n\na|b\n   -|-\nitems row T4\n---\n\na|b\n| -|-\nitems row T5\n---\n\na|b\n-|-|\nitems row T6\n---",
+   "ids": []
+  },
+  {
+   "name": "table delimiter row with a vertical tab",
+   "markdown": "a|b\n-|-\u000b\nitems row T1\n---",
+   "ids": [
+    "ab--items-row-t1"
+   ]
+  },
+  {
+   "name": "table delimiter rows that open none",
+   "markdown": "a|b\n\t-|-\nitems row T1\n---\n\na|b\n- | -\nitems row T2\n---\n\na|b|c\n-||-\nitems row T3\n---\n\na|b\n:|:\nitems row T4\n---\n\na|b\n=|=\nitems row T5\n---",
+   "ids": [
+    "ab--items-row-t1",
+    "abc--items-row-t3",
+    "abitems-row-t4",
+    "abitems-row-t5"
+   ]
+  },
+  {
+   "name": "table delimiter row less indented than a list item",
+   "markdown": "- a|b\n -|-\nitems row T1\n---",
+   "ids": []
+  },
+  {
+   "name": "table delimiter row deeper in a list item",
+   "markdown": "- a|b\n    -|-\n  items row T1\n  ---",
+   "ids": []
+  },
+  {
+   "name": "table delimiter row on a lazy line of a block quote",
+   "markdown": "> a|b\n-|-\nitems row T1\n---",
+   "ids": []
+  },
+  {
+   "name": "table header cells with escaped pipes",
+   "markdown": "a\\|b|c\n-|-\nitems row T1\n---\n\na\\|b\n-|-\nitems row T2\n---\n\na\\\\|b\n-|-\nitems row T3\n---\n\na|b\\|\n-|-\nitems row T4\n---",
+   "ids": [
+    "ab--items-row-t2",
+    "ab--items-row-t3"
+   ]
+  },
+  {
+   "name": "table header cells with a code span and outer pipes",
+   "markdown": "`a|b`\n-|-\nitems row T1\n---\n\n|a|b|\n-|-\nitems row T2\n---\n\na||b\n-|-|-\nitems row T3\n---",
+   "ids": []
+  },
+  {
+   "name": "table header of a lone pipe",
+   "markdown": "|\n-\nitems row T1\n---\n\n||\n-\nitems row T2\n---",
+   "ids": [
+    "",
+    "items-row-t1",
+    "-1",
+    "items-row-t2"
+   ]
+  },
+  {
+   "name": "table header after definitions",
+   "markdown": "[r]: /u\na|b\n-|-\nitems row T1\n---\n\n[s]: /u|b\n-|-\nitems row T2\n---",
+   "ids": []
+  },
+  {
+   "name": "table header after a failed header in its paragraph",
+   "markdown": "a|b|c\n-|-\nd|e\n-|-\nitems row T1\n---",
+   "ids": []
+  },
+  {
+   "name": "table rows ended by an HTML block of type 7",
+   "markdown": "a|b\n-|-\n<span>\n# h",
+   "ids": [
+    "h"
+   ]
+  },
+  {
+   "name": "table rows ended by an HTML block of type 6",
+   "markdown": "a|b\n-|-\n<div>\n# h",
+   "ids": []
+  },
+  {
+   "name": "table rows ended by a footnote definition",
+   "markdown": "a|b\n-|-\n[^n]: x\n    # c\n\n# z[^n]",
+   "ids": [
+    "zn"
+   ]
+  },
+  {
+   "name": "table rows ended by a block quote and a fence",
+   "markdown": "a|b\n-|-\n> # c\n\na|b\n-|-\n```\n# d\n```",
+   "ids": [
+    "c"
+   ]
+  },
+  {
+   "name": "table rows ended by an indented line",
+   "markdown": "a | b\n--|--\n    x\nitems row T1\n---",
+   "ids": [
+    "items-row-t1"
+   ]
+  },
+  {
+   "name": "table rows ended by list items",
+   "markdown": "a|b\n-|-\n-\nitems row T1\n---\n\na|b\n-|-\n1.\nitems row T2\n---\n\na|b\n-|-\n2.\nitems row T3\n---",
+   "ids": [
+    "items-row-t1",
+    "items-row-t2",
+    "items-row-t3"
+   ]
+  },
+  {
+   "name": "table rows ended by a math block",
+   "markdown": "a | b\n--|--\n$$\n# a\n$$\n# b",
+   "ids": [
+    "b"
+   ]
+  },
+  {
+   "name": "table row of a lone pipe",
+   "markdown": "a|b\n-|-\n|\nitems row T1\n---\n\na|b\n-|-\n|  \nitems row T2\n---",
+   "ids": []
+  },
+  {
+   "name": "table row of a no-break space",
+   "markdown": "a|b\n-|-\n \nitems row T1\n---",
+   "ids": [
+    "items-row-t1"
+   ]
+  },
+  {
+   "name": "table in a footnote definition",
+   "markdown": "[^n]: x\n\n    a|b\n    -|-\n    items row T1\n    ---\n\n# z[^n]",
+   "ids": [
+    "zn"
+   ]
+  },
+  {
+   "name": "table footnote reference in an excess cell",
+   "markdown": "| a |\n|---|\n| x | y[^n] |\n\n# h[^m]\n\n[^m]: x\n\n[^n]: y",
+   "ids": [
+    "hm"
+   ]
+  },
+  {
+   "name": "table escaped pipe in the paragraph before a header",
+   "markdown": "x[^a\\|b]\nc|d\n-|-\n\n# h[^q]\n\n[^a|b]: y\n\n[^q]: z\n\nx[^a\\|b]\nc\n\n# g[^q]",
+   "ids": [
+    "hq",
+    "gq"
+   ]
+  },
+  {
+   "name": "table escaped pipe in a cell",
+   "markdown": "c|d\n-|-\nx[^a\\|b]\n\n# h[^q]\n\n[^a|b]: y\n\n[^q]: z",
+   "ids": [
+    "hq"
+   ]
+  },
+  {
+   "name": "table escaped backslash before a pipe in a cell",
+   "markdown": "c|d\n-|-\nx[^a\\\\|b]\n\n# h[^q]\n\n[^a\\|b]: y\n\n[^q]: z",
+   "ids": [
+    "hq"
+   ]
+  },
+  {
+   "name": "table cell limit",
+   "markdown": "|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|\n|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|\nx1\nx2\nx3\nx4\nx5\nx6\nx7\nx8\nx9\nx10\nx11\nx12\nx13\nx14\nx15\nx16\nx17\nx18\nx19\nx20\nx21\nx22\nx23\nx24\nx25\nx26\nx27\nx28\nx29\nx30\nx31\nx32\nx33\nx34\nx35\nx36\nx37\nx38\nx39\nx40\nx41\nx42\nx43\nx44\nx45\nx46\nx47\nx48\nx49\nx50\nx51\nx52\nx53\nx54\nx55\nx56\nx57\nx58\nx59\nx60\nx61\nx62\nx63\nx64\nx65\nx66\nx67\nx68\nx69\nx70\nx71\nx72\nx73\nx74\nx75\nx76\nx77\nx78\nx79\nx80\nx81\nx82\nx83\nx84\nx85\nx86\nx87\nx88\nx89\nx90\nx91\nx92\nx93\nx94\nx95\nx96\nx97\nx98\nx99\nx100\nx101\nx102\nx103\nx104\nx105\nx106\nx107\nx108\nx109\nx110\nx111\nx112\nx113\nx114\nx115\nx116\nx117\nx118\nx119\nx120\nx121\nx122\nx123\nx124\nx125\nx126\nx127\nx128\nx129\nx130\nx131\nx132\nx133\nx134\nx135\nx136\nx137\nx138\nx139\nx140\nx141\nx142\nx143\nx144\nx145\nx146\nx147\nx148\nx149\nx150\nx151\nx152\nx153\nx154\nx155\nx156\nx157\nx158\nx159\nx160\nx161\nx162\nx163\nx164\nx165\nx166\nx167\nx168\nx169\nx170\nx171\nx172\nx173\nx174\nx175\nx176\nx177\nx178\nx179\nx180\nx181\nx182\nx183\nx184\nx185\nx186\nx187\nx188\nx189\nx190\nx191\nx192\nx193\nx194\nx195\nx196\nx197\nx198\nx199\nx200\nx201\nx202\nx203\nx204\nx205\nx206\nx207\nx208\nx209\nx210\nx211\nx212\nx213\nx214\nx215\nx216\nx217\nx218\nx219\nx220\nx221\nx222\nx223\nx224\nx225\nx226\nx227\nx228\nx229\nx230\nx231\nx232\nx233\nx234\nx235\nx236\nx237\nx238\nx239\nx240\nx241\nx242\nx243\nx244\nx245\nx246\nx247\nx248\nx249\nx250\nx251\nx252\nx253\nx254\nx255\nx256\nx257\nx258\nx259\nx260\nx261\nx262\nx263\nx264\nx265\nx266\nx267\nx268\nx269\nx270\nx271\nx272\nx273\nx274\nx275\nx276\nx277\nx278\nx279\nx280\nx281\nx282\nx283\nx284\nx285\nx286\nx287\nx288\nx289\nx290\nx291\nx292\nx293\nx294\nx295\nx296\nx297\nx298\nx299\nx300\nx301\nx302\nx303\nx304\nx305\nx306\nx307\nx308\nx309\nx310\nx311\nx312\nx313\nx314\nx315\nx316\nx317\nx318\nx319\nx320\nx321\nx322\nx323\nx324\nx325\nx326\nx327\nx328\nx329\nx330\nx331\nx332\nx333\nx334\nx335\nx336\nx337\nx338\nx339\nx340\nx341\nx342\nx343\nx344\nx345\nx346\nx347\nx348\nx349\nx350\nx351\nx352\nx353\nx354\nx355\nx356\nx357\nx358\nx359\nx360\nx361\nx362\nx363\nx364\nx365\nx366\nx367\nx368\nx369\nx370\nx371\nx372\nx373\nx374\nx375\nx376\nx377\nx378\nx379\nx380\nx381\nx382\nx383\nx384\nx385\nx386\nx387\nx388\nx389\nx390\nx391\nx392\nx393\nx394\nx395\nx396\nx397\nx398\nx399\nx400\nx401\nx402\nx403\nx404\nx405\nx406\nx407\nx408\nx409\nx410\nx411\nx412\nx413\nx414\nx415\nx416\nx417\nx418\nx419\nx420\nx421\nx422\nx423\nx424\nx425\nx426\nx427\nx428\nx429\nx430\nx431\nx432\nx433\nx434\nx435\nx436\nx437\nx438\nx439\nx440\nx441\nx442\nx443\nx444\nx445\nx446\nx447\nx448\nx449\nx450\nx451\nx452\nx453\nx454\nx455\nx456\nx457\nx458\nx459\nx460\nx461\nx462\nx463\nx464\nx465\nx466\nx467\nx468\nx469\nx470\nx471\nx472\nx473\nx474\nx475\nx476\nx477\nx478\nx479\nx480\nx481\nx482\nx483\nx484\nx485\nx486\nx487\nx488\nx489\nx490\nx491\nx492\nx493\nx494\nx495\nx496\nx497\nx498\nx499\nx500\nx501\nx502\nx503\nx504\nx505\nx506\nx507\nx508\nx509\nx510\nx511\nx512\nx513\nx514\nx515\nx516\nx517\nx518\nx519\nx520\nx521\nx522\nx523\nx524\nx525\nx526\nx527\nx528\nx529\nx530\nx531\nx532\nx533\nx534\nx535\nx536\nx537\nx538\nx539\nx540\nx541\nx542\nx543\nx544\nx545\nx546\nx547\nx548\nx549\nx550\nx551\nx552\nx553\nx554\nx555\nx556\nx557\nx558\nx559\nx560\nx561\nx562\nx563\nx564\nx565\nx566\nx567\nx568\nx569\nx570\nx571\nx572\nx573\nx574\nx575\nx576\nx577\nx578\nx579\nx580\nx581\nx582\nx583\nx584\nx585\nx586\nx587\nx588\nx589\nx590\nx591\nx592\nx593\nx594\nx595\nx596\nx597\nx598\nx599\nx600\n---",
+   "ids": [
+    "x66x67x68x69x70x71x72x73x74x75x76x77x78x79x80x81x82x83x84x85x86x87x88x89x90x91x92x93x94x95x96x97x98x99x100x101x102x103x104x105x106x107x108x109x110x111x112x113x114x115x116x117x118x119x120x121x122x123x124x125x126x127x128x129x130x131x132x133x134x135x136x137x138x139x140x141x142x143x144x145x146x147x148x149x150x151x152x153x154x155x156x157x158x159x160x161x162x163x164x165x166x167x168x169x170x171x172x173x174x175x176x177x178x179x180x181x182x183x184x185x186x187x188x189x190x191x192x193x194x195x196x197x198x199x200x201x202x203x204x205x206x207x208x209x210x211x212x213x214x215x216x217x218x219x220x221x222x223x224x225x226x227x228x229x230x231x232x233x234x235x236x237x238x239x240x241x242x243x244x245x246x247x248x249x250x251x252x253x254x255x256x257x258x259x260x261x262x263x264x265x266x267x268x269x270x271x272x273x274x275x276x277x278x279x280x281x282x283x284x285x286x287x288x289x290x291x292x293x294x295x296x297x298x299x300x301x302x303x304x305x306x307x308x309x310x311x312x313x314x315x316x317x318x319x320x321x322x323x324x325x326x327x328x329x330x331x332x333x334x335x336x337x338x339x340x341x342x343x344x345x346x347x348x349x350x351x352x353x354x355x356x357x358x359x360x361x362x363x364x365x366x367x368x369x370x371x372x373x374x375x376x377x378x379x380x381x382x383x384x385x386x387x388x389x390x391x392x393x394x395x396x397x398x399x400x401x402x403x404x405x406x407x408x409x410x411x412x413x414x415x416x417x418x419x420x421x422x423x424x425x426x427x428x429x430x431x432x433x434x435x436x437x438x439x440x441x442x443x444x445x446x447x448x449x450x451x452x453x454x455x456x457x458x459x460x461x462x463x464x465x466x467x468x469x470x471x472x473x474x475x476x477x478x479x480x481x482x483x484x485x486x487x488x489x490x491x492x493x494x495x496x497x498x499x500x501x502x503x504x505x506x507x508x509x510x511x512x513x514x515x516x517x518x519x520x521x522x523x524x525x526x527x528x529x530x531x532x533x534x535x536x537x538x539x540x541x542x543x544x545x546x547x548x549x550x551x552x553x554x555x556x557x558x559x560x561x562x563x564x565x566x567x568x569x570x571x572x573x574x575x576x577x578x579x580x581x582x583x584x585x586x587x588x589x590x591x592x593x594x595x596x597x598x599x600"
+   ]
+  },
+  {
+   "name": "id in a table cell",
+   "markdown": "| a |\n|---|\n| <a id=\"items-row-t1\"></a> |",
+   "ids": []
+  },
+  {
+   "name": "id in an excess table cell",
+   "markdown": "| a |\n|---|\n| x | <a id=\"items-row-t1\"></a> |",
+   "ids": []
+  },
+  {
+   "name": "id after a pipe in a code span of a table cell",
+   "markdown": "| a | b |\n|---|---|\n| `x | <a id=\"items-row-t1\"></a> ` |",
+   "ids": []
   }
  ],
  "rawHeadings": [
@@ -1412,6 +1731,33 @@
   {
    "name": "raw heading with an isindex",
    "markdown": "<h2>a<isindex>b</h2>",
+   "ids": [
+    null
+   ]
+  },
+  {
+   "name": "raw headings in table cells",
+   "markdown": "| <h2>items row T1</h2> | b |\n|---|---|\n| <h3>c</h3> | d |",
+   "ids": [
+    null,
+    null
+   ]
+  },
+  {
+   "name": "raw heading ended by its table cell",
+   "markdown": "| <h2>items row | T1 |\n|---|---|\n| x | y |",
+   "ids": [
+    null
+   ]
+  },
+  {
+   "name": "raw heading in an excess table cell",
+   "markdown": "| a |\n|---|\n| x | <h2>items row T1</h2> |",
+   "ids": []
+  },
+  {
+   "name": "raw heading after a pipe in a code span of a table cell",
+   "markdown": "| a | b |\n|---|---|\n| `x | <h2>items row T1</h2> ` |",
    "ids": [
     null
    ]

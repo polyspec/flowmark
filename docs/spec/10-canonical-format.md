@@ -189,20 +189,54 @@ and the column sections — are payload: the renderer moves them with their row 
   `# c` gives VS Code `c` alone, and `- $$`, `  x`, `y`, `  # e` gives `e` in the item). GitHub and
   GitLab read no math block: a `$$` line is text there, and the vectors show their headings unchanged.
 - **Tables under S_GH, S_GL and S_VS.** GitHub, GitLab and VS Code render GFM tables (GFM 0.29 §4.10), which take
-  in lines that CommonMark reads as paragraphs, so the three read the headings of their tables (the collision
-  rule). A line of a paragraph followed by a delimiter row — up to three spaces of indent, then cells of hyphens
-  with an optional colon at either end, separated by pipes, a pipe at either end optional — with as many cells as
-  that line is the header row of a table, and the lines after the delimiter row are its body rows, up to a blank
-  line, up to a line that opens a block that interrupts a paragraph, and up to the end of its container: a body
-  row is no paragraph line, so a setext underline after it underlines nothing. The cells of a row are split at
-  every pipe that no backslash escapes; a code span protects none. A delimiter row of one cell holds a pipe
-  under S_GH and S_GL. VS Code's markdown-it 14 differs twice: it looks for a table at the start of every line,
-  before any other block, so a line that would be an ATX heading is the header row of a table when a delimiter
-  row of as many cells follows it, and it takes a delimiter row of one cell without a pipe (`| a |` over `---`
-  is a table) when its header row holds a pipe, which GitHub and GitLab read as a setext heading. Grounding:
-  the slug vectors record each case from the viewers (`a|b`, `-|-`, `items row T1`, `---` gives no heading in
-  any of them; `# a|b`, `-|-` gives GitHub `ab` and VS Code none; `| a |`, `---` gives GitHub and GitLab `-a-`
-  and VS Code none; a code span `` `a|b` `` over `-|-` is a table in all three).
+  in lines that CommonMark reads as paragraphs, so the three read the headings around their tables and the content
+  of their cells as their viewer does (the collision rule). Each reading follows its viewer's source: cmark-gfm's
+  `extensions/table.c` for GitHub, comrak 0.56.0's `src/parser/table.rs` for GitLab, and markdown-it 14.3.2's
+  `rules_block/table.mjs` for VS Code.
+  - Cells. The cells of a row are split at every pipe that does not follow a backslash, whether that backslash is
+    escaped or not; a code span protects none; a pipe at either end opens or closes no cell. A cell is its text
+    without the white space around it — spaces and tabs under S_GH and S_GL, what JavaScript's `trim` removes
+    under S_VS — with each `\|` read as `|`. It is inline content: its footnote references, raw HTML and ids are
+    read as a paragraph's are. A body row holds the cells up to the columns of its header row, and the cells past
+    them are dropped.
+  - GitHub and GitLab. A delimiter row is up to three spaces of indent, then cells of hyphens with an optional
+    colon at either end, separated by pipes, with spaces, tabs, vertical tabs and form feeds around them, a pipe
+    at either end optional; a row of one cell holds a pipe. When a delimiter row follows a line of an open
+    paragraph, that line is the header row of a table if it has as many cells; otherwise the paragraph opens no
+    table after that. The lines of the paragraph before the header row stay a paragraph, with each `\|` read as
+    `|`; a link reference definition among them is text and defines no label, since the viewer inserts that
+    paragraph after it has read its lines and reads definitions only as a paragraph it holds ends. The body rows go on up to a blank line, a line indented four columns or more, a line that opens a block
+    that interrupts a paragraph or a list item of any kind, an HTML block of type 7, a line of a pipe alone, the
+    end of the container, and a row that would pass the cell limit: a table takes a row while the cells its body
+    rows have autocompleted so far — the cells a row lacks against the header row — are at most 0x80000 on GitHub
+    and 500000 on GitLab.
+  - VS Code. markdown-it's table rule runs first at the start of every block, and on every line of an open
+    paragraph that is neither lazy nor indented four columns or more. So a line that would open an ATX heading, a
+    fence, an HTML block, a math block, a list item or a block quote is the header row of a table when a
+    delimiter row follows it, and a header row ends the paragraph before it. The header row, trimmed, holds a pipe
+    and is indented less than four columns; a pipe alone is none, since it has no cell. The delimiter row
+    continues every open container, not lazily, and is indented less than four columns. It begins with a pipe, a
+    hyphen or a colon, then one of those or a space or a tab, never a space or a tab after a hyphen, and holds
+    nothing else. Split at its pipes, every part is hyphens with an optional colon at either end, and only the
+    first and the last part may be empty. It needs no pipe, so `| a |` over `---` is a table. The header row has
+    as many cells as the delimiter row, an empty first or last part dropped. A lazy line of a list item's
+    paragraph is read the same way: when it is a header row, the list item ends and the table opens in the
+    containers the line continues. A lazy line of a block quote is not read so. The body rows go on up to a line
+    that is empty once trimmed, a line of a no-break space alone included; a line indented four columns or more;
+    a line that opens a block that ends a block quote (an ATX heading, a fence, an HTML block of types 1 to 6, a
+    math block, a thematic break, a block quote or a list item of any kind); the end of the container; and a row
+    that would pass the cell limit. A table takes no row that brings its autocompleted cells past 0x10000, and a
+    row of more cells than the header row counts negative.
+  - Grounding: the slug vectors record each case from the viewers. `a|b`, `-|-`, `items row T1`, `---` gives no
+    heading in any of them. `# a|b`, `-|-` gives GitHub `ab` and VS Code none. `| a |`, `---` gives GitHub and
+    GitLab `-a-` and VS Code none. A code span `` `a|b` `` over `-|-` is a table in all three. Further cases:
+    `table escaped pipe in a cell`, `table escaped pipe in the paragraph before a header`, `table header after a
+    link reference definition that a heading uses`, `raw heading in an
+    excess table cell`, `table header after a failed header in its paragraph`, `table delimiter row with a
+    vertical tab`, `table rows ended by an HTML block of type 7`, `table row of a lone pipe`, `table cell limit`,
+    `table header that a heading reads first`, `table in a list item before an unindented line`, `table header
+    on a lazy line of a block quote`, `table header indented four spaces in a paragraph`, `table header of a lone
+    pipe` and `table row of a no-break space`.
 - **Footnotes under S_GH and S_GL.** GitHub and GitLab render with footnotes, cmark-gfm's and comrak
   0.56.0's, so S_GH and S_GL read the blocks and the references as their viewer does; VS Code renders
   none, and S_VS reads the brackets and the lines as CommonMark does. A line indented less than four

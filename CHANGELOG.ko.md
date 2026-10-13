@@ -1,9 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 02e323c4404da9e8e0476ca934afe79ca817a5850d2203f314cdb8cac6307559 -->
+<!-- source-sha256: 69c18f0e70d91572124492e3da4ed1314d41b2eab9f511d3dd04dd1226a671da -->
 # Changelog
 
 ## Unreleased
 
+- T12.1-38-1: engine이 GFM table을 각 viewer처럼 읽으며, GitHub, GitLab, VS Code에서 기록한 table vector 54개를 더해 확인한다: table cell은 inline 내용이라 그 footnote 참조가 footnote 번호를 매기고 그 raw HTML heading과 id를 읽으며, 각 `\|`는 `|`로 읽고 header의 column 너머 cell은 버린다; GitHub과 GitLab에서 header row 앞의 문단은 pipe의 escape를 풀고 어떤 link label도 정의하지 않는다; body row는 각 viewer의 cell 한도에서 멈춘다; VS Code의 markdown-it table rule은 모든 block 시작과 모든 문단 줄에서 가장 먼저 돌므로, heading, fence, HTML block, math block, list item, block quote 줄도 뒤에 delimiter row가 오면 header row다.
 - T12.1-38-2 (fix): `make slug-vectors`는 연결이 응답 전에 실패한 GitHub 요청을 세 번까지 다시 보내므로, timeout된 연결 하나가 요청 수천 건의 기록을 끝내지 않는다; HTTP 오류는 여전히 기록을 끝낸다.
 - T12: markdown database가 완성되었다. checklist의 모든 항목이 끝났다 — 문법, validator, release된 orm v0.0.9 위의 `markdown://` IR 실행기, 규모 시험을 거친 write path, 얼굴들, crudui가 렌더하는 천 글의 게시판, 세 platform gate, 복잡한 foreign key corpus.
 - T12.12: flowmark가 pseudo-version 대신 release된 orm v0.0.9를 요구한다. 그 tag는 IR executor protocol 항목 T61과 T62, validator series T82–T102를 담으며 전 suite가 그 위에서 통과한다.

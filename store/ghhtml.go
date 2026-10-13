@@ -703,6 +703,62 @@ func ghReadings(lines []string, sc scan, g linkRefs) []ghRead {
 	return out
 }
 
+// tableItem returns the item of the table t, with the events of the HTML cmark-gfm renders
+// for it (html.c and table.c): the header row in a thead, the body rows, when there are
+// any, in a tbody, each row a tr of its cells, th in the header and td in the body, each
+// cell's events those of its inline content. The element of the item holds every cell,
+// each on a line of its text, and an event's offset and spans are those in its cell
+// moved by the cell's offset in that text, so the cells' spans stay apart.
+func tableItem(lines []string, t table, g linkRefs) ghItem {
+	var pieces []textPiece
+	var events []ghEvent
+	tag := func(name string, end bool) { events = append(events, ghEvent{name: name, end: end}) }
+	base := 0
+	top := true
+	tag("table", false)
+	for k, r := range t.rows {
+		top = top && lines[r.at] == r.rest
+		switch k {
+		case 0:
+			tag("thead", false)
+		case 1:
+			tag("tbody", false)
+		}
+		tag("tr", false)
+		cell := "td"
+		if k == 0 {
+			cell = "th"
+		}
+		for _, c := range r.cells {
+			e := cellElement(lines, r, c)
+			if len(pieces) > 0 {
+				base++
+			}
+			pieces = append(pieces, e.pieces...)
+			tag(cell, false)
+			for _, ev := range inlineEvents(e.text, g) {
+				ev.at += base
+				for i := range ev.spans {
+					ev.spans[i] += base
+				}
+				events = append(events, ev)
+			}
+			tag(cell, true)
+			base += len(e.text)
+		}
+		tag("tr", true)
+		if k == 0 {
+			tag("thead", true)
+		}
+	}
+	if len(t.rows) > 1 {
+		tag("tbody", true)
+	}
+	tag("table", true)
+	first, last := t.rows[0].at, t.rows[len(t.rows)-1].at
+	return ghItem{events: events, e: newElement(pieces), at: first, last: last, nested: !top}
+}
+
 // ghItems returns the blocks of the file that GitHub renders with text, in order: its
 // headings, and its paragraphs and HTML blocks that are not headings; a paragraph that is
 // all link reference definitions renders nothing, and neither does the content of a
@@ -735,7 +791,7 @@ func ghItems(lines []string, sc scan, g linkRefs) []ghItem {
 			items = append(items, ghItem{events: htmlEvents(e.text), e: e, at: u.at, last: last, nested: !top})
 			continue
 		}
-		_, cm := cmDefLines(u.lines)
+		cm := u.defLines()
 		all := true
 		for _, d := range cm {
 			all = all && d
@@ -749,6 +805,11 @@ func ghItems(lines []string, sc scan, g linkRefs) []ghItem {
 			continue
 		}
 		items = append(items, ghItem{open: "p", events: inlineEvents(e.text, g), e: e, at: u.at, last: last, nested: !top})
+	}
+	for _, t := range sc.tables {
+		if g.shows(t.note) {
+			items = append(items, tableItem(lines, t, g))
+		}
 	}
 	sort.SliceStable(items, func(i, j int) bool { return items[i].at < items[j].at })
 	return items

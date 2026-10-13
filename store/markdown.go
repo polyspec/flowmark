@@ -57,18 +57,43 @@ type blockSyntax struct {
 	// delimiter row are its body rows until a blank line or a block that interrupts a paragraph. A line of the table is
 	// no paragraph line, so a setext underline after a body row underlines nothing.
 	tables bool
-	// mdTables reads the tables as markdown-it 14 reads them, which VS Code renders, under tables: a table is looked
-	// for at the start of every line, before any other block, so a line that would be a heading is a header row when a
-	// delimiter row follows it; and the delimiter row of a header row that holds a pipe needs no pipe itself, so
+	// mdTables reads the tables as markdown-it 14.3.2's table rule reads them, which VS Code renders, under tables
+	// (mdTable): the rule runs first at the start of every block, so a line that would open a heading, a fence, an HTML
+	// block, a math block, a list item or a block quote is a header row when a delimiter row follows it, and it ends an
+	// open paragraph at its header row; the delimiter row of a header row that holds a pipe needs no pipe itself, so
 	// `| a |` over `---` is a table of one column where GitHub and GitLab read a setext heading.
 	mdTables bool
+	// cellLimit is the limit of the cells a table autocompletes in its body rows, past which it takes no more rows, as
+	// its viewer counts them (the slug vectors, `table cell limit`): a row of fewer cells than the header row
+	// autocompletes the rest.
+	cellLimit cellLimit
 }
 
-// atxMark is an ATX heading read at line at, in a scan of depth open containers, with the text rest of the line.
-type atxMark struct {
-	at, depth int
-	rest      string
-	set       bool
+// cellLimit is a viewer's limit of the cells a table autocompletes: max cells, checked before a row (cmark-gfm and
+// comrak, which take a row while the cells autocompleted so far are at most max) or with it (markdown-it, which takes
+// no row that would autocomplete past max). The zero value sets no limit.
+type cellLimit struct {
+	max     int
+	withRow bool
+}
+
+// The cell limits of the viewers: cmark-gfm's 0x80000 as GitHub renders, comrak 0.56.0's 500000 as GitLab renders, and
+// markdown-it 14's MAX_AUTOCOMPLETED_CELLS 0x10000 as VS Code renders, each observed by the slug vectors.
+var (
+	ghCells = cellLimit{max: 0x80000}
+	glCells = cellLimit{max: 500000}
+	vsCells = cellLimit{max: 0x10000, withRow: true}
+)
+
+// takes reports whether a table that has autocompleted filled cells takes a row that would autocomplete auto more.
+func (c cellLimit) takes(filled, auto int) bool {
+	if c.max == 0 {
+		return true
+	}
+	if c.withRow {
+		return filled+auto <= c.max
+	}
+	return filled <= c.max
 }
 
 // textCol returns the 1-based column, in code points, of the first character of the
@@ -252,22 +277,31 @@ type scanner struct {
 	// blank is whether the last line read was blank inside every container it continued,
 	// which ends a block quote before a lazy line under blockSyntax.math.
 	blank bool
-	// retract is set when the line read turned the ATX heading before it into the header row of a table, which is no
-	// heading: scanWith drops that heading.
-	retract bool
-	// atx is the last ATX heading read, which an mdTables delimiter row on the next line turns into a header row.
-	atx atxMark
+	// delim is set when an mdTables table opened at the line read, whose next line is its delimiter row (mdTable).
+	delim bool
+	// cols is the number of columns of the open table, and filled the cells its body rows have autocompleted, when
+	// leaf is leafTable.
+	cols, filled int
+	tables       []table // the tables read so far, the open one last
 }
 
 // unit is the text of a paragraph or of an HTML block: its lines without the markers
 // of the containers that hold them, and the index of its first line. A paragraph that
 // a setext underline closes is a heading, so it is marked and left out of the text.
 type unit struct {
-	at      int
-	html    bool
+	at   int
+	html bool
+	// pipes is whether the viewer reads each `\|` of the paragraph as `|`: cmark-gfm and comrak unescape the pipes of
+	// the paragraph that the header row of a table leaves (try_inserting_table_header_paragraph); markdown-it ends the
+	// paragraph before the header row, and reads it as it stands.
+	pipes   bool
 	lines   []string
 	heading bool
 	note    *noteDef // the innermost footnote definition that holds it, under blockSyntax.notes
+	// noTable is whether a delimiter row stood under the paragraph without a header row of as many cells: cmark-gfm
+	// and comrak then open no table in that paragraph (the slug vectors, `table header after a failed header in its
+	// paragraph`); markdown-it opens one all the same.
+	noTable bool
 }
 
 // scan is the block structure of a run of lines from some index on.
@@ -283,6 +317,25 @@ type scan struct {
 	open bool
 	// notes is every footnote definition, in the order they open, under blockSyntax.notes.
 	notes []*noteDef
+	// tables is every table, in the order they open, under blockSyntax.tables.
+	tables []table
+}
+
+// table is a GFM table of a scan: its rows, the header row first, and the innermost footnote definition that holds
+// it, under blockSyntax.notes.
+type table struct {
+	rows []tableRow
+	note *noteDef
+}
+
+// tableRow is a row of a table: the index of its line, the line's text after the markers of its containers, and the
+// byte ranges in that text of the cells the viewer renders, each without the white space around it. A body row holds
+// no cell past the columns of the header row: every viewer drops those cells (the slug vectors, `raw heading in an
+// excess table cell`).
+type tableRow struct {
+	at    int
+	rest  string
+	cells [][2]int
 }
 
 // scanHeadings reads the block structure of lines from index from on. A setext
@@ -297,13 +350,6 @@ func scanWith(lines []string, from int, syn blockSyntax) scan {
 	s := scanner{syn: syn}
 	for i := from; i < len(lines); i++ {
 		h, ok := s.feed(lines, i)
-		if s.retract {
-			s.retract = false
-			sc.all = sc.all[:len(sc.all)-1]
-			if len(sc.heads) > 0 && sc.heads[len(sc.heads)-1].at == i-1 {
-				sc.heads = sc.heads[:len(sc.heads)-1]
-			}
-		}
 		if ok {
 			sc.all = append(sc.all, h)
 			if !h.nested {
@@ -319,6 +365,7 @@ func scanWith(lines []string, from int, syn blockSyntax) scan {
 	}
 	sc.open = len(s.stack) == 0 && (s.leaf == leafFence || s.leaf == leafHTML)
 	sc.notes = s.notes
+	sc.tables = s.tables
 	return sc
 }
 
@@ -380,8 +427,11 @@ func (s *scanner) feed(lines []string, i int) (heading, bool) {
 	blank := s.blank
 	s.blank = m == len(s.stack) && isBlank(rest)
 	if m < len(s.stack) {
-		// Only a paragraph continues lazily into a container that did not match.
-		if s.leaf == leafPara && s.syn.lazyText(rest) {
+		// Only a paragraph continues lazily into a container that did not match. Under mdTables a table whose header
+		// row the line is ends the paragraph, unless a block quote is among the containers it does not continue:
+		// markdown-it reads a lazy line of a block quote as no block start (sCount -1), and one of a list item
+		// alone as a line the paragraph checks for its end.
+		if s.leaf == leafPara && s.syn.lazyText(rest) && !s.lazyTable(lines, i, rest, m) {
 			s.addLine(rest)
 			return heading{}, false
 		}
@@ -394,14 +444,28 @@ func (s *scanner) feed(lines []string, i int) (heading, bool) {
 	}
 	switch s.leaf {
 	case leafTable:
-		// A body row, unless the line is blank or opens a block that interrupts a paragraph, which ends the table.
-		if isBlank(rest) || s.syn.opensInterrupt(rest) {
+		// A body row, unless the line is blank, is indented four columns or more, or opens a block that interrupts a
+		// paragraph, which ends the table: every viewer reads an indented line after a table as indented code (the slug
+		// vectors, `table rows ended by an indented line`).
+		if s.delim {
+			s.delim = false
+			return heading{}, false
+		}
+		auto := s.cols - min(tableRowCells(rest), s.cols)
+		if s.syn.mdTables {
+			// markdown-it counts a row of more cells than the header row as negative autocompletion.
+			auto = s.cols - len(mdRowSpans(rest))
+		}
+		if isBlank(rest) || s.syn.mdTables && strings.TrimFunc(rest, jsTrimmed) == "" || indentOf(rest) >= 4 ||
+			s.syn.opensInterrupt(rest) || s.syn.endsCmarkTable(rest) || !s.syn.cellLimit.takes(s.filled, auto) {
 			s.leaf = leafNone
 			if isBlank(rest) {
 				return heading{}, false
 			}
 			return s.start(lines, i, rest, col)
 		}
+		s.filled += auto
+		s.addRow(i, rest)
 		return heading{}, false
 	case leafMath:
 		if strings.Contains(rest, "$$") {
@@ -432,26 +496,110 @@ func (s *scanner) feed(lines []string, i int) (heading, bool) {
 // cells as the last line of the paragraph, which is then the header row (GFM 0.29 §4.10): the header row leaves the
 // paragraph, and the lines after the delimiter row are the body rows of the table. It reports whether it did.
 func (s *scanner) tableStarts(rest string) bool {
-	cells := tableDelimiterCells(rest, s.syn.mdTables)
+	cells := tableDelimiterCells(rest, false)
 	if cells == 0 {
 		return false
 	}
 	u := &s.units[s.cur]
-	if len(u.lines) == 0 {
+	if len(u.lines) == 0 || u.noTable {
 		return false
 	}
 	header := u.lines[len(u.lines)-1]
-	if tableRowCells(header) != cells || s.syn.mdTables && !strings.Contains(header, "|") {
+	if tableRowCells(header) != cells {
+		u.noTable = true
 		return false
 	}
+	at := u.at + len(u.lines) - 1
 	u.lines = u.lines[:len(u.lines)-1]
+	u.pipes = true
+	s.openTable(at, header, cells)
 	if len(u.lines) == 0 {
 		// The paragraph was the header row alone: the table stands where the paragraph did.
 		s.units = append(s.units[:s.cur], s.units[s.cur+1:]...)
 		s.cur = len(s.units) - 1
 	}
-	s.leaf = leafTable
 	return true
+}
+
+// mdTable reports whether rest, the text of line i inside the containers open, is the header row of a table as
+// markdown-it 14.3.2's table rule reads it (rules_block/table.mjs), and the number of its columns: the next line
+// continues every open container, not lazily, and is a delimiter row (tableDelimiterCells) indented less than four
+// columns inside them, and rest, trimmed as JavaScript trims, holds a pipe and splits into as many cells (mdRowSpans).
+// The rule runs at the start of every block before any other, and on every line of a paragraph that is not lazy and
+// not indented four columns or more, which is where scanner.start reads a line. It runs only under mdTables.
+func (s *scanner) mdTable(lines []string, i int, rest string) (int, bool) {
+	if !s.syn.mdTables || i+1 >= len(lines) || !strings.Contains(strings.TrimFunc(rest, jsTrimmed), "|") {
+		return 0, false
+	}
+	next, col := expandLead(lines[i+1], 0), 0
+	for _, b := range s.stack {
+		r, c, ok := b.match(next, col, lines[i+1])
+		if !ok {
+			return 0, false
+		}
+		next, col = r, c
+	}
+	cells := tableDelimiterCells(next, true)
+	return cells, cells > 0 && cells == len(mdRowSpans(rest))
+}
+
+// lazyTable reports whether the lazy line i, of text rest after the first m containers open, is the header row of a
+// table that ends the open paragraph (mdTable): only when every container it does not continue is a list item.
+func (s *scanner) lazyTable(lines []string, i int, rest string, m int) bool {
+	for _, b := range s.stack[m:] {
+		if b.quote {
+			return false
+		}
+	}
+	_, ok := s.mdTable(lines, i, rest)
+	return ok
+}
+
+// openTable opens a table of cells columns whose header row is the line at, of text header.
+func (s *scanner) openTable(at int, header string, cells int) {
+	s.leaf = leafTable
+	s.cols, s.filled = cells, 0
+	s.tables = append(s.tables, table{note: s.innerNote()})
+	s.addRow(at, header)
+}
+
+// addRow adds the line at, of text rest, to the open table as a row of its cells up to the table's columns. A cell is
+// the text between the pipes that tableRowSpans finds, without the white space around it: cmark-gfm and comrak trim a
+// cell of spaces and tabs (a line holds no line ending), markdown-it trims it as JavaScript's String.prototype.trim.
+func (s *scanner) addRow(at int, rest string) {
+	spans := tableRowSpans(rest)
+	if s.syn.mdTables {
+		spans = mdRowSpans(rest)
+	}
+	row := tableRow{at: at, rest: rest}
+	for _, sp := range spans[:min(len(spans), s.cols)] {
+		b, e := sp[0], sp[1]
+		for b < e {
+			r, n := utf8.DecodeRuneInString(rest[b:])
+			if !s.cellSpace(r) {
+				break
+			}
+			b += n
+		}
+		for e > b {
+			r, n := utf8.DecodeLastRuneInString(rest[b:e])
+			if !s.cellSpace(r) {
+				break
+			}
+			e -= n
+		}
+		row.cells = append(row.cells, [2]int{b, e})
+	}
+	t := &s.tables[len(s.tables)-1]
+	t.rows = append(t.rows, row)
+}
+
+// cellSpace reports whether the viewer trims r from either end of a cell (addRow).
+func (s *scanner) cellSpace(r rune) bool {
+	if s.syn.mdTables {
+		return jsTrimmed(r)
+	}
+	return r == ' ' || r == '\t'
 }
 
 // mathEnd reads a line, rest, on which the containers from the m-th on do not continue
@@ -539,14 +687,13 @@ func (s *scanner) start(lines []string, i int, rest string, col int) (heading, b
 			}
 			return heading{}, false
 		}
-		if s.syn.mdTables && s.atx.set && s.atx.at == i-1 && s.atx.depth == len(s.stack) && strings.Contains(s.atx.rest, "|") {
-			if cells := tableDelimiterCells(rest, true); cells > 0 && cells == tableRowCells(s.atx.rest) {
-				s.retract = true
-				s.leaf = leafTable
-				return heading{}, false
-			}
+		if cells, ok := s.mdTable(lines, i, rest); ok {
+			// The table ends an open paragraph before its header row.
+			s.openTable(i, rest, cells)
+			s.delim = true
+			return heading{}, false
 		}
-		if s.leaf == leafPara && s.syn.tables && s.tableStarts(rest) {
+		if s.leaf == leafPara && s.syn.tables && !s.syn.mdTables && s.tableStarts(rest) {
 			return heading{}, false
 		}
 		if s.leaf == leafPara {
@@ -567,7 +714,6 @@ func (s *scanner) start(lines []string, i int, rest string, col int) (heading, b
 		}
 		if level, text, tab, ok := headingOf(rest); ok {
 			s.leaf = leafNone
-			s.atx = atxMark{at: i, depth: len(s.stack), rest: rest, set: true}
 			return heading{at: i, last: i, level: level, text: text, tab: tab, nested: !top, note: s.innerNote()}, true
 		}
 		if f, ok := fenceOpenAt(rest); ok {
@@ -863,6 +1009,18 @@ func boundaryLevel(lines []string, from, level int) int {
 	return len(lines)
 }
 
+// endsCmarkTable reports whether line ends the rows of a table as cmark-gfm and comrak 0.56.0 read them, which GitHub
+// and GitLab render (tables without mdTables), beside the blocks that interrupt a paragraph: an HTML block of type 7,
+// which opens there and takes in the lines after it, and a line of no cell, a pipe alone with white space around it
+// (the slug vectors, `table rows ended by an HTML block of type 7` and `table row of a lone pipe`). markdown-it takes
+// both as rows.
+func (y blockSyntax) endsCmarkTable(line string) bool {
+	if !y.tables || y.mdTables || indentOf(line) >= 4 {
+		return false
+	}
+	return htmlStart(line) == 7 || strings.Trim(line, " \t") == "|"
+}
+
 // htmlStart reads the start of an HTML block of CommonMark 0.31.2 and returns its
 // type, 1 to 7, or 0 when line starts none. A type 6 start is the name of a block
 // element; a type 7 start is one complete tag and nothing but white space after it.
@@ -1097,12 +1255,21 @@ func joinLines(lines []string) string {
 // §4.10), and 0 when it is not: up to three spaces of indent, then cells separated by pipes, each of hyphens with an
 // optional colon at either end and spaces around, a pipe at either end optional. A row of one cell needs a pipe, since
 // hyphens alone are a thematic break or a setext underline; markdown-it (pipeless) takes it, its header row holding a
-// pipe.
+// pipe, and reads the row by mdDelimiterCells.
 func tableDelimiterCells(line string, pipeless bool) int {
 	if indentOf(line) > 3 {
 		return 0
 	}
-	t := strings.Trim(line, " \t")
+	if pipeless {
+		return mdDelimiterCells(line)
+	}
+	// cmark-gfm and comrak read a vertical tab or a form feed around a delimiter row as white space; markdown-it
+	// (pipeless) does not (the slug vectors, `table delimiter row with a vertical tab`).
+	space := " \t\v\f"
+	if pipeless {
+		space = " \t"
+	}
+	t := strings.Trim(line, space)
 	if t == "" || !pipeless && !strings.Contains(t, "|") {
 		return 0
 	}
@@ -1110,7 +1277,7 @@ func tableDelimiterCells(line string, pipeless bool) int {
 	t = strings.TrimSuffix(t, "|")
 	cells := strings.Split(t, "|")
 	for _, cell := range cells {
-		c := strings.Trim(cell, " \t")
+		c := strings.Trim(cell, space)
 		c = strings.TrimPrefix(c, ":")
 		c = strings.TrimSuffix(c, ":")
 		if c == "" || strings.Trim(c, "-") != "" {
@@ -1121,27 +1288,89 @@ func tableDelimiterCells(line string, pipeless bool) int {
 }
 
 // tableRowCells returns the number of cells of a table row: the cells between the pipes that a backslash does not
-// escape, a pipe at either end optional. A code span protects no pipe: GitHub, GitLab and VS Code split the row there
-// (GFM 0.29 §4.10 example 200).
-func tableRowCells(line string) int {
-	t := strings.Trim(line, " \t")
-	n := 1
-	for i := 0; i < len(t); i++ {
-		switch t[i] {
-		case '\\':
-			i++
-		case '|':
-			n++
+// escape, a pipe at either end optional. A pipe right after a backslash is escaped even when that backslash is itself
+// escaped: GitHub, GitLab and VS Code split the row before they read escapes, so `a\\|b` is one cell (the slug
+// vectors, `table header cells with escaped pipes`). A code span protects no pipe: they split the row there (GFM 0.29
+// §4.10 example 200).
+func tableRowCells(line string) int { return len(tableRowSpans(line)) }
+
+// mdDelimiterCells returns the number of cells of line when markdown-it 14.3.2's table rule reads it as a delimiter
+// row, and 0 when it does not: after the spaces and tabs that begin it, its first character is a pipe, a hyphen or a
+// colon, its second one of those or a space or a tab, never a space or a tab after a hyphen, which would open a list
+// item, and the rest only those; split at every pipe, each part trimmed is hyphens with an optional colon at either
+// end, an empty part standing only first or last.
+func mdDelimiterCells(line string) int {
+	t := strings.TrimLeft(line, " \t")
+	if len(t) < 2 || !strings.ContainsRune("|-:", rune(t[0])) || !strings.ContainsRune("|-: \t", rune(t[1])) ||
+		t[0] == '-' && (t[1] == ' ' || t[1] == '\t') || strings.Trim(t, "|-: \t") != "" {
+		return 0
+	}
+	parts := strings.Split(t, "|")
+	n := 0
+	for k, p := range parts {
+		c := strings.Trim(p, " \t")
+		if c == "" {
+			if k == 0 || k == len(parts)-1 {
+				continue
+			}
+			return 0
 		}
-	}
-	if strings.HasPrefix(t, "|") {
-		n--
-	}
-	if strings.HasSuffix(t, "|") && !strings.HasSuffix(t, `\|`) && len(t) > 1 {
-		n--
-	}
-	if n < 1 {
-		n = 1
+		c = strings.TrimPrefix(c, ":")
+		c = strings.TrimSuffix(c, ":")
+		if c == "" || strings.Trim(c, "-") != "" {
+			return 0
+		}
+		n++
 	}
 	return n
+}
+
+// mdRowSpans returns the byte ranges in line of the cells of a table row as markdown-it 14.3.2 splits it (escapedSplit):
+// the line trimmed as JavaScript trims, split at every pipe that does not follow a backslash, an empty first or last
+// part dropped. A row of a pipe alone has no cell.
+func mdRowSpans(line string) [][2]int {
+	from := len(line) - len(strings.TrimLeftFunc(line, jsTrimmed))
+	to := max(len(strings.TrimRightFunc(line, jsTrimmed)), from)
+	var out [][2]int
+	b := from
+	for i := from; i < to; i++ {
+		if line[i] == '|' && (i == from || line[i-1] != '\\') {
+			out = append(out, [2]int{b, i})
+			b = i + 1
+		}
+	}
+	out = append(out, [2]int{b, to})
+	if out[0][0] == out[0][1] {
+		out = out[1:]
+	}
+	if n := len(out); n > 0 && out[n-1][0] == out[n-1][1] {
+		out = out[:n-1]
+	}
+	return out
+}
+
+// tableRowSpans returns the byte ranges in line of the cells of a table row (tableRowCells), each with the white space
+// around it.
+func tableRowSpans(line string) [][2]int {
+	from := len(line) - len(strings.TrimLeft(line, " \t"))
+	to := max(len(strings.TrimRight(line, " \t")), from)
+	var out [][2]int
+	b := from
+	for i := from; i < to; i++ {
+		if line[i] == '|' && (i == from || line[i-1] != '\\') {
+			out = append(out, [2]int{b, i})
+			b = i + 1
+		}
+	}
+	out = append(out, [2]int{b, to})
+	if to > from && line[from] == '|' {
+		out = out[1:]
+	}
+	if to-from > 1 && line[to-1] == '|' && line[to-2] != '\\' {
+		out = out[:len(out)-1]
+	}
+	if len(out) == 0 {
+		out = [][2]int{{from, to}}
+	}
+	return out
 }

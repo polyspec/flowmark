@@ -1,6 +1,6 @@
 # GitLab's heading ids per code point (spec 10, Detail headings and anchors), the vectors of S_GL.
-# Recorded 2026-10-11 by running gitlab-glfm-markdown 0.0.45, the version and sha256 GitLab's Gemfile.lock
-# pins at commit 55bfaf7fe32d62fb4957d0f1014fdd14e1c19128, with the OPTIONS of its lib/banzai/filter/markdown_engines/glfm_markdown.rb:
+# Recorded 2026-10-13 by running gitlab-glfm-markdown 0.0.45, the version and sha256 GitLab's Gemfile.lock
+# pins at commit 57457fa19e3a9d9b7cc9a939b50f29fd6a59e62b, with the OPTIONS of its lib/banzai/filter/markdown_engines/glfm_markdown.rb:
 # --alerts --autolink --cjk-friendly-emphasis --description-lists --escaped-char-spans --footnotes --full-info-string --header-accessibility --header-id-prefix user-content- --inapplicable-tasks --math-code --math-dollars --multiline-block-quotes --only-escape-chars $%#&@!~^: --placeholder-detection --relaxed-autolinks --relaxed-tasklist-character --sourcepos --strikethrough --table --tasklist --tasklist-classes --tasklist-in-table --wikilinks-title-before-pipe --unsafe
 # Each heading id is user-content- and the id here. Re-record with make slug-vectors (scripts/record-slugs.mjs).
 #

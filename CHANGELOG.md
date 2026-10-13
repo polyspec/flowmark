@@ -3,6 +3,7 @@
 
 ## Unreleased
 
+- T12.1-38-1: the engine reads GFM tables as each viewer does, checked against 54 more table vectors recorded from GitHub, GitLab and VS Code: a table cell is inline content, so its footnote references number the footnotes and its raw HTML headings and ids are read, with each `\|` read as `|` and the cells past the header's columns dropped; the paragraph before a header row unescapes its pipes and defines no link label on GitHub and GitLab; the body rows stop at each viewer's cell limit; and VS Code's markdown-it table rule is tried first at every block start and on every paragraph line, so a heading, fence, HTML block, math block, list item or block quote line is a header row when a delimiter row follows it.
 - T12.1-38-2 (fix): `make slug-vectors` sends a GitHub request again, up to three attempts, when its connection fails before any response, so one timed-out connection no longer ends a recording of thousands of requests; an HTTP error still ends it.
 - T12: the markdown database is complete: every item of its checklist is done — the grammar, the validator, the IR executor behind `markdown://` on the released orm v0.0.9, the scale-tested write path, the faces, the crudui-rendered board at a thousand posts, the three-platform gate, and the complex foreign key corpus.
 - T12.12: flowmark requires the released orm v0.0.9 instead of the pseudo-version: the tag carries the IR executor protocol items T61 and T62 and the validator series T82–T102, and the whole suite passes on it.
