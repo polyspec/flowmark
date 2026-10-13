@@ -2,7 +2,7 @@
 // headings and the splitting of their ids, the treatments and their compression, and the reading of GitHub's HTML.
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mkdtempSync, readFileSync, writeFileSync, chmodSync } from 'node:fs';
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { compress, forms, githubAttributes, githubRender, githubIds, gitlabIds, glfmArgs, groupSize, headingIdAttrs, headingsOf, katexOptions, methodSource, snippetPrefix, splitIds, treatment } from '../scripts/record-slugs.mjs';
@@ -108,7 +108,8 @@ test("a snippet's heading slug prefix is its anchorized base name and a hyphen, 
 });
 
 // withGh runs fn with a gh on PATH that answers the calls in turn from replies: each reply is [stderr, exit] for a
-// failure or [stdout] for a rendering; it returns the number of calls gh got.
+// failure or [stdout] for a rendering; it returns the number of calls gh got and the directory of the stub, which it
+// removes.
 function withGh(replies, fn) {
   const dir = mkdtempSync(path.join(tmpdir(), 'record-slugs-gh-'));
   const count = path.join(dir, 'count');
@@ -128,30 +129,32 @@ process.stdout.write(out);
   process.env.PATH = `${dir}${path.delimiter}${saved}`;
   try {
     fn();
+    return { calls: Number(readFileSync(count, 'utf8')), dir };
   } finally {
     process.env.PATH = saved;
+    rmSync(dir, { recursive: true, force: true });
   }
-  return Number(readFileSync(count, 'utf8'));
 }
 
 const noResponse = ['Post "https://api.github.com/markdown": dial tcp 20.200.245.245:443: connect: operation timed out\n', 1];
 
 test('a GitHub request whose connection fails before a response is sent again', () => {
   let html;
-  const calls = withGh([noResponse, ['<p>x</p>\n']], () => { html = githubRender('x'); });
+  const { calls, dir } = withGh([noResponse, ['<p>x</p>\n']], () => { html = githubRender('x'); });
   assert.equal(html, '<p>x</p>\n');
   assert.equal(calls, 2);
+  assert.equal(existsSync(dir), false, `the stub directory ${dir} is left behind`);
 });
 
 test('a GitHub request that gets an HTTP error is not sent again', () => {
-  const calls = withGh([['HTTP 422: Validation Failed\n', 1], ['<p>x</p>\n']], () => {
+  const { calls } = withGh([['HTTP 422: Validation Failed\n', 1], ['<p>x</p>\n']], () => {
     assert.throws(() => githubRender('x'), /Command failed/);
   });
   assert.equal(calls, 1);
 });
 
 test('a GitHub request whose connection fails at every attempt ends the recording', () => {
-  const calls = withGh([noResponse, noResponse, noResponse, ['<p>x</p>\n']], () => {
+  const { calls } = withGh([noResponse, noResponse, noResponse, ['<p>x</p>\n']], () => {
     assert.throws(() => githubRender('x'), /Command failed/);
   });
   assert.equal(calls, 3);
