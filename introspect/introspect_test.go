@@ -107,7 +107,7 @@ func requireCatalog(t *testing.T, res *introspect.Result) {
 				others[n] = x
 			}
 		}
-		parsed, diags := dbspec.Parse(d.Text, others)
+		parsed, _, diags := dbspec.Parse(d.Text, others)
 		if len(diags) > 0 {
 			t.Fatalf("returned %s does not parse: %+v", d.File, diags)
 		}

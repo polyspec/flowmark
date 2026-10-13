@@ -537,7 +537,7 @@ func TestUpdate(t *testing.T) {
 		{"60#surfaces: an upsert that two keys can meet", f, f.msg("insert", "people", map[string]any{"set": sets("id", "name"), "on_duplicate": []any{set("name", 1)}}, "P9", "Nine"), "IR_INVALID"},
 		{"60#surfaces: an upsert that does not assign its unique key", f, f.msg("insert", "people", map[string]any{"set": sets("name"), "on_duplicate": []any{set("name", 0)}}, "Nine"), "IR_INVALID"},
 		{"60#surfaces: an update of the key column", f, byID(f, "notes", sets("id"), "N3", "N7"), "IR_INVALID"},
-		{"60#surfaces: a restore that assigns the key column", f, f.msg("restore", "people", map[string]any{"set": sets("id"), "where": where(pred("id", "eq", p(1)))}, "P9", "P3"), "IR_INVALID"},
+		{"60#surfaces: a restore that sets the key column to null", f, f.msg("restore", "people", map[string]any{"set": []any{map[string]any{"column": "id", "null": true}}, "where": where(pred("id", "eq", p(0)))}, "P3"), "IR_INVALID"},
 		{"60#surfaces: a restore that assigns the soft delete column", f, f.msg("restore", "people", map[string]any{"set": sets("deleted_at"), "where": where(pred("id", "eq", p(1)))}, "2026-10-11 09:00:00", "P3"), "IR_INVALID"},
 		{"60#surfaces: a set to null of a non-null column", f, f.msg("update", "notes", map[string]any{"set": []any{map[string]any{"column": "title", "null": true}}, "where": where(pred("id", "eq", p(0)))}, "N3"), "IR_INVALID"},
 	}
@@ -580,6 +580,29 @@ func TestDelete(t *testing.T) {
 		f := fresh(t)
 		f.commit(f.want(byID(f, "restore", "people", "P3"), `{"affected":1,"keys":[]}`))
 		f.want(f.msg("all", "people", map[string]any{"columns": none}), `{"rows":[{"id":"P1"},{"id":"P2"},{"id":"P3"}]}`)
+	})
+	t.Run("60#surfaces: restore takes its primary key from the set", func(t *testing.T) {
+		f := fresh(t)
+		f.commit(f.want(f.msg("restore", "people", map[string]any{"set": sets("id")}, "P3"), `{"affected":1,"keys":[]}`))
+		f.want(f.msg("all", "people", map[string]any{"columns": none}), `{"rows":[{"id":"P1"},{"id":"P2"},{"id":"P3"}]}`)
+	})
+	t.Run("60#surfaces: restore takes a unique key from the set when the primary key is not covered", func(t *testing.T) {
+		f := fresh(t)
+		f.commit(f.want(f.msg("restore", "people", map[string]any{"set": sets("email")}, "gone@x.io"), `{"affected":1,"keys":[]}`))
+	})
+	t.Run("60#surfaces: restore writes the set values outside the key", func(t *testing.T) {
+		f := fresh(t)
+		f.commit(f.want(f.msg("restore", "people", map[string]any{"set": sets("id", "name")}, "P3", "Back"), `{"affected":1,"keys":[]}`))
+		f.want(f.msg("all", "people", map[string]any{"columns": map[string]any{"mode": "none", "add": []string{"id", "name"}}, "where": where(pred("id", "eq", p(0)))}, "P3"), `{"rows":[{"id":"P3","name":"Back"}]}`)
+	})
+	t.Run("60#surfaces: a further condition of the where narrows the restore", func(t *testing.T) {
+		f := fresh(t)
+		f.want(f.msg("restore", "people", map[string]any{"set": sets("id"), "where": where(pred("name", "eq", p(1)))}, "P3", "Other"), `{"affected":0,"keys":[]}`)
+		f.commit(f.want(f.msg("restore", "people", map[string]any{"set": sets("id"), "where": where(pred("name", "eq", p(1)))}, "P3", "Gone"), `{"affected":1,"keys":[]}`))
+	})
+	t.Run("60#surfaces: a key value in the set and another in the where both bind", func(t *testing.T) {
+		f := fresh(t)
+		f.want(f.msg("restore", "people", map[string]any{"set": sets("id"), "where": where(pred("id", "eq", p(1)))}, "P9", "P3"), `{"affected":0,"keys":[]}`)
 	})
 	t.Run("60#surfaces: restore of a row that is not deleted changes nothing", func(t *testing.T) {
 		f := fresh(t)
@@ -647,6 +670,8 @@ func TestDelete(t *testing.T) {
 		{"10#diagnostics: a delete whose restrict check needs an unavailable table", bf, byID(bf, "delete", "items", "T3"), "CONSTRAINT"},
 		{"60#surfaces: restore of a table without soft_delete", f, byID(f, "restore", "tags", 1), "IR_INVALID"},
 		{"60#surfaces: restore by a column that is no key", f, f.msg("restore", "people", map[string]any{"where": where(pred("name", "eq", p(0)))}, "Gone"), "IR_INVALID"},
+		{"60#surfaces: restore whose values cover no key", f, f.msg("restore", "people", map[string]any{"set": sets("name")}, "Gone"), "IR_INVALID"},
+		{"60#surfaces: restore with or in its where", f, f.msg("restore", "people", map[string]any{"set": sets("id"), "where": where(pred("name", "eq", p(1)), map[string]any{"pred": map[string]any{"conn": "or", "column": "name", "op": "eq", "p": 2}})}, "P3", "Gone", "Other"), "IR_INVALID"},
 		{"60#surfaces: restore that assigns the soft delete column", f, f.msg("restore", "people", map[string]any{"set": []any{map[string]any{"column": "deleted_at", "null": true}}, "where": where(pred("id", "eq", p(0)))}, "P3"), "IR_INVALID"},
 		{"60#surfaces: a delete without where", f, f.msg("delete", "tags", nil), "IR_INVALID"},
 	}

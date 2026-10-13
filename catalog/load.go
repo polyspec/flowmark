@@ -170,7 +170,8 @@ func (l *loader) parseSet(docs []*document) bool {
 				others[o.name] = o.text
 			}
 		}
-		parsed, ds := dbspec.Parse(d.text, others)
+		// The declaration positions are not read here; T12-3 replaces locateDecl with them (docs/plans/markdown-database-checklist.md).
+		parsed, _, ds := dbspec.Parse(d.text, others)
 		for _, x := range ds {
 			l.add(Diagnostic{File: d.file, Line: x.Line, Column: x.Column, Rule: rule, Message: "dbspec " + x.Rule + ": " + x.Message})
 		}

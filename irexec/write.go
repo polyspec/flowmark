@@ -954,47 +954,27 @@ func (w *writer) removeRow(x *rec) *Error {
 	return nil
 }
 
-// restore clears the soft delete column of the soft-deleted row its where names by
-// its primary key or one unique key, with the set values (orm protocol 1.5).
+// restore clears the soft delete column of the soft-deleted row that its key names, with the new values of its set
+// (orm protocol 1.5). orm's ir.RestoreKey picks the key after the request hook, as the validator did: the set values
+// of the key columns become conditions after the where, whose other conditions narrow the restore as a hook narrows an
+// update, and the other set values are the new values.
 func (w *writer) restore() *Error {
 	req := w.r.cl.req
-	if w.ent.SoftDelete == "" {
-		return errf(codeIRInvalid, "restore of %s, which has no soft_delete setting", w.ent.Name)
-	}
-	if err := restoreKey(w.ent, req.Where); err != nil {
-		return err
-	}
-	rows, err := w.matched(true)
+	parts, err := ir.RestoreKey(w.ent, req)
 	if err != nil {
-		return err
+		return fromIR(err)
 	}
-	set := append(slices.Clone(req.Set), ir.Assign{Column: w.ent.SoftDelete, Null: true})
-	if err := w.updateRows(rows, set, false); err != nil {
-		return err
+	req.Where = &parts.Where
+	rows, xerr := w.matched(true)
+	if xerr != nil {
+		return xerr
+	}
+	set := append(slices.Clone(parts.Set), ir.Assign{Column: w.ent.SoftDelete, Null: true})
+	if xerr := w.updateRows(rows, set, false); xerr != nil {
+		return xerr
 	}
 	w.answer.Affected = int64(len(rows))
 	return nil
-}
-
-// restoreKey checks that a restore's where names every column of the primary key
-// or of one unique key once, with eq and a parameter, joined by and.
-func restoreKey(ent *runtimemodel.Entity, where *ir.Group) *Error {
-	invalid := errf(codeIRInvalid, "restore of %s names every column of its primary key or of one unique key once with an eq value", ent.Name)
-	var columns []string
-	for i, item := range where.Items {
-		pr := item.Pred
-		if pr == nil || pr.Op != "eq" || pr.P == nil || pr.Fn != nil || pr.Value != nil || pr.Ref != nil || pr.Sub != nil || (i > 0 && pr.Conn != "and") || slices.Contains(columns, pr.Column) {
-			return invalid
-		}
-		columns = append(columns, pr.Column)
-	}
-	same := func(key []string) bool {
-		return len(key) == len(columns) && !slices.ContainsFunc(key, func(c string) bool { return !slices.Contains(columns, c) })
-	}
-	if same(ent.PK) || slices.ContainsFunc(ent.Uniques, func(k runtimemodel.Key) bool { return same(k.Columns) }) {
-		return nil
-	}
-	return invalid
 }
 
 // sortedTables returns the names of a set of tables in order.

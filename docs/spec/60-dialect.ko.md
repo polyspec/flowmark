@@ -1,5 +1,5 @@
 <!-- doc-id: spec-dialect -->
-<!-- source-sha256: 6b4f9866e1fce917574db4b22e9aeb930985e7bae17fe2cc09ddf24d04365247 -->
+<!-- source-sha256: bf6980ac1ac66fb8e564056762a868a23ab291a08cb88e8085afd6f51c291ac4 -->
 # Capability table
 
 [English](60-dialect.md)
@@ -59,7 +59,7 @@ surface는 `CAPABILITY_UNSUPPORTED`, 그리고 orm의 규칙이 모든 backend�
 | `paginate` | 지원. 요청 하나가 일관된 corpus 하나를 읽는다 |
 | `insert`(단일, 다중 행) | 지원. `identity`, `key_prefix`, `order` column은 executor가 할당하며 생략할 수 있다. default는 명시적으로 쓴다. insert는 값이나 NULL로 배정한다 — `plus_p`와 `minus_p`는 거기서 `IR_INVALID`이고 `on_duplicate`에서는 유효하다(orm의 규칙). 근거: MySQL은 그런 배정을 default에서 계산하고, PostgreSQL과 SQLite는 거절한다 |
 | `update` | 지원. 읽은 뒤 바뀐 대상은 덮어쓰지 않고 `WRITE_CONFLICT`로 실패한다. primary key나 identity column의 배정은 `IR_INVALID`다([document model](20-document-model.ko.md#key)) |
-| `delete`, `restore` | 지원. `restore`는 SQL 형태를 지킨다(soft delete column을 비우고, 지운 동안 unique key를 유지). 참조되는 행의 delete는 같은 delete가 참조하는 행을 지우더라도 `FOREIGN_KEY`([constraints](50-constraints.ko.md#key와-참조)). primary key, identity, soft delete column을 배정하는 `restore`는 `IR_INVALID`다 |
+| `delete`, `restore` | 지원. `restore`는 SQL 형태를 지키며(soft delete column을 비우고, 지운 동안 unique key를 유지), 그 key는 request hook 뒤에 orm의 `ir.RestoreKey`(orm protocol 1.5)가 set 값과 `and`로 이은 `eq` 조건에서 고르므로, hook의 조건은 update를 좁히듯 restore를 좁힌다. 참조되는 행의 delete는 같은 delete가 참조하는 행을 지우더라도 `FOREIGN_KEY`([constraints](50-constraints.ko.md#key와-참조)). primary key, identity, soft delete column을 배정하는 `restore`는 `IR_INVALID`다 |
 | `optimistic` | 지원. 일치가 없으면 `OPTIMISTIC_LOCK` |
 | `on_duplicate` | insert된 행과 만날 수 있는 key — insert가 `identity`나 `key_prefix`에 맡기지 않는 한 primary key, 그리고 각 unique key — 가 정확히 하나이고 insert가 그 모든 column을 배정할 때 지원한다. 그 key가 충돌 대상이며, 그 밖의 `on_duplicate`는 `IR_INVALID`다(MySQL의 아무 key 규칙과 PostgreSQL과 SQLite의 충돌 대상을 같은 key로 만드는 orm의 규칙). primary key는 아래 비교가 정하는 대로 행과 만난다. 근거: MySQL은 자신의 key 순서로 아무 unique key에서나 행과 만나는 반면, PostgreSQL과 SQLite는 충돌 대상 하나를 지정하고 다른 key에서의 만남은 `DUPLICATE_KEY`다. 행과 만날 수 있는 key가 하나이면 셋은 구성상 같다 |
 | primary key 비교 | A–Z의 대소문자를 가리지 않는다. SQL에서 orm의 binary collation과 다른데, key는 file 이름이자 anchor이기 때문이다([document model](20-document-model.ko.md#key)): key가 다른 key와 대소문자를 무시하고 같은 insert는 `DUPLICATE_KEY`이며, 충돌 key가 primary key인 `on_duplicate` insert는 그 행 — 바이트 단위로 같은 key가 먼저, 아니면 byte 순서에서 가장 작은 것 — 과 만나고, 그 행은 자기 key를 유지한다. 근거: `ON DUPLICATE KEY UPDATE`와 `ON CONFLICT`는 충돌 key의 index가 그 index의 비교로 보고하는 중복에서 작동한다 |
