@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database-checklist -->
-<!-- source-sha256: c06e091af0c4b4b7b03ffe34ae66fcf0ab063bb7efc0cfde1c928913b3d2078c -->
+<!-- source-sha256: a5bc7ce43b3227b75a3454b9172aebfbb8b95156df9a4ef5bdac681dae34fd69 -->
 # markdown database checklist
 
 ## T12 markdown database
@@ -143,3 +143,4 @@
 - [o] T12-3 flowmark의 문법 하나. 원인: `catalog/rules.go`의 `locateDecl`은 regex로 dbspec 선언 문법을 다시 적고, 찾지 못하면 1행 1열을 돌려준다 — 없는 위치를 그럴듯한 위치로 바꾸는 fallback — orm의 Go dbspec model에 선언 위치가 없었기 때문이다. 인수 조건: orm이 `T128-3p`(parse 결과의 선언 위치)를 release한 뒤 `locateDecl`과 그 fallback을 지우고 그 위치를 쓴다; test 아닌 code의 감사는 regex와 문자열 일치를 다루며, pattern은 그 문법의 유일한 읽기이거나 외부 도구 동작을 출처와 함께 옮긴 것일 때만 정당하다(`store/inline.go`의 `vsGuard`는 `@vscode/markdown-it-katex`를 인용한다); 규칙이 다시 적힌 곳은 red 먼저. 결과: 유효한 문서 중 정규식과 parser가 다르게 읽는 것이 없어 제거에는 red 사례가 없다. 결함은 다시 적은 문법과 그 대체 동작이었다. 근거: orm `docs/plans/editor-stack.md`.
   - [ ] T12-3-1 set의 문서 이름을 orm으로 정한다 (T12-3에 이어). 원인: T12-3의 감사가 `catalog/load.go`의 `headerName`을 찾았다. 이것은 parse 전에 문서를 key로 묶으려고 `dbspec 1 <document>` header를 문자열 비교로 다시 적고, header가 맞지 않으면 파일 이름을 대신 쓴다. orm에는 문서 집합을 parse하는 공개 API가 없고(orm `T166`), orm의 runtimemodel도 header를 같은 방식으로 다시 적는다. 완료 조건: orm이 `T166`을 릴리스한 뒤 catalog가 그것으로 set을 parse하고, `headerName`과 그 대체 동작을 없애며, 문자열 비교가 parser와 다르게 읽는 header로 먼저 red를 확인한다.
 - [o] T12-4 catalog가 선언된 dbspec set 파일을 읽는다. 원인: catalog는 모든 `dbspec/*.dbs`를 묶음으로 삼는데, 이것은 orm set 파일(`T128-2a`) 옆의 세 번째 선언이다. 인수 조건: orm이 `T128-2a`를 release한 뒤 판정을 `docs/spec/00-overview.md`와 `30-schema.md`(+ko)에 먼저 적는다 — catalog는 `dbspec/dbspec-set.json`을 읽는다; `dbspec/` 아래에 있지만 묶음이 나열하지 않은 `.dbs`는 그것을 밝힌 catalog 오류이며, `dbspec/` 밖의 나열 경로는 오류이고, 각각 수락 vector와 거부 vector를 가진다; `testdata/`와 `examples/` 아래 모든 corpus가 set 파일을 가진다; board의 orm-gen 호출은 `--set`을 받는다. 근거: orm `docs/plans/editor-stack.md`.
+- [o] T12-5 slug recorder test를 Windows에서 실행한다. 원인: scripts/record-slugs.mjs의 재시도 test는 `gh`라는 이름의 node script를 PATH 맨 앞에 두는데 Windows는 그것을 실행하지 않아, 진짜 gh가 답했고 test가 추가된 뒤 CI의 모든 Windows 실행에서 test 셋이 실패했다. 완료 조건: githubRender가 request를 인자로 받고, test는 stub program 대신 node:test의 mock function을 넘기며, Windows 실행이 통과한다.
