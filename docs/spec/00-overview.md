@@ -19,8 +19,8 @@ git keeps the audit trail, the branches and the rollback.
   the client validates the IR request, does not plan, and sends it to the flowmark server, which
   answers rows or one orm error. orm contains no markdown engine; grounding: an engine inside orm
   would be carried by each of its five clients, a separate engine is one implementation.
-- **The catalog is the schema.** A corpus root holds `dbspec/*.dbs`, the dbspec document set
-  that declares every table, its storage and its settings ([schema](30-schema.md)). Documents
+- **The catalog is the schema.** A corpus root holds `dbspec/dbspec-set.json`, the set file of the dbspec documents
+  that declare every table, its storage and its settings ([schema](30-schema.md)). Documents
   carry no schema copy, as a database keeps its schema once and never per row. flowmark reads
   the catalog and the IR with orm's Go `engine/dbspec` and `engine/ir` packages as libraries and
   never reimplements them.
@@ -47,7 +47,7 @@ and state.
 | --- | --- |
 | corpus | the directory tree of markdown documents that is the database |
 | corpus root | the directory given to a command or the server; it holds `dbspec/` and `.flowmark/` |
-| catalog | the `dbspec/*.dbs` document set of a corpus root |
+| catalog | the document set that `dbspec/dbspec-set.json` of a corpus root declares |
 | storage | how a table's rows sit in files: `files`, `document` or `block` |
 | row scope | the part of a document that belongs to one row: its file, or its detail section |
 | codec | the strict parser and the canonical renderer of the storages |

@@ -1,5 +1,5 @@
 <!-- doc-id: spec-overview -->
-<!-- source-sha256: 5cec94fe83a6fc82f2cd306a3371ee7451ba6a779336aa1e76ce94ad403105cf -->
+<!-- source-sha256: d85b5f89addb7bf99a9c73b6cd1f5da48b71a8fac0594150a2a221bcbdf0431f -->
 # 개요
 
 [English](00-overview.md)
@@ -19,8 +19,8 @@ flowmark는 markdown 문법을 가진 텍스트 DB다. 파일이 database이고,
   database에 접속한다. scheme `markdown://`은 IR executor를 고른다 — client는 IR 요청을 검증하고 plan하지
   않으며 flowmark server로 보내고, server는 행이나 orm 오류 하나로 답한다. orm은 markdown 엔진을 담지
   않는다. 근거: orm 안의 엔진은 다섯 client가 각자 가져야 하고, 별도 엔진은 구현이 하나다.
-- **catalog가 schema다.** corpus root는 모든 table과 그 저장과 setting을 선언하는 dbspec 문서 set
-  `dbspec/*.dbs`를 담는다([schema](30-schema.md)). database가 schema를 행마다가 아니라 한 번만 두듯
+- **catalog가 schema다.** corpus root는 모든 table과 그 저장과 setting을 선언하는 dbspec 문서의 set
+  파일 `dbspec/dbspec-set.json`을 담는다([schema](30-schema.md)). database가 schema를 행마다가 아니라 한 번만 두듯
   문서는 schema 사본을 갖지 않는다. flowmark는 catalog와 IR을 orm의 Go `engine/dbspec`과 `engine/ir` package를 library로 써서 읽고, 이들을
   다시 구현하지 않는다.
 - **corpus가 진실이다.** corpus는 catalog가 기술하는 markdown 문서의 directory tree다. 모든 쓰기는
@@ -42,7 +42,7 @@ emit하면 그대로 재현되고, 같은 입력으로 operation을 반복하면
 | --- | --- |
 | corpus | database인 markdown 문서의 directory tree |
 | corpus root | command나 server에 준 directory. `dbspec/`과 `.flowmark/`를 담는다 |
-| catalog | corpus root의 `dbspec/*.dbs` 문서 set |
+| catalog | corpus root의 `dbspec/dbspec-set.json`이 선언한 문서 set |
 | storage | table의 행이 file에 놓이는 방식: `files`, `document`, `block` |
 | row scope | 행 하나에 속하는 문서의 부분: 그 file, 또는 그 상세 섹션 |
 | codec | 저장 방식들의 strict parser와 canonical renderer |

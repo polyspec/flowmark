@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"github.com/polyspec/flowmark/internal/corpustest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -86,6 +87,9 @@ func boardRoot(t *testing.T) string {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(root, "dbspec", "board.dbs"), []byte(boardDBS), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := corpustest.WriteSetFile(filepath.Join(root, "dbspec")); err != nil {
 		t.Fatal(err)
 	}
 	return root
@@ -181,6 +185,9 @@ table views {
 			t.Fatal(err)
 		}
 		if err := os.WriteFile(filepath.Join(root, "dbspec", "flowmark.dbs"), []byte(dbs), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := corpustest.WriteSetFile(filepath.Join(root, "dbspec")); err != nil {
 			t.Fatal(err)
 		}
 		cliOK(t, "install", root)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/polyspec/flowmark/internal/corpustest"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -309,6 +310,9 @@ func writeTree(t testing.TB, root string, docs map[string]string) {
 		if err := os.WriteFile(full, []byte(text), 0o644); err != nil {
 			t.Fatal(err)
 		}
+	}
+	if err := corpustest.WriteSetFile(filepath.Join(root, "dbspec")); err != nil {
+		t.Fatal(err)
 	}
 }
 

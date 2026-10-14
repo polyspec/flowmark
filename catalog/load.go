@@ -4,8 +4,10 @@ import (
 	"errors"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -102,42 +104,80 @@ func fileDiagnostic(file, msg string) Diagnostic {
 	return Diagnostic{File: file, Line: 1, Column: 1, Rule: rule, Message: msg}
 }
 
-// readDocuments reads the .dbs files of the set in name order. A file that
-// cannot be read or fails the byte check is a diagnostic and leaves the set.
-// Hidden entries are skipped, as the corpus walk skips them; any other entry
-// that is not a .dbs file is a diagnostic, never dropped.
+// readDocuments reads the documents that the set file dbspec/dbspec-set.json lists, with orm's set reader, in file
+// name order (docs/spec/30-schema.md, The catalog). An error of the set file, a listed document outside dbspec/ or in a
+// folder of it, an external entry, a .dbs file of dbspec/ that the set does not list and any other entry of dbspec/
+// are diagnostics, never dropped; a document that fails the byte check leaves the set with its diagnostics. Hidden
+// entries are skipped, as the corpus walk skips them.
 func (l *loader) readDocuments(root string, entries []fs.DirEntry) []*document {
+	setFile := dbspecDir + "/" + dbspec.SetFileName
+	listed := map[string]bool{}
 	var docs []*document
-	found := false
+	hasSet := false
 	for _, e := range entries {
-		name := e.Name()
-		file := dbspecDir + "/" + name
-		switch {
-		case strings.HasPrefix(name, "."):
-		case e.IsDir():
-			l.add(fileDiagnostic(file, "unexpected directory in dbspec/"))
-		case strings.HasSuffix(name, dbsExt):
-			found = true
-			text, ds, err := dbspec.ReadFile(filepath.Join(root, dbspecDir, name))
-			if err != nil {
-				l.add(fileDiagnostic(file, "cannot read "+file+": "+err.Error()))
+		if e.Name() == dbspec.SetFileName && !e.IsDir() {
+			hasSet = true
+		}
+	}
+	if !hasSet {
+		l.add(fileDiagnostic(setFile, "no "+setFile))
+	} else {
+		set, errs := dbspec.ReadSet(filepath.Join(root, dbspecDir, dbspec.SetFileName))
+		for _, e := range errs {
+			l.add(fileDiagnostic(setFile, "dbspec "+e.Rule+": "+l.corpusPath(root, e.Message)))
+		}
+		for _, f := range set.External {
+			l.add(fileDiagnostic(setFile, "external document "+path.Clean(l.corpusPath(root, f.Path))+": the catalog uses no document outside its set"))
+		}
+		for _, f := range set.Documents {
+			file, ok := l.documentFile(root, f.Path)
+			if !ok {
+				l.add(fileDiagnostic(setFile, "listed document "+file+" is not directly in dbspec/"))
 				continue
 			}
+			listed[file] = true
+			text, ds := dbspec.ReadBytes(file, f.Bytes)
 			for _, d := range ds {
 				l.add(Diagnostic{File: file, Line: d.Line, Column: d.Column, Rule: rule, Message: "dbspec " + d.Rule + ": " + d.Message})
 			}
 			if len(ds) > 0 {
 				continue
 			}
-			docs = append(docs, &document{file: file, name: headerName(text, name), text: text})
+			docs = append(docs, &document{file: file, name: headerName(text, path.Base(file)), text: text})
+		}
+	}
+	for _, e := range entries {
+		name := e.Name()
+		file := dbspecDir + "/" + name
+		switch {
+		case strings.HasPrefix(name, "."), name == dbspec.SetFileName:
+		case e.IsDir():
+			l.add(fileDiagnostic(file, "unexpected directory in dbspec/"))
+		case strings.HasSuffix(name, dbsExt):
+			if hasSet && !listed[file] {
+				l.add(fileDiagnostic(file, file+" is not listed in "+setFile))
+			}
 		default:
 			l.add(fileDiagnostic(file, "unexpected file in dbspec/: "+name))
 		}
 	}
-	if !found {
-		l.add(fileDiagnostic(dbspecDir, "no .dbs document in dbspec/"))
-	}
+	sort.Slice(docs, func(i, j int) bool { return docs[i].file < docs[j].file })
 	return docs
+}
+
+// documentFile is the corpus path of a listed document, and whether it lies directly in dbspec/.
+func (l *loader) documentFile(root, joined string) (string, bool) {
+	file := path.Clean(l.corpusPath(root, joined))
+	return file, path.Dir(file) == dbspecDir && strings.HasSuffix(file, dbsExt)
+}
+
+// corpusPath rewrites the paths that orm's set reader names, each the root joined with a corpus path, into corpus
+// paths, slash-separated and relative to the root, so a diagnostic names the file as every other corpus diagnostic does.
+func (l *loader) corpusPath(root, text string) string {
+	if prefix := filepath.Clean(root); prefix != "." {
+		text = strings.ReplaceAll(text, prefix+string(filepath.Separator), "")
+	}
+	return filepath.ToSlash(text)
 }
 
 // headerName is the document name of a file's header `dbspec 1 <document>`;

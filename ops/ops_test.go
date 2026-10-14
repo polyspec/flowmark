@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/polyspec/flowmark/internal/corpustest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -92,6 +93,9 @@ func boardCorpus(t *testing.T) *Corpus {
 		if err := os.WriteFile(full, []byte(text), 0o644); err != nil {
 			t.Fatal(err)
 		}
+	}
+	if err := corpustest.WriteSetFile(filepath.Join(root, "dbspec")); err != nil {
+		t.Fatal(err)
 	}
 	c, err := Open(context.Background(), root, 0)
 	if err != nil {

@@ -1,5 +1,5 @@
 <!-- doc-id: spec-schema -->
-<!-- source-sha256: cf86772fc36584a723627e6271fbcdae5f159a6901747609aadc8839c23e1fc1 -->
+<!-- source-sha256: 3519f0a35e5f5fb241d04e0fbc11967999b3d3d01eb8f03fed645341faeeb43f -->
 # Schema
 
 [English](30-schema.md)
@@ -9,14 +9,24 @@
 
 ## Catalog
 
-- corpus root의 `dbspec/*.dbs` 문서 set이 catalog다: database catalog처럼 schema의 유일한 출발점이다.
+- orm의 set 파일(orm `docs/dbspec.md`, Document sets)인 `dbspec/dbspec-set.json`이 선언한 문서 set이 corpus
+  root의 catalog다: database catalog처럼 schema의 유일한 출발점이다.
   문서는 schema 사본도 stamp도 갖지 않는다 — database는 schema를 행마다가 아니라 한 번만 두며, 문서마다
   사본을 두면 사본의 이탈이 그 자체로 버그 부류가 된다.
 - flowmark는 orm의 Go `engine/dbspec` package로 catalog를 읽고 그 manifest hash를 쓴다. 문법을 다시
   구현하지 않는다. `use` 줄은 `dbspec/` set 안에서 풀리며 외부 문서는 schema 오류다.
-- `dbspec/`에는 `.dbs` 집합만 있다. `dbspec/`의 다른 file은 `catalog` 진단이다.
+- `dbspec/`에는 set 파일과 그것이 나열한 `.dbs` 문서가 있고, 각 문서는 `dbspec/` 바로 아래에 있다. flowmark는 set
+  파일을 orm의 set reader로 읽으므로 그 규칙은 orm의 것이고 그 오류는 set 파일에 위치한 `catalog` 진단이다. set의
+  모든 선언을 검사하며 아무것도 버리지 않는다:
+  - `dbspec/dbspec-set.json`이 없는 corpus는 `catalog` 진단 `no dbspec/dbspec-set.json`이다;
+  - set 파일이 나열하지 않은 `dbspec/`의 `.dbs` 파일은 그 이름을 적은 `catalog` 진단이다;
+  - `dbspec/` 밖이나 그 하위 폴더에 있는 나열된 문서는 그 경로를 적은 `catalog` 진단이다;
+  - `external` 항목은 `catalog` 진단이다: catalog는 set 밖의 문서를 쓰지 않는다;
+  - `dbspec/`의 다른 file은 `catalog` 진단이다.
+  근거: orm의 생성기와 language server가 같은 set 파일을 읽으므로, 선언 하나가 모든 도구의 set을 정한다. 그 옆의
+  directory 형태는 따로 어긋나는 두 번째 선언이 된다.
 - corpus setting file `dbspec/flowmark.json`과 그 `translations` 언어 목록은 철회된다: catalog가 모든
-  선언을 담으며, `.dbs` 집합 밖의 file은 읽지 않는다.
+  선언을 담으며, set 파일과 그 문서 밖의 file은 읽지 않는다.
 - 내장 schema fragment를 가진 단독 문서는 없다: corpus는 catalog를 가진 root다.
 
 ## Markdown setting
@@ -102,7 +112,7 @@ introspection은 모든 문서를 catalog에 대해 검증하고 catalog를 돌�
 진단이다. catalog 없는 corpus에는 돌려줄 schema가 없으며, catalog 초안을 만드는 도구는 이 spec에 속하지
 않는다.
 
-- 돌려주는 catalog는 `dbspec/` 문서 set이다: 각 문서를 dbspec의 canonical form(orm `docs/dbspec.md`,
+- 돌려주는 catalog는 `dbspec/dbspec-set.json`의 문서 set이다: 각 문서를 dbspec의 canonical form(orm `docs/dbspec.md`,
   Canonical form)으로, 그 corpus path와 문서 이름과 함께 file 이름 순서로 돌려주고, set의 manifest hash를
   함께 돌려준다. 근거: catalog는 schema의 유일한 출발점이므로 introspection은 catalog를 돌려주며 행에서
   유도한 것은 돌려주지 않는다. orm의 database introspection은 dbspec 문서를 돌려주고, canonical form은
@@ -117,7 +127,8 @@ introspection은 모든 문서를 catalog에 대해 검증하고 catalog를 돌�
   사람에게서 schema를 숨기게 된다. 진단이 하나도 없을 때에만 corpus가 유효하다.
 - load되지 않는 catalog는 catalog 없이 그 `catalog` 진단만 돌려준다: validator는 catalog를 통해 문서를
   읽으므로 catalog 없이는 실행할 수 없다. `dbspec/`이 없는 corpus는 `dbspec`에 위치한 `catalog` 진단
-  `no dbspec/ directory`다.
+  `no dbspec/ directory`이고, set 파일이 없는 corpus는 `dbspec/dbspec-set.json`에 위치한 `catalog` 진단
+  `no dbspec/dbspec-set.json`이다.
 - 명령줄은 `flowmark introspect <corpus>`이며 `<corpus>`는 corpus root다. 표준 출력에 JSON 객체 하나
   `{"catalog": {"manifest_hash", "documents": [{"file", "name", "text"}]}, "diagnostics": [{"file",
   "line", "column", "rule", "message"}]}`를 쓰며, catalog가 load되지 않으면 `"catalog": null`, 진단이

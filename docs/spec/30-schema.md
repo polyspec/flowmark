@@ -9,16 +9,26 @@ introspection.
 
 ## The catalog
 
-- The `dbspec/*.dbs` document set of a corpus root is the catalog: the only origin of the schema,
+- The document set that `dbspec/dbspec-set.json`, orm's set file (orm `docs/dbspec.md`, Document sets), declares
+  is the catalog of a corpus root: the only origin of the schema,
   as a database catalog is. Documents carry no schema copy and no stamp — a database keeps its
   schema once and never per row, and a copy per document makes the drift of the copies a bug
   class of its own.
 - flowmark reads the catalog with orm's Go `engine/dbspec` package and uses its manifest hash; it
   never reimplements the grammar. `use` lines resolve within the `dbspec/` set; an external
   document is a schema error.
-- `dbspec/` holds only the `.dbs` set. Another file in `dbspec/` is a `catalog` diagnostic.
+- `dbspec/` holds the set file and the `.dbs` documents it lists, each directly in `dbspec/`. flowmark reads the set
+  file with orm's set reader, so its rules are orm's and its errors are `catalog` diagnostics at the set file. Every
+  declaration of the set is checked, and none is dropped:
+  - a corpus without `dbspec/dbspec-set.json` is the `catalog` diagnostic `no dbspec/dbspec-set.json`;
+  - a `.dbs` file in `dbspec/` that the set file does not list is a `catalog` diagnostic naming it;
+  - a listed document outside `dbspec/`, or one in a folder of it, is a `catalog` diagnostic naming the path;
+  - an `external` entry is a `catalog` diagnostic: the catalog uses no document outside its set;
+  - another file in `dbspec/` is a `catalog` diagnostic.
+  Grounding: orm's generators and language server read the same set file, so one declaration names the set for every
+  tool; a directory form beside it would be a second declaration that drifts.
 - The corpus setting file `dbspec/flowmark.json` and its `translations` language list are
-  withdrawn: the catalog holds every declaration, and no file outside the `.dbs` set is read.
+  withdrawn: the catalog holds every declaration, and no file outside the set file and its documents is read.
 - Standalone documents with an embedded schema fragment do not exist: a corpus is a root with a
   catalog.
 
@@ -126,7 +136,7 @@ Introspection validates every document against the catalog and returns the catal
 that fails is a located diagnostic. A corpus without a catalog has no schema to return; a tool
 that drafts one is not part of this specification.
 
-- The catalog returned is the `dbspec/` document set: each document in dbspec's canonical form
+- The catalog returned is the document set of `dbspec/dbspec-set.json`: each document in dbspec's canonical form
   (orm `docs/dbspec.md`, Canonical form), with its corpus path and its document name, in file name
   order, and the set's manifest hash. Grounding: the catalog is the only origin of the schema, so
   introspection returns it and nothing derived from the rows; orm's introspection of a database
@@ -144,7 +154,8 @@ that drafts one is not part of this specification.
   the document. The corpus is valid exactly when there is no diagnostic.
 - A catalog that does not load returns no catalog and only its `catalog` diagnostics: the validator
   reads the documents through the catalog and cannot run without it. A corpus without `dbspec/` is
-  the `catalog` diagnostic `no dbspec/ directory` at `dbspec`.
+  the `catalog` diagnostic `no dbspec/ directory` at `dbspec`, and one without its set file the `catalog`
+  diagnostic `no dbspec/dbspec-set.json` at `dbspec/dbspec-set.json`.
 - The command line is `flowmark introspect <corpus>`, `<corpus>` being the corpus root. It prints
   one JSON object on standard output, `{"catalog": {"manifest_hash", "documents": [{"file",
   "name", "text"}]}, "diagnostics": [{"file", "line", "column", "rule", "message"}]}`, with

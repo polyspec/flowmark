@@ -198,7 +198,11 @@ func runVector(root string, v *vector) (err error) {
 	if err != nil {
 		return fmt.Errorf("the catalog %q: %v", v.Catalog, err)
 	}
-	before := map[string]string{"dbspec/" + v.Catalog + ".dbs": string(dbs)}
+	before := map[string]string{
+		"dbspec/" + v.Catalog + ".dbs": string(dbs),
+		// The set file that lists the catalog document (docs/spec/30-schema.md, The catalog).
+		"dbspec/dbspec-set.json": `{"schema":1,"documents":["` + v.Catalog + `.dbs"]}` + "\n",
+	}
 	for p, t := range v.Corpus {
 		if _, ok := before[p]; ok {
 			return fmt.Errorf("the corpus names the catalog file %s", p)

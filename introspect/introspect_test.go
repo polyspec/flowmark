@@ -1,6 +1,7 @@
 package introspect_test
 
 import (
+	"github.com/polyspec/flowmark/internal/corpustest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -61,6 +62,9 @@ func writeTree(t *testing.T, files map[string]string) string {
 		if err := os.WriteFile(full, []byte(text), 0o644); err != nil {
 			t.Fatal(err)
 		}
+	}
+	if err := corpustest.WriteSetFile(filepath.Join(root, "dbspec")); err != nil {
+		t.Fatal(err)
 	}
 	return root
 }
