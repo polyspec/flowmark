@@ -2,6 +2,7 @@ package catalog
 
 import (
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path"
@@ -124,10 +125,10 @@ func (l *loader) readDocuments(root string, entries []fs.DirEntry) []*document {
 	} else {
 		set, errs := dbspec.ReadSet(filepath.Join(root, dbspecDir, dbspec.SetFileName))
 		for _, e := range errs {
-			l.add(fileDiagnostic(setFile, "dbspec "+e.Rule+": "+l.corpusPath(root, e.Message)))
+			l.add(fileDiagnostic(setFile, "dbspec "+e.Rule+": "+e.Message))
 		}
 		for _, f := range set.External {
-			l.add(fileDiagnostic(setFile, "external document "+path.Clean(l.corpusPath(root, f.Path))+": the catalog uses no document outside its set"))
+			l.add(fileDiagnostic(setFile, "external document "+corpusPath(root, f.Path)+": the catalog uses no document outside its set"))
 		}
 		for _, f := range set.Documents {
 			file, ok := l.documentFile(root, f.Path)
@@ -167,17 +168,18 @@ func (l *loader) readDocuments(root string, entries []fs.DirEntry) []*document {
 
 // documentFile is the corpus path of a listed document, and whether it lies directly in dbspec/.
 func (l *loader) documentFile(root, joined string) (string, bool) {
-	file := path.Clean(l.corpusPath(root, joined))
+	file := corpusPath(root, joined)
 	return file, path.Dir(file) == dbspecDir && strings.HasSuffix(file, dbsExt)
 }
 
-// corpusPath rewrites the paths that orm's set reader names, each the root joined with a corpus path, into corpus
-// paths, slash-separated and relative to the root, so a diagnostic names the file as every other corpus diagnostic does.
-func (l *loader) corpusPath(root, text string) string {
-	if prefix := filepath.Clean(root); prefix != "." {
-		text = strings.ReplaceAll(text, prefix+string(filepath.Separator), "")
+// corpusPath is the corpus path of a path that orm's set reader joined with the root: relative to the root and
+// slash-separated, as every corpus diagnostic names its file.
+func corpusPath(root, joined string) string {
+	rel, err := filepath.Rel(root, joined)
+	if err != nil {
+		panic(fmt.Sprintf("catalog: the set reader joined %s with the root %s", joined, root))
 	}
-	return filepath.ToSlash(text)
+	return filepath.ToSlash(rel)
 }
 
 // headerName is the document name of a file's header `dbspec 1 <document>`;
