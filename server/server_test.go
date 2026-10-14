@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"github.com/polyspec/flowmark/internal/corpustest"
 	"io"
 	"net"
 	"os"
@@ -223,6 +224,11 @@ func write(t testing.TB, root, rel, text string) {
 	}
 	if err := os.WriteFile(p, []byte(text), 0o644); err != nil {
 		t.Fatal(err)
+	}
+	if strings.HasPrefix(rel, "dbspec/") {
+		if err := corpustest.WriteSetFile(filepath.Join(root, "dbspec")); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 

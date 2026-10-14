@@ -1,6 +1,7 @@
 package irexec
 
 import (
+	"github.com/polyspec/flowmark/internal/corpustest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -50,6 +51,9 @@ func TestRelationsCatalogRules(t *testing.T) {
 				t.Fatal(err)
 			}
 			if err := os.WriteFile(filepath.Join(root, "dbspec", "flowmark.dbs"), []byte(c.dbs), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if err := corpustest.WriteSetFile(filepath.Join(root, "dbspec")); err != nil {
 				t.Fatal(err)
 			}
 			_, diags := catalog.Load(root)

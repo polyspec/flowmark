@@ -2,6 +2,7 @@ package catalog_test
 
 import (
 	"fmt"
+	"github.com/polyspec/flowmark/internal/corpustest"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -30,9 +31,15 @@ func writeCorpus(t *testing.T, files map[string]string) string {
 			}
 			continue
 		}
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, name)), 0o755); err != nil {
+			t.Fatal(err)
+		}
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(text), 0o644); err != nil {
 			t.Fatal(err)
 		}
+	}
+	if err := corpustest.WriteSetFile(dir); err != nil {
+		t.Fatal(err)
 	}
 	return root
 }
@@ -295,16 +302,64 @@ func TestLoadRejectsMissingCatalogDirectory(t *testing.T) {
 	}
 }
 
-func TestLoadRejectsCorpusWithoutDocument(t *testing.T) {
-	root := writeCorpus(t, map[string]string{"notes.md": "# notes\n"})
-	cat, diags := catalog.Load(root)
-	expectRejected(t, cat, diags)
-	for _, d := range diags {
-		if d.File == "dbspec" && strings.Contains(d.Message, "no .dbs document") {
-			return
-		}
+// TestLoadSetFile checks the rules of the set file dbspec/dbspec-set.json (docs/spec/30-schema.md, The catalog): each
+// rejecting case names its file and its cause, and the accepting cases load.
+func TestLoadSetFile(t *testing.T) {
+	doc := func(name string) string {
+		return "dbspec 1 " + name + "\n\ntable " + name + "_rows {\n  id varchar(32)\n  primary key (id)\n  settings {\n    store files\n    title id\n  }\n}\n"
 	}
-	t.Fatalf("no diagnostic for a corpus without a document: %+v", diags)
+	for _, c := range []struct {
+		name  string
+		files map[string]string
+		file  string
+		want  string
+	}{
+		{"no set file", map[string]string{"notes.md": "# notes\n"}, "dbspec/dbspec-set.json", "no dbspec/dbspec-set.json"},
+		{"a document the set does not list", map[string]string{"a.dbs": doc("a"), "b.dbs": doc("b"), "dbspec-set.json": `{"schema":1,"documents":["a.dbs"]}`}, "dbspec/b.dbs", "dbspec/b.dbs is not listed in dbspec/dbspec-set.json"},
+		{"a listed document outside dbspec", map[string]string{"a.dbs": doc("a"), "dbspec-set.json": `{"schema":1,"documents":["a.dbs","../outside.dbs"]}`}, "dbspec/dbspec-set.json", "set.path"},
+		{"a listed document in a folder", map[string]string{"a.dbs": doc("a"), "sub/": "", "sub/c.dbs": doc("c"), "dbspec-set.json": `{"schema":1,"documents":["a.dbs","sub/c.dbs"]}`}, "dbspec/dbspec-set.json", "listed document dbspec/sub/c.dbs is not directly in dbspec/"},
+		{"an external document", map[string]string{"a.dbs": doc("a"), "dbspec-set.json": `{"schema":1,"documents":["a.dbs"],"external":["../ext/e.dbs"]}`}, "dbspec/dbspec-set.json", ""},
+		{"a set file that is not JSON", map[string]string{"a.dbs": doc("a"), "dbspec-set.json": `{`}, "dbspec/dbspec-set.json", "set.json"},
+		{"a missing listed document", map[string]string{"a.dbs": doc("a"), "dbspec-set.json": `{"schema":1,"documents":["a.dbs","gone.dbs"]}`}, "dbspec/dbspec-set.json", "gone.dbs"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			root := writeCorpus(t, c.files)
+			if c.name == "an external document" {
+				if err := os.MkdirAll(filepath.Join(root, "ext"), 0o755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filepath.Join(root, "ext", "e.dbs"), []byte(doc("e")), 0o644); err != nil {
+					t.Fatal(err)
+				}
+				c.want = "external document ext/e.dbs: the catalog uses no document outside its set"
+			}
+			cat, diags := catalog.Load(root)
+			expectRejected(t, cat, diags)
+			for _, d := range diags {
+				if d.File == c.file && strings.Contains(d.Message, c.want) {
+					return
+				}
+			}
+			t.Fatalf("no diagnostic at %s containing %q in %+v", c.file, c.want, diags)
+		})
+	}
+	for _, c := range []struct {
+		name  string
+		files map[string]string
+	}{
+		{"every document listed", map[string]string{"a.dbs": doc("a"), "b.dbs": doc("b"), "dbspec-set.json": `{"schema":1,"documents":["b.dbs","a.dbs"]}`}},
+		{"a hidden entry beside the set", map[string]string{"a.dbs": doc("a"), ".keep": "", "dbspec-set.json": `{"schema":1,"documents":["a.dbs"]}`}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			cat, diags := catalog.Load(writeCorpus(t, c.files))
+			if len(diags) > 0 {
+				t.Fatalf("diagnostics: %+v", diags)
+			}
+			if got := strings.Join(cat.Files, " "); got != "dbspec/a.dbs dbspec/b.dbs" && got != "dbspec/a.dbs" {
+				t.Fatalf("files %s, want the listed documents in file name order", got)
+			}
+		})
+	}
 }
 
 func TestLoadRejectsTableWithoutStore(t *testing.T) {

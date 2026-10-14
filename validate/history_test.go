@@ -1,6 +1,7 @@
 package validate
 
 import (
+	"github.com/polyspec/flowmark/internal/corpustest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -61,6 +62,9 @@ func historyCorpus(t *testing.T, files map[string]string) (*catalog.Catalog, str
 	write("dbspec/flowmark.dbs", documentHistoryCatalog)
 	for rel, text := range files {
 		write(rel, text)
+	}
+	if err := corpustest.WriteSetFile(filepath.Join(root, "dbspec")); err != nil {
+		t.Fatal(err)
 	}
 	cat, diags := catalog.Load(root)
 	if len(diags) > 0 {

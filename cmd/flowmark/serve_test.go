@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"github.com/polyspec/flowmark/internal/corpustest"
 	"io"
 	"net"
 	"os"
@@ -47,6 +48,9 @@ func serveCorpus(t *testing.T, dbs string) string {
 		if err := os.WriteFile(p, []byte(text), 0o644); err != nil {
 			t.Fatal(err)
 		}
+	}
+	if err := corpustest.WriteSetFile(filepath.Join(root, "dbspec")); err != nil {
+		t.Fatal(err)
 	}
 	return root
 }

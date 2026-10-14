@@ -2,6 +2,7 @@ package validate
 
 import (
 	"fmt"
+	"github.com/polyspec/flowmark/internal/corpustest"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -717,6 +718,9 @@ func writeTree(t *testing.T, root string, files map[string]string) {
 		if err := os.WriteFile(p, []byte(text), 0o644); err != nil {
 			t.Fatal(err)
 		}
+	}
+	if err := corpustest.WriteSetFile(filepath.Join(root, "dbspec")); err != nil {
+		t.Fatal(err)
 	}
 }
 

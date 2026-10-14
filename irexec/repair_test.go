@@ -2,6 +2,7 @@ package irexec
 
 import (
 	"errors"
+	"github.com/polyspec/flowmark/internal/corpustest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -76,6 +77,9 @@ func jobsCatalog(t testing.TB) string {
 		"}",
 	)
 	if err := os.WriteFile(filepath.Join(dir, "dbspec", "jobs.dbs"), []byte(dbs), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := corpustest.WriteSetFile(filepath.Join(dir, "dbspec")); err != nil {
 		t.Fatal(err)
 	}
 	return dir

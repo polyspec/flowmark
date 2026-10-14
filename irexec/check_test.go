@@ -1,6 +1,7 @@
 package irexec
 
 import (
+	"github.com/polyspec/flowmark/internal/corpustest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -29,6 +30,9 @@ func gaugesCatalog(t testing.TB) string {
 		"}",
 	)
 	if err := os.WriteFile(filepath.Join(dir, "dbspec", "gauges.dbs"), []byte(dbs), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := corpustest.WriteSetFile(filepath.Join(dir, "dbspec")); err != nil {
 		t.Fatal(err)
 	}
 	return dir
@@ -81,6 +85,9 @@ func viewsCatalog(t testing.TB) string {
 		"}",
 	)
 	if err := os.WriteFile(filepath.Join(dir, "dbspec", "flowmark.dbs"), []byte(dbs), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := corpustest.WriteSetFile(filepath.Join(dir, "dbspec")); err != nil {
 		t.Fatal(err)
 	}
 	return dir

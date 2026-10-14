@@ -56,7 +56,7 @@ commands above. The list sort is a server request (`?sort=`), because the server
 
 The same application runs on hyper's Node.js server, over orm's TypeScript client: `node/` holds its `main.ts`,
 `handlers.ts` and `posts.ts` (the same five methods, asynchronous) and the models in `node/model/`, generated from the
-same catalog (`orm-gen gen --schema ../block/dbspec/board.dbs --out node/model --scan node/posts.ts`; `--scan` makes it
+same catalog (`orm-gen gen --set ../block/dbspec/dbspec-set.json --out node/model --scan node/posts.ts`; `--scan` makes it
 declare the condition and join methods that `posts.ts` calls). After `npm install` in this folder and the steps 1 and 2
 above, `npm run build:node` bundles the server, and the DSN of the corpus goes in the environment:
 
@@ -66,8 +66,8 @@ FLOWMARK_DSN='markdown://127.0.0.1:<port>/board?token=<token>' BOARD_SESSIONS=<s
 
 Both servers answer the same: the rows of every page of the list and the page of a post come out the same.
 
-The models in `src/Model/` are generated from the corpus catalog (`orm-gen gen --out src/Model --namespace
-'Flowmark\Board\Model' examples/board/block/dbspec/board.dbs`); a catalog change that changes its hash needs them
+The models in `src/Model/` are generated from the corpus catalog (`orm-gen gen --set examples/board/block/dbspec/dbspec-set.json --out src/Model
+--namespace 'Flowmark\Board\Model'`); a catalog change that changes its hash needs them
 generated again, and the server refuses a model of another hash (`SCHEMA_HASH_MISMATCH`).
 
 ## Measured at 1000 posts
