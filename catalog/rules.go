@@ -1,11 +1,9 @@
 package catalog
 
 import (
-	"bytes"
-	"regexp"
+	"fmt"
 	"slices"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/polyspec/orm/engine/dbspec"
 )
@@ -131,31 +129,26 @@ func isKeyType(k dbspec.TypeKind) bool {
 
 // tableDiag locates a diagnostic at the name of a table declaration.
 func (l *loader) tableDiag(d *document, table, msg string) Diagnostic {
-	line, column := locateDecl(d.text, `table +`, table, ` *\{`)
+	line, column := d.position(dbspec.PositionTable, table)
 	return Diagnostic{File: d.file, Line: line, Column: column, Rule: rule, Message: msg}
 }
 
-// fkDiag locates a diagnostic at the name of a foreign key declaration.
-func (l *loader) fkDiag(d *document, fk, msg string) Diagnostic {
-	line, column := locateDecl(d.text, `foreign key +`, fk, ` *\(`)
+// fkDiag locates a diagnostic at the name of a foreign key declaration of a table.
+func (l *loader) fkDiag(d *document, table, fk, msg string) Diagnostic {
+	line, column := d.position(dbspec.PositionConstraint, table, fk)
 	return Diagnostic{File: d.file, Line: line, Column: column, Rule: rule, Message: msg}
 }
 
-// locateDecl returns the line and column of a declaration's name in the text:
-// the name follows the keyword pattern and is followed by the tail pattern.
-// The parser accepted the declaration, so it is in the text; the location is
-// line 1, column 1 only for a name the text does not declare.
-func locateDecl(text, keyword, name, tail string) (int, int) {
-	re := regexp.MustCompile(`(?m)^( *` + keyword + `)` + regexp.QuoteMeta(name) + tail)
-	m := re.FindStringSubmatchIndex(text)
-	if m == nil {
-		return 1, 1
+// position returns the line and column of a declaration from the positions that the parser reports
+// (docs/dbspec.md "Declaration positions"). The rules locate only declarations of a parsed document, so a
+// declaration without a position is a broken invariant of the catalog, not a place to guess.
+func (d *document) position(kind string, path ...string) (int, int) {
+	for _, p := range d.positions {
+		if p.Kind == kind && slices.Equal(p.Path, path) {
+			return p.Line, p.Column
+		}
 	}
-	// m[3] is the end of the prefix group, where the name starts.
-	before := []byte(text[:m[3]])
-	line := 1 + bytes.Count(before, []byte("\n"))
-	lineStart := bytes.LastIndexByte(before, '\n') + 1
-	return line, utf8.RuneCount(before[lineStart:]) + 1
+	panic(fmt.Sprintf("catalog: %s has no %s position for %v", d.file, kind, path))
 }
 
 // checkForeignKeys runs the rule on the foreign keys of the set, once every
@@ -174,9 +167,9 @@ func (l *loader) checkForeignKeys() {
 			pk := target.table.PrimaryKey.Columns
 			switch {
 			case len(fk.Columns) != 1 || len(fk.References) != 1:
-				l.add(l.fkDiag(r.doc, fk.Name, "foreign key "+fk.Name+" is composite ("+strings.Join(fk.Columns, ", ")+"); a link needs one column"))
+				l.add(l.fkDiag(r.doc, r.table.Name, fk.Name, "foreign key "+fk.Name+" is composite ("+strings.Join(fk.Columns, ", ")+"); a link needs one column"))
 			case len(pk) != 1 || pk[0] != fk.References[0]:
-				l.add(l.fkDiag(r.doc, fk.Name, "foreign key "+fk.Name+" references "+fk.Table+" ("+strings.Join(fk.References, ", ")+"), which is not the one-column primary key of "+fk.Table))
+				l.add(l.fkDiag(r.doc, r.table.Name, fk.Name, "foreign key "+fk.Name+" references "+fk.Table+" ("+strings.Join(fk.References, ", ")+"), which is not the one-column primary key of "+fk.Table))
 			}
 		}
 	}
