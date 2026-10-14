@@ -3,6 +3,7 @@
 
 ## Unreleased
 
+- T12-5: the slug recorder's retry tests pass a node:test mock to githubRender instead of a gh stub on PATH, which Windows did not run.
 - T12-4: the catalog reads the document set that dbspec/dbspec-set.json declares, with orm's set reader; a .dbs file the set does not list, a listed document outside dbspec/, an external entry and the set file's errors are catalog diagnostics, and every corpus carries its set file.
 - T12-3: the catalog locates a table or foreign key diagnostic by the declaration positions of dbspec.Parse instead of a regular expression that fell back to line 1, column 1; the audit of the regular expressions of non-test code found the GFM delimiter cell, the token file, the lock name and the cited markdown-it-katex guard each the one reading of its grammar.
 - T14-1: flowmark pins orm v0.0.11.
