@@ -183,16 +183,15 @@ func corpusPath(root, joined string) string {
 }
 
 // parseSet parses the documents with orm's set parse (docs/dbspec.md "Parsing a set"), which names each document by its
-// header and parses it with the others as the documents its use lines name. A document name that a later file repeats
-// is reported at that file. It reports false when a document failed or a name repeats.
+// header, parses it with the others as the documents its use lines name, and reports a repeated name on the later
+// document. It reports false when a document has a diagnostic.
 func (l *loader) parseSet(docs []*document) bool {
 	texts := make([]string, len(docs))
 	for i, d := range docs {
 		texts[i] = d.text
 	}
-	set := dbspec.ParseSet(texts, nil)
-	ok := len(set.Diagnostics) == 0
-	for i, r := range set.Documents {
+	ok := true
+	for i, r := range dbspec.ParseSet(texts, nil) {
 		d := docs[i]
 		d.name = r.Name
 		for _, x := range r.Diagnostics {
@@ -202,22 +201,6 @@ func (l *loader) parseSet(docs []*document) bool {
 			ok = false
 		}
 		d.parsed, d.positions = r.Document, r.Positions
-	}
-	// The set parse reports one name.duplicate per repeated document, in set order, and leaves that document
-	// unparsed with no diagnostics of its own; the k-th set diagnostic is at the k-th such document.
-	var repeated []string
-	seen := map[string]bool{}
-	for i, r := range set.Documents {
-		if r.Name != "" && seen[r.Name] && r.Document == nil && len(r.Diagnostics) == 0 {
-			repeated = append(repeated, docs[i].file)
-		}
-		seen[r.Name] = true
-	}
-	if len(repeated) != len(set.Diagnostics) {
-		panic(fmt.Sprintf("catalog: %d set diagnostics for %d repeated documents", len(set.Diagnostics), len(repeated)))
-	}
-	for k, x := range set.Diagnostics {
-		l.add(Diagnostic{File: repeated[k], Line: x.Line, Column: x.Column, Rule: rule, Message: "dbspec " + x.Rule + ": " + x.Message})
 	}
 	return ok
 }

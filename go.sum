@@ -26,6 +26,8 @@ github.com/polyspec/ordered-json/packages/ordered-json-go v0.0.8 h1:jir7WB0z+h3K
 github.com/polyspec/ordered-json/packages/ordered-json-go v0.0.8/go.mod h1:/n1+tI5wQ1eWoPco5spuER4QDmL8DYjnDJ8J6Mu37iM=
 github.com/polyspec/orm v0.0.15-0.20261014080714-f9fe9766f298 h1:N2YSSiQD+LpfRSlXovNpT8SRwWkBK3cUm2cw2TF6YPw=
 github.com/polyspec/orm v0.0.15-0.20261014080714-f9fe9766f298/go.mod h1:fTMZNJHHdpWbmz8hl++NMG0jgtnGf3qlgFVrb0+UxGo=
+github.com/polyspec/orm v0.0.15-0.20261014082842-de5b8b8ef010 h1:cyeyjTFIgSgNR/1zu44x9nu9NU6+6Ad/qhrqhMk0rwI=
+github.com/polyspec/orm v0.0.15-0.20261014082842-de5b8b8ef010/go.mod h1:fTMZNJHHdpWbmz8hl++NMG0jgtnGf3qlgFVrb0+UxGo=
 github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec h1:W09IVJc94icq4NjY3clb7Lk8O1qJ8BdBEF8z0ibU0rE=
 github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec/go.mod h1:qqbHyh8v60DhA7CoWK5oRCqLrMHRGoxYCSS9EjAz6Eo=
 go.yaml.in/yaml/v3 v3.0.5 h1:N6y/pJk8buWs9NY5ERU2HSMfm+IuD/OtfdAnq6kESPw=
