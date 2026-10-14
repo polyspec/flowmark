@@ -144,7 +144,7 @@ func (l *loader) readDocuments(root string, entries []fs.DirEntry) []*document {
 			if len(ds) > 0 {
 				continue
 			}
-			docs = append(docs, &document{file: file, name: headerName(text, path.Base(file)), text: text})
+			docs = append(docs, &document{file: file, text: text})
 		}
 	}
 	for _, e := range entries {
@@ -182,48 +182,42 @@ func corpusPath(root, joined string) string {
 	return filepath.ToSlash(rel)
 }
 
-// headerName is the document name of a file's header `dbspec 1 <document>`;
-// when the header is not in that form, the file name stands for the document
-// and the parser reports the header.
-func headerName(text, fileName string) string {
-	line, _, _ := strings.Cut(text, "\n")
-	if f := strings.Fields(line); len(f) >= 3 && f[0] == "dbspec" {
-		return f[2]
-	}
-	return strings.TrimSuffix(fileName, dbsExt)
-}
-
-// parseSet parses every document with the others of the set as its declared
-// document set, which is what its use lines name. It reports false when a
-// document failed or two documents share a name.
+// parseSet parses the documents with orm's set parse (docs/dbspec.md "Parsing a set"), which names each document by its
+// header and parses it with the others as the documents its use lines name. A document name that a later file repeats
+// is reported at that file. It reports false when a document failed or a name repeats.
 func (l *loader) parseSet(docs []*document) bool {
-	ok := true
-	firstFile := map[string]string{}
-	for _, d := range docs {
-		if first, dup := firstFile[d.name]; dup {
-			l.add(Diagnostic{File: d.file, Line: 1, Column: len("dbspec 1 ") + 1, Rule: rule, Message: "document " + d.name + " is also declared by " + first})
-			ok = false
-			continue
-		}
-		firstFile[d.name] = d.file
-	}
+	texts := make([]string, len(docs))
 	for i, d := range docs {
-		others := map[string]string{}
-		for j, o := range docs {
-			if j != i && firstFile[o.name] == o.file {
-				others[o.name] = o.text
-			}
-		}
-		parsed, positions, ds := dbspec.Parse(d.text, others)
-		for _, x := range ds {
+		texts[i] = d.text
+	}
+	set := dbspec.ParseSet(texts, nil)
+	ok := len(set.Diagnostics) == 0
+	for i, r := range set.Documents {
+		d := docs[i]
+		d.name = r.Name
+		for _, x := range r.Diagnostics {
 			l.add(Diagnostic{File: d.file, Line: x.Line, Column: x.Column, Rule: rule, Message: "dbspec " + x.Rule + ": " + x.Message})
 		}
-		if len(ds) > 0 {
+		if len(r.Diagnostics) > 0 {
 			ok = false
-			continue
 		}
-		d.parsed = parsed
-		d.positions = positions
+		d.parsed, d.positions = r.Document, r.Positions
+	}
+	// The set parse reports one name.duplicate per repeated document, in set order, and leaves that document
+	// unparsed with no diagnostics of its own; the k-th set diagnostic is at the k-th such document.
+	var repeated []string
+	seen := map[string]bool{}
+	for i, r := range set.Documents {
+		if r.Name != "" && seen[r.Name] && r.Document == nil && len(r.Diagnostics) == 0 {
+			repeated = append(repeated, docs[i].file)
+		}
+		seen[r.Name] = true
+	}
+	if len(repeated) != len(set.Diagnostics) {
+		panic(fmt.Sprintf("catalog: %d set diagnostics for %d repeated documents", len(set.Diagnostics), len(repeated)))
+	}
+	for k, x := range set.Diagnostics {
+		l.add(Diagnostic{File: repeated[k], Line: x.Line, Column: x.Column, Rule: rule, Message: "dbspec " + x.Rule + ": " + x.Message})
 	}
 	return ok
 }

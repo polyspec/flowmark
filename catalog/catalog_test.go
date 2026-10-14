@@ -302,6 +302,17 @@ func TestLoadRejectsMissingCatalogDirectory(t *testing.T) {
 	}
 }
 
+// TestLoadNamesDocumentsByTheParser checks that a document is named by the header that the parser reads: a header the
+// parser refuses names no document, so it repeats no name of the set and reports only its header diagnostic.
+func TestLoadNamesDocumentsByTheParser(t *testing.T) {
+	good := "dbspec 1 a\n\ntable a_rows {\n  id varchar(32)\n  primary key (id)\n  settings {\n    store files\n    title id\n  }\n}\n"
+	bad := "dbspec 1 a extra\n\ntable b_rows {\n  id varchar(32)\n  primary key (id)\n  settings {\n    store files\n    title id\n  }\n}\n"
+	_, diags := catalog.Load(writeCorpus(t, map[string]string{"a.dbs": good, "b.dbs": bad}))
+	if len(diags) != 1 || diags[0].File != "dbspec/b.dbs" || !strings.Contains(diags[0].Message, "dbspec header") {
+		t.Fatalf("diagnostics %+v, want only the header diagnostic of dbspec/b.dbs", diags)
+	}
+}
+
 // TestLoadSetFile checks the rules of the set file dbspec/dbspec-set.json (docs/spec/30-schema.md, The catalog): each
 // rejecting case names its file and its cause, and the accepting cases load.
 func TestLoadSetFile(t *testing.T) {
