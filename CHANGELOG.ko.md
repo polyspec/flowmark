@@ -1,9 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 24f15a6d964f4e2ede8474e47c7a94143c0d10f09e19d022340680a2978ee9cb -->
+<!-- source-sha256: 2a0da67be6f119cc30972a421a659f2458e890037e42078a1424ad49d1cc9e87 -->
 # Changelog
 
 ## Unreleased
 
+- T12-3: catalog가 table과 foreign key 진단의 위치를 1행 1열로 대체하던 정규식 대신 dbspec.Parse의 선언 위치로 정한다. test가 아닌 code의 정규식 감사에서 GFM delimiter cell, token 파일, lock 이름, 출처를 밝힌 markdown-it-katex guard는 각각 그 문법의 유일한 읽기다.
 - T14-1: flowmark가 orm v0.0.11을 고정한다.
 - T14: restore가 orm의 ir.RestoreKey로 request hook 뒤에 key를 고른다(orm protocol 1.5).
 - T12-1: flowmark는 branch가 아니라 release tag v0.0.35에서 kit을 공유 PRINCIPLES.md와 함께 vendor한다; AGENTS.md는 그것으로 연결하고 flowmark의 규칙만 남기며, 전체 test 모음은 활성 checklist의 모든 항목이 끝났을 때 한 번, 항목마다 소유 검사만 실행한다.
