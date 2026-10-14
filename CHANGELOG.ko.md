@@ -1,9 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 2a0da67be6f119cc30972a421a659f2458e890037e42078a1424ad49d1cc9e87 -->
+<!-- source-sha256: f2999a021d5836905abf2095c0518ac30520e06a1b1b1881bef0d4a9b122acac -->
 # Changelog
 
 ## Unreleased
 
+- T12-4: catalog가 dbspec/dbspec-set.json이 선언한 문서 set을 orm의 set reader로 읽는다. set이 나열하지 않은 .dbs 파일, dbspec/ 밖의 나열된 문서, external 항목, set 파일 자체의 오류는 catalog 진단이며, 모든 corpus가 set 파일을 갖는다.
 - T12-3: catalog가 table과 foreign key 진단의 위치를 1행 1열로 대체하던 정규식 대신 dbspec.Parse의 선언 위치로 정한다. test가 아닌 code의 정규식 감사에서 GFM delimiter cell, token 파일, lock 이름, 출처를 밝힌 markdown-it-katex guard는 각각 그 문법의 유일한 읽기다.
 - T14-1: flowmark가 orm v0.0.11을 고정한다.
 - T14: restore가 orm의 ir.RestoreKey로 request hook 뒤에 key를 고른다(orm protocol 1.5).
