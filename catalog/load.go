@@ -65,6 +65,8 @@ type document struct {
 	name   string // the header name, which the document set keys it by
 	text   string
 	parsed *dbspec.Document
+	// positions are the declaration positions of the parsed document, in source order.
+	positions []dbspec.Position
 }
 
 // tableRef is a table of the set with the facts its layout needs.
@@ -170,8 +172,7 @@ func (l *loader) parseSet(docs []*document) bool {
 				others[o.name] = o.text
 			}
 		}
-		// The declaration positions are not read here; T12-3 replaces locateDecl with them (docs/plans/markdown-database-checklist.md).
-		parsed, _, ds := dbspec.Parse(d.text, others)
+		parsed, positions, ds := dbspec.Parse(d.text, others)
 		for _, x := range ds {
 			l.add(Diagnostic{File: d.file, Line: x.Line, Column: x.Column, Rule: rule, Message: "dbspec " + x.Rule + ": " + x.Message})
 		}
@@ -180,6 +181,7 @@ func (l *loader) parseSet(docs []*document) bool {
 			continue
 		}
 		d.parsed = parsed
+		d.positions = positions
 	}
 	return ok
 }
