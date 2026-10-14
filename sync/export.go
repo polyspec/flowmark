@@ -19,7 +19,7 @@ import (
 	"github.com/polyspec/orm/engine/plan"
 	"github.com/polyspec/orm/engine/planner"
 	"github.com/polyspec/orm/engine/runtimemodel"
-	"github.com/polyspec/orm/packages/orm-go/orm"
+	"github.com/polyspec/orm/packages/go/orm"
 )
 
 // Statement is one statement of an export (spec 70 The export): its SQL text as

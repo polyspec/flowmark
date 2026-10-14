@@ -27,8 +27,8 @@ import (
 	"github.com/polyspec/orm/engine/dbspec"
 	"github.com/polyspec/orm/engine/plan"
 	"github.com/polyspec/orm/engine/runtimemodel"
-	"github.com/polyspec/orm/packages/orm-go/orm"
-	_ "github.com/polyspec/orm/packages/orm-go/orm/sqlite"
+	"github.com/polyspec/orm/packages/go/orm"
+	_ "github.com/polyspec/orm/packages/go/orm/sqlite"
 	_ "modernc.org/sqlite"
 )
 

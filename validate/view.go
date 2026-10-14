@@ -15,7 +15,7 @@ import (
 	"github.com/polyspec/orm/engine/dbspec"
 	"github.com/polyspec/orm/engine/ir"
 	"github.com/polyspec/orm/engine/runtimemodel"
-	"github.com/polyspec/orm/packages/orm-go/orm"
+	"github.com/polyspec/orm/packages/go/orm"
 )
 
 // The rule names of the codec and view rules (spec 50 Codec values, Views).
