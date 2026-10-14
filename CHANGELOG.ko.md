@@ -1,9 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: ab56fa8aa436fd8879defb5178faa4ea1d960d39042cf9a9ab60eb96aba44017 -->
+<!-- source-sha256: 9a2c17b07ed12d30a29a37fb6f33d15ff4a2d4ba914058c731a1319bb182edf8 -->
 # Changelog
 
 ## Unreleased
 
+- T12-3-1-1: go.mod가 main commit 대신 문서별 set parse(T166)를 담은 orm 릴리스 v0.0.15를 pin한다.
 - T12-3-2: catalog가 반복된 이름을 그 문서 자신의 결과로 담는 orm ParseSet의 문서별 결과를 그대로 옮기고, 아무것도 다시 맞추지 않는다.
 - T12-3-1: catalog가 header 줄을 나누지 않고 orm의 dbspec.ParseSet으로 문서 이름을 정해, 거부된 header는 문서 이름이 되지 않고 거짓 반복을 일으키지 않는다.
 - T12-4-1: catalog가 orm set reader의 메시지를 바꾸지 않고 filepath.Rel로 corpus 경로를 만든다.

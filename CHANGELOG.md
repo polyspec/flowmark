@@ -3,6 +3,7 @@
 
 ## Unreleased
 
+- T12-3-1-1: go.mod pins the orm release v0.0.15, which carries the per-document set parse (T166), instead of a main commit.
 - T12-3-2: the catalog copies orm's per-document results of ParseSet, a repeated name on its own document, and reconstructs nothing.
 - T12-3-1: the catalog names its documents by orm's dbspec.ParseSet instead of splitting the header line, so a refused header names no document and raises no false repeat.
 - T12-4-1: the catalog keeps the messages of orm's set reader unchanged and makes corpus paths with filepath.Rel.
