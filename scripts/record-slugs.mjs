@@ -559,15 +559,23 @@ const requestLimit = 390_000;
  */
 const connectAttempts = 3;
 
-/** GitHub's rendering of a document, by POST /markdown in mode markdown, through gh. */
-export function githubRender(text) {
+/** Sends one POST /markdown request through gh with the JSON body input and returns its output. */
+function ghMarkdown(input) {
+  return execFileSync('gh', ['api', '-X', 'POST', '/markdown', '--input', '-'], {
+    input,
+    maxBuffer: 1 << 30,
+    stdio: ['pipe', 'pipe', 'pipe'],
+  }).toString('utf8');
+}
+
+/**
+ * GitHub's rendering of a document, by POST /markdown in mode markdown, through gh. request sends one request and
+ * throws as execFileSync does, with the stderr of gh; the tests pass their own, so no stub program stands in for gh.
+ */
+export function githubRender(text, request = ghMarkdown) {
   for (let attempt = 1; ; attempt++) {
     try {
-      return execFileSync('gh', ['api', '-X', 'POST', '/markdown', '--input', '-'], {
-        input: JSON.stringify({ text, mode: 'markdown' }),
-        maxBuffer: 1 << 30,
-        stdio: ['pipe', 'pipe', 'pipe'],
-      }).toString('utf8');
+      return request(JSON.stringify({ text, mode: 'markdown' }));
     } catch (err) {
       // gh writes a failure without a response as `Post "<url>": <error>`, and an HTTP error as `HTTP <status>: …`.
       const stderr = String(err.stderr ?? '');

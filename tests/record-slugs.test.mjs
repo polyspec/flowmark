@@ -1,10 +1,7 @@
 // Tests of the slug-vector recorder (scripts/record-slugs.mjs) that need no network: the forms of a code point, the
 // headings and the splitting of their ids, the treatments and their compression, and the reading of GitHub's HTML.
 import assert from 'node:assert/strict';
-import test from 'node:test';
-import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
+import test, { mock } from 'node:test';
 import { compress, forms, githubAttributes, githubRender, githubIds, gitlabIds, glfmArgs, groupSize, headingIdAttrs, headingsOf, katexOptions, methodSource, snippetPrefix, splitIds, treatment } from '../scripts/record-slugs.mjs';
 
 test('a code point has a reference form and a raw form, escaped when it is ASCII punctuation', () => {
@@ -107,55 +104,33 @@ test("a snippet's heading slug prefix is its anchorized base name and a hyphen, 
   assert.equal(snippetPrefix('dir/!!!.md'), '');
 });
 
-// withGh runs fn with a gh on PATH that answers the calls in turn from replies: each reply is [stderr, exit] for a
-// failure or [stdout] for a rendering; it returns the number of calls gh got and the directory of the stub, which it
-// removes.
-function withGh(replies, fn) {
-  const dir = mkdtempSync(path.join(tmpdir(), 'record-slugs-gh-'));
-  const count = path.join(dir, 'count');
-  writeFileSync(count, '0');
-  writeFileSync(path.join(dir, 'replies.json'), JSON.stringify(replies));
-  writeFileSync(path.join(dir, 'gh'), `#!${process.execPath}
-const fs = require('node:fs');
-const n = Number(fs.readFileSync(${JSON.stringify(count)}, 'utf8'));
-fs.writeFileSync(${JSON.stringify(count)}, String(n + 1));
-fs.readFileSync(0);
-const [out, exit] = JSON.parse(fs.readFileSync(${JSON.stringify(path.join(dir, 'replies.json'))}, 'utf8'))[n];
-if (exit) { process.stderr.write(out); process.exit(exit); }
-process.stdout.write(out);
-`);
-  chmodSync(path.join(dir, 'gh'), 0o755);
-  const saved = process.env.PATH;
-  process.env.PATH = `${dir}${path.delimiter}${saved}`;
-  try {
-    fn();
-    return { calls: Number(readFileSync(count, 'utf8')), dir };
-  } finally {
-    process.env.PATH = saved;
-    rmSync(dir, { recursive: true, force: true });
-  }
+// ghReplies is a request of githubRender, a mock function of node:test that answers the calls in turn from replies:
+// each reply is [stderr, exit] for a failure, thrown as execFileSync throws it, or [stdout] for a rendering.
+function ghReplies(replies) {
+  const request = mock.fn();
+  replies.forEach(([out, exit], call) => request.mock.mockImplementationOnce(() => {
+    if (exit) throw Object.assign(new Error('Command failed: gh api -X POST /markdown --input -'), { status: exit, stderr: Buffer.from(out) });
+    return out;
+  }, call));
+  return request;
 }
 
 const noResponse = ['Post "https://api.github.com/markdown": dial tcp 20.200.245.245:443: connect: operation timed out\n', 1];
 
 test('a GitHub request whose connection fails before a response is sent again', () => {
-  let html;
-  const { calls, dir } = withGh([noResponse, ['<p>x</p>\n']], () => { html = githubRender('x'); });
-  assert.equal(html, '<p>x</p>\n');
-  assert.equal(calls, 2);
-  assert.equal(existsSync(dir), false, `the stub directory ${dir} is left behind`);
+  const gh = ghReplies([noResponse, ['<p>x</p>\n']]);
+  assert.equal(githubRender('x', gh), '<p>x</p>\n');
+  assert.equal(gh.mock.callCount(), 2);
 });
 
 test('a GitHub request that gets an HTTP error is not sent again', () => {
-  const { calls } = withGh([['HTTP 422: Validation Failed\n', 1], ['<p>x</p>\n']], () => {
-    assert.throws(() => githubRender('x'), /Command failed/);
-  });
-  assert.equal(calls, 1);
+  const gh = ghReplies([['HTTP 422: Validation Failed\n', 1], ['<p>x</p>\n']]);
+  assert.throws(() => githubRender('x', gh), /Command failed/);
+  assert.equal(gh.mock.callCount(), 1);
 });
 
 test('a GitHub request whose connection fails at every attempt ends the recording', () => {
-  const { calls } = withGh([noResponse, noResponse, noResponse, ['<p>x</p>\n']], () => {
-    assert.throws(() => githubRender('x'), /Command failed/);
-  });
-  assert.equal(calls, 3);
+  const gh = ghReplies([noResponse, noResponse, noResponse, ['<p>x</p>\n']]);
+  assert.throws(() => githubRender('x', gh), /Command failed/);
+  assert.equal(gh.mock.callCount(), 3);
 });
