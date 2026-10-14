@@ -1,9 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 0810bfdb30df4eeabadddae0f5b3729a79a7110c08ed80ae4b5cd657061152a0 -->
+<!-- source-sha256: d2289f41694901c39433dca54ba2a26d4e7bb690520cb53c14562a725291a5d2 -->
 # Changelog
 
 ## Unreleased
 
+- T12-4-1: catalog가 orm set reader의 메시지를 바꾸지 않고 filepath.Rel로 corpus 경로를 만든다.
 - T12-5: slug recorder의 재시도 test가 Windows가 실행하지 않던 PATH의 gh stub 대신 node:test mock을 githubRender에 넘긴다.
 - T12-4: catalog가 dbspec/dbspec-set.json이 선언한 문서 set을 orm의 set reader로 읽는다. set이 나열하지 않은 .dbs 파일, dbspec/ 밖의 나열된 문서, external 항목, set 파일 자체의 오류는 catalog 진단이며, 모든 corpus가 set 파일을 갖는다.
 - T12-3: catalog가 table과 foreign key 진단의 위치를 1행 1열로 대체하던 정규식 대신 dbspec.Parse의 선언 위치로 정한다. test가 아닌 code의 정규식 감사에서 GFM delimiter cell, token 파일, lock 이름, 출처를 밝힌 markdown-it-katex guard는 각각 그 문법의 유일한 읽기다.
