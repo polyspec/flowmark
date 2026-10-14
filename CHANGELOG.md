@@ -3,6 +3,7 @@
 
 ## Unreleased
 
+- T12-3-1: the catalog names its documents by orm's dbspec.ParseSet instead of splitting the header line, so a refused header names no document and raises no false repeat.
 - T12-4-1: the catalog keeps the messages of orm's set reader unchanged and makes corpus paths with filepath.Rel.
 - T12-5: the slug recorder's retry tests pass a node:test mock to githubRender instead of a gh stub on PATH, which Windows did not run.
 - T12-4: the catalog reads the document set that dbspec/dbspec-set.json declares, with orm's set reader; a .dbs file the set does not list, a listed document outside dbspec/, an external entry and the set file's errors are catalog diagnostics, and every corpus carries its set file.

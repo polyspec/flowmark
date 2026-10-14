@@ -1,9 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: d2289f41694901c39433dca54ba2a26d4e7bb690520cb53c14562a725291a5d2 -->
+<!-- source-sha256: c650080eaac95f538981db98f3cb71fde14a0d5c76b4b7928b210a45a1938934 -->
 # Changelog
 
 ## Unreleased
 
+- T12-3-1: catalog가 header 줄을 나누지 않고 orm의 dbspec.ParseSet으로 문서 이름을 정해, 거부된 header는 문서 이름이 되지 않고 거짓 반복을 일으키지 않는다.
 - T12-4-1: catalog가 orm set reader의 메시지를 바꾸지 않고 filepath.Rel로 corpus 경로를 만든다.
 - T12-5: slug recorder의 재시도 test가 Windows가 실행하지 않던 PATH의 gh stub 대신 node:test mock을 githubRender에 넘긴다.
 - T12-4: catalog가 dbspec/dbspec-set.json이 선언한 문서 set을 orm의 set reader로 읽는다. set이 나열하지 않은 .dbs 파일, dbspec/ 밖의 나열된 문서, external 항목, set 파일 자체의 오류는 catalog 진단이며, 모든 corpus가 set 파일을 갖는다.
