@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database-checklist -->
-<!-- source-sha256: 213fcae2066b9f3d511e6fcebbd7fd44799b9e17b36aa11bdb0c2841ca08138b -->
+<!-- source-sha256: 44db6c278f9f183d86e1bbb7e9d41ca3ea9aac0e58ccc25f1cef0b564b24c438 -->
 # markdown database checklist
 
 ## T12 markdown database
@@ -142,7 +142,8 @@
 - [o] T12.1-38-2-1 기록기 test가 stub gh를 지운다(T12.1-38-2에 이어). 원인: stub gh를 쓰는 `tests/record-slugs.test.mjs`의 각 test가 임시 폴더(OS 임시 폴더의 `record-slugs-gh-*`)를 남겼다. 인수 조건: test가 끝나면 통과하든 실패하든 stub의 폴더를 지운다. 증거: 응답 없는 요청의 test가 폴더가 없어졌음을 확인한다; 변경 전에는 실패했고 변경 후 통과하며, 실행 뒤 `record-slugs-gh-*` 폴더가 남지 않는다.
 - [o] T12-3 flowmark의 문법 하나. 원인: `catalog/rules.go`의 `locateDecl`은 regex로 dbspec 선언 문법을 다시 적고, 찾지 못하면 1행 1열을 돌려준다 — 없는 위치를 그럴듯한 위치로 바꾸는 fallback — orm의 Go dbspec model에 선언 위치가 없었기 때문이다. 인수 조건: orm이 `T128-3p`(parse 결과의 선언 위치)를 release한 뒤 `locateDecl`과 그 fallback을 지우고 그 위치를 쓴다; test 아닌 code의 감사는 regex와 문자열 일치를 다루며, pattern은 그 문법의 유일한 읽기이거나 외부 도구 동작을 출처와 함께 옮긴 것일 때만 정당하다(`store/inline.go`의 `vsGuard`는 `@vscode/markdown-it-katex`를 인용한다); 규칙이 다시 적힌 곳은 red 먼저. 결과: 유효한 문서 중 정규식과 parser가 다르게 읽는 것이 없어 제거에는 red 사례가 없다. 결함은 다시 적은 문법과 그 대체 동작이었다. 근거: orm `docs/plans/editor-stack.md`.
   - [o] T12-3-1 set의 문서 이름을 orm으로 정한다 (T12-3에 이어). 원인: T12-3의 감사가 `catalog/load.go`의 `headerName`을 찾았다. 이것은 parse 전에 문서를 key로 묶으려고 `dbspec 1 <document>` header를 문자열 비교로 다시 적고, header가 맞지 않으면 파일 이름을 대신 쓴다. orm에는 문서 집합을 parse하는 공개 API가 없고(orm `T166`), orm의 runtimemodel도 header를 같은 방식으로 다시 적는다. 완료 조건: orm이 `T166`을 릴리스한 뒤 catalog가 그것으로 set을 parse하고, `headerName`과 그 대체 동작을 없애며, 문자열 비교가 parser와 다르게 읽는 header로 먼저 red를 확인한다.
-    - [ ] T12-3-1-1 T166을 담은 orm 릴리스를 pin한다 (T12-3-1에 이어). 원인: go.mod가 릴리스 전에 dbspec.ParseSet을 처음 담은 orm main commit de5b8b8e(v0.0.15-0.20261014082842-de5b8b8ef010, 반복된 이름을 그 문서에 보고하는 dbspec.ParseSet)을 pin한다. 제거 조건: orm이 T166을 릴리스하면(editor stack 릴리스 T128-R 또는 그 전) go.mod가 그 tag를 pin하고 이 항목을 닫는다.
+    - [o] T12-3-1-1 T166을 담은 orm 릴리스를 pin한다 (T12-3-1에 이어). 원인: go.mod가 릴리스 전에 dbspec.ParseSet을 처음 담은 orm main commit de5b8b8e(v0.0.15-0.20261014082842-de5b8b8ef010, 반복된 이름을 그 문서에 보고하는 dbspec.ParseSet)을 pin한다. 제거 조건: orm이 T166을 릴리스하면(editor stack 릴리스 T128-R 또는 그 전) go.mod가 그 tag를 pin하고 이 항목을 닫는다.
+      Evidence: go.mod가 T166을 담은 릴리스 github.com/polyspec/orm v0.0.15를 pin한다. catalog와 internal test가 통과한다.
   - [o] T12-3-2 반복된 이름을 그 문서의 결과에서 받는다 (T12-3-1에 이어). 원인: catalog가 반복된 이름의 set 진단이 어느 문서의 것인지 parse되지 않은 문서로 거꾸로 맞췄다. orm이 밝혀야 할 것을 추측한 것이다. orm T166이 이제 반복된 이름을 그 문서 자신의 결과에 보고한다. 완료 조건: catalog가 dbspec.ParseSet의 각 결과를 그대로 옮기고 다시 맞추는 코드가 없으며, catalog test가 통과한다.
 - [o] T12-4 catalog가 선언된 dbspec set 파일을 읽는다. 원인: catalog는 모든 `dbspec/*.dbs`를 묶음으로 삼는데, 이것은 orm set 파일(`T128-2a`) 옆의 세 번째 선언이다. 인수 조건: orm이 `T128-2a`를 release한 뒤 판정을 `docs/spec/00-overview.md`와 `30-schema.md`(+ko)에 먼저 적는다 — catalog는 `dbspec/dbspec-set.json`을 읽는다; `dbspec/` 아래에 있지만 묶음이 나열하지 않은 `.dbs`는 그것을 밝힌 catalog 오류이며, `dbspec/` 밖의 나열 경로는 오류이고, 각각 수락 vector와 거부 vector를 가진다; `testdata/`와 `examples/` 아래 모든 corpus가 set 파일을 가진다; board의 orm-gen 호출은 `--set`을 받는다. 근거: orm `docs/plans/editor-stack.md`.
   - [o] T12-4-1 set reader가 돌려주는 경로를 그대로 받는다 (T12-4에 이어). 원인: `corpusPath`가 orm set 오류의 메시지 문자열을 문자열 치환으로 고쳐 썼다. orm이 이미 구조화된 경로로 돌려주는 것을 다시 읽은 것이다. 완료 조건: catalog가 orm의 메시지를 바꾸지 않고, 돌려받은 경로에서 filepath.Rel로 corpus 경로를 만들며, catalog test가 통과한다.
