@@ -5,7 +5,7 @@ package introspect
 import (
 	"github.com/polyspec/flowmark/catalog"
 	"github.com/polyspec/flowmark/validate"
-	"github.com/polyspec/orm/engine/dbspec"
+	"github.com/polyspec/orm/packages/go/engine/dbspec"
 )
 
 // Document is one dbspec/ document of the catalog: its corpus path, its

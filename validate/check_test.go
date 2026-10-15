@@ -3,7 +3,7 @@ package validate
 import (
 	"testing"
 
-	"github.com/polyspec/orm/engine/dbspec"
+	"github.com/polyspec/orm/packages/go/engine/dbspec"
 
 	"github.com/polyspec/flowmark/catalog"
 )

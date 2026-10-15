@@ -13,12 +13,12 @@ import (
 	"github.com/polyspec/flowmark/catalog"
 	"github.com/polyspec/flowmark/irexec"
 	"github.com/polyspec/flowmark/validate"
-	"github.com/polyspec/orm/engine/dbspec"
-	"github.com/polyspec/orm/engine/dialect"
-	"github.com/polyspec/orm/engine/ir"
-	"github.com/polyspec/orm/engine/plan"
-	"github.com/polyspec/orm/engine/planner"
-	"github.com/polyspec/orm/engine/runtimemodel"
+	"github.com/polyspec/orm/packages/go/engine/dbspec"
+	"github.com/polyspec/orm/packages/go/engine/dialect"
+	"github.com/polyspec/orm/packages/go/engine/ir"
+	"github.com/polyspec/orm/packages/go/engine/plan"
+	"github.com/polyspec/orm/packages/go/engine/planner"
+	"github.com/polyspec/orm/packages/go/engine/runtimemodel"
 	"github.com/polyspec/orm/packages/go/orm"
 )
 

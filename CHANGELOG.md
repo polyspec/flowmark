@@ -3,6 +3,7 @@
 
 ## Unreleased
 
+- flowmark takes orm 0.0.18: go.mod requires the Go module github.com/polyspec/orm/packages/go, and the engine imports take its packages/go/engine paths. (#T12-6)
 - T12-3-1-1: go.mod pins the orm release v0.0.15, which carries the per-document set parse (T166), instead of a main commit.
 - T12-3-2: the catalog copies orm's per-document results of ParseSet, a repeated name on its own document, and reconstructs nothing.
 - T12-3-1: the catalog names its documents by orm's dbspec.ParseSet instead of splitting the header line, so a refused header names no document and raises no false repeat.

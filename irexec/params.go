@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/polyspec/orm/engine/dbspec"
-	"github.com/polyspec/orm/engine/ir"
+	"github.com/polyspec/orm/packages/go/engine/dbspec"
+	"github.com/polyspec/orm/packages/go/engine/ir"
 )
 
 // checkParams checks every parameter of a request against each slot it fills before any

@@ -19,8 +19,8 @@ import (
 	"github.com/polyspec/flowmark/irexec"
 	"github.com/polyspec/flowmark/store/journal"
 	"github.com/polyspec/flowmark/writepath"
-	"github.com/polyspec/orm/engine/dbspec"
-	"github.com/polyspec/orm/engine/ir"
+	"github.com/polyspec/orm/packages/go/engine/dbspec"
+	"github.com/polyspec/orm/packages/go/engine/ir"
 )
 
 // The codes this package answers with itself (orm errors.yaml).

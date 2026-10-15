@@ -11,7 +11,7 @@ import (
 	"github.com/polyspec/flowmark/catalog"
 	"github.com/polyspec/flowmark/store"
 	"github.com/polyspec/flowmark/validate"
-	"github.com/polyspec/orm/engine/dbspec"
+	"github.com/polyspec/orm/packages/go/engine/dbspec"
 )
 
 // docSuffix is the suffix of a corpus document.

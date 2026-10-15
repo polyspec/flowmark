@@ -12,9 +12,9 @@ import (
 
 	"github.com/polyspec/flowmark/catalog"
 	"github.com/polyspec/flowmark/store"
-	"github.com/polyspec/orm/engine/dbspec"
-	"github.com/polyspec/orm/engine/ir"
-	"github.com/polyspec/orm/engine/runtimemodel"
+	"github.com/polyspec/orm/packages/go/engine/dbspec"
+	"github.com/polyspec/orm/packages/go/engine/ir"
+	"github.com/polyspec/orm/packages/go/engine/runtimemodel"
 	"github.com/polyspec/orm/packages/go/orm"
 )
 

@@ -12,7 +12,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/polyspec/orm/engine/dbspec"
+	"github.com/polyspec/orm/packages/go/engine/dbspec"
 )
 
 // The corpus layout: the catalog is the dbspec/ directory of the root.

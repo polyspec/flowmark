@@ -19,9 +19,9 @@ import (
 	"time"
 
 	"github.com/polyspec/flowmark/catalog"
-	"github.com/polyspec/orm/engine/dbspec"
-	"github.com/polyspec/orm/engine/ir"
-	"github.com/polyspec/orm/engine/runtimemodel"
+	"github.com/polyspec/orm/packages/go/engine/dbspec"
+	"github.com/polyspec/orm/packages/go/engine/ir"
+	"github.com/polyspec/orm/packages/go/engine/runtimemodel"
 )
 
 // Executor runs the requests of one catalog. Its runtime model is built from the

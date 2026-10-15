@@ -5,7 +5,7 @@ import (
 
 	"github.com/polyspec/flowmark/store"
 	"github.com/polyspec/flowmark/validate"
-	"github.com/polyspec/orm/engine/dbspec"
+	"github.com/polyspec/orm/packages/go/engine/dbspec"
 )
 
 // checks judges each check of the table over each written row with the validator's

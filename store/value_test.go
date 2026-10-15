@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/polyspec/orm/engine/dbspec"
+	"github.com/polyspec/orm/packages/go/engine/dbspec"
 )
 
 func typ(k dbspec.TypeKind) dbspec.Type { return dbspec.Type{Kind: k} }

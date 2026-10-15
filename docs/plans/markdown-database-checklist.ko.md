@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database-checklist -->
-<!-- source-sha256: 44db6c278f9f183d86e1bbb7e9d41ca3ea9aac0e58ccc25f1cef0b564b24c438 -->
+<!-- source-sha256: db63b0f424944f7468a843cd1d941ecdc40c04458a9e24c8a2243c61c3f1f5da -->
 # markdown database checklist
 
 ## T12 markdown database
@@ -148,3 +148,5 @@
 - [o] T12-4 catalog가 선언된 dbspec set 파일을 읽는다. 원인: catalog는 모든 `dbspec/*.dbs`를 묶음으로 삼는데, 이것은 orm set 파일(`T128-2a`) 옆의 세 번째 선언이다. 인수 조건: orm이 `T128-2a`를 release한 뒤 판정을 `docs/spec/00-overview.md`와 `30-schema.md`(+ko)에 먼저 적는다 — catalog는 `dbspec/dbspec-set.json`을 읽는다; `dbspec/` 아래에 있지만 묶음이 나열하지 않은 `.dbs`는 그것을 밝힌 catalog 오류이며, `dbspec/` 밖의 나열 경로는 오류이고, 각각 수락 vector와 거부 vector를 가진다; `testdata/`와 `examples/` 아래 모든 corpus가 set 파일을 가진다; board의 orm-gen 호출은 `--set`을 받는다. 근거: orm `docs/plans/editor-stack.md`.
   - [o] T12-4-1 set reader가 돌려주는 경로를 그대로 받는다 (T12-4에 이어). 원인: `corpusPath`가 orm set 오류의 메시지 문자열을 문자열 치환으로 고쳐 썼다. orm이 이미 구조화된 경로로 돌려주는 것을 다시 읽은 것이다. 완료 조건: catalog가 orm의 메시지를 바꾸지 않고, 돌려받은 경로에서 filepath.Rel로 corpus 경로를 만들며, catalog test가 통과한다.
 - [o] T12-5 slug recorder test를 Windows에서 실행한다. 원인: scripts/record-slugs.mjs의 재시도 test는 `gh`라는 이름의 node script를 PATH 맨 앞에 두는데 Windows는 그것을 실행하지 않아, 진짜 gh가 답했고 test가 추가된 뒤 CI의 모든 Windows 실행에서 test 셋이 실패했다. 완료 조건: githubRender가 request를 인자로 받고, test는 stub program 대신 node:test의 mock function을 넘기며, Windows 실행이 통과한다.
+- [o] T12-6 Go module이 github.com/polyspec/orm/packages/go인 orm 0.0.18을 받는다. 원인: orm 0.0.18이 Go module을 packages/go로 옮겨(orm `T137-1-5`) flowmark가 import하는 engine package는 github.com/polyspec/orm/packages/go/engine/*이고, flowmark는 이전 module github.com/polyspec/orm v0.0.15를 pin했다. 완료 조건: go.mod가 이전 module 대신 github.com/polyspec/orm/packages/go v0.0.18을 요구하고, 모든 import가 새 경로를 쓰며, 바뀐 package의 test가 통과한다.
+  Evidence: module의 go build와 go vet이 통과한다. catalog, introspect, irexec, ops, store, sync, validate의 go test가 통과하고, irexec와 validate의 대소문자 case는 scripts/go-test.mjs의 case-sensitive folder에서 통과한다.

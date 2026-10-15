@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/polyspec/flowmark/catalog"
-	"github.com/polyspec/orm/engine/dbspec"
+	"github.com/polyspec/orm/packages/go/engine/dbspec"
 )
 
 // fileTarget is one table the file fuzzer reads: its catalog, its table, the file
