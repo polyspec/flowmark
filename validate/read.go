@@ -8,7 +8,7 @@ import (
 
 	"github.com/polyspec/flowmark/catalog"
 	"github.com/polyspec/flowmark/store"
-	"github.com/polyspec/orm/engine/runtimemodel"
+	"github.com/polyspec/orm/packages/go/engine/runtimemodel"
 )
 
 // placed is a row with the corpus file that holds it and, for a block row, its

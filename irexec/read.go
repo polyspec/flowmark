@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/polyspec/orm/engine/dbspec"
-	"github.com/polyspec/orm/engine/ir"
+	"github.com/polyspec/orm/packages/go/engine/dbspec"
+	"github.com/polyspec/orm/packages/go/engine/ir"
 )
 
 // reader runs the read side of one request over one corpus.

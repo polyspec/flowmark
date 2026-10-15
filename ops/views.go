@@ -9,7 +9,7 @@ import (
 	"github.com/polyspec/flowmark/irexec"
 	"github.com/polyspec/flowmark/validate"
 	"github.com/polyspec/flowmark/writepath"
-	"github.com/polyspec/orm/engine/runtimemodel"
+	"github.com/polyspec/orm/packages/go/engine/runtimemodel"
 )
 
 // viewAnswer is the answer of views with a key: the view row and the rows of its entity through its filter and sort.

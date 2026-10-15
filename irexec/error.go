@@ -7,7 +7,7 @@ import (
 
 	"github.com/polyspec/flowmark/catalog"
 	"github.com/polyspec/flowmark/store"
-	"github.com/polyspec/orm/engine/ir"
+	"github.com/polyspec/orm/packages/go/engine/ir"
 )
 
 // The error codes of orm errors.yaml that the executor answers with.

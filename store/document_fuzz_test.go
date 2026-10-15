@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/polyspec/flowmark/catalog"
-	"github.com/polyspec/orm/engine/dbspec"
+	"github.com/polyspec/orm/packages/go/engine/dbspec"
 )
 
 // documentTarget is one document table the document fuzzer reads: its catalog, its

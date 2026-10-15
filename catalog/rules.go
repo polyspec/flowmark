@@ -5,7 +5,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/polyspec/orm/engine/dbspec"
+	"github.com/polyspec/orm/packages/go/engine/dbspec"
 )
 
 // maxHeading is the deepest heading level of markdown.

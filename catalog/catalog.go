@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/polyspec/orm/engine/dbspec"
+	"github.com/polyspec/orm/packages/go/engine/dbspec"
 )
 
 // Diagnostic is one located catalog error. File is relative to the corpus

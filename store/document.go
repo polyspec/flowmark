@@ -13,7 +13,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/polyspec/flowmark/catalog"
-	"github.com/polyspec/orm/engine/dbspec"
+	"github.com/polyspec/orm/packages/go/engine/dbspec"
 )
 
 // docLayout is the storage of one list or table of rows as its catalog declares it:

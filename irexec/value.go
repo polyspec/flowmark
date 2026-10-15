@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/polyspec/flowmark/store"
-	"github.com/polyspec/orm/engine/dbspec"
+	"github.com/polyspec/orm/packages/go/engine/dbspec"
 )
 
 // The runtime value model JSON of the protocol (orm docs/protocol.md section 5): a

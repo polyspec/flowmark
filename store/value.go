@@ -7,7 +7,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/polyspec/flowmark/internal/unicodedcp"
-	"github.com/polyspec/orm/engine/dbspec"
+	"github.com/polyspec/orm/packages/go/engine/dbspec"
 )
 
 // maxKeyBytes bounds a files key so its file name stays within 255 bytes.
