@@ -1,5 +1,5 @@
 <!-- doc-id: spec-document-model -->
-<!-- source-sha256: 92b133d71c72a8748f5ebc0b149ae43c9016df54fc97e2b5910924d7c50716d9 -->
+<!-- source-sha256: 732a3d568a3f916921bca3c04377c2a670067ff23cc8cde2c4f615340267d83b -->
 # 문서 모델
 
 [English](20-document-model.md)
@@ -56,7 +56,7 @@ aggregate냐 split이냐는 저장 선언이다. 논리 관계는 모든 저장�
 
 `store` setting에 `shard <column> <period>`를 가진 `files` 또는 `document` table은 기간마다 행을 따로
 저장한다. column은 non-null `date` 또는 `datetime`이고 period는 `year`, `month`, `day`다(setting과 그
-오류는 orm의 것이다, T119). 소유하는 행이 없고 시간에 따라 쌓이는 table — 이벤트 로그, 시간 기록 — 은
+오류는 orm의 것이다, `T119`). 소유하는 행이 없고 시간에 따라 쌓이는 table — 이벤트 로그, 시간 기록 — 은
 그렇지 않으면 파일 하나(`document`)나 folder 하나(`files`)가 끝없이 커진다.
 
 - **기간 이름.** 행의 기간 이름은 column 값을 grain에서 자른 것이다: `2026`, `2026-10`, `2026-10-11`.
@@ -84,7 +84,7 @@ aggregate냐 split이냐는 저장 선언이다. 논리 관계는 모든 저장�
 - **절 변경**은 table의 shard를 더하거나 뺀다. 저장 변경이다(spec 80).
 - **방식 하나와 적용 범위.** shard 방식은 시간 shard 하나이며 기간은 `year`, `month`, `day`다. 이것은
   database의 파티션이 아니라 markdown corpus의 저장에 대한 선언이다. SQL backend(MySQL, PostgreSQL,
-  SQLite)는 orm이 정한 대로 이 절을 무시하므로(orm `docs/dbspec.md`, T119) database export(spec 70)는
+  SQLite)는 orm이 정한 대로 이 절을 무시하므로(orm `docs/dbspec.md`, `T119`) database export(spec 70)는
   샤드된 table에 table 하나를 만들고 모든 기간의 행을 table이 읽히는 순서로 insert한다. 절은 `files`와
   `document` 저장에 적용되며, orm은 `block` table, 자기 참조 외래 key가 있는 table, `order`가 있는
   table에서 거절하고 catalog는 이력 table에서 거절한다. key 범위, hash, 목록에 의한 shard와 column

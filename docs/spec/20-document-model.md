@@ -62,7 +62,7 @@ so the same rows can be stored either way.
 
 A `files` or `document` table whose `store` setting carries `shard <column> <period>` stores the rows
 of each period apart, the column being a non-null `date` or `datetime` column and the period `year`,
-`month` or `day` (the setting and its errors are orm's, T119). A table that no row owns and that
+`month` or `day` (the setting and its errors are orm's, `T119`). A table that no row owns and that
 accumulates in time — an event log, time entries — would otherwise grow one file without end (`document`)
 or one folder without end (`files`).
 
@@ -94,7 +94,7 @@ or one folder without end (`files`).
 - **The one method, and where it applies.** There is one shard method, the time shard, with the periods
   `year`, `month` and `day`. It is a statement about the storage of a markdown corpus, not a partition of a
   database: the SQL backends (MySQL, PostgreSQL, SQLite) ignore the clause as orm defines it (orm
-  `docs/dbspec.md`, T119), so a database export (spec 70) creates one table for a sharded table and inserts
+  `docs/dbspec.md`, `T119`), so a database export (spec 70) creates one table for a sharded table and inserts
   its rows of every period in the order the table reads in. The clause applies to `files` and `document`
   storage; orm rejects it on a `block` table, on a table with a self foreign key and on a table with
   `order`, and the catalog rejects it on a history table. Shard by key range, by hash or by list, and a

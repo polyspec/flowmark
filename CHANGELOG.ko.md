@@ -1,11 +1,12 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 1f06f157adf88289f8ede636107c9069381fe8a4d1960f03cf311353fadaf950 -->
+<!-- source-sha256: 3a7cbea99d8b77155adbc380c3a5fbfb8021e81e67f1282470c6d0f792bfbe12 -->
 # Changelog
 
 ## Unreleased
 
+- T12-7: prose의 다른 repo task ID를 코드 span으로 쓴다. 그래서 make refs-check가 orm 항목을 flowmark task로 읽지 않는다.
 - flowmark가 orm 0.0.18을 받는다. go.mod가 Go module github.com/polyspec/orm/packages/go를 요구하고, engine import는 그 packages/go/engine 경로를 쓴다. (#T12-6)
-- T12-3-1-1: go.mod가 main commit 대신 문서별 set parse(T166)를 담은 orm 릴리스 v0.0.15를 pin한다.
+- T12-3-1-1: go.mod가 main commit 대신 문서별 set parse(`T166`)를 담은 orm 릴리스 v0.0.15를 pin한다.
 - T12-3-2: catalog가 반복된 이름을 그 문서 자신의 결과로 담는 orm ParseSet의 문서별 결과를 그대로 옮기고, 아무것도 다시 맞추지 않는다.
 - T12-3-1: catalog가 header 줄을 나누지 않고 orm의 dbspec.ParseSet으로 문서 이름을 정해, 거부된 header는 문서 이름이 되지 않고 거짓 반복을 일으키지 않는다.
 - T12-4-1: catalog가 orm set reader의 메시지를 바꾸지 않고 filepath.Rel로 corpus 경로를 만든다.
@@ -20,7 +21,7 @@
 - T12.1-38-1: engine이 GFM table을 각 viewer처럼 읽으며, GitHub, GitLab, VS Code에서 기록한 table vector 54개를 더해 확인한다: table cell은 inline 내용이라 그 footnote 참조가 footnote 번호를 매기고 그 raw HTML heading과 id를 읽으며, 각 `\|`는 `|`로 읽고 header의 column 너머 cell은 버린다; GitHub과 GitLab에서 header row 앞의 문단은 pipe의 escape를 풀고 어떤 link label도 정의하지 않는다; body row는 각 viewer의 cell 한도에서 멈춘다; VS Code의 markdown-it table rule은 모든 block 시작과 모든 문단 줄에서 가장 먼저 돌므로, heading, fence, HTML block, math block, list item, block quote 줄도 뒤에 delimiter row가 오면 header row다.
 - T12.1-38-2 (fix): `make slug-vectors`는 연결이 응답 전에 실패한 GitHub 요청을 세 번까지 다시 보내므로, timeout된 연결 하나가 요청 수천 건의 기록을 끝내지 않는다; HTTP 오류는 여전히 기록을 끝낸다.
 - T12: markdown database가 완성되었다. checklist의 모든 항목이 끝났다 — 문법, validator, release된 orm v0.0.9 위의 `markdown://` IR 실행기, 규모 시험을 거친 write path, 얼굴들, crudui가 렌더하는 천 글의 게시판, 세 platform gate, 복잡한 foreign key corpus.
-- T12.12: flowmark가 pseudo-version 대신 release된 orm v0.0.9를 요구한다. 그 tag는 IR executor protocol 항목 T61과 T62, validator series T82–T102를 담으며 전 suite가 그 위에서 통과한다.
+- T12.12: flowmark가 pseudo-version 대신 release된 orm v0.0.9를 요구한다. 그 tag는 IR executor protocol 항목 `T61`과 `T62`, validator series `T82`–`T102`를 담으며 전 suite가 그 위에서 통과한다.
 - T12.14: 복잡한 foreign key의 corpus: golden이 다섯 table 사슬, 자기 참조, 쌍방향 쌍, 다섯 table에게 참조되는 table, block 행으로의 링크와 모든 저장 종류를 선언한다. engine은 사슬을 쓰고 그 사슬을 지나 join 하며 관계의 관계를 조립하고, 이동에서 참조를 유지하며, 빈 참조와 자기 참조된 삭제, 사슬 변이 잡은 삭제, 홀로 남은 쌍방향 쌍의 한쪽을 거절한다 — model이 담을 수 없는 복합 key는 test가 고정하는 schema error로 남는다.
 - T12.11.2-2 (수정): board의 정렬이 두 얼굴에서 동작한다 — query API를 잘못 불러 PHP 정렬이 항상 비었고, 정렬은 이제 페이지를 자르기 전에 목록 전체에 적용된다(제목은 요청의 column order로, 작성자 이름은 요청의 order 항목이 join된 column을 못 가리키므로 목록을 읽어 정렬). 페이지가 정렬을 따른다.
 - T12.11.2-2 (수정): board의 pager가 링크를 윈도잉한다 — 첫 페이지, 마지막 페이지, 현재 주변 다섯 개와 간격 표시, crudui의 pagination 모델처럼 — 그리고 링크가 정렬을 유지한다. 목록 자체는 항상 요청한 페이지의 열 개 글을 보인다.
@@ -43,7 +44,7 @@
 - T12.5-5: 열기에 실패한 corpus는 lock을 남기지 않는다. lock 해제는 lock file을 여는데 macOS의 감시가 문서마다 descriptor를 쥐어 남은 것이 없었으므로, 감시를 먼저 닫고 lock을 해제한다.
 - T12.11.2-1: board 애플리케이션이 hyper의 Node.js 서버에서도 orm의 TypeScript client와 `markdown://` 위에 `examples/board/web/node`로 돈다. PHP 서버와 Node.js 서버는 같은 행과 글 하나의 같은 페이지를 낸다.
 - T12.11.2: board 애플리케이션이 hyper의 PHP 서버 위에서 orm과 `markdown://`로 `examples/board/web`에서 돈다. 글 1000개를 1월부터 10월까지 달마다 100개씩 나누며, 두 board corpus 모두 `posts`는 `created`의 달로 샤드되고 `examples/board/seed`가 엔진으로 글을 쓴다.
-- T12.1-35: `files`나 `document` table이 시간 shard(`store ... shard <column> <year|month|day>`, orm T119)를 선언할 수 있다. 행은 `<table>/<period>/<key>.flowmark.md`나 기간 문서 `<table>/<period>.flowmark.md`에 서고, insert는 행을 자기 기간의 파일에 놓고, shard column 갱신은 행을 옮기며 그 행으로의 링크를 같은 쓰기에서 다시 쓰고, 행이 없는 기간에는 파일이 없으며, validator는 다른 기간의 파일에 있는 행을 `shard.period`로 보고한다.
+- T12.1-35: `files`나 `document` table이 시간 shard(`store ... shard <column> <year|month|day>`, orm `T119`)를 선언할 수 있다. 행은 `<table>/<period>/<key>.flowmark.md`나 기간 문서 `<table>/<period>.flowmark.md`에 서고, insert는 행을 자기 기간의 파일에 놓고, shard column 갱신은 행을 옮기며 그 행으로의 링크를 같은 쓰기에서 다시 쓰고, 행이 없는 기간에는 파일이 없으며, validator는 다른 기간의 파일에 있는 행을 `shard.period`로 보고한다.
 - T12.7: database로의 export가 완료되었다. codec column은 저장된 cell을 유지하고, list 끝의 host stage hex와 ip는 풀었다가 orm이 다시 적용하며, client stage 앞의 host stage만 거절한다. 앞선 항목의 identity key와 `datetime(p)` bind까지 합쳐 catalog의 모든 table이 export된다.
 - T12.4: IR executor가 완료되었다. orm protocol 아래에서 모든 IR 종류에 답하며, orm이 필요 없는 판정은 적용되어 있다. orm 항목을 기다리는 열 가지 판정은 하위 항목 T12.4-1부터 T12.4-10이며 각각 orm bump 뒤에 적용된다.
 - T12.7(일부): export test가 자체 binder 대신 orm의 `DB.Execute`로 statement를 적용하므로 모든 precision의 SQLite `datetime(p)`와 `time(p)` column이 database가 요구하는 대로 bind된다. orm pin은 그것을 담은 commit으로 올라간다.
