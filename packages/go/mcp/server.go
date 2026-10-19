@@ -70,8 +70,12 @@ func Serve(root string, wait time.Duration, in io.Reader, out io.Writer) error {
 		if err != nil {
 			return err
 		}
-		w.Write(b)
-		w.WriteByte('\n')
+		if _, err := w.Write(b); err != nil {
+			return err
+		}
+		if err := w.WriteByte('\n'); err != nil {
+			return err
+		}
 		// The client reads each response while the session runs, so each one is flushed on its own.
 		if err := w.Flush(); err != nil {
 			return err

@@ -32,10 +32,13 @@ var citesSpec = regexp.MustCompile(`^[0-9]+#`)
 // of the module and fails on each one citing a spec anchor that is not a
 // heading of that spec, listing them all.
 func TestCaseNamesCiteSpecHeadings(t *testing.T) {
-	root := moduleRoot(t)
-	files := testFiles(t, root)
+	var files []string
+	for _, module := range goModules(t) {
+		files = append(files, testFiles(t, module)...)
+	}
 	anchors := map[string]map[string]bool{} // spec number to its anchors
 	var bad []string
+	root := repositoryRoot(t)
 	for _, file := range files {
 		for _, lit := range citations(t, file) {
 			rel, err := filepath.Rel(root, lit.pos.Filename)
@@ -51,7 +54,7 @@ func TestCaseNamesCiteSpecHeadings(t *testing.T) {
 			spec, anchor := m[1], m[2]
 			set, ok := anchors[spec]
 			if !ok {
-				set = specAnchors(t, root, spec)
+				set = specAnchors(t, repositoryRoot(t), spec)
 				anchors[spec] = set
 			}
 			if !set[anchor] {
@@ -87,7 +90,7 @@ func TestAnchor(t *testing.T) {
 // TestSpecAnchorsRejects pins that a citation the spec has no heading for is
 // absent from its anchors, and that a duplicate heading takes a suffix.
 func TestSpecAnchorsRejects(t *testing.T) {
-	set := specAnchors(t, moduleRoot(t), "10")
+	set := specAnchors(t, repositoryRoot(t), "10")
 	for _, a := range []string{"detail-headings-and-anchors", "readable-values", "document-order"} {
 		if !set[a] {
 			t.Errorf("spec 10 lacks anchor %q", a)
@@ -106,6 +109,24 @@ func TestSpecAnchorsRejects(t *testing.T) {
 	if !slices.Equal(got, want) {
 		t.Errorf("headingAnchors = %q, want %q", got, want)
 	}
+}
+
+// repositoryRoot is the folder of the repository: the two folders above the module of the package (packages/go),
+// where docs/spec lies.
+func repositoryRoot(t *testing.T) string {
+	t.Helper()
+	return filepath.Join(moduleRoot(t), "..", "..")
+}
+
+// goModules are the Go modules of the repository, the folders that hold a go.mod below the repository root.
+func goModules(t *testing.T) []string {
+	t.Helper()
+	repo := repositoryRoot(t)
+	var modules []string
+	for _, rel := range []string{"packages/go", "examples", "tests/conformance/go"} {
+		modules = append(modules, filepath.Join(repo, rel))
+	}
+	return modules
 }
 
 // moduleRoot is the nearest ancestor of the package directory, where go test
@@ -226,7 +247,11 @@ func specAnchors(t *testing.T, root, spec string) map[string]bool {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
+	t.Cleanup(func() {
+		if err := f.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	list, err := headingAnchors(f)
 	if err != nil {
 		t.Fatalf("%s: %v", found[0], err)

@@ -2,8 +2,8 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -24,7 +24,7 @@ const serveUsage = "usage: flowmark serve <corpus> --port <port> [--new-token] [
 // each failure on stderr. It returns 0 after a stop, 1 when the server cannot start or fails, and 2 on a usage error.
 func serve(args []string, stdout, stderr io.Writer, stop <-chan os.Signal) (code int) {
 	usage := func(format string, a ...any) int {
-		fmt.Fprintf(stderr, "flowmark serve: "+format+"\n%s\n", append(a, serveUsage)...)
+		report(stderr, "flowmark serve: "+format+"\n%s\n", append(a, serveUsage)...)
 		return 2
 	}
 	if len(args) == 0 || strings.HasPrefix(args[0], "-") {
@@ -52,7 +52,7 @@ func serve(args []string, stdout, stderr io.Writer, stop <-chan os.Signal) (code
 		return usage("--tx-idle-ms %d is not positive", *idleMS)
 	}
 	fail := func(format string, a ...any) int {
-		fmt.Fprintf(stderr, "flowmark serve: "+format+"\n", a...)
+		report(stderr, "flowmark serve: "+format+"\n", a...)
 		return 1
 	}
 	root, err := filepath.Abs(args[0])
@@ -62,7 +62,7 @@ func serve(args []string, stdout, stderr io.Writer, stop <-chan os.Signal) (code
 	cat, diags := catalog.Load(root)
 	if len(diags) > 0 {
 		for _, d := range diags {
-			fmt.Fprintf(stderr, "flowmark serve: %s: line %d: %s: %s\n", d.File, d.Line, d.Rule, d.Message)
+			report(stderr, "flowmark serve: %s: line %d: %s: %s\n", d.File, d.Line, d.Rule, d.Message)
 		}
 		return fail("the catalog has %d diagnostics; fix them to serve the corpus", len(diags))
 	}
@@ -94,7 +94,14 @@ func serve(args []string, stdout, stderr io.Writer, stop <-chan os.Signal) (code
 	if err != nil {
 		return fail("%v", err)
 	}
-	fmt.Fprintf(stdout, "[serve] listening on %s for the corpus %s\n", ln.Addr(), name)
+	pr := &printer{w: stdout}
+	pr.printf("[serve] listening on %s for the corpus %s\n", ln.Addr(), name)
+	if pr.err != nil {
+		if cerr := ln.Close(); cerr != nil {
+			return fail("%v", errors.Join(pr.err, cerr))
+		}
+		return fail("%v", pr.err)
+	}
 	served := make(chan error, 1)
 	go func() { served <- srv.Serve(ln) }()
 	select {
@@ -121,7 +128,7 @@ type lineLog struct {
 func (l *lineLog) printf(format string, a ...any) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	fmt.Fprintf(l.w, format+"\n", a...)
+	report(l.w, format+"\n", a...)
 }
 
 // Observe prints a lock, journal or corpus tree event. A read of one folder or file from the disk (corpus.read) is not

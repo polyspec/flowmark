@@ -21,8 +21,9 @@ rules:
 
   # K244: the Go suite of the conformance vectors crosses packages, so it lies in tests/conformance/go, a module of its own; the
   # vectors and catalogs that every runtime reads lie beside it in tests/conformance/. tests/kit holds the tests of kit.
+  # tests/darwin holds the node test of the macOS mount, which only the macOS run of make flowmark-test reads (hdiutil).
   - id: layout-root-tests
-    paths: ["tests/*", "!tests/kit", "!tests/conformance"]
+    paths: ["tests/*", "!tests/kit", "!tests/conformance", "!tests/darwin"]
 
   # S9: the infrastructure is TypeScript, and these files are the exceptions that the rule allows, each with its reason.
   - id: layout-infrastructure-typescript
@@ -31,18 +32,5 @@ rules:
       - "tests/**/*.{js,mjs,cjs,py,sh,bash,zsh,rb,pl,php,go,rs,ps1,bat,cmd}"
       # The fixture checkouts of kit hold the packages of a consumer repository as test data, not infrastructure.
       - "!tests/kit/fixture/**"
-      # S9: a harness that drives one language's implementation is a test of that language. go-test.mjs runs the go test of
-      # each Go module, provisioning the case-sensitive folder that they need, and its test drives it.
-      - "!scripts/go-test.mjs"
-      - "!tests/go-test.test.mjs"
       # S9: the Go suites of the conformance vectors drive the Go implementation, so they are tests of that language.
       - "!tests/conformance/go/**"
-      # S9: a symbol extractor runs that ecosystem's tool: record-slugs.mjs drives the heading renderers of GitHub, GitLab and
-      # VS Code (gh, npm and cargo) to record the slug vectors, and its test drives the recorder without the network.
-      - "!scripts/record-slugs.mjs"
-      - "!tests/record-slugs.test.mjs"
-
-  # S5: a path repository of a composer.json names a folder inside the repository. The board example runs against the sibling
-  # checkouts of orm and hyper that its path repositories name, which lie outside this repository and are linked there by make link.
-  - id: layout-composer-path
-    select: ["**/composer.json", "!tests/kit/fixture/**", "!examples/board/web/composer.json"]

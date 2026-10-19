@@ -141,17 +141,17 @@ func TestRelationsConstraints(t *testing.T) {
 	})
 	t.Run("10#sections-and-their-values: a dangling reference is refused", func(t *testing.T) {
 		f := seeded(t)
-		err := f.fails(f.msg("insert", "posts", map[string]any{"set": sets("id", "author", "team", "title")}, "P9", "M9", "G1", "빈 글"), "FOREIGN_KEY")
+		err := f.failure(f.msg("insert", "posts", map[string]any{"set": sets("id", "author", "team", "title")}, "P9", "M9", "G1", "빈 글"), "FOREIGN_KEY")
 		wantFaults(t, err, []dupFault{{"posts", "P9", -1, "author", "FOREIGN_KEY", "no members row"}})
 	})
 	t.Run("50#keys-and-references: a delete a live self reference holds is refused", func(t *testing.T) {
 		f := seeded(t)
-		err := f.fails(f.msg("delete", "categories", map[string]any{"where": where(pred("id", "eq", p(0)))}, "C1"), "FOREIGN_KEY")
+		err := f.failure(f.msg("delete", "categories", map[string]any{"where": where(pred("id", "eq", p(0)))}, "C1"), "FOREIGN_KEY")
 		wantFaults(t, err, []dupFault{{"categories", "C1", -1, "", "FOREIGN_KEY", "referenced by categories C2"}})
 	})
 	t.Run("50#keys-and-references: a delete a live chain edge holds is refused", func(t *testing.T) {
 		f := seeded(t)
-		err := f.fails(f.msg("delete", "members", map[string]any{"where": where(pred("id", "eq", p(0)))}, "M1"), "FOREIGN_KEY")
+		err := f.failure(f.msg("delete", "members", map[string]any{"where": where(pred("id", "eq", p(0)))}, "M1"), "FOREIGN_KEY")
 		wantFaults(t, err, []dupFault{{"members", "M1", -1, "", "FOREIGN_KEY", "posts P1"}})
 	})
 	t.Run("60#surfaces: a two-directional pair goes together", func(t *testing.T) {

@@ -105,7 +105,7 @@ func TestLimitCountsSoftDeleted(t *testing.T) {
 	})
 	t.Run("50#the-state-machine: a soft-deleted row holds its place under the limit", func(t *testing.T) {
 		f := catalogFixture(t, docs).on(t)
-		err := f.fails(f.msg("update", "tasks", map[string]any{"set": sets("state"), "where": where(pred("id", "eq", p(1)))}, "doing", "B"), "CONSTRAINT")
+		err := f.failure(f.msg("update", "tasks", map[string]any{"set": sets("state"), "where": where(pred("id", "eq", p(1)))}, "doing", "B"), "CONSTRAINT")
 		wantFaults(t, err, []dupFault{{"tasks", "B", -1, "state", "CONSTRAINT", "limit 1"}})
 	})
 }
@@ -138,7 +138,7 @@ func TestDocumentHistory(t *testing.T) {
 	if got := f.file("ticket_history.flowmark.md"); !strings.Contains(got, "| 1 | [K1](tickets.flowmark.md) | open | closed | 2026-10-11 09:00:00.123456 |\n") {
 		t.Fatalf("ticket_history:\n%s", got)
 	}
-	err := f.fails(f.msg("delete", "tickets", map[string]any{"where": where(pred("id", "eq", p(0)))}, "K1"), "FOREIGN_KEY")
+	err := f.failure(f.msg("delete", "tickets", map[string]any{"where": where(pred("id", "eq", p(0)))}, "K1"), "FOREIGN_KEY")
 	wantFaults(t, err, []dupFault{{"tickets", "K1", -1, "", "FOREIGN_KEY", "ticket_history 1"}})
 	f.fails(f.msg("update", "tickets", map[string]any{"set": sets("state"), "where": where(pred("id", "eq", p(1)))}, "open", "K1"), "CONSTRAINT")
 }

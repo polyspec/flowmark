@@ -55,7 +55,7 @@ func run(args []string, in io.Reader, out, errOut io.Writer) int {
 // usage writes why the command line is wrong and the command lines, and returns 2.
 func usage(errOut io.Writer, why string) int {
 	if why != "" {
-		fmt.Fprintf(errOut, "flowmark: %s\n", why)
+		report(errOut, "flowmark: %s\n", why)
 	}
 	lines := []string{"usage:"}
 	for _, n := range ops.Operations() {
@@ -72,15 +72,48 @@ func usage(errOut io.Writer, why string) int {
 		"  flowmark sidecar [--lock-wait-ms <n>]",
 		"an assignment is <column>=<text> or <column>:=<json>; a value is <text> or :=<json>",
 	)
-	fmt.Fprintln(errOut, strings.Join(lines, "\n"))
+	report(errOut, "%s\n", strings.Join(lines, "\n"))
 	return 2
 }
 
 // fail writes the failure err of the command to standard error as `flowmark <command>: <code>: <message>` and returns 1.
 func fail(errOut io.Writer, command string, err error) int {
 	code, msg := ops.Failure(err)
-	fmt.Fprintf(errOut, "flowmark %s: %s: %s\n", command, code, msg)
+	report(errOut, "flowmark %s: %s: %s\n", command, code, msg)
 	return 1
+}
+
+// printer writes the output of a command. The first write that fails is kept, and the command's status reports it.
+type printer struct {
+	w   io.Writer
+	err error
+}
+
+func (p *printer) printf(format string, a ...any) {
+	if p.err == nil {
+		_, p.err = fmt.Fprintf(p.w, format, a...)
+	}
+}
+
+func (p *printer) println(a ...any) {
+	if p.err == nil {
+		_, p.err = fmt.Fprintln(p.w, a...)
+	}
+}
+
+// status returns 0 when every write went through, and otherwise reports the first failed write on errOut and returns 1.
+func (p *printer) status(errOut io.Writer, command string) int {
+	if p.err != nil {
+		return fail(errOut, command, p.err)
+	}
+	return 0
+}
+
+// report writes a diagnostic of a command to w. It is the last channel of a command that has already failed: when w
+// cannot take the line either, the status the caller returns is the report.
+func report(w io.Writer, format string, a ...any) {
+	p := printer{w: w}
+	p.printf(format, a...)
 }
 
 // closeCorpus closes the corpus a command opened, on every way out of the command: a failure to close it is written

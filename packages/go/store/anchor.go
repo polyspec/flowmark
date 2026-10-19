@@ -398,7 +398,7 @@ func numberNotes(lines []string, sc scan, refs linkRefs, gh bool) {
 	}
 	sort.SliceStable(all, func(i, j int) bool { return all[i].at < all[j].at })
 	for _, c := range all {
-		r := inlineReader{s: c.text, refs: refs, gh: gh}
+		r := inlineReader{s: c.text, refs: refs, gh: gh, math: noMath}
 		if !gh {
 			r.math = glMath
 		}

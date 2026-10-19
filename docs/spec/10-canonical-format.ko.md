@@ -1,5 +1,5 @@
 <!-- doc-id: spec-canonical-format -->
-<!-- source-sha256: a1cb5dc7e960982cf54de960135cfb3b6dcb95f4eae31a010f73006f791a9bad -->
+<!-- source-sha256: 9b80e08ad89ebc5998d34c2dbb2d3a53e5aa6dd0dde2a59db7de5dc6b85437ec -->
 # Canonical format
 
 [English](10-canonical-format.md)
@@ -251,7 +251,7 @@ column 섹션 — 은 payload다: renderer는 이를 행과 함께 옮기고 그
   지우며, 그다음 각 공백을 `-`로 쓴다. 어느 것도 텍스트를 정규화하거나, hyphen을 잘라내거나, run을 줄이지 않는다:
   `café`와 `cafe`는 slug가 다르며, `items row  T1`과 `items row T1`도 그렇다. engine의 Unicode data는 Go `unicode`
   package의 것인 17.0.0이며, S_VS가 지우는 집합에는 Unicode 13.0.0 data file로 생성한 table을 쓴다. 근거: slug
-  vector, 곧 viewer 자신이 렌더하는 id로, 2026-10-11에 `make slug-vectors`(`scripts/record-slugs.mjs`)가
+  vector, 곧 viewer 자신이 렌더하는 id로, 2026-10-11에 `make slug-vectors`(`scripts/record-slugs.mts`)가
   `store/testdata/slug`에 기록했으며 S_GH, S_VS, S_GL이 그대로 재현한다: surrogate를 뺀 모든 code point마다 그것을
   numeric reference로, 그리고 그 문자 자체로 담은 heading, 그리고 공백, tab, underscore, hyphen, reference, escape,
   강조, code span, link, image, raw HTML, 줄 바꿈, math span과 block, footnote definition과 reference, wikilink, 반복된

@@ -14,7 +14,7 @@ import (
 
 // The slug vectors of spec 10 (Detail headings and anchors): the heading ids that
 // GitHub, VS Code and GitLab render, recorded from the viewers by
-// scripts/record-slugs.mjs (make slug-vectors) into testdata/slug. S_GH, S_VS and S_GL
+// scripts/record-slugs.mts (make slug-vectors) into testdata/slug. S_GH, S_VS and S_GL
 // must reproduce every one.
 
 // cpVector is a line of a code point file: the code points lo to hi, the surrogates
@@ -31,7 +31,11 @@ func readCodePoints(t *testing.T, file string) []cpVector {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
+	t.Cleanup(func() {
+		if err := f.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	var out []cpVector
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {

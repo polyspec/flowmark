@@ -5,6 +5,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -23,12 +24,12 @@ func main() {
 	}
 }
 
-func run() error {
+func run() (err error) {
 	f, err := os.Open(dataFile)
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { err = errors.Join(err, f.Close()) }()
 	ranges, err := unicodedcp.Parse(f)
 	if err != nil {
 		return fmt.Errorf("%s: %w", dataFile, err)

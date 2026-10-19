@@ -89,7 +89,8 @@ func face(out, errOut io.Writer, name string, args []string) (code int) {
 	}
 	values := map[string]arg{}
 	for _, a := range rest {
-		col, text, raw := a, "", false
+		var col, text string
+		raw := false
 		if i := strings.Index(a, ":="); i >= 0 && (strings.IndexByte(a, '=') == i+1) {
 			col, text, raw = a[:i], a[i+2:], true
 		} else if i := strings.IndexByte(a, '='); i >= 0 {
@@ -176,6 +177,7 @@ func face(out, errOut io.Writer, name string, args []string) (code int) {
 	if err != nil {
 		return fail(errOut, name, err)
 	}
-	fmt.Fprintf(out, "%s\n", b)
-	return 0
+	pr := &printer{w: out}
+	pr.printf("%s\n", b)
+	return pr.status(errOut, name)
 }

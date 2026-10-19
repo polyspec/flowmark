@@ -1,7 +1,7 @@
 # GitHub's heading ids per code point (spec 10, Detail headings and anchors), the vectors of S_GH.
 # Recorded 2026-10-13 from GitHub's renderer: POST https://api.github.com/markdown, mode "markdown", which
 # renders each heading anchor as <a id="user-content-<id>" class="anchor">; the id here is without the prefix.
-# Re-record with make slug-vectors (scripts/record-slugs.mjs).
+# Re-record with make slug-vectors (scripts/record-slugs.mts).
 #
 # Each line is lo..hi ; ref ; raw: the code points lo to hi (the surrogates skipped), and the id of a heading
 # holding the code point between two hyphens, without them: ref when the heading holds it as its numeric

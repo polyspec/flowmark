@@ -1,8 +1,8 @@
-// Tests of the slug-vector recorder (scripts/record-slugs.mjs) that need no network: the forms of a code point, the
+// Tests of the slug-vector recorder (scripts/record-slugs.mts) that need no network: the forms of a code point, the
 // headings and the splitting of their ids, the treatments and their compression, and the reading of GitHub's HTML.
 import assert from 'node:assert/strict';
 import test, { mock } from 'node:test';
-import { compress, forms, githubAttributes, githubRender, githubIds, gitlabIds, glfmArgs, groupSize, headingIdAttrs, headingsOf, katexOptions, methodSource, snippetPrefix, splitIds, treatment } from '../scripts/record-slugs.mjs';
+import { compress, forms, githubAttributes, githubRender, githubIds, gitlabIds, glfmArgs, groupSize, headingIdAttrs, headingsOf, katexOptions, methodSource, snippetPrefix, splitIds, treatment } from '../scripts/record-slugs.mts';
 
 test('a code point has a reference form and a raw form, escaped when it is ASCII punctuation', () => {
   assert.deepEqual(forms(0x41), { ref: '&#x41;', raw: 'A', htmlRef: '&#x41;', htmlRaw: 'A' });

@@ -2,7 +2,7 @@
 # Recorded 2026-10-13 by running gitlab-glfm-markdown 0.0.45, the version and sha256 GitLab's Gemfile.lock
 # pins at commit 57457fa19e3a9d9b7cc9a939b50f29fd6a59e62b, with the OPTIONS of its lib/banzai/filter/markdown_engines/glfm_markdown.rb:
 # --alerts --autolink --cjk-friendly-emphasis --description-lists --escaped-char-spans --footnotes --full-info-string --header-accessibility --header-id-prefix user-content- --inapplicable-tasks --math-code --math-dollars --multiline-block-quotes --only-escape-chars $%#&@!~^: --placeholder-detection --relaxed-autolinks --relaxed-tasklist-character --sourcepos --strikethrough --table --tasklist --tasklist-classes --tasklist-in-table --wikilinks-title-before-pipe --unsafe
-# Each heading id is user-content- and the id here. Re-record with make slug-vectors (scripts/record-slugs.mjs).
+# Each heading id is user-content- and the id here. Re-record with make slug-vectors (scripts/record-slugs.mts).
 #
 # Each line is lo..hi ; ref ; raw: the code points lo to hi (the surrogates skipped), and the id of a heading
 # holding the code point between two hyphens, without them: ref when the heading holds it as its numeric

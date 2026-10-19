@@ -1,5 +1,5 @@
 <!-- doc-id: examples-board-web -->
-<!-- source-sha256: 8150d582835fbf825e9a35ddcf4d091b4e8b1690a6458e6fe1389bf886e7f154 -->
+<!-- source-sha256: 86126512497fb52fc41824ad851eeef61f5b60dbadbd4945fd515c48613164d8 -->
 # 게시판 애플리케이션
 
 [English](README.md)

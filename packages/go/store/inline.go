@@ -86,7 +86,7 @@ func glText(s string, refs linkRefs) reading {
 // as GitHub escapes it, and its attributes are still recorded. A footnote reference
 // renders as GitHub renders it (ghFootnote).
 func inlineText(s string, refs linkRefs) inlineResult {
-	r := inlineReader{s: s, refs: refs, gh: true}
+	r := inlineReader{s: s, refs: refs, gh: true, math: noMath}
 	r.run()
 	text, alt := r.readings()
 	return inlineResult{text: text, alt: alt, tags: r.tags, tagAt: r.tagAt}
@@ -95,7 +95,7 @@ func inlineText(s string, refs linkRefs) inlineResult {
 // inlineTags returns the tags of inlineText of s, and the offset of the '<' of each,
 // without its text, which a reading of the tags alone does not build.
 func inlineTags(s string, refs linkRefs) ([][]htmlAttr, []int) {
-	r := inlineReader{s: s, refs: refs, gh: true}
+	r := inlineReader{s: s, refs: refs, gh: true, math: noMath}
 	r.run()
 	return r.tags, r.tagAt
 }

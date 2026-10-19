@@ -1,16 +1,16 @@
-// Tests of the Go test runner (scripts/go-test.mjs): a run whose PATH holds no `go` fails naming the cause and the fix,
-// not with the bare spawn error.
+// Tests of the case-sensitive folder on macOS (scripts/go-test.mts): a volume already mounted at the folder is reused and not
+// detached. Only the macOS run of make flowmark-test reads this folder, since hdiutil exists only there.
 import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { spawnSync } from 'node:child_process';
-import { provision, runGoTests } from '../scripts/go-test.mjs';
+import { provision } from '../../scripts/go-test.mts';
 
 // A mount found already at the folder is reused and left mounted: the run that
 // attached it, such as a concurrent make flowmark-test, still needs it.
-test('a volume already mounted at the folder is reused, not detached', { skip: process.platform !== 'darwin' }, t => {
+test('a volume already mounted at the folder is reused, not detached', t => {
   const root = mkdtempSync(path.join(tmpdir(), 'go-test-mount-'));
   const dir = path.join(root, 'case-sensitive');
   const image = path.join(root, 'probe.dmg');
@@ -26,20 +26,3 @@ test('a volume already mounted at the folder is reused, not detached', { skip: p
   assert.equal(provisioned.attached, false, `a reused mount is reported attached: ${provisioned.step}`);
 });
 
-test('a PATH that holds no go fails naming go, the PATH searched and the fix', t => {
-  const root = mkdtempSync(path.join(tmpdir(), 'go-test-'));
-  const empty = mkdtempSync(path.join(tmpdir(), 'go-test-path-'));
-  const saved = process.env.PATH;
-  t.after(() => {
-    process.env.PATH = saved;
-    rmSync(root, { recursive: true, force: true });
-    rmSync(empty, { recursive: true, force: true });
-  });
-  process.env.PATH = empty;
-  assert.throws(() => runGoTests(root, root), error => {
-    assert.match(error.message, /no executable named go on PATH/);
-    assert.ok(error.message.includes(empty), `the message names the PATH searched: ${error.message}`);
-    assert.match(error.message, /install Go or put its bin folder on PATH/);
-    return true;
-  });
-});

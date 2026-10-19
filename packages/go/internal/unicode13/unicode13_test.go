@@ -40,7 +40,11 @@ func TestTableIsFresh(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer cf.Close()
+	t.Cleanup(func() {
+		if err := cf.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	cats, err := ParseCategories(cf)
 	if err != nil {
 		t.Fatalf("%s: %v", categoryFile, err)
@@ -49,7 +53,11 @@ func TestTableIsFresh(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer af.Close()
+	t.Cleanup(func() {
+		if err := af.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	alpha, err := ParseAlphabetic(af)
 	if err != nil {
 		t.Fatalf("%s: %v", alphabeticFile, err)

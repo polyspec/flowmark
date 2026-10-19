@@ -163,9 +163,10 @@ tool lands, a standard binds the work as written here.
   each exception there carries its reason.
   Enforced by: `make layout-check`
 - S6 Language parity: every implementation of a repository tests the same feature units, vectors and API at the same
-  level. A permanent difference is a declared profile whose reason cites a spec anchor; an exclusion is debt that fails
+  level, and each requirement that docs/spec defines (a bullet **<id>** or a heading <id>) is cited by a unit, so every
+  implementation of its profile tests it. A permanent difference is a declared profile whose reason cites a spec anchor; an exclusion is debt that fails
   until removed.
-  Enforced by: `make parity-declarations-check`
+  Enforced by: `make parity-declarations-check`, `make parity-check`
 - S7 Test placement: a test of a basic feature lives in the package and repository that own the feature; a consumer keeps
   only tests from the consumer's point of view.
   Enforced by: `make layout-check`, `make parity-declarations-check`

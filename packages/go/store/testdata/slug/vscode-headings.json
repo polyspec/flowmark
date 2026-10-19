@@ -2,7 +2,7 @@
  "viewer": "VS Code",
  "recorded": "2026-10-13",
  "request": "VS Code 1.141.0: extensions/markdown-language-features/src/slugify.ts and markdownEngine.ts #tokenToPlainText, markdown-it 14.3.2, @vscode/markdown-it-katex 1.1.2 with {\"enableFencedBlocks\":true,\"globalGroup\":true,\"macros\":{}}, node 26.8.1",
- "rerecord": "make slug-vectors (scripts/record-slugs.mjs)",
+ "rerecord": "make slug-vectors (scripts/record-slugs.mts)",
  "cases": [
   {
    "name": "spaces",

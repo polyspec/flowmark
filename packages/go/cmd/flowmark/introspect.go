@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"flag"
-	"fmt"
 	"io"
 	"path/filepath"
 
@@ -21,17 +20,17 @@ func introspectTo(out, errOut io.Writer, args []string) int {
 		return 2
 	}
 	if fs.NArg() != 1 {
-		fmt.Fprintln(errOut, "usage: flowmark introspect <corpus>")
+		report(errOut, "usage: flowmark introspect <corpus>\n")
 		return 2
 	}
 	root, err := filepath.Abs(fs.Arg(0))
 	if err != nil {
-		fmt.Fprintf(errOut, "flowmark introspect: the corpus root %s: %v\n", fs.Arg(0), err)
+		report(errOut, "flowmark introspect: the corpus root %s: %v\n", fs.Arg(0), err)
 		return 1
 	}
 	res, err := introspect.Corpus(root)
 	if err != nil {
-		fmt.Fprintf(errOut, "flowmark introspect: %v\n", err)
+		report(errOut, "flowmark introspect: %v\n", err)
 		return 1
 	}
 	var buf bytes.Buffer
@@ -39,11 +38,11 @@ func introspectTo(out, errOut io.Writer, args []string) int {
 	enc.SetEscapeHTML(false)
 	enc.SetIndent("", "  ")
 	if err := enc.Encode(answer(res)); err != nil {
-		fmt.Fprintf(errOut, "flowmark introspect: %v\n", err)
+		report(errOut, "flowmark introspect: %v\n", err)
 		return 1
 	}
 	if _, err := out.Write(buf.Bytes()); err != nil {
-		fmt.Fprintf(errOut, "flowmark introspect: %v\n", err)
+		report(errOut, "flowmark introspect: %v\n", err)
 		return 1
 	}
 	if len(res.Diagnostics) > 0 {

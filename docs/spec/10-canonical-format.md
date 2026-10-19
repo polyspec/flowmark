@@ -352,7 +352,7 @@ and the column sections — are payload: the renderer moves them with their row 
   runs: `café` and `cafe` have different slugs, and so do `items row  T1` and `items row T1`. The
   engine's Unicode data is that of Go's `unicode` package, 17.0.0, and, for S_VS's removal, a table
   generated from the Unicode 13.0.0 data files. Grounding: the slug vectors, the ids the viewers
-  themselves render, recorded on 2026-10-11 by `make slug-vectors` (`scripts/record-slugs.mjs`) into
+  themselves render, recorded on 2026-10-11 by `make slug-vectors` (`scripts/record-slugs.mts`) into
   `store/testdata/slug`, which S_GH, S_VS and S_GL reproduce exactly: for every code point but the
   surrogates, a heading holding it as a numeric reference and as itself, and structural cases of
   spaces, tabs, underscores, hyphens, references, escapes, emphasis, code spans, links, images, raw HTML,

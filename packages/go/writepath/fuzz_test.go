@@ -212,7 +212,7 @@ func FuzzSession(f *testing.F) {
 			if err := json.Unmarshal(b, &got); err != nil {
 				t.Fatal(err)
 			}
-			if want := m.visible(); !slices.Equal(got.Rows, want) && !(len(got.Rows) == 0 && len(want) == 0) {
+			if want := m.visible(); !slices.Equal(got.Rows, want) && (len(got.Rows) != 0 || len(want) != 0) {
 				t.Fatalf("after op %d(%d) the session reads %+v; the model holds %+v", op, arg, got.Rows, want)
 			}
 		}

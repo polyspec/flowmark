@@ -10,7 +10,7 @@ import (
 // The slugs of a heading's rendered text that decide a detail-anchor collision (spec 10,
 // Detail headings and anchors), each as its viewer computes it. S_GH is the slug of
 // GitHub's renderer and S_VS that of VS Code's slugify.ts, each reproducing the ids that
-// the viewer renders, recorded by scripts/record-slugs.mjs into testdata/slug; S_GL is
+// the viewer renders, recorded by scripts/record-slugs.mts into testdata/slug; S_GL is
 // comrak 0.56.0's Anchorizer, which GitLab renders headings with through
 // gitlab-glfm-markdown 0.0.45. None of them normalizes the text, trims hyphens or
 // collapses runs.

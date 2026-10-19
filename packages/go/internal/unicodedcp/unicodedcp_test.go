@@ -39,7 +39,11 @@ func TestTableIsFresh(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
+	t.Cleanup(func() {
+		if err := f.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	ranges, err := Parse(f)
 	if err != nil {
 		t.Fatalf("%s: %v", dataFile, err)

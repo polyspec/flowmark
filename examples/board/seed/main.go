@@ -9,6 +9,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -24,7 +25,7 @@ func main() {
 	}
 }
 
-func run(args []string) error {
+func run(args []string) (err error) {
 	if len(args) != 5 {
 		return fmt.Errorf("usage: seed <corpus root> <year> <first month> <last month> <posts per month>")
 	}
@@ -45,7 +46,7 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
-	defer c.Close()
+	defer func() { err = errors.Join(err, c.Close()) }()
 	authors, err := keysOf(ctx, c, "people")
 	if err != nil {
 		return err

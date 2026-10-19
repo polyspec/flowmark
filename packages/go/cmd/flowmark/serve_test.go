@@ -127,14 +127,20 @@ func TestServe(t *testing.T) {
 		done := make(chan int, 1)
 		go func() {
 			done <- serve(append([]string{root, "--port", "0"}, args...), pw, &errOut, stop)
-			pw.Close()
+			if err := pw.Close(); err != nil {
+				t.Error(err)
+			}
 		}()
 		line, err := bufio.NewReader(pr).ReadString('\n')
 		m := listening.FindStringSubmatch(line)
 		if err != nil || m == nil {
 			t.Fatalf("stdout %q, %v; stderr %s", line, err, errOut.String())
 		}
-		go io.Copy(io.Discard, pr)
+		copied := make(chan error, 1)
+		go func() {
+			_, err := io.Copy(io.Discard, pr)
+			copied <- err
+		}()
 		return "127.0.0.1:" + m[1], func() (int, string) {
 			stop <- syscall.SIGTERM
 			select {
@@ -164,7 +170,11 @@ func TestServe(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer conn.Close()
+		defer func() {
+			if err := conn.Close(); err != nil {
+				t.Error(err)
+			}
+		}()
 		if err := conn.SetDeadline(time.Now().Add(patience)); err != nil {
 			t.Fatal(err)
 		}

@@ -702,7 +702,11 @@ func caseInsensitive(t *testing.T, dir string) bool {
 	if err := os.WriteFile(probe, nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	defer os.Remove(probe)
+	defer func() {
+		if err := os.Remove(probe); err != nil {
+			t.Error(err)
+		}
+	}()
 	_, err := os.Stat(filepath.Join(dir, "caseprobe"))
 	return err == nil
 }
@@ -750,7 +754,11 @@ func caseSensitiveRoot(t *testing.T) string {
 	if err != nil {
 		t.Fatalf("%s=%s: %v", caseSensitiveEnv, dir, err)
 	}
-	t.Cleanup(func() { os.RemoveAll(root) })
+	t.Cleanup(func() {
+		if err := os.RemoveAll(root); err != nil {
+			t.Error(err)
+		}
+	})
 	if caseInsensitive(t, root) {
 		t.Fatalf("%s=%s folds case", caseSensitiveEnv, dir)
 	}

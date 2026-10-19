@@ -24,8 +24,16 @@ func TestCodecAllocationBudget(t *testing.T) {
 	lk := documentLinker()
 	for _, mb := range []int{1, 4} {
 		rows, data := benchDocument(t, mb)
-		parse := allocated(func() { ParseDocument(cat, "items", "items.flowmark.md", data, lk) })
-		render := allocated(func() { RenderDocument(cat, "items", docPath("items"), rows, lk) })
+		parse := allocated(t, func() {
+			if _, _, err := ParseDocument(cat, "items", "items.flowmark.md", data, lk); err != nil {
+				t.Fatal(err)
+			}
+		})
+		render := allocated(t, func() {
+			if _, _, err := RenderDocument(cat, "items", docPath("items"), rows, lk); err != nil {
+				t.Fatal(err)
+			}
+		})
 		for name, n := range map[string]uint64{"parse": parse, "render": render} {
 			if x := float64(n) / float64(len(data)); x > codecAllocBudget {
 				t.Errorf("the %s of %d MB allocates %.1f bytes per byte; the budget is %d", name, mb, x, codecAllocBudget)
@@ -35,7 +43,8 @@ func TestCodecAllocationBudget(t *testing.T) {
 }
 
 // allocated returns the bytes that run allocates.
-func allocated(run func()) uint64 {
+func allocated(t *testing.T, run func()) uint64 {
+	t.Helper()
 	before := memStats()
 	run()
 	return memStats().TotalAlloc - before.TotalAlloc

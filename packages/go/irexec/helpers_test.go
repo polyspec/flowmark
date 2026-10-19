@@ -128,7 +128,7 @@ func newFixtureIn(t testing.TB, root, src string, docs map[string]string) *fixtu
 }
 
 // caseSensitiveEnv names the folder, on a case-sensitive file system, where a case
-// writes a corpus whose file names differ only in case; scripts/go-test.mjs, which
+// writes a corpus whose file names differ only in case; scripts/go-test.mts, which
 // make test runs, provisions it. It is read only when the test's temporary folder
 // folds case, and must then be set and absolute.
 const caseSensitiveEnv = "FLOWMARK_CASE_SENSITIVE_DIR"
@@ -154,7 +154,11 @@ func caseSensitiveRoot(t *testing.T) string {
 	if err != nil {
 		t.Fatalf("%s=%s: %v", caseSensitiveEnv, dir, err)
 	}
-	t.Cleanup(func() { os.RemoveAll(root) })
+	t.Cleanup(func() {
+		if err := os.RemoveAll(root); err != nil {
+			t.Error(err)
+		}
+	})
 	if foldsCase(t, root) {
 		t.Fatalf("%s=%s folds case", caseSensitiveEnv, dir)
 	}
@@ -169,7 +173,11 @@ func foldsCase(t *testing.T, dir string) bool {
 	if err := os.WriteFile(probe, nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	defer os.Remove(probe)
+	defer func() {
+		if err := os.Remove(probe); err != nil {
+			t.Error(err)
+		}
+	}()
 	_, err := os.Stat(filepath.Join(dir, "caseprobe"))
 	return err == nil
 }
@@ -263,9 +271,24 @@ func (f *fixture) ok(m []byte) *Result {
 }
 
 // fails executes a message that must fail with code, and returns the error.
-func (f *fixture) fails(m []byte, code string) *Error {
+// fails asserts that the request m fails with code.
+func (f *fixture) fails(m []byte, code string) {
 	f.t.Helper()
 	res, err := f.run(m)
+	f.checkFailure(m, res, err, code)
+}
+
+// failure asserts that the request m fails with code and returns that failure.
+func (f *fixture) failure(m []byte, code string) *Error {
+	f.t.Helper()
+	res, err := f.run(m)
+	f.checkFailure(m, res, err, code)
+	return err
+}
+
+// checkFailure fails the test unless the run that answered res with err failed with code.
+func (f *fixture) checkFailure(m []byte, res *Result, err *Error, code string) {
+	f.t.Helper()
 	if err == nil {
 		b, _ := json.Marshal(res.Answer)
 		f.t.Fatalf("request %s answered %s; want %s", m, b, code)
@@ -273,7 +296,6 @@ func (f *fixture) fails(m []byte, code string) *Error {
 	if err.Code != code {
 		f.t.Fatalf("request %s failed with %v; want %s", m, err, code)
 	}
-	return err
 }
 
 // answer returns the JSON of an answer.

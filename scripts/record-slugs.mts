@@ -663,7 +663,7 @@ function recordGitHub() {
     "GitHub's heading ids per code point (spec 10, Detail headings and anchors), the vectors of S_GH.",
     `Recorded ${today()} from GitHub's renderer: POST https://api.github.com/markdown, mode "markdown", which`,
     'renders each heading anchor as <a id="user-content-<id>" class="anchor">; the id here is without the prefix.',
-    'Re-record with make slug-vectors (scripts/record-slugs.mjs).',
+    'Re-record with make slug-vectors (scripts/record-slugs.mts).',
   ];
   const render = text => githubIds(githubRender(text));
   const ref = codePointIds('ref', render, 'GitHub');
@@ -693,7 +693,7 @@ function recordGitHub() {
     viewer: 'GitHub',
     recorded: today(),
     request: 'POST https://api.github.com/markdown, mode "markdown"; ids without user-content-',
-    rerecord: 'make slug-vectors (scripts/record-slugs.mjs)',
+    rerecord: 'make slug-vectors (scripts/record-slugs.mts)',
     cases,
     rawHeadings,
     attributes,
@@ -805,7 +805,7 @@ async function recordVSCode() {
       `pins, configured as the preview's defaults (html, linkify without fuzzy links, no breaks, no typographer),`,
       `with @vscode/markdown-it-katex ${katexPluginVersion} (katex ${katexVersion}) as ${mathBase} contributes it, enabled by default;`,
       `node ${process.versions.node} (Unicode ${process.versions.unicode}), VS Code ${tag} names node ${nodeVersion}.`,
-      'Re-record with make slug-vectors (scripts/record-slugs.mjs).',
+      'Re-record with make slug-vectors (scripts/record-slugs.mts).',
     ];
     const ref = codePointIds('ref', render, 'VS Code');
     const raw = codePointIds('raw', render, 'VS Code');
@@ -814,7 +814,7 @@ async function recordVSCode() {
       viewer: 'VS Code',
       recorded: today(),
       request: `VS Code ${tag}: ${base}/src/slugify.ts and markdownEngine.ts #tokenToPlainText, markdown-it ${mdVersion}, @vscode/markdown-it-katex ${katexPluginVersion} with ${JSON.stringify(mathOptions)}, node ${process.versions.node}`,
-      rerecord: 'make slug-vectors (scripts/record-slugs.mjs)',
+      rerecord: 'make slug-vectors (scripts/record-slugs.mts)',
       cases: structuralCases.map(([name, markdown]) => ({ name, markdown, ids: render(markdown + '\n') })),
       rawHeadings: rawHeadingCases.map(([name, markdown]) => ({ name, markdown, ids: renderHtml(markdown + '\n') })),
     };
@@ -942,7 +942,7 @@ async function recordGitLab() {
       `Recorded ${today()} by running gitlab-glfm-markdown ${version}, the version and sha256 GitLab's Gemfile.lock`,
       `pins at commit ${commit}, with the OPTIONS of its ${engineFile}:`,
       options,
-      'Each heading id is user-content- and the id here. Re-record with make slug-vectors (scripts/record-slugs.mjs).',
+      'Each heading id is user-content- and the id here. Re-record with make slug-vectors (scripts/record-slugs.mts).',
     ];
     const ref = codePointIds('ref', render, 'GitLab');
     const rawIds = codePointIds('raw', render, 'GitLab');
@@ -951,7 +951,7 @@ async function recordGitLab() {
       viewer: 'GitLab',
       recorded: today(),
       request: `gitlab-glfm-markdown ${version} (GitLab ${commit}), ${options}; ids without user-content-`,
-      rerecord: 'make slug-vectors (scripts/record-slugs.mjs)',
+      rerecord: 'make slug-vectors (scripts/record-slugs.mts)',
       cases: structuralCases.map(([name, markdown]) => ({ name, markdown, ids: render(markdown + '\n') })),
       rawHeadings: rawHeadingCases.map(([name, markdown]) => ({ name, markdown, ids: render(markdown + '\n') })),
       snippet: {

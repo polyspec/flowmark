@@ -181,7 +181,7 @@ func TestInsert(t *testing.T) {
 	})
 	t.Run("60#surfaces: an insert without on_duplicate whose key equals without regard to case", func(t *testing.T) {
 		f := fresh(t)
-		err := f.fails(f.msg("insert", "people", map[string]any{"set": sets("id", "name")}, "p1", "X"), "DUPLICATE_KEY")
+		err := f.failure(f.msg("insert", "people", map[string]any{"set": sets("id", "name")}, "p1", "X"), "DUPLICATE_KEY")
 		wantFaults(t, err, []dupFault{{"people", "p1", -1, "id", "DUPLICATE_KEY", "the key P1"}})
 	})
 	dangling := func() map[string]string {
@@ -208,7 +208,7 @@ func TestInsert(t *testing.T) {
 		docs := dangling()
 		docs["notes/N9.flowmark.md"] = "no heading\n"
 		f := catalogFixture(t, docs).on(t)
-		err := f.fails(f.msg("insert", "items", map[string]any{"set": sets("id", "title", "body")}, "T9", "Ninth", ""), "CONSTRAINT")
+		err := f.failure(f.msg("insert", "items", map[string]any{"set": sets("id", "title", "body")}, "T9", "Ninth", ""), "CONSTRAINT")
 		if err.Diagnostic == nil || err.Diagnostic.File != "notes/N9.flowmark.md" {
 			t.Fatalf("diagnostic %+v", err.Diagnostic)
 		}
@@ -253,7 +253,7 @@ func TestInsertRejects(t *testing.T) {
 	}
 	for _, c := range cases {
 		f.sub(t, c.name, func(f *fixture) {
-			err := f.fails(c.msg, c.code)
+			err := f.failure(c.msg, c.code)
 			wantFaults(f.t, err, c.want)
 		})
 	}
@@ -317,7 +317,7 @@ func TestKeyChecks(t *testing.T) {
 	}
 	for _, c := range cases {
 		f.sub(t, c.name, func(f *fixture) {
-			wantFaults(f.t, f.fails(ins(c.ids...), "DUPLICATE_KEY"), c.want)
+			wantFaults(f.t, f.failure(ins(c.ids...), "DUPLICATE_KEY"), c.want)
 		})
 	}
 	f.sub(t, "10#diagnostics: new keys pass the key checks", func(f *fixture) {
@@ -387,7 +387,7 @@ func TestFaultOrder(t *testing.T) {
 			[]dupFault{{"items", "T1", -1, "id", dup, "items.flowmark.md"}}},
 	}
 	for _, c := range cases {
-		f.sub(t, c.name, func(f *fixture) { wantFaults(f.t, f.fails(c.msg, c.code), c.want) })
+		f.sub(t, c.name, func(f *fixture) { wantFaults(f.t, f.failure(c.msg, c.code), c.want) })
 	}
 }
 
@@ -515,7 +515,7 @@ func TestUpdate(t *testing.T) {
 			[]dupFault{{"items", "T3", -1, "title", "CONSTRAINT", ""}}},
 	}
 	for _, c := range rejects {
-		f.sub(t, c.name, func(f *fixture) { wantFaults(f.t, f.fails(c.msg, c.code), c.want) })
+		f.sub(t, c.name, func(f *fixture) { wantFaults(f.t, f.failure(c.msg, c.code), c.want) })
 	}
 	limitDocs := baseDocs()
 	limitDocs["items.flowmark.md"] = strings.Replace(limitDocs["items.flowmark.md"], "- [ ] T3 Review the design\n", "- [ ] T3 Review the design\n- [ ] T5 Fifth\n", 1)
@@ -625,13 +625,13 @@ func TestDelete(t *testing.T) {
 		{"50#keys-and-references: a delete of a row that children name as parent", byID(f, "delete", "notes", "N1"), []dupFault{{"notes", "N1", -1, "", "FOREIGN_KEY", "notes N2"}}},
 	}
 	for _, c := range rejects {
-		f.sub(t, c.name, func(f *fixture) { wantFaults(f.t, f.fails(c.msg, "FOREIGN_KEY"), c.want) })
+		f.sub(t, c.name, func(f *fixture) { wantFaults(f.t, f.failure(c.msg, "FOREIGN_KEY"), c.want) })
 	}
 	steps := baseDocs()
 	delete(steps, "notes/N2.flowmark.md")
 	sf := catalogFixture(t, steps)
 	sf.sub(t, "50#keys-and-references: a delete of a row whose scope holds block rows", func(f *fixture) {
-		wantFaults(f.t, f.fails(byID(f, "delete", "notes", "N1"), "FOREIGN_KEY"), []dupFault{{"notes", "N1", -1, "", "FOREIGN_KEY", "steps S1"}})
+		wantFaults(f.t, f.failure(byID(f, "delete", "notes", "N1"), "FOREIGN_KEY"), []dupFault{{"notes", "N1", -1, "", "FOREIGN_KEY", "steps S1"}})
 	})
 	t.Run("20#keys: a key changes by an insert under the new key, the references pointed at it and the old row deleted", func(t *testing.T) {
 		f := fresh(t)
@@ -649,7 +649,7 @@ func TestDelete(t *testing.T) {
 	nf := catalogFixture(t, noSteps)
 	for _, order := range [][]any{{"N1", "N2"}, {"N2", "N1"}} {
 		nf.sub(t, "50#keys-and-references: one delete of a referenced row and the row referencing it, parameters "+order[0].(string)+" then "+order[1].(string), func(f *fixture) {
-			err := f.fails(f.msg("delete", "notes", map[string]any{"where": where(pred("id", "in", map[string]any{"ps": []int{0, 1}}))}, order...), "FOREIGN_KEY")
+			err := f.failure(f.msg("delete", "notes", map[string]any{"where": where(pred("id", "in", map[string]any{"ps": []int{0, 1}}))}, order...), "FOREIGN_KEY")
 			wantFaults(f.t, err, []dupFault{{"notes", "N1", -1, "", "FOREIGN_KEY", "notes N2"}})
 		})
 	}

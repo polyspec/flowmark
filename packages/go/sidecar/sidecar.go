@@ -51,11 +51,15 @@ func Serve(wait time.Duration, in io.Reader, out, errOut io.Writer) error {
 		}
 		var m message
 		if err := json.Unmarshal(line, &m); err != nil {
-			fmt.Fprintf(errOut, "flowmark sidecar: the line %.200q is no message of protocol v1: %v\n", line, err)
+			if _, werr := fmt.Fprintf(errOut, "flowmark sidecar: the line %.200q is no message of protocol v1: %v\n", line, err); werr != nil {
+				return werr
+			}
 			continue
 		}
 		if len(m.Surface) == 0 || string(m.Surface) == "null" {
-			fmt.Fprintf(errOut, "flowmark sidecar: the message %.200q names no surface, so it has no answer\n", line)
+			if _, werr := fmt.Fprintf(errOut, "flowmark sidecar: the message %.200q names no surface, so it has no answer\n", line); werr != nil {
+				return werr
+			}
 			continue
 		}
 		a := answer{Surface: m.Surface}
@@ -70,8 +74,12 @@ func Serve(wait time.Duration, in io.Reader, out, errOut io.Writer) error {
 		if err != nil {
 			return err
 		}
-		w.Write(b)
-		w.WriteByte('\n')
+		if _, err := w.Write(b); err != nil {
+			return err
+		}
+		if err := w.WriteByte('\n'); err != nil {
+			return err
+		}
 		// The host reads each answer while the process runs, so each one is flushed on its own.
 		if err := w.Flush(); err != nil {
 			return err

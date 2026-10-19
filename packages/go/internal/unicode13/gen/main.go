@@ -6,6 +6,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -25,12 +26,12 @@ func main() {
 	}
 }
 
-func run() error {
+func run() (err error) {
 	cf, err := os.Open(categoryFile)
 	if err != nil {
 		return err
 	}
-	defer cf.Close()
+	defer func() { err = errors.Join(err, cf.Close()) }()
 	categories, err := unicode13.ParseCategories(cf)
 	if err != nil {
 		return fmt.Errorf("%s: %w", categoryFile, err)
@@ -39,7 +40,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	defer af.Close()
+	defer func() { err = errors.Join(err, af.Close()) }()
 	alphabetic, err := unicode13.ParseAlphabetic(af)
 	if err != nil {
 		return fmt.Errorf("%s: %w", alphabeticFile, err)

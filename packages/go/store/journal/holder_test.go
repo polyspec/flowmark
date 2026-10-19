@@ -75,7 +75,11 @@ func TestZombieHolderReadsEnded(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer w.close()
+	t.Cleanup(func() {
+		if err := w.close(); err != nil {
+			t.Error(err)
+		}
+	})
 	if err := w.armHolder(h); err != nil {
 		t.Fatal(err)
 	}

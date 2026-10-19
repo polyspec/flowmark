@@ -5,47 +5,6 @@
     "license": "MIT",
     "repositories": [
         {
-            "type": "path",
-            "url": "../../../../polyspec/hyper/packages/hyper-server-php",
-            "options": {
-                "symlink": false
-            }
-        },
-        {
-            "type": "path",
-            "url": "../../../../polyspec/orm/packages/orm-php",
-            "options": {
-                "symlink": false
-            }
-        },
-        {
-            "type": "package",
-            "package": {
-                "name": "polyspec/template",
-                "version": "0.0.6",
-                "type": "library",
-                "description": "Template language implementation: lexer, parser, renderer, functions and CLI",
-                "license": "MIT",
-                "dist": {
-                    "type": "zip",
-                    "url": "https://github.com/polyspec/template/releases/download/v0.0.6/polyspec-template-php-0.0.6.zip",
-                    "shasum": "02f0244bd3fd663b68576d0c740284306b3f8320"
-                },
-                "require": {
-                    "php": "^8.2",
-                    "ext-mbstring": "*"
-                },
-                "autoload": {
-                    "psr-4": {
-                        "Polyspec\\Template\\": "src/"
-                    }
-                },
-                "bin": [
-                    "bin/template.php"
-                ]
-            }
-        },
-        {
             "type": "package",
             "package": {
                 "name": "polyspec/ordered-json",
@@ -69,17 +28,133 @@
             }
         },
         {
-            "type": "path",
-            "url": "../../../../polyspec/crudui/packages/validator-php",
-            "options": {
-                "symlink": false
+            "type": "package",
+            "package": {
+                "name": "polyspec/template",
+                "version": "0.0.5",
+                "description": "Template language implementation: lexer, parser, renderer, functions and CLI",
+                "type": "library",
+                "license": "MIT",
+                "require": {
+                    "php": "^8.2",
+                    "ext-mbstring": "*"
+                },
+                "autoload": {
+                    "psr-4": {
+                        "Polyspec\\Template\\": "src/"
+                    }
+                },
+                "bin": [
+                    "bin/template.php"
+                ],
+                "dist": {
+                    "type": "zip",
+                    "url": "https://github.com/polyspec/template/releases/download/v0.0.5/polyspec-template-php-0.0.5.zip"
+                }
             }
         },
         {
-            "type": "path",
-            "url": "../../../../polyspec/crudui/packages/generator-php",
-            "options": {
-                "symlink": false
+            "type": "package",
+            "package": {
+                "name": "polyspec/hyper-server",
+                "version": "0.0.13",
+                "description": "Server side of the region protocol: routes, actions and region JSON for template language layouts",
+                "type": "library",
+                "license": "MIT",
+                "require": {
+                    "php": "^8.2",
+                    "polyspec/template": "0.0.5"
+                },
+                "autoload": {
+                    "psr-4": {
+                        "Polyspec\\Hyper\\": "src/"
+                    }
+                },
+                "dist": {
+                    "type": "zip",
+                    "url": "https://github.com/polyspec/hyper/releases/download/v0.0.13/polyspec-hyper-server-php-0.0.13.zip"
+                }
+            }
+        },
+        {
+            "type": "package",
+            "package": {
+                "name": "polyspec/orm",
+                "version": "0.0.9",
+                "description": "PHP client of the orm model syntax: generated models over PDO with SQL assembled in process",
+                "type": "library",
+                "license": "MIT",
+                "require": {
+                    "php": ">=8.4",
+                    "polyspec/ordered-json": "0.0.8",
+                    "ext-pdo": "*",
+                    "ext-json": "*",
+                    "ext-zlib": "*",
+                    "symfony/yaml": "^7.4"
+                },
+                "autoload": {
+                    "psr-4": {
+                        "Polyspec\\Orm\\": "src/"
+                    },
+                    "classmap": [
+                        "src/"
+                    ]
+                },
+                "bin": [
+                    "bin/orm-gen"
+                ],
+                "dist": {
+                    "type": "zip",
+                    "url": "https://github.com/polyspec/orm/releases/download/v0.0.9/polyspec-orm-php-0.0.9.zip"
+                }
+            }
+        },
+        {
+            "type": "package",
+            "package": {
+                "name": "polyspec/crudui-generator",
+                "version": "0.0.5",
+                "description": "Form templates, editable data and HTML rendering for CRUDUI",
+                "type": "library",
+                "license": "MIT",
+                "require": {
+                    "php": "^8.4",
+                    "ext-mbstring": "*",
+                    "polyspec/crudui-validator": "0.0.5"
+                },
+                "autoload": {
+                    "psr-4": {
+                        "Polyspec\\Crudui\\Generator\\": "src/Internal/",
+                        "Polyspec\\Crudui\\": "src/"
+                    }
+                },
+                "dist": {
+                    "type": "zip",
+                    "url": "https://github.com/polyspec/crudui/releases/download/v0.0.5/polyspec-crudui-generator-php-0.0.5.zip"
+                }
+            }
+        },
+        {
+            "type": "package",
+            "package": {
+                "name": "polyspec/crudui-validator",
+                "version": "0.0.5",
+                "description": "PHP validator for crudui system - validates form data against YAML specifications",
+                "type": "library",
+                "license": "MIT",
+                "require": {
+                    "php": "^8.4"
+                },
+                "autoload": {
+                    "psr-4": {
+                        "Polyspec\\Crudui\\Validator\\": "src/",
+                        "Polyspec\\Crudui\\": "src/Public/"
+                    }
+                },
+                "dist": {
+                    "type": "zip",
+                    "url": "https://github.com/polyspec/crudui/releases/download/v0.0.5/polyspec-crudui-validator-php-0.0.5.zip"
+                }
             }
         }
     ],
@@ -87,7 +162,7 @@
         "php": ">=8.4",
         "polyspec/hyper-server": "0.0.13",
         "polyspec/orm": "0.0.9",
-        "polyspec/template": "0.0.6",
+        "polyspec/template": "0.0.5",
         "polyspec/crudui-generator": "0.0.5"
     },
     "autoload": {

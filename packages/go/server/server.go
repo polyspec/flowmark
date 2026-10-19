@@ -108,7 +108,7 @@ func (s *Server) Serve(ln net.Listener) error {
 		s.mu.Lock()
 		if s.closed {
 			s.mu.Unlock()
-			conn.Close()
+			s.closeConn(conn)
 			continue
 		}
 		s.n++
@@ -136,17 +136,25 @@ func (s *Server) Close() error {
 		}
 	}
 	for conn := range s.conns {
-		conn.Close()
+		s.closeConn(conn)
 	}
 	s.mu.Unlock()
 	s.wg.Wait()
 	return err
 }
 
+// closeConn closes a connection the server is done with. A connection that is already closed is no fault; any other
+// failure to close is logged, since no caller can answer for it.
+func (s *Server) closeConn(conn net.Conn) {
+	if err := conn.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
+		s.logf("[serve] closing a connection: %v", err)
+	}
+}
+
 // handle serves the connection conn as the session name.
 func (s *Server) handle(conn net.Conn, name string) {
 	defer func() {
-		conn.Close()
+		s.closeConn(conn)
 		s.mu.Lock()
 		delete(s.conns, conn)
 		s.mu.Unlock()
@@ -177,8 +185,12 @@ func (s *Server) handle(conn net.Conn, name string) {
 	}()
 	w := bufio.NewWriter(conn)
 	answer := func(line []byte) bool {
-		w.Write(line)
-		w.WriteByte('\n')
+		if _, err := w.Write(line); err != nil {
+			return false
+		}
+		if err := w.WriteByte('\n'); err != nil {
+			return false
+		}
 		return w.Flush() == nil
 	}
 	connected := false

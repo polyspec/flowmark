@@ -190,30 +190,12 @@ func stages(t *testing.T, c *Corpus) []string {
 	return names
 }
 
-// stageFiles lists the names in the one stage of c.
-func stageFiles(t *testing.T, c *Corpus) []string {
-	t.Helper()
-	s := stages(t, c)
-	if len(s) != 1 {
-		t.Fatalf("stages = %v, want one", s)
-	}
-	entries, err := os.ReadDir(filepath.Join(c.txDir(), s[0]))
-	if err != nil {
-		t.Fatal(err)
-	}
-	names := []string{}
-	for _, e := range entries {
-		names = append(names, e.Name())
-	}
-	return names
-}
-
 // symlink creates a symbolic link or skips the test where this platform refuses to create one without privileges
 // (Windows without developer mode); the refusal it tests cannot arise where no link can be made.
 func symlink(t *testing.T, target, link string) {
 	t.Helper()
 	if err := os.Symlink(target, link); err != nil {
-		t.Skipf("this platform creates no symbolic link here: %v", err)
+		t.Fatalf("the platform refuses a symbolic link, which the refusal test needs: %v", err)
 	}
 }
 

@@ -45,7 +45,7 @@ func TestCorpusData(t *testing.T) {
 	}
 	// A walk entry that makes a table unavailable is a difference too, at its place.
 	if err := os.Symlink("../tags.flowmark.md", filepath.Join(f.root, "notes", "N5.flowmark.md")); err != nil {
-		t.Skipf("this platform creates no symbolic link here: %v", err)
+		t.Fatalf("the platform refuses a symbolic link, which the walk test needs: %v", err)
 	}
 	walked, err := Open(f.cat, store.DirFS(f.root), nil)
 	if err != nil {

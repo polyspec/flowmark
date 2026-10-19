@@ -649,7 +649,7 @@ func TestUnavailableTable(t *testing.T) {
 	broken["notes/N9.flowmark.md"] = "no heading\n"
 	f := catalogFixture(t, broken)
 	f.sub(t, "10#diagnostics: a read of an unavailable table fails naming the file", func(f *fixture) {
-		err := f.fails(f.msg("all", "notes", nil), "CONSTRAINT")
+		err := f.failure(f.msg("all", "notes", nil), "CONSTRAINT")
 		if err.Diagnostic == nil || err.Diagnostic.File != "notes/N9.flowmark.md" || !strings.HasPrefix(err.Diagnostic.Rule, "format.") {
 			f.t.Fatalf("diagnostic %+v", err.Diagnostic)
 		}
@@ -674,7 +674,7 @@ func TestUnavailableTable(t *testing.T) {
 	dup["tags.flowmark.md"] = lines("# tags", "| id | label | kind |", "| --- | --- | --- |", "| 1 | go | topic |", "| 1 | ops | area |")
 	g := catalogFixture(t, dup)
 	g.sub(t, "10#diagnostics: two rows with byte-equal keys name the second row and key.duplicate", func(f *fixture) {
-		err := f.fails(f.msg("all", "tags", nil), "CONSTRAINT")
+		err := f.failure(f.msg("all", "tags", nil), "CONSTRAINT")
 		if d := err.Diagnostic; d == nil || d.Rule != "key.duplicate" || d.File != "tags.flowmark.md" || d.Line != 5 {
 			f.t.Fatalf("diagnostic %+v", err.Diagnostic)
 		}
@@ -689,7 +689,7 @@ func TestTypeFaultValue(t *testing.T) {
 	docs["people.flowmark.md"] = strings.Replace(docs["people.flowmark.md"], "| P1 | Ada | ada@x.io | 36 |", "| P1 | Ada | ada@x.io | old |", 1)
 	f := catalogFixture(t, docs)
 	f.sub(t, "10#readable-values: returning the value fails naming the type diagnostic", func(f *fixture) {
-		err := f.fails(f.msg("all", "people", nil), "CONSTRAINT")
+		err := f.failure(f.msg("all", "people", nil), "CONSTRAINT")
 		if d := err.Diagnostic; d == nil || d.Rule != "type" || d.File != "people.flowmark.md" || d.Line != 4 {
 			f.t.Fatalf("diagnostic %+v", err.Diagnostic)
 		}

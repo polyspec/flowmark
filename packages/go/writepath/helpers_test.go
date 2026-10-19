@@ -412,9 +412,6 @@ func buildMsg(t testing.TB, hash, kind, entity string, body map[string]any, para
 	return b
 }
 
-// p is a parameter index for a request body.
-func p(i int) map[string]any { return map[string]any{"p": i} }
-
 // whereID is the where of the row whose id is parameter i.
 func whereID(i int) map[string]any {
 	return map[string]any{"items": []any{map[string]any{"pred": map[string]any{"column": "id", "op": "eq", "p": i}}}}

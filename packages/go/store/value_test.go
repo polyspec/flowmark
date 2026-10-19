@@ -182,10 +182,10 @@ func TestInvisibleAtEnd(t *testing.T) {
 		{"a b", false},
 		{" ", false},
 		{" a ", false},
-		{"۝a۝", false},
+		{"\u06dda\u06dd", false},
 		{"ㅤa", true},
 		{"a͏", true},
-		{"a​b", false},
+		{"a\u200bb", false},
 		{"a\xff", false},
 	}
 	for _, c := range cases {

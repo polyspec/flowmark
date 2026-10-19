@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"github.com/polyspec/flowmark/packages/go/internal/corpustest"
 	"io"
 	"net"
@@ -246,7 +247,11 @@ func (f *fixture) dial() *client {
 	if err != nil {
 		f.t.Fatal(err)
 	}
-	f.t.Cleanup(func() { conn.Close() })
+	f.t.Cleanup(func() {
+		if err := conn.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
+			f.t.Error(err)
+		}
+	})
 	return &client{t: f.t, conn: conn, r: bufio.NewReader(conn)}
 }
 
@@ -483,7 +488,7 @@ func TestToken(t *testing.T) {
 			t.Fatal(err)
 		}
 		if err := os.Symlink(filepath.Join(root, "elsewhere.json"), file(root)); err != nil {
-			t.Skipf("no symlink: %v", err)
+			t.Fatalf("no symlink: %v", err)
 		}
 		for _, renew := range []bool{false, true} {
 			if _, err := Token(root, renew); err == nil || !strings.Contains(err.Error(), "symbolic link") {
@@ -645,7 +650,9 @@ func TestClosedConnection(t *testing.T) {
 		a := f.connect()
 		a.want(begin, ok)
 		a.want(f.insertTag("web", "area"), insertedWeb3)
-		a.conn.Close()
+		if err := a.conn.Close(); err != nil {
+			t.Fatal(err)
+		}
 		f.waitEnded("serve-1")
 		f.rec.waitFor(t, "the release of serve-1", of(journal.LockReleased, "serve-1"))
 		b := f.connect()
@@ -663,7 +670,9 @@ func TestClosedConnection(t *testing.T) {
 		f.rec.waitFor(t, "the wait of serve-2", func(e journal.Event) bool {
 			return e.Kind == journal.LockWaiting && strings.HasSuffix(e.Holder, "/serve-1")
 		})
-		b.conn.Close()
+		if err := b.conn.Close(); err != nil {
+			t.Fatal(err)
+		}
 		f.waitEnded("serve-2")
 		a.want(f.countTags(), count2)
 		a.want(rollback, ok)
@@ -735,7 +744,11 @@ func TestNew(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer ln.Close()
+		defer func() {
+			if err := ln.Close(); err != nil {
+				t.Error(err)
+			}
+		}()
 		if a := ln.Addr().(*net.TCPAddr); !a.IP.Equal(net.IPv4(127, 0, 0, 1)) || a.Port == 0 {
 			t.Fatalf("bound %v", a)
 		}

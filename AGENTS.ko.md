@@ -1,5 +1,5 @@
 <!-- doc-id: agents -->
-<!-- source-sha256: 0a35753536057b728f163a883ea85db1ac82fdbb50eb2fb9a7dd1641b842b2f5 -->
+<!-- source-sha256: 566a94197a8926b50321b4342c4bc81a40c4dbe50a73e05fec153abdb3c97a23 -->
 # 개발 규칙
 
 [English](AGENTS.md)
@@ -40,12 +40,12 @@ GitHub, Jira), 응용 schema이고, [polyspec/orm](https://github.com/polyspec/o
   `$(KIT)/<tool>.$(KIT_EXT)`로 실행하고, 일반적인 필요는 자기 `package.json`에 선언된 생태계 library에서 얻는다.
   kit이 없거나 잘못된 tool은 여기서 복사하거나 고치지 않고 kit에 보고한다.
   Enforced by: `make kit-check`
-- `make flowmark-test`는 이 저장소 자체 코드의 전체 모음이다: `tests/`의 node test와 `scripts/go-test.mjs`를
+- `make flowmark-test`는 이 저장소 자체 코드의 전체 모음이다: `tests/`의 node test와 `scripts/go-test.mts`를
   실행하며, 일부 Go test가 필요로 하는 대소문자 구분 폴더를 마련한 뒤(macOS에서는 `var/` 아래의 Case-sensitive APFS
   image, Windows에서는 `fsutil`, 그 밖에서는 탐지하는 폴더) 그것으로 저장소의 각 Go module(`packages/go`, `examples`, `tests/conformance/go`)에서 `go test ./...`를 실행한다. 대소문자를 접는
   파일 시스템에서 맨 `go test ./...`를 실행하면 설계대로 그 test들이 실패하며, 필요한 변수를 알려 준다. CI workflow는
   Linux, Windows, macOS에서 같은 두 명령을 실행한다.
-  Enforced by: `.github/workflows/test.yml`
+  Enforced by: `make flowmark-test`
 - 엔진은 database이므로 그 unit test는 촘촘하다: 모든 문법과 제약 규칙에는 허용과 거절의 사례가 최소 하나씩 있고
   표 주도이며 edge case를 포함한다. 모든 storage에는 모든 column type과 NULL 및 빈 형태를 덮는 P1/P2 golden
   fixture가 있다. parse와 emit은 golden fixture를 seed로 `go test -fuzz`로 fuzz하며, fuzzer가 찾은 실패 입력은
@@ -54,7 +54,7 @@ GitHub, Jira), 응용 schema이고, [polyspec/orm](https://github.com/polyspec/o
 - 다중 플랫폼은 필수 요구다: lock, journal, watch, 파일 시스템의 플랫폼별 코드는 CI matrix의 각 플랫폼에서 돌고,
   이식 가능한 구현을 플랫폼 꼼수로 대신하지 않는다. lock은 kit의 holder-lock 선례를 따르며, 현재 요구를 만족하는 가장
   단순한 구현이 이긴다.
-  Enforced by: `.github/workflows/test.yml`
+  Enforced by: `make flowmark-test`
 - 각 repository는 자기 checklist를 운영한다: 다른 repository의 작업은 거기서 추적하고, 여기서는 그 ID를 code span으로
   참조한다. 그래서 `make refs-check`는 다른 repository의 항목을 이 repository의 항목으로 읽지 않는다.
   Enforced by: `make refs-check`

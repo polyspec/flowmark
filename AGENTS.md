@@ -46,12 +46,12 @@ them holds the rules of this repository.
   in its own `package.json`. A tool that kit lacks or gets wrong is reported to kit, never copied or edited here.
   Enforced by: `make kit-check`
 - `make flowmark-test` is the full suite of the repository's own code: it runs the node tests of `tests/` and
-  `scripts/go-test.mjs`, which provisions the case-sensitive folder some Go tests need (on macOS a Case-sensitive APFS image
+  `scripts/go-test.mts`, which provisions the case-sensitive folder some Go tests need (on macOS a Case-sensitive APFS image
   under `var/`, on Windows `fsutil`, elsewhere a folder it probes) and runs `go test ./...` with it in each Go module of the
   repository (`packages/go`, `examples`, `tests/conformance/go`). A bare `go test ./...` on
   a file system that folds case fails those tests by design and names the variable they need. The CI workflow runs the same
   two commands on Linux, Windows and macOS.
-  Enforced by: `.github/workflows/test.yml`
+  Enforced by: `make flowmark-test`
 - The engine is a database, so its unit tests are dense: every grammar and constraint rule has at least one accepting and one
   rejecting case, table-driven, with its edge cases; every storage has P1/P2 golden fixtures covering every column type and
   both the NULL and the empty forms; parse and emit are fuzzed (`go test -fuzz`) with the golden fixtures as seeds, and a
@@ -60,7 +60,7 @@ them holds the rules of this repository.
 - Multi-platform is a hard requirement: the platform-specific code of the lock, the journal, the watch and the file system
   runs on each platform of the CI matrix, and no platform trick stands in for a portable implementation; locks follow kit's
   holder-lock precedent, and the simplest implementation that satisfies the current requirements wins.
-  Enforced by: `.github/workflows/test.yml`
+  Enforced by: `make flowmark-test`
 - Each repository runs its own checklists: work in another repository is tracked there and referenced here by its ID in a
   code span, so that `make refs-check` reads no other repository's item as one of this repository.
   Enforced by: `make refs-check`

@@ -46,8 +46,9 @@ func canonTo(out, errOut io.Writer, args []string) int {
 	if err != nil {
 		return fail(errOut, "canon", err)
 	}
+	pr := &printer{w: out}
 	for _, p := range res.Rewritten {
-		fmt.Fprintf(out, "[canon] rewrote %s\n", p)
+		pr.printf("[canon] rewrote %s\n", p)
 	}
 	for _, r := range res.Reported {
 		d := r.Diagnostic
@@ -55,8 +56,8 @@ func canonTo(out, errOut io.Writer, args []string) int {
 		if r.Needs != "" {
 			why = fmt.Sprintf("a link needs the unavailable table %s (%s)", r.Needs, why)
 		}
-		fmt.Fprintf(out, "[canon] left %s: %s\n", r.Path, why)
+		pr.printf("[canon] left %s: %s\n", r.Path, why)
 	}
-	fmt.Fprintf(out, "[canon] %d rewritten, %d left\n", len(res.Rewritten), len(res.Reported))
-	return 0
+	pr.printf("[canon] %d rewritten, %d left\n", len(res.Rewritten), len(res.Reported))
+	return pr.status(errOut, "canon")
 }

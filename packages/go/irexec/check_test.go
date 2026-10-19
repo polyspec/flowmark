@@ -126,12 +126,12 @@ func TestViewAndCodecJudgement(t *testing.T) {
 	})
 	t.Run("50#views: a view of an entity the catalog does not declare is refused at entity", func(t *testing.T) {
 		f := clean(t)
-		err := f.fails(insertView(f, "ghosts", noFilter, `[]`), "CONSTRAINT")
+		err := f.failure(insertView(f, "ghosts", noFilter, `[]`), "CONSTRAINT")
 		wantFaults(t, err, []dupFault{{"views", "V2", -1, "entity", "CONSTRAINT", "view: the entity ghosts"}})
 	})
 	t.Run("50#views: a faulty filter and a faulty sort are two faults", func(t *testing.T) {
 		f := clean(t)
-		err := f.fails(insertView(f, "memos", `{"where":{"items":[{"pred":{"column":"rank","op":"gt","p":0}}]},"params":[1,2]}`, `[{"column":"color"}]`), "CONSTRAINT")
+		err := f.failure(insertView(f, "memos", `{"where":{"items":[{"pred":{"column":"rank","op":"gt","p":0}}]},"params":[1,2]}`, `[{"column":"color"}]`), "CONSTRAINT")
 		wantFaults(t, err, []dupFault{
 			{"views", "V2", -1, "filter", "CONSTRAINT", "view: the filter holds param 1"},
 			{"views", "V2", -1, "sort", "CONSTRAINT", "view: the sort"},
@@ -139,12 +139,12 @@ func TestViewAndCodecJudgement(t *testing.T) {
 	})
 	t.Run("50#views: a write that leaves a stored view invalid is refused", func(t *testing.T) {
 		f := stored(t)
-		err := f.fails(f.msg("update", "views", map[string]any{"set": sets("title"), "where": where(pred("id", "eq", p(1)))}, "Spooks", "V1"), "CONSTRAINT")
+		err := f.failure(f.msg("update", "views", map[string]any{"set": sets("title"), "where": where(pred("id", "eq", p(1)))}, "Spooks", "V1"), "CONSTRAINT")
 		wantFaults(t, err, []dupFault{{"views", "V1", -1, "entity", "CONSTRAINT", "view: the entity ghosts"}})
 	})
 	t.Run("50#views: a filter its codec cannot decode is codec alone", func(t *testing.T) {
 		f := clean(t)
-		err := f.fails(insertView(f, "memos", `{"where":`, `[]`), "CONSTRAINT")
+		err := f.failure(insertView(f, "memos", `{"where":`, `[]`), "CONSTRAINT")
 		wantFaults(t, err, []dupFault{{"views", "V2", -1, "filter", "CONSTRAINT", "codec: filter holds a value its codec"}})
 	})
 	t.Run("50#codec-values: a value its stages decode is written", func(t *testing.T) {
@@ -153,7 +153,7 @@ func TestViewAndCodecJudgement(t *testing.T) {
 	})
 	t.Run("50#codec-values: a value its stages cannot decode is refused at its column", func(t *testing.T) {
 		f := clean(t)
-		err := f.fails(insertMemo(f, "doc", `{"a":`), "CONSTRAINT")
+		err := f.failure(insertMemo(f, "doc", `{"a":`), "CONSTRAINT")
 		wantFaults(t, err, []dupFault{{"memos", "N2", -1, "doc", "CONSTRAINT", "codec: doc holds a value its codec"}})
 	})
 	t.Run("50#codec-values: a write that does not assign an undecodable value leaves it", func(t *testing.T) {
@@ -190,14 +190,14 @@ func TestCheckJudgement(t *testing.T) {
 	})
 	t.Run("50#checks: a check that needs the value not of its type names its type diagnostic", func(t *testing.T) {
 		f := gauges(t)
-		err := f.fails(setMode(f, "G1", "manual"), "CONSTRAINT")
+		err := f.failure(setMode(f, "G1", "manual"), "CONSTRAINT")
 		if err.Diagnostic == nil || err.Diagnostic.Rule != "type" || err.Diagnostic.Line != 4 {
 			t.Fatalf("error %+v, want the type diagnostic of G1's level", err)
 		}
 	})
 	t.Run("50#checks: a check false over readable values names the check", func(t *testing.T) {
 		f := gauges(t)
-		err := f.fails(f.msg("insert", "gauges", map[string]any{"set": sets("id", "level", "mode")}, "G3", -1, "auto"), "CONSTRAINT")
+		err := f.failure(f.msg("insert", "gauges", map[string]any{"set": sets("id", "level", "mode")}, "G3", -1, "auto"), "CONSTRAINT")
 		wantFaults(t, err, []dupFault{{"gauges", "G3", -1, "", "CONSTRAINT", "ck_gauges_level"}})
 	})
 	t.Run("50#checks: a check true over readable values passes", func(t *testing.T) {

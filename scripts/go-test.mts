@@ -9,7 +9,7 @@
 // case-sensitive. The exit status is go test's.
 import { existsSync, mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawnSync, type SpawnSyncOptions } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 /** The repository root: the parent of the folder that holds this script. */
@@ -18,22 +18,22 @@ export const repositoryRoot = path.dirname(path.dirname(fileURLToPath(import.met
 /** The environment variable that names the case-sensitive folder to the Go tests. */
 export const caseSensitiveEnv = 'FLOWMARK_CASE_SENSITIVE_DIR';
 
-const log = message => console.log(`[go-test] ${message}`);
+const log = (message: string): void => console.log(`[go-test] ${message}`);
 
 /** Runs `command` with `args`, its output shown; throws when it does not exit 0. */
-function run(command, args, options = {}) {
+function run(command: string, args: string[], options: SpawnSyncOptions = {}): void {
   const result = spawnSync(command, args, { stdio: 'inherit', ...options });
   if (result.error) throw new Error(`${command} ${args.join(' ')}: ${result.error.message}`);
   if (result.status !== 0) throw new Error(`${command} ${args.join(' ')} exited with ${result.status ?? result.signal}`);
 }
 
 /** Whether `dir` is a mount point: its device differs from its parent's. */
-function isMountPoint(dir) {
+function isMountPoint(dir: string): boolean {
   return existsSync(dir) && statSync(dir).dev !== statSync(path.dirname(dir)).dev;
 }
 
 /** Whether the file system of `dir` folds case: a file written as CaseProbe is found as caseprobe. */
-export function foldsCase(dir) {
+export function foldsCase(dir: string): boolean {
   const probe = path.join(dir, 'CaseProbe');
   writeFileSync(probe, '');
   try {
@@ -47,7 +47,7 @@ export function foldsCase(dir) {
  * Provisions the case-sensitive folder `dir` on `platform` and returns the name of the step that made it so, and
  * whether this run attached an image there that it must detach.
  */
-export function provision(dir, platform) {
+export function provision(dir: string, platform: NodeJS.Platform): { step: string; attached: boolean } {
   mkdirSync(path.dirname(dir), { recursive: true });
   switch (platform) {
     case 'darwin': {
@@ -71,7 +71,7 @@ export function provision(dir, platform) {
 }
 
 /** Runs the Go tests with the case-sensitive folder and returns go test's exit status. */
-export function goTest(root = repositoryRoot, platform = process.platform) {
+export function goTest(root: string = repositoryRoot, platform: NodeJS.Platform = process.platform): number {
   const dir = path.join(root, 'var', 'case-sensitive');
   let attached = false;
   try {
@@ -98,7 +98,7 @@ export const goModules = ['packages/go', 'examples', 'tests/conformance/go'];
  * or its link absent while a package manager relinks it — fails naming the PATH searched and the fix, never the bare
  * spawn error.
  */
-export function runGoTests(root, dir, modules = goModules) {
+export function runGoTests(root: string, dir: string, modules: string[] = goModules): number {
   const env = { ...process.env, [caseSensitiveEnv]: dir };
   let status = 0;
   for (const module of modules) {
@@ -118,7 +118,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   try {
     process.exitCode = goTest();
   } catch (error) {
-    log(error.message);
+    log(error instanceof Error ? error.message : String(error));
     process.exitCode = 1;
   }
 }

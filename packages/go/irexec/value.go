@@ -236,10 +236,10 @@ func compare(a, b scalar) int {
 		}
 		return 0
 	case kindBool:
-		switch {
-		case a.text == b.text:
+		switch a.text {
+		case b.text:
 			return 0
-		case a.text == "false":
+		case "false":
 			return -1
 		}
 		return 1

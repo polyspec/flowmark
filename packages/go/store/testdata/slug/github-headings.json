@@ -2,7 +2,7 @@
  "viewer": "GitHub",
  "recorded": "2026-10-13",
  "request": "POST https://api.github.com/markdown, mode \"markdown\"; ids without user-content-",
- "rerecord": "make slug-vectors (scripts/record-slugs.mjs)",
+ "rerecord": "make slug-vectors (scripts/record-slugs.mts)",
  "cases": [
   {
    "name": "spaces",

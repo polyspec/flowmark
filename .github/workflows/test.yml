@@ -18,16 +18,22 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version-file: packages/go/go.mod
       - uses: actions/setup-node@v4
         with:
           node-version: lts/*
-      # The same two commands as `make flowmark-test`, run directly so that no platform needs make.
-      - name: node tests
+      - name: install
         shell: bash
-        run: node --test tests/*.test.mjs
-      - name: go tests
-        run: node scripts/go-test.mjs
+        run: make install
+      # make flowmark-test runs the node tests, the Go tests of every Go module and, on macOS, the mount test of the
+      # case-sensitive folder; the same make target runs on each platform of the matrix.
+      - name: flowmark tests
+        shell: bash
+        run: make flowmark-test
+      # The reference check of the documents: every task ID that a document names resolves to a checklist item.
+      - name: references
+        shell: bash
+        run: make refs-check
       # The benchmarks of writepath, whose numbers the scale envelope of spec 40 states (T12.5-3, T12.13): one run
       # per platform, its output kept as an artifact of the run.
       - name: benchmarks

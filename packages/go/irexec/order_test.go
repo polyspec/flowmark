@@ -132,7 +132,7 @@ func TestFilesOrderRank(t *testing.T) {
 		if r := res.Post.Next.files["notes/N5.flowmark.md"].rows[0].Scalars["position"]; r == nil || *r != "3000" {
 			t.Fatalf("N5 rank %v", r)
 		}
-		wantFaults(t, f.fails(ins("N5", 4), "CONSTRAINT"), nil)
+		wantFaults(t, f.failure(ins("N5", 4), "CONSTRAINT"), nil)
 	})
 	t.Run("20#order: ranks shared by siblings stand in corpus order and a renumber parts them", func(t *testing.T) {
 		docs := rankedDocs()

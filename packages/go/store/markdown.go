@@ -1119,7 +1119,7 @@ func tagNameEnd(s string, p int) int {
 // underscore or colon, then letters, digits, colons, periods, underscores and
 // dashes; -1 when none starts there.
 func attrNameEnd(s string, p int) int {
-	if p >= len(s) || !(isASCIILetter(s[p]) || s[p] == '_' || s[p] == ':') {
+	if p >= len(s) || (!isASCIILetter(s[p]) && s[p] != '_' && s[p] != ':') {
 		return -1
 	}
 	for p++; p < len(s) && (isASCIILetter(s[p]) || ('0' <= s[p] && s[p] <= '9') || strings.IndexByte(":._-", s[p]) >= 0); p++ {

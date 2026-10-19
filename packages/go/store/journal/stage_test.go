@@ -141,6 +141,15 @@ func TestDeleteReplayIdempotent(t *testing.T) {
 	}
 }
 
+// requireRefusal fails the test unless err is a *RecoveryRefusal.
+func requireRefusal(t *testing.T, err error) {
+	t.Helper()
+	if refusalOf(t, err) == nil {
+		t.Fatalf("Recover = %v, want *RecoveryRefusal", err)
+	}
+}
+
+// refusalOf returns the *RecoveryRefusal that err is, and fails the test when it is none.
 func refusalOf(t *testing.T, err error) *RecoveryRefusal {
 	t.Helper()
 	var refusal *RecoveryRefusal
@@ -187,7 +196,7 @@ func TestRefusalAfterPartialApplyResolvable(t *testing.T) {
 func TestRefusalResolvedByRestoringPre(t *testing.T) {
 	c, l, root, stage, _, after := crashed(t, "prepare", 0)
 	writeFile(t, root, "a.md", "human\n")
-	refusalOf(t, c.Recover(l))
+	requireRefusal(t, c.Recover(l))
 	copyFile(t, filepath.Join(stage, hashOf("old a\n")), filepath.Join(root, "a.md"))
 	if err := c.Recover(l); err != nil {
 		t.Fatal(err)
@@ -200,7 +209,7 @@ func TestRefusalResolvedByRestoringPre(t *testing.T) {
 func TestRefusalResolvedByRestoringPost(t *testing.T) {
 	c, l, root, stage, _, after := crashed(t, "prepare", 0)
 	writeFile(t, root, "a.md", "human\n")
-	refusalOf(t, c.Recover(l))
+	requireRefusal(t, c.Recover(l))
 	copyFile(t, filepath.Join(stage, hashOf("new a\n")), filepath.Join(root, "a.md"))
 	if err := c.Recover(l); err != nil {
 		t.Fatal(err)

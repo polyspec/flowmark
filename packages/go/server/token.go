@@ -21,7 +21,7 @@ var tokenFile = regexp.MustCompile(`^\{"token":"([0-9a-f]{32})"\}\n$`)
 // starts read it; renew (--new-token) replaces it. The file is written under a partial name and linked into place, so
 // servers starting at once keep the one token the first link placed; a renewal renames over it. A file that does not
 // hold the one form, or a symlink where it or `.flowmark/` must be, refuses.
-func Token(root string, renew bool) (string, error) {
+func Token(root string, renew bool) (tok string, err error) {
 	dir := filepath.Join(root, ".flowmark")
 	if err := ensureFolder(dir); err != nil {
 		return "", err
@@ -36,12 +36,16 @@ func Token(root string, renew bool) (string, error) {
 	case err != nil && !errors.Is(err, fs.ErrNotExist):
 		return "", fmt.Errorf("the token file: %w", err)
 	}
-	tok := randomHex(16)
+	tok = randomHex(16)
 	part := p + "." + randomHex(16) + ".part"
 	if err := writeSynced(part, []byte(`{"token":"`+tok+`"}`+"\n")); err != nil {
 		return "", fmt.Errorf("writing the token file: %w", err)
 	}
-	defer os.Remove(part)
+	defer func() {
+		if rerr := os.Remove(part); rerr != nil && !errors.Is(rerr, fs.ErrNotExist) {
+			err = errors.Join(err, rerr)
+		}
+	}()
 	if renew {
 		if err := os.Rename(part, p); err != nil {
 			return "", fmt.Errorf("placing the token file: %w", err)

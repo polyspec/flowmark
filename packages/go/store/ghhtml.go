@@ -187,7 +187,7 @@ func htmlEvents(s string) []ghEvent {
 // image's description is none, since GitHub writes the description into an alt
 // attribute.
 func inlineEvents(s string, refs linkRefs) []ghEvent {
-	r := inlineReader{s: s, refs: refs, gh: true}
+	r := inlineReader{s: s, refs: refs, gh: true, math: noMath}
 	r.run()
 	inside := func(ranges [][2]int, at int) bool {
 		for _, rg := range ranges {
@@ -648,7 +648,7 @@ func ghReadings(lines []string, sc scan, g linkRefs) []ghRead {
 		if ev.self {
 			el.end(true)
 		}
-		out = append(out, ghRead{head: it.head, e: it.e, at: ev.at, anchored: !(inside && sure), el: el})
+		out = append(out, ghRead{head: it.head, e: it.e, at: ev.at, anchored: !inside || !sure, el: el})
 		live = append(live, el)
 	}
 	for k, it := range items {

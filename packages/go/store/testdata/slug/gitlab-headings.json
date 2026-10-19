@@ -2,7 +2,7 @@
  "viewer": "GitLab",
  "recorded": "2026-10-13",
  "request": "gitlab-glfm-markdown 0.0.45 (GitLab 57457fa19e3a9d9b7cc9a939b50f29fd6a59e62b), --alerts --autolink --cjk-friendly-emphasis --description-lists --escaped-char-spans --footnotes --full-info-string --header-accessibility --header-id-prefix user-content- --inapplicable-tasks --math-code --math-dollars --multiline-block-quotes --only-escape-chars $%#&@!~^: --placeholder-detection --relaxed-autolinks --relaxed-tasklist-character --sourcepos --strikethrough --table --tasklist --tasklist-classes --tasklist-in-table --wikilinks-title-before-pipe --unsafe; ids without user-content-",
- "rerecord": "make slug-vectors (scripts/record-slugs.mjs)",
+ "rerecord": "make slug-vectors (scripts/record-slugs.mts)",
  "cases": [
   {
    "name": "spaces",

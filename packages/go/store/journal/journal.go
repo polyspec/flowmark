@@ -122,7 +122,7 @@ func isHex(s string, n int) bool {
 		return false
 	}
 	for _, r := range s {
-		if !('0' <= r && r <= '9' || 'a' <= r && r <= 'f') {
+		if (r < '0' || r > '9') && (r < 'a' || r > 'f') {
 			return false
 		}
 	}

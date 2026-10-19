@@ -158,8 +158,12 @@ func codecDocs(t *testing.T) map[string]string {
 	text := strings.Replace(string(data), old, "  summary text null\n  doc text null\n  packed bytes null\n  hexed varchar(255) null\n  addr bytes null\n  primary key (id)\n  settings {\n    store files\n    title title\n    body body\n    markdown body\n    markdown summary\n    codec doc ordered_json\n    codec packed ordered_json gz\n    codec hexed ordered_json hex\n    codec addr ip\n  }", 1)
 	var packed bytes.Buffer
 	w := zlib.NewWriter(&packed)
-	w.Write([]byte(`{"b":2}`))
-	w.Close()
+	if _, err := w.Write([]byte(`{"b":2}`)); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
 	return map[string]string{
 		"dbspec/flowmark.dbs":  text,
 		"memos/M1.flowmark.md": "# Memo one\n- doc: {\"a\":1}\n- packed: " + base64.StdEncoding.EncodeToString(packed.Bytes()) + "\n- hexed: " + strings.ToUpper(hex.EncodeToString([]byte(`{"h":3}`))) + "\n- addr: AQIDBA==\n\nBody.\n\n## summary\n\nSummary text.\n",
@@ -190,7 +194,11 @@ func apply(t *testing.T, c *irexec.Corpus, stmts []Statement) *sql.DB {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { db.Close() })
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	model, diags := runtimemodel.Build(c.Catalog().Documents)
 	if len(diags) > 0 {
 		t.Fatalf("runtime model: %v", runtimemodel.DiagnosticsError(diags))
@@ -208,12 +216,14 @@ func apply(t *testing.T, c *irexec.Corpus, stmts []Statement) *sql.DB {
 			if err != nil {
 				t.Fatal(err)
 			}
-			t.Cleanup(func() { odb.Close() })
+			t.Cleanup(func() {
+				if err := odb.Close(); err != nil {
+					t.Error(err)
+				}
+			})
 		}
 		params := make([]any, len(s.Params))
-		for j, v := range s.Params {
-			params[j] = v
-		}
+		copy(params, s.Params)
 		for _, slot := range s.Slots {
 			params[slot.Param] = native(t, slot.ColType, s.Params[slot.Param])
 		}
@@ -276,7 +286,11 @@ func readBack(t *testing.T, db *sql.DB, c *irexec.Corpus, table string) [][]any 
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
 	var out [][]any
 	for rows.Next() {
 		vals := make([]any, len(tb.Columns))

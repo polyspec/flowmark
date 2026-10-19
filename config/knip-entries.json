@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "entries": {
+    "examples/board/web/node/**/*.ts": "the Node.js server of the board example, which its README runs: node/main.ts and the files it imports",
+    "examples/board/web/client/**/*.ts": "the browser client of the board example, which its README builds: client/main.ts"
+  },
+  "binaries": {
+    "go": "the Go toolchain that scripts/go-test.mts runs in each Go module",
+    "hdiutil": "the macOS tool that tests/darwin mounts the case-sensitive image with, run only on macOS by make flowmark-test"
+  },
+  "ignore": {
+    "packages/go/store/testdata/slug/vscode-slugify.ts": "the VS Code slugify source that store tests read as data; scripts/record-slugs.mts writes it, and nothing imports it"
+  }
+}

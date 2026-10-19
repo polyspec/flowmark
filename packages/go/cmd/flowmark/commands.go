@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"io/fs"
 
@@ -38,14 +37,15 @@ func install(out, errOut io.Writer, args []string) (code int) {
 	if err != nil {
 		return fail(errOut, "install", err)
 	}
+	pr := &printer{w: out}
 	for _, p := range res.Created {
-		fmt.Fprintf(out, "[install] created %s\n", p)
+		pr.printf("[install] created %s\n", p)
 	}
 	if res.Attributes {
-		fmt.Fprintln(out, "[install] added the line *.flowmark.md text eol=lf to .gitattributes")
+		pr.println("[install] added the line *.flowmark.md text eol=lf to .gitattributes")
 	}
-	fmt.Fprintf(out, "[install] %d created\n", len(res.Created))
-	return 0
+	pr.printf("[install] %d created\n", len(res.Created))
+	return pr.status(errOut, "install")
 }
 
 // history runs `flowmark history repair [--lock-wait-ms <n>] <corpus> <table> <key> [--from <state>]` (spec 50 A state
@@ -84,8 +84,9 @@ func history(out, errOut io.Writer, args []string) (code int) {
 	if err != nil {
 		return fail(errOut, "history repair", err)
 	}
-	fmt.Fprintf(out, "%s\n", b)
-	return 0
+	pr := &printer{w: out}
+	pr.printf("%s\n", b)
+	return pr.status(errOut, "history repair")
 }
 
 // unlock runs `flowmark unlock <corpus> [--holder <pid>@<host>/<session>]` (spec 40 A stale lock): it removes the lock
@@ -114,6 +115,7 @@ func unlock(out, errOut io.Writer, args []string) int {
 		}
 		return fail(errOut, "unlock", &ops.Error{Code: code, Msg: err.Error()})
 	}
-	fmt.Fprintf(out, "[unlock] removed the lock of %s\n", h)
-	return 0
+	pr := &printer{w: out}
+	pr.printf("[unlock] removed the lock of %s\n", h)
+	return pr.status(errOut, "unlock")
 }

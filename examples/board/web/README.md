@@ -40,8 +40,8 @@ The paths below are relative to the repository; `<flowmark>` is a built `flowmar
 ## Forms, lists and validation by crudui
 
 The create form, the board list and the validation of a submission are declared once per face and
-run by [crudui](https://github.com/polyspec/crudui): `src/PostForm.php` (Composer path repositories
-of `polyspec/crudui-generator`) and `node/postForm.ts` (npm file dependencies on the generator,
+run by [crudui](https://github.com/polyspec/crudui): `src/PostForm.php` (the Composer package
+`polyspec/crudui-generator`) and `node/postForm.ts` (npm file dependencies on the generator,
 HTML renderer and validator packages) hold the same field specification — 제목, 작성자, 내용, each
 with its rule and its Korean message — and the same list columns. The server renders the form with
 `renderForm` (the action, the hidden CSRF token, the errors of a refused submission) and the list

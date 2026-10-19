@@ -11,14 +11,18 @@ refs-check: ## Check that every task ID a document names resolves to a checklist
 # The repository's own tests. test, the task of kit, runs them as a prerequisite; the recipe of kit runs nothing more.
 .PHONY: flowmark-test
 flowmark-test: ## Run the tests of the repository's own code and scripts; offline
-	$(NODE) --test tests/*.test.mjs tests/*.test.mts
-	$(NODE) scripts/go-test.mjs
+	$(NODE) --test tests/*.test.mts
+	$(NODE) scripts/go-test.mts
+# The macOS folder of the case-sensitive tests is mounted by hdiutil, which only macOS has, so its test runs only there.
+ifeq ($(shell uname -s),Darwin)
+	$(NODE) --test tests/darwin/*.test.mts
+endif
 
 test: flowmark-test
 
 .PHONY: slug-vectors
 slug-vectors: ## Record the heading ids GitHub, VS Code and GitLab render into store/testdata/slug; needs the network, gh, npm and cargo
-	$(NODE) scripts/record-slugs.mjs
+	$(NODE) scripts/record-slugs.mts
 
 # The check of the commit-msg hook: the message MESSAGE against the commit rules of kit, and the item rules of the index.
 .PHONY: commit-msg-check

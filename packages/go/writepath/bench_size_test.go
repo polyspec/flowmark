@@ -101,14 +101,22 @@ func BenchmarkSessions(b *testing.B) {
 			if err != nil {
 				b.Fatal(err)
 			}
-			b.Cleanup(func() { c.Close() })
+			b.Cleanup(func() {
+				if err := c.Close(); err != nil {
+					b.Error(err)
+				}
+			})
 			ss := make([]*Session, sessions)
 			for i := range ss {
 				ss[i], err = c.Session(fmt.Sprintf("bench%d", i))
 				if err != nil {
 					b.Fatal(err)
 				}
-				b.Cleanup(func() { ss[i].Close() })
+				b.Cleanup(func() {
+					if err := ss[i].Close(); err != nil {
+						b.Error(err)
+					}
+				})
 			}
 			ctx := context.Background()
 			var turn atomic.Int64

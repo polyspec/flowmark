@@ -156,7 +156,7 @@ func documentParseCases() []docCase {
 			"- [ ] T1 Plan done:false", "- [ ] T2 Other done:false", "", "## items row T1", "", "```", "", "## items row T2", "", "x")),
 		docReject("10#single-line-places: a table cell that begins with an invisible character", RuleBlock, 4, peopleOf(
 			peopleHeader, peopleDelim,
-			row("P1", "", "​Ada", "lead", "true", "", "", "", "", "", "", "", "", ""),
+			row("P1", "", "\u200bAda", "lead", "true", "", "", "", "", "", "", "", "", ""),
 			"", "## people row P1", "", "### bio", "", "Notes.")),
 		docReject("10#list-rows: a row without a glyph", RuleBlock, 2, itemsOf("- T1 Plan done:false")),
 		docReject("10#list-rows: an unknown glyph", RuleBlock, 2, itemsOf("- [?] T1 Plan done:false")),
@@ -199,7 +199,7 @@ func documentParseCases() []docCase {
 		docAccept("10#list-rows: two spaces before an escaped title token", itemsOf(`- [ ] T1 a  owner\:x done:false`)),
 		docAccept("10#list-rows: a tab inside a title before an escaped title token", itemsOf("- [ ] T1 Set\towner\\:x done:false")),
 		docAccept("10#list-rows: a tab inside a title before an escaped column token that holds a column", itemsOf("- [ ] T1 Plan\tnote\\:x done:false")),
-		docReject("10#list-rows: a title that begins with an invisible character", RuleBlock, 2, itemsOf("- [ ] T1 ​Plan done:false")),
+		docReject("10#list-rows: a title that begins with an invisible character", RuleBlock, 2, itemsOf("- [ ] T1 \u200bPlan done:false")),
 		docReject("10#single-line-places: a title with a comment opener", RuleBlock, 2, itemsOf("- [ ] T1 a <!-- b done:false")),
 		docReject("10#list-rows: a parent field in a list", RuleBlock, 2, itemsOf("- [ ] T1 Plan done:false parent:T1")),
 		docReject("10#list-rows: the order column written as a field", RuleBlock, 2, itemsOf("- [ ] T1 Plan done:false position:1")),
@@ -1112,7 +1112,7 @@ func writeCases() []writeCase {
 		{name: "10#detail-headings-and-anchors: an undeclared section", rows: []*Row{
 			withSection(item("T1", "Plan", "waiting", "1", done), "nope", "x\n")}, rule: RuleConstraint},
 		{name: "10#single-line-places: a title with an invisible character at its start", rows: []*Row{
-			item("T1", "​Plan", "waiting", "1", done)}, rule: RuleConstraint},
+			item("T1", "\u200bPlan", "waiting", "1", done)}, rule: RuleConstraint},
 		{name: "10#detail-headings-and-anchors: a body whose open fence precedes a section", rows: []*Row{
 			withSection(withBody(item("T1", "Plan", "waiting", "1", done), "```\ncode\n"), "cause", "x")}, rule: RuleConstraint},
 		{name: "10#detail-headings-and-anchors: a present empty section", rows: []*Row{

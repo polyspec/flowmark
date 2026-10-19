@@ -121,7 +121,7 @@ func TestTakesAnchor(t *testing.T) {
 	}
 }
 
-// slugifyFile is VS Code's slugify.ts, as scripts/record-slugs.mjs ran it to record the
+// slugifyFile is VS Code's slugify.ts, as scripts/record-slugs.mts ran it to record the
 // S_VS vectors, with VS Code's MIT license beside it in vscode-LICENSE.txt: its
 // githubSlugReplaceRegex is the expression of the characters its slug removes.
 const slugifyFile = "testdata/slug/vscode-slugify.ts"

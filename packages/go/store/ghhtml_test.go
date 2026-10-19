@@ -10,7 +10,7 @@ import (
 )
 
 // The vectors of GitHub's reading of HTML headings (spec 10, Detail headings and
-// anchors), recorded by scripts/record-slugs.mjs into testdata/slug.
+// anchors), recorded by scripts/record-slugs.mts into testdata/slug.
 
 // ghHTMLFile is the part of github-headings.json that records how GitHub reads HTML.
 type ghHTMLFile struct {
