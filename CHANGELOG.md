@@ -3,6 +3,7 @@
 
 ## Unreleased
 
+- flowmark follows the kit standard 0.0.54: the Go modules lie in `packages/go`, the plans in `docs/plans/<plan>/`, and the checks and gates are kit's (T15).
 - T12-7: other-repo task IDs in the prose are code spans, so make refs-check reads no orm item as a flowmark task.
 - flowmark takes orm 0.0.18: go.mod requires the Go module github.com/polyspec/orm/packages/go, and the engine imports take its packages/go/engine paths. (#T12-6)
 - T12-3-1-1: go.mod pins the orm release v0.0.15, which carries the per-document set parse (`T166`), instead of a main commit.

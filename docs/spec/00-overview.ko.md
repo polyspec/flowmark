@@ -1,5 +1,5 @@
 <!-- doc-id: spec-overview -->
-<!-- source-sha256: d85b5f89addb7bf99a9c73b6cd1f5da48b71a8fac0594150a2a221bcbdf0431f -->
+<!-- source-sha256: 18c2478b158cfdf15c312cd902d95031eaa2138e16826d7f7c92565a488d46fb -->
 # 개요
 
 [English](00-overview.md)
@@ -66,8 +66,8 @@ emit하면 그대로 재현되고, 같은 입력으로 operation을 반복하면
 
 ## 문서 지도
 
-판정은 [design plan](../plans/design-plan.ko.md)과
-[markdown database 계획](../plans/markdown-database-plan.ko.md)에 있고, 이 spec 묶음이 그것을 고정한다:
+판정은 [design plan](../plans/flowmark/plan.ko.md)과
+[markdown database 계획](../plans/markdown-database/plan.ko.md)에 있고, 이 spec 묶음이 그것을 고정한다:
 [canonical format](10-canonical-format.md), [document model](20-document-model.md),
 [schema](30-schema.md), [operations](40-ops.md), [constraints](50-constraints.md),
 [capability table](60-dialect.md), [sync](70-sync.md), [migration](80-migration.md),

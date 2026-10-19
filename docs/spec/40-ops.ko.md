@@ -1,5 +1,5 @@
 <!-- doc-id: spec-ops -->
-<!-- source-sha256: 69bc868391adbf5dc10ac33348fa0d6319a90078931d74df8e8cd695783eb80e -->
+<!-- source-sha256: 797cb9816576da464a8dda467164f01df28c62f6764c91a415b5a2c1de6e2e8d -->
 # Operations
 
 [English](40-ops.md)
@@ -402,7 +402,7 @@
 journal은 hard link가 필요 없다.
 
 journal과 복구의 모든 hash는 file의 raw byte의 SHA-256이며 소문자 hex 64자리다(raw-file-bytes hashing,
-[design plan](../plans/design-plan.ko.md)). 각 단계는 publish된다: 5단계 뒤 `journal.prepared`, 7단계 뒤
+[design plan](../plans/flowmark/plan.ko.md)). 각 단계는 publish된다: 5단계 뒤 `journal.prepared`, 7단계 뒤
 `journal.applied`, 8단계 뒤 `journal.collected`, 열 때 `journal.replayed`나 `journal.discarded`다.
 
 전원 손실을 넘는 내구성은 각 단계의 file과 folder 항목이 다음 단계가 시작하기 전에 disk에 있기를

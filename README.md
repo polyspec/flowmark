@@ -20,9 +20,9 @@ and transactions over a folder of markdown documents — with no external databa
   offline.
 
 Status: the engine is being rebuilt on its storage grammar. The rulings live in
-[docs/plans/design-plan.md](docs/plans/design-plan.md) and
-[docs/plans/markdown-database-plan.md](docs/plans/markdown-database-plan.md); the trackers are
-[docs/plans/execution-checklist.md](docs/plans/execution-checklist.md) and
-[docs/plans/markdown-database-checklist.md](docs/plans/markdown-database-checklist.md).
-The shared tooling is the vendored copy of [polyspec/kit](https://github.com/polyspec/kit)
-(`make kit-sync KIT_TAG=<tag>` updates it; `make kit-check` verifies it).
+[docs/plans/flowmark/plan.md](docs/plans/flowmark/plan.md) and
+[docs/plans/markdown-database/plan.md](docs/plans/markdown-database/plan.md); the trackers are
+[docs/plans/flowmark/checklist.md](docs/plans/flowmark/checklist.md) and
+[docs/plans/markdown-database/checklist.md](docs/plans/markdown-database/checklist.md).
+The shared tooling is the npm package [@polyspec/kit](https://github.com/polyspec/kit), a devDependency
+(`make install-packages` installs it; `make kit-check` verifies its copies).

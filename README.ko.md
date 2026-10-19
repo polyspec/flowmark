@@ -1,5 +1,5 @@
 <!-- doc-id: readme -->
-<!-- source-sha256: ca6efe0ec51684f40d4e70d1f4a77ac7bb8366b3ee394668f4692591ebb276f5 -->
+<!-- source-sha256: 81ed053dba6729d577d1fac17d1fbb9246bfbc9565856472551d87865ed541fd -->
 # flowmark
 
 [English](README.md)
@@ -17,9 +17,9 @@ canonical rendering, corpus-global 제약(type, key, foreign key, state machine)
   architecture), 그리고 칸반·목록·간트 view가 soksak plugin에서 도는 issue 추적 응용 schema — data를
   로컬에서, git 안에서, 오프라인으로 관리한다.
 
-상태: 엔진을 저장 문법 위에 다시 짓는 중이다. 판정은 [docs/plans/design-plan.ko.md](docs/plans/design-plan.ko.md)와
-[docs/plans/markdown-database-plan.ko.md](docs/plans/markdown-database-plan.ko.md)에, 추적은
-[docs/plans/execution-checklist.ko.md](docs/plans/execution-checklist.ko.md)와
-[docs/plans/markdown-database-checklist.ko.md](docs/plans/markdown-database-checklist.ko.md)에 있다.
-공유 tooling은 [polyspec/kit](https://github.com/polyspec/kit)의 vendored copy다
-(`make kit-sync KIT_TAG=<tag>`가 갱신하고 `make kit-check`가 검증한다).
+상태: 엔진을 저장 문법 위에 다시 짓는 중이다. 판정은 [docs/plans/flowmark/plan.ko.md](docs/plans/flowmark/plan.ko.md)와
+[docs/plans/markdown-database/plan.ko.md](docs/plans/markdown-database/plan.ko.md)에, 추적은
+[docs/plans/flowmark/checklist.ko.md](docs/plans/flowmark/checklist.ko.md)와
+[docs/plans/markdown-database/checklist.ko.md](docs/plans/markdown-database/checklist.ko.md)에 있다.
+공유 tooling은 [@polyspec/kit](https://github.com/polyspec/kit) npm package이며 devDependency다
+(`make install-packages`가 설치하고 `make kit-check`가 그 사본을 검증한다).

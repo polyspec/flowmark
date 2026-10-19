@@ -13,14 +13,14 @@ folder, `posts/2026-01/` to `posts/2026-10/`, 100 posts each.
 
 ## Run
 
-The paths below are relative to the repository; `<flowmark>` is a built `flowmark` (`make build`).
+The paths below are relative to the repository; `<flowmark>` is a built `flowmark` (`make flowmark-build`).
 
 1. Make a corpus with the people and no posts, and install and seed it. The seed writes every post through the engine:
 
    ```sh
    mkdir var/board && cp -R examples/board/block/dbspec examples/board/block/people.flowmark.md var/board/
    <flowmark> install var/board
-   go run ./examples/board/seed var/board 2026 1 10 100
+   go -C examples run ./board/seed ../var/board 2026 1 10 100
    ```
 
 2. Serve the corpus; it prints the port, and the token stands in `var/board/.flowmark/server.json`:

@@ -9,7 +9,7 @@ import { spawnSync } from 'node:child_process';
 import { provision, runGoTests } from '../scripts/go-test.mjs';
 
 // A mount found already at the folder is reused and left mounted: the run that
-// attached it, such as a concurrent make test, still needs it.
+// attached it, such as a concurrent make flowmark-test, still needs it.
 test('a volume already mounted at the folder is reused, not detached', { skip: process.platform !== 'darwin' }, t => {
   const root = mkdtempSync(path.join(tmpdir(), 'go-test-mount-'));
   const dir = path.join(root, 'case-sensitive');

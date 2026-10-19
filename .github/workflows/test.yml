@@ -22,7 +22,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: lts/*
-      # The same two commands as `make test`, run directly so that no platform needs make.
+      # The same two commands as `make flowmark-test`, run directly so that no platform needs make.
       - name: node tests
         shell: bash
         run: node --test tests/*.test.mjs
@@ -43,7 +43,7 @@ jobs:
           if [ "$(uname -s)" = Darwin ]; then sudo sysctl -w kern.maxfilesperproc=65536 || echo 'raise: kern.maxfilesperproc refused'; fi
           ulimit -n 65536 || echo 'raise: the rlimit was refused'
           ulimit -Sn; ulimit -Hn
-          go test ./writepath -run '^$' -bench . -benchmem | tee benchmarks.txt
+          (cd packages/go && go test ./writepath -run '^$' -bench . -benchmem) | tee benchmarks.txt
       - uses: actions/upload-artifact@v4
         with:
           name: benchmarks-${{ matrix.os }}

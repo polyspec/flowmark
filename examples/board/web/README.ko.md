@@ -1,5 +1,5 @@
 <!-- doc-id: examples-board-web -->
-<!-- source-sha256: 3b6f33b0c9f6586ee7c8a4f55c15b0a20beb7f973c05a918e9e588fc4c2064c7 -->
+<!-- source-sha256: 8150d582835fbf825e9a35ddcf4d091b4e8b1690a6458e6fe1389bf886e7f154 -->
 # 게시판 애플리케이션
 
 [English](README.md)
@@ -14,14 +14,14 @@ corpus는 글 1000개 규모로 잡았다. `posts`는 `store files shard created
 
 ## 실행
 
-아래 경로는 저장소 기준이고 `<flowmark>`는 빌드한 `flowmark`(`make build`)다.
+아래 경로는 저장소 기준이고 `<flowmark>`는 빌드한 `flowmark`(`make flowmark-build`)다.
 
 1. people만 있고 글이 없는 corpus를 만들어 install하고 시드한다. 시드는 모든 글을 엔진으로 쓴다:
 
    ```sh
    mkdir var/board && cp -R examples/board/block/dbspec examples/board/block/people.flowmark.md var/board/
    <flowmark> install var/board
-   go run ./examples/board/seed var/board 2026 1 10 100
+   go -C examples run ./board/seed ../var/board 2026 1 10 100
    ```
 
 2. corpus를 serve한다. port를 출력하고 token은 `var/board/.flowmark/server.json`에 있다:

@@ -1,22 +1,5 @@
 {
   "schema": 1,
   "hooks": ["pre-push", "commit-msg"],
-  "trackers": [
-    {
-      "path": "docs/plans/execution-checklist.md",
-      "translation": "docs/plans/execution-checklist.ko.md",
-      "format": "list",
-      "idPattern": "T[0-9]+(?:[.-][0-9]+)*",
-      "states": ["[ ]", "[~]", "[o]", "[!]", "[-]"],
-      "active": "[~]"
-    },
-    {
-      "path": "docs/plans/markdown-database-checklist.md",
-      "translation": "docs/plans/markdown-database-checklist.ko.md",
-      "format": "list",
-      "idPattern": "T[0-9]+(?:[.-][0-9]+)*",
-      "states": ["[ ]", "[~]", "[o]", "[!]", "[-]"],
-      "active": "[~]"
-    }
-  ]
+  "idPattern": "T[0-9]+(?:[.-][0-9]+)*"
 }

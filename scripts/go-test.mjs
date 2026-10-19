@@ -52,7 +52,7 @@ export function provision(dir, platform) {
   switch (platform) {
     case 'darwin': {
       // A volume already mounted there is reused and left mounted: the run that
-      // attached it, such as a concurrent make test, still needs it.
+      // attached it, such as a concurrent make flowmark-test, still needs it.
       if (isMountPoint(dir)) return { step: `the volume already mounted at ${dir}`, attached: false };
       const image = `${dir}.dmg`;
       run('hdiutil', ['create', '-size', '64m', '-fs', 'Case-sensitive APFS', '-volname', 'flowmark-case', '-ov', image]);
@@ -88,22 +88,30 @@ export function goTest(root = repositoryRoot, platform = process.platform) {
   }
 }
 
+/** The Go modules of the repository, each a folder with its own go.mod, that `make flowmark-test` runs in turn. */
+export const goModules = ['packages/go', 'examples', 'tests/conformance/go'];
+
 /**
- * Runs `go test` over the module at `root` with the case-sensitive folder `dir` declared, and returns its exit status.
- * The environment is the process's, extended with that one variable, so `go` is looked up on the process's PATH at the
- * moment of the spawn: a PATH without it — Go not installed, or its link absent while a package manager relinks it —
- * fails naming the PATH searched and the fix, never the bare spawn error.
+ * Runs `go test ./...` in each Go module of `modules` below `root`, with the case-sensitive folder `dir` declared, and
+ * returns the exit status of the last module that failed, or 0. The environment is the process's, extended with that one
+ * variable, so `go` is looked up on the process's PATH at the moment of the spawn: a PATH without it — Go not installed,
+ * or its link absent while a package manager relinks it — fails naming the PATH searched and the fix, never the bare
+ * spawn error.
  */
-export function runGoTests(root, dir) {
+export function runGoTests(root, dir, modules = goModules) {
   const env = { ...process.env, [caseSensitiveEnv]: dir };
-  const result = spawnSync('go', ['test', '-count=1', './...'], { cwd: root, stdio: 'inherit', env });
-  if (result.error?.code === 'ENOENT') {
-    throw new Error(
-      `go test: no executable named go on PATH (${env.PATH ?? ''}); install Go or put its bin folder on PATH, then run again`,
-    );
+  let status = 0;
+  for (const module of modules) {
+    const result = spawnSync('go', ['test', '-count=1', './...'], { cwd: path.join(root, module), stdio: 'inherit', env });
+    if (result.error?.code === 'ENOENT') {
+      throw new Error(
+        `go test: no executable named go on PATH (${env.PATH ?? ''}); install Go or put its bin folder on PATH, then run again`,
+      );
+    }
+    if (result.error) throw new Error(`go test: ${result.error.message}`);
+    if ((result.status ?? 1) !== 0) status = result.status ?? 1;
   }
-  if (result.error) throw new Error(`go test: ${result.error.message}`);
-  return result.status ?? 1;
+  return status;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

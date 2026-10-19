@@ -5,7 +5,7 @@
 
 Example corpora of the engine. Each folder is a corpus root: its `dbspec/` catalog and the
 `*.flowmark.md` documents the engine wrote. Every row was written through the engine, and the
-tests of this folder (`go test ./examples/`, part of `make test`) read and change copies of the
+tests of this folder (`cd examples && go test ./...`, part of `make flowmark-test`) read and change copies of the
 corpora through the operations of the faces only, so the corpora stay valid and canonical.
 
 Open one with any face, for example `flowmark rows examples/tracker/aggregate-list items`.

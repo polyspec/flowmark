@@ -11,9 +11,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/polyspec/flowmark/catalog"
-	"github.com/polyspec/flowmark/introspect"
-	"github.com/polyspec/flowmark/ops"
+	"github.com/polyspec/flowmark/packages/go/catalog"
+	"github.com/polyspec/flowmark/packages/go/introspect"
+	"github.com/polyspec/flowmark/packages/go/ops"
 )
 
 // The tracker corpora: the rows of the application schema in three storages of the table items — every row in one

@@ -71,8 +71,8 @@ and state.
 
 ## Document map
 
-The rulings live in [the design plan](../plans/design-plan.md) and the
-[markdown database plan](../plans/markdown-database-plan.md); this specification set pins them:
+The rulings live in [the design plan](../plans/flowmark/plan.md) and the
+[markdown database plan](../plans/markdown-database/plan.md); this specification set pins them:
 [canonical format](10-canonical-format.md), [document model](20-document-model.md),
 [schema](30-schema.md), [operations](40-ops.md), [constraints](50-constraints.md),
 [capability table](60-dialect.md), [sync](70-sync.md), [migration](80-migration.md),

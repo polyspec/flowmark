@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/polyspec/flowmark/catalog"
-	"github.com/polyspec/flowmark/ops"
+	"github.com/polyspec/flowmark/packages/go/catalog"
+	"github.com/polyspec/flowmark/packages/go/ops"
 )
 
 // The board corpora: the comments of a post as a block list inside the post's file, and as one file per comment whose

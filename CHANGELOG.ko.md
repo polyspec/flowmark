@@ -1,9 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 3a7cbea99d8b77155adbc380c3a5fbfb8021e81e67f1282470c6d0f792bfbe12 -->
+<!-- source-sha256: 53f74f993e8a6a86f16ee6d11259050794719ad2c94e27673a855587bc0a4699 -->
 # Changelog
 
 ## Unreleased
 
+- flowmark가 kit 표준 0.0.54를 따른다: Go module은 `packages/go`에, plan은 `docs/plans/<plan>/`에 있고, check와 gate는 kit의 것이다 (T15).
 - T12-7: prose의 다른 repo task ID를 코드 span으로 쓴다. 그래서 make refs-check가 orm 항목을 flowmark task로 읽지 않는다.
 - flowmark가 orm 0.0.18을 받는다. go.mod가 Go module github.com/polyspec/orm/packages/go를 요구하고, engine import는 그 packages/go/engine 경로를 쓴다. (#T12-6)
 - T12-3-1-1: go.mod가 main commit 대신 문서별 set parse(`T166`)를 담은 orm 릴리스 v0.0.15를 pin한다.

@@ -8,7 +8,7 @@
 flowmark is a text database whose grammar is markdown: this repository is the engine and its thin
 faces, the sync adapters (database, GitHub, Jira) and the application schema;
 [polyspec/orm](https://github.com/polyspec/orm) is the query layer that reaches it by the DSN
-`markdown://`. The rulings live in `docs/plans/design-plan.md` and the plans beside it; each plan
+`markdown://`. The rulings live in `docs/plans/flowmark/plan.md` and the plans beside it; each plan
 has its checklist in `docs/plans/`.
 
 ## Principles
@@ -24,82 +24,46 @@ them holds the rules of this repository.
   notification contract requires it, and it is stated. A file system that sends no
   notifications is not supported, and that is stated too. Polling or a timer is chosen only when
   no orthodox mechanism exists, stated as such, never the main path.
+  Enforced by: none, a judgement at review.
 - Idempotence and observability, as the engine applies them: a journal replay, a canon, an
   install and a write of the same bytes are idempotent; a request that is not idempotent by
   nature, such as an insert, is refused on its repetition as its rule says. That an event
   occurred is known from what it publishes, not found by searching for it. A process that
   crashed publishes nothing, so on start the engine reads the declared places of its own state
   — the lock and the journal — once; that is a read of a declared place, not a search.
+  Enforced by: none, a judgement at review.
 - Paths, as the engine applies them: the engine never creates a symlink and never follows one;
   a symlink found in a corpus is reported as its rule says.
+  Enforced by: none, a judgement at review.
 
 ## Rules
 
-- The user's instructions take precedence. Branches and worktrees follow PRINCIPLES.md; a
-  worktree that an agent tool creates keeps the name the tool gives it, since the tool names it,
-  and is deleted with its branch as soon as its work merges.
-- A worktree whose work stopped without merging is abandoned. It is reviewed at once: what is
-  worth keeping becomes a checklist item that states the condition of the worktree's removal,
-  and the rest is discarded; the worktree is then deleted with its branch. An abandoned worktree
-  is never left to wait, since nothing would tell anyone what it holds.
-- Parallel items run in separate worktrees, one item or one group of rulings each. A worktree
-  changes code, specifications and plans; the changelogs and the checklists are written only by
-  whoever merges into main, in the commit after the merge, so parallel work never conflicts in
-  them. A worktree branch is rebased onto main before it merges, and every check passes after
-  the rebase.
-- `make test` is the full suite: it runs the repository's node tests and `scripts/go-test.mjs`,
-  which provisions the case-sensitive folder some Go tests need (on macOS a Case-sensitive APFS
-  image under `var/`, on Windows `fsutil`, elsewhere a folder it probes) and runs `go test ./...`
-  with it. A bare `go test ./...` on a file system that folds case fails those tests by design
-  and names the variable they need. As PRINCIPLES.md rules, it runs once when every item of the
-  active checklist is done; while an item is developed, the checks that own what changed run:
-  `go test` of the changed packages and the changed node test files.
-- An instruction is first classified: a checklist item (work), the memory (what only the owner
-  and the agent need), AGENTS (a working guideline, kept here without duplication and never in
-  the checklist or the changelog), or a plain answer. Work is prioritized, the documents and the
-  checklist are updated, then the work runs. The current work is finished first; it is stopped
-  for a new instruction only on the owner's explicit request or a stated judgement that the new
-  work must come first — otherwise the instruction is added and taken in priority order.
-- A checklist is one file per plan: the work of one plan lives in one checklist file, and a
-  different plan gets its own file beside its plan in `docs/plans/` — `execution-checklist.md`
-  for the design plan, `<plan>-checklist.md` for any other. Every checklist file is a tracker of
-  `config/checklist.json`, its Korean pair holds the same item IDs and states, and item IDs are
-  unique across the files. Run `make documents-check` before changing an item state. Each
-  repository runs its own checklists: work in another repository is tracked there and referenced
-  here by its ID in a code span. Split sub-items rather than growing one giant unit.
-- A problem becomes a new checklist item; when it relates to an existing item it is that item's
-  sub-item by ID.
-- The states are `[ ]` waiting, `[~]` in progress, `[o]` done, `[!]` bypassed with `Cause:` and
-  `Retry:` on the item, `[-]` impossible with `Cause:`. `[o]` is terminal: a new issue related to a
-  done item spawns a suffixed item (`T8.0.14-1`) instead of reopening it. Parallel work is allowed;
-  keep the number of `[~]` items from growing without completed results: independent items may
-  run together, but starting new items while the started ones stay partial is refused —
-  completion comes before starting, so `[o]` keeps growing faster than `[~]`.
-- `[!]` is used only when the next item cannot proceed without it, with an explicit reason; a
-  bypass is not a completion. The item records its cause and its retry condition, and work
-  resumes without waiting for permission once the retry condition holds. An audit covers only
-  the `[!]` items, their causes and their retry conditions — never a rerun of unrelated tests.
-- An item becomes `[o]` in the commit that completes it, after its owning checks pass. That
-  commit also writes the changelog entry under `## Unreleased` in CHANGELOG.md and CHANGELOG.ko.md.
-  Uncommitted changes cover one item only; an unfinished item is never a reason to widen them by
-  adding another. Each feature is reviewed, self-tested and recorded before its commit.
-- A defect's checklist item records the observable criterion of correctness, and its RED case
-  is confirmed failing for the intended reason before the fix (PRINCIPLES.md, Verification).
-- The engine is a database, so its unit tests are dense: every grammar and constraint rule has at least one accepting and one rejecting case, table-driven, with its edge cases; every storage has P1/P2 golden fixtures covering every column type and both the NULL and the empty forms; parse and emit are fuzzed (`go test -fuzz`) with the golden fixtures as seeds, and a failing input the fuzzer finds stays as a regression case. An item that adds a rule is not done until these cases exist.
-- English documents are canonical. Every document has a `.ko.md` twin with the same information;
-  edit both in the same change, and a Korean-caught fix is ported to the English file before the
-  next `make documents-stamp`. A correction is a new commit with fresh stamps.
-- Commit messages are English `type(scope): Subject (#task)`: a subject of at most 50 characters,
-  capitalized, imperative, no trailing period; a blank line; a body wrapped near 72 characters
-  explaining what changed and why, not how; an optional footer after a blank line for references;
-  the types `feat`, `fix`, `docs`, `style`, `refactor`, `test`,
-  `chore`. Commit as `min-0-max <max@blue.tools>` without additional author trailers.
-- The shared tools are the vendored copy of polyspec/kit: `scripts/kit`, `tests/kit`, `kit.json`
-  and `.kit/kit.lock.json` change only in kit and reach this repository with
-  `make kit-sync KIT_TAG=<tag>`; `make kit-check` verifies them. A tool that kit lacks or gets
-  wrong is reported to kit, never copied or edited here.
-- Multi-platform is a hard requirement. No platform tricks: locks follow kit's holder-lock
-  precedent, crash safety comes from journal replay, and the simplest implementation that fully
-  satisfies the current requirements wins.
-- Korean documents write technical terms in English; the context alone is Korean. Code
-  comments and commit messages are written in English.
+- The shared tools are the package `@polyspec/kit`, a devDependency of the root `package.json` pinned to the asset URL of its
+  release with its integrity. The files of its `kit.copies` (`scripts/kit/kit-bootstrap.mk`, `scripts/kit/bootstrap/`, the
+  release workflow, `PRINCIPLES.md`, `config/layout.kit.yml` and the lint configuration) are copies that `make kit-sync`
+  writes from the installed package and `make kit-check` compares; they are changed in kit, never here. flowmark runs a kit
+  tool through its make target or `$(KIT)/<tool>.$(KIT_EXT)`, and takes a generic need from its ecosystem library declared
+  in its own `package.json`. A tool that kit lacks or gets wrong is reported to kit, never copied or edited here.
+  Enforced by: `make kit-check`
+- `make flowmark-test` is the full suite of the repository's own code: it runs the node tests of `tests/` and
+  `scripts/go-test.mjs`, which provisions the case-sensitive folder some Go tests need (on macOS a Case-sensitive APFS image
+  under `var/`, on Windows `fsutil`, elsewhere a folder it probes) and runs `go test ./...` with it in each Go module of the
+  repository (`packages/go`, `examples`, `tests/conformance/go`). A bare `go test ./...` on
+  a file system that folds case fails those tests by design and names the variable they need. The CI workflow runs the same
+  two commands on Linux, Windows and macOS.
+  Enforced by: `.github/workflows/test.yml`
+- The engine is a database, so its unit tests are dense: every grammar and constraint rule has at least one accepting and one
+  rejecting case, table-driven, with its edge cases; every storage has P1/P2 golden fixtures covering every column type and
+  both the NULL and the empty forms; parse and emit are fuzzed (`go test -fuzz`) with the golden fixtures as seeds, and a
+  failing input the fuzzer finds stays as a regression case. An item that adds a rule is not done until these cases exist.
+  Enforced by: none, a judgement at review.
+- Multi-platform is a hard requirement: the platform-specific code of the lock, the journal, the watch and the file system
+  runs on each platform of the CI matrix, and no platform trick stands in for a portable implementation; locks follow kit's
+  holder-lock precedent, and the simplest implementation that satisfies the current requirements wins.
+  Enforced by: `.github/workflows/test.yml`
+- Each repository runs its own checklists: work in another repository is tracked there and referenced here by its ID in a
+  code span, so that `make refs-check` reads no other repository's item as one of this repository.
+  Enforced by: `make refs-check`
+- Git files name no outside project that is not a dependency of flowmark; the polyspec repositories (kit, orm, hyper, crudui,
+  template and others) are internal libraries and may be cited.
+  Enforced by: none, a judgement at review.

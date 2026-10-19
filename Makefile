@@ -1,21 +1,33 @@
-# The flowmark repository: the design phase holds documents only; the kit targets come from the vendored kit.mk.
-include scripts/kit/kit.mk
+# The flowmark repository: the design phase holds documents only; the shared targets come from the installed @polyspec/kit.
+include scripts/kit/kit-bootstrap.mk
 
-.DEFAULT_GOAL := kit-test
+# The Go of the checkout, by its absolute path (kit-check: a recipe starts a tool by its absolute path, as NODE and ALINT of kit.mk do).
+GO := $(CURDIR)/var/tools/mise/shims/go
 
 .PHONY: refs-check
 refs-check: ## Check that every task ID a document names resolves to a checklist item; offline
-	node scripts/check-refs.mjs
+	$(NODE) scripts/check-refs.mts
 
-.PHONY: test
-test: ## Run the tests of the repository's own code and scripts; offline
-	node --test tests/*.test.mjs
-	node scripts/go-test.mjs
+# The repository's own tests. test, the task of kit, runs them as a prerequisite; the recipe of kit runs nothing more.
+.PHONY: flowmark-test
+flowmark-test: ## Run the tests of the repository's own code and scripts; offline
+	$(NODE) --test tests/*.test.mjs tests/*.test.mts
+	$(NODE) scripts/go-test.mjs
+
+test: flowmark-test
 
 .PHONY: slug-vectors
 slug-vectors: ## Record the heading ids GitHub, VS Code and GitLab render into store/testdata/slug; needs the network, gh, npm and cargo
-	node scripts/record-slugs.mjs
+	$(NODE) scripts/record-slugs.mjs
 
-.PHONY: build
-build: ## Build the executable that sidecar.json names
-	go build -o build/flowmark ./cmd/flowmark
+# The check of the commit-msg hook: the message MESSAGE against the commit rules of kit, and the item rules of the index.
+.PHONY: commit-msg-check
+commit-msg-check: ## Check the commit message MESSAGE and the index against the commit rules of kit; offline
+	$(NODE) $(KIT)/check-commits.mjs --message "$(MESSAGE)"
+
+# The executable that sidecar.json names. build, the task of kit, builds it as a prerequisite.
+.PHONY: flowmark-build
+flowmark-build: ## Build the executable that sidecar.json names
+	cd packages/go && $(GO) build -o $(CURDIR)/build/flowmark ./cmd/flowmark
+
+build: flowmark-build

@@ -1,0 +1,169 @@
+package store
+
+import (
+	"bytes"
+	"strings"
+	"testing"
+
+	"github.com/polyspec/flowmark/packages/go/catalog"
+	"github.com/polyspec/orm/packages/go/engine/dbspec"
+)
+
+// documentTarget is one document table the document fuzzer reads: its catalog, its
+// table and the linker of its corpus.
+type documentTarget struct {
+	cat   *catalog.Catalog
+	table string
+	lk    Linker
+}
+
+// documentTargets are the tables the document fuzzer reads, selected by a byte: the
+// fixture's items, people and milestones (a list, a table with a parent link and
+// sections, and a table with an order column), then the entries of the equivalence
+// corpora as a document list (target 3) and as a document table (target 4).
+func documentTargets(f testing.TB) []documentTarget {
+	fixture := loadDocumentFixture(f)
+	return []documentTarget{
+		{fixture, "items", documentLinker()},
+		{fixture, "people", documentLinker()},
+		{fixture, "milestones", documentLinker()},
+		{equivCatalog(f, equivDocument), "entries", equivDocLinker("entries.flowmark.md")},
+		{equivCatalog(f, equivDocumentTable), "entries", equivDocLinker("entries.flowmark.md")},
+	}
+}
+
+// fuzzDocumentSeeds are the golden documents and their noncanonical spellings.
+func fuzzDocumentSeeds(f *testing.F) {
+	seed := func(i uint8, b []byte) {
+		f.Add(i, b)
+		f.Add(i, bytes.ReplaceAll(b, []byte("\n"), []byte("\r\n")))
+		f.Add(i, bytes.TrimSuffix(b, []byte("\n")))
+	}
+	for i, table := range []string{"items", "people", "milestones"} {
+		seed(uint8(i), readDocumentGolden(f, table))
+	}
+	seed(3, readEquiv(f, equivDocument, "entries.flowmark.md"))
+	seed(4, readEquiv(f, equivDocumentTable, "entries.flowmark.md"))
+	f.Add(uint8(0), []byte(itemsOf()))
+	f.Add(uint8(0), []byte(itemsOf("- [ ] T1 Plan done:false note:\"a b\"", "  - [~] T2 Child done:false", "", "## items row T2", "", "Body.")))
+	f.Add(uint8(0), []byte(itemsOf("- [ ] T1 Set owner\\: review done:false", "- [x] T2 Plan done:true", "", "## items row T2", "", "### evidence", "", "a|b")))
+	f.Add(uint8(0), []byte(itemsOf(`- [ ] T1 Plan done:false note:"a\"b" weight:-3`)))
+	f.Add(uint8(0), []byte(itemsOf("- [ ] T1 Plan done:false", "", "## items row T1", "", "### cause")))
+	f.Add(uint8(0), []byte(itemsOf("- [ ] T1 Plan done:false  note:\"x\"")))
+	f.Add(uint8(0), []byte(itemsOf("- [ ] T1 Plan done:false\tnote:\"x\"")))
+	f.Add(uint8(0), []byte(itemsOf("- [ ] T1 Plan\tdone:false")))
+	f.Add(uint8(0), []byte(itemsOf("- [ ] T1 ​Plan done:false")))
+	f.Add(uint8(0), []byte(itemsOf("- [ ] T1 Plan done:false note:a b")))
+	f.Add(uint8(0), []byte(itemsOf("- [ ] T1 Plan done:false note:\" a\"")))
+	f.Add(uint8(0), []byte(itemsOf("- [ ] T1 Plan done:false", "", "## items row T1", "", "A.", "", "## items row T1", "", "B.")))
+	f.Add(uint8(0), []byte(itemsOf("- [ ] T1 Plan done:false", "", "## items row T1", "", "### item_history", "", "x")))
+	f.Add(uint8(0), []byte(itemsOf("- [ ] T1 Plan done:false", "", "## items row T1", "", "### item_history")))
+	f.Add(uint8(0), []byte(itemsOf("- [ ] T1 Plan done:false", "", "## items row T1", "", "### item_notes", "- N1 Spec item:T1 tag:x", "  - N2 Child", "", "#### item_notes row N1", "", "Body.")))
+	f.Add(uint8(0), []byte(itemsOf("- [ ] T1 Plan done:false", "", "## items row T1", "", "### item_history", "| id | from_state | to_state | at |", "| --- | --- | --- | --- |", "| 1 | waiting | doing | 2026-10-01 08:00:00.000000 |", "", "#### item_history row 1", "", "##### evidence", "", "a|b")))
+	f.Add(uint8(0), []byte(checkedOf("- [~] C1 Plan done:false", "  - [x] C2 Child done:true", "", "#### item_checks row C1", "", "##### item_check_history", "| id | from_state | to_state | at |", "| --- | --- | --- | --- |", "| 1 | open | doing | 2026-10-01 08:00:00.000000 |")))
+	f.Add(uint8(0), []byte(checkedOf("- [x] C1 Plan done:true", "", "#### item_checks row C1", "", "##### evidence", "", "a|b")))
+	f.Add(uint8(0), []byte(checkedOf("- [ ] C1 Plan done:false weight:-3 note:\"a b\"", "- [~] C2 Two done:false")))
+	f.Add(uint8(0), []byte(checkedOf("- [ ] C1 Plan done:false", "  - [~] C2 Child done:false", "", "#### item_checks row C2", "", "Body.")))
+	f.Add(uint8(1), []byte(peopleOf(peopleHeader, peopleDelim, row("P1", "", "Ada", "", "true", "", "", "", "", "", "", "", "", ""), "", "## people row P1", "", "### bio", "", "Notes.")))
+	f.Add(uint8(1), []byte(peopleOf(peopleHeader, peopleDelim, row("P1", "", `"\q"`, "", "true", "", "", "", "", "", "", "", "", ""))))
+	f.Add(uint8(1), []byte(peopleOf(peopleHeader, peopleDelim, row("P1", "", "a \\| b", "", "true", "", "", "", "", "", "", "", "", ""), "", "## people row P1", "", "### bio", "", "x")))
+	f.Add(uint8(2), []byte(milestonesOf("| id | parent | title |", "| --- | --- | --- |", row("M1", "[M2](milestones.flowmark.md)", "A"), row("M2", "[M1](milestones.flowmark.md)", "B"))))
+}
+
+// FuzzParseDocument requires that a parse never panics, that a document with no
+// diagnostic writes back as itself (P1), and that a parsed document writes
+// bytes that parse back without a diagnostic and write the same bytes again (P2).
+func FuzzParseDocument(f *testing.F) {
+	fuzzDocumentSeeds(f)
+	targets := documentTargets(f)
+	f.Fuzz(func(t *testing.T, sel uint8, data []byte) {
+		target := targets[int(sel)%len(targets)]
+		cat, table, lk := target.cat, target.table, target.lk
+		rel := table + ".flowmark.md"
+		lay, err := docLayoutOf(cat, table)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rows, diags, err := ParseDocument(cat, table, rel, data, lk)
+		if err != nil {
+			t.Fatalf("parse of a document table refused: %v\ninput: %q", err, data)
+		}
+		if rows == nil {
+			if len(diags) == 0 {
+				t.Fatal("no rows and no diagnostic")
+			}
+			return
+		}
+		// Two rows with byte-for-byte equal keys are readable, but their table is
+		// unavailable to a write (DUPLICATE_KEY), so the emission is the read-side one.
+		out, rd, err := RenderDocument(cat, table, docPath(table), rows, lk)
+		if err != nil || len(rd) > 0 {
+			for _, d := range rd {
+				if d.Rule != RuleDuplicateKey {
+					t.Fatalf("a parsed document is refused on write: %v %+v\ninput: %q", err, rd, data)
+				}
+			}
+			var rf []Refusal
+			out, _, rf = renderDocument(lay, docPath(lay.table), rows, lk, false)
+			if len(rf) > 0 {
+				t.Fatalf("a parsed document is refused on the read-side emission: %+v\ninput: %q", rf, data)
+			}
+		}
+		back, pd, err := ParseDocument(cat, table, rel, out, lk)
+		if err != nil || len(pd) > 0 || back == nil {
+			t.Fatalf("emitted document does not parse cleanly: %v %+v\ninput: %q\nemit: %q", err, pd, data, out)
+		}
+		again, _, rf := renderDocument(lay, docPath(lay.table), back, lk, false)
+		if len(rf) > 0 || !bytes.Equal(again, out) {
+			t.Fatalf("P2 failed\ninput: %q\nemit: %q\nagain: %q", data, out, again)
+		}
+		if len(diags) == 0 && !bytes.Equal(out, data) {
+			t.Fatalf("P1 failed\ninput: %q\nemit: %q", data, out)
+		}
+	})
+}
+
+// FuzzRenderDocument requires that rows the writer accepts write a canonical
+// document that parses back to the same rows and writes the same bytes.
+func FuzzRenderDocument(f *testing.F) {
+	f.Add("Plan the parser", "Intro line.\n", `it's: "quoted" ünï`, "1", "P1", "true", "Proof.\n")
+	f.Add("Set owner: review", "", "", "2", "", "false", "")
+	f.Add("a \\#", "```\n## x\n```\n", "a\\\"b", "7", "", "true", "")
+	f.Add("Title", "", "a​", "1", "", "true", "")
+	f.Add("Title", "", "ㅤa͏", "1", "", "true", "")
+	f.Add(" a", "", "", "1", "", "true", "")
+	cat := loadDocumentFixture(f)
+	lk := documentLinker()
+	f.Fuzz(func(t *testing.T, title, body, note, position, owner, done, evidence string) {
+		doneText := strings.ToLower(done)
+		if doneText != "true" && doneText != "false" {
+			return
+		}
+		sc := map[string]*string{"state": sp("waiting"), "position": &position, "done": &doneText, "note": &note}
+		if owner != "" {
+			sc["owner"] = &owner
+		}
+		r := &Row{
+			Table: "items", Key: "T1", Title: title, Body: body, Scalars: sc,
+			Sections: map[string]*string{"evidence": &evidence}, Raw: map[string]string{}, Dangling: map[string]DanglingLink{},
+		}
+		out, diags, err := RenderDocument(cat, "items", docPath("items"), []*Row{r}, lk)
+		if err != nil || len(diags) > 0 {
+			return
+		}
+		back, pd, err := ParseDocument(cat, "items", "items.flowmark.md", out, lk)
+		if err != nil || len(pd) > 0 || len(back) != 1 {
+			t.Fatalf("written document does not parse cleanly: %v %+v\ntitle %q body %q\nout %q", err, pd, title, body, out)
+		}
+		if back[0].Title != title || back[0].Body != body || *back[0].Scalars["note"] != note {
+			t.Fatalf("row changed on the round trip: %+v", back[0])
+		}
+		if want, ok := readable(dbspec.Type{Kind: dbspec.TypeI32}, position); !ok || *back[0].Scalars["position"] != want {
+			t.Fatalf("position changed on the round trip: %q", position)
+		}
+		again, rd, err := RenderDocument(cat, "items", docPath("items"), back, lk)
+		if err != nil || len(rd) > 0 || !bytes.Equal(again, out) {
+			t.Fatalf("P2 failed: %q vs %q", again, out)
+		}
+	})
+}

@@ -3,7 +3,7 @@
 // without their posts). Every post is a row.insert of the operation layer, the way a face writes one, so the corpus
 // stays valid and canonical. The authors are the people the corpus holds, in turn.
 //
-//	go run ./examples/board/seed <corpus root> <year> <first month> <last month> <posts per month>
+//	go -C examples run ./board/seed <corpus root> <year> <first month> <last month> <posts per month>
 package main
 
 import (
@@ -14,7 +14,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/polyspec/flowmark/ops"
+	"github.com/polyspec/flowmark/packages/go/ops"
 )
 
 func main() {

@@ -464,7 +464,7 @@ identical targets as two files and keep the target sharing no file with the stag
 recorded states stay in the stage for a recovery refusal. The journal needs no hard link.
 
 Every hash of the journal and of recovery is the SHA-256 of the file's raw bytes, as 64
-lowercase hex digits (raw-file-bytes hashing, [design plan](../plans/design-plan.md)). Each step
+lowercase hex digits (raw-file-bytes hashing, [design plan](../plans/flowmark/plan.md)). Each step
 is published: `journal.prepared` after step 5, `journal.applied` after step 7,
 `journal.collected` after step 8, and on opening `journal.replayed` or `journal.discarded`.
 

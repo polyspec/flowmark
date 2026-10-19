@@ -2,3 +2,11 @@
 build/
 var/
 /flowmark
+# The root packages of package-lock.json, @polyspec/kit among them (make install-packages).
+/node_modules/
+/.results/
+# The go.work of each Go module that kit link writes (link asserts that Git ignores it). The root go.work lists the Go
+# modules of the repository and is tracked.
+go.work
+!/go.work
+go.work.sum
