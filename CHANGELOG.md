@@ -3,7 +3,6 @@
 
 ## Unreleased
 
-- T16: flowmark accepts ORM's parameterized root page limit: it pins the exact IR commit, validates the i64 parameters before reading the corpus, applies them to page rows, and keeps `paginate`'s count over every match. (T16)
 - flowmark follows the kit standard 0.0.54: the Go modules lie in `packages/go`, the plans in `docs/plans/<plan>/`, and the checks and gates are kit's (T15).
 - T12-7: other-repo task IDs in the prose are code spans, so make refs-check reads no orm item as a flowmark task.
 - flowmark takes orm 0.0.18: go.mod requires the Go module github.com/polyspec/orm/packages/go, and the engine imports take its packages/go/engine paths. (#T12-6)

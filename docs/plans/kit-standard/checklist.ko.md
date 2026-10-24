@@ -1,5 +1,5 @@
 <!-- doc-id: checklist-kit-standard -->
-<!-- source-sha256: 1691112e6564f6e88fce9f919e592ed7fb9acd29fb22a3c810d35ba8f17d38f5 -->
+<!-- source-sha256: 99533d1f0869fe2212d85e2fb9b7c2cea691c8c8622fd391572e698280f5ac84 -->
 # kit 표준 체크리스트
 
 | ID | Task | Deliverables | Verification | State |
