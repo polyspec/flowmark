@@ -3,11 +3,51 @@ package irexec
 import (
 	"bytes"
 	"encoding/json"
+	"strconv"
 	"strings"
 
 	"github.com/polyspec/orm/packages/go/engine/dbspec"
 	"github.com/polyspec/orm/packages/go/engine/ir"
 )
+
+const maxSafeInteger = 1<<53 - 1
+
+type pageLimit struct {
+	offset int64
+	count  int64
+}
+
+// parameterizedPageLimit reads the root page limit's i64 parameters before the executor
+// touches the corpus, as the wire contract requires.
+func parameterizedPageLimit(req *ir.Request, params []json.RawMessage) (*pageLimit, *Error) {
+	if req.Limit == nil || req.Limit.OffsetP == nil {
+		return nil, nil
+	}
+	offset, err := pageLimitParam(params, *req.Limit.OffsetP)
+	if err != nil {
+		return nil, err
+	}
+	count, err := pageLimitParam(params, *req.Limit.CountP)
+	if err != nil {
+		return nil, err
+	}
+	if offset < 0 || count <= 0 {
+		return nil, errf(codeIRInvalid, "limit offset>=0, count>0")
+	}
+	return &pageLimit{offset: offset, count: count}, nil
+}
+
+func pageLimitParam(params []json.RawMessage, index int) (int64, *Error) {
+	value, ok := decodeParam(params[index], dbspec.Type{Kind: dbspec.TypeI64})
+	if !ok || value.null {
+		return 0, errf(codeCodecEncode, "parameter %d is not a safe i64 page limit", index)
+	}
+	n, err := strconv.ParseInt(value.text, 10, 64)
+	if err != nil || n < -maxSafeInteger || n > maxSafeInteger {
+		return 0, errf(codeCodecEncode, "parameter %d is not a safe i64 page limit", index)
+	}
+	return n, nil
+}
 
 // checkParams checks every parameter of a request against each slot it fills before any
 // row is read (spec 60 The wire): a parameter that is not a value of the type of its slot

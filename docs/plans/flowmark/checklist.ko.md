@@ -1,5 +1,5 @@
 <!-- doc-id: execution-checklist -->
-<!-- source-sha256: 22e93bade76ff363ce9f784ef84289c9d2ddb4dc5b446e1a0a5677e83f5f11f1 -->
+<!-- source-sha256: 89b791268b1fdc0feb2b67d04fdbe07cd15573b93fd86bfcd4350115636df250 -->
 # 실행 체크리스트
 
 | ID | Task | Deliverables | Verification | State |
@@ -75,4 +75,4 @@
 | T13 | Git이 모든 commit message와 push를 검사한다: `config/checklist.json`이 hook `pre-push`와 `commit-msg`를 나열하고, `.githooks/commit-msg`가 message에 kit의 `check-commits.mjs`를 실행하며, `make hooks`가 `core.hooksPath`를 설정한다. 원인: hook이 설치된 적이 없고 `commit-msg`가 나열되지 않아, commit 5b983ec가 subject에 필요한 `(#task)` 없이 들어갔다. `check-commits.mjs`를 실행하면 그 subject를 거절한다 | `make hooks-check`가 통과하고, `config/commits.json`을 어기는 subject의 commit을 hook이 거절한다. | - | [o] |
 | T14 | restore가 request hook 뒤에 key를 고른다(orm protocol 1.5, orm `T140`). 원인: orm `T140`은 planner가 hook 뒤에 set 값과 and로 이은 eq 조건에서 restore의 key를 고르게 하고 model은 set만 보내는데, flowmark executor는 where에서만 key를 읽었다. 인수 조건: executor가 orm의 `ir.RestoreKey`에서 key, 조건, 새 값을 얻는다; docs/spec/60-dialect.md와 50-constraints.md(+ko)가 이를 적는다; irexec restore case가 set에서 온 key, unique key, 좁히는 조건, key 없음, `or`를 덮으며 red를 먼저 본다. 증거: 변경 전 새 irexec restore case는 executor가 where에서만 key를 읽어 실패했다; executor는 이제 orm의 ir.RestoreKey에서 key, 조건, 새 값을 얻으며, irexec, catalog, introspect, ops, store, sync, validate test가 orm v0.0.11에서 통과한다; orm의 markdown conformance가 이 executor로 restore case를 통과한다. | - | - | [o] |
 | T14-1 | release된 orm을 고정한다(T14에 이어). 원인: T14는 아직 어느 orm release에도 없는 orm의 `ir.RestoreKey`가 필요하므로, flowmark는 release된 orm tag를 받는다는 규칙과 달리 push된 orm `T140` commit을 pseudo-version으로 고정한다. 인수 조건: go.mod가 `T140`을 release하는 orm tag를 고정한다; 이것이 pseudo-version 고정의 제거 조건이다. 증거: orm `T140` commit의 pseudo-version 고정은 main에 오지 않았다: merge한 go.mod가 `T140`을 담은 release인 orm v0.0.11을 고정한다. | - | - | [o] |
-| T16 | markdown executor가 request parameter의 offset_p와 count_p로 canonical ORM root page limit을 받는다 | the ORM IR decoder dependency used by irexec, and native executor cases for a page with parameterized offset and count | `cd packages/go && go test ./irexec -run ^TestParameterizedPageLimit$` | [ ] |
+| T16 | markdown executor가 request parameter의 offset_p와 count_p로 canonical ORM root page limit을 받는다 | the ORM IR decoder dependency used by irexec, and native executor cases for a page with parameterized offset and count | `cd packages/go && go test ./irexec -run ^TestParameterizedPageLimit$` | [~] |

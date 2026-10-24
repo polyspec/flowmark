@@ -1,5 +1,5 @@
 <!-- doc-id: spec-dialect -->
-<!-- source-sha256: bf6980ac1ac66fb8e564056762a868a23ab291a08cb88e8085afd6f51c291ac4 -->
+<!-- source-sha256: 379cad8455d6f66faae4d3be5d620aa766f6b2b5f7ed4c89b5fa49fbc5c3a3fd -->
 # Capability table
 
 [English](60-dialect.md)
@@ -56,7 +56,7 @@ surface는 `CAPABILITY_UNSUPPORTED`, 그리고 orm의 규칙이 모든 backend�
 | `one`, `all`, `count`, `group_count`, `sum`, `avg` | memory의 corpus 위에서 지원. `group_count`는 NULL을 함께 묶는다 |
 | 정렬 | IR `order`는 column의 type으로 정렬하며, NULL은 오름차순에서 모든 값 앞에, 내림차순에서 모든 값 뒤에 오고, 동률은 저장 순서다 — `group_count`의 group과 `limit_per_parent`의 순위에도 같다. 없는 읽기는 저장 순서를 돌려준다([document model](20-document-model.ko.md#순서)). 근거: MySQL과 SQLite는 오름차순에서 NULL을 처음에, PostgreSQL은 마지막에 둔다. MySQL에는 `NULLS FIRST`가 없으므로, NULL을 가장 작게 두는 것이 세 database가 모방 없이 render하는 유일한 규칙이다 |
 | `group_by` | `count`와 `group_count`의 root에서만 유효하며, 그 밖에서는 `IR_INVALID`다. 그것이 있으면 `order` 항목은 group column, 그 column 함수, 또는 `random`이어야 한다(아니면 `IR_INVALID`) — orm의 규칙. 근거: 모든 행 읽기는 primary key를 고르므로, group된 행 읽기는 MySQL 1055, PostgreSQL 42803, SQLite에서는 임의의 행이며, group되지 않은 column으로의 정렬도 같다 |
-| `paginate` | 지원. 요청 하나가 일관된 corpus 하나를 읽는다 |
+| `paginate` | 지원. 요청 하나가 일관된 corpus 하나를 읽는다. canonical root page limit은 ORM의 `offset_p`, `count_p` i64 parameter를 사용하며 page 행에 적용하고 `count`는 여전히 모든 일치 행을 센다. 잘못된 parameter 값은 corpus를 읽기 전에 실패한다 |
 | `insert`(단일, 다중 행) | 지원. `identity`, `key_prefix`, `order` column은 executor가 할당하며 생략할 수 있다. default는 명시적으로 쓴다. insert는 값이나 NULL로 배정한다 — `plus_p`와 `minus_p`는 거기서 `IR_INVALID`이고 `on_duplicate`에서는 유효하다(orm의 규칙). 근거: MySQL은 그런 배정을 default에서 계산하고, PostgreSQL과 SQLite는 거절한다 |
 | `update` | 지원. 읽은 뒤 바뀐 대상은 덮어쓰지 않고 `WRITE_CONFLICT`로 실패한다. primary key나 identity column의 배정은 `IR_INVALID`다([document model](20-document-model.ko.md#key)) |
 | `delete`, `restore` | 지원. `restore`는 SQL 형태를 지키며(soft delete column을 비우고, 지운 동안 unique key를 유지), 그 key는 request hook 뒤에 orm의 `ir.RestoreKey`(orm protocol 1.5)가 set 값과 `and`로 이은 `eq` 조건에서 고르므로, hook의 조건은 update를 좁히듯 restore를 좁힌다. 참조되는 행의 delete는 같은 delete가 참조하는 행을 지우더라도 `FOREIGN_KEY`([constraints](50-constraints.ko.md#key와-참조)). primary key, identity, soft delete column을 배정하는 `restore`는 `IR_INVALID`다 |

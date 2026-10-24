@@ -28,6 +28,8 @@ github.com/polyspec/ordered-json/packages/go v0.0.9 h1:QbHcaIwJRQIPffpggSQ79ZUyB
 github.com/polyspec/ordered-json/packages/go v0.0.9/go.mod h1:vPlZlrsbbkCqEr+B4LinIPKh7amgIkHj8xGKu9ZiKPg=
 github.com/polyspec/orm/packages/go v0.0.18 h1:CHkw8qiVz6KPNLXLxjxO1pGyVeKyMh2TRRZfn6wc9DI=
 github.com/polyspec/orm/packages/go v0.0.18/go.mod h1:dfdIIDtbljpMYUVRZjJPaQ/a4mtms1Y2cM19tmWbcRE=
+github.com/polyspec/orm/packages/go v0.0.19-0.20261024061702-5fb006f263ca h1:idyTbY/pWRLhnG4gietlEbVA6nwSA6No5f9afeTfNIU=
+github.com/polyspec/orm/packages/go v0.0.19-0.20261024061702-5fb006f263ca/go.mod h1:dfdIIDtbljpMYUVRZjJPaQ/a4mtms1Y2cM19tmWbcRE=
 github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec h1:W09IVJc94icq4NjY3clb7Lk8O1qJ8BdBEF8z0ibU0rE=
 github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec/go.mod h1:qqbHyh8v60DhA7CoWK5oRCqLrMHRGoxYCSS9EjAz6Eo=
 go.yaml.in/yaml/v3 v3.0.5 h1:N6y/pJk8buWs9NY5ERU2HSMfm+IuD/OtfdAnq6kESPw=

@@ -59,6 +59,7 @@ type message struct {
 type call struct {
 	req    *ir.Request
 	params []json.RawMessage
+	page   *pageLimit
 	now    time.Time
 }
 
@@ -100,12 +101,16 @@ func (e *Executor) decode(b []byte, orm bool) (*call, *Error) {
 			return nil, err
 		}
 	}
+	page, pageErr := parameterizedPageLimit(req, m.Params)
+	if pageErr != nil {
+		return nil, pageErr
+	}
 	now, ok := datetimeOfWire(m.Now, 6)
 	if !ok || now.null {
 		return nil, errf(codeIRInvalid, "now %q is not a datetime in the form YYYY-MM-DD HH:MM:SS.ffffff", m.Now)
 	}
 	tm, _ := parseDatetime(now.text)
-	return &call{req: req, params: m.Params, now: tm}, nil
+	return &call{req: req, params: m.Params, page: page, now: tm}, nil
 }
 
 // IsWrite reports whether the request message msg holds a write — insert, update,

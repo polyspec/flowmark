@@ -401,7 +401,14 @@ func (r *reader) selectRows(q *ir.Query, one bool) ([]*Row, *Error) {
 			envs = envs[:1]
 		}
 	case q.Limit != nil:
-		envs = limitEnvs(envs, q.Limit.Offset, q.Limit.Count)
+		if q.Limit.OffsetP != nil {
+			if r.cl.page == nil {
+				return nil, errf(codeInternal, "parameterized page limit was not decoded")
+			}
+			envs = limitPage(envs, *r.cl.page)
+		} else {
+			envs = limitEnvs(envs, q.Limit.Offset, q.Limit.Count)
+		}
 	}
 	return r.assemble(s, envs)
 }
@@ -416,6 +423,19 @@ func limitEnvs(envs []*env, offset, count int) []*env {
 		end = len(envs)
 	}
 	return envs[offset:end]
+}
+
+func limitPage(envs []*env, limit pageLimit) []*env {
+	length := int64(len(envs))
+	if limit.offset >= length {
+		return nil
+	}
+	start := int(limit.offset)
+	remaining := length - limit.offset
+	if limit.count >= remaining {
+		return envs[start:]
+	}
+	return envs[start : start+int(limit.count)]
 }
 
 // built is a row of a statement as built: its env and the row of each join path.

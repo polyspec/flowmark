@@ -82,6 +82,34 @@ func TestReadKinds(t *testing.T) {
 	})
 }
 
+// TestParameterizedPageLimit accepts the ORM's canonical root page limit (PRT-78).
+func TestParameterizedPageLimit(t *testing.T) {
+	f := baseFixture(t)
+	f.want(f.msg("paginate", "items", map[string]any{
+		"columns": none,
+		"limit":   map[string]any{"offset_p": 0, "count_p": 1},
+	}, 1, 2), `{"rows":[{"id":"T2","parent":"T1","owner":null},{"id":"T3","parent":null,"owner":null}],"count":4}`)
+	for _, c := range []struct {
+		name   string
+		offset any
+		count  any
+		code   string
+	}{
+		{"60#the-wire: NULL page offset", nil, 1, "CODEC_ENCODE"},
+		{"60#the-wire: fractional page count", 0, 1.5, "CODEC_ENCODE"},
+		{"60#the-wire: page offset outside the safe integer range", int64(1 << 53), 1, "CODEC_ENCODE"},
+		{"protocol: negative page offset", -1, 1, "IR_INVALID"},
+		{"protocol: zero page count", 0, 0, "IR_INVALID"},
+	} {
+		f.sub(t, c.name, func(f *fixture) {
+			f.fails(f.msg("paginate", "items", map[string]any{
+				"columns": none,
+				"limit":   map[string]any{"offset_p": 0, "count_p": 1},
+			}, c.offset, c.count), c.code)
+		})
+	}
+}
+
 // TestReadRejects pins the refusals of the read kinds.
 func TestReadRejects(t *testing.T) {
 	f := baseFixture(t)
