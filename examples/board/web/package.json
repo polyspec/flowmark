@@ -8,25 +8,25 @@
     "node": ">=26"
   },
   "dependencies": {
-    "@polyspec/hyper-client": "file:../../../../polyspec/hyper/packages/hyper-client",
+    "@polyspec/hyper-client": "https://github.com/polyspec/hyper/releases/download/v0.0.18/polyspec-hyper-client-npm-0.0.18.tgz",
     "htmx.org": "4.0.0",
-    "@polyspec/template": "https://github.com/polyspec/template/releases/download/v0.0.6/polyspec-template-npm-0.0.6.tgz",
-    "@polyspec/hyper-server": "file:../../../../polyspec/hyper/packages/hyper-server-node",
-    "@polyspec/orm": "file:../../../../polyspec/orm/packages/orm-npm",
-    "@polyspec/ordered-json": "https://github.com/polyspec/ordered-json/releases/download/v0.0.8/polyspec-ordered-json-npm-0.0.8.tgz",
-    "@polyspec/crudui-generator-core": "file:../../../../polyspec/crudui/packages/generator-core",
-    "@polyspec/crudui-generator-html": "file:../../../../polyspec/crudui/packages/generator-html",
-    "@polyspec/crudui-validator": "file:../../../../polyspec/crudui/packages/validator-ts"
+    "@polyspec/template": "https://github.com/polyspec/template/releases/download/v0.0.11/polyspec-template-npm-0.0.11.tgz",
+    "@polyspec/hyper-server": "https://github.com/polyspec/hyper/releases/download/v0.0.18/polyspec-hyper-server-npm-0.0.18.tgz",
+    "@polyspec/orm": "https://github.com/polyspec/orm/releases/download/v0.0.18/polyspec-orm-npm-0.0.18.tgz",
+    "@polyspec/ordered-json": "https://github.com/polyspec/ordered-json/releases/download/v0.0.9/polyspec-ordered-json-npm-0.0.9.tgz",
+    "@polyspec/crudui-generator-core": "https://github.com/polyspec/crudui/releases/download/v0.0.7/polyspec-crudui-generator-core-npm-0.0.7.tgz",
+    "@polyspec/crudui-generator-html": "https://github.com/polyspec/crudui/releases/download/v0.0.7/polyspec-crudui-generator-html-npm-0.0.7.tgz",
+    "@polyspec/crudui-validator": "https://github.com/polyspec/crudui/releases/download/v0.0.7/polyspec-crudui-validator-npm-0.0.7.tgz"
   },
   "overrides": {
-    "@polyspec/hyper-client": "file:../../../../polyspec/hyper/packages/hyper-client",
-    "@polyspec/template": "https://github.com/polyspec/template/releases/download/v0.0.6/polyspec-template-npm-0.0.6.tgz",
-    "@polyspec/hyper-server": "file:../../../../polyspec/hyper/packages/hyper-server-node",
-    "@polyspec/orm": "file:../../../../polyspec/orm/packages/orm-npm",
-    "@polyspec/ordered-json": "https://github.com/polyspec/ordered-json/releases/download/v0.0.8/polyspec-ordered-json-npm-0.0.8.tgz",
-    "@polyspec/crudui-generator-core": "file:../../../../polyspec/crudui/packages/generator-core",
-    "@polyspec/crudui-generator-html": "file:../../../../polyspec/crudui/packages/generator-html",
-    "@polyspec/crudui-validator": "file:../../../../polyspec/crudui/packages/validator-ts"
+    "@polyspec/hyper-client": "https://github.com/polyspec/hyper/releases/download/v0.0.18/polyspec-hyper-client-npm-0.0.18.tgz",
+    "@polyspec/template": "https://github.com/polyspec/template/releases/download/v0.0.11/polyspec-template-npm-0.0.11.tgz",
+    "@polyspec/hyper-server": "https://github.com/polyspec/hyper/releases/download/v0.0.18/polyspec-hyper-server-npm-0.0.18.tgz",
+    "@polyspec/orm": "https://github.com/polyspec/orm/releases/download/v0.0.18/polyspec-orm-npm-0.0.18.tgz",
+    "@polyspec/ordered-json": "https://github.com/polyspec/ordered-json/releases/download/v0.0.9/polyspec-ordered-json-npm-0.0.9.tgz",
+    "@polyspec/crudui-generator-core": "https://github.com/polyspec/crudui/releases/download/v0.0.7/polyspec-crudui-generator-core-npm-0.0.7.tgz",
+    "@polyspec/crudui-generator-html": "https://github.com/polyspec/crudui/releases/download/v0.0.7/polyspec-crudui-generator-html-npm-0.0.7.tgz",
+    "@polyspec/crudui-validator": "https://github.com/polyspec/crudui/releases/download/v0.0.7/polyspec-crudui-validator-npm-0.0.7.tgz"
   },
   "devDependencies": {
     "@types/node": "26.6.5",

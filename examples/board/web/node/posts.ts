@@ -1,7 +1,7 @@
 // Stores board posts in a flowmark corpus, which orm reaches through the DSN `markdown://`, as src/Posts.php does.
 // The interface is that of hyper's board example, with promises since orm's client is asynchronous: an id is the key
 // of the post (`P1`), and a creation time is Unix seconds, read from the UTC datetime of the column.
-import { OrmError, type Db } from '@polyspec/orm';
+import type { Db } from '@polyspec/orm';
 import { People, Posts as PostModel } from './model/models.js';
 
 export interface PostRow {
@@ -13,6 +13,18 @@ export interface PostRow {
 
 export interface Post extends PostRow {
   body: string;
+}
+
+/** The name of the author that a row of posts joined with its person holds; the join of a post always holds it. */
+function authorName(row: Record<string, unknown>): string {
+  const person = row.people_model;
+  if (typeof person === 'object' && person !== null && 'name' in person) return String(person.name);
+  throw new Error(`the post ${String(row.id)} holds no joined author name`);
+}
+
+/** Writes Unix seconds as the `YYYY-MM-DD HH:MM:SS` UTC datetime of a column. */
+function datetime(seconds: number): string {
+  return new Date(seconds * 1000).toISOString().slice(0, 19).replace('T', ' ');
 }
 
 /** Reads the Unix seconds of a datetime column value that is `YYYY-MM-DD HH:MM:SS` in UTC. */
@@ -49,7 +61,7 @@ export class Posts {
       items = (await query.orderByTitleAsc().orderByIdAsc().getsPage(page, perPage)).items.toArray();
     } else if (sort === 'author') {
       items = (await query.orderByCreatedDesc().orderByIdDesc().gets()).toArray();
-      const nameOf = (row: Record<string, unknown>): string => String((row.people_model as Record<string, unknown>).name);
+      const nameOf = authorName;
       items.sort((a, b) => nameOf(a) < nameOf(b) ? -1 : nameOf(a) > nameOf(b) ? 1 : String(a.id) < String(b.id) ? -1 : 1);
       items = items.slice((page - 1) * perPage, page * perPage);
     } else {
@@ -59,28 +71,26 @@ export class Posts {
     return result.items.toArray().map((row: Record<string, unknown>) => ({
       id: String(row.id),
       title: String(row.title),
-      author: String((row.people_model as Record<string, unknown>).name),
+      author: authorName(row),
       created_at: seconds(row.created),
     }));
   }
 
   // Returns one post, or null when it does not exist.
   async find(id: string): Promise<Post | null> {
-    try {
-      const row = (await new PostModel().connect(this.db)
-        .joinAuthorWithId(new People().removeAllColumns().addColumnName())
-        .id(id).get()).toArray() as Record<string, unknown>;
-      return {
-        id: String(row.id),
-        title: String(row.title),
-        author: String((row.people_model as Record<string, unknown>).name),
-        body: String(row.body),
-        created_at: seconds(row.created),
-      };
-    } catch (error) {
-      if (error instanceof OrmError && error.code === 'NO_ROWS') return null;
-      throw error;
-    }
+    // orm's get() is null when no row matches.
+    const found = await new PostModel().connect(this.db)
+      .joinAuthorWithId(new People().removeAllColumns().addColumnName())
+      .id(id).get();
+    if (found === null) return null;
+    const row = found.toArray();
+    return {
+      id: String(row.id),
+      title: String(row.title),
+      author: authorName(row),
+      body: String(row.body),
+      created_at: seconds(row.created),
+    };
   }
 
   // Returns the number of posts.
@@ -96,15 +106,9 @@ export class Posts {
   // Creates a post by the named author, who is created when the corpus has no person of that name, and returns its id.
   async create(title: string, author: string, body: string): Promise<string> {
     return this.db.transaction(async () => {
-      let authorId: string;
-      try {
-        authorId = (await new People().connect(this.db).name(author).get()).getId();
-      } catch (error) {
-        if (!(error instanceof OrmError) || error.code !== 'NO_ROWS') throw error;
-        authorId = (await new People().connect(this.db).setName(author).create()).getId();
-      }
-      const created = new Date(this.now() * 1000);
-      const post = await new PostModel().connect(this.db).setTitle(title).setAuthor(authorId).setBody(body).setCreated(created).create();
+      const person = await new People().connect(this.db).name(author).get();
+      const authorId = person === null ? (await new People().connect(this.db).setName(author).create()).getId() : person.getId();
+      const post = await new PostModel().connect(this.db).setTitle(title).setAuthor(authorId).setBody(body).setCreated(datetime(this.now())).create();
       return post.getId();
     });
   }

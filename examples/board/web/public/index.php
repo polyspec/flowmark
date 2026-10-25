@@ -40,6 +40,9 @@ $app = App::open(
     https: getenv('BOARD_HTTPS') === '1',
     frameAncestors: "'self'",
 );
-$app->bind(Posts::class, fn (): Posts => new Posts(Flowmark\Board\Model\connect($dsn, new Config()), fn (): int => time()));
+$app->bind(
+    Posts::class,
+    fn (): Posts => new Posts(Flowmark\Board\Model\connect($dsn, new Config()), fn (): int => time()),
+);
 $app->bind(Assets::class, fn (): Assets => Assets::fromManifest(__DIR__ . '/../build/manifest.json'));
 $app->run();

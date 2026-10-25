@@ -3,5 +3,3 @@
 /build/
 /public/assets/hyper-*.js
 /public/assets/templates/
-/composer.lock
-/package-lock.json

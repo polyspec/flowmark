@@ -468,6 +468,17 @@ export function headingIdAttrs(html) {
  * The named character references that GitHub decodes inside a raw HTML heading, with the text each renders: every name
  * of the entities package the engine reads (internal/htmlentity), in its own raw <h2>.
  */
+// The suppression line of slugify.ts of VS Code and the reason that the suppression check of kit asks of it; the recorded
+// file keeps the source byte-identical but for this note.
+const SLUGIFY_SUPPRESSION = '// eslint-disable-next-line no-misleading-character-class\n';
+const SLUGIFY_REASON = '// eslint-disable-next-line no-misleading-character-class -- vendored VS Code source, kept byte-identical except this note\n';
+
+// withReason is slugify.ts with the reason on its suppression line; a release without that line fails the recording.
+function withReason(slugify) {
+  if (!slugify.includes(SLUGIFY_SUPPRESSION)) throw new Error('slugify.ts of VS Code holds no eslint-disable-next-line no-misleading-character-class line');
+  return slugify.replace(SLUGIFY_SUPPRESSION, SLUGIFY_REASON);
+}
+
 function githubEntities() {
   const names = Object.keys(JSON.parse(readFileSync(path.join(repositoryRoot, 'internal', 'htmlentity', 'testdata', 'entities-3.0.1.json'), 'utf8')));
   const html = githubRender(names.map((n, i) => `<h2>e${i}x&${n};x</h2>`).join('\n\n') + '\n');
@@ -820,7 +831,7 @@ async function recordVSCode() {
     };
     writeFileSync(path.join(vectorDir, 'vscode-headings.json'), JSON.stringify(file, null, 1) + '\n');
     // The slugify.ts that was run, whose expression TestVSRemovalIsVSCodeRegex reads, with VS Code's MIT license.
-    writeFileSync(path.join(vectorDir, 'vscode-slugify.ts'), slugify);
+    writeFileSync(path.join(vectorDir, 'vscode-slugify.ts'), withReason(slugify));
     writeFileSync(path.join(vectorDir, 'vscode-LICENSE.txt'), vscodeFile('LICENSE.txt', tag));
   } finally {
     rmSync(work, { recursive: true, force: true });

@@ -5,6 +5,9 @@ include ../kit/scripts/kit/kit-bootstrap.mk
 # The suite of the repository: the gates of kit and its own checks and tests.
 CHECK_TARGETS := kit-check toolchain-check layout-check docs-check rules-check owner-validate rebuild-check language-check test-markers-check duplication-check dependency-policy-check parity-declarations-check parity-check commits-check link-state-check bypass-check suppression-check divergence-check lint-ts lint-php lint-go refs-check flowmark-test
 
+# The Composer of mise.toml, by its shim, which installs the PHP packages of the board example.
+COMPOSER := $(KIT_TOOLS)/mise/shims/composer
+
 # The Go of the checkout, by its absolute path (kit-check: a recipe starts a tool by its absolute path, as NODE and ALINT of kit.mk do).
 GO := $(CURDIR)/var/tools/mise/shims/go
 
@@ -23,6 +26,15 @@ ifeq ($(shell uname -s),Darwin)
 endif
 
 test: flowmark-test
+
+# The board example installs its Composer and npm packages, the polyspec ones as links to the sibling checkouts, from their
+# locks; make install runs it after the bootstrap of kit (kit K246-2).
+.PHONY: flowmark-install
+flowmark-install: install-kit ## Install the Composer and npm packages of the board example from their locks; ONLINE
+	$(ONLINE) $(COMPOSER) install --no-interaction --working-dir=examples/board/web
+	cd examples/board/web && $(ONLINE) $(NPM) ci
+
+install: flowmark-install
 
 .PHONY: slug-vectors
 slug-vectors: ## Record the heading ids GitHub, VS Code and GitLab render into store/testdata/slug; needs the network, gh, npm and cargo

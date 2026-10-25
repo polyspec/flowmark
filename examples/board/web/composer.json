@@ -8,22 +8,25 @@
             "type": "package",
             "package": {
                 "name": "polyspec/ordered-json",
-                "version": "0.0.8",
+                "version": "0.0.9",
                 "type": "library",
                 "require": {
-                    "php": ">=8.2",
+                    "php": ">=8.5",
                     "ext-json": "*",
                     "ext-pcre": "*"
                 },
                 "autoload": {
+                    "psr-4": {
+                        "Polyspec\\OrderedJson\\": "src/"
+                    },
                     "files": [
                         "src/OrderedJson.php"
                     ]
                 },
                 "dist": {
                     "type": "zip",
-                    "url": "https://github.com/polyspec/ordered-json/releases/download/v0.0.8/polyspec-ordered-json-php-0.0.8.zip",
-                    "shasum": "6fa67fff99b422f42ed7ab51ac470cadf8ade699"
+                    "url": "https://github.com/polyspec/ordered-json/releases/download/v0.0.9/polyspec-ordered-json-php-0.0.9.zip",
+                    "shasum": "5f93a2c0df5967163801cb3d4d087e44834bb456"
                 }
             }
         },
@@ -31,25 +34,23 @@
             "type": "package",
             "package": {
                 "name": "polyspec/template",
-                "version": "0.0.5",
-                "description": "Template language implementation: lexer, parser, renderer, functions and CLI",
+                "version": "0.0.11",
                 "type": "library",
-                "license": "MIT",
                 "require": {
-                    "php": "^8.2",
-                    "ext-mbstring": "*"
+                    "php": ">=8.5",
+                    "ext-mbstring": "*",
+                    "opis/json-schema": "^2.6",
+                    "symfony/console": "^8.1"
                 },
                 "autoload": {
                     "psr-4": {
                         "Polyspec\\Template\\": "src/"
                     }
                 },
-                "bin": [
-                    "bin/template.php"
-                ],
                 "dist": {
                     "type": "zip",
-                    "url": "https://github.com/polyspec/template/releases/download/v0.0.5/polyspec-template-php-0.0.5.zip"
+                    "url": "https://github.com/polyspec/template/releases/download/v0.0.11/polyspec-template-php-0.0.11.zip",
+                    "shasum": "2b5e993c1d53c9869ea4c4ab50f02835d06c9e22"
                 }
             }
         },
@@ -57,13 +58,11 @@
             "type": "package",
             "package": {
                 "name": "polyspec/hyper-server",
-                "version": "0.0.13",
-                "description": "Server side of the region protocol: routes, actions and region JSON for template language layouts",
+                "version": "0.0.18",
                 "type": "library",
-                "license": "MIT",
                 "require": {
-                    "php": "^8.2",
-                    "polyspec/template": "0.0.5"
+                    "php": ">=8.5",
+                    "polyspec/template": "0.0.11"
                 },
                 "autoload": {
                     "psr-4": {
@@ -72,7 +71,8 @@
                 },
                 "dist": {
                     "type": "zip",
-                    "url": "https://github.com/polyspec/hyper/releases/download/v0.0.13/polyspec-hyper-server-php-0.0.13.zip"
+                    "url": "https://github.com/polyspec/hyper/releases/download/v0.0.18/polyspec-hyper-server-php-0.0.18.zip",
+                    "shasum": "50566c5820f6a4b1b8ca9f026e0bc6071357021e"
                 }
             }
         },
@@ -80,57 +80,28 @@
             "type": "package",
             "package": {
                 "name": "polyspec/orm",
-                "version": "0.0.9",
-                "description": "PHP client of the orm model syntax: generated models over PDO with SQL assembled in process",
+                "version": "0.0.18",
                 "type": "library",
-                "license": "MIT",
                 "require": {
-                    "php": ">=8.4",
-                    "polyspec/ordered-json": "0.0.8",
+                    "php": ">=8.5",
+                    "composer-runtime-api": "^2.2",
+                    "polyspec/ordered-json": "0.0.9",
                     "ext-pdo": "*",
                     "ext-json": "*",
                     "ext-zlib": "*",
-                    "symfony/yaml": "^7.4"
+                    "nikic/php-parser": "^5.9.0",
+                    "purrphp/yaml": "^1.0",
+                    "symfony/yaml": "^8.1"
                 },
                 "autoload": {
                     "psr-4": {
                         "Polyspec\\Orm\\": "src/"
-                    },
-                    "classmap": [
-                        "src/"
-                    ]
-                },
-                "bin": [
-                    "bin/orm-gen"
-                ],
-                "dist": {
-                    "type": "zip",
-                    "url": "https://github.com/polyspec/orm/releases/download/v0.0.9/polyspec-orm-php-0.0.9.zip"
-                }
-            }
-        },
-        {
-            "type": "package",
-            "package": {
-                "name": "polyspec/crudui-generator",
-                "version": "0.0.5",
-                "description": "Form templates, editable data and HTML rendering for CRUDUI",
-                "type": "library",
-                "license": "MIT",
-                "require": {
-                    "php": "^8.4",
-                    "ext-mbstring": "*",
-                    "polyspec/crudui-validator": "0.0.5"
-                },
-                "autoload": {
-                    "psr-4": {
-                        "Polyspec\\Crudui\\Generator\\": "src/Internal/",
-                        "Polyspec\\Crudui\\": "src/"
                     }
                 },
                 "dist": {
                     "type": "zip",
-                    "url": "https://github.com/polyspec/crudui/releases/download/v0.0.5/polyspec-crudui-generator-php-0.0.5.zip"
+                    "url": "https://github.com/polyspec/orm/releases/download/v0.0.18/polyspec-orm-php-0.0.18.zip",
+                    "shasum": "7aff6a97d7ca201839d362c051acdc86779677de"
                 }
             }
         },
@@ -138,12 +109,10 @@
             "type": "package",
             "package": {
                 "name": "polyspec/crudui-validator",
-                "version": "0.0.5",
-                "description": "PHP validator for crudui system - validates form data against YAML specifications",
+                "version": "0.0.7",
                 "type": "library",
-                "license": "MIT",
                 "require": {
-                    "php": "^8.4"
+                    "php": ">=8.5"
                 },
                 "autoload": {
                     "psr-4": {
@@ -153,17 +122,53 @@
                 },
                 "dist": {
                     "type": "zip",
-                    "url": "https://github.com/polyspec/crudui/releases/download/v0.0.5/polyspec-crudui-validator-php-0.0.5.zip"
+                    "url": "https://github.com/polyspec/crudui/releases/download/v0.0.7/polyspec-crudui-validator-php-0.0.7.zip",
+                    "shasum": "b671b5275ffecf59794a47c06552ae66683e075a"
                 }
             }
+        },
+        {
+            "type": "package",
+            "package": {
+                "name": "polyspec/crudui-generator",
+                "version": "0.0.7",
+                "type": "library",
+                "require": {
+                    "php": ">=8.5",
+                    "php-64bit": "^8.2",
+                    "ext-mbstring": "*",
+                    "polyspec/crudui-validator": "0.0.7"
+                },
+                "autoload": {
+                    "psr-4": {
+                        "Polyspec\\Crudui\\Generator\\": "src/Internal/",
+                        "Polyspec\\Crudui\\": "src/"
+                    }
+                },
+                "dist": {
+                    "type": "zip",
+                    "url": "https://github.com/polyspec/crudui/releases/download/v0.0.7/polyspec-crudui-generator-php-0.0.7.zip",
+                    "shasum": "4c1f1255fb97fd5670f3fa30f9086f93efcb08c6"
+                }
+            }
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/min-0-max/yaml",
+            "no-api": true
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/min-0-max/json-schema",
+            "no-api": true
         }
     ],
     "require": {
-        "php": ">=8.4",
-        "polyspec/hyper-server": "0.0.13",
-        "polyspec/orm": "0.0.9",
-        "polyspec/template": "0.0.5",
-        "polyspec/crudui-generator": "0.0.5"
+        "php": ">=8.5",
+        "polyspec/crudui-generator": "0.0.7",
+        "polyspec/hyper-server": "0.0.18",
+        "polyspec/orm": "0.0.18",
+        "polyspec/template": "0.0.11"
     },
     "autoload": {
         "psr-4": {

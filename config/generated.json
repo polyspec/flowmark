@@ -9,6 +9,7 @@
     "examples/board/web/src/Model/Comments.php",
     "examples/board/web/src/Model/People.php",
     "examples/board/web/src/Model/Posts.php",
-    "examples/board/web/src/Model/bootstrap.php"
+    "examples/board/web/src/Model/bootstrap.php",
+    "examples/board/web/src/Model/schema_declarations.php"
   ]
 }

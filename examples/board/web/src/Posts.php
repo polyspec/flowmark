@@ -47,7 +47,11 @@ final class Posts
             $rows = $query->orderByTitleAsc()->orderByIdAsc()->getsPage($page, $perPage)->items->toArray();
         } elseif ($sort === 'author') {
             $rows = $query->orderByCreatedDesc()->orderByIdDesc()->gets()->toArray();
-            usort($rows, static fn (array $a, array $b): int => [$a['people_model']['name'], $a['id']] <=> [$b['people_model']['name'], $b['id']]);
+            usort(
+                $rows,
+                static fn (array $a, array $b): int
+                    => [$a['people_model']['name'], $a['id']] <=> [$b['people_model']['name'], $b['id']],
+            );
             $rows = array_slice($rows, ($page - 1) * $perPage, $perPage);
         } else {
             $rows = $query->orderByCreatedDesc()->orderByIdDesc()->getsPage($page, $perPage)->items->toArray();

@@ -2,19 +2,152 @@
   "schema": 1,
   "comment": "The owner checks of the repository paths, read by owner-check of @polyspec/kit: make owner-check runs the targets of the rules whose globs match a changed path, and make owner-validate checks that every tracked path has a rule and every glob matches a tracked path.",
   "owners": [
-    { "paths": ["*.md", "docs/**", "examples/**/*.md", "config/documents.json", "config/checklist.json"], "targets": ["docs-check", "refs-check"] },
-    { "paths": ["AGENTS.md", "PRINCIPLES.md", "PRINCIPLES.ko.md"], "targets": ["rules-check"] },
-    { "paths": ["packages/go/**", "go.work"], "targets": ["flowmark-test", "lint-go"] },
-    { "paths": ["tests/**"], "targets": ["flowmark-test"] },
-    { "paths": ["tests/conformance/**"], "targets": ["lint-go"] },
-    { "paths": ["examples/**"], "targets": ["flowmark-test", "lint-go", "lint-ts", "lint-php"] },
-    { "paths": ["scripts/**"], "targets": ["flowmark-test", "lint-ts"] },
-    { "paths": ["Makefile", ".claude/settings.json", ".editorconfig"], "targets": ["kit-check"] },
-    { "paths": ["config/layout.kit.yml", "config/layout.yml", "config/*.schema.json", "config/generated.json", ".gitignore", ".gitattributes", ".github/**"], "targets": ["layout-check"] },
-    { "paths": ["config/toolchain.json", "mise.toml", "mise.lock", ".mise/**"], "targets": ["toolchain-check"] },
-    { "paths": ["config/knip-entries.json", "package.json", "package-lock.json"], "targets": ["lint-ts", "dependency-policy-check"] },
-    { "paths": [".githooks/**"], "targets": ["hooks-check"] },
-    { "paths": ["sidecar.json"], "targets": ["flowmark-build"] },
-    { "paths": ["config/owner-checks.json"], "targets": ["owner-validate"] }
+    {
+      "paths": [
+        "*.md",
+        "docs/**",
+        "examples/**/*.md",
+        "config/documents.json",
+        "config/checklist.json"
+      ],
+      "targets": [
+        "docs-check",
+        "refs-check"
+      ]
+    },
+    {
+      "paths": [
+        "AGENTS.md",
+        "PRINCIPLES.md",
+        "PRINCIPLES.ko.md"
+      ],
+      "targets": [
+        "rules-check"
+      ]
+    },
+    {
+      "paths": [
+        "packages/go/**",
+        "go.work"
+      ],
+      "targets": [
+        "flowmark-test",
+        "lint-go",
+        "duplication-check",
+        "lint-ts"
+      ]
+    },
+    {
+      "paths": [
+        "tests/**"
+      ],
+      "targets": [
+        "flowmark-test",
+        "lint-ts",
+        "duplication-check"
+      ]
+    },
+    {
+      "paths": [
+        "tests/conformance/**"
+      ],
+      "targets": [
+        "lint-go",
+        "duplication-check"
+      ]
+    },
+    {
+      "paths": [
+        "examples/**"
+      ],
+      "targets": [
+        "flowmark-test",
+        "lint-go",
+        "lint-ts",
+        "lint-php",
+        "duplication-check"
+      ]
+    },
+    {
+      "paths": [
+        "scripts/**"
+      ],
+      "targets": [
+        "flowmark-test",
+        "lint-ts",
+        "duplication-check"
+      ]
+    },
+    {
+      "paths": [
+        "Makefile",
+        ".claude/settings.json",
+        ".editorconfig"
+      ],
+      "targets": [
+        "kit-check"
+      ]
+    },
+    {
+      "paths": [
+        "config/layout.kit.yml",
+        "config/layout.yml",
+        "config/*.schema.json",
+        "config/generated.json",
+        ".gitignore",
+        ".gitattributes",
+        ".github/**"
+      ],
+      "targets": [
+        "layout-check"
+      ]
+    },
+    {
+      "paths": [
+        "config/toolchain.json",
+        "mise.toml",
+        "mise.lock",
+        ".mise/**",
+        ".php-version"
+      ],
+      "targets": [
+        "toolchain-check"
+      ]
+    },
+    {
+      "paths": [
+        "config/knip-entries.json",
+        "package.json",
+        "package-lock.json"
+      ],
+      "targets": [
+        "lint-ts",
+        "dependency-policy-check"
+      ]
+    },
+    {
+      "paths": [
+        ".githooks/**"
+      ],
+      "targets": [
+        "hooks-check"
+      ]
+    },
+    {
+      "paths": [
+        "sidecar.json"
+      ],
+      "targets": [
+        "flowmark-build"
+      ]
+    },
+    {
+      "paths": [
+        "config/owner-checks.json"
+      ],
+      "targets": [
+        "owner-validate"
+      ]
+    }
   ]
 }

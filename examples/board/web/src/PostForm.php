@@ -79,13 +79,16 @@ final class PostForm
             'author' => $post['author'],
             'created' => date('Y-m-d H:i', $post['created_at']),
         ], $posts);
-        return Generator::renderList(json_decode(self::LIST, false, 512, JSON_THROW_ON_ERROR), $rows, ['language' => 'ko']);
+        $list = json_decode(self::LIST, false, 512, JSON_THROW_ON_ERROR);
+
+        return Generator::renderList($list, $rows, ['language' => 'ko']);
     }
 
     private static function template(): stdClass
     {
         if (self::$template === null) {
-            self::$template = Generator::compileForm(json_decode(self::FORM, false, 512, JSON_THROW_ON_ERROR), ['keyPrefix' => 'form']);
+            $form = json_decode(self::FORM, false, 512, JSON_THROW_ON_ERROR);
+            self::$template = Generator::compileForm($form, ['keyPrefix' => 'form']);
         }
         return self::$template;
     }

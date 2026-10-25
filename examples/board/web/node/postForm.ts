@@ -52,7 +52,7 @@ export function judge(values: PostValues): { valid: boolean; errors: { path: str
 
 /** Renders the create form: the fields with the values they hold, their errors under them, and the CSRF token hidden. */
 export function createFormHtml(values: Partial<PostValues>, errors: { path: string; message: string }[], csrf: string): string {
-  return renderForm(createForm(template, values as Record<string, unknown>, { language: 'ko' }), {
+  return renderForm(createForm(template, values, { language: 'ko' }), {
     action: { method: 'post', url: '/board/create' },
     hidden: { _csrf: csrf },
     errors,

@@ -43,7 +43,12 @@ function pagerWindow(page: number, pages: number): ({ n: number } | { gap: true 
 
 // Removes the characters that PHP trim removes: space, tab, line feed, carriage return, NUL and vertical tab.
 function trim(text: string): string {
-  return text.replace(/^[ \t\n\r\0\x0B]+|[ \t\n\r\0\x0B]+$/g, '');
+  const trimmed = ' \t\n\r\0\v';
+  let start = 0;
+  let end = text.length;
+  while (start < end && trimmed.includes(text.charAt(start))) start++;
+  while (end > start && trimmed.includes(text.charAt(end - 1))) end--;
+  return text.slice(start, end);
 }
 
 export const handlers: Handlers<Services> = {

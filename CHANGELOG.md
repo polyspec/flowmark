@@ -3,6 +3,7 @@
 
 ## Unreleased
 
+- The board example pins the releases of its polyspec packages, which make flowmark-install installs from their locks and make install-link links to the sibling checkouts, and make lint-php passes on it (T15-11).
 - No error or type assertion of the Go modules is dropped: each is returned, reported or names its broken invariant, and make lint-go passes (T15-10).
 - packages/go compiles against the linked orm, whose ir.ParamUses returns an error, and passes the errorlint, nilerr and unused lints of kit; the gethostuuid syscall states why it stays (T15-9).
 - .gitignore ignores every .venv/, so make layout-check finds the vulture lock environment ignored (T15-8).
