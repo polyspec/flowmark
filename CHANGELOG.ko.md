@@ -1,9 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: b68600826c544f9c7e936ee2a062e92676a16a0b568a5596bbc87a69ccd6dcc1 -->
+<!-- source-sha256: 5bbb1315155127b4a3306c13dc773803e5dc2f08f52484f6f42a47872968bf9a -->
 # Changelog
 
 ## Unreleased
 
+- config/owner-checks.json은 추적된 각 path에 그것을 소유하는 gate와 test를 주므로, make owner-check가 변경의 검사를 고른다(T15-7).
 - examples/board/web/.npmrc는 allow-remote만 두므로, npm이 그 file: package와 bin을 link하고 make toolchain-check가 통과한다(T15-6).
 - AGENTS의 규칙은 Own 또는 Refines P17로 시작하고, flowmark은 config/generated.json과 함께 kit의 Git hook을 두고 설치하므로 make rules-check가 통과한다(T15-5).
 - flowmark은 옆의 checkout에서 kit을 받는다. Makefile은 ../kit의 kit-bootstrap.mk를 include하고 suite를 선언하며, stale 사본과 config/php-lint는 없어졌고, PRINCIPLES.md, 그 짝, .editorconfig, .claude/settings.json은 ../kit로 가는 link다(kit K514, K614, K621)(T15-4).
