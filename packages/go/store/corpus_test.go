@@ -305,6 +305,22 @@ func shardEvent(title, at string) string {
 	return "# " + title + "\n- at: " + at + "\n"
 }
 
+// TestShardMissingFolder: a sharded table whose folder is missing has no rows and no diagnostic, read as a files table
+// and as a document table (spec 20 Time shards).
+func TestShardMissingFolder(t *testing.T) {
+	cat, diags := catalog.Load("testdata/shard")
+	if len(diags) > 0 {
+		t.Fatalf("catalog: %+v", diags)
+	}
+	root := t.TempDir()
+	rows, _, diags := ParseFilesTable(cat, DirFS(root), "events", stubLinker{}, nil)
+	wantKeysAndRules(t, rows, diags, nil, nil)
+	docs, diags, err := ParseDocumentTable(cat, DirFS(root), "notes", stubLinker{}, nil)
+	if err != nil || len(docs) > 0 || len(diags) > 0 {
+		t.Fatalf("documents %+v, diagnostics %+v, %v; want none", docs, diags, err)
+	}
+}
+
 // TestParseFilesTableShard pins the walk of a sharded files table (spec 20 Time shards): its rows stand in
 // the folder of their period, <table>/<period>/<key>.flowmark.md, the period named at the grain of the shard.
 func TestParseFilesTableShard(t *testing.T) {
@@ -334,7 +350,6 @@ func TestParseFilesTableShard(t *testing.T) {
 			rules: []string{RuleWalk, RuleWalk}},
 		{name: "20#time-shards: a document below a period folder is a walk diagnostic", files: map[string]string{"events/2026-10/sub/E1.flowmark.md": e1},
 			rules: []string{RuleWalk}},
-		{name: "20#time-shards: a missing table folder has no rows and no diagnostic"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -397,7 +412,6 @@ func TestParseDocumentTableShard(t *testing.T) {
 			rules: []string{RuleWalk}},
 		{name: "20#time-shards: a symbolic link named as a period is a walk diagnostic and is not followed", files: map[string]string{"notes/2027.flowmark.md": y27},
 			links: map[string]string{"notes/2026.flowmark.md": "2027.flowmark.md"}, keys: []string{"N3"}, paths: []string{"notes/2027.flowmark.md"}, rules: []string{RuleWalk}},
-		{name: "20#time-shards: a missing table folder has no rows and no diagnostic"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

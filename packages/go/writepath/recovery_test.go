@@ -68,6 +68,18 @@ type crashPoint struct {
 	event journal.Kind
 }
 
+// eachCrashPoint runs check as a subtest of t for each crash point, on a fresh base fixture f, with the snapshots of
+// its corpus before the crash transaction and after it.
+func eachCrashPoint(t *testing.T, check func(t *testing.T, cp crashPoint, f *fixture, before, after map[string]string)) {
+	after := afterCrashTx(t)
+	for _, cp := range crashPoints {
+		t.Run(fmt.Sprintf("40#opening-a-corpus: %s#%d", cp.step, cp.index), func(t *testing.T) {
+			f := baseFixture(t)
+			check(t, cp, f, snapshot(t, f.root), after)
+		})
+	}
+}
+
 // crashPoints are the steps of the crash transaction of crashTx, whose three targets are notes/N3.flowmark.md (a
 // whole-file delete), people.flowmark.md and tags.flowmark.md.
 var crashPoints = []crashPoint{
@@ -136,43 +148,38 @@ func afterCrashTx(t *testing.T) map[string]string {
 // prepare record it writes nothing and fails DRIVER, its partial stage discarded; from the prepare record on it is
 // decided, and recovery under the same lock completes it, so the commit succeeds. Never a mix.
 func TestRecoveryOnAcquisition(t *testing.T) {
-	after := afterCrashTx(t)
-	for _, cp := range crashPoints {
-		t.Run(fmt.Sprintf("40#opening-a-corpus: %s#%d", cp.step, cp.index), func(t *testing.T) {
-			f := baseFixture(t)
-			before := snapshot(t, f.root)
-			s := f.crashSession(t, "server")
-			f.j.SetFault(crashOnce(cp.step, cp.index))
-			err := s.Commit()
-			if cp.new {
-				// From the prepare record on the commit is decided: recovery under the same lock completes it.
-				if err != nil {
-					t.Fatalf("Commit = %v, want the commit completed under its lock", err)
-				}
-			} else {
-				fails(t, err, "DRIVER", "simulated crash", "nothing was written")
-				if !errors.Is(err, errCrash) {
-					t.Fatalf("Commit = %v, want the crash as its cause", err)
-				}
+	eachCrashPoint(t, func(t *testing.T, cp crashPoint, f *fixture, before, after map[string]string) {
+		s := f.crashSession(t, "server")
+		f.j.SetFault(crashOnce(cp.step, cp.index))
+		err := s.Commit()
+		if cp.new {
+			// From the prepare record on the commit is decided: recovery under the same lock completes it.
+			if err != nil {
+				t.Fatalf("Commit = %v, want the commit completed under its lock", err)
 			}
-			f.j.SetFault(nil)
-			kinds := f.rec.kinds()
-			if len(kinds) < 3 || kinds[0] != journal.LockAcquired || kinds[len(kinds)-2] != cp.event || kinds[len(kinds)-1] != journal.LockReleased {
-				t.Fatalf("events = %v, want the lock, then %s, then the release", kinds, cp.event)
+		} else {
+			fails(t, err, "DRIVER", "simulated crash", "nothing was written")
+			if !errors.Is(err, errCrash) {
+				t.Fatalf("Commit = %v, want the crash as its cause", err)
 			}
-			f.rec.reset()
-			want(t, f.session("cli"), f.countTags(), map[bool]string{false: `{"count":2}`, true: `{"count":3}`}[cp.new])
-			f.rec.wantKinds(t, opened...)
-			wantSnap := before
-			if cp.new {
-				wantSnap = after
-			}
-			if got := snapshot(t, f.root); !reflect.DeepEqual(got, wantSnap) {
-				t.Fatalf("corpus = %v, want %v", got, wantSnap)
-			}
-			f.clean()
-		})
-	}
+		}
+		f.j.SetFault(nil)
+		kinds := f.rec.kinds()
+		if len(kinds) < 3 || kinds[0] != journal.LockAcquired || kinds[len(kinds)-2] != cp.event || kinds[len(kinds)-1] != journal.LockReleased {
+			t.Fatalf("events = %v, want the lock, then %s, then the release", kinds, cp.event)
+		}
+		f.rec.reset()
+		want(t, f.session("cli"), f.countTags(), map[bool]string{false: `{"count":2}`, true: `{"count":3}`}[cp.new])
+		f.rec.wantKinds(t, opened...)
+		wantSnap := before
+		if cp.new {
+			wantSnap = after
+		}
+		if got := snapshot(t, f.root); !reflect.DeepEqual(got, wantSnap) {
+			t.Fatalf("corpus = %v, want %v", got, wantSnap)
+		}
+		f.clean()
+	})
 }
 
 // TestOpenRecovers pins recovery when a corpus is opened (spec 40 Opening a corpus): Open runs it under the lock and

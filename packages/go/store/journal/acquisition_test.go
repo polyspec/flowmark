@@ -3,8 +3,6 @@ package journal
 import (
 	"context"
 	"errors"
-	"os"
-	"strings"
 	"testing"
 )
 
@@ -48,16 +46,6 @@ func TestReleaseRefusesSameSessionOtherAcquisition(t *testing.T) {
 	if other.Acquisition == l.Holder().Acquisition {
 		t.Fatal("two acquisitions share a token")
 	}
-	plantRecord(t, root, LockPath, other)
-	if err := l.Release(); err == nil || !strings.Contains(err.Error(), "replaced") {
-		t.Fatalf("Release = %v, want a replaced-lock error", err)
-	}
-	data, readErr := os.ReadFile(lockFile(root))
-	if readErr != nil {
-		t.Fatal(readErr)
-	}
-	if string(data) != string(other.record()) {
-		t.Fatalf("lock file changed to %q", data)
-	}
+	wantReplacedRelease(t, l, root, other)
 	wantKinds(t, rec, LockAcquired)
 }

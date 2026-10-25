@@ -67,11 +67,7 @@ func TestTreeHandEditRacingCommit(t *testing.T) {
 	late := func(journal.Notices) journal.Notices { return journal.Notices{} }
 	t.Run("40#the-commit-protocol: a transaction's commit refuses a target edited by hand", func(t *testing.T) {
 		f := baseFixture(t)
-		s := f.session("server")
-		ctx := context.Background()
-		if err := s.Begin(ctx, false); err != nil {
-			t.Fatal(err)
-		}
+		s := f.begun(t, "server")
 		want(t, s, f.msg("update", "notes", map[string]any{"set": sets(0, "title"), "where": corpustest.WhereID(1)}, "Tx root", "N3"), `{"affected":1,"keys":[]}`)
 		f.c.tree.SetNotices(late)
 		hand := lines("# Hand root", "- position: 2")

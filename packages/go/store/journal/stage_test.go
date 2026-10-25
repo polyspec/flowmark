@@ -109,12 +109,7 @@ func TestCommitDeleteMovesIntoStage(t *testing.T) {
 	if _, err := os.Lstat(filepath.Join(root, "c.md")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("c.md: %v", err)
 	}
-	if err := c.Recover(l); err != nil {
-		t.Fatal(err)
-	}
-	if got := snapshot(t, root); !reflect.DeepEqual(got, after) {
-		t.Fatalf("corpus = %v", got)
-	}
+	wantRecovered(t, c, l, root, after)
 	if s := stages(t, c); len(s) != 0 {
 		t.Fatalf("stages = %v", s)
 	}
@@ -132,12 +127,7 @@ func TestDeleteReplayIdempotent(t *testing.T) {
 	}
 	c.fault = nil
 	for range 2 {
-		if err := c.Recover(l); err != nil {
-			t.Fatal(err)
-		}
-		if got := snapshot(t, root); !reflect.DeepEqual(got, after) {
-			t.Fatalf("corpus = %v", got)
-		}
+		wantRecovered(t, c, l, root, after)
 	}
 }
 
@@ -185,12 +175,7 @@ func TestRefusalAfterPartialApplyResolvable(t *testing.T) {
 		}
 	}
 	copyFile(t, filepath.Join(stage, hashOf("new a\n")), filepath.Join(root, "a.md"))
-	if err := c.Recover(l); err != nil {
-		t.Fatal(err)
-	}
-	if got := snapshot(t, root); !reflect.DeepEqual(got, after) {
-		t.Fatalf("corpus = %v", got)
-	}
+	wantRecovered(t, c, l, root, after)
 }
 
 func TestRefusalResolvedByRestoringPre(t *testing.T) {
@@ -198,12 +183,7 @@ func TestRefusalResolvedByRestoringPre(t *testing.T) {
 	writeFile(t, root, "a.md", "human\n")
 	requireRefusal(t, c.Recover(l))
 	copyFile(t, filepath.Join(stage, hashOf("old a\n")), filepath.Join(root, "a.md"))
-	if err := c.Recover(l); err != nil {
-		t.Fatal(err)
-	}
-	if got := snapshot(t, root); !reflect.DeepEqual(got, after) {
-		t.Fatalf("corpus = %v", got)
-	}
+	wantRecovered(t, c, l, root, after)
 }
 
 func TestRefusalResolvedByRestoringPost(t *testing.T) {
@@ -211,12 +191,7 @@ func TestRefusalResolvedByRestoringPost(t *testing.T) {
 	writeFile(t, root, "a.md", "human\n")
 	requireRefusal(t, c.Recover(l))
 	copyFile(t, filepath.Join(stage, hashOf("new a\n")), filepath.Join(root, "a.md"))
-	if err := c.Recover(l); err != nil {
-		t.Fatal(err)
-	}
-	if got := snapshot(t, root); !reflect.DeepEqual(got, after) {
-		t.Fatalf("corpus = %v", got)
-	}
+	wantRecovered(t, c, l, root, after)
 }
 
 // Until the target is resolved, every open refuses the same way and changes nothing.

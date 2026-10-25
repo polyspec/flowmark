@@ -40,6 +40,26 @@ func (w *scriptedWatch) close() error {
 	return nil
 }
 
+// liveTree returns the tree of the corpus at root, watched by the platform's own watch and observed by rec, closed when
+// the test ends.
+func liveTree(t *testing.T, root string, rec *recorder) *Tree {
+	t.Helper()
+	c, err := New(root, rec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr, err := c.Tree()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := tr.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	return tr
+}
+
 // scriptedTree returns a tree of a corpus holding files, watched by a scripted watch, and the observer of its events.
 func scriptedTree(t *testing.T, files map[string]string) (*Tree, *scriptedWatch, *recorder, string) {
 	t.Helper()
@@ -65,8 +85,6 @@ func scriptedTree(t *testing.T, files map[string]string) (*Tree, *scriptedWatch,
 // reads returns the corpus paths of the corpus.read events since the last reset, and resets.
 func reads(t *testing.T, rec *recorder, root string) []string {
 	t.Helper()
-	rec.mu.Lock()
-	defer rec.mu.Unlock()
 	out := []string{}
 	for _, e := range rec.Events() {
 		if e.Kind == CorpusRead {
@@ -139,14 +157,12 @@ func TestTreeKeepsWhatItRead(t *testing.T) {
 			if err := tr.Refresh(); err != nil {
 				t.Fatal(err)
 			}
-			rec.mu.Lock()
 			var overflow int
 			for _, e := range rec.Events() {
 				if e.Kind == CorpusOverflow {
 					overflow++
 				}
 			}
-			rec.mu.Unlock()
 			if want := map[bool]int{true: 1}[c.n.Overflow]; overflow != want {
 				t.Fatalf("corpus.overflow published %d times, want %d", overflow, want)
 			}
@@ -244,24 +260,9 @@ func TestTreeWatchFailure(t *testing.T) {
 // so a file under it is never answered from the folder that went away (spec 40 Opening a corpus).
 func TestTreeFolderReplacedBetweenRefreshAndRead(t *testing.T) {
 	root := t.TempDir()
-	write := func(p, text string) {
-		t.Helper()
-		corpustest.WriteFiles(t, root, map[string]string{p: text})
-	}
-	write("t/k.flowmark.md", "old\n")
-	c, err := New(root, &recorder{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	tr, err := c.Tree()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := tr.Close(); err != nil {
-			t.Error(err)
-		}
-	})
+	writeFile(t, root, "t/k.flowmark.md", "old\n")
+	rec := &recorder{}
+	tr := liveTree(t, root, rec)
 	read := func() string {
 		t.Helper()
 		readAll(t, tr, ".", "t/")
@@ -279,12 +280,12 @@ func TestTreeFolderReplacedBetweenRefreshAndRead(t *testing.T) {
 	}
 	refresh()
 	read()
-	write("t/other.flowmark.md", "x\n")
+	writeFile(t, root, "t/other.flowmark.md", "x\n")
 	refresh()
 	if err := os.Rename(filepath.Join(root, "t"), filepath.Join(root, "t.old")); err != nil {
 		t.Fatal(err)
 	}
-	write("t/k.flowmark.md", "new\n")
+	writeFile(t, root, "t/k.flowmark.md", "new\n")
 	read()
 	for i := range 3 {
 		refresh()
@@ -298,26 +299,10 @@ func TestTreeFolderReplacedBetweenRefreshAndRead(t *testing.T) {
 // exactly what changed.
 func TestTreeNotifications(t *testing.T) {
 	root := t.TempDir()
-	write := func(p, text string) {
-		t.Helper()
-		corpustest.WriteFiles(t, root, map[string]string{p: text})
-	}
-	write("t/x.flowmark.md", "x\n")
-	write("t/y.flowmark.md", "y\n")
+	writeFile(t, root, "t/x.flowmark.md", "x\n")
+	writeFile(t, root, "t/y.flowmark.md", "y\n")
 	rec := &recorder{}
-	c, err := New(root, rec)
-	if err != nil {
-		t.Fatal(err)
-	}
-	tr, err := c.Tree()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := tr.Close(); err != nil {
-			t.Error(err)
-		}
-	})
+	tr := liveTree(t, root, rec)
 	// walk reads the corpus as the walk does: each folder's entries, then each file in it.
 	walk := func() map[string]string {
 		t.Helper()
@@ -375,14 +360,14 @@ func TestTreeNotifications(t *testing.T) {
 	}
 	step("40#opening-a-corpus: nothing changed, nothing is read", func() {},
 		map[string]string{"t/x.flowmark.md": "x\n", "t/y.flowmark.md": "y\n"})
-	step("40#opening-a-corpus: a file written in place", func() { write("t/x.flowmark.md", "x2\n") },
+	step("40#opening-a-corpus: a file written in place", func() { writeFile(t, root, "t/x.flowmark.md", "x2\n") },
 		map[string]string{"t/x.flowmark.md": "x2\n", "t/y.flowmark.md": "y\n"}, "t/x.flowmark.md")
 	step("40#opening-a-corpus: a file truncated", func() {
 		if err := os.Truncate(filepath.Join(root, "t", "y.flowmark.md"), 0); err != nil {
 			t.Fatal(err)
 		}
 	}, map[string]string{"t/x.flowmark.md": "x2\n", "t/y.flowmark.md": ""}, "t/y.flowmark.md")
-	step("40#opening-a-corpus: a file created", func() { write("t/z.flowmark.md", "z\n") },
+	step("40#opening-a-corpus: a file created", func() { writeFile(t, root, "t/z.flowmark.md", "z\n") },
 		map[string]string{"t/x.flowmark.md": "x2\n", "t/y.flowmark.md": "", "t/z.flowmark.md": "z\n"}, "t/z.flowmark.md")
 	step("40#opening-a-corpus: a file removed", func() {
 		if err := os.Remove(filepath.Join(root, "t", "z.flowmark.md")); err != nil {
@@ -390,7 +375,7 @@ func TestTreeNotifications(t *testing.T) {
 		}
 	}, map[string]string{"t/x.flowmark.md": "x2\n", "t/y.flowmark.md": ""})
 	step("40#opening-a-corpus: a file replaced by a rename", func() {
-		write("t/.swap", "x3\n")
+		writeFile(t, root, "t/.swap", "x3\n")
 		if err := os.Rename(filepath.Join(root, "t", ".swap"), filepath.Join(root, "t", "x.flowmark.md")); err != nil {
 			t.Fatal(err)
 		}
@@ -399,9 +384,9 @@ func TestTreeNotifications(t *testing.T) {
 		if err := os.Rename(filepath.Join(root, "t"), filepath.Join(root, "old")); err != nil {
 			t.Fatal(err)
 		}
-		write("t/w.flowmark.md", "w\n")
+		writeFile(t, root, "t/w.flowmark.md", "w\n")
 	}, map[string]string{"old/x.flowmark.md": "x3\n", "old/y.flowmark.md": "", "t/w.flowmark.md": "w\n"},
 		"old/x.flowmark.md", "old/y.flowmark.md", "t/w.flowmark.md")
-	step("40#opening-a-corpus: a file in the renamed folder written", func() { write("old/y.flowmark.md", "y2\n") },
+	step("40#opening-a-corpus: a file in the renamed folder written", func() { writeFile(t, root, "old/y.flowmark.md", "y2\n") },
 		map[string]string{"old/x.flowmark.md": "x3\n", "old/y.flowmark.md": "y2\n", "t/w.flowmark.md": "w\n"}, "old/y.flowmark.md")
 }

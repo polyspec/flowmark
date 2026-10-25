@@ -245,33 +245,28 @@ func TestTransactionHoldsProcesses(t *testing.T) {
 // TestCrashedProcessRecovers pins a process killed at each step of a commit (spec 40 Opening a corpus): its lock is
 // stale until `flowmark unlock`, and the next open recovers the old state or the new one, never a mix.
 func TestCrashedProcessRecovers(t *testing.T) {
-	after := afterCrashTx(t)
-	for _, cp := range crashPoints {
-		t.Run(fmt.Sprintf("40#opening-a-corpus: %s#%d", cp.step, cp.index), func(t *testing.T) {
-			f := baseFixture(t)
-			before := snapshot(t, f.root)
-			corpustest.WantExit(t, childCommand(t, "crash", f.root, 0, crashTx(f), "FLOWMARK_WRITEPATH_STEP="+cp.step, "FLOWMARK_WRITEPATH_INDEX="+strconv.Itoa(cp.index)), 3)
-			_, err := f.session("cli").Exec(context.Background(), f.countTags())
-			fails(t, err, "CANCELED", "LOCK_TIMEOUT", "flowmark unlock")
-			if _, err := f.j.Unlock(""); err != nil {
-				t.Fatal(err)
-			}
-			f.rec.reset()
-			g := openFixtureEvents(t, f.root)
-			kinds := g.rec.kinds()
-			if kinds[len(kinds)-2] != cp.event {
-				t.Fatalf("events = %v, want %s before the release", kinds, cp.event)
-			}
-			wantSnap := before
-			if cp.new {
-				wantSnap = after
-			}
-			if got := snapshot(t, f.root); !reflect.DeepEqual(got, wantSnap) {
-				t.Fatalf("corpus = %v, want %v", got, wantSnap)
-			}
-			g.clean()
-		})
-	}
+	eachCrashPoint(t, func(t *testing.T, cp crashPoint, f *fixture, before, after map[string]string) {
+		corpustest.WantExit(t, childCommand(t, "crash", f.root, 0, crashTx(f), "FLOWMARK_WRITEPATH_STEP="+cp.step, "FLOWMARK_WRITEPATH_INDEX="+strconv.Itoa(cp.index)), 3)
+		_, err := f.session("cli").Exec(context.Background(), f.countTags())
+		fails(t, err, "CANCELED", "LOCK_TIMEOUT", "flowmark unlock")
+		if _, err := f.j.Unlock(""); err != nil {
+			t.Fatal(err)
+		}
+		f.rec.reset()
+		g := openFixtureEvents(t, f.root)
+		kinds := g.rec.kinds()
+		if kinds[len(kinds)-2] != cp.event {
+			t.Fatalf("events = %v, want %s before the release", kinds, cp.event)
+		}
+		wantSnap := before
+		if cp.new {
+			wantSnap = after
+		}
+		if got := snapshot(t, f.root); !reflect.DeepEqual(got, wantSnap) {
+			t.Fatalf("corpus = %v, want %v", got, wantSnap)
+		}
+		g.clean()
+	})
 }
 
 // openFixtureEvents opens the corpus at root and keeps the events of the opening.

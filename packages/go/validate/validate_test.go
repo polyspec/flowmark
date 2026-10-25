@@ -63,6 +63,12 @@ func (w wanted) matches(d catalog.Diagnostic) bool {
 		strings.Contains(d.Message, w.says)
 }
 
+// checkTreeCase runs the case name: it checks, as checkCorpus does, a fresh corpus holding files.
+func checkTreeCase(t *testing.T, cat *catalog.Catalog, name string, files map[string]string, want []string) {
+	t.Helper()
+	t.Run(name, func(t *testing.T) { checkCorpus(t, cat, corpustest.NewTree(t, files), want) })
+}
+
 // checkBuilt checks, as checkCorpus does, the corpus that build writes into a fresh root.
 func checkBuilt(t *testing.T, cat *catalog.Catalog, build func(root string), want []string) {
 	t.Helper()
@@ -698,9 +704,7 @@ func TestValidatorRules(t *testing.T) {
 			}},
 	}
 	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			checkCorpus(t, cat, corpustest.NewTree(t, tc.files), tc.want)
-		})
+		checkTreeCase(t, cat, tc.name, tc.files, tc.want)
 	}
 }
 

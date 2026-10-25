@@ -62,6 +62,23 @@ func fixtureText(t *testing.T, edits ...[2]string) string {
 	return text
 }
 
+// wantAccepted requires the catalog that editedCorpus writes with edits to load with no diagnostic.
+func wantAccepted(t *testing.T, edits ...[2]string) {
+	t.Helper()
+	if cat, diags, _ := loadEdited(t, edits...); len(diags) != 0 || cat == nil {
+		t.Fatalf("diagnostics = %+v, want an accepted catalog", diags)
+	}
+}
+
+// loadEdited loads the catalog of the corpus that editedCorpus writes with edits, and returns it with its diagnostics
+// and the edited catalog text.
+func loadEdited(t *testing.T, edits ...[2]string) (*catalog.Catalog, []catalog.Diagnostic, string) {
+	t.Helper()
+	root, text := editedCorpus(t, edits...)
+	cat, diags := catalog.Load(root)
+	return cat, diags, text
+}
+
 // editedCorpus writes the application schema with the edits applied, plus
 // any extra documents, and returns the root and the schema text.
 func editedCorpus(t *testing.T, edits ...[2]string) (string, string) {
@@ -282,8 +299,7 @@ table users {
 }
 
 func TestLoadDbspecDiagnosticsCarriedThrough(t *testing.T) {
-	root, _ := editedCorpus(t, [2]string{"  primary key (id)\n  index ix_items_parent", "  primary key (idx)\n  index ix_items_parent"})
-	cat, diags := catalog.Load(root)
+	cat, diags, _ := loadEdited(t, [2]string{"  primary key (id)\n  index ix_items_parent", "  primary key (idx)\n  index ix_items_parent"})
 	expectRejected(t, cat, diags)
 	for _, d := range diags {
 		if d.File == "dbspec/flowmark.dbs" && d.Rule == "catalog" && d.Line > 0 && d.Column > 0 && strings.HasPrefix(d.Message, "dbspec key:") {
@@ -374,8 +390,7 @@ func TestLoadSetFile(t *testing.T) {
 }
 
 func TestLoadRejectsTableWithoutStore(t *testing.T) {
-	root, text := editedCorpus(t, [2]string{"    store files\n", ""})
-	cat, diags := catalog.Load(root)
+	cat, diags, text := loadEdited(t, [2]string{"    store files\n", ""})
 	expectRejected(t, cat, diags)
 	expectTableDiag(t, diags, text, "items", "no store setting")
 }
@@ -456,15 +471,13 @@ table service_history {
 }
 
 table views {`
-	root, text := editedCorpus(t, [2]string{"table views {", audited})
-	cat, diags := catalog.Load(root)
+	cat, diags, text := loadEdited(t, [2]string{"table views {", audited})
 	expectRejected(t, cat, diags)
 	expectTableDiag(t, diags, text, "service", "audit setting")
 }
 
 func TestLoadRejectsImmutableSetting(t *testing.T) {
-	root, text := editedCorpus(t, [2]string{"    title name\n", "    title name\n    immutable\n"})
-	cat, diags := catalog.Load(root)
+	cat, diags, text := loadEdited(t, [2]string{"    title name\n", "    title name\n    immutable\n"})
 	expectRejected(t, cat, diags)
 	expectTableDiag(t, diags, text, "people", "immutable setting")
 }
@@ -490,8 +503,7 @@ func TestLoadRejectsSetNullAction(t *testing.T) {
 }
 
 func TestLoadRejectsExternalUse(t *testing.T) {
-	root, _ := editedCorpus(t, [2]string{"dbspec 1 flowmark\n", "dbspec 1 flowmark\n\nuse core { users }\n"})
-	cat, diags := catalog.Load(root)
+	cat, diags, _ := loadEdited(t, [2]string{"dbspec 1 flowmark\n", "dbspec 1 flowmark\n\nuse core { users }\n"})
 	expectRejected(t, cat, diags)
 	for _, d := range diags {
 		if d.File == "dbspec/flowmark.dbs" && d.Rule == "catalog" && d.Line == 3 && strings.Contains(d.Message, "not in the declared document set") {
@@ -502,15 +514,13 @@ func TestLoadRejectsExternalUse(t *testing.T) {
 }
 
 func TestLoadRejectsStateMachineWithoutHistory(t *testing.T) {
-	root, text := editedCorpus(t, [2]string{"    state_machine state history item_history row item from from_state to to_state at at\n", ""})
-	cat, diags := catalog.Load(root)
+	cat, diags, text := loadEdited(t, [2]string{"    state_machine state history item_history row item from from_state to to_state at at\n", ""})
 	expectRejected(t, cat, diags)
 	expectTableDiag(t, diags, text, "items", "no history")
 }
 
 func TestLoadRejectsStateMachineWithoutInitial(t *testing.T) {
-	root, text := editedCorpus(t, [2]string{"    state_machine state initial waiting\n", ""})
-	cat, diags := catalog.Load(root)
+	cat, diags, text := loadEdited(t, [2]string{"    state_machine state initial waiting\n", ""})
 	expectRejected(t, cat, diags)
 	expectTableDiag(t, diags, text, "items", "no initial state")
 }
@@ -535,8 +545,7 @@ func TestLoadListStateRules(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			root, text := editedCorpus(t, c.edits...)
-			cat, diags := catalog.Load(root)
+			cat, diags, text := loadEdited(t, c.edits...)
 			if c.msg == "" {
 				if len(diags) != 0 || cat == nil {
 					t.Fatalf("diagnostics = %+v, want an accepted catalog", diags)
@@ -553,8 +562,7 @@ func TestLoadListStateRules(t *testing.T) {
 // machine is non-null. dbspec refuses a nullable one in every storage, so the
 // rejection is its own, located at the state line.
 func TestLoadRejectsNullableStateColumn(t *testing.T) {
-	root, _ := editedCorpus(t, [2]string{"  state varchar(16)\n", "  state varchar(16) null\n"})
-	cat, diags := catalog.Load(root)
+	cat, diags, _ := loadEdited(t, [2]string{"  state varchar(16)\n", "  state varchar(16) null\n"})
 	expectRejected(t, cat, diags)
 	if !slices.ContainsFunc(diags, func(d catalog.Diagnostic) bool {
 		return d.File == "dbspec/flowmark.dbs" && d.Rule == "catalog" && strings.Contains(d.Message, "needs a non-null")
@@ -584,8 +592,7 @@ func TestLoadRejectsFilesWithoutTitle(t *testing.T) {
 }
 
 table views {`
-	root, text := editedCorpus(t, [2]string{"table views {", notes})
-	cat, diags := catalog.Load(root)
+	cat, diags, text := loadEdited(t, [2]string{"table views {", notes})
 	expectRejected(t, cat, diags)
 	expectTableDiag(t, diags, text, "notes", "files storage needs a title")
 }
@@ -714,8 +721,7 @@ table note_c {
 }
 
 table views {`
-	root, text := editedCorpus(t, [2]string{"table views {", chain})
-	cat, diags := catalog.Load(root)
+	cat, diags, text := loadEdited(t, [2]string{"table views {", chain})
 	expectRejected(t, cat, diags)
 	expectTableDiag(t, diags, text, "note_c", "level 7")
 }
@@ -843,8 +849,7 @@ func TestLoadHistoryStorageKind(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			root, text := editedCorpus(t, c.edits...)
-			cat, diags := catalog.Load(root)
+			cat, diags, text := loadEdited(t, c.edits...)
 			if !c.refused {
 				if cat == nil || len(diags) > 0 {
 					t.Fatalf("refused: %+v", diags)
@@ -966,8 +971,7 @@ func TestLoadBlockPlacementNonNull(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			root, text := editedCorpus(t, c.edits...)
-			cat, diags := catalog.Load(root)
+			cat, diags, text := loadEdited(t, c.edits...)
 			if c.table == "" {
 				if cat == nil || len(diags) > 0 {
 					t.Fatalf("refused: %+v", diags)
@@ -1006,8 +1010,7 @@ func TestLoadRejectsBlockCycle(t *testing.T) {
 }
 
 table views {`
-	root, text := editedCorpus(t, [2]string{"table views {", node})
-	cat, diags := catalog.Load(root)
+	cat, diags, text := loadEdited(t, [2]string{"table views {", node})
 	expectRejected(t, cat, diags)
 	expectTableDiag(t, diags, text, "node", "cycle")
 }
@@ -1067,16 +1070,14 @@ func TestLoadRejectsReservedTableName(t *testing.T) {
 	accept := []string{"cons", "console", "com10", "lpt", "con_1", "prnt"}
 	for _, name := range reject {
 		t.Run("reject "+name, func(t *testing.T) {
-			root, text := editedCorpus(t, [2]string{"table views {", "table " + name + " {"})
-			cat, diags := catalog.Load(root)
+			cat, diags, text := loadEdited(t, [2]string{"table views {", "table " + name + " {"})
 			expectRejected(t, cat, diags)
 			expectTableDiag(t, diags, text, name, "reserved file name")
 		})
 	}
 	for _, name := range accept {
 		t.Run("accept "+name, func(t *testing.T) {
-			root, _ := editedCorpus(t, [2]string{"table views {", "table " + name + " {"})
-			cat, diags := catalog.Load(root)
+			cat, diags, _ := loadEdited(t, [2]string{"table views {", "table " + name + " {"})
 			if len(diags) != 0 || cat == nil {
 				t.Fatalf("diagnostics = %+v, want an accepted catalog", diags)
 			}
@@ -1115,8 +1116,7 @@ func TestLoadRejectsChildNamedLikeMarkdownColumn(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			root, text := editedCorpus(t, [2]string{"table views {", childBlock(c.table)})
-			cat, diags := catalog.Load(root)
+			cat, diags, text := loadEdited(t, [2]string{"table views {", childBlock(c.table)})
 			if c.accept {
 				if len(diags) != 0 || cat == nil {
 					t.Fatalf("diagnostics = %+v, want an accepted catalog", diags)
@@ -1242,11 +1242,7 @@ func TestLoadAcceptsNameOfSameFileTable(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			root, _ := editedCorpus(t, c.edits...)
-			cat, diags := catalog.Load(root)
-			if len(diags) != 0 || cat == nil {
-				t.Fatalf("diagnostics = %+v, want an accepted catalog", diags)
-			}
+			wantAccepted(t, c.edits...)
 		})
 	}
 }
@@ -1322,11 +1318,7 @@ func TestLoadAcceptsOneColumnPrimaryKeyForeignKey(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			root, _ := editedCorpus(t, c.edits...)
-			cat, diags := catalog.Load(root)
-			if len(diags) != 0 || cat == nil {
-				t.Fatalf("diagnostics = %+v, want an accepted catalog", diags)
-			}
+			wantAccepted(t, c.edits...)
 		})
 	}
 }
@@ -1377,8 +1369,7 @@ func TestLoadRejectsForeignKeyNotToPrimaryKey(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			root, text := editedCorpus(t, c.edits...)
-			cat, diags := catalog.Load(root)
+			cat, diags, text := loadEdited(t, c.edits...)
 			expectRejected(t, cat, diags)
 			expectForeignKeyDiag(t, diags, text, c.fk, c.msg)
 		})
@@ -1407,8 +1398,7 @@ func TestLoadKeyColumnTypes(t *testing.T) {
 	accepted := []string{"i16", "i32", "i64", "bool", "varchar(32)", "uuid", "date"}
 	for _, key := range accepted {
 		t.Run("accepts "+key, func(t *testing.T) {
-			root, _ := editedCorpus(t, [2]string{"table views {", keyedTable(key)})
-			cat, diags := catalog.Load(root)
+			cat, diags, _ := loadEdited(t, [2]string{"table views {", keyedTable(key)})
 			if len(diags) != 0 || cat == nil {
 				t.Fatalf("diagnostics = %+v, want an accepted catalog", diags)
 			}
@@ -1417,8 +1407,7 @@ func TestLoadKeyColumnTypes(t *testing.T) {
 	rejected := []string{"time(0)", "datetime(0)", "decimal(4,2)", "f64"}
 	for _, key := range rejected {
 		t.Run("rejects "+key, func(t *testing.T) {
-			root, text := editedCorpus(t, [2]string{"table views {", keyedTable(key)})
-			cat, diags := catalog.Load(root)
+			cat, diags, text := loadEdited(t, [2]string{"table views {", keyedTable(key)})
 			expectRejected(t, cat, diags)
 			expectTableDiag(t, diags, text, "keyed", "is not a key type")
 		})
@@ -1428,8 +1417,7 @@ func TestLoadKeyColumnTypes(t *testing.T) {
 	// refused.
 	for _, key := range []string{"bytes", "text"} {
 		t.Run("rejects "+key, func(t *testing.T) {
-			root, _ := editedCorpus(t, [2]string{"table views {", keyedTable(key)})
-			cat, diags := catalog.Load(root)
+			cat, diags, _ := loadEdited(t, [2]string{"table views {", keyedTable(key)})
 			expectRejected(t, cat, diags)
 			if !slices.ContainsFunc(diags, func(d catalog.Diagnostic) bool {
 				return strings.Contains(d.Message, "cannot be part of a key")
@@ -1493,8 +1481,7 @@ func TestLoadViewColumns(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run("100#views: "+c.name, func(t *testing.T) {
-			root, text := editedCorpus(t, c.edit)
-			cat, diags := catalog.Load(root)
+			cat, diags, text := loadEdited(t, c.edit)
 			expectRejected(t, cat, diags)
 			expectTableDiag(t, diags, text, "views", msg)
 			if len(diags) != 1 {
@@ -1515,15 +1502,13 @@ func TestLoadViewColumns(t *testing.T) {
 // the format holds; a later stage encodes the line feed away.
 func TestLoadYAMLCodec(t *testing.T) {
 	column := [2]string{"  name varchar(255)\n", "  name varchar(255)\n  meta text null\n"}
-	root, text := editedCorpus(t, column, [2]string{"    title name\n", "    title name\n    codec meta yaml\n"})
-	cat, diags := catalog.Load(root)
+	cat, diags, text := loadEdited(t, column, [2]string{"    title name\n", "    title name\n    codec meta yaml\n"})
 	expectRejected(t, cat, diags)
 	expectTableDiag(t, diags, text, "people", "column meta ends its codec with the stage yaml")
 	if len(diags) != 1 {
 		t.Fatalf("%d diagnostics, want the yaml error alone: %+v", len(diags), diags)
 	}
-	root, _ = editedCorpus(t, column, [2]string{"    title name\n", "    title name\n    codec meta yaml base64\n"})
-	if cat, diags := catalog.Load(root); cat == nil || len(diags) > 0 {
+	if cat, diags, _ := loadEdited(t, column, [2]string{"    title name\n", "    title name\n    codec meta yaml base64\n"}); cat == nil || len(diags) > 0 {
 		t.Fatalf("yaml under base64 refused: %+v", diags)
 	}
 }
@@ -1533,16 +1518,14 @@ func TestLoadYAMLCodec(t *testing.T) {
 // an i64 column, so any other key type is a located catalog diagnostic at the
 // identity column.
 func TestLoadIdentityKeyType(t *testing.T) {
-	root, _ := editedCorpus(t, [2]string{"table views {", keyedTable("i64 identity")})
-	cat, diags := catalog.Load(root)
+	cat, diags, _ := loadEdited(t, [2]string{"table views {", keyedTable("i64 identity")})
 	if len(diags) != 0 || cat == nil {
 		t.Fatalf("diagnostics = %+v, want an accepted catalog", diags)
 	}
 	rejected := []string{"i32 identity", "varchar(32) identity", "uuid identity", "date identity", "bool identity"}
 	for _, key := range rejected {
 		t.Run("rejects "+key, func(t *testing.T) {
-			root, _ := editedCorpus(t, [2]string{"table views {", keyedTable(key)})
-			cat, diags := catalog.Load(root)
+			cat, diags, _ := loadEdited(t, [2]string{"table views {", keyedTable(key)})
 			expectRejected(t, cat, diags)
 			if !slices.ContainsFunc(diags, func(d catalog.Diagnostic) bool {
 				return d.File == "dbspec/flowmark.dbs" && d.Rule == "catalog" && d.Line > 0 && strings.Contains(d.Message, "an identity column has type i64")
@@ -1560,8 +1543,7 @@ var shardedPeople = [][2]string{
 }
 
 func TestLoadReadsStoreShard(t *testing.T) {
-	root, _ := editedCorpus(t, shardedPeople...)
-	cat, diags := catalog.Load(root)
+	cat, diags, _ := loadEdited(t, shardedPeople...)
 	if len(diags) != 0 || cat == nil {
 		t.Fatalf("diagnostics for a sharded table: %+v", diags)
 	}

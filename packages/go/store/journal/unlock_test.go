@@ -88,11 +88,7 @@ func TestUnlockRefusesRunningHolder(t *testing.T) {
 
 // A holder on another host is removed only when --holder names it.
 func TestUnlockOtherHostRequiresHolder(t *testing.T) {
-	root := t.TempDir()
-	c, _ := newCorpus(t, root)
-	other := selfRecord(t, c, "s9")
-	other.Host = "another-machine"
-	plantRecord(t, root, LockPath, other)
+	root, c, other := otherHostLock(t)
 	if _, err := c.Unlock(""); err == nil || !strings.Contains(err.Error(), "--holder") {
 		t.Fatalf("Unlock = %v, want a refusal asking for --holder", err)
 	}

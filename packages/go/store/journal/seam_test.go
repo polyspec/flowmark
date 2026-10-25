@@ -33,10 +33,5 @@ func TestExportedFaultSeamAndRoot(t *testing.T) {
 		t.Fatalf("corpus at the crash = %v, want the old state", got)
 	}
 	c.SetFault(nil)
-	if err := c.Recover(l); err != nil {
-		t.Fatal(err)
-	}
-	if got := snapshot(t, root); !reflect.DeepEqual(got, after) {
-		t.Fatalf("corpus = %v, want the new state", got)
-	}
+	wantRecovered(t, c, l, root, after)
 }

@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -174,4 +175,82 @@ func selfRecord(t *testing.T, c *Corpus, session string) Holder {
 func plantRecord(t *testing.T, root, rel string, h Holder) {
 	t.Helper()
 	writeFile(t, root, rel, string(h.record()))
+}
+
+// wantRecovered requires the recovery of c under the lock l to succeed and to leave the corpus at root as want.
+func wantRecovered(t *testing.T, c *Corpus, l *Lock, root string, want map[string]string) {
+	t.Helper()
+	if err := c.Recover(l); err != nil {
+		t.Fatal(err)
+	}
+	if got := snapshot(t, root); !reflect.DeepEqual(got, want) {
+		t.Fatalf("corpus = %v, want %v", got, want)
+	}
+}
+
+// wantCommitted requires the commit of changes by c under the lock l to succeed and to leave the corpus at root as want.
+func wantCommitted(t *testing.T, c *Corpus, l *Lock, changes []Change, root string, want map[string]string) {
+	t.Helper()
+	if err := c.Commit(l, changes); err != nil {
+		t.Fatal(err)
+	}
+	if got := snapshot(t, root); !reflect.DeepEqual(got, want) {
+		t.Fatalf("corpus = %v, want %v", got, want)
+	}
+}
+
+// refusesLinkedStage opens the corpus at root, whose journal folder holds a symbolic link, takes its lock, and requires
+// the recovery to refuse the link; it returns the corpus and the lock.
+func refusesLinkedStage(t *testing.T, root string) (*Corpus, *Lock) {
+	t.Helper()
+	c, _ := newCorpus(t, root)
+	l := acquire(t, c, "s1")
+	if err := c.Recover(l); err == nil || !strings.Contains(err.Error(), "symbolic link") {
+		t.Fatalf("Recover = %v, want a symlink refusal", err)
+	}
+	return c, l
+}
+
+// otherHostLock returns the root of a fresh corpus whose lock file names a holder on another host, the corpus and the
+// holder.
+func otherHostLock(t *testing.T) (string, *Corpus, Holder) {
+	t.Helper()
+	root := t.TempDir()
+	c, _ := newCorpus(t, root)
+	other := selfRecord(t, c, "s9")
+	other.Host = "another-machine"
+	plantRecord(t, root, LockPath, other)
+	return root, c, other
+}
+
+// wantReplacedRelease plants the record other as the lock file of root and requires the release of l to refuse the
+// replaced lock and to leave the file as planted.
+func wantReplacedRelease(t *testing.T, l *Lock, root string, other Holder) {
+	t.Helper()
+	plantRecord(t, root, LockPath, other)
+	if err := l.Release(); err == nil || !strings.Contains(err.Error(), "replaced") {
+		t.Fatalf("Release = %v, want a replaced-lock error", err)
+	}
+	data, err := os.ReadFile(lockFile(root))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != string(other.record()) {
+		t.Fatalf("lock file changed to %q", data)
+	}
+}
+
+// wantLinkErrors requires linkUnsupported to read the failure of a link with each errno of cases as its want, a refusal
+// for want of hard links, and linkError to name that cause for each such errno.
+func wantLinkErrors(t *testing.T, cases map[error]bool) {
+	t.Helper()
+	for errno, want := range cases {
+		err := &os.LinkError{Op: "link", Old: "a", New: "b", Err: errno}
+		if got := linkUnsupported(err); got != want {
+			t.Errorf("linkUnsupported(%v) = %v, want %v", errno, got, want)
+		}
+		if want && !strings.Contains(linkError(err).Error(), "hard links") {
+			t.Errorf("linkError(%v) = %v, want the hard-link cause", errno, linkError(err))
+		}
+	}
 }

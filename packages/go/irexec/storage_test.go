@@ -77,15 +77,7 @@ func TestFilesStorageOrder(t *testing.T) {
 			f := catalogFixture(t, corpus(c.notes)).on(t)
 			// The keys alone: a parent not of its type fails a read that returns it.
 			res := f.ok(f.msg("all", "notes", map[string]any{"columns": map[string]any{"mode": "none", "remove": []string{"parent", "item"}}}))
-			var got []string
-			for _, r := range res.Answer.Rows {
-				v, _ := r.Get("id")
-				s, ok := v.(string)
-				if !ok {
-					t.Fatalf("the value %v is no string", v)
-				}
-				got = append(got, s)
-			}
+			got := rowIDs(t, res)
 			if !slices.Equal(got, c.want) {
 				t.Fatalf("ids %v; want %v", got, c.want)
 			}

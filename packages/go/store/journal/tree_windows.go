@@ -30,14 +30,9 @@ type windowsTree struct {
 }
 
 func newTreeWatch(c *Corpus) (treeWatch, error) {
-	name, err := windows.UTF16PtrFromString(c.root)
+	dir, err := openWatchedDir(c.root)
 	if err != nil {
 		return nil, err
-	}
-	dir, err := windows.CreateFile(name, windows.FILE_LIST_DIRECTORY, shareAll, nil, windows.OPEN_EXISTING,
-		windows.FILE_FLAG_BACKUP_SEMANTICS|windows.FILE_FLAG_OVERLAPPED, 0)
-	if err != nil {
-		return nil, fmt.Errorf("opening %s: %w", c.root, err)
 	}
 	w := &windowsTree{root: c.root, dir: dir, buf: make([]byte, 64*1024)}
 	if w.ov.HEvent, err = windows.CreateEvent(nil, 1, 0, nil); err != nil {

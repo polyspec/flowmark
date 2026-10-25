@@ -6,7 +6,6 @@ import (
 	"encoding/binary"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"unicode/utf16"
 
@@ -17,20 +16,12 @@ import (
 // `GOOS=windows go test -c` and run on a Windows host.
 
 func TestLinkUnsupportedClassified(t *testing.T) {
-	for errno, want := range map[windows.Errno]bool{
+	wantLinkErrors(t, map[error]bool{
 		windows.ERROR_INVALID_FUNCTION: true,
 		windows.ERROR_NOT_SUPPORTED:    true,
 		windows.ERROR_ALREADY_EXISTS:   false,
 		windows.ERROR_ACCESS_DENIED:    false,
-	} {
-		err := &os.LinkError{Op: "link", Old: "a", New: "b", Err: errno}
-		if got := linkUnsupported(err); got != want {
-			t.Errorf("linkUnsupported(%v) = %v, want %v", errno, got, want)
-		}
-		if want && !strings.Contains(linkError(err).Error(), "hard links") {
-			t.Errorf("linkError(%v) = %v", errno, linkError(err))
-		}
-	}
+	})
 }
 
 // notifyBuffer encodes FILE_NOTIFY_INFORMATION entries as ReadDirectoryChangesW returns them.

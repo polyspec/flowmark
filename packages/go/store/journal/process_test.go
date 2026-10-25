@@ -9,7 +9,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -252,16 +251,11 @@ func TestCrashedProcessRecovers(t *testing.T) {
 				t.Fatal(err)
 			}
 			l := acquire(t, c, "parent")
-			if err := c.Recover(l); err != nil {
-				t.Fatal(err)
-			}
 			want := before
 			if p.new {
 				want = after
 			}
-			if got := snapshot(t, root); !reflect.DeepEqual(got, want) {
-				t.Fatalf("corpus = %v, want %v", got, want)
-			}
+			wantRecovered(t, c, l, root, want)
 			if kinds := rec.kinds(); kinds[len(kinds)-1] != p.event {
 				t.Fatalf("events = %v, want the last %s", kinds, p.event)
 			}

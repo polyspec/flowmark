@@ -37,12 +37,7 @@ func TestCommitAppliesAndCollects(t *testing.T) {
 	root, changes, _, after := fixture(t)
 	c, rec := newCorpus(t, root)
 	l := acquire(t, c, "s1")
-	if err := c.Commit(l, changes); err != nil {
-		t.Fatal(err)
-	}
-	if got := snapshot(t, root); !reflect.DeepEqual(got, after) {
-		t.Fatalf("corpus = %v, want %v", got, after)
-	}
+	wantCommitted(t, c, l, changes, root, after)
 	if s := stages(t, c); len(s) != 0 {
 		t.Fatalf("stages left: %v", s)
 	}
@@ -152,12 +147,7 @@ func TestCommitRefusesLeftoverStage(t *testing.T) {
 	if err := c.Recover(l); err != nil {
 		t.Fatal(err)
 	}
-	if err := c.Commit(l, changes); err != nil {
-		t.Fatal(err)
-	}
-	if got := snapshot(t, root); !reflect.DeepEqual(got, after) {
-		t.Fatalf("corpus = %v, want %v", got, after)
-	}
+	wantCommitted(t, c, l, changes, root, after)
 }
 
 func crashAt(step string, index int) func(string, int) error {
@@ -212,16 +202,11 @@ func TestCrashAtEveryStep(t *testing.T) {
 			// A fresh process opens the corpus.
 			c2, rec := newCorpus(t, root)
 			l2 := acquire(t, c2, "s2")
-			if err := c2.Recover(l2); err != nil {
-				t.Fatal(err)
-			}
 			want := before
 			if p.new {
 				want = after
 			}
-			if got := snapshot(t, root); !reflect.DeepEqual(got, want) {
-				t.Fatalf("corpus = %v, want %v", got, want)
-			}
+			wantRecovered(t, c2, l2, root, want)
 			if s := stages(t, c2); len(s) != 0 {
 				t.Fatalf("stages left: %v", s)
 			}
@@ -249,24 +234,13 @@ func TestCrashDuringReplay(t *testing.T) {
 		index int
 	}{{"rename", 0}, {"rename", 2}, {"renames", 0}, {"commit", 0}, {"collect", 0}} {
 		t.Run(fmt.Sprintf("%s#%d", p.step, p.index), func(t *testing.T) {
-			root, changes, _, after := fixture(t)
-			c, _ := newCorpus(t, root)
-			l := acquire(t, c, "s1")
-			c.fault = crashAt("prepare", 0)
-			if err := c.Commit(l, changes); !errors.Is(err, errCrash) {
-				t.Fatalf("Commit = %v", err)
-			}
+			c, l, root, _, _, after := crashed(t, "prepare", 0)
 			c.fault = crashAt(p.step, p.index)
 			if err := c.Recover(l); !errors.Is(err, errCrash) {
 				t.Fatalf("Recover = %v, want the crash", err)
 			}
 			c.fault = nil
-			if err := c.Recover(l); err != nil {
-				t.Fatal(err)
-			}
-			if got := snapshot(t, root); !reflect.DeepEqual(got, after) {
-				t.Fatalf("corpus = %v, want %v", got, after)
-			}
+			wantRecovered(t, c, l, root, after)
 		})
 	}
 }
@@ -279,7 +253,7 @@ func TestRecoverRefusesHumanEdit(t *testing.T) {
 		index int
 	}{{"prepare", 0}, {"rename", 0}} {
 		t.Run(fmt.Sprintf("%s#%d", p.step, p.index), func(t *testing.T) {
-			root, changes, before, after := fixture(t)
+			root, changes, _, after := fixture(t)
 			c, rec := newCorpus(t, root)
 			l := acquire(t, c, "s1")
 			c.fault = crashAt(p.step, p.index)
@@ -315,12 +289,7 @@ func TestRecoverRefusesHumanEdit(t *testing.T) {
 			if err := os.Remove(filepath.Join(root, "d.md")); err != nil {
 				t.Fatal(err)
 			}
-			if err := c.Recover(l); err != nil {
-				t.Fatal(err)
-			}
-			if got := snapshot(t, root); !reflect.DeepEqual(got, after) {
-				t.Fatalf("corpus = %v, want %v (before %v)", got, after, before)
-			}
+			wantRecovered(t, c, l, root, after)
 		})
 	}
 }
@@ -347,13 +316,7 @@ func TestRecoverRefusesCorruptBlob(t *testing.T) {
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			root, changes, before, _ := fixture(t)
-			c, _ := newCorpus(t, root)
-			l := acquire(t, c, "s1")
-			c.fault = crashAt("prepare", 0)
-			if err := c.Commit(l, changes); !errors.Is(err, errCrash) {
-				t.Fatalf("Commit = %v", err)
-			}
+			c, l, root, _, before, _ := crashed(t, "prepare", 0)
 			c.fault = nil
 			tc.damage(t, filepath.Join(c.txDir(), stages(t, c)[0]))
 			err := c.Recover(l)
@@ -436,11 +399,7 @@ func TestRecoverRejectsForeignEntries(t *testing.T) {
 			t.Fatal(err)
 		}
 		symlink(t, elsewhere, filepath.Join(root, ".flowmark", "tx"))
-		c, _ := newCorpus(t, root)
-		l := acquire(t, c, "s1")
-		if err := c.Recover(l); err == nil || !strings.Contains(err.Error(), "symbolic link") {
-			t.Fatalf("Recover = %v, want a symlink refusal", err)
-		}
+		c, l := refusesLinkedStage(t, root)
 		writeFile(t, root, "a.md", "x\n")
 		if err := c.Commit(l, []Change{{Path: "a.md", Data: []byte("y\n")}}); err == nil || !strings.Contains(err.Error(), "symbolic link") {
 			t.Fatalf("Commit = %v, want a symlink refusal", err)
@@ -453,11 +412,7 @@ func TestRecoverRejectsForeignEntries(t *testing.T) {
 			t.Fatal(err)
 		}
 		symlink(t, elsewhere, filepath.Join(root, ".flowmark", "tx", stageName))
-		c, _ := newCorpus(t, root)
-		l := acquire(t, c, "s1")
-		if err := c.Recover(l); err == nil || !strings.Contains(err.Error(), "symbolic link") {
-			t.Fatalf("Recover = %v, want a symlink refusal", err)
-		}
+		refusesLinkedStage(t, root)
 	})
 }
 

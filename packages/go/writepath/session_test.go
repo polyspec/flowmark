@@ -259,11 +259,7 @@ func TestTransactionControlMisuse(t *testing.T) {
 // exists replaces it (the SQL standard).
 func TestSavepoints(t *testing.T) {
 	f := baseFixture(t)
-	s := f.session("server")
-	ctx := context.Background()
-	if err := s.Begin(ctx, false); err != nil {
-		t.Fatal(err)
-	}
+	s := f.begun(t, "server")
 	labels := func(j string) {
 		t.Helper()
 		want(t, s, f.msg("all", "tags", map[string]any{"columns": map[string]any{"mode": "none", "add": []string{"label"}}}), j)

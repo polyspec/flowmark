@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"compress/zlib"
 	"encoding/base64"
-	"github.com/polyspec/flowmark/packages/go/internal/corpustest"
 	"strings"
 	"testing"
 
@@ -214,8 +213,6 @@ func TestViewsAndCodecs(t *testing.T) {
 			want:  []string{"views.flowmark.md:4 type ~ entity"}},
 	}
 	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			checkCorpus(t, cat, corpustest.NewTree(t, tc.files), tc.want)
-		})
+		checkTreeCase(t, cat, tc.name, tc.files, tc.want)
 	}
 }

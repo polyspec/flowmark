@@ -1,7 +1,6 @@
 package journal
 
 import (
-	"bufio"
 	"os"
 	"strings"
 	"testing"
@@ -47,19 +46,9 @@ func TestZombieHolderReadsEnded(t *testing.T) {
 	if err := os.Mkdir(root+string(os.PathSeparator)+".flowmark", 0o755); err != nil {
 		t.Fatal(err)
 	}
-	cmd := childCommand(t, "record", root, "zombie")
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := cmd.Start(); err != nil {
-		t.Fatal(err)
-	}
-	line, err := bufio.NewReader(stdout).ReadString('\n')
+	child := startChild(t, "record", root, "zombie")
+	stdin := child.stdin
+	line, err := child.out.ReadString('\n')
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +86,7 @@ func TestZombieHolderReadsEnded(t *testing.T) {
 	if got := judge(t, c, h); got != HolderEnded {
 		t.Fatalf("zombie = %v, want ended", got)
 	}
-	if err := cmd.Wait(); err != nil {
+	if err := child.cmd.Wait(); err != nil {
 		t.Fatal(err)
 	}
 }

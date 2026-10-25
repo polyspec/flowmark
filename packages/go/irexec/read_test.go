@@ -310,15 +310,7 @@ func TestJoins(t *testing.T) {
 		res := f.ok(f.msg("all", "notes", map[string]any{"columns": none,
 			"where": where(pred("id", "eq", p(0)), map[string]any{"joined": map[string]any{"conn": "or", "join": "it"}}),
 			"joins": []any{join("left", map[string]any{"where": where(pred("state", "eq", p(1)))})}}, "N3", "done"))
-		var ids []string
-		for _, r := range res.Answer.Rows {
-			v, _ := r.Get("id")
-			s, ok := v.(string)
-			if !ok {
-				t.Fatalf("the value %v is no string", v)
-			}
-			ids = append(ids, s)
-		}
+		ids := rowIDs(t, res)
 		if !slices.Equal(ids, []string{"N1", "N3"}) {
 			f.t.Fatalf("ids %v", ids)
 		}
@@ -482,15 +474,7 @@ func TestOrderAndLimit(t *testing.T) {
 	})
 	f.sub(t, "20#order: an order on the order column sorts by its value, ties in storage order", func(f *fixture) {
 		res := f.ok(f.msg("all", "notes", order(map[string]any{"column": "position"})))
-		var ids []string
-		for _, r := range res.Answer.Rows {
-			v, _ := r.Get("id")
-			s, ok := v.(string)
-			if !ok {
-				t.Fatalf("the value %v is no string", v)
-			}
-			ids = append(ids, s)
-		}
+		ids := rowIDs(t, res)
 		if !slices.Equal(ids, []string{"N1", "N2", "N3"}) {
 			f.t.Fatalf("ids %v", ids)
 		}
@@ -538,15 +522,7 @@ func TestOrderNulls(t *testing.T) {
 		return map[string]any{"columns": none, "order": []any{map[string]any{"column": "age", "desc": desc}}}
 	}
 	ids := func(f *fixture, m []byte) []string {
-		var out []string
-		for _, r := range f.ok(m).Answer.Rows {
-			v, _ := r.Get("id")
-			s, ok := v.(string)
-			if !ok {
-				t.Fatalf("the value %v is no string", v)
-			}
-			out = append(out, s)
-		}
+		out := rowIDs(t, f.ok(m))
 		return out
 	}
 	f.sub(t, "60#surfaces: NULL sorts before every value ascending, NULLs in storage order", func(f *fixture) {
@@ -596,15 +572,7 @@ func TestClock(t *testing.T) {
 	f := catalogFixture(t, docs)
 	at := func(f *fixture, op string, value map[string]any, params ...any) []string {
 		res := f.ok(f.msgAt(half, "all", "people", map[string]any{"columns": none, "where": where(pred("joined", op, map[string]any{"value": value}))}, params...))
-		var out []string
-		for _, r := range res.Answer.Rows {
-			v, _ := r.Get("id")
-			s, ok := v.(string)
-			if !ok {
-				t.Fatalf("the value %v is no string", v)
-			}
-			out = append(out, s)
-		}
+		out := rowIDs(t, res)
 		return out
 	}
 	f.sub(t, "40#the-clock: a datetime(0) column equals no clock with a fraction", func(f *fixture) {

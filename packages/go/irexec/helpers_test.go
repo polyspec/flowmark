@@ -275,3 +275,18 @@ func where(items ...map[string]any) map[string]any {
 
 // set is an assignment of column to parameter i.
 func set(column string, i int) map[string]any { return map[string]any{"column": column, "p": i} }
+
+// rowIDs returns the id of each row of the answer of res, in order; an id that is no string fails the test.
+func rowIDs(t testing.TB, res *Result) []string {
+	t.Helper()
+	var ids []string
+	for _, r := range res.Answer.Rows {
+		v, _ := r.Get("id")
+		s, ok := v.(string)
+		if !ok {
+			t.Fatalf("the value %v is no string", v)
+		}
+		ids = append(ids, s)
+	}
+	return ids
+}

@@ -41,15 +41,24 @@ func watchArmError(err error) error {
 	return fmt.Errorf("ReadDirectoryChangesW: %w", err)
 }
 
-func newLockWatch(c *Corpus) (lockWatch, error) {
-	name, err := windows.UTF16PtrFromString(c.abs(".flowmark"))
+// openWatchedDir opens the folder path for overlapped ReadDirectoryChangesW.
+func openWatchedDir(path string) (windows.Handle, error) {
+	name, err := windows.UTF16PtrFromString(path)
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
 	dir, err := windows.CreateFile(name, windows.FILE_LIST_DIRECTORY, shareAll, nil, windows.OPEN_EXISTING,
 		windows.FILE_FLAG_BACKUP_SEMANTICS|windows.FILE_FLAG_OVERLAPPED, 0)
 	if err != nil {
-		return nil, fmt.Errorf("opening %s: %w", c.abs(".flowmark"), err)
+		return 0, fmt.Errorf("opening %s: %w", path, err)
+	}
+	return dir, nil
+}
+
+func newLockWatch(c *Corpus) (lockWatch, error) {
+	dir, err := openWatchedDir(c.abs(".flowmark"))
+	if err != nil {
+		return nil, err
 	}
 	w := &windowsWatch{dir: dir, buf: make([]byte, 64*1024), ch: make(chan wake, wakeBuffer), done: make(chan struct{})}
 	var errs []error

@@ -155,11 +155,7 @@ func TestAcquireStaleLockReported(t *testing.T) {
 
 // A holder on another host cannot be checked here: its state is unknown, never judged ended.
 func TestAcquireOtherHostUnknown(t *testing.T) {
-	root := t.TempDir()
-	c, _ := newCorpus(t, root)
-	other := selfRecord(t, c, "s9")
-	other.Host = "another-machine"
-	plantRecord(t, root, LockPath, other)
+	_, c, other := otherHostLock(t)
 	_, err := c.Acquire(context.Background(), "s1", 0)
 	var timeout *LockTimeout
 	if !errors.As(err, &timeout) || timeout.State != HolderUnknown {
@@ -239,17 +235,7 @@ func TestReleaseReplacedLockRefused(t *testing.T) {
 	c, rec := newCorpus(t, root)
 	l := acquire(t, c, "s1")
 	other := selfRecord(t, c, "s9")
-	plantRecord(t, root, LockPath, other)
-	if err := l.Release(); err == nil || !strings.Contains(err.Error(), "replaced") {
-		t.Fatalf("Release = %v, want a replaced-lock error", err)
-	}
-	data, readErr := os.ReadFile(lockFile(root))
-	if readErr != nil {
-		t.Fatal(readErr)
-	}
-	if string(data) != string(other.record()) {
-		t.Fatalf("lock file changed to %q", data)
-	}
+	wantReplacedRelease(t, l, root, other)
 	wantKinds(t, rec, LockAcquired)
 }
 
