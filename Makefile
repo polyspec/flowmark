@@ -27,7 +27,7 @@ slug-vectors: ## Record the heading ids GitHub, VS Code and GitLab render into s
 # The check of the commit-msg hook: the message MESSAGE against the commit rules of kit, and the item rules of the index.
 .PHONY: commit-msg-check
 commit-msg-check: ## Check the commit message MESSAGE and the index against the commit rules of kit; offline
-	$(NODE) $(KIT)/check-commits.mjs --message "$(MESSAGE)"
+	$(NODE) $(KIT)/check-commits.$(KIT_EXT) --message "$(MESSAGE)"
 
 # The executable that sidecar.json names. build, the task of kit, builds it as a prerequisite.
 .PHONY: flowmark-build
