@@ -1,5 +1,5 @@
 <!-- doc-id: checklist-kit-standard -->
-<!-- source-sha256: bbbf14c777502ab66a83de8d3fdb1ad466bd9a8816b0e3ea2d8b4aabc9a6342a -->
+<!-- source-sha256: dc9a75a93caf8f4a3b5d5cc81e6815ab5e2f2bec8d495a7663052711c2220f54 -->
 # kit 표준 체크리스트
 
 | ID | Task | Deliverables | Verification | State |
@@ -10,3 +10,4 @@
 | T15-3 | commit-msg-check는 check-commits를 $(KIT_EXT)로 실행한다(kit K613). 원인: target이 kit의 dist 파일인 check-commits.mjs를 가리켰는데, kit이 source를 실행하면 저장소는 그 파일을 더 실행하지 않는다. 수정: recipe는 $(KIT)/check-commits.$(KIT_EXT)를 가리킨다 | Makefile | `make -n commit-msg-check MESSAGE=x` | [o] |
 | T15-4 | flowmark은 옆의 checkout에서 kit을 받는다(kit K514, K614, K621). 원인: flowmark이 kit의 bootstrap, PHP lint, PRINCIPLES, lint 설정을 사본으로 두고 suite를 선언하지 않아서, kit이 config/layout.kit.yml과 그 schema 세 개만 복사한 뒤로 kit-check가 지적 38건을 찾는다. 수정: Makefile은 ../kit의 kit-bootstrap.mk를 include하고 suite를 선언하며, make kit-sync가 stale 사본을 지우고, config/php-lint를 지우며, 공유 root 파일 네 개는 ../kit로 가는 link가 된다 | Makefile, scripts/kit, config/php-lint, config/layout.kit.yml, PRINCIPLES.md, PRINCIPLES.ko.md, .editorconfig, .claude/settings.json, AGENTS.md | `make kit-check` | [o] |
 | T15-5 | make rules-check가 통과한다. 원인: AGENTS가 Own도 Refines도 아닌 규칙 아홉 개를 적고, 그중 세 개는 이 저장소의 용어 없이 P17을 적용하며, PRINCIPLES는 flowmark이 두지 않은 pre-commit과 pre-merge-commit hook을 가리킨다. 수정: 각 규칙은 Own 또는 Refines P17로 시작하고, P17 규칙은 적용하는 엔진 파일을 이름 붙이며, make hooks가 config/generated.json과 함께 kit의 Git hook을 쓴다 | AGENTS.md, .githooks, config/generated.json | `make rules-check` | [o] |
+| T15-6 | make toolchain-check가 통과한다. 원인: examples/board/web/.npmrc가 install-links=true와 bin-links=false를 두어서, npm이 각 file: 의존성을 link하지 않고 묶으며 bin을 link하지 않는다. 수정: 파일은 allow-remote=root만 둔다 | examples/board/web/.npmrc | `make toolchain-check` | [ ] |
