@@ -1,5 +1,5 @@
 <!-- doc-id: checklist-kit-standard -->
-<!-- source-sha256: 7bb4dce0bcb7a70217d8e4bedc629f3fb326350f996c85cfb93d429b9a88b4d1 -->
+<!-- source-sha256: e0bf1b88051a99dba8be524fe1feb0384e3bd8bf3742d251ffac39cdf94c8f7f -->
 # kit 표준 체크리스트
 
 | ID | Task | Deliverables | Verification | State |
@@ -19,3 +19,4 @@
 | T15-13 | make lint-ts가 통과한다. 원인: flowmark에 root tsconfig.json이 없어서 script와 test의 형이 풀리지 않고 oxlint가 그 호출을 unsafe로 보고한다. record-slugs.mts는 형이 없고 Go 이동 이전의 path를 읽고 쓴다. board client는 형을 단언하고, knip은 그 의존성을 목록에 없다고 찾으며, build는 esbuild를 path로 부르고, import하지 않는 ordered-json을 나열한다. 수정: root tsconfig.json, packages/go 아래 data를 쓰는 형이 있는 record-slugs.mts, hyper의 형이 있는 client, knip workspace인 board, 이름으로 부르는 esbuild, ordered-json 의존성 제거 | tsconfig.json, scripts/record-slugs.mts, examples/board/web/client, config/knip-entries.json | `make lint-ts` | [o] |
 | T15-14 | make rebuild-check가 통과한다(S1, kit K286). 원인: flowmark에 config/rebuild.json이 없어서, kit이 layout으로 찾는 tool source인 script와 board 예제의 PHP, TypeScript에 분류가 없다. 수정: config/rebuild.json이 각각을 그것이 쓰는 생태계 도구나 그것이 없는 이유로 분류하고, config/owner-checks.json이 rebuild-check로 그것을 소유한다 | config/rebuild.json, config/owner-checks.json | `make rebuild-check` | [o] |
 | T15-15 | make dependency-policy-check가 통과한다. 원인: flowmark에 config/dependency-policy.json이 없어서 board 예제의 PHP platform과 npm lock이 어디에도 선언되지 않는다. 수정: config/dependency-policy.json이 examples/board/web/composer.json의 platform과 lock package-lock.json, examples/board/web/package-lock.json을 선언하고, config/owner-checks.json이 dependency-policy-check로 그것을 소유한다 | config/dependency-policy.json, config/owner-checks.json | `make dependency-policy-check` | [o] |
+| T15-17 | flowmark의 Go에서 make duplication-check가 통과합니다. 원인: 각 패키지의 test가 다른 패키지의 corpus, fixture, request helper를 복사하고, 몇 library 함수가 다른 함수의 조각을 반복해 duplication-check가 Go clone 127개를 찾습니다. 수정: 반복된 조각마다 두 곳이 부르는 한 함수로 옮기고, test helper는 internal/corpustest로 옮깁니다. PHP와 TypeScript clone은 orm-gen이 쓴 파일이며, kit K640이 config/generated.json으로 제외합니다. | packages/go/internal/corpustest and the Go packages whose tests and functions call the shared pieces. | `make duplication-check` | [ ] |
