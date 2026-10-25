@@ -3,7 +3,6 @@ package journal
 import (
 	"bufio"
 	"os"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -103,12 +102,8 @@ func TestZombieHolderReadsEnded(t *testing.T) {
 	}
 }
 
-// otherUserPID is the process of another user that every host has: init on a unix host, and the System process on
-// Windows, where process 1 does not exist.
+// otherUserPID is the process of another user that the host has: process 1, launchd of root on macOS.
 func otherUserPID() int {
-	if runtime.GOOS == "windows" {
-		return 4
-	}
 	return 1
 }
 

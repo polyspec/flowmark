@@ -3,6 +3,7 @@
 
 ## Unreleased
 
+- The token and holder tests check the behavior on macOS with no branch on the platform, so make divergence-check passes (T15-16).
 - config/dependency-policy.json declares the PHP platform of the board example and the npm locks of flowmark, so make dependency-policy-check passes (T15-15).
 - config/rebuild.json classes the tool sources of flowmark, its scripts and the board example, so make rebuild-check passes (T15-14).
 - make lint-ts passes: the root tsconfig.json types the scripts and tests, record-slugs.mts is typed and reads and writes its data under packages/go, and the board client is the typed client of hyper (T15-13).

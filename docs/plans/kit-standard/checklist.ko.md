@@ -1,5 +1,5 @@
 <!-- doc-id: checklist-kit-standard -->
-<!-- source-sha256: cc5a444976130d666c902d5d0f266b43a28f92c372bf1f80f040b2b42278bded -->
+<!-- source-sha256: 829c3244b15959b0d9790f8dbeedf889d608616fde2970d76910fae40a429fdb -->
 # kit 표준 체크리스트
 
 | ID | Task | Deliverables | Verification | State |
@@ -20,4 +20,4 @@
 | T15-14 | make rebuild-check가 통과한다(S1, kit K286). 원인: flowmark에 config/rebuild.json이 없어서, kit이 layout으로 찾는 tool source인 script와 board 예제의 PHP, TypeScript에 분류가 없다. 수정: config/rebuild.json이 각각을 그것이 쓰는 생태계 도구나 그것이 없는 이유로 분류하고, config/owner-checks.json이 rebuild-check로 그것을 소유한다 | config/rebuild.json, config/owner-checks.json | `make rebuild-check` | [o] |
 | T15-15 | make dependency-policy-check가 통과한다. 원인: flowmark에 config/dependency-policy.json이 없어서 board 예제의 PHP platform과 npm lock이 어디에도 선언되지 않는다. 수정: config/dependency-policy.json이 examples/board/web/composer.json의 platform과 lock package-lock.json, examples/board/web/package-lock.json을 선언하고, config/owner-checks.json이 dependency-policy-check로 그것을 소유한다 | config/dependency-policy.json, config/owner-checks.json | `make dependency-policy-check` | [o] |
 | T15-17 | flowmark의 Go에서 make duplication-check가 통과합니다. 원인: 각 패키지의 test가 다른 패키지의 corpus, fixture, request helper를 복사하고, 몇 library 함수가 다른 함수의 조각을 반복해 duplication-check가 Go clone 127개를 찾습니다. 수정: 반복된 조각마다 두 곳이 부르는 한 함수로 옮기고, test helper는 internal/corpustest로 옮깁니다. PHP와 TypeScript clone은 orm-gen이 쓴 파일이며, kit K640이 config/generated.json으로 제외합니다. | packages/go/internal/corpustest and the Go packages whose tests and functions call the shared pieces. | `make duplication-check` | [ ] |
-| T15-16 | make divergence-check가 통과한다. 원인: packages/go/server의 token test와 packages/go/store/journal의 holder test가 runtime.GOOS로 분기해서 다른 platform에서는 다른 것을 단언한다. 수정: 둘은 flowmark을 개발하는 macOS의 동작, 곧 server.json의 mode 0600과 다른 사용자의 process인 process 1을 검사한다 | packages/go/server/server_test.go, packages/go/store/journal/holder_test.go | `make divergence-check` | [~] |
+| T15-16 | make divergence-check가 통과한다. 원인: packages/go/server의 token test와 packages/go/store/journal의 holder test가 runtime.GOOS로 분기해서 다른 platform에서는 다른 것을 단언한다. 수정: 둘은 flowmark을 개발하는 macOS의 동작, 곧 server.json의 mode 0600과 다른 사용자의 process인 process 1을 검사한다 | packages/go/server/server_test.go, packages/go/store/journal/holder_test.go | `make divergence-check` | [o] |

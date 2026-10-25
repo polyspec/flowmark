@@ -1,9 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: a59c514f2040bbc5fe7a8df2d771d97838a59a395c57e0eaf646f2a016a30dc0 -->
+<!-- source-sha256: f3f659fece63737f7d3505d80aa6d57720fe53c0963c02bcb33dd15dbe2a7dac -->
 # Changelog
 
 ## Unreleased
 
+- token과 holder test는 platform 분기 없이 macOS의 동작을 검사하므로 make divergence-check가 통과한다(T15-16).
 - config/dependency-policy.json이 board 예제의 PHP platform과 flowmark의 npm lock을 선언하므로 make dependency-policy-check가 통과한다(T15-15).
 - config/rebuild.json이 flowmark의 tool source인 script와 board 예제를 분류하므로 make rebuild-check가 통과한다(T15-14).
 - make lint-ts가 통과한다: root tsconfig.json이 script와 test의 형을 정하고, record-slugs.mts는 형이 있으며 자기 data를 packages/go 아래에서 읽고 쓰고, board client는 hyper의 형이 있는 client다(T15-13).
