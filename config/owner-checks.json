@@ -149,6 +149,14 @@
       "targets": [
         "owner-validate"
       ]
+    },
+    {
+      "paths": [
+        "config/rebuild.json"
+      ],
+      "targets": [
+        "rebuild-check"
+      ]
     }
   ]
 }

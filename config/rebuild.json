@@ -1,0 +1,86 @@
+{
+  "schema": 1,
+  "comment": "The class of each tool source of flowmark (S1), found by the layout of the repository (kit K286): ecosystem names the tool it uses, policy the reason no ecosystem tool applies.",
+  "tools": {
+    "examples/board/web/app/handlers.php": {
+      "kind": "policy",
+      "reason": "the handlers of the board example, an application of the PHP server; it implements no tool of an ecosystem"
+    },
+    "examples/board/web/client/main.ts": {
+      "kind": "ecosystem",
+      "tool": "htmx.org and @polyspec/hyper-client run the page of the board example in the browser"
+    },
+    "examples/board/web/node/handlers.ts": {
+      "kind": "policy",
+      "reason": "the handlers of the board example, an application of the Node server; it implements no tool of an ecosystem"
+    },
+    "examples/board/web/node/main.ts": {
+      "kind": "ecosystem",
+      "tool": "node:http through App.server of @polyspec/hyper-server serves the board example"
+    },
+    "examples/board/web/node/model/models.ts": {
+      "kind": "ecosystem",
+      "tool": "orm-gen of @polyspec/orm generates it from the corpus catalog (the commands of the board README)"
+    },
+    "examples/board/web/node/postForm.ts": {
+      "kind": "ecosystem",
+      "tool": "@polyspec/crudui-generator-html renders the post form of the board example"
+    },
+    "examples/board/web/node/posts.ts": {
+      "kind": "ecosystem",
+      "tool": "@polyspec/orm reaches the flowmark corpus of the board example through markdown://"
+    },
+    "examples/board/web/public/index.php": {
+      "kind": "ecosystem",
+      "tool": "the front controller of the PHP SAPI (the built-in server or php-fpm) calls App::run of polyspec/hyper-server"
+    },
+    "examples/board/web/src/Assets.php": {
+      "kind": "policy",
+      "reason": "reads the manifest that the asset build writes (HY-76) for the layout of the board example; no ecosystem tool names the assets of this build"
+    },
+    "examples/board/web/src/Model/Comments.php": {
+      "kind": "ecosystem",
+      "tool": "orm-gen of polyspec/orm generates it from the corpus catalog (the commands of the board README)"
+    },
+    "examples/board/web/src/Model/People.php": {
+      "kind": "ecosystem",
+      "tool": "orm-gen of polyspec/orm generates it from the corpus catalog (the commands of the board README)"
+    },
+    "examples/board/web/src/Model/Posts.php": {
+      "kind": "ecosystem",
+      "tool": "orm-gen of polyspec/orm generates it from the corpus catalog (the commands of the board README)"
+    },
+    "examples/board/web/src/Model/bootstrap.php": {
+      "kind": "ecosystem",
+      "tool": "orm-gen of polyspec/orm generates it from the corpus catalog (the commands of the board README)"
+    },
+    "examples/board/web/src/Model/schema_declarations.php": {
+      "kind": "ecosystem",
+      "tool": "orm-gen of polyspec/orm generates it from the corpus catalog (the commands of the board README)"
+    },
+    "examples/board/web/src/Pages.php": {
+      "kind": "policy",
+      "reason": "the paging of the post list of the board example, an application of the PHP server; it implements no tool of an ecosystem"
+    },
+    "examples/board/web/src/PostForm.php": {
+      "kind": "ecosystem",
+      "tool": "polyspec/crudui-generator renders the post form of the board example"
+    },
+    "examples/board/web/src/Posts.php": {
+      "kind": "ecosystem",
+      "tool": "polyspec/orm reaches the flowmark corpus of the board example through markdown://"
+    },
+    "scripts/check-refs.mts": {
+      "kind": "policy",
+      "reason": "flowmark's rule that every task ID a document names resolves to an item of a checklist; no ecosystem tool reads the IDs of these checklists"
+    },
+    "scripts/go-test.mts": {
+      "kind": "ecosystem",
+      "tool": "go test runs the tests of each Go module, on macOS on the case-sensitive folder that hdiutil mounts"
+    },
+    "scripts/record-slugs.mts": {
+      "kind": "ecosystem",
+      "tool": "gh api asks GitHub's renderer, VS Code's own slugify.ts runs on markdown-it, and cargo builds gitlab-glfm-markdown, whose heading ids are recorded"
+    }
+  }
+}
