@@ -20,18 +20,56 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 export const repositoryRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
 /** The folder the vectors are written to. */
-export const vectorDir = path.join(repositoryRoot, 'store', 'testdata', 'slug');
+export const vectorDir = path.join(repositoryRoot, 'packages', 'go', 'store', 'testdata', 'slug');
 
-const log = message => console.log(`[record-slugs] ${message}`);
+const log = (message: string): void => console.log(`[record-slugs] ${message}`);
+
+/** The form of a code point in a heading: its reference or itself, in an ATX heading or a raw HTML <h2>. */
+export type Form = 'ref' | 'raw' | 'htmlRef' | 'htmlRaw';
+
+/** A heading of the code point vectors: one code point alone, or a group of them, and its line. */
+export interface Heading {
+  kind: 'single' | 'group';
+  cps: number[];
+  line: string;
+}
+
+/** A viewer's rendering of a document: the id of each heading element of it, in order, or null for one with none. */
+export type Render = (text: string) => (string | null)[];
+
+/** A case of the recordings: its name and its markdown. */
+export type Case = [name: string, markdown: string];
+
+/** Whether v is a JSON object, or an object of the tools that the recorder runs. */
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
+/** The member at names of the value v, which what names; the recording fails when a member is missing. */
+function at(v: unknown, what: string, ...names: string[]): unknown {
+  let cur = v;
+  for (const name of names) {
+    if (!(isRecord(cur) || typeof cur === 'function') || !(name in cur)) throw new Error(`${what} has no ${names.join('.')}`);
+    const next: unknown = Reflect.get(cur, name);
+    cur = next;
+  }
+  return cur;
+}
+
+/** The string v, which what names; the recording fails for any other value. */
+function text(v: unknown, what: string): string {
+  if (typeof v !== 'string') throw new Error(`${what} is no string: ${String(v)}`);
+  return v;
+}
 
 /** The code points a vector covers: every code point but the surrogates, which no UTF-8 text holds. */
-export function* codePoints() {
+export function* codePoints(): Generator<number> {
   for (let cp = 0; cp <= 0x10ffff; cp++) {
     if (cp < 0xd800 || cp > 0xdfff) yield cp;
   }
 }
 
-const isASCIIPunct = cp => (cp >= 0x21 && cp <= 0x2f) || (cp >= 0x3a && cp <= 0x40) || (cp >= 0x5b && cp <= 0x60) || (cp >= 0x7b && cp <= 0x7e);
+const isASCIIPunct = (cp: number): boolean => (cp >= 0x21 && cp <= 0x2f) || (cp >= 0x3a && cp <= 0x40) || (cp >= 0x5b && cp <= 0x60) || (cp >= 0x7b && cp <= 0x7e);
 
 /**
  * The two forms in which a heading holds a code point: `ref`, its hexadecimal numeric character reference, which
@@ -40,7 +78,7 @@ const isASCIIPunct = cp => (cp >= 0x21 && cp <= 0x2f) || (cp >= 0x3a && cp <= 0x
  * ends the heading's line, and neither has U+0000: GitHub renders no document that holds it (the API returns the text
  * as it was sent), and CommonMark reads it as U+FFFD, which the reference form records.
  */
-export function forms(cp) {
+export function forms(cp: number): Record<Form, string | null> {
   const ref = `&#x${cp.toString(16).toUpperCase()};`;
   const htmlRaw = cp === 0x0a || cp === 0x0d || cp === 0 || cp === 0x3c || cp === 0x26 ? null : String.fromCodePoint(cp);
   if (cp === 0x0a || cp === 0x0d || cp === 0) return { ref, raw: null, htmlRef: ref, htmlRaw };
@@ -53,7 +91,7 @@ export function forms(cp) {
  * heading, an HTML block of its own, which holds the code point as its numeric reference or as itself (no '<' or '&',
  * which would begin markup, and no line ending or U+0000).
  */
-const headingLine = (form, text) => (form.startsWith('html') ? `<h2>${text}</h2>` : `# ${text}`);
+const headingLine = (form: Form, text: string): string => (form.startsWith('html') ? `<h2>${text}</h2>` : `# ${text}`);
 
 /** The number of code points a group heading holds. */
 export const groupSize = 512;
@@ -64,9 +102,9 @@ export const groupSize = 512;
  * read alone, in `# s<hex>p<c>q`. Each heading starts with its own marker so that no two ids are equal and none is
  * numbered.
  */
-export function headingsOf(cps, form) {
-  const headings = [];
-  const grouped = [];
+export function headingsOf(cps: Iterable<number>, form: Form): Heading[] {
+  const headings: Heading[] = [];
+  const grouped: [number, string][] = [];
   for (const cp of cps) {
     const f = forms(cp)[form];
     if (f === null) continue;
@@ -85,39 +123,47 @@ export function headingsOf(cps, form) {
  * at its hyphens, and a single's is its id between the marker and q. A heading whose id does not split as expected is
  * returned in `again`, to be read one code point per heading.
  */
-export function splitIds(heading, id) {
-  const out = new Map();
+export function splitIds(heading: Heading, id: string | null | undefined): { ids: Map<number, string>; again: boolean } {
+  const out = new Map<number, string>();
+  if (id === null || id === undefined) throw new Error(`the heading ${JSON.stringify(heading.line)} rendered no id`);
   if (heading.kind === 'single') {
-    const head = `s${heading.cps[0].toString(16)}p`;
+    const [cp] = heading.cps;
+    if (cp === undefined) throw new Error(`the heading ${JSON.stringify(heading.line)} holds no code point`);
+    const head = `s${cp.toString(16)}p`;
     if (!id.startsWith(head) || !id.endsWith('q')) throw new Error(`the heading ${JSON.stringify(heading.line)} rendered the id ${JSON.stringify(id)}`);
-    out.set(heading.cps[0], id.slice(head.length, -1));
+    out.set(cp, id.slice(head.length, -1));
     return { ids: out, again: false };
   }
   const parts = id.split('-');
   const n = heading.cps.length;
   if (parts.length !== n + 2 || parts[n + 1] !== '') return { ids: out, again: true };
-  heading.cps.forEach((cp, k) => out.set(cp, parts[k + 1]));
+  heading.cps.forEach((cp, k) => out.set(cp, parts[k + 1] ?? ''));
   return { ids: out, again: false };
 }
 
 /** The headings that read each code point of a group alone. */
-export function singles(heading, form) {
-  return heading.cps.map(cp => ({ kind: 'single', cps: [cp], line: headingLine(form, `s${cp.toString(16)}p${forms(cp)[form]}q`) }));
+export function singles(heading: Heading, form: Form): Heading[] {
+  return heading.cps.map(cp => {
+    const f = forms(cp)[form];
+    if (f === null) throw new Error(`the code point ${hex(cp)} has no ${form} form`);
+    return { kind: 'single', cps: [cp], line: headingLine(form, `s${cp.toString(16)}p${f}q`) };
+  });
 }
 
-const hex = cp => cp.toString(16).toUpperCase().padStart(4, '0');
+const hex = (cp: number): string => cp.toString(16).toUpperCase().padStart(4, '0');
 
 /**
  * The treatment of the code point cp whose id is t: `drop` when the id is empty, `keep` when it is the character,
  * `+N` or `-N` (hexadecimal) when it is the single character N code points away, else the code points of the id in
  * hexadecimal joined by spaces; `none` when the form does not exist.
  */
-export function treatment(cp, t) {
+export function treatment(cp: number, t: string | null | undefined): string {
   if (t === null || t === undefined) return 'none';
   if (t === '') return 'drop';
-  const chars = [...t].map(c => c.codePointAt(0));
-  if (chars.length === 1) {
-    const d = chars[0] - cp;
+  const chars = Array.from(t, c => c.codePointAt(0) ?? 0);
+  const [only] = chars;
+  if (chars.length === 1 && only !== undefined) {
+    const d = only - cp;
     if (d === 0) return 'keep';
     return d > 0 ? `+${d.toString(16).toUpperCase()}` : `-${(-d).toString(16).toUpperCase()}`;
   }
@@ -128,16 +174,16 @@ export function treatment(cp, t) {
  * The lines of a code point file: one line `lo..hi ; ref ; raw` for each run of consecutive code points (the
  * surrogates skipped) whose two treatments are the same, ref that of the reference form and raw that of the raw form.
  */
-export function compress(ref, raw) {
-  const lines = [];
-  let run = null;
+export function compress(ref: Map<number, string>, raw: Map<number, string>): string[] {
+  const lines: string[] = [];
+  let run: { lo: number; hi: number; key: string } | null = null;
   const flush = () => {
     if (run) lines.push(`${hex(run.lo)}..${hex(run.hi)} ; ${run.key}`);
   };
   for (const cp of codePoints()) {
     const key = `${treatment(cp, ref.get(cp))} ; ${treatment(cp, raw.get(cp))}`;
     const next = run && (run.hi + 1 === cp || (run.hi === 0xd7ff && cp === 0xe000));
-    if (next && run.key === key) {
+    if (next && run !== null && run.key === key) {
       run.hi = cp;
       continue;
     }
@@ -152,7 +198,7 @@ export function compress(ref, raw) {
  * The structural cases: documents whose headings' ids show how a viewer reads a heading's text and numbers a repeated
  * slug. Each is recorded as a document of its own, so the numbering starts afresh.
  */
-export const structuralCases = [
+export const structuralCases: Case[] = [
   ['spaces', '# a b  c   d'],
   ['leading and trailing spaces by reference', '# &#32;a b&#32;'],
   ['tabs', '# a\tb\t\tc'],
@@ -351,7 +397,7 @@ export const structuralCases = [
  * underline. Each viewer stops taking rows once the cells it has autocompleted pass its limit, and the rows from there
  * are a paragraph that the underline makes a heading, whose text names the first row the table did not take.
  */
-export function tableCellLimit() {
+export function tableCellLimit(): string {
   const n = 1001;
   const rows = Array.from({ length: 600 }, (_, k) => `x${k + 1}`);
   return [`|${'a|'.repeat(n)}`, `|${'-|'.repeat(n)}`, ...rows, '---'].join('\n');
@@ -365,14 +411,14 @@ export function tableCellLimit() {
 export const snippetFile = 'items.flowmark.md';
 
 /** Gitlab::HeadingSlug.prefix_from_file_path of file: the anchorized base name without its extension, and '-'. */
-export function snippetPrefix(file) {
+export function snippetPrefix(file: string): string {
   const base = path.basename(file, path.extname(file));
   const slug = base.toLowerCase().replace(/[^\p{L}\p{M}\p{N}\p{Pc} -]/gu, '').replaceAll(' ', '-');
   return slug === '' ? '' : `${slug}-`;
 }
 
 /** The cases of a GitLab snippet: documents rendered with the heading slug prefix of snippetFile. */
-export const snippetCases = [
+export const snippetCases: Case[] = [
   ['detail heading shape in a snippet', '## items row T1\n\n## items row T1\n\n# a\n\n# a-1\n\n# a'],
   ['snippet prefix in a heading', `# ${snippetPrefix(snippetFile).slice(0, -1)} items row T1\n\n## items row T1`],
 ];
@@ -382,7 +428,7 @@ export const snippetCases = [
  * element: the id each viewer gives it from its text; for a raw element in VS Code and GitLab, which give it none, the
  * id attribute as written, or null.
  */
-export const rawHeadingCases = [
+export const rawHeadingCases: Case[] = [
   ['raw heading', '<h2>items row T1</h2>'],
   ['raw heading with an id', '<h2 id="hh">g</h2>'],
   ['raw heading in capitals', '<H2>Items Row T1</H2>'],
@@ -457,36 +503,39 @@ rtc ruby s samp script search section select slot small source span strike stron
 tbody td template textarea tfoot th thead time title tr track tt u ul var video wbr xmp foo custom-el`.split(/\s+/);
 
 /** The ids and name attributes of the heading elements of html, in order: the id attribute of each, or null. */
-export function headingIdAttrs(html) {
-  return [...html.matchAll(/<h[1-6]((?=[\s>\/])[^>]*)>/gi)].map(m => {
-    const id = (m[1] ?? '').match(/\sid="([^"]*)"/i);
-    return id ? unescapeAttr(id[1]) : null;
+export function headingIdAttrs(html: string): (string | null)[] {
+  return [...html.matchAll(/<h[1-6]((?=[\s>/])[^>]*)>/gi)].map(m => {
+    const id = /\sid="([^"]*)"/i.exec(m[1] ?? '');
+    return id ? unescapeAttr(id[1] ?? '') : null;
   });
 }
 
-/**
- * The named character references that GitHub decodes inside a raw HTML heading, with the text each renders: every name
- * of the entities package the engine reads (internal/htmlentity), in its own raw <h2>.
- */
 // The suppression line of slugify.ts of VS Code and the reason that the suppression check of kit asks of it; the recorded
 // file keeps the source byte-identical but for this note.
 const SLUGIFY_SUPPRESSION = '// eslint-disable-next-line no-misleading-character-class\n';
 const SLUGIFY_REASON = '// eslint-disable-next-line no-misleading-character-class -- vendored VS Code source, kept byte-identical except this note\n';
 
 // withReason is slugify.ts with the reason on its suppression line; a release without that line fails the recording.
-function withReason(slugify) {
+function withReason(slugify: string): string {
   if (!slugify.includes(SLUGIFY_SUPPRESSION)) throw new Error('slugify.ts of VS Code holds no eslint-disable-next-line no-misleading-character-class line');
   return slugify.replace(SLUGIFY_SUPPRESSION, SLUGIFY_REASON);
 }
 
-function githubEntities() {
-  const names = Object.keys(JSON.parse(readFileSync(path.join(repositoryRoot, 'internal', 'htmlentity', 'testdata', 'entities-3.0.1.json'), 'utf8')));
+/**
+ * The named character references that GitHub decodes inside a raw HTML heading, with the text each renders: every name
+ * of the entities package the engine reads (internal/htmlentity), in its own raw <h2>.
+ */
+function githubEntities(): Record<string, string> {
+  const entities: unknown = JSON.parse(readFileSync(path.join(repositoryRoot, 'packages', 'go', 'internal', 'htmlentity', 'testdata', 'entities-3.0.1.json'), 'utf8'));
+  if (!isRecord(entities)) throw new Error('entities-3.0.1.json is no object');
+  const names = Object.keys(entities);
   const html = githubRender(names.map((n, i) => `<h2>e${i}x&${n};x</h2>`).join('\n\n') + '\n');
   const inner = [...html.matchAll(/<h2[^>]*>e(\d+)x([^]*?)x<\/h2>/g)];
   if (inner.length !== names.length) throw new Error(`${inner.length} headings rendered for ${names.length} names`);
-  const out = {};
+  const out: Record<string, string> = {};
   for (const [, i, body] of inner) {
     const n = names[Number(i)];
+    if (n === undefined || body === undefined) throw new Error(`the heading e${String(i)} names no entity`);
     if (body !== `&amp;${n};`) out[n] = unescapeAttr(body);
   }
   return out;
@@ -496,7 +545,7 @@ function githubEntities() {
  * The raw HTML attribute cases of GitHub: documents of one raw tag whose id or name attribute GitHub renders. GitHub
  * renders no anchor of its own for them; the recorded value is the attribute as rendered.
  */
-export const attributeCases = [
+export const attributeCases: Case[] = [
   ['id', '<a id="items-row-t1"></a>'],
   ['name', '<a name="items-row-t1"></a>'],
   ['id in capitals', '<a id="ITEMS-ROW-T1"></a>'],
@@ -516,10 +565,13 @@ export const attributeCases = [
 ];
 
 /** The value of an HTML attribute with its character references decoded. */
-export function unescapeAttr(v) {
-  return v.replace(/&(#x[0-9a-fA-F]+|#[0-9]+|amp|lt|gt|quot|apos|#39);/g, (m, e) => {
-    if (e[0] === '#') return String.fromCodePoint(e[1] === 'x' || e[1] === 'X' ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10));
-    return { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" }[e];
+export function unescapeAttr(v: string): string {
+  const named: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
+  return v.replace(/&(#x[0-9a-fA-F]+|#[0-9]+|amp|lt|gt|quot|apos|#39);/g, (_m: string, e: string) => {
+    if (e.startsWith('#')) return String.fromCodePoint(e[1] === 'x' || e[1] === 'X' ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10));
+    const c = named[e];
+    if (c === undefined) throw new Error(`the reference &${e}; is no named reference of the recorder`);
+    return c;
   });
 }
 
@@ -530,18 +582,18 @@ export function unescapeAttr(v) {
  * there once the sanitizer has removed the elements between). Its id is without user-content-; the empty string for an
  * anchor whose id is empty, which GitHub writes without the prefix; null for any other heading element.
  */
-export function githubIds(html) {
-  const out = [];
+export function githubIds(html: string): (string | null)[] {
+  const out: (string | null)[] = [];
   let wrapper = false;
   let first = -1;
-  for (const m of html.matchAll(/<div class="markdown-heading">|<a id="([^"]*)" class="anchor"|<h[1-6](?=[\s>\/])[^>]*>/g)) {
+  for (const m of html.matchAll(/<div class="markdown-heading">|<a id="([^"]*)" class="anchor"|<h[1-6](?=[\s>/])[^>]*>/g)) {
     if (m[0] === '<div class="markdown-heading">') {
       if (wrapper) throw new Error(`a heading wrapper inside another at ${m.index}`);
       wrapper = true;
       first = -1;
     } else if (m[0].startsWith('<a ')) {
       if (!wrapper || first < 0) throw new Error(`a heading anchor outside a heading wrapper at ${m.index}`);
-      const id = unescapeAttr(m[1]);
+      const id = unescapeAttr(m[1] ?? '');
       if (id !== '' && !id.startsWith('user-content-')) throw new Error(`a heading anchor without user-content-: ${id}`);
       out[first] = id === '' ? '' : id.slice('user-content-'.length);
       wrapper = false;
@@ -555,8 +607,8 @@ export function githubIds(html) {
 }
 
 /** The id and name attributes of GitHub's rendering html other than its heading anchors, in order. */
-export function githubAttributes(html) {
-  return [...html.matchAll(/\s(id|name)="([^"]*)"(?! class="anchor")/g)].map(m => ({ attr: m[1], value: unescapeAttr(m[2]) }));
+export function githubAttributes(html: string): { attr: string; value: string }[] {
+  return [...html.matchAll(/\s(id|name)="([^"]*)"(?! class="anchor")/g)].map(m => ({ attr: m[1] ?? '', value: unescapeAttr(m[2] ?? '') }));
 }
 
 /** The largest document sent to GitHub in one request, in bytes; the API renders at most 400 KB. */
@@ -571,7 +623,7 @@ const requestLimit = 390_000;
 const connectAttempts = 3;
 
 /** Sends one POST /markdown request through gh with the JSON body input and returns its output. */
-function ghMarkdown(input) {
+function ghMarkdown(input: string): string {
   return execFileSync('gh', ['api', '-X', 'POST', '/markdown', '--input', '-'], {
     input,
     maxBuffer: 1 << 30,
@@ -583,13 +635,13 @@ function ghMarkdown(input) {
  * GitHub's rendering of a document, by POST /markdown in mode markdown, through gh. request sends one request and
  * throws as execFileSync does, with the stderr of gh; the tests pass their own, so no stub program stands in for gh.
  */
-export function githubRender(text, request = ghMarkdown) {
+export function githubRender(text: string, request: (input: string) => string = ghMarkdown): string {
   for (let attempt = 1; ; attempt++) {
     try {
       return request(JSON.stringify({ text, mode: 'markdown' }));
     } catch (err) {
       // gh writes a failure without a response as `Post "<url>": <error>`, and an HTTP error as `HTTP <status>: …`.
-      const stderr = String(err.stderr ?? '');
+      const stderr = err instanceof Error && 'stderr' in err ? String(err.stderr) : '';
       if (attempt >= connectAttempts || !stderr.startsWith('Post "https://api.github.com/markdown": ')) throw err;
       log(`GitHub: attempt ${attempt} got no response, sent again: ${stderr.trim()}`);
     }
@@ -600,9 +652,9 @@ export function githubRender(text, request = ghMarkdown) {
  * The ids of the headings, as a viewer renders them: render is called with documents of whole headings that fit the
  * request limit, and returns their ids in order.
  */
-function renderHeadings(headings, render) {
-  const ids = [];
-  let batch = [];
+function renderHeadings(headings: Heading[], render: Render): (string | null)[] {
+  const ids: (string | null)[] = [];
+  let batch: Heading[] = [];
   let size = 0;
   const send = () => {
     if (batch.length === 0) return;
@@ -623,12 +675,12 @@ function renderHeadings(headings, render) {
 }
 
 /** The id of every code point in one form, as render observes it. */
-function codePointIds(form, render, label) {
+function codePointIds(form: Form, render: Render, label: string): Map<number, string> {
   const headings = headingsOf(codePoints(), form);
   log(`${label}: ${form} form, ${headings.length} headings`);
   const ids = renderHeadings(headings, render);
-  const out = new Map();
-  const again = [];
+  const out = new Map<number, string>();
+  const again: Heading[] = [];
   headings.forEach((h, k) => {
     const r = splitIds(h, ids[k]);
     if (r.again) again.push(...singles(h, form));
@@ -645,7 +697,7 @@ function codePointIds(form, render, label) {
 }
 
 /** The text of a code point file: its header lines, then the compressed lines. */
-function codePointFile(header, ref, raw, html = false) {
+function codePointFile(header: string[], ref: Map<number, string>, raw: Map<number, string>, html = false): string {
   const head = [
     ...header.map(l => `# ${l}`),
     '#',
@@ -667,16 +719,16 @@ function codePointFile(header, ref, raw, html = false) {
 }
 
 /** Today's date in UTC, as YYYY-MM-DD. */
-const today = () => new Date().toISOString().slice(0, 10);
+const today = (): string => new Date().toISOString().slice(0, 10);
 
-function recordGitHub() {
+function recordGitHub(): void {
   const header = [
     "GitHub's heading ids per code point (spec 10, Detail headings and anchors), the vectors of S_GH.",
     `Recorded ${today()} from GitHub's renderer: POST https://api.github.com/markdown, mode "markdown", which`,
     'renders each heading anchor as <a id="user-content-<id>" class="anchor">; the id here is without the prefix.',
     'Re-record with make slug-vectors (scripts/record-slugs.mts).',
   ];
-  const render = text => githubIds(githubRender(text));
+  const render: Render = text => githubIds(githubRender(text));
   const ref = codePointIds('ref', render, 'GitHub');
   const raw = codePointIds('raw', render, 'GitHub');
   writeFileSync(path.join(vectorDir, 'github-codepoints.txt'), codePointFile(header, ref, raw));
@@ -692,12 +744,13 @@ function recordGitHub() {
   const rawHeadings = rawHeadingCases.map(([name, markdown]) => ({ name, markdown, ids: render(markdown + '\n') }));
   const attributes = attributeCases.map(([name, markdown]) => ({ name, markdown, values: githubAttributes(githubRender(markdown + '\n')) }));
   log('GitHub: the element names that end a heading element');
-  const closers = Object.fromEntries(elementNames.map(x => [x, {
+  const closerList = elementNames.map(x => [x, {
     open: render(`<h2>a<${x}>b</h2>\n`),
     end: render(`<h2>a</${x}>b</h2>\n`),
-  }]));
+  }] as const);
+  const closers = Object.fromEntries(closerList);
   // The start tags that end a heading element, each read again after every element name left open inside it.
-  const ending = elementNames.filter(x => closers[x].open.length > 1 || closers[x].open[0] === 'a');
+  const ending = closerList.filter(([, c]) => c.open.length > 1 || c.open[0] === 'a').map(([x]) => x);
   log(`GitHub: ${ending.length} ending tags after each of ${elementNames.length} open elements`);
   const nested = Object.fromEntries(elementNames.map(o => [o, Object.fromEntries(ending.map(x => [x, render(`<h2><${o}>a<${x}>b</h2>\n`)]))]));
   const file = {
@@ -716,12 +769,12 @@ function recordGitHub() {
 }
 
 /** The text of a file of microsoft/vscode at ref, through gh. */
-function vscodeFile(file, ref) {
+function vscodeFile(file: string, ref: string): string {
   return execFileSync('gh', ['api', '-H', 'Accept: application/vnd.github.raw', `repos/microsoft/vscode/contents/${file}?ref=${ref}`], { maxBuffer: 1 << 28 }).toString('utf8');
 }
 
 /** The source of the method named head of a class source: from head to its matching closing brace. */
-export function methodSource(src, head) {
+export function methodSource(src: string, head: string): string {
   const at = src.indexOf(head);
   if (at < 0) throw new Error(`no ${head} in the source`);
   let depth = 0;
@@ -737,75 +790,130 @@ export function methodSource(src, head) {
  * `const options = {…}`, and macros, which are the user's markdown.math.macros, empty by default. Any other member is
  * an error, so a changed extension shows here.
  */
-export function katexOptions(src) {
-  const m = src.match(/const options = \{([^}]*\{[^}]*\}[^}]*|[^}]*)\};/);
+export function katexOptions(src: string): Record<string, boolean | Record<string, never>> {
+  const m = /const options = \{([^}]*\{[^}]*\}[^}]*|[^}]*)\};/.exec(src);
   if (!m) throw new Error('no options in markdown-math extension.ts');
-  const options = {};
-  for (const line of m[1].split('\n').map(l => l.trim().replace(/,$/, '')).filter(Boolean)) {
-    const b = line.match(/^(\w+): (true|false)$/);
-    if (b) options[b[1]] = b[2] === 'true';
+  const options: Record<string, boolean | Record<string, never>> = {};
+  for (const line of (m[1] ?? '').split('\n').map(l => l.trim().replace(/,$/, '')).filter(Boolean)) {
+    const b = /^(\w+): (true|false)$/.exec(line);
+    if (b && b[1] !== undefined) options[b[1]] = b[2] === 'true';
     else if (line === 'macros: { ...settingsMacros }') options.macros = {};
     else throw new Error(`an option of markdown-math that the recorder does not read: ${line}`);
   }
   return options;
 }
 
-async function recordVSCode() {
-  const tag = JSON.parse(execFileSync('gh', ['api', 'repos/microsoft/vscode/releases/latest']).toString('utf8')).tag_name;
+/** VS Code's TypeScript as the recorder runs it: the transpiler of its sources. */
+interface Transpiler {
+  transpileModule(src: string, options: { compilerOptions: { target: unknown; module: unknown } }): { outputText: string };
+  ScriptTarget: { ES2022: unknown };
+  ModuleKind: { ESNext: unknown };
+}
+
+/** The slug builder of VS Code's slugify.ts. */
+interface Slugifier {
+  createBuilder(): { add(text: string): { value: string } };
+}
+
+/** A token of markdown-it, as the recorder reads it. */
+interface MarkdownToken {
+  type: string;
+  attrSet(name: string, value: string): void;
+}
+
+/** markdown-it, as the recorder configures and runs it. */
+interface Markdown {
+  parse(src: string, env: object): MarkdownToken[];
+  use(plugin: unknown, options: unknown): Markdown;
+  linkify: { set(options: { fuzzyLink: boolean }): unknown };
+  renderer: { render(tokens: MarkdownToken[], options: unknown, env: object): string };
+  options: unknown;
+}
+
+const isTranspiler = (v: unknown): v is Transpiler => isRecord(v) && typeof v.transpileModule === 'function';
+const isSlugifier = (v: unknown): v is Slugifier => isRecord(v) && typeof v.createBuilder === 'function';
+const isEngine = (v: unknown): v is new () => { plain(token: MarkdownToken): string } => typeof v === 'function';
+const isMarkdownFactory = (v: unknown): v is (options: { html: boolean; breaks: boolean; linkify: boolean; typographer: boolean }) => Markdown => typeof v === 'function';
+
+/** The module of the file in the work folder, through import(). */
+async function load(file: string): Promise<unknown> {
+  const mod: unknown = await import(pathToFileURL(file).href);
+  return mod;
+}
+
+async function recordVSCode(): Promise<void> {
+  const latest: unknown = JSON.parse(execFileSync('gh', ['api', 'repos/microsoft/vscode/releases/latest']).toString('utf8'));
+  const tag = text(at(latest, 'the latest release of VS Code', 'tag_name'), 'the tag of the latest release of VS Code');
   const base = 'extensions/markdown-language-features';
   const slugify = vscodeFile(`${base}/src/slugify.ts`, tag);
   const engine = vscodeFile(`${base}/src/markdownEngine.ts`, tag);
-  const lock = JSON.parse(vscodeFile(`${base}/package-lock.json`, tag));
-  const mdVersion = lock.packages['node_modules/markdown-it'].version;
+  const lock: unknown = JSON.parse(vscodeFile(`${base}/package-lock.json`, tag));
+  const mdVersion = text(at(lock, `${base}/package-lock.json`, 'packages', 'node_modules/markdown-it', 'version'), 'the version of markdown-it');
   const nodeVersion = vscodeFile('.nvmrc', tag).trim();
-  const ts = JSON.parse(vscodeFile('package-lock.json', tag)).packages['node_modules/typescript'];
+  const rootLock: unknown = JSON.parse(vscodeFile('package-lock.json', tag));
+  const ts = at(rootLock, 'package-lock.json of VS Code', 'packages', 'node_modules/typescript');
+  const tsName = isRecord(ts) && typeof ts.name === 'string' ? ts.name : 'typescript';
+  const tsVersion = text(at(ts, 'the typescript of VS Code', 'version'), 'the version of the typescript of VS Code');
   // The markdown-math extension, which VS Code ships with markdown.math.enabled true by default, contributes
   // @vscode/markdown-it-katex to the engine; its options are those of its extension.ts.
   const mathBase = 'extensions/markdown-math';
   const mathExtension = vscodeFile(`${mathBase}/src/extension.ts`, tag);
-  const mathLock = JSON.parse(vscodeFile(`${mathBase}/package-lock.json`, tag)).packages;
-  const katexPluginVersion = mathLock['node_modules/@vscode/markdown-it-katex'].version;
-  const katexVersion = mathLock['node_modules/katex'].version;
+  const mathLock: unknown = JSON.parse(vscodeFile(`${mathBase}/package-lock.json`, tag));
+  const katexPluginVersion = text(at(mathLock, `${mathBase}/package-lock.json`, 'packages', 'node_modules/@vscode/markdown-it-katex', 'version'), 'the version of @vscode/markdown-it-katex');
+  const katexVersion = text(at(mathLock, `${mathBase}/package-lock.json`, 'packages', 'node_modules/katex', 'version'), 'the version of katex');
   const mathOptions = katexOptions(mathExtension);
-  const mathEnabled = JSON.parse(vscodeFile(`${mathBase}/package.json`, tag)).contributes.configuration
-    .flatMap(c => Object.entries(c.properties ?? {}))
-    .find(([k]) => k === 'markdown.math.enabled')[1].default;
-  if (mathEnabled !== true) throw new Error(`markdown.math.enabled defaults to ${mathEnabled}`);
+  const mathPackage: unknown = JSON.parse(vscodeFile(`${mathBase}/package.json`, tag));
+  const configuration = at(mathPackage, `${mathBase}/package.json`, 'contributes', 'configuration');
+  if (!Array.isArray(configuration)) throw new Error(`${mathBase}/package.json contributes no configuration list`);
+  const enabled = configuration.flatMap((c: unknown) => isRecord(c) && isRecord(c.properties) ? Object.entries(c.properties) : []).find(([k]) => k === 'markdown.math.enabled');
+  if (enabled === undefined) throw new Error(`${mathBase}/package.json declares no markdown.math.enabled`);
+  const mathEnabled = at(enabled[1], 'markdown.math.enabled', 'default');
+  if (mathEnabled !== true) throw new Error(`markdown.math.enabled defaults to ${String(mathEnabled)}`);
   const work = mkdtempSync(path.join(tmpdir(), 'record-slugs-'));
   try {
-    execFileSync('npm', ['install', '--prefix', work, '--no-save', '--ignore-scripts', '--no-audit', '--no-fund', `markdown-it@${mdVersion}`, `typescript@npm:${ts.name ?? 'typescript'}@${ts.version}`, `@vscode/markdown-it-katex@${katexPluginVersion}`, `katex@${katexVersion}`], { stdio: 'ignore' });
-    const typescript = (await import(pathToFileURL(path.join(work, 'node_modules', 'typescript', 'lib', 'typescript.js')).href)).default;
+    execFileSync('npm', ['install', '--prefix', work, '--no-save', '--ignore-scripts', '--no-audit', '--no-fund', `markdown-it@${mdVersion}`, `typescript@npm:${tsName}@${tsVersion}`, `@vscode/markdown-it-katex@${katexPluginVersion}`, `katex@${katexVersion}`], { stdio: 'ignore' });
+    const typescript = at(await load(path.join(work, 'node_modules', 'typescript', 'lib', 'typescript.js')), 'typescript.js', 'default');
+    if (!isTranspiler(typescript)) throw new Error('typescript.js has no transpileModule');
     // The TypeScript sources compiled as VS Code compiles them, by the TypeScript its package-lock.json pins.
-    const compile = src => typescript.transpileModule(src, { compilerOptions: { target: typescript.ScriptTarget.ES2022, module: typescript.ModuleKind.ESNext } }).outputText;
+    const compile = (src: string): string => typescript.transpileModule(src, { compilerOptions: { target: typescript.ScriptTarget.ES2022, module: typescript.ModuleKind.ESNext } }).outputText;
     writeFileSync(path.join(work, 'slugify.mjs'), compile(slugify));
     const method = methodSource(engine, '#tokenToPlainText(token: MarkdownIt.Token): string {');
     writeFileSync(path.join(work, 'plain.mjs'), compile(`export class Engine {\n${method}\nplain(token: any): string { return this.#tokenToPlainText(token); }\n}\n`));
-    const { githubSlugifier } = await import(pathToFileURL(path.join(work, 'slugify.mjs')).href);
-    const { Engine } = await import(pathToFileURL(path.join(work, 'plain.mjs')).href);
-    const markdownit = (await import(pathToFileURL(path.join(work, 'node_modules', 'markdown-it', 'index.mjs')).href)).default;
-    const katexPlugin = (await import(pathToFileURL(path.join(work, 'node_modules', '@vscode', 'markdown-it-katex', 'dist', 'index.js')).href)).default.default;
+    const githubSlugifier = at(await load(path.join(work, 'slugify.mjs')), 'slugify.mjs', 'githubSlugifier');
+    if (!isSlugifier(githubSlugifier)) throw new Error('slugify.ts has no githubSlugifier with createBuilder');
+    const Engine = at(await load(path.join(work, 'plain.mjs')), 'plain.mjs', 'Engine');
+    if (!isEngine(Engine)) throw new Error('plain.mjs has no Engine class');
+    const markdownit = at(await load(path.join(work, 'node_modules', 'markdown-it', 'index.mjs')), 'markdown-it', 'default');
+    if (!isMarkdownFactory(markdownit)) throw new Error('markdown-it exports no function');
+    const katexPlugin = at(await load(path.join(work, 'node_modules', '@vscode', 'markdown-it-katex', 'dist', 'index.js')), '@vscode/markdown-it-katex', 'default', 'default');
     let md = markdownit({ html: true, breaks: false, linkify: true, typographer: false });
     md.linkify.set({ fuzzyLink: false });
     md = md.use(katexPlugin, mathOptions);
     const plain = new Engine();
+    // The plain text of the inline token after the heading_open token at i.
+    const inlineAfter = (tokens: MarkdownToken[], i: number): MarkdownToken => {
+      const inline = tokens[i + 1];
+      if (inline === undefined) throw new Error('a heading_open token ends the token stream');
+      return inline;
+    };
     // The heading ids of #addNamedHeaders: the slug builder of the render, fed the plain text of each heading's
     // inline token.
-    const render = text => {
+    const render: Render = source => {
       const builder = githubSlugifier.createBuilder();
-      const tokens = md.parse(text, {});
-      const ids = [];
+      const tokens = md.parse(source, {});
+      const ids: string[] = [];
       tokens.forEach((t, i) => {
-        if (t.type === 'heading_open') ids.push(builder.add(plain.plain(tokens[i + 1])).value);
+        if (t.type === 'heading_open') ids.push(builder.add(plain.plain(inlineAfter(tokens, i))).value);
       });
       return ids;
     };
     // The id attribute of every heading element of the preview's HTML: #addNamedHeaders sets it on each heading_open
     // token; raw HTML is written as it stands.
-    const renderHtml = text => {
+    const renderHtml: Render = source => {
       const builder = githubSlugifier.createBuilder();
-      const tokens = md.parse(text, {});
+      const tokens = md.parse(source, {});
       tokens.forEach((t, i) => {
-        if (t.type === 'heading_open') t.attrSet('id', builder.add(plain.plain(tokens[i + 1])).value);
+        if (t.type === 'heading_open') t.attrSet('id', builder.add(plain.plain(inlineAfter(tokens, i))).value);
       });
       return headingIdAttrs(md.renderer.render(tokens, md.options, {}));
     };
@@ -844,19 +952,20 @@ async function recordVSCode() {
  * Banzai::Renderer::USER_CONTENT_ID_PREFIX, only_escape_chars as REFERENCE_CHARS. A false member is the CLI's default.
  * Any other value is an error, so a changed engine shows here.
  */
-export function glfmArgs(src) {
-  const body = src.match(/OPTIONS = \{([^}]*)\}\.freeze/);
+export function glfmArgs(src: string): string[] {
+  const body = /OPTIONS = \{([^}]*)\}\.freeze/.exec(src);
   if (!body) throw new Error('no OPTIONS in glfm_markdown.rb');
-  const chars = src.match(/REFERENCE_CHARS = %w\[([^\]]*)\]\.freeze/);
-  const args = [];
-  for (const line of body[1].split('\n').map(l => l.trim().replace(/,$/, '')).filter(Boolean)) {
-    const m = line.match(/^(\w+): (.+)$/);
-    if (!m) throw new Error(`an OPTIONS line the recorder does not read: ${line}`);
-    const flag = `--${m[1].replaceAll('_', '-')}`;
-    if (m[2] === 'true') args.push(flag);
-    else if (m[2] === 'false') continue;
-    else if (m[1] === 'header_id_prefix' && m[2] === 'Banzai::Renderer::USER_CONTENT_ID_PREFIX') args.push(flag, 'user-content-');
-    else if (m[1] === 'only_escape_chars' && m[2] === 'REFERENCE_CHARS' && chars) args.push(flag, chars[1].split(/\s+/).join(''));
+  const chars = /REFERENCE_CHARS = %w\[([^\]]*)\]\.freeze/.exec(src);
+  const args: string[] = [];
+  for (const line of (body[1] ?? '').split('\n').map(l => l.trim().replace(/,$/, '')).filter(Boolean)) {
+    const m = /^(\w+): (.+)$/.exec(line);
+    const [, name, value] = m ?? [];
+    if (name === undefined || value === undefined) throw new Error(`an OPTIONS line the recorder does not read: ${line}`);
+    const flag = `--${name.replaceAll('_', '-')}`;
+    if (value === 'true') args.push(flag);
+    else if (value === 'false') continue;
+    else if (name === 'header_id_prefix' && value === 'Banzai::Renderer::USER_CONTENT_ID_PREFIX') args.push(flag, 'user-content-');
+    else if (name === 'only_escape_chars' && value === 'REFERENCE_CHARS' && chars?.[1] !== undefined) args.push(flag, chars[1].split(/\s+/).join(''));
     else throw new Error(`an OPTIONS value the recorder does not read: ${line}`);
   }
   return args;
@@ -867,23 +976,23 @@ export function glfmArgs(src) {
  * comrak renders, which carries data-sourcepos, without user-content-; for raw HTML, which comrak writes as it stands
  * and gives no id of its own, the id attribute as written, or null.
  */
-export function gitlabIds(html) {
-  return [...html.matchAll(/<h[1-6]((?=[\s>\/])[^>]*)>/gi)].map(m => {
+export function gitlabIds(html: string): (string | null)[] {
+  return [...html.matchAll(/<h[1-6]((?=[\s>/])[^>]*)>/gi)].map(m => {
     const attrs = m[1] ?? '';
     if (!/\sdata-sourcepos="/.test(attrs)) {
-      const written = attrs.match(/\sid="([^"]*)"/i);
-      return written ? unescapeAttr(written[1]) : null;
+      const written = /\sid="([^"]*)"/i.exec(attrs);
+      return written ? unescapeAttr(written[1] ?? '') : null;
     }
-    const id = attrs.match(/\sid="([^"]*)"/);
+    const id = /\sid="([^"]*)"/.exec(attrs);
     if (!id) throw new Error(`a heading of comrak without an id: ${m[0]}`);
-    const v = unescapeAttr(id[1]);
+    const v = unescapeAttr(id[1] ?? '');
     if (!v.startsWith('user-content-')) throw new Error(`a heading id without user-content-: ${v}`);
     return v.slice('user-content-'.length);
   });
 }
 
 /** The text of a URL, or an error naming it. */
-async function fetchText(url) {
+async function fetchText(url: string): Promise<string> {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`${url}: ${res.status}`);
   return res.text();
@@ -895,7 +1004,7 @@ async function fetchText(url) {
  * src/formatter.rs, which render through comrak as the Ruby extension does); it is built with the gem's Cargo.lock and
  * dependencies, without the Ruby binding (magnus, rb-sys, serde_magnus), which only src/lib.rs uses.
  */
-async function buildGlfm(version, sha256, work) {
+async function buildGlfm(version: string, sha256: string, work: string): Promise<string> {
   const res = await fetch(`https://rubygems.org/downloads/gitlab-glfm-markdown-${version}.gem`);
   if (!res.ok) throw new Error(`gitlab-glfm-markdown ${version}: ${res.status}`);
   const gem = Buffer.from(await res.arrayBuffer());
@@ -908,7 +1017,8 @@ async function buildGlfm(version, sha256, work) {
   execFileSync('tar', ['-xzf', path.join(src, 'data.tar.gz'), '-C', src]);
   const ext = path.join(src, 'ext', 'gitlab_glfm_markdown');
   const toml = readFileSync(path.join(ext, 'Cargo.toml'), 'utf8');
-  const section = name => (toml.match(new RegExp(`^\\[${name}\\]\\n([^]*?)(?=^\\[|(?![^]))`, 'm')) ?? [])[1] ?? '';
+  // A section that the gem's Cargo.toml does not declare has no lines.
+  const section = (name: string): string => new RegExp(`^\\[${name}\\]\\n([^]*?)(?=^\\[|(?![^]))`, 'm').exec(toml)?.[1] ?? '';
   const deps = section('dependencies').split('\n').filter(l => !/^(magnus|rb-sys|serde_magnus)\s*=/.test(l)).join('\n');
   const harness = path.join(work, 'harness');
   mkdirSync(harness);
@@ -924,13 +1034,14 @@ async function buildGlfm(version, sha256, work) {
   return path.join(harness, 'target', 'release', 'glfm');
 }
 
-async function recordGitLab() {
+async function recordGitLab(): Promise<void> {
   const project = 'https://gitlab.com/api/v4/projects/gitlab-org%2Fgitlab';
-  const commit = JSON.parse(await fetchText(`${project}/repository/commits/master`)).id;
-  const raw = file => fetchText(`https://gitlab.com/gitlab-org/gitlab/-/raw/${commit}/${file}`);
-  const lock = (await raw('Gemfile.lock')).match(/^ {2}gitlab-glfm-markdown \(([0-9.]+)\) sha256=([0-9a-f]{64})$/m);
-  if (!lock) throw new Error("no gitlab-glfm-markdown checksum in GitLab's Gemfile.lock");
-  const [, version, sha256] = lock;
+  const master: unknown = JSON.parse(await fetchText(`${project}/repository/commits/master`));
+  const commit = text(at(master, 'the master commit of GitLab', 'id'), 'the id of the master commit of GitLab');
+  const raw = (file: string): Promise<string> => fetchText(`https://gitlab.com/gitlab-org/gitlab/-/raw/${commit}/${file}`);
+  const lock = /^ {2}gitlab-glfm-markdown \(([0-9.]+)\) sha256=([0-9a-f]{64})$/m.exec(await raw('Gemfile.lock'));
+  const [, version, sha256] = lock ?? [];
+  if (version === undefined || sha256 === undefined) throw new Error("no gitlab-glfm-markdown checksum in GitLab's Gemfile.lock");
   const engineFile = 'lib/banzai/filter/markdown_engines/glfm_markdown.rb';
   const engine = await raw(engineFile);
   const args = glfmArgs(engine);
@@ -946,7 +1057,7 @@ async function recordGitLab() {
   const work = mkdtempSync(path.join(tmpdir(), 'record-slugs-'));
   try {
     const bin = await buildGlfm(version, sha256, work);
-    const render = text => gitlabIds(execFileSync(bin, args, { input: text, maxBuffer: 1 << 30 }).toString('utf8'));
+    const render: Render = source => gitlabIds(execFileSync(bin, args, { input: source, maxBuffer: 1 << 30 }).toString('utf8'));
     const options = args.join(' ');
     const header = [
       "GitLab's heading ids per code point (spec 10, Detail headings and anchors), the vectors of S_GL.",

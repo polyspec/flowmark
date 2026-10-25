@@ -31,6 +31,22 @@ interface DocumentsConfig {
   exclude?: string[];
 }
 
+const isStrings = (v: unknown): v is string[] => Array.isArray(v) && v.every(x => typeof x === 'string');
+
+/** config/checklist.json as check-refs reads it: its idPattern, a string; any other shape is an error naming it. */
+function checklistConfig(v: unknown): ChecklistConfig {
+  if (typeof v !== 'object' || v === null || !('idPattern' in v) || typeof v.idPattern !== 'string') throw new Error('config/checklist.json has no idPattern string');
+  return { idPattern: v.idPattern };
+}
+
+/** config/documents.json as check-refs reads it: include, and exclude when given, lists of globs. */
+function documentsConfig(v: unknown): DocumentsConfig {
+  if (typeof v !== 'object' || v === null || !('include' in v) || !isStrings(v.include)) throw new Error('config/documents.json has no include list of globs');
+  if (!('exclude' in v)) return { include: v.include };
+  if (!isStrings(v.exclude)) throw new Error('config/documents.json has an exclude that is no list of globs');
+  return { include: v.include, exclude: v.exclude };
+}
+
 const CHECKLIST = /^docs\/plans\/[^/]+\/checklist\.md$/;
 
 /** The regular expression of a glob of config/documents.json: `**` crosses folders, `*` and `?` do not. */
@@ -108,8 +124,8 @@ function itemIds(root: string, files: string[], idPattern: string): Set<string> 
  * task-ID references it read, and a finding for each reference that resolves to no item.
  */
 export function checkReferences(root: string): ReferenceResult {
-  const config = JSON.parse(readFileSync(path.join(root, 'config', 'checklist.json'), 'utf8')) as ChecklistConfig;
-  const documents = JSON.parse(readFileSync(path.join(root, 'config', 'documents.json'), 'utf8')) as DocumentsConfig;
+  const config = checklistConfig(JSON.parse(readFileSync(path.join(root, 'config', 'checklist.json'), 'utf8')));
+  const documents = documentsConfig(JSON.parse(readFileSync(path.join(root, 'config', 'documents.json'), 'utf8')));
   const files = trackedFiles(root);
   const ids = itemIds(root, files, config.idPattern);
   const pattern = new RegExp(`(?<![\\w.])(?:${config.idPattern})(?![\\w-])(?!\\.\\d)`, 'g');

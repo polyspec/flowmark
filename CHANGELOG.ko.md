@@ -1,9 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 3680f9b44f4ea5ddd6945668e278729aba83d201dc1b6c074d10c1aeaa196932 -->
+<!-- source-sha256: df2005136418695a724f016f87a67bc398724799ccf370f8784fb027bd2eabc9 -->
 # Changelog
 
 ## Unreleased
 
+- make lint-ts가 통과한다: root tsconfig.json이 script와 test의 형을 정하고, record-slugs.mts는 형이 있으며 자기 data를 packages/go 아래에서 읽고 쓰고, board client는 hyper의 형이 있는 client다(T15-13).
 - board 예제는 polyspec package의 release를 pin하고, make flowmark-install이 lock에서 설치하며 make install-link가 옆의 checkout으로 link하고, make lint-php가 그것에 대해 통과한다(T15-11).
 - Go module의 어떤 error나 type assertion도 버려지지 않는다: 각각은 반환되거나 보고되거나 깨진 불변식을 이름 붙이며, make lint-go가 통과한다(T15-10).
 - packages/go는 ir.ParamUses가 error를 돌려주는 link된 orm에 대해 compile되고 kit의 errorlint, nilerr, unused lint를 통과하며, gethostuuid syscall은 남는 이유를 적는다(T15-9).

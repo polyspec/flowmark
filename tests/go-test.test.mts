@@ -17,7 +17,8 @@ test('a PATH that holds no go fails naming go, the PATH searched and the fix', t
     rmSync(empty, { recursive: true, force: true });
   });
   process.env.PATH = empty;
-  assert.throws(() => runGoTests(root, root), error => {
+  assert.throws(() => runGoTests(root, root), (error: unknown) => {
+    assert.ok(error instanceof Error, 'runGoTests throws an Error');
     assert.match(error.message, /no executable named go on PATH/);
     assert.ok(error.message.includes(empty), `the message names the PATH searched: ${error.message}`);
     assert.match(error.message, /install Go or put its bin folder on PATH/);

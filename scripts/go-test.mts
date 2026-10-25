@@ -99,11 +99,11 @@ export const goModules = ['packages/go', 'examples', 'tests/conformance/go'];
  * spawn error.
  */
 export function runGoTests(root: string, dir: string, modules: string[] = goModules): number {
-  const env = { ...process.env, [caseSensitiveEnv]: dir };
+  const env: NodeJS.ProcessEnv = { ...process.env, [caseSensitiveEnv]: dir };
   let status = 0;
   for (const module of modules) {
     const result = spawnSync('go', ['test', '-count=1', './...'], { cwd: path.join(root, module), stdio: 'inherit', env });
-    if (result.error?.code === 'ENOENT') {
+    if (result.error !== undefined && 'code' in result.error && result.error.code === 'ENOENT') {
       throw new Error(
         `go test: no executable named go on PATH (${env.PATH ?? ''}); install Go or put its bin folder on PATH, then run again`,
       );

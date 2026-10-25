@@ -14,7 +14,7 @@ test('a volume already mounted at the folder is reused, not detached', t => {
   const root = mkdtempSync(path.join(tmpdir(), 'go-test-mount-'));
   const dir = path.join(root, 'case-sensitive');
   const image = path.join(root, 'probe.dmg');
-  const run = (...args) => assert.equal(spawnSync('hdiutil', args, { stdio: 'ignore' }).status, 0, `hdiutil ${args.join(' ')}`);
+  const run = (...args: string[]): void => assert.equal(spawnSync('hdiutil', args, { stdio: 'ignore' }).status, 0, `hdiutil ${args.join(' ')}`);
   run('create', '-size', '8m', '-fs', 'Case-sensitive APFS', '-volname', 'flowmark-probe', '-ov', image);
   mkdirSync(dir);
   run('attach', '-nobrowse', '-mountpoint', dir, image);

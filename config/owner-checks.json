@@ -118,7 +118,8 @@
       "paths": [
         "config/knip-entries.json",
         "package.json",
-        "package-lock.json"
+        "package-lock.json",
+        "tsconfig.json"
       ],
       "targets": [
         "lint-ts",

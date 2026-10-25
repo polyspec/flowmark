@@ -30,9 +30,11 @@ test('the space and the hyphen are read alone, the rest in groups', () => {
 
 test('a group id splits at its hyphens, and one that does not split is read again', () => {
   const [h] = headingsOf([0x41, 0x2e], 'raw');
+  assert.ok(h, 'the code points make a heading');
   assert.deepEqual([...splitIds(h, 'g0-a--').ids], [[0x41, 'a'], [0x2e, '']]);
   assert.equal(splitIds(h, 'g0-a-b--').again, true);
   const [s] = headingsOf([0x20], 'ref');
+  assert.ok(s, 'the space makes a heading');
   assert.deepEqual([...splitIds(s, 's20p-q').ids], [[0x20, '-']]);
   assert.throws(() => splitIds(s, 'x'));
 });
@@ -47,8 +49,8 @@ test('a treatment names the id relative to the code point', () => {
 });
 
 test('compression joins runs across the surrogates', () => {
-  const ref = new Map();
-  const raw = new Map();
+  const ref = new Map<number, string>();
+  const raw = new Map<number, string>();
   for (let cp = 0; cp <= 0x10ffff; cp++) {
     if (cp >= 0xd800 && cp <= 0xdfff) continue;
     ref.set(cp, String.fromCodePoint(cp));
@@ -106,16 +108,18 @@ test("a snippet's heading slug prefix is its anchorized base name and a hyphen, 
 
 // ghReplies is a request of githubRender, a mock function of node:test that answers the calls in turn from replies:
 // each reply is [stderr, exit] for a failure, thrown as execFileSync throws it, or [stdout] for a rendering.
-function ghReplies(replies) {
-  const request = mock.fn();
-  replies.forEach(([out, exit], call) => request.mock.mockImplementationOnce(() => {
+function ghReplies(replies: [out: string, exit?: number][]) {
+  const request = mock.fn((_input: string): string => {
+    throw new Error('gh got more calls than its replies');
+  });
+  replies.forEach(([out, exit], call) => request.mock.mockImplementationOnce((): string => {
     if (exit) throw Object.assign(new Error('Command failed: gh api -X POST /markdown --input -'), { status: exit, stderr: Buffer.from(out) });
     return out;
   }, call));
   return request;
 }
 
-const noResponse = ['Post "https://api.github.com/markdown": dial tcp 20.200.245.245:443: connect: operation timed out\n', 1];
+const noResponse: [string, number] = ['Post "https://api.github.com/markdown": dial tcp 20.200.245.245:443: connect: operation timed out\n', 1];
 
 test('a GitHub request whose connection fails before a response is sent again', () => {
   const gh = ghReplies([noResponse, ['<p>x</p>\n']]);
