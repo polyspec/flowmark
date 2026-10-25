@@ -155,6 +155,12 @@ type DocFile struct {
 	Rows []*Row
 }
 
+// unreadable is the answer of a folder of the table that cannot be read: a walk diagnostic that names the cause, and no
+// error, since the parse reports a folder it cannot read and goes on.
+func unreadable(table, what string, err error) ([]DocFile, []Diagnostic, error) {
+	return nil, []Diagnostic{fileDiag(table, RuleWalk, what+": "+err.Error())}, nil
+}
+
 // ParseDocumentTable reads the documents of the sharded document table of the corpus fsys: the files
 // <table>/<period>.flowmark.md, the period named at the grain of the table's shard (spec 20 Time shards). A
 // missing folder has no documents. A document named as another grain or as no period, a folder, and a
@@ -167,7 +173,7 @@ func ParseDocumentTable(cat *catalog.Catalog, fsys FS, table string, lk Linker, 
 	}
 	root, err := fsys.ReadDir(".")
 	if err != nil {
-		return nil, []Diagnostic{fileDiag(table, RuleWalk, "cannot read the corpus root: "+err.Error())}, nil
+		return unreadable(table, "cannot read the corpus root", err)
 	}
 	i := slices.IndexFunc(root, func(e fs.DirEntry) bool { return e.Name() == table })
 	switch {
@@ -180,7 +186,7 @@ func ParseDocumentTable(cat *catalog.Catalog, fsys FS, table string, lk Linker, 
 	}
 	entries, err := fsys.ReadDir(table)
 	if err != nil {
-		return nil, []Diagnostic{fileDiag(table, RuleWalk, "cannot read the folder: "+err.Error())}, nil
+		return unreadable(table, "cannot read the folder", err)
 	}
 	var docs []DocFile
 	var diags []Diagnostic

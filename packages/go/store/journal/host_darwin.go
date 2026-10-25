@@ -15,7 +15,7 @@ import (
 func hostID() (string, error) {
 	var id [16]byte
 	wait := unix.Timespec{Sec: 5}
-	if _, _, e := unix.Syscall(unix.SYS_GETHOSTUUID, uintptr(unsafe.Pointer(&id[0])), uintptr(unsafe.Pointer(&wait)), 0); e != 0 {
+	if _, _, e := unix.Syscall(unix.SYS_GETHOSTUUID, uintptr(unsafe.Pointer(&id[0])), uintptr(unsafe.Pointer(&wait)), 0); e != 0 { //nolint:staticcheck // SA1019: x/sys has no gethostuuid wrapper; the raw syscall is the only cgo-free call of it
 		return "", fmt.Errorf("gethostuuid(2): %w", e)
 	}
 	return hex.EncodeToString(id[:]), nil

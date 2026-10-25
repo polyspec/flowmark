@@ -121,7 +121,7 @@ func decodeVector(file string, b []byte) (*vector, error) {
 	dec := json.NewDecoder(bytes.NewReader(b))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&v); err != nil {
-		return nil, fmt.Errorf("%s: %v", file, err)
+		return nil, fmt.Errorf("%s: %w", file, err)
 	}
 	if want := strings.TrimSuffix(filepath.Base(file), ".json"); v.Name != want {
 		return nil, fmt.Errorf("%s: the name %q is not the file name %q", file, v.Name, want)
@@ -196,7 +196,7 @@ type outcome struct {
 func runVector(root string, v *vector) (err error) {
 	dbs, err := os.ReadFile(filepath.Join("..", "catalogs", v.Catalog+".dbs"))
 	if err != nil {
-		return fmt.Errorf("the catalog %q: %v", v.Catalog, err)
+		return fmt.Errorf("the catalog %q: %w", v.Catalog, err)
 	}
 	before := map[string]string{
 		"dbspec/" + v.Catalog + ".dbs": string(dbs),
@@ -250,7 +250,7 @@ func runVector(root string, v *vector) (err error) {
 	}
 	c, err := writepath.Open(context.Background(), cat, j, 0)
 	if err != nil {
-		return fmt.Errorf("opening the corpus: %v", err)
+		return fmt.Errorf("opening the corpus: %w", err)
 	}
 	defer func() { err = errors.Join(err, c.Close()) }()
 
@@ -282,7 +282,7 @@ func runVector(root string, v *vector) (err error) {
 	second.random = random
 	if !written {
 		if _, err := expectOutcome(root, v.Expect, second, after); err != nil {
-			return fmt.Errorf("the repeat: %v", err)
+			return fmt.Errorf("the repeat: %w", err)
 		}
 		if !random && !reflect.DeepEqual(first, second) {
 			return fmt.Errorf("the repeat answers %v, the first run %v", second, first)
@@ -291,10 +291,10 @@ func runVector(root string, v *vector) (err error) {
 	}
 	again, err := expectOutcome(root, v.Repeat, second, after)
 	if err != nil {
-		return fmt.Errorf("the repeat: %v", err)
+		return fmt.Errorf("the repeat: %w", err)
 	}
 	if err := checkAfter(cat, root, before, again, declared); err != nil {
-		return fmt.Errorf("the repeat: %v", err)
+		return fmt.Errorf("the repeat: %w", err)
 	}
 	return nil
 }
@@ -305,7 +305,7 @@ func checkStorage(cat *catalog.Catalog, v *vector) error {
 		Entity string `json:"entity"`
 	}
 	if err := json.Unmarshal(v.Request, &req); err != nil {
-		return fmt.Errorf("the request: %v", err)
+		return fmt.Errorf("the request: %w", err)
 	}
 	for _, tb := range cat.Tables {
 		if tb.Name != req.Entity {
@@ -328,7 +328,7 @@ func checkStorage(cat *catalog.Catalog, v *vector) error {
 func message(v *vector, hash string) ([]byte, bool, error) {
 	var req map[string]json.RawMessage
 	if err := json.Unmarshal(v.Request, &req); err != nil {
-		return nil, false, fmt.Errorf("the request: %v", err)
+		return nil, false, fmt.Errorf("the request: %w", err)
 	}
 	for _, m := range []string{"ir_version", "manifest_hash", "n_params"} {
 		if _, ok := req[m]; ok {
@@ -341,7 +341,7 @@ func message(v *vector, hash string) ([]byte, bool, error) {
 		} `json:"order"`
 	}
 	if err := json.Unmarshal(v.Request, &order); err != nil {
-		return nil, false, fmt.Errorf("the request's order: %v", err)
+		return nil, false, fmt.Errorf("the request's order: %w", err)
 	}
 	random := slices.ContainsFunc(order.Order, func(o struct {
 		Random bool `json:"random"`
@@ -364,7 +364,7 @@ func run(c *writepath.Corpus, msg []byte) (*outcome, error) {
 	}
 	a, err := s.Exec(context.Background(), msg)
 	if cerr := s.Close(); cerr != nil {
-		return nil, fmt.Errorf("closing the session: %v", cerr)
+		return nil, fmt.Errorf("closing the session: %w", cerr)
 	}
 	var we *writepath.Error
 	var ee *irexec.Error
@@ -383,7 +383,7 @@ func run(c *writepath.Corpus, msg []byte) (*outcome, error) {
 		}
 		return o, nil
 	default:
-		return nil, fmt.Errorf("the request failed with an error of no orm code: %v", err)
+		return nil, fmt.Errorf("the request failed with an error of no orm code: %w", err)
 	}
 	b, err := json.Marshal(a)
 	if err != nil {
@@ -485,7 +485,7 @@ func compareMembers(e *expectation, o *outcome) error {
 	dec := json.NewDecoder(bytes.NewReader(o.members["rows"]))
 	dec.UseNumber()
 	if err := dec.Decode(&rows); err != nil {
-		return fmt.Errorf("the answer's rows: %v", err)
+		return fmt.Errorf("the answer's rows: %w", err)
 	}
 	expected := *e.Rows
 	if len(rows) != len(expected) {
@@ -531,7 +531,7 @@ func decodeValue(raw json.RawMessage) (any, error) {
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.UseNumber()
 	if err := dec.Decode(&x); err != nil {
-		return nil, fmt.Errorf("the value %s: %v", raw, err)
+		return nil, fmt.Errorf("the value %s: %w", raw, err)
 	}
 	return x, nil
 }

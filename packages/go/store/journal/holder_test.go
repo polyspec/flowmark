@@ -71,7 +71,7 @@ func TestZombieHolderReadsEnded(t *testing.T) {
 	if got := judge(t, c, h); got != HolderRunning {
 		t.Fatalf("live child = %v, want running", got)
 	}
-	w, err := newLockWatch(c)
+	w, err := c.newWatch()
 	if err != nil {
 		t.Fatal(err)
 	}

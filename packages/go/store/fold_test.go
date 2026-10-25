@@ -174,7 +174,7 @@ func slugifySet(src string) (map[rune]bool, error) {
 		for p := 0; p < len(alt); {
 			units, n, err := regexAtom(alt[p:])
 			if err != nil {
-				return nil, fmt.Errorf("%q: %v", alt, err)
+				return nil, fmt.Errorf("%q: %w", alt, err)
 			}
 			atoms = append(atoms, units)
 			p += n

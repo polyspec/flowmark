@@ -65,6 +65,9 @@ func (e *Error) Error() string {
 
 func (e *Error) Unwrap() error { return e.Err }
 
+// Failure is the orm code and the message of the error, as a server answer names them.
+func (e *Error) Failure() (code, msg string) { return e.Code, e.Msg }
+
 func newError(code, format string, a ...any) *Error {
 	return &Error{Code: code, Face: code, Msg: fmt.Sprintf(format, a...)}
 }

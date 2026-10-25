@@ -1,9 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: b67cc9188ab2455788e2c0c3920a73309efe7c9d27b23922b2d9dca3eea6fb1b -->
+<!-- source-sha256: 1d82bd13eb3143762cc20d6d643069e943af90afaddbaaf4459698c48a08e5ac -->
 # Changelog
 
 ## Unreleased
 
+- packages/go는 ir.ParamUses가 error를 돌려주는 link된 orm에 대해 compile되고 kit의 errorlint, nilerr, unused lint를 통과하며, gethostuuid syscall은 남는 이유를 적는다(T15-9).
 - .gitignore는 모든 .venv/를 무시하므로, make layout-check가 vulture lock 환경을 무시된 것으로 본다(T15-8).
 - config/owner-checks.json은 추적된 각 path에 그것을 소유하는 gate와 test를 주므로, make owner-check가 변경의 검사를 고른다(T15-7).
 - examples/board/web/.npmrc는 allow-remote만 두므로, npm이 그 file: package와 bin을 link하고 make toolchain-check가 통과한다(T15-6).

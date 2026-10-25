@@ -164,11 +164,11 @@ func snapshot(t *testing.T, root string) map[string]string {
 	return out
 }
 
-// TestTrackerSchema: each tracker catalog is the application schema (spec 100, catalog/testdata/app) but for the store
-// setting of items, so the split-file corpus is the application schema itself and the other two differ from it in that
-// one line.
+// TestTrackerSchema: each tracker catalog is the application schema (spec 100, packages/go/catalog/testdata/app) but
+// for the store setting of items, so the split-file corpus is the application schema itself and the other two differ
+// from it in that one line.
 func TestTrackerSchema(t *testing.T) {
-	app, err := os.ReadFile(filepath.Join("..", "catalog", "testdata", "app", "dbspec", "flowmark.dbs"))
+	app, err := os.ReadFile(filepath.Join("..", "packages", "go", "catalog", "testdata", "app", "dbspec", "flowmark.dbs"))
 	if err != nil {
 		t.Fatal(err)
 	}

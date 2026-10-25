@@ -44,6 +44,9 @@ type Error struct {
 
 func (e *Error) Error() string { return e.Code + ": " + e.Msg }
 
+// Failure is the orm code and the message of the error, as a server answer names them.
+func (e *Error) Failure() (code, msg string) { return e.Code, e.Msg }
+
 // errf returns an error of code with a formatted message.
 func errf(code, format string, a ...any) *Error {
 	return &Error{Code: code, Msg: fmt.Sprintf(format, a...)}

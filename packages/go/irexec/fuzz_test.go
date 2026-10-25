@@ -3,6 +3,7 @@ package irexec
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"sort"
 	"sync"
 	"testing"
@@ -114,8 +115,8 @@ func FuzzExecute(f *testing.F) {
 func outcome(t *testing.T, fx *fixture, msg []byte) []byte {
 	res, err := fx.e.Execute(fx.c, msg)
 	if err != nil {
-		e, ok := err.(*Error)
-		if !ok {
+		var e *Error
+		if !errors.As(err, &e) {
 			t.Fatalf("an error that is not an *Error: %v", err)
 		}
 		if !errorCodes[e.Code] || e.Code == "INTERNAL" {

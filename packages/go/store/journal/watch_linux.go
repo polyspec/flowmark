@@ -140,14 +140,20 @@ func inotifyEvents(buf []byte, f func(wd int, mask uint32, name string)) error {
 // linuxWatch is one wait's subscription to the shared inotify instance, and a pidfd of its holder (Linux 5.3+).
 type linuxWatch struct {
 	c     *Corpus
+	s     *watchShare
 	ch    chan wake
 	armed bool
 	mu    sync.Mutex
 	pidf  *os.File
 }
 
-func newLockWatch(c *Corpus) (lockWatch, error) {
-	s := &c.share
+// watchFactory arms the lock waits of the corpus c: each subscribes to the one inotify instance that they share.
+func watchFactory(c *Corpus) func() (lockWatch, error) {
+	s := &watchShare{}
+	return func() (lockWatch, error) { return newLockWatch(c, s) }
+}
+
+func newLockWatch(c *Corpus, s *watchShare) (lockWatch, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.hub == nil {
@@ -162,7 +168,7 @@ func newLockWatch(c *Corpus) (lockWatch, error) {
 	s.hub.subs[ch] = struct{}{}
 	s.hub.mu.Unlock()
 	s.refs++
-	return &linuxWatch{c: c, ch: ch}, nil
+	return &linuxWatch{c: c, s: s, ch: ch}, nil
 }
 
 func (w *linuxWatch) wakes() <-chan wake { return w.ch }
@@ -225,7 +231,7 @@ func (w *linuxWatch) close() error {
 		w.pidf = nil
 	}
 	w.mu.Unlock()
-	s := &w.c.share
+	s := w.s
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.hub.mu.Lock()

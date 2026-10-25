@@ -10,8 +10,10 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// watchShare holds nothing on macOS: each wait has its own kqueue.
-type watchShare struct{}
+// watchFactory arms the lock waits of the corpus c: on macOS each has its own kqueue, so they share nothing.
+func watchFactory(c *Corpus) func() (lockWatch, error) {
+	return func() (lockWatch, error) { return newLockWatch(c) }
+}
 
 // darwinWatch watches the lock file with kqueue (REVIEW 1-a): the lock is opened with O_EVTONLY and registered for
 // EVFILT_VNODE NOTE_DELETE | NOTE_RENAME | NOTE_REVOKE with EV_CLEAR, and the holder's exit with EVFILT_PROC NOTE_EXIT

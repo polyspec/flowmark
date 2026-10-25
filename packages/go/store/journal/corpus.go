@@ -30,8 +30,6 @@ type Corpus struct {
 	// stageFolders creates a missing corpus folder in the stage and moves it into place (spec 40, durability); true on
 	// Windows, which has no folder flush. The tests set it to run that path on every platform.
 	stageFolders bool
-	// share is what the lock waits of this corpus share: the inotify instance on Linux.
-	share watchShare
 }
 
 // New declares the corpus at root, an absolute and clean path of a folder that is no symbolic link. obs receives
@@ -54,7 +52,7 @@ func New(root string, obs Observer) (*Corpus, error) {
 		return nil, fmt.Errorf("journal: the corpus root %s is not a folder", root)
 	}
 	c := &Corpus{root: root, obs: obs, stageFolders: stageFoldersDefault}
-	c.newWatch = func() (lockWatch, error) { return newLockWatch(c) }
+	c.newWatch = watchFactory(c)
 	return c, nil
 }
 

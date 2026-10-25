@@ -57,7 +57,11 @@ func pageLimitParam(params []json.RawMessage, index int) (int64, *Error) {
 // except the assignment of a non-null column. The check is made before reading, so the
 // answer does not depend on the rows, as a bind failure does not.
 func (e *Executor) checkParams(req *ir.Request, params []json.RawMessage) *Error {
-	for i, us := range ir.ParamUses(e.model, req) {
+	uses, err := ir.ParamUses(e.model, req)
+	if err != nil {
+		return fromIR(err)
+	}
+	for i, us := range uses {
 		raw := bytes.TrimSpace(params[i])
 		if string(raw) == "null" {
 			continue

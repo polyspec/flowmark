@@ -12,8 +12,10 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// watchShare holds nothing on Windows: each wait has its own folder handle.
-type watchShare struct{}
+// watchFactory arms the lock waits of the corpus c: on Windows each has its own folder handle, so they share nothing.
+func watchFactory(c *Corpus) func() (lockWatch, error) {
+	return func() (lockWatch, error) { return newLockWatch(c) }
+}
 
 // windowsWatch watches `.flowmark/` with an overlapped ReadDirectoryChangesW (REVIEW 1-c), and the holder's process
 // handle; WaitForMultipleObjects waits for the change event, the process, a re-arm and the close together.

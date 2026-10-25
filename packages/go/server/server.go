@@ -18,7 +18,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/polyspec/flowmark/packages/go/irexec"
 	"github.com/polyspec/flowmark/packages/go/writepath"
 )
 
@@ -348,36 +347,20 @@ func errorLine(code, msg string) []byte {
 	return b
 }
 
-// failureLine is the answer of a failure of the write path or the executor, with its orm code: the code of the first
-// coded error in the error's tree, INTERNAL when none has one.
-func failureLine(err error) []byte {
-	switch e := err.(type) {
-	case *writepath.Error:
-		return errorLine(e.Code, e.Msg)
-	case *irexec.Error:
-		return errorLine(e.Code, e.Msg)
-	}
-	code := codeOf(err)
-	if code == "" {
-		code = codeInternal
-	}
-	return errorLine(code, err.Error())
-}
+// failure is a coded error of the write path or the executor: its orm code and message.
+type failure interface{ Failure() (code, msg string) }
 
-func codeOf(err error) string {
-	switch e := err.(type) {
-	case *writepath.Error:
-		return e.Code
-	case *irexec.Error:
-		return e.Code
-	case interface{ Unwrap() []error }:
-		for _, x := range e.Unwrap() {
-			if c := codeOf(x); c != "" {
-				return c
-			}
-		}
-	case interface{ Unwrap() error }:
-		return codeOf(e.Unwrap())
+// failureLine is the answer of a failure of the write path or the executor, with its orm code: the code of the first
+// coded error in the error's tree, INTERNAL when none has one. The message is that of the coded error when it is the
+// whole error, else the whole error's, so a joined failure, such as a close after the coded one, is kept.
+func failureLine(err error) []byte {
+	var f failure
+	if !errors.As(err, &f) {
+		return errorLine(codeInternal, err.Error())
 	}
-	return ""
+	code, msg := f.Failure()
+	if any(f) != any(err) {
+		msg = err.Error()
+	}
+	return errorLine(code, msg)
 }
