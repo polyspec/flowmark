@@ -26,14 +26,7 @@ func boardCorpus(t *testing.T) *Corpus {
 func openCorpus(t *testing.T, root string) *Corpus {
 	t.Helper()
 	c, err := Open(context.Background(), root, 0)
-	if err != nil {
-		t.Fatalf("Open: %v", err)
-	}
-	t.Cleanup(func() {
-		if err := c.Close(); err != nil {
-			t.Errorf("Close: %v", err)
-		}
-	})
+	corpustest.Opened(t, c, err)
 	return c
 }
 

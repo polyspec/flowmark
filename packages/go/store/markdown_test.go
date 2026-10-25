@@ -108,10 +108,6 @@ func TestHeadingBoundary(t *testing.T) {
 // definitions alone makes no heading. The readings are those of commonmark.js, cmark-gfm
 // and markdown-it.
 func TestSetextAfterDefinitions(t *testing.T) {
-	type head struct {
-		at, last int
-		text     string
-	}
 	cases := []struct {
 		name  string
 		lines []string
@@ -128,18 +124,7 @@ func TestSetextAfterDefinitions(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			var got []head
-			for _, h := range scanHeadings(c.lines, 0).all {
-				got = append(got, head{h.at, h.last, h.text})
-			}
-			if len(got) != len(c.want) {
-				t.Fatalf("headings %+v; want %+v", got, c.want)
-			}
-			for k := range got {
-				if got[k] != c.want[k] {
-					t.Fatalf("headings %+v; want %+v", got, c.want)
-				}
-			}
+			wantHeads(t, scanHeadings(c.lines, 0), c.want)
 		})
 	}
 }
@@ -358,10 +343,6 @@ func TestCellElement(t *testing.T) {
 // them are its body rows until a blank line or a block that interrupts a paragraph. A line of the table is no
 // paragraph line, so a setext underline after a body row underlines nothing. CommonMark alone reads no table.
 func TestTables(t *testing.T) {
-	type head struct {
-		at, last int
-		text     string
-	}
 	cases := []struct {
 		name   string
 		lines  []string
@@ -379,18 +360,7 @@ func TestTables(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			var got []head
-			for _, h := range scanWith(c.lines, 0, blockSyntax{tables: c.tables}).all {
-				got = append(got, head{h.at, h.last, h.text})
-			}
-			if len(got) != len(c.want) {
-				t.Fatalf("headings %+v; want %+v", got, c.want)
-			}
-			for k := range got {
-				if got[k] != c.want[k] {
-					t.Fatalf("headings %+v; want %+v", got, c.want)
-				}
-			}
+			wantHeads(t, scanWith(c.lines, 0, blockSyntax{tables: c.tables}), c.want)
 		})
 	}
 }
@@ -438,5 +408,23 @@ func TestTableAtTheStart(t *testing.T) {
 	}
 	if len(got) != 2 || got[0] != "items row T1" || got[1] != "more text" {
 		t.Fatalf("headings %q; want the two setext headings after the table", got)
+	}
+}
+
+// head is a heading of a scan as the cases state it: its first and last line and its text.
+type head struct {
+	at, last int
+	text     string
+}
+
+// wantHeads requires the headings of sc to be want.
+func wantHeads(t *testing.T, sc scan, want []head) {
+	t.Helper()
+	var got []head
+	for _, h := range sc.all {
+		got = append(got, head{h.at, h.last, h.text})
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("headings %+v; want %+v", got, want)
 	}
 }

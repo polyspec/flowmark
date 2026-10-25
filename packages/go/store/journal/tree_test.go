@@ -68,7 +68,7 @@ func reads(t *testing.T, rec *recorder, root string) []string {
 	rec.mu.Lock()
 	defer rec.mu.Unlock()
 	out := []string{}
-	for _, e := range rec.events {
+	for _, e := range rec.Events() {
 		if e.Kind == CorpusRead {
 			rel, err := filepath.Rel(root, e.Path)
 			if err != nil {
@@ -77,7 +77,7 @@ func reads(t *testing.T, rec *recorder, root string) []string {
 			out = append(out, filepath.ToSlash(rel))
 		}
 	}
-	rec.events = nil
+	rec.Reset()
 	return out
 }
 
@@ -141,7 +141,7 @@ func TestTreeKeepsWhatItRead(t *testing.T) {
 			}
 			rec.mu.Lock()
 			var overflow int
-			for _, e := range rec.events {
+			for _, e := range rec.Events() {
 				if e.Kind == CorpusOverflow {
 					overflow++
 				}

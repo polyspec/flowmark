@@ -539,27 +539,19 @@ func decodeValue(raw json.RawMessage) (any, error) {
 // tree reads every file under root but the journal's folder, and requires that folder to hold no stage.
 func tree(root string) (map[string]string, error) {
 	out := map[string]string{}
-	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
+	fsys := os.DirFS(root)
+	err := fs.WalkDir(fsys, ".", func(rel string, d fs.DirEntry, err error) error {
+		switch {
+		case err != nil:
 			return err
-		}
-		rel, err := filepath.Rel(root, path)
-		if err != nil {
-			return err
-		}
-		rel = filepath.ToSlash(rel)
-		if rel == ".flowmark" {
+		case rel == ".flowmark":
 			return fs.SkipDir
-		}
-		if d.IsDir() {
+		case d.IsDir():
 			return nil
 		}
-		b, err := os.ReadFile(path)
-		if err != nil {
-			return err
-		}
+		b, err := fs.ReadFile(fsys, rel)
 		out[rel] = string(b)
-		return nil
+		return err
 	})
 	if err != nil {
 		return nil, err

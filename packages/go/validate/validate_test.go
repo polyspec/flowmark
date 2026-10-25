@@ -63,6 +63,14 @@ func (w wanted) matches(d catalog.Diagnostic) bool {
 		strings.Contains(d.Message, w.says)
 }
 
+// checkBuilt checks, as checkCorpus does, the corpus that build writes into a fresh root.
+func checkBuilt(t *testing.T, cat *catalog.Catalog, build func(root string), want []string) {
+	t.Helper()
+	root := t.TempDir()
+	build(root)
+	checkCorpus(t, cat, root, want)
+}
+
 // checkCorpus validates the corpus at root with the catalog cat and checks its diagnostics against want (check).
 func checkCorpus(t *testing.T, cat *catalog.Catalog, root string, want []string) {
 	t.Helper()
@@ -691,9 +699,7 @@ func TestValidatorRules(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			root := t.TempDir()
-			corpustest.WriteTree(t, root, tc.files)
-			checkCorpus(t, cat, root, tc.want)
+			checkCorpus(t, cat, corpustest.NewTree(t, tc.files), tc.want)
 		})
 	}
 }

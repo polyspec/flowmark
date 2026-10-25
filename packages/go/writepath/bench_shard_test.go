@@ -99,13 +99,6 @@ func BenchmarkShardInsert(b *testing.B) {
 // BenchmarkShardRead is a count of the events of the corpus kept in memory, flat and sharded.
 func BenchmarkShardRead(b *testing.B) {
 	shardLayouts(b, func(b *testing.B, f *fixture) {
-		s := f.session("bench")
-		m := f.msg("count", "events", nil)
-		ctx := context.Background()
-		loop(b, func(int) {
-			if _, err := s.Exec(ctx, m); err != nil {
-				b.Fatal(err)
-			}
-		})
+		benchCount(b, f, "events")
 	})
 }

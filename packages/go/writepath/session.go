@@ -166,15 +166,29 @@ func (s *Session) Rewrite(ctx context.Context, compute func(*irexec.Corpus) ([]R
 	return int(a.Affected), nil
 }
 
+// enter binds ctx to the session and holds the session for one call; leave releases both. A closed session is CONFIG,
+// and then nothing is held.
+func (s *Session) enter(ctx context.Context) (_ context.Context, leave func(), _ error) {
+	ctx, unbind := s.bind(ctx)
+	s.mu.Lock()
+	leave = func() {
+		s.mu.Unlock()
+		unbind()
+	}
+	if s.closed {
+		leave()
+		return ctx, nil, newError(codeConfig, "the session %s is closed", s.name)
+	}
+	return ctx, leave, nil
+}
+
 // do runs an operation in the session's transaction, or as one transaction under the lock.
 func (s *Session) do(ctx context.Context, o op) (*irexec.Answer, error) {
-	ctx, unbind := s.bind(ctx)
-	defer unbind()
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.closed {
-		return nil, newError(codeConfig, "the session %s is closed", s.name)
+	ctx, leave, err := s.enter(ctx)
+	if err != nil {
+		return nil, err
 	}
+	defer leave()
 	if s.tx == nil {
 		return s.single(ctx, o)
 	}
@@ -253,13 +267,11 @@ func (c *Corpus) runSingle(l *journal.Lock, o op) (*irexec.Answer, bool, error) 
 // read-only transaction takes the lock too and refuses every write as READ_ONLY. A begin that does not open the
 // transaction, by an error or a panic, releases the lock.
 func (s *Session) Begin(ctx context.Context, readOnly bool) (err error) {
-	ctx, unbind := s.bind(ctx)
-	defer unbind()
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.closed {
-		return newError(codeConfig, "the session %s is closed", s.name)
+	ctx, leave, err := s.enter(ctx)
+	if err != nil {
+		return err
 	}
+	defer leave()
 	if s.tx != nil {
 		return newError(codeConfig, "a transaction is already open in the session %s; commit or roll it back before begin", s.name)
 	}

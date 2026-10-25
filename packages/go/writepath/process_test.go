@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/polyspec/flowmark/packages/go/internal/corpustest"
 	"io"
 	"os"
 	"os/exec"
@@ -208,8 +209,7 @@ func TestConcurrentProcesses(t *testing.T) {
 // waiting, lands after the commit.
 func TestTransactionHoldsProcesses(t *testing.T) {
 	f := baseFixture(t)
-	s := f.session("server")
-	must(t, s.Begin(context.Background(), false))
+	s := f.begun(t, "server")
 	want(t, s, f.insertTag("web", "area"), `{"affected":1,"keys":[3]}`)
 	out, err := childCommand(t, "write", f.root, 0, [][]byte{f.insertTag("db", "area")}).Output()
 	if err != nil {
@@ -250,13 +250,8 @@ func TestCrashedProcessRecovers(t *testing.T) {
 		t.Run(fmt.Sprintf("40#opening-a-corpus: %s#%d", cp.step, cp.index), func(t *testing.T) {
 			f := baseFixture(t)
 			before := snapshot(t, f.root)
-			cmd := childCommand(t, "crash", f.root, 0, crashTx(f), "FLOWMARK_WRITEPATH_STEP="+cp.step, "FLOWMARK_WRITEPATH_INDEX="+strconv.Itoa(cp.index))
-			out, err := cmd.Output()
-			var exit *exec.ExitError
-			if !errors.As(err, &exit) || exit.ExitCode() != 3 {
-				t.Fatalf("child = %v %q, want the exit 3 of the crash", err, out)
-			}
-			_, err = f.session("cli").Exec(context.Background(), f.countTags())
+			corpustest.WantExit(t, childCommand(t, "crash", f.root, 0, crashTx(f), "FLOWMARK_WRITEPATH_STEP="+cp.step, "FLOWMARK_WRITEPATH_INDEX="+strconv.Itoa(cp.index)), 3)
+			_, err := f.session("cli").Exec(context.Background(), f.countTags())
 			fails(t, err, "CANCELED", "LOCK_TIMEOUT", "flowmark unlock")
 			if _, err := f.j.Unlock(""); err != nil {
 				t.Fatal(err)
@@ -282,23 +277,9 @@ func TestCrashedProcessRecovers(t *testing.T) {
 // openFixtureEvents opens the corpus at root and keeps the events of the opening.
 func openFixtureEvents(t *testing.T, root string) *fixture {
 	t.Helper()
-	cat, diags := catalog.Load(root)
-	if len(diags) > 0 {
-		t.Fatal(diags)
-	}
-	rec := &recorder{}
-	j, err := journal.New(root, rec)
+	f, err := openRaw(t, root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	c, err := Open(context.Background(), cat, j, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := c.Close(); err != nil {
-			t.Errorf("Close: %v", err)
-		}
-	})
-	return &fixture{t: t, root: root, cat: cat, j: j, c: c, rec: rec}
+	return f
 }

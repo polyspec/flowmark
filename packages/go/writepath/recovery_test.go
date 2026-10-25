@@ -11,7 +11,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/polyspec/flowmark/packages/go/catalog"
 	"github.com/polyspec/flowmark/packages/go/store/journal"
 )
 
@@ -46,13 +45,7 @@ func crashOnce(step string, index int) func(string, int) error {
 // next acquisition completes it.
 func TestDecidedCommitRecoveryFails(t *testing.T) {
 	f := baseFixture(t)
-	s := f.session("server")
-	must(t, s.Begin(context.Background(), false))
-	for _, m := range crashTx(f) {
-		if _, err := s.Exec(context.Background(), m); err != nil {
-			t.Fatal(err)
-		}
-	}
+	s := f.crashSession(t, "server")
 	f.j.SetFault(crashAt("renames", 0))
 	err := s.Commit()
 	fails(t, err, "DRIVER", "prepared", "next acquisition", "do not repeat")
@@ -134,13 +127,7 @@ func snapshot(t testing.TB, root string) map[string]string {
 func afterCrashTx(t *testing.T) map[string]string {
 	t.Helper()
 	f := baseFixture(t)
-	s := f.session("reference")
-	must(t, s.Begin(context.Background(), false))
-	for _, m := range crashTx(f) {
-		if _, err := s.Exec(context.Background(), m); err != nil {
-			t.Fatal(err)
-		}
-	}
+	s := f.crashSession(t, "reference")
 	must(t, s.Commit())
 	return snapshot(t, f.root)
 }
@@ -154,13 +141,7 @@ func TestRecoveryOnAcquisition(t *testing.T) {
 		t.Run(fmt.Sprintf("40#opening-a-corpus: %s#%d", cp.step, cp.index), func(t *testing.T) {
 			f := baseFixture(t)
 			before := snapshot(t, f.root)
-			s := f.session("server")
-			must(t, s.Begin(context.Background(), false))
-			for _, m := range crashTx(f) {
-				if _, err := s.Exec(context.Background(), m); err != nil {
-					t.Fatal(err)
-				}
-			}
+			s := f.crashSession(t, "server")
 			f.j.SetFault(crashOnce(cp.step, cp.index))
 			err := s.Commit()
 			if cp.new {
@@ -200,13 +181,7 @@ func TestRecoveryOnAcquisition(t *testing.T) {
 func TestOpenRecovers(t *testing.T) {
 	stopped := func(t *testing.T) *fixture {
 		f := baseFixture(t)
-		s := f.session("server")
-		must(t, s.Begin(context.Background(), false))
-		for _, m := range crashTx(f) {
-			if _, err := s.Exec(context.Background(), m); err != nil {
-				t.Fatal(err)
-			}
-		}
+		s := f.crashSession(t, "server")
 		// A fault that recovery meets again leaves the decided commit's stage for the next acquisition.
 		f.j.SetFault(crashAt("renames", 0))
 		if err := s.Commit(); !errors.Is(err, errCrash) {
@@ -215,24 +190,8 @@ func TestOpenRecovers(t *testing.T) {
 		return f
 	}
 	open := func(t *testing.T, root string) (*Corpus, *recorder, error) {
-		cat, diags := catalog.Load(root)
-		if len(diags) > 0 {
-			t.Fatal(diags)
-		}
-		rec := &recorder{}
-		j, err := journal.New(root, rec)
-		if err != nil {
-			t.Fatal(err)
-		}
-		c, err := Open(context.Background(), cat, j, 0)
-		if err == nil {
-			t.Cleanup(func() {
-				if err := c.Close(); err != nil {
-					t.Errorf("Close: %v", err)
-				}
-			})
-		}
-		return c, rec, err
+		f, err := openRaw(t, root)
+		return f.c, f.rec, err
 	}
 	t.Run("40#opening-a-corpus: opening completes a prepared stage", func(t *testing.T) {
 		f := stopped(t)

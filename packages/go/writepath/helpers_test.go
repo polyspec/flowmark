@@ -11,7 +11,6 @@ import (
 	"reflect"
 	"slices"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -29,54 +28,21 @@ const patience = 60 * time.Second
 const testNow = "2026-10-11 09:00:00.123456"
 
 // recorder is the observer of a test: it keeps every event in order.
-type recorder struct {
-	mu     sync.Mutex
-	events []journal.Event
-	notify chan struct{}
-}
-
-func (r *recorder) Observe(e journal.Event) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.events = append(r.events, e)
-	if r.notify != nil {
-		close(r.notify)
-		r.notify = nil
-	}
-}
+type recorder struct{ journal.Recorder }
 
 // waitFor blocks until an event of kind has been published since the last reset.
 func (r *recorder) waitFor(t testing.TB, kind journal.Kind) {
 	t.Helper()
-	deadline := time.After(patience)
-	for {
-		r.mu.Lock()
-		for _, e := range r.events {
-			if e.Kind == kind {
-				r.mu.Unlock()
-				return
-			}
-		}
-		if r.notify == nil {
-			r.notify = make(chan struct{})
-		}
-		ch := r.notify
-		r.mu.Unlock()
-		select {
-		case <-ch:
-		case <-deadline:
-			t.Fatalf("waited %s for %s; got %v", patience, kind, r.kinds())
-		}
+	if _, ok := r.Wait(1, func(e journal.Event) bool { return e.Kind == kind }, patience); !ok {
+		t.Fatalf("waited %s for %s; got %v", patience, kind, r.kinds())
 	}
 }
 
 // kinds returns the kinds of the lock and journal events since the last reset; the events of the corpus tree are
 // read by treeEvents.
 func (r *recorder) kinds() []journal.Kind {
-	r.mu.Lock()
-	defer r.mu.Unlock()
 	out := []journal.Kind{}
-	for _, e := range r.events {
+	for _, e := range r.Events() {
 		if !treeKind(e.Kind) {
 			out = append(out, e.Kind)
 		}
@@ -93,10 +59,8 @@ func treeKind(kind journal.Kind) bool {
 // reset, in order.
 func (r *recorder) treeEvents(t testing.TB, root string, kind journal.Kind) []string {
 	t.Helper()
-	r.mu.Lock()
-	defer r.mu.Unlock()
 	out := []string{}
-	for _, e := range r.events {
+	for _, e := range r.Events() {
 		if e.Kind != kind {
 			continue
 		}
@@ -122,11 +86,7 @@ func (r *recorder) documentsRead(t testing.TB, root string) []string {
 	return out
 }
 
-func (r *recorder) reset() {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.events = nil
-}
+func (r *recorder) reset() { r.Reset() }
 
 // wantKinds requires the events published since the last reset to be want, and resets.
 func (r *recorder) wantKinds(t testing.TB, want ...journal.Kind) {
@@ -211,6 +171,20 @@ func newFixture(t testing.TB, dbs string, docs map[string]string) *fixture {
 // openFixture opens the corpus at root through the write path.
 func openFixture(t testing.TB, root string) *fixture {
 	t.Helper()
+	f, err := openRaw(t, root)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	f.c.clock = func() time.Time { return time.Date(2026, 10, 11, 10, 0, 0, 123456000, time.UTC) }
+	f.rec.reset()
+	return f
+}
+
+// openRaw opens the corpus at root through the write path with a new recorder, which keeps the events of the opening,
+// and closes it when the test ends. It returns the error of Open, with no corpus; a catalog or a journal that does not
+// open fails the test.
+func openRaw(t testing.TB, root string) (*fixture, error) {
+	t.Helper()
 	cat, diags := catalog.Load(root)
 	if len(diags) > 0 || cat == nil {
 		t.Fatalf("catalog of %s: %+v", root, diags)
@@ -222,23 +196,38 @@ func openFixture(t testing.TB, root string) *fixture {
 	}
 	c, err := Open(context.Background(), cat, j, 0)
 	if err != nil {
-		t.Fatalf("Open: %v", err)
+		return &fixture{t: t, root: root, cat: cat, j: j, rec: rec}, err
 	}
-	t.Cleanup(func() {
-		if err := c.Close(); err != nil {
-			t.Errorf("Close: %v", err)
-		}
-	})
-	c.clock = func() time.Time { return time.Date(2026, 10, 11, 10, 0, 0, 123456000, time.UTC) }
-	f := &fixture{t: t, root: root, cat: cat, j: j, c: c, rec: rec}
-	rec.reset()
-	return f
+	corpustest.Opened(t, c, nil)
+	return &fixture{t: t, root: root, cat: cat, j: j, c: c, rec: rec}, nil
 }
 
 // baseFixture is the base corpus of the executor's test catalog.
 func baseFixture(t testing.TB) *fixture {
 	t.Helper()
 	return newFixture(t, executorCatalog(t), baseDocs())
+}
+
+// begun returns a new session of the fixture's corpus, labeled label, with a transaction open.
+func (f *fixture) begun(t testing.TB, label string) *Session {
+	t.Helper()
+	s := f.session(label)
+	if err := s.Begin(context.Background(), false); err != nil {
+		t.Fatal(err)
+	}
+	return s
+}
+
+// crashSession returns a session, labeled label, whose open transaction ran the messages of crashTx.
+func (f *fixture) crashSession(t testing.TB, label string) *Session {
+	t.Helper()
+	s := f.begun(t, label)
+	for _, m := range crashTx(f) {
+		if _, err := s.Exec(context.Background(), m); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return s
 }
 
 // session returns a new session of the fixture's corpus, closed when the test ends.

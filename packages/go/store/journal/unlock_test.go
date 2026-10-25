@@ -51,7 +51,7 @@ func TestUnlockPublishesEvent(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantKinds(t, rec, LockCleared)
-	if e := rec.events[0]; e.Holder != gone.String() || e.Path != lockFile(root) {
+	if e := rec.Events()[0]; e.Holder != gone.String() || e.Path != lockFile(root) {
 		t.Fatalf("event = %+v", e)
 	}
 }

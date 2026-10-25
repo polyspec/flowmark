@@ -78,9 +78,7 @@ func TestShardPeriod(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			root := t.TempDir()
-			tc.build(root)
-			checkCorpus(t, cat, root, tc.want)
+			checkBuilt(t, cat, tc.build, tc.want)
 		})
 	}
 }
@@ -111,9 +109,7 @@ func TestScaleEnvelope(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			root := t.TempDir()
-			tc.build(root)
-			checkCorpus(t, cat, root, tc.want)
+			checkBuilt(t, cat, tc.build, tc.want)
 		})
 	}
 }

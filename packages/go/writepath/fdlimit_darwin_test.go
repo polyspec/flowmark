@@ -53,17 +53,7 @@ func limitDescriptors(t *testing.T, room int) (restore func()) {
 // releasing the lock opens the lock file, so the watch is closed before the lock is released. The next open takes
 // the lock without waiting.
 func TestOpenWithoutDescriptors(t *testing.T) {
-	docs := map[string]string{}
-	for i := 0; i < 120; i++ {
-		docs[fmt.Sprintf("cards/C%d.flowmark.md", i)] = fmt.Sprintf("# Card %d\n", i)
-	}
-	root := t.TempDir()
-	corpustest.WriteTree(t, root, map[string]string{"dbspec/test.dbs": cardsDBS})
-	corpustest.WriteTree(t, root, docs)
-	cat, diags := catalog.Load(root)
-	if len(diags) > 0 || cat == nil {
-		t.Fatalf("catalog: %+v", diags)
-	}
+	root, cat := cardsCorpus(t, 120)
 	open := func() (*Corpus, error) {
 		j, err := journal.New(root, &recorder{})
 		if err != nil {
@@ -98,17 +88,7 @@ func TestOpenWithoutDescriptors(t *testing.T) {
 // shows here.
 func TestWatchDescriptors(t *testing.T) {
 	const documents = 150
-	docs := map[string]string{}
-	for i := 0; i < documents; i++ {
-		docs[fmt.Sprintf("cards/C%d.flowmark.md", i)] = fmt.Sprintf("# Card %d\n", i)
-	}
-	root := t.TempDir()
-	corpustest.WriteTree(t, root, map[string]string{"dbspec/test.dbs": cardsDBS})
-	corpustest.WriteTree(t, root, docs)
-	cat, diags := catalog.Load(root)
-	if len(diags) > 0 || cat == nil {
-		t.Fatalf("catalog: %+v", diags)
-	}
+	root, cat := cardsCorpus(t, documents)
 	before := openDescriptors(t)
 	j, err := journal.New(root, &recorder{})
 	if err != nil {
@@ -130,4 +110,19 @@ func TestWatchDescriptors(t *testing.T) {
 	if after := openDescriptors(t) - before; after != 0 {
 		t.Errorf("40#opening-a-corpus: %d descriptors stay open after the corpus is closed", after)
 	}
+}
+
+// cardsCorpus writes the catalog cardsDBS with n cards under a fresh root and returns the root and its catalog.
+func cardsCorpus(t *testing.T, n int) (string, *catalog.Catalog) {
+	t.Helper()
+	docs := map[string]string{"dbspec/test.dbs": cardsDBS}
+	for i := 0; i < n; i++ {
+		docs[fmt.Sprintf("cards/C%d.flowmark.md", i)] = fmt.Sprintf("# Card %d\n", i)
+	}
+	root := corpustest.NewTree(t, docs)
+	cat, diags := catalog.Load(root)
+	if len(diags) > 0 || cat == nil {
+		t.Fatalf("catalog: %+v", diags)
+	}
+	return root, cat
 }

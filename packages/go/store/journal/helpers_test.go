@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -17,65 +16,27 @@ import (
 // test, never the condition a test checks.
 const patience = 60 * time.Second
 
-type recorder struct {
-	mu     sync.Mutex
-	events []Event
-	notify chan struct{}
-}
-
-func (r *recorder) Observe(e Event) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.events = append(r.events, e)
-	if r.notify != nil {
-		close(r.notify)
-		r.notify = nil
-	}
-}
+// recorder is the observer of a test: it keeps every event in order.
+type recorder struct{ Recorder }
 
 func (r *recorder) kinds() []Kind {
-	r.mu.Lock()
-	defer r.mu.Unlock()
 	kinds := []Kind{}
-	for _, e := range r.events {
+	for _, e := range r.Events() {
 		kinds = append(kinds, e.Kind)
 	}
 	return kinds
 }
 
-func (r *recorder) reset() {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.events = nil
-}
+func (r *recorder) reset() { r.Reset() }
 
 // waitFor blocks until n published events satisfy match and returns them.
 func (r *recorder) waitFor(t *testing.T, n int, match func(Event) bool) []Event {
 	t.Helper()
-	deadline := time.After(patience)
-	for {
-		r.mu.Lock()
-		var found []Event
-		for _, e := range r.events {
-			if match(e) {
-				found = append(found, e)
-			}
-		}
-		if len(found) >= n {
-			r.mu.Unlock()
-			return found
-		}
-		if r.notify == nil {
-			r.notify = make(chan struct{})
-		}
-		ch := r.notify
-		r.mu.Unlock()
-		select {
-		case <-ch:
-		case <-deadline:
-			t.Fatalf("waited %s for %d events; got %v", patience, n, r.kinds())
-		}
+	found, ok := r.Wait(n, match, patience)
+	if !ok {
+		t.Fatalf("waited %s for %d events; got %v", patience, n, r.kinds())
 	}
+	return found
 }
 
 func kindIs(k Kind) func(Event) bool { return func(e Event) bool { return e.Kind == k } }

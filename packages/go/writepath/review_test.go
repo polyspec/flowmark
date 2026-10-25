@@ -14,8 +14,7 @@ import (
 // one of them is CONFIG.
 func TestReleaseDropsLaterSavepoints(t *testing.T) {
 	f := baseFixture(t)
-	s := f.session("server")
-	must(t, s.Begin(context.Background(), false))
+	s := f.begun(t, "server")
 	must(t, s.Savepoint("s1"))
 	want(t, s, f.insertTag("a", "area"), `{"affected":1,"keys":[3]}`)
 	must(t, s.Savepoint("s2"))
@@ -31,8 +30,7 @@ func TestReleaseDropsLaterSavepoints(t *testing.T) {
 func TestRecheckDivergence(t *testing.T) {
 	t.Run("40#the-commit-protocol: the same answer, another net post-image", func(t *testing.T) {
 		f := baseFixture(t)
-		s := f.session("server")
-		must(t, s.Begin(context.Background(), false))
+		s := f.begun(t, "server")
 		// T3 gains a detail section, so every link to it is rewritten; a note linking T3 lands by hand.
 		want(t, s, f.msg("update", "items", map[string]any{"set": sets(0, "body"), "where": corpustest.WhereID(1)}, "Now a body.", "T3"), `{"affected":1,"keys":[]}`)
 		f.write("notes/N4.flowmark.md", lines("# Third root", "- item: [T3](../items.flowmark.md)", "- position: 3"))
@@ -44,8 +42,7 @@ func TestRecheckDivergence(t *testing.T) {
 	})
 	t.Run("40#the-commit-protocol: another answer, the same net post-image", func(t *testing.T) {
 		f := baseFixture(t)
-		s := f.session("server")
-		must(t, s.Begin(context.Background(), false))
+		s := f.begun(t, "server")
 		want(t, s, f.msg("update", "tags", map[string]any{"set": sets(0, "kind"), "where": corpustest.WhereID(1)}, "topic", 2), `{"affected":1,"keys":[]}`)
 		// Matches no note; a note that it matches lands by hand, and setting its weight to the weight it holds
 		// changes no byte.

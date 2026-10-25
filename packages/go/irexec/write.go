@@ -242,6 +242,19 @@ func (w *writer) assignValue(a *ir.Assign, f *runtimemodel.Field, old cell, p *i
 	return cell{text: v}, ""
 }
 
+// setColumns sets on row the value of vals of each column of tb, but its placement and order columns, which the place of
+// the row holds.
+func setColumns(tb *catalog.Table, row *store.Row, vals map[string]cell) {
+	placement := tb.Placement()
+	for _, c := range tb.Columns {
+		v, ok := vals[c.Name]
+		if !ok || c.Name == placement || c.Name == tb.Order {
+			continue
+		}
+		setValue(tb, row, c.Name, v)
+	}
+}
+
 // setValue gives column col of row the value v in its place: the key, the title,
 // the body, a markdown section or a stored scalar. A markdown value's last line ends
 // with a line feed in the row, as the store holds it.
@@ -429,14 +442,7 @@ func (w *writer) insertRow(i int, ps []*int) *Error {
 		w.fault(g, tb.Name, tb.Key, codeConstraint, "the key has no value")
 		return nil
 	}
-	placement := tb.Placement()
-	for _, c := range tb.Columns {
-		v, ok := vals[c.Name]
-		if !ok || c.Name == placement || c.Name == tb.Order {
-			continue
-		}
-		setValue(tb, g.row, c.Name, v)
-	}
+	setColumns(tb, g.row, vals)
 	if sm := tb.StateMachine; sm != nil {
 		if s := vals[sm.Column]; !s.null {
 			if !slices.Contains(sm.Initial, s.text) {
@@ -480,13 +486,13 @@ func (w *writer) insertRow(i int, ps []*int) *Error {
 		f.rows = append(f.rows, g.row)
 		w.touched[path] = true
 	case catalog.StorageBlock:
-		pv := vals[placement]
+		pv := vals[tb.Placement()]
 		p, err := w.placementRow(tb, pv)
 		if err != nil {
 			return err
 		}
 		if p == nil {
-			w.fault(g, tb.Name, placement, codeForeignKey, fmt.Sprintf("the foreign key %s names no %s row with the key %s", placement, tb.Storage.Parent, pv.text))
+			w.fault(g, tb.Name, tb.Placement(), codeForeignKey, fmt.Sprintf("the foreign key %s names no %s row with the key %s", tb.Placement(), tb.Storage.Parent, pv.text))
 			return nil
 		}
 		if p.row.Blocks == nil {
@@ -740,14 +746,7 @@ func (w *writer) updateRows(rows []*rec, set []ir.Assign, stamp bool) *Error {
 		if err := w.transition(g, x, vals); err != nil {
 			return err
 		}
-		placement := tb.Placement()
-		for _, c := range tb.Columns {
-			v, ok := vals[c.Name]
-			if !ok || c.Name == placement || c.Name == tb.Order {
-				continue
-			}
-			setValue(tb, x.row, c.Name, v)
-		}
+		setColumns(tb, x.row, vals)
 		x = w.next.byRow[x.row]
 		w.touched[x.file] = true
 		if sh := tb.Storage.Shard; sh != nil && g.assigned[sh.Column] {
@@ -762,7 +761,7 @@ func (w *writer) updateRows(rows []*rec, set []ir.Assign, stamp bool) *Error {
 			oldParent = x.parent.row
 		}
 		if tb.Storage.Kind == catalog.StorageBlock {
-			if v, ok := vals[placement]; ok && (v.null || v.text != x.parent.row.Key) {
+			if v, ok := vals[tb.Placement()]; ok && (v.null || v.text != x.parent.row.Key) {
 				if err := w.movePlacement(g, x, v); err != nil {
 					return err
 				}

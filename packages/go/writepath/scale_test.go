@@ -19,9 +19,7 @@ func TestScaleEvent(t *testing.T) {
 	catalog.Envelope = catalog.EnvelopeLimits{FileBytes: 400, FolderFiles: old.FolderFiles, CorpusFiles: old.CorpusFiles}
 	scaleEvents := func(f *fixture) []journal.Event {
 		var out []journal.Event
-		f.rec.mu.Lock()
-		defer f.rec.mu.Unlock()
-		for _, e := range f.rec.events {
+		for _, e := range f.rec.Events() {
 			if e.Kind == journal.ScaleExceeded {
 				out = append(out, e)
 			}

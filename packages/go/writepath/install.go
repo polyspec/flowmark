@@ -30,13 +30,11 @@ type InstallResult struct {
 // kind of entry at a table's place, or a .gitattributes that is no regular file, refuses it as CONFIG before anything
 // is written. An install that finds everything in place writes nothing.
 func (s *Session) Install(ctx context.Context) (_ *InstallResult, err error) {
-	ctx, unbind := s.bind(ctx)
-	defer unbind()
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.closed {
-		return nil, newError(codeConfig, "the session %s is closed", s.name)
+	ctx, leave, err := s.enter(ctx)
+	if err != nil {
+		return nil, err
 	}
+	defer leave()
 	if s.tx != nil {
 		return nil, newError(codeConfig, "flowmark install is its own transaction; commit or roll back the open transaction first")
 	}

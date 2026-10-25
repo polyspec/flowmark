@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/polyspec/flowmark/packages/go/internal/corpustest"
 	"io"
 	"os"
 	"os/exec"
@@ -240,14 +241,9 @@ func TestCrashedProcessRecovers(t *testing.T) {
 	for _, p := range crashPoints {
 		t.Run(fmt.Sprintf("%s#%d", p.step, p.index), func(t *testing.T) {
 			root, _, before, after := fixture(t)
-			cmd := childCommand(t, "crash", root, "child", "FLOWMARK_JOURNAL_STEP="+p.step, "FLOWMARK_JOURNAL_INDEX="+strconv.Itoa(p.index))
-			out, err := cmd.Output()
-			var exit *exec.ExitError
-			if !errors.As(err, &exit) || exit.ExitCode() != 3 {
-				t.Fatalf("child = %v %q, want the exit 3 of the crash", err, out)
-			}
+			corpustest.WantExit(t, childCommand(t, "crash", root, "child", "FLOWMARK_JOURNAL_STEP="+p.step, "FLOWMARK_JOURNAL_INDEX="+strconv.Itoa(p.index)), 3)
 			c, rec := newCorpus(t, root)
-			_, err = c.Acquire(context.Background(), "parent", 0)
+			_, err := c.Acquire(context.Background(), "parent", 0)
 			var timeout *LockTimeout
 			if !errors.As(err, &timeout) || timeout.State != HolderEnded {
 				t.Fatalf("Acquire = %v, want the stale lock of the crashed child", err)

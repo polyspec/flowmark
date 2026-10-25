@@ -90,15 +90,7 @@ func TestReadRefusalPosition(t *testing.T) {
 		{Table: "tasks", Key: "T1", Index: -1, Column: "", Rule: RuleConstraint, Message: "row fault"},
 	}
 	got := readDiagnostics(rel, rf, []*Row{row})
-	want := []struct{ line, col int }{{1, 3}, {3, 3}, {1, 1}}
-	if len(got) != len(want) {
-		t.Fatalf("%d diagnostics; want %d: %+v", len(got), len(want), got)
-	}
-	for k, w := range want {
-		if got[k].Line != w.line || got[k].Column != w.col {
-			t.Fatalf("diagnostic %d at %d:%d; want %d:%d: %+v", k, got[k].Line, got[k].Column, w.line, w.col, got[k])
-		}
-	}
+	wantPositions(t, got, []position{{1, 3}, {3, 3}, {1, 1}})
 }
 
 // TestReadRefusalPositionDocument requires the same of a list row of a document file:
@@ -119,15 +111,7 @@ func TestReadRefusalPositionDocument(t *testing.T) {
 	}
 	got := readDiagnostics(rel, rf, rows)
 	// Line 2 is the first row, line 3 the second; "- [ ] T2 Other" puts the title at column 10.
-	want := []struct{ line, col int }{{3, 10}, {2, 15}, {2, 1}}
-	if len(got) != len(want) {
-		t.Fatalf("%d diagnostics; want %d: %+v", len(got), len(want), got)
-	}
-	for k, w := range want {
-		if got[k].Line != w.line || got[k].Column != w.col {
-			t.Fatalf("diagnostic %d at %d:%d; want %d:%d: %+v", k, got[k].Line, got[k].Column, w.line, w.col, got[k])
-		}
-	}
+	wantPositions(t, got, []position{{3, 10}, {2, 15}, {2, 1}})
 }
 
 // TestDefinitionBeforeSetextSection requires that the link reference definitions
@@ -177,9 +161,7 @@ func TestFilesSectionHeading(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			_, diags := ParseFile(cat, "tasks", "tasks/T1.flowmark.md", []byte(c.text), lk)
-			if !hasDiagAt(diags, c.rule, c.message, c.line, c.col) {
-				t.Fatalf("diagnostics %+v; want %s %q at %d:%d", diags, c.rule, c.message, c.line, c.col)
-			}
+			wantDiagAt(t, diags, c.rule, c.message, c.line, c.col)
 		})
 	}
 }
@@ -1016,5 +998,21 @@ func TestDiagnosticColumnsCountCodePoints(t *testing.T) {
 				t.Fatalf("diagnostics %+v; want %s at %d:%d", diags, c.rule, c.line, c.col)
 			}
 		})
+	}
+}
+
+// position is the line and column of a diagnostic.
+type position struct{ line, col int }
+
+// wantPositions requires the diagnostics got to stand at want, in order.
+func wantPositions(t *testing.T, got []Diagnostic, want []position) {
+	t.Helper()
+	if len(got) != len(want) {
+		t.Fatalf("%d diagnostics; want %d: %+v", len(got), len(want), got)
+	}
+	for k, w := range want {
+		if got[k].Line != w.line || got[k].Column != w.col {
+			t.Fatalf("diagnostic %d at %d:%d; want %d:%d: %+v", k, got[k].Line, got[k].Column, w.line, w.col, got[k])
+		}
 	}
 }

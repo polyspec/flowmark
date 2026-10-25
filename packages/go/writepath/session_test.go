@@ -87,10 +87,7 @@ func TestCreateMissing(t *testing.T) {
 func TestTransaction(t *testing.T) {
 	t.Run("40#transactions: requests read the post-image and commit writes it once", func(t *testing.T) {
 		f := baseFixture(t)
-		s := f.session("server")
-		if err := s.Begin(context.Background(), false); err != nil {
-			t.Fatal(err)
-		}
+		s := f.begun(t, "server")
 		want(t, s, f.insertTag("web", "area"), `{"affected":1,"keys":[3]}`)
 		want(t, s, f.insertTag("db", "area"), `{"affected":1,"keys":[4]}`)
 		want(t, s, f.countTags(), `{"count":4}`)
@@ -115,10 +112,7 @@ func TestTransaction(t *testing.T) {
 	})
 	t.Run("40#transactions: rollback writes nothing and releases the lock", func(t *testing.T) {
 		f := baseFixture(t)
-		s := f.session("server")
-		if err := s.Begin(context.Background(), false); err != nil {
-			t.Fatal(err)
-		}
+		s := f.begun(t, "server")
 		want(t, s, f.insertTag("web", "area"), `{"affected":1,"keys":[3]}`)
 		if err := s.Rollback(); err != nil {
 			t.Fatal(err)
@@ -128,10 +122,7 @@ func TestTransaction(t *testing.T) {
 	})
 	t.Run("40#transactions: a failed request changes nothing and the transaction stays open", func(t *testing.T) {
 		f := baseFixture(t)
-		s := f.session("server")
-		if err := s.Begin(context.Background(), false); err != nil {
-			t.Fatal(err)
-		}
+		s := f.begun(t, "server")
 		want(t, s, f.insertTag("web", "area"), `{"affected":1,"keys":[3]}`)
 		_, err := s.Exec(context.Background(), f.msg("insert", "tags", map[string]any{"set": sets(0, "label", "kind"), "rows": [][]int{{2, 3}}}, "db", "area", "bad", "other"))
 		fails(t, err, "CONSTRAINT", "ck_tags_kind")
@@ -320,8 +311,7 @@ func must(t testing.TB, err error) {
 func TestConflict(t *testing.T) {
 	begin := func(t *testing.T) (*fixture, *Session) {
 		f := baseFixture(t)
-		s := f.session("server")
-		must(t, s.Begin(context.Background(), false))
+		s := f.begun(t, "server")
 		want(t, s, f.msg("update", "tags", map[string]any{"set": sets(0, "kind"), "where": corpustest.WhereID(1)}, "topic", 2), `{"affected":1,"keys":[]}`)
 		return f, s
 	}
@@ -349,8 +339,7 @@ func TestConflict(t *testing.T) {
 	})
 	t.Run("40#the-commit-protocol: a target created by hand", func(t *testing.T) {
 		f := baseFixture(t)
-		s := f.session("server")
-		must(t, s.Begin(context.Background(), false))
+		s := f.begun(t, "server")
 		want(t, s, f.msg("insert", "notes", map[string]any{"set": sets(0, "id", "title", "body")}, "N4", "Fourth", ""), `{"affected":1,"keys":["N4"]}`)
 		f.write("notes/N4.flowmark.md", lines("# Mine", "- position: 3"))
 		fails(t, s.Commit(), "WRITE_CONFLICT", "notes/N4.flowmark.md:1")
@@ -376,8 +365,7 @@ func TestConflict(t *testing.T) {
 func TestCommitChecks(t *testing.T) {
 	t.Run("40#the-commit-protocol: a referenced row removed by hand fails the commit", func(t *testing.T) {
 		f := baseFixture(t)
-		s := f.session("server")
-		must(t, s.Begin(context.Background(), false))
+		s := f.begun(t, "server")
 		want(t, s, f.msg("insert", "items", map[string]any{"set": sets(0, "title", "body", "owner")}, "Owned", "", "P2"), `{"affected":1,"keys":["T5"]}`)
 		f.write("people.flowmark.md", strings.Replace(baseDocs()["people.flowmark.md"], "| P2 | Max |  |  | false | 0.00 | 2026-10-02 10:00:00 |  |  |\n", "", 1))
 		fails(t, s.Commit(), "FOREIGN_KEY", "P2")
@@ -388,16 +376,14 @@ func TestCommitChecks(t *testing.T) {
 	})
 	t.Run("40#the-commit-protocol: a key taken by hand fails the commit", func(t *testing.T) {
 		f := baseFixture(t)
-		s := f.session("server")
-		must(t, s.Begin(context.Background(), false))
+		s := f.begun(t, "server")
 		want(t, s, f.msg("insert", "steps", map[string]any{"set": sets(0, "id", "note", "title", "done")}, "S3", "N1", "Ship", false), `{"affected":1,"keys":["S3"]}`)
 		f.write("notes/N3.flowmark.md", lines("# Second root", "- position: 2", "", "## steps", "- s3 Mine done:false"))
 		fails(t, s.Commit(), "DUPLICATE_KEY", "s3")
 	})
 	t.Run("40#the-commit-protocol: a change that makes the write another write", func(t *testing.T) {
 		f := baseFixture(t)
-		s := f.session("server")
-		must(t, s.Begin(context.Background(), false))
+		s := f.begun(t, "server")
 		upd := f.msg("update", "notes", map[string]any{"set": sets(0, "weight"), "where": map[string]any{"items": []any{map[string]any{"pred": map[string]any{"column": "position", "op": "gte", "p": 1}}}}}, 1.5, 2)
 		want(t, s, upd, `{"affected":1,"keys":[]}`)
 		f.write("notes/N4.flowmark.md", lines("# Third root", "- position: 3"))
@@ -412,8 +398,7 @@ func TestCommitChecks(t *testing.T) {
 	})
 	t.Run("40#the-commit-protocol: a change the writes do not depend on commits them", func(t *testing.T) {
 		f := baseFixture(t)
-		s := f.session("server")
-		must(t, s.Begin(context.Background(), false))
+		s := f.begun(t, "server")
 		want(t, s, f.msg("insert", "items", map[string]any{"set": sets(0, "title", "body", "owner")}, "Owned", "", "P2"), `{"affected":1,"keys":["T5"]}`)
 		f.write("people.flowmark.md", baseDocs()["people.flowmark.md"]+"| P4 | Lin |  |  | true | 0.00 | 2026-10-04 10:00:00 |  |  |\n")
 		must(t, s.Commit())
@@ -693,8 +678,7 @@ func TestRepairCommit(t *testing.T) {
 	})
 	t.Run("50#a-state-changed-outside-the-engine: inside a transaction, then a transition of the repaired row", func(t *testing.T) {
 		f := newFixture(t, executorCatalog(t), gapped())
-		s := f.session("server")
-		must(t, s.Begin(context.Background(), false))
+		s := f.begun(t, "server")
 		if _, err := s.Repair(context.Background(), "items", "T3", ""); err != nil {
 			t.Fatal(err)
 		}

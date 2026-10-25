@@ -2,8 +2,11 @@ package corpustest
 
 import (
 	"encoding/json"
+	"errors"
+	"io"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -203,5 +206,28 @@ func EqualLines(t testing.TB, got, want []string) {
 	t.Helper()
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("answers:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+}
+
+// Opened fails the test on err, the error of opening c, and closes c when the test ends, failing it when the close fails.
+func Opened(t testing.TB, c io.Closer, err error) {
+	t.Helper()
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := c.Close(); err != nil {
+			t.Errorf("Close: %v", err)
+		}
+	})
+}
+
+// WantExit runs the child process cmd and requires it to exit with code, the exit of a crash that a test provokes.
+func WantExit(t testing.TB, cmd *exec.Cmd, code int) {
+	t.Helper()
+	out, err := cmd.Output()
+	var exit *exec.ExitError
+	if !errors.As(err, &exit) || exit.ExitCode() != code {
+		t.Fatalf("child = %v %q, want the exit %d of the crash", err, out, code)
 	}
 }

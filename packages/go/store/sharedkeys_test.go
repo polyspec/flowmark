@@ -127,10 +127,7 @@ func TestSharedKeyLinks(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			rows, diags, err := ParseDocument(cat, "items", "items.flowmark.md", []byte(c.text), lk)
-			if err != nil {
-				t.Fatal(err)
-			}
+			rows, diags := parseItems(t, cat, c.text, lk)
 			if c.line == 0 {
 				if len(diags) > 0 || rows == nil {
 					t.Fatalf("diagnostics %+v; want none\n%s", diags, c.text)

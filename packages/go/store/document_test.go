@@ -665,10 +665,7 @@ func TestSetextDetailHeading(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			rows, diags, err := ParseDocument(cat, "items", "items.flowmark.md", []byte(c.text), lk)
-			if err != nil {
-				t.Fatal(err)
-			}
+			rows, diags := parseItems(t, cat, c.text, lk)
 			if len(diags) == 0 || diags[0].Rule != c.rule || diags[0].Line != c.line || diags[0].Column != c.col {
 				t.Fatalf("diagnostics %+v; want first %s at %d:%d", diags, c.rule, c.line, c.col)
 			}
@@ -713,10 +710,26 @@ func TestDocumentSectionHeading(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !hasDiagAt(diags, c.rule, c.message, c.line, c.col) {
-				t.Fatalf("diagnostics %+v; want %s %q at %d:%d", diags, c.rule, c.message, c.line, c.col)
-			}
+			wantDiagAt(t, diags, c.rule, c.message, c.line, c.col)
 		})
+	}
+}
+
+// parseItems parses text as the document items.flowmark.md of the table items, failing the test on an error.
+func parseItems(t *testing.T, cat *catalog.Catalog, text string, lk Linker) ([]*Row, []Diagnostic) {
+	t.Helper()
+	rows, diags, err := ParseDocument(cat, "items", "items.flowmark.md", []byte(text), lk)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return rows, diags
+}
+
+// wantDiagAt requires diags to hold a diagnostic of rule whose message contains message, at line and column.
+func wantDiagAt(t *testing.T, diags []Diagnostic, rule, message string, line, col int) {
+	t.Helper()
+	if !hasDiagAt(diags, rule, message, line, col) {
+		t.Fatalf("diagnostics %+v; want %s %q at %d:%d", diags, rule, message, line, col)
 	}
 }
 

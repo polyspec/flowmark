@@ -48,53 +48,22 @@ table tags {
 const tagsDoc = "# tags\n| id | label | kind |\n| --- | --- | --- |\n| 1 | go | topic |\n| 2 | ops | area |\n"
 
 // recorder is the journal observer of a test: it keeps every event in order and wakes the waits for one.
-type recorder struct {
-	mu     sync.Mutex
-	events []journal.Event
-	notify chan struct{}
-}
-
-func (r *recorder) Observe(e journal.Event) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.events = append(r.events, e)
-	if r.notify != nil {
-		close(r.notify)
-		r.notify = nil
-	}
-}
+type recorder struct{ journal.Recorder }
 
 // waitFor blocks until an event that match accepts has been published, and returns it.
 func (r *recorder) waitFor(t testing.TB, what string, match func(journal.Event) bool) journal.Event {
 	t.Helper()
-	deadline := time.After(patience)
-	for {
-		r.mu.Lock()
-		for _, e := range r.events {
-			if match(e) {
-				r.mu.Unlock()
-				return e
-			}
-		}
-		if r.notify == nil {
-			r.notify = make(chan struct{})
-		}
-		ch := r.notify
-		r.mu.Unlock()
-		select {
-		case <-ch:
-		case <-deadline:
-			t.Fatalf("waited %s for %s", patience, what)
-		}
+	found, ok := r.Wait(1, match, patience)
+	if !ok {
+		t.Fatalf("waited %s for %s", patience, what)
 	}
+	return found[0]
 }
 
 // count returns how many events match accepts.
 func (r *recorder) count(match func(journal.Event) bool) int {
-	r.mu.Lock()
-	defer r.mu.Unlock()
 	n := 0
-	for _, e := range r.events {
+	for _, e := range r.Events() {
 		if match(e) {
 			n++
 		}

@@ -112,10 +112,7 @@ func TestInstall(t *testing.T) {
 	})
 	t.Run("40#the-faces: install inside an open transaction is CONFIG", func(t *testing.T) {
 		f := newFixture(t, cardsDBS, nil)
-		s := f.session("tx")
-		if err := s.Begin(context.Background(), false); err != nil {
-			t.Fatal(err)
-		}
+		s := f.begun(t, "tx")
 		_, err := s.Install(context.Background())
 		fails(t, err, "CONFIG", "its own transaction")
 		if err := s.Rollback(); err != nil {

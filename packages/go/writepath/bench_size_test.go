@@ -77,14 +77,7 @@ func BenchmarkFileSizeRead(b *testing.B) {
 		b.Run(fmt.Sprintf("rows=%d", rows), func(b *testing.B) {
 			root, bytes := sizedNotes(b, rows)
 			f := openFixture(b, root)
-			s := f.session("bench")
-			m := f.msg("count", "notes", nil)
-			ctx := context.Background()
-			loop(b, func(int) {
-				if _, err := s.Exec(ctx, m); err != nil {
-					b.Fatal(err)
-				}
-			})
+			benchCount(b, f, "notes")
 			b.ReportMetric(float64(bytes)/1024, "file-KB")
 		})
 	}

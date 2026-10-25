@@ -215,9 +215,7 @@ func TestViewsAndCodecs(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			root := t.TempDir()
-			corpustest.WriteTree(t, root, tc.files)
-			checkCorpus(t, cat, root, tc.want)
+			checkCorpus(t, cat, corpustest.NewTree(t, tc.files), tc.want)
 		})
 	}
 }

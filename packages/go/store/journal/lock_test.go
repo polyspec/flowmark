@@ -23,7 +23,7 @@ func TestLockPathIsDeclared(t *testing.T) {
 		t.Fatalf("the lock file: %v", err)
 	}
 	wantKinds(t, rec, LockAcquired)
-	if e := rec.events[0]; e.Path != lockFile(root) || e.Holder != l.Holder().String() {
+	if e := rec.Events()[0]; e.Path != lockFile(root) || e.Holder != l.Holder().String() {
 		t.Fatalf("event = %+v", e)
 	}
 	entries, err := os.ReadDir(filepath.Join(root, ".flowmark"))

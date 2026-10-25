@@ -193,12 +193,8 @@ func TestInsert(t *testing.T) {
 	t.Run("10#foreign-keys-as-links: an insert that gives a dangling link its row rewrites the link", func(t *testing.T) {
 		f := catalogFixture(t, dangling()).on(t)
 		res := f.want(f.msg("insert", "items", map[string]any{"set": sets("id", "title", "body")}, "T9", "Ninth", ""), `{"affected":1,"keys":["T9"]}`)
-		var paths []string
-		for _, tg := range res.Post.Targets {
-			paths = append(paths, tg.Path)
-		}
-		if strings.Join(paths, " ") != "items.flowmark.md notes/N3.flowmark.md" {
-			t.Fatalf("targets %v", paths)
+		if got := targetPaths(res); got != "items.flowmark.md notes/N3.flowmark.md" {
+			t.Fatalf("targets %v", got)
 		}
 		f.commit(res)
 		if got := f.file("notes/N3.flowmark.md"); got != lines("# Second root", "- item: [T9](../items.flowmark.md)", "- position: 2") {
@@ -420,12 +416,8 @@ func TestUpdate(t *testing.T) {
 			t.Fatalf("N3:\n%s", f.file("notes/N3.flowmark.md"))
 		}
 		res := f.ok(byID(f, "items", sets("state"), "T3", "doing"))
-		paths := []string{}
-		for _, tg := range res.Post.Targets {
-			paths = append(paths, tg.Path)
-		}
-		if strings.Join(paths, " ") != "items.flowmark.md notes/N3.flowmark.md" {
-			t.Fatalf("targets %v", paths)
+		if got := targetPaths(res); got != "items.flowmark.md notes/N3.flowmark.md" {
+			t.Fatalf("targets %v", got)
 		}
 		f.commit(res)
 		if !strings.Contains(f.file("notes/N3.flowmark.md"), "- item: [T3](../items.flowmark.md#items-row-t3)\n") {
@@ -679,4 +671,13 @@ func TestDelete(t *testing.T) {
 	for _, c := range codes {
 		c.f.sub(t, c.name, func(f *fixture) { f.fails(c.msg, c.code) })
 	}
+}
+
+// targetPaths returns the paths of the post targets of res, joined by spaces.
+func targetPaths(res *Result) string {
+	var paths []string
+	for _, tg := range res.Post.Targets {
+		paths = append(paths, tg.Path)
+	}
+	return strings.Join(paths, " ")
 }

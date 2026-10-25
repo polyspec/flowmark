@@ -46,6 +46,19 @@ func liveHeap() uint64 {
 	return m.HeapAlloc
 }
 
+// benchCount runs loop over a count of the rows of table in one session of f.
+func benchCount(b *testing.B, f *fixture, table string) {
+	b.Helper()
+	s := f.session("bench")
+	m := f.msg("count", table, nil)
+	ctx := context.Background()
+	loop(b, func(int) {
+		if _, err := s.Exec(ctx, m); err != nil {
+			b.Fatal(err)
+		}
+	})
+}
+
 // loop runs op b.N times and reports the 95th percentile of its wall time and the CPU time per operation.
 func loop(b *testing.B, op func(i int)) {
 	b.Helper()
@@ -126,14 +139,7 @@ func BenchmarkOpen(b *testing.B) {
 func BenchmarkRead(b *testing.B) {
 	sizes(b, func(b *testing.B, n int) {
 		f := newFixture(b, executorCatalog(b), benchDocs(n))
-		s := f.session("bench")
-		m := f.msg("count", "notes", nil)
-		ctx := context.Background()
-		loop(b, func(int) {
-			if _, err := s.Exec(ctx, m); err != nil {
-				b.Fatal(err)
-			}
-		})
+		benchCount(b, f, "notes")
 	})
 }
 
