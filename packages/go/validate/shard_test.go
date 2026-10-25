@@ -80,11 +80,7 @@ func TestShardPeriod(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			root := t.TempDir()
 			tc.build(root)
-			diags, err := Corpus(cat, root)
-			if err != nil {
-				t.Fatal(err)
-			}
-			check(t, diags, tc.want)
+			checkCorpus(t, cat, root, tc.want)
 		})
 	}
 }
@@ -117,11 +113,7 @@ func TestScaleEnvelope(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			root := t.TempDir()
 			tc.build(root)
-			diags, err := Corpus(cat, root)
-			if err != nil {
-				t.Fatal(err)
-			}
-			check(t, diags, tc.want)
+			checkCorpus(t, cat, root, tc.want)
 		})
 	}
 }
@@ -156,11 +148,7 @@ func TestScaleEnvelopeCounts(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			root := t.TempDir()
 			build(root, tc.folders...)
-			diags, err := Corpus(cat, root)
-			if err != nil {
-				t.Fatal(err)
-			}
-			check(t, diags, tc.want)
+			checkCorpus(t, cat, root, tc.want)
 		})
 	}
 }

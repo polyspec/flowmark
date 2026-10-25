@@ -1100,7 +1100,7 @@ func htmlTagAt(s string) (int, []htmlAttr) {
 		if n < 0 {
 			break
 		}
-		attr := htmlAttr{name: asciiLower(s[q:n])}
+		attr := htmlAttr{name: FoldASCII(s[q:n])}
 		p = n
 		if e := attrSpecEnd(s, p); e >= 0 {
 			eq := skipSpace(s, p)
@@ -1161,17 +1161,8 @@ func inlineTail(s string, j int) (int, bool) {
 // control characters whose parentheses balance.
 func linkDest(s string, p int) (int, bool) {
 	if p < len(s) && s[p] == '<' {
-		for k := p + 1; k < len(s); k++ {
-			switch s[k] {
-			case '\\':
-				k++
-			case '>':
-				return k + 1, true
-			case '<', '\n':
-				return 0, false
-			}
-		}
-		return 0, false
+		e := angleDestEnd(s, p)
+		return max(e, 0), e >= 0
 	}
 	depth := 0
 	k := p

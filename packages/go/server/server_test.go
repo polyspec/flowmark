@@ -268,13 +268,19 @@ func (c *client) send(line string) {
 	}
 }
 
-// recv reads one answer line.
-func (c *client) recv() string {
+// read reads up to the next line feed, waiting at most patience.
+func (c *client) read() (string, error) {
 	c.t.Helper()
 	if err := c.conn.SetReadDeadline(time.Now().Add(patience)); err != nil {
 		c.t.Fatal(err)
 	}
-	line, err := c.r.ReadString('\n')
+	return c.r.ReadString('\n')
+}
+
+// recv reads one answer line.
+func (c *client) recv() string {
+	c.t.Helper()
+	line, err := c.read()
 	if err != nil {
 		c.t.Fatalf("reading an answer: %v (read %q)", err, line)
 	}
@@ -325,11 +331,8 @@ func (c *client) wantError(code string, parts ...string) {
 // closed requires the server to have closed the connection: the next read ends without a line.
 func (c *client) closed() {
 	c.t.Helper()
-	if err := c.conn.SetReadDeadline(time.Now().Add(patience)); err != nil {
-		c.t.Fatal(err)
-	}
-	line, err := c.r.ReadString('\n')
-	if err != io.EOF || line != "" {
+	line, err := c.read()
+	if !errors.Is(err, io.EOF) || line != "" {
 		c.t.Fatalf("read %q, %v; want the connection closed", line, err)
 	}
 }
@@ -633,6 +636,18 @@ func TestControl(t *testing.T) {
 	})
 }
 
+// wantRolledBack requires the session serve-1 to release the lock with nothing written: a new connection counts the
+// tags of the corpus as they were, and the tags document is unchanged.
+func (f *fixture) wantRolledBack(t *testing.T) {
+	t.Helper()
+	f.rec.waitFor(t, "the release of serve-1", of(journal.LockReleased, "serve-1"))
+	b := f.connect()
+	b.want(f.countTags(), count2)
+	if f.tags() != tagsDoc {
+		t.Fatalf("tags:\n%s", f.tags())
+	}
+}
+
 // TestClosedConnection pins a connection that closes (spec 40 The server, The lock): its transaction is rolled back,
 // the lock released, and a lock wait of its request ended.
 func TestClosedConnection(t *testing.T) {
@@ -645,12 +660,7 @@ func TestClosedConnection(t *testing.T) {
 			t.Fatal(err)
 		}
 		f.waitEnded("serve-1")
-		f.rec.waitFor(t, "the release of serve-1", of(journal.LockReleased, "serve-1"))
-		b := f.connect()
-		b.want(f.countTags(), count2)
-		if f.tags() != tagsDoc {
-			t.Fatalf("tags:\n%s", f.tags())
-		}
+		f.wantRolledBack(t)
 	})
 	t.Run("40#the-lock: a closed connection ends its request's lock wait and runs no later message", func(t *testing.T) {
 		f := start(t, noIdle, waitLong)
@@ -704,12 +714,7 @@ func TestIdle(t *testing.T) {
 		a.want(f.insertTag("web", "area"), insertedWeb3)
 		a.wantError("CONNECTION_LOST", "idle", "rolled back")
 		a.closed()
-		f.rec.waitFor(t, "the release of serve-1", of(journal.LockReleased, "serve-1"))
-		b := f.connect()
-		b.want(f.countTags(), count2)
-		if f.tags() != tagsDoc {
-			t.Fatalf("tags:\n%s", f.tags())
-		}
+		f.wantRolledBack(t)
 	})
 	t.Run("40#the-server: a session without a transaction is not idle", func(t *testing.T) {
 		f := start(t, idle, waitLong)

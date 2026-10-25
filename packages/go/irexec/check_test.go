@@ -2,8 +2,6 @@ package irexec
 
 import (
 	"github.com/polyspec/flowmark/packages/go/internal/corpustest"
-	"os"
-	"path/filepath"
 	"testing"
 )
 
@@ -11,10 +9,6 @@ import (
 // value not of its type in, and returns its corpus root.
 func gaugesCatalog(t testing.TB) string {
 	t.Helper()
-	dir := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(dir, "dbspec"), 0o755); err != nil {
-		t.Fatal(err)
-	}
 	dbs := lines(
 		"dbspec 1 gauges",
 		"",
@@ -29,18 +23,13 @@ func gaugesCatalog(t testing.TB) string {
 		"  }",
 		"}",
 	)
-	corpustest.WriteTree(t, dir, map[string]string{"dbspec/gauges.dbs": dbs})
-	return dir
+	return corpustest.NewTree(t, map[string]string{"dbspec/gauges.dbs": dbs})
 }
 
 // viewsCatalog writes a catalog with the view table and a table of codec columns,
 // one of whose stages hold the host stage hex, and returns its corpus root.
 func viewsCatalog(t testing.TB) string {
 	t.Helper()
-	dir := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(dir, "dbspec"), 0o755); err != nil {
-		t.Fatal(err)
-	}
 	dbs := lines(
 		"dbspec 1 flowmark",
 		"",
@@ -79,8 +68,7 @@ func viewsCatalog(t testing.TB) string {
 		"  }",
 		"}",
 	)
-	corpustest.WriteTree(t, dir, map[string]string{"dbspec/flowmark.dbs": dbs})
-	return dir
+	return corpustest.NewTree(t, map[string]string{"dbspec/flowmark.dbs": dbs})
 }
 
 // TestViewAndCodecJudgement pins the commit's judgement of the view and codec

@@ -76,6 +76,17 @@ func (w *writer) placeInOrder(g *given, k *cell) *Error {
 	return w.insertAt(g, w.next.byRow[g.row], k)
 }
 
+// placeAt returns the siblings of x and the place among them that k names (position); ok is false when the write is
+// refused.
+func (w *writer) placeAt(g *given, x *rec, k *cell) ([]*rec, int64, bool, *Error) {
+	sibs, err := w.siblings(x)
+	if err != nil {
+		return nil, 0, false, err
+	}
+	pos, ok := w.position(g, x, k, int64(len(sibs)))
+	return sibs, pos, ok, nil
+}
+
 // position returns the 1-based position k names among n siblings, or the end when
 // k is nil; ok is false, the fault reported, when k lies outside 1..n + 1.
 func (w *writer) position(g *given, x *rec, k *cell, n int64) (int64, bool) {
@@ -97,14 +108,12 @@ func (w *writer) insertAt(g *given, x *rec, k *cell) *Error {
 	if x.tb.Storage.Kind == catalog.StorageFiles {
 		return w.rank(g, x, k)
 	}
-	sibs, err := w.siblings(x)
+	sibs, pos, ok, err := w.placeAt(g, x, k)
 	if err != nil {
 		return err
 	}
-	n := int64(len(sibs))
-	pos, ok := w.position(g, x, k, n)
 	if !ok {
-		w.setOrder(x, n+1)
+		w.setOrder(x, int64(len(sibs))+1)
 		return nil
 	}
 	for _, y := range sibs {
@@ -159,12 +168,11 @@ const rankSpacing = 1000
 // to renumber, that is not of its type fails as CONSTRAINT.
 func (w *writer) rank(g *given, x *rec, k *cell) *Error {
 	tb := x.tb
-	sibs, err := w.siblings(x)
+	sibs, pos, ok, err := w.placeAt(g, x, k)
 	if err != nil {
 		return err
 	}
 	n := int64(len(sibs))
-	pos, ok := w.position(g, x, k, n)
 	if !ok {
 		return nil // the write is refused; x keeps the rank it has
 	}

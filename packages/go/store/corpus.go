@@ -44,19 +44,8 @@ func ParseFilesTable(cat *catalog.Catalog, fsys FS, table string, lk Linker, mem
 	if err != nil {
 		return nil, nil, []Diagnostic{fileDiag(table, RuleWalk, err.Error())}
 	}
-	// The folder's type is its entry in the root, never a lookup of its path, which would follow a symbolic link.
-	root, err := fsys.ReadDir(".")
-	if err != nil {
-		return nil, nil, []Diagnostic{fileDiag(table, RuleWalk, "cannot read the corpus root: "+err.Error())}
-	}
-	i := slices.IndexFunc(root, func(e fs.DirEntry) bool { return e.Name() == table })
-	switch {
-	case i < 0:
-		return nil, nil, nil
-	case root[i].Type()&fs.ModeSymlink != 0:
-		return nil, nil, []Diagnostic{fileDiag(table, RuleWalk, "a symbolic link named as a files table is not followed")}
-	case !root[i].IsDir():
-		return nil, nil, []Diagnostic{fileDiag(table, RuleWalk, "the table folder is not a folder")}
+	if found, diags := tableFolder(fsys, table, "a files table"); !found {
+		return nil, nil, diags
 	}
 	w := &walker{cat: cat, fsys: fsys, lay: lay, lk: lk, memo: memo, data: map[string][]byte{}, shard: lay.shard}
 	w.visit(table, 0)
@@ -159,6 +148,27 @@ type DocFile struct {
 	Rows []*Row
 }
 
+// tableFolder reports whether the corpus root fsys holds the folder of table, what kind of table it is named as (such as
+// "a files table"). The folder's type is its entry in the root, never a lookup of its path, which would follow a symbolic
+// link: a root that cannot be read, a symbolic link and an entry that is no folder are not found, each with its walk
+// diagnostic, and a root without the entry is not found with none.
+func tableFolder(fsys FS, table, what string) (bool, []Diagnostic) {
+	root, err := fsys.ReadDir(".")
+	if err != nil {
+		return false, []Diagnostic{fileDiag(table, RuleWalk, "cannot read the corpus root: "+err.Error())}
+	}
+	i := slices.IndexFunc(root, func(e fs.DirEntry) bool { return e.Name() == table })
+	switch {
+	case i < 0:
+		return false, nil
+	case root[i].Type()&fs.ModeSymlink != 0:
+		return false, []Diagnostic{fileDiag(table, RuleWalk, "a symbolic link named as "+what+" is not followed")}
+	case !root[i].IsDir():
+		return false, []Diagnostic{fileDiag(table, RuleWalk, "the table folder is not a folder")}
+	}
+	return true, nil
+}
+
 // unreadable is the answer of a folder of the table that cannot be read: a walk diagnostic that names the cause, and no
 // error, since the parse reports a folder it cannot read and goes on.
 func unreadable(table, what string, err error) ([]DocFile, []Diagnostic, error) {
@@ -175,18 +185,8 @@ func ParseDocumentTable(cat *catalog.Catalog, fsys FS, table string, lk Linker, 
 	if !ok || tb.Storage.Kind != catalog.StorageDocument || tb.Storage.Shard == nil {
 		return nil, nil, fmt.Errorf("table %s is not a sharded document table", table)
 	}
-	root, err := fsys.ReadDir(".")
-	if err != nil {
-		return unreadable(table, "cannot read the corpus root", err)
-	}
-	i := slices.IndexFunc(root, func(e fs.DirEntry) bool { return e.Name() == table })
-	switch {
-	case i < 0:
-		return nil, nil, nil
-	case root[i].Type()&fs.ModeSymlink != 0:
-		return nil, []Diagnostic{fileDiag(table, RuleWalk, "a symbolic link named as a sharded table is not followed")}, nil
-	case !root[i].IsDir():
-		return nil, []Diagnostic{fileDiag(table, RuleWalk, "the table folder is not a folder")}, nil
+	if found, diags := tableFolder(fsys, table, "a sharded table"); !found {
+		return nil, diags, nil
 	}
 	entries, err := fsys.ReadDir(table)
 	if err != nil {

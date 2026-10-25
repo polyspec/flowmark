@@ -217,11 +217,7 @@ func TestViewsAndCodecs(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			root := t.TempDir()
 			corpustest.WriteTree(t, root, tc.files)
-			diags, err := Corpus(cat, root)
-			if err != nil {
-				t.Fatal(err)
-			}
-			check(t, diags, tc.want)
+			checkCorpus(t, cat, root, tc.want)
 		})
 	}
 }

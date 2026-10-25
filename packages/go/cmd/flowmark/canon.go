@@ -52,7 +52,7 @@ func canonTo(out, errOut io.Writer, args []string) int {
 	}
 	for _, r := range res.Reported {
 		d := r.Diagnostic
-		why := fmt.Sprintf("%s:%d:%d %s: %s", d.File, d.Line, d.Column, d.Rule, d.Message)
+		why := d.String()
 		if r.Needs != "" {
 			why = fmt.Sprintf("a link needs the unavailable table %s (%s)", r.Needs, why)
 		}

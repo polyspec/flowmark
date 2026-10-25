@@ -64,7 +64,7 @@ func fromIR(err error) *Error {
 // diagError is the CONSTRAINT error of a request that needs what diagnostic d
 // stands for, naming the file and the diagnostic.
 func diagError(why string, d catalog.Diagnostic) *Error {
-	return &Error{Code: codeConstraint, Msg: fmt.Sprintf("%s: %s:%d:%d %s: %s", why, d.File, d.Line, d.Column, d.Rule, d.Message), Diagnostic: &d}
+	return &Error{Code: codeConstraint, Msg: why + ": " + d.String(), Diagnostic: &d}
 }
 
 // faultError is the error of a write refused by faults, whose code is the code of

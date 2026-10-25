@@ -529,9 +529,7 @@ func TestParseDocumentRules(t *testing.T) {
 					return
 				}
 				out := checkDocumentP2(t, cat, table, rows, lk)
-				if !bytes.Equal(out, []byte(c.text)) {
-					t.Fatalf("P1: emit(parse(s)) != s\n got: %q\nwant: %q", out, c.text)
-				}
+				wantP1(t, out, c.text)
 				return
 			}
 			if len(diags) == 0 {

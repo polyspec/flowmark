@@ -114,12 +114,7 @@ func FuzzParseDocument(f *testing.F) {
 			t.Fatalf("emitted document does not parse cleanly: %v %+v\ninput: %q\nemit: %q", err, pd, data, out)
 		}
 		again, _, rf := renderDocument(lay, docPath(lay.table), back, lk, false)
-		if len(rf) > 0 || !bytes.Equal(again, out) {
-			t.Fatalf("P2 failed\ninput: %q\nemit: %q\nagain: %q", data, out, again)
-		}
-		if len(diags) == 0 && !bytes.Equal(out, data) {
-			t.Fatalf("P1 failed\ninput: %q\nemit: %q", data, out)
-		}
+		wantRoundTrip(t, data, out, again, len(rf), len(diags))
 	})
 }
 

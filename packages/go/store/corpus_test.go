@@ -1,6 +1,7 @@
 package store
 
 import (
+	"bytes"
 	"github.com/polyspec/flowmark/packages/go/internal/corpustest"
 	"os"
 	"path/filepath"
@@ -50,6 +51,38 @@ func treeIn(t *testing.T, root string, files map[string]string, links map[string
 		t.Fatal(err)
 	}
 	return root
+}
+
+// wantRoundTrip requires the properties of a fuzz input data that emits out, whose parse emits again: P2, again is out
+// and the second emit has no fault (faults), and, for an input that the parse reports nothing on (diags), P1, out is data.
+func wantRoundTrip(t *testing.T, data, out, again []byte, faults, diags int) {
+	t.Helper()
+	if faults > 0 || !bytes.Equal(again, out) {
+		t.Fatalf("P2 failed\ninput: %q\nemit: %q\nagain: %q", data, out, again)
+	}
+	if diags == 0 && !bytes.Equal(out, data) {
+		t.Fatalf("P1 failed\ninput: %q\nemit: %q", data, out)
+	}
+}
+
+// wantP1 requires the emit out of the parse of text to be text.
+func wantP1(t *testing.T, out []byte, text string) {
+	t.Helper()
+	if !bytes.Equal(out, []byte(text)) {
+		t.Fatalf("P1: emit(parse(s)) != s\n got: %q\nwant: %q", out, text)
+	}
+}
+
+// wantKeysAndRules requires the sorted keys of rows to be keys and the sorted rules of diags to be rules.
+func wantKeysAndRules(t *testing.T, rows []*Row, diags []Diagnostic, keys, rules []string) {
+	t.Helper()
+	gotKeys, gotRules := keysAndRules(rows, diags)
+	if !reflect.DeepEqual(gotKeys, keys) {
+		t.Fatalf("keys = %v; want %v (diagnostics %+v)", gotKeys, keys, diags)
+	}
+	if !reflect.DeepEqual(gotRules, rules) {
+		t.Fatalf("diagnostic rules = %v; want %v: %+v", gotRules, rules, diags)
+	}
 }
 
 // keysAndRules returns the sorted keys of the rows and the sorted rules of the
@@ -151,13 +184,7 @@ func TestParseFilesTableWalk(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			root := tree(t, c.files, c.links)
 			rows, _, diags := ParseFilesTable(cat, DirFS(root), "tasks", lk, nil)
-			keys, rules := keysAndRules(rows, diags)
-			if !reflect.DeepEqual(keys, c.keys) {
-				t.Fatalf("keys = %v; want %v (diagnostics %+v)", keys, c.keys, diags)
-			}
-			if !reflect.DeepEqual(rules, c.rules) {
-				t.Fatalf("diagnostic rules = %v; want %v: %+v", rules, c.rules, diags)
-			}
+			wantKeysAndRules(t, rows, diags, c.keys, c.rules)
 			for _, d := range diags {
 				if d.Line < 1 || d.Column < 1 || d.File == "" {
 					t.Fatalf("diagnostic not located: %+v", d)
@@ -313,13 +340,7 @@ func TestParseFilesTableShard(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			root := tree(t, c.files, nil)
 			rows, _, diags := ParseFilesTable(cat, DirFS(root), "events", stubLinker{}, nil)
-			keys, rules := keysAndRules(rows, diags)
-			if !reflect.DeepEqual(keys, c.keys) {
-				t.Fatalf("keys = %v; want %v (diagnostics %+v)", keys, c.keys, diags)
-			}
-			if !reflect.DeepEqual(rules, c.rules) {
-				t.Fatalf("diagnostic rules = %v; want %v: %+v", rules, c.rules, diags)
-			}
+			wantKeysAndRules(t, rows, diags, c.keys, c.rules)
 			var paths []string
 			for _, r := range rows {
 				paths = append(paths, r.Path)
@@ -393,13 +414,7 @@ func TestParseDocumentTableShard(t *testing.T) {
 					paths = append(paths, d.Path)
 				}
 			}
-			keys, rules := keysAndRules(rows, diags)
-			if !reflect.DeepEqual(keys, c.keys) {
-				t.Fatalf("keys = %v; want %v (diagnostics %+v)", keys, c.keys, diags)
-			}
-			if !reflect.DeepEqual(rules, c.rules) {
-				t.Fatalf("diagnostic rules = %v; want %v: %+v", rules, c.rules, diags)
-			}
+			wantKeysAndRules(t, rows, diags, c.keys, c.rules)
 			sort.Strings(paths)
 			if !reflect.DeepEqual(paths, c.paths) {
 				t.Fatalf("paths = %v; want %v", paths, c.paths)

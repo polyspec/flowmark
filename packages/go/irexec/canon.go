@@ -207,7 +207,7 @@ func canonRefusal(reports []CanonReport) *Error {
 	msgs := make([]string, len(reports))
 	for i, rp := range reports {
 		d := rp.Diagnostic
-		at := fmt.Sprintf("%s:%d:%d %s: %s", d.File, d.Line, d.Column, d.Rule, d.Message)
+		at := d.String()
 		if rp.Needs != "" {
 			msgs[i] = fmt.Sprintf("%s holds a link to a row of the table %s, which is unavailable (%s), so its derived target is unknown", rp.Path, rp.Needs, at)
 		} else {

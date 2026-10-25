@@ -3,8 +3,6 @@ package irexec
 import (
 	"errors"
 	"github.com/polyspec/flowmark/packages/go/internal/corpustest"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -37,10 +35,6 @@ func itemsWith(text string) map[string]string {
 // returns its corpus root.
 func jobsCatalog(t testing.TB) string {
 	t.Helper()
-	dir := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(dir, "dbspec"), 0o755); err != nil {
-		t.Fatal(err)
-	}
 	dbs := lines(
 		"dbspec 1 jobs",
 		"",
@@ -76,8 +70,7 @@ func jobsCatalog(t testing.TB) string {
 		"  }",
 		"}",
 	)
-	corpustest.WriteTree(t, dir, map[string]string{"dbspec/jobs.dbs": dbs})
-	return dir
+	return corpustest.NewTree(t, map[string]string{"dbspec/jobs.dbs": dbs})
 }
 
 // TestRepair pins the history repair (spec 50 A state changed outside the engine,

@@ -180,12 +180,12 @@ func cmDefAt(s string, p int) (string, int, bool) {
 	if collapseSpace(label) == "" {
 		return "", 0, false
 	}
-	dest := skipLineSpace(s, r+2)
+	dest := skipTailSpace(s, r+2)
 	dend := destinationEnd(s, dest)
 	if dend < 0 {
 		return "", 0, false
 	}
-	if p2 := skipLineSpace(s, dend); p2 > dend && p2 < len(s) && (s[p2] == '"' || s[p2] == '\'' || s[p2] == '(') {
+	if p2 := skipTailSpace(s, dend); p2 > dend && p2 < len(s) && (s[p2] == '"' || s[p2] == '\'' || s[p2] == '(') {
 		if tend := titleEnd(s, p2); tend >= 0 {
 			if e := lineEndAfter(s, tend); e >= 0 {
 				return label, e, true
@@ -198,38 +198,27 @@ func cmDefAt(s string, p int) (string, int, bool) {
 	return "", 0, false
 }
 
-// skipLineSpace returns the offset of the first character at or after p that is neither a
-// space nor a tab, passing at most one line feed as well.
-func skipLineSpace(s string, p int) int {
-	lf := false
-	for p < len(s) {
-		switch {
-		case s[p] == ' ' || s[p] == '\t':
-		case s[p] == '\n' && !lf:
-			lf = true
-		default:
-			return p
+// angleDestEnd returns the offset after the angle-bracketed destination that begins with the '<' at p: the text up to
+// the next '>' that no backslash escapes, with no line ending or '<' in it; -1 when it does not close.
+func angleDestEnd(s string, p int) int {
+	for k := p + 1; k < len(s); k++ {
+		switch s[k] {
+		case '\\':
+			k++
+		case '>':
+			return k + 1
+		case '<', '\n':
+			return -1
 		}
-		p++
 	}
-	return p
+	return -1
 }
 
 // destinationEnd returns the offset after the destination that begins at p, or -1 when none
 // reads: an angle-bracketed one with no line ending in it, or a run of non-space characters.
 func destinationEnd(s string, p int) int {
 	if p < len(s) && s[p] == '<' {
-		for k := p + 1; k < len(s); k++ {
-			switch s[k] {
-			case '\\':
-				k++
-			case '>':
-				return k + 1
-			case '<', '\n':
-				return -1
-			}
-		}
-		return -1
+		return angleDestEnd(s, p)
 	}
 	k := p
 	for k < len(s) && s[k] > 0x20 && s[k] != 0x7f {

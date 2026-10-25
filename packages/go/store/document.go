@@ -68,37 +68,22 @@ func layoutOfTable(cat *catalog.Catalog, tb *catalog.Table, placement string, in
 	lay := &docLayout{
 		table: table, list: tb.Storage.Shape == catalog.ShapeList, scope: tb.RowScope, placement: placement, inFiles: inFiles,
 		title: tb.Title, body: tb.Body, order: tb.Order,
-		fks: map[string]string{}, glyphs: map[string]string{}, states: map[string]string{},
+		glyphs: map[string]string{}, states: map[string]string{},
 	}
-	markdown := map[string]bool{}
-	for _, m := range tb.Markdown {
-		markdown[m] = true
+	var err error
+	lay.key, lay.sections, lay.scalars, lay.fks, err = layoutColumns(tb, func(name string) bool {
+		return name == tb.Order || name == tb.Body || name == placement
+	})
+	if err != nil {
+		return nil, err
 	}
-	keyFound := false
 	for _, c := range tb.Columns {
-		switch {
-		case c.Name == tb.Key:
-			lay.key, keyFound = c, true
-		case c.Name == tb.Order:
+		if c.Name == tb.Order && c.Name != tb.Key {
 			lay.orderType = c.Type
-		case c.Name == tb.Body || c.Name == placement:
-		case markdown[c.Name]:
-			lay.sections = append(lay.sections, section{name: c.Name, nullable: c.Null})
-		default:
-			lay.scalars = append(lay.scalars, c)
 		}
 	}
-	if !keyFound {
-		return nil, fmt.Errorf("table %s has no key column", table)
-	}
-	for _, fk := range tb.ForeignKeys {
-		if len(fk.Columns) != 1 {
-			continue
-		}
-		lay.fks[fk.Columns[0]] = fk.Table
-		if fk.Table == table && fk.Columns[0] == "parent" {
-			lay.parent = "parent"
-		}
+	if lay.fks["parent"] == table {
+		lay.parent = "parent"
 	}
 	if sm := tb.StateMachine; sm != nil && lay.list {
 		lay.state = sm.Column

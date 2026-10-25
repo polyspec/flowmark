@@ -454,9 +454,7 @@ func TestParseFileRules(t *testing.T) {
 					t.Fatalf("columns kept raw %q; want %q", raws, c.raw)
 				}
 				out := checkP2(t, cat, row, lk)
-				if !bytes.Equal(out, []byte(c.text)) {
-					t.Fatalf("P1: emit(parse(s)) != s\n got: %q\nwant: %q", out, c.text)
-				}
+				wantP1(t, out, c.text)
 				return
 			}
 			if len(diags) == 0 {

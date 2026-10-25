@@ -114,11 +114,7 @@ func TestDocumentTableHistory(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			cat, root := historyCorpus(t, tc.files)
-			diags, err := Corpus(cat, root)
-			if err != nil {
-				t.Fatal(err)
-			}
-			check(t, diags, tc.want)
+			checkCorpus(t, cat, root, tc.want)
 		})
 	}
 }

@@ -1030,7 +1030,7 @@ func htmlStart(line string) int {
 		return 0
 	}
 	rest := line[s:]
-	lower := asciiLower(rest)
+	lower := FoldASCII(rest)
 	for _, name := range []string{"script", "pre", "style", "textarea"} {
 		if strings.HasPrefix(lower, "<"+name) {
 			after := rest[len(name)+1:]
@@ -1070,7 +1070,7 @@ func blockTag6(s string) bool {
 	for q < len(s) && (isASCIILetter(s[q]) || ('0' <= s[q] && s[q] <= '9')) {
 		q++
 	}
-	if !blockTagNames[asciiLower(s[p:q])] {
+	if !blockTagNames[FoldASCII(s[p:q])] {
 		return false
 	}
 	return q == len(s) || s[q] == '>' || jsSpaceAt(s[q:]) > 0 ||
@@ -1194,9 +1194,9 @@ func jsSpaceAt(s string) int {
 // isASCIILetter reports whether c is an ASCII letter.
 func isASCIILetter(c byte) bool { return ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') }
 
-// asciiLower lowers the ASCII letters of s, keeping every other byte, so that its
+// FoldASCII lowers the ASCII letters of s, keeping every other byte, so that its
 // length is s's length.
-func asciiLower(s string) string {
+func FoldASCII(s string) string {
 	b := []byte(s)
 	for i, c := range b {
 		if 'A' <= c && c <= 'Z' {
@@ -1212,7 +1212,7 @@ func asciiLower(s string) string {
 func htmlEnds(kind int, line string) bool {
 	switch kind {
 	case 1:
-		lower := asciiLower(line)
+		lower := FoldASCII(line)
 		for _, end := range []string{"</script>", "</pre>", "</style>", "</textarea>"} {
 			if strings.Contains(lower, end) {
 				return true
@@ -1325,12 +1325,9 @@ func mdDelimiterCells(line string) int {
 	return n
 }
 
-// mdRowSpans returns the byte ranges in line of the cells of a table row as markdown-it 14.3.2 splits it (escapedSplit):
-// the line trimmed as JavaScript trims, split at every pipe that does not follow a backslash, an empty first or last
-// part dropped. A row of a pipe alone has no cell.
-func mdRowSpans(line string) [][2]int {
-	from := len(line) - len(strings.TrimLeftFunc(line, jsTrimmed))
-	to := max(len(strings.TrimRightFunc(line, jsTrimmed)), from)
+// pipeSpans returns the byte ranges of line[from:to] between the pipes that do not follow a backslash, the first from
+// from and the last to to.
+func pipeSpans(line string, from, to int) [][2]int {
 	var out [][2]int
 	b := from
 	for i := from; i < to; i++ {
@@ -1339,7 +1336,16 @@ func mdRowSpans(line string) [][2]int {
 			b = i + 1
 		}
 	}
-	out = append(out, [2]int{b, to})
+	return append(out, [2]int{b, to})
+}
+
+// mdRowSpans returns the byte ranges in line of the cells of a table row as markdown-it 14.3.2 splits it (escapedSplit):
+// the line trimmed as JavaScript trims, split at every pipe that does not follow a backslash, an empty first or last
+// part dropped. A row of a pipe alone has no cell.
+func mdRowSpans(line string) [][2]int {
+	from := len(line) - len(strings.TrimLeftFunc(line, jsTrimmed))
+	to := max(len(strings.TrimRightFunc(line, jsTrimmed)), from)
+	out := pipeSpans(line, from, to)
 	if out[0][0] == out[0][1] {
 		out = out[1:]
 	}
@@ -1354,15 +1360,7 @@ func mdRowSpans(line string) [][2]int {
 func tableRowSpans(line string) [][2]int {
 	from := len(line) - len(strings.TrimLeft(line, " \t"))
 	to := max(len(strings.TrimRight(line, " \t")), from)
-	var out [][2]int
-	b := from
-	for i := from; i < to; i++ {
-		if line[i] == '|' && (i == from || line[i-1] != '\\') {
-			out = append(out, [2]int{b, i})
-			b = i + 1
-		}
-	}
-	out = append(out, [2]int{b, to})
+	out := pipeSpans(line, from, to)
 	if to > from && line[from] == '|' {
 		out = out[1:]
 	}

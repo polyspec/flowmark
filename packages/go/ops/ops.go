@@ -186,7 +186,7 @@ func Open(ctx context.Context, root string, wait time.Duration) (*Corpus, error)
 	if cat == nil || len(diags) > 0 {
 		lines := make([]string, len(diags))
 		for i, d := range diags {
-			lines[i] = fmt.Sprintf("%s:%d:%d %s: %s", d.File, d.Line, d.Column, d.Rule, d.Message)
+			lines[i] = d.String()
 		}
 		return nil, errf(codeSchemaInvalid, "the catalog of %s does not load; repair dbspec/ first: %s", abs, strings.Join(lines, "; "))
 	}

@@ -184,6 +184,16 @@ func TestServe(t *testing.T) {
 	connect := func(tok string) string {
 		return `{"op":"connect","corpus":"board","token":"` + tok + `"}`
 	}
+	// connects requires the token tok to connect to the server at addr, which then stops cleanly.
+	connects := func(addr, tok string, stopped func() (int, string)) {
+		t.Helper()
+		if got := ask(t, addr, connect(tok)); got[0] != `{"ok":true}` {
+			t.Fatalf("answers %q", got)
+		}
+		if code, errOut := stopped(); code != 0 {
+			t.Fatalf("exit %d; stderr %s", code, errOut)
+		}
+	}
 
 	addr, stopped := run(t)
 	first := token(t)
@@ -203,12 +213,7 @@ func TestServe(t *testing.T) {
 	if token(t) != first {
 		t.Fatalf("the token changed across starts: %s, then %s", first, token(t))
 	}
-	if got := ask(t, addr, connect(first)); got[0] != `{"ok":true}` {
-		t.Fatalf("answers %q", got)
-	}
-	if code, errOut := stopped(); code != 0 {
-		t.Fatalf("exit %d; stderr %s", code, errOut)
-	}
+	connects(addr, first, stopped)
 
 	addr, stopped = run(t, "--new-token")
 	renewed := token(t)
@@ -218,10 +223,5 @@ func TestServe(t *testing.T) {
 	if got := ask(t, addr, connect(first)); !strings.Contains(got[0], `"code":"CONFIG"`) {
 		t.Fatalf("the old token answered %q", got)
 	}
-	if got := ask(t, addr, connect(renewed)); got[0] != `{"ok":true}` {
-		t.Fatalf("answers %q", got)
-	}
-	if code, errOut := stopped(); code != 0 {
-		t.Fatalf("exit %d; stderr %s", code, errOut)
-	}
+	connects(addr, renewed, stopped)
 }

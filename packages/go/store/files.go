@@ -52,6 +52,38 @@ type section struct {
 	nullable bool
 }
 
+// layoutColumns sorts the columns of tb that skip does not name for a layout: its key, the sections of its markdown
+// columns and its stored scalars, each in declaration order; a table without its key column is refused. fks maps the
+// column of each single-column foreign key to the table it references.
+func layoutColumns(tb *catalog.Table, skip func(name string) bool) (key dbspec.Column, sections []section, scalars []dbspec.Column, fks map[string]string, err error) {
+	markdown := map[string]bool{}
+	for _, m := range tb.Markdown {
+		markdown[m] = true
+	}
+	keyFound := false
+	for _, c := range tb.Columns {
+		switch {
+		case c.Name == tb.Key:
+			key, keyFound = c, true
+		case skip(c.Name):
+		case markdown[c.Name]:
+			sections = append(sections, section{name: c.Name, nullable: c.Null})
+		default:
+			scalars = append(scalars, c)
+		}
+	}
+	if !keyFound {
+		return key, nil, nil, nil, fmt.Errorf("table %s has no key column", tb.Name)
+	}
+	fks = map[string]string{}
+	for _, fk := range tb.ForeignKeys {
+		if len(fk.Columns) == 1 {
+			fks[fk.Columns[0]] = fk.Table
+		}
+	}
+	return key, sections, scalars, fks, nil
+}
+
 // layoutOf returns the layout of table, which must be a files table of cat.
 func layoutOf(cat *catalog.Catalog, table string) (*filesLayout, error) {
 	tb, ok := cat.Table(table)
@@ -61,30 +93,11 @@ func layoutOf(cat *catalog.Catalog, table string) (*filesLayout, error) {
 	if tb.Storage.Kind != catalog.StorageFiles {
 		return nil, fmt.Errorf("table %s is not a files table", table)
 	}
-	lay := &filesLayout{table: table, title: tb.Title, body: tb.Body, fks: map[string]string{}, scope: tb.RowScope, shard: tb.Storage.Shard}
-	markdown := map[string]bool{}
-	for _, m := range tb.Markdown {
-		markdown[m] = true
-	}
-	keyFound := false
-	for _, c := range tb.Columns {
-		switch {
-		case c.Name == tb.Key:
-			lay.key, keyFound = c, true
-		case c.Name == tb.Title || c.Name == tb.Body:
-		case markdown[c.Name]:
-			lay.sections = append(lay.sections, section{name: c.Name, nullable: c.Null})
-		default:
-			lay.scalars = append(lay.scalars, c)
-		}
-	}
-	if !keyFound {
-		return nil, fmt.Errorf("table %s has no key column", table)
-	}
-	for _, fk := range tb.ForeignKeys {
-		if len(fk.Columns) == 1 {
-			lay.fks[fk.Columns[0]] = fk.Table
-		}
+	lay := &filesLayout{table: table, title: tb.Title, body: tb.Body, scope: tb.RowScope, shard: tb.Storage.Shard}
+	var err error
+	lay.key, lay.sections, lay.scalars, lay.fks, err = layoutColumns(tb, func(name string) bool { return name == tb.Title || name == tb.Body })
+	if err != nil {
+		return nil, err
 	}
 	children, err := childLayouts(cat, table, true)
 	if err != nil {

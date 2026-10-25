@@ -82,7 +82,7 @@ func TestGoldensValidateClean(t *testing.T) {
 				t.Fatal(err)
 			}
 			for _, d := range diags {
-				t.Errorf("%s:%d:%d %s: %s", d.File, d.Line, d.Column, d.Rule, d.Message)
+				t.Error(d.String())
 			}
 		})
 	}

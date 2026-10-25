@@ -98,12 +98,7 @@ func FuzzParseFile(f *testing.F) {
 			t.Fatalf("emitted file does not parse cleanly: %+v\ninput: %q\nemit: %q", pd, data, out)
 		}
 		again, rd := renderFileOf(t, cat, table, back, lk)
-		if len(rd) > 0 || !bytes.Equal(again, out) {
-			t.Fatalf("P2 failed\ninput: %q\nemit: %q\nagain: %q", data, out, again)
-		}
-		if len(diags) == 0 && !bytes.Equal(out, data) {
-			t.Fatalf("P1 failed\ninput: %q\nemit: %q", data, out)
-		}
+		wantRoundTrip(t, data, out, again, len(rd), len(diags))
 	})
 }
 

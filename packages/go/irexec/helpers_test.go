@@ -228,7 +228,7 @@ func (f *fixture) commit(res *Result) {
 		f.t.Fatal(err)
 	}
 	for _, d := range diags {
-		f.t.Errorf("after the commit: %s:%d:%d %s: %s", d.File, d.Line, d.Column, d.Rule, d.Message)
+		f.t.Errorf("after the commit: %s", d)
 	}
 	f.reopen()
 	next := res.Post.Next

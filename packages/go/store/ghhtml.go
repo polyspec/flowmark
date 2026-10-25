@@ -65,7 +65,7 @@ func tagOf(t string) (name string, end, self, ok bool) {
 	if q < 0 {
 		return "", false, false, false
 	}
-	return asciiLower(t[p:q]), end, !end && strings.HasSuffix(t, "/>"), true
+	return FoldASCII(t[p:q]), end, !end && strings.HasSuffix(t, "/>"), true
 }
 
 // ghRawRef reads the character reference at the start of s, raw HTML text, as GitHub's

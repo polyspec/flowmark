@@ -18,6 +18,11 @@ type Diagnostic struct {
 	Message string
 }
 
+// String writes the diagnostic as every face and test reports it: file:line:column rule: message.
+func (d Diagnostic) String() string {
+	return fmt.Sprintf("%s:%d:%d %s: %s", d.File, d.Line, d.Column, d.Rule, d.Message)
+}
+
 // Catalog is a loaded, valid catalog.
 type Catalog struct {
 	Documents    []*dbspec.Document

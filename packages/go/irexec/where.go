@@ -1,6 +1,7 @@
 package irexec
 
 import (
+	"github.com/polyspec/flowmark/packages/go/store"
 	"math"
 	"strconv"
 	"strings"
@@ -324,20 +325,9 @@ func (r *reader) contains(s *scope, ev *env, p *ir.Pred) (tri, *Error) {
 		return tUnknown, nil
 	}
 	if p.Op == "contains" {
-		return bool3(strings.Contains(foldASCII(v.text), foldASCII(pv.text))), nil
+		return bool3(strings.Contains(store.FoldASCII(v.text), store.FoldASCII(pv.text))), nil
 	}
 	return bool3(strings.Contains(v.text, pv.text)), nil
-}
-
-// foldASCII lower-cases the bytes A-Z of s and keeps every other byte.
-func foldASCII(s string) string {
-	b := []byte(s)
-	for i, c := range b {
-		if 'A' <= c && c <= 'Z' {
-			b[i] = c + ('a' - 'A')
-		}
-	}
-	return string(b)
 }
 
 // compareParams evaluates a comparison, in, not_in or between of the value v of

@@ -320,7 +320,7 @@ func (f *fixture) clean() {
 		f.t.Fatal(err)
 	}
 	for _, d := range diags {
-		f.t.Errorf("%s:%d:%d %s: %s", d.File, d.Line, d.Column, d.Rule, d.Message)
+		f.t.Error(d.String())
 	}
 	entries, err := os.ReadDir(filepath.Join(f.root, ".flowmark", "tx"))
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {

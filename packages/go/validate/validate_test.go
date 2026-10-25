@@ -1,7 +1,6 @@
 package validate
 
 import (
-	"fmt"
 	"github.com/polyspec/flowmark/packages/go/internal/corpustest"
 	"path/filepath"
 	"strconv"
@@ -64,6 +63,16 @@ func (w wanted) matches(d catalog.Diagnostic) bool {
 		strings.Contains(d.Message, w.says)
 }
 
+// checkCorpus validates the corpus at root with the catalog cat and checks its diagnostics against want (check).
+func checkCorpus(t *testing.T, cat *catalog.Catalog, root string, want []string) {
+	t.Helper()
+	diags, err := Corpus(cat, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	check(t, diags, want)
+}
+
 // check requires that the diagnostics are exactly want: each want entry matches
 // one diagnostic, and no diagnostic is left over.
 func check(t *testing.T, diags []catalog.Diagnostic, want []string) {
@@ -86,7 +95,7 @@ func check(t *testing.T, diags []catalog.Diagnostic, want []string) {
 	var extra []string
 	for i, d := range diags {
 		if !used[i] {
-			extra = append(extra, fmt.Sprintf("%s:%d:%d %s: %s", d.File, d.Line, d.Column, d.Rule, d.Message))
+			extra = append(extra, d.String())
 		}
 	}
 	if len(missing) > 0 || len(extra) > 0 {
@@ -684,11 +693,7 @@ func TestValidatorRules(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			root := t.TempDir()
 			corpustest.WriteTree(t, root, tc.files)
-			diags, err := Corpus(cat, root)
-			if err != nil {
-				t.Fatal(err)
-			}
-			check(t, diags, tc.want)
+			checkCorpus(t, cat, root, tc.want)
 		})
 	}
 }
@@ -722,11 +727,7 @@ func TestFilesCaseDuplicate(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			root := corpustest.CaseSensitiveRoot(t)
 			corpustest.WriteTree(t, root, tc.files)
-			diags, err := Corpus(cat, root)
-			if err != nil {
-				t.Fatal(err)
-			}
-			check(t, diags, tc.want)
+			checkCorpus(t, cat, root, tc.want)
 		})
 	}
 }
