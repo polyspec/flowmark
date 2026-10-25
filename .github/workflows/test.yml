@@ -10,34 +10,68 @@ jobs:
   test:
     name: test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    # The project lies in the folder named by its repository, beside the sibling checkouts that the bootstrap of kit and
+    # make link read (kit K473, K613), as in gates.yml; every run step runs in it.
+    defaults:
+      run:
+        shell: bash
+        working-directory: ${{ github.event.repository.name }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
+        with:
+          path: ${{ github.event.repository.name }}
       - uses: actions/setup-go@v5
         with:
-          go-version-file: packages/go/go.mod
+          go-version-file: ${{ github.event.repository.name }}/packages/go/go.mod
       - uses: actions/setup-node@v4
         with:
           node-version: lts/*
+      - name: sibling checkouts
+        env:
+          SELF: ${{ github.event.repository.name }}
+        run: |
+          repositories=$(node -e '
+            const { execFileSync } = require("node:child_process");
+            const fs = require("node:fs");
+            const locks = execFileSync("git", ["ls-files", "-z"], { encoding: "utf8" }).split("\0")
+              .filter(file => /(^|\/)(package-lock\.json|composer\.lock|uv\.lock|Cargo\.lock|pylock[^/]*\.toml)$/.test(file));
+            const names = new Set();
+            for (const file of locks) {
+              for (const match of fs.readFileSync(file, "utf8").matchAll(/github\.com\/polyspec\/([A-Za-z0-9._-]+?)(?:\.git)?(?=[\/"#?])/g)) {
+                if (match[1] !== process.env.SELF) names.add(match[1]);
+              }
+            }
+            for (const name of [...names].sort()) console.log(name);
+          ')
+          for repository in $repositories; do
+            git clone --depth 1 "https://github.com/polyspec/$repository.git" "../$repository"
+          done
+      # The consumer bootstrap runs the sources of the sibling kit checkout, which import its packages; install them in that fresh
+      # clone before make install reads it. Nothing is built (kit K613).
+      - name: install sibling kit
+        run: |
+          if [ -d ../kit/.git ]; then
+            make -C ../kit install-tools TOOLS=npm
+            make -C ../kit install-packages
+          fi
       - name: install
-        shell: bash
         run: make install
+      - name: link
+        run: make link
       # make flowmark-test runs the node tests, the Go tests of every Go module and, on macOS, the mount test of the
       # case-sensitive folder; the same make target runs on each platform of the matrix.
       - name: flowmark tests
-        shell: bash
         run: make flowmark-test
       # The reference check of the documents: every task ID that a document names resolves to a checklist item.
       - name: references
-        shell: bash
         run: make refs-check
       # The benchmarks of writepath, whose numbers the scale envelope of spec 40 states (T12.5-3, T12.13): one run
       # per platform, its output kept as an artifact of the run.
       - name: benchmarks
-        shell: bash
         run: |
           # The watch of macOS holds one descriptor per document (spec 40), so the benchmark corpus needs more open
           # files than the runner's defaults allow. The standard raises are the rlimit and, on macOS, the per-process
@@ -53,4 +87,4 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: benchmarks-${{ matrix.os }}
-          path: benchmarks.txt
+          path: ${{ github.event.repository.name }}/benchmarks.txt
