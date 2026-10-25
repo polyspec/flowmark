@@ -1,5 +1,5 @@
 <!-- doc-id: checklist-kit-standard -->
-<!-- source-sha256: 01c0655669beb678b37a903fbc1408b232a0f14f41fc61809e9b9fbd152a30ed -->
+<!-- source-sha256: b2afa589ac81f524576971a1b51f53b0bf2b7a6a311ab9e474ac915d75b16be7 -->
 # kit 표준 체크리스트
 
 | ID | Task | Deliverables | Verification | State |
@@ -23,4 +23,4 @@
 | T15-16 | make divergence-check가 통과한다. 원인: packages/go/server의 token test와 packages/go/store/journal의 holder test가 runtime.GOOS로 분기해서 다른 platform에서는 다른 것을 단언한다. 수정: 둘은 flowmark을 개발하는 macOS의 동작, 곧 server.json의 mode 0600과 다른 사용자의 process인 process 1을 검사한다 | packages/go/server/server_test.go, packages/go/store/journal/holder_test.go | `make divergence-check` | [o] |
 | T15-18 | gates workflow는 sibling kit을 checkout한다(kit K473, K613; template T26.7-93). 원인: .github/workflows/gates.yml이 flowmark만 checkout해서 make install이 ../kit/scripts/kit/kit-bootstrap.mk를 찾지 못했고 CI run 40236380506이 실패했다. 수정: gates.yml은 template과 hyper의 workflow로, project를 저장소 이름의 폴더에 sibling checkout과 나란히 checkout하고 sibling kit을 install하고 package를 link한다 | .github/workflows/gates.yml | `cmp ../template/.github/workflows/gates.yml .github/workflows/gates.yml` | [o] |
 | T15-19 | test workflow는 sibling kit을 checkout한다(kit K473, K613; T15-18). 원인: .github/workflows/test.yml이 flowmark만 checkout해서 make install이 ../kit/scripts/kit/kit-bootstrap.mk를 찾지 못했고 CI run 40236703970의 모든 job이 실패했다. 수정: gates.yml처럼 project는 sibling checkout과 나란히 저장소 이름의 폴더에 있고, workflow는 test 전에 sibling kit을 install하고 package를 link한다 | .github/workflows/test.yml | `gh run list --repo polyspec/flowmark --workflow test.yml --branch main --limit 1 --json conclusion` | [o] |
-| T15-20 | test workflow는 .php-version의 PHP를 설치한다(kit K193; T15-19). 원인: .github/workflows/test.yml이 PHP를 설치하지 않아서 CI run 40237120987에서 kit install이 .php-version의 PHP 8.5를 찾지 못했다. 수정: workflow가 install 전에 gates.yml의 setup-php step으로 그것을 설치한다 | .github/workflows/test.yml | `gh run list --repo polyspec/flowmark --workflow test.yml --branch main --limit 1 --json conclusion` | [ ] |
+| T15-20 | test workflow는 .php-version의 PHP를 설치한다(kit K193; T15-19). 원인: .github/workflows/test.yml이 PHP를 설치하지 않아서 CI run 40237120987에서 kit install이 .php-version의 PHP 8.5를 찾지 못했다. 수정: workflow가 install 전에 gates.yml의 setup-php step으로 그것을 설치한다 | .github/workflows/test.yml | `gh run list --repo polyspec/flowmark --workflow test.yml --branch main --limit 1 --json conclusion` | [~] |
