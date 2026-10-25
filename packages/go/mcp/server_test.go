@@ -4,46 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"github.com/polyspec/flowmark/packages/go/internal/corpustest"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 )
-
-const peopleDBS = `dbspec 1 people
-
-table people {
-  id varchar(32)
-  name varchar(64)
-  primary key (id)
-  settings {
-    store document table
-    title name
-  }
-}
-`
-
-// corpusRoot writes a corpus of one people table with one row and returns its root.
-func corpusRoot(t *testing.T) string {
-	t.Helper()
-	root := t.TempDir()
-	for p, text := range map[string]string{
-		"dbspec/people.dbs":  peopleDBS,
-		"people.flowmark.md": "# people\n| id | name |\n| --- | --- |\n| P1 | Ada |\n",
-	} {
-		full := filepath.Join(root, filepath.FromSlash(p))
-		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(full, []byte(text), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := corpustest.WriteSetFile(filepath.Join(root, "dbspec")); err != nil {
-		t.Fatal(err)
-	}
-	return root
-}
 
 // serve runs the server over the input lines and returns its output lines.
 func serve(t *testing.T, root string, lines ...string) []string {
@@ -61,7 +24,7 @@ func serve(t *testing.T, root string, lines ...string) []string {
 
 // TestServer pins the MCP face (spec 40 The faces): JSON-RPC 2.0 over one line per message, one tool per operation.
 func TestServer(t *testing.T) {
-	root := corpusRoot(t)
+	root := corpustest.PeopleRoot(t)
 	t.Run("40#the-faces: initialize and the tool list", func(t *testing.T) {
 		got := serve(t, root,
 			`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`,
@@ -104,9 +67,7 @@ func TestServer(t *testing.T) {
 			`{"jsonrpc":"2.0","id":4,"result":{"content":[{"type":"text","text":"{\"code\":\"NO_ROWS\",\"error\":\"the table people has no row with the key \\\"P9\\\"\"}"}],"isError":true}}`,
 			`{"jsonrpc":"2.0","id":5,"result":{"content":[{"type":"text","text":"{\"affected\":1,\"keys\":[\"P2\"],\"rows\":[{\"id\":\"P1\",\"name\":\"Ada\"},{\"id\":\"P2\",\"name\":\"Max & Co\"}]}"}],"isError":false}}`,
 		}
-		if strings.Join(got, "\n") != strings.Join(want, "\n") {
-			t.Fatalf("answers:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
-		}
+		corpustest.EqualLines(t, got, want)
 	})
 	t.Run("40#the-faces: protocol errors are JSON-RPC errors", func(t *testing.T) {
 		got := serve(t, root,
@@ -121,8 +82,6 @@ func TestServer(t *testing.T) {
 			`{"jsonrpc":"2.0","id":7,"error":{"code":-32602,"message":"the tool frobnicate is unknown"}}`,
 			`{"jsonrpc":"2.0","id":8,"result":{}}`,
 		}
-		if strings.Join(got, "\n") != strings.Join(want, "\n") {
-			t.Fatalf("answers:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
-		}
+		corpustest.EqualLines(t, got, want)
 	})
 }

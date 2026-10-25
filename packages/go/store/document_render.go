@@ -271,7 +271,7 @@ func (w *writer) checkRow(lay *docLayout, byKey map[string]int, r *Row) {
 			w.refuse(name, name+" is not a markdown section of "+lay.table)
 		}
 	}
-	for _, name := range sortedBlocks(r) {
+	for _, name := range r.BlockNames() {
 		if lay.childNamed(name) == nil {
 			w.refuse(name, name+" is not a block of "+lay.table)
 		}
@@ -585,8 +585,8 @@ func (dw *docWriter) linkTarget(table, key string) (string, int) {
 	return target, linkOne
 }
 
-// sortedBlocks returns the names of the child blocks of row r, sorted.
-func sortedBlocks(r *Row) []string {
+// BlockNames returns the names of the child blocks of the row, sorted.
+func (r *Row) BlockNames() []string {
 	names := make([]string, 0, len(r.Blocks))
 	for name := range r.Blocks {
 		names = append(names, name)

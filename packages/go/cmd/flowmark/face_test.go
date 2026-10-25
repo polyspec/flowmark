@@ -3,71 +3,13 @@ package main
 import (
 	"bytes"
 	"github.com/polyspec/flowmark/packages/go/internal/corpustest"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
 
-const boardDBS = `dbspec 1 board
-
-table items {
-  id varchar(32)
-  parent varchar(32) null
-  state varchar(16) default 'waiting'
-  title varchar(255)
-  body text
-  position i32
-  evidence text null
-  primary key (id)
-  index ix_items_parent (parent)
-  foreign key fk_items_parent (parent) references items (id) on delete restrict on update restrict
-  settings {
-    key_prefix 'T'
-    store document list
-    title title
-    body body
-    order position
-    markdown body
-    markdown evidence
-    checkbox state waiting ' '
-    checkbox state doing '~'
-    checkbox state done 'x'
-    state_machine state initial waiting
-    state_machine state waiting -> doing
-    state_machine state doing -> done require (evidence)
-    state_machine state terminal done
-    state_machine state history item_history row item from from_state to to_state at at
-  }
-}
-
-table item_history {
-  id i64 identity
-  item varchar(32)
-  from_state varchar(16)
-  to_state varchar(16)
-  at datetime(6)
-  evidence text null
-  primary key (id)
-  index ix_item_history_item (item)
-  foreign key fk_history_item (item) references items (id) on delete restrict on update restrict
-  settings {
-    store block fk_history_item table
-    markdown evidence
-  }
-}
-
-table people {
-  id varchar(32)
-  name varchar(64)
-  age i32 null
-  primary key (id)
-  settings {
-    store document table
-    title name
-  }
-}
-
+// boardDBS is the board catalog of corpustest with a files table of notes.
+const boardDBS = corpustest.BoardDBS + `
 table notes {
   id varchar(16)
   title varchar(64)
@@ -83,15 +25,7 @@ table notes {
 func boardRoot(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(root, "dbspec"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(root, "dbspec", "board.dbs"), []byte(boardDBS), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := corpustest.WriteSetFile(filepath.Join(root, "dbspec")); err != nil {
-		t.Fatal(err)
-	}
+	corpustest.WriteTree(t, root, map[string]string{"dbspec/board.dbs": boardDBS})
 	return root
 }
 
@@ -181,15 +115,7 @@ table views {
   }
 }
 `
-		if err := os.MkdirAll(filepath.Join(root, "dbspec"), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(filepath.Join(root, "dbspec", "flowmark.dbs"), []byte(dbs), 0o644); err != nil {
-			t.Fatal(err)
-		}
-		if err := corpustest.WriteSetFile(filepath.Join(root, "dbspec")); err != nil {
-			t.Fatal(err)
-		}
+		corpustest.WriteTree(t, root, map[string]string{"dbspec/flowmark.dbs": dbs})
 		cliOK(t, "install", root)
 		cliOK(t, "row.insert", root, "people", "id=P1", "name=Ada", "age=36")
 		cliOK(t, "row.insert", root, "people", "id=P2", "name=Max", "age=20")

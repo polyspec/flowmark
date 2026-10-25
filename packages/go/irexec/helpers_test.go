@@ -3,7 +3,7 @@ package irexec
 import (
 	"encoding/json"
 	"errors"
-	"io/fs"
+	"github.com/polyspec/flowmark/packages/go/internal/corpustest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -33,56 +33,6 @@ var goldenRoots = []string{
 	"equivalence/files",
 }
 
-// moduleRoot returns the root of the module: the nearest ancestor of the test's
-// working directory that holds go.mod. The go tool declares that working directory
-// to be the package directory, and go.mod declares the module root, so the store's
-// goldens are found from a declared root rather than from where this package stands.
-func moduleRoot(t testing.TB) string {
-	t.Helper()
-	wd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("module root: %v", err)
-	}
-	for dir := wd; ; {
-		if fi, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil && fi.Mode().IsRegular() {
-			return dir
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			t.Fatalf("module root: no ancestor of %s holds go.mod", wd)
-		}
-		dir = parent
-	}
-}
-
-// goldenDir returns <module root>/store/testdata/<name>.
-func goldenDir(t testing.TB, name string) string {
-	t.Helper()
-	return filepath.Join(moduleRoot(t), "store", "testdata", filepath.FromSlash(name))
-}
-
-// copyTree copies the regular files of src into dst.
-func copyTree(src, dst string) error {
-	return filepath.WalkDir(src, func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		rel, err := filepath.Rel(src, p)
-		if err != nil {
-			return err
-		}
-		target := filepath.Join(dst, rel)
-		if d.IsDir() {
-			return os.MkdirAll(target, 0o755)
-		}
-		data, err := os.ReadFile(p)
-		if err != nil {
-			return err
-		}
-		return os.WriteFile(target, data, 0o644)
-	})
-}
-
 // fixture is a corpus in a temporary root, its executor, and the corpus as read.
 type fixture struct {
 	t    testing.TB
@@ -102,18 +52,10 @@ func newFixture(t testing.TB, src string, docs map[string]string) *fixture {
 // newFixtureIn is newFixture with the temporary root root.
 func newFixtureIn(t testing.TB, root, src string, docs map[string]string) *fixture {
 	t.Helper()
-	if err := copyTree(src, root); err != nil {
+	if err := corpustest.CopyTree(src, root); err != nil {
 		t.Fatal(err)
 	}
-	for p, text := range docs {
-		full := filepath.Join(root, filepath.FromSlash(p))
-		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(full, []byte(text), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
+	corpustest.WriteFiles(t, root, docs)
 	cat, diags := catalog.Load(root)
 	if len(diags) > 0 || cat == nil {
 		t.Fatalf("catalog of %s: %+v", src, diags)
@@ -127,61 +69,6 @@ func newFixtureIn(t testing.TB, root, src string, docs map[string]string) *fixtu
 	return f
 }
 
-// caseSensitiveEnv names the folder, on a case-sensitive file system, where a case
-// writes a corpus whose file names differ only in case; scripts/go-test.mts, which
-// make test runs, provisions it. It is read only when the test's temporary folder
-// folds case, and must then be set and absolute.
-const caseSensitiveEnv = "FLOWMARK_CASE_SENSITIVE_DIR"
-
-// caseSensitiveRoot returns an empty folder on a case-sensitive file system: the
-// test's temporary folder when its file system keeps case, and otherwise a new
-// folder under the one caseSensitiveEnv declares. It fails the test when neither
-// keeps case.
-func caseSensitiveRoot(t *testing.T) string {
-	t.Helper()
-	root := t.TempDir()
-	if !foldsCase(t, root) {
-		return root
-	}
-	dir := os.Getenv(caseSensitiveEnv)
-	if dir == "" {
-		t.Fatalf("the file system of %s folds case, so two names that differ only in case cannot be written; set %s to an absolute folder on a case-sensitive file system", root, caseSensitiveEnv)
-	}
-	if !filepath.IsAbs(dir) {
-		t.Fatalf("%s=%s is not an absolute path", caseSensitiveEnv, dir)
-	}
-	root, err := os.MkdirTemp(dir, "flowmark-case-")
-	if err != nil {
-		t.Fatalf("%s=%s: %v", caseSensitiveEnv, dir, err)
-	}
-	t.Cleanup(func() {
-		if err := os.RemoveAll(root); err != nil {
-			t.Error(err)
-		}
-	})
-	if foldsCase(t, root) {
-		t.Fatalf("%s=%s folds case", caseSensitiveEnv, dir)
-	}
-	return root
-}
-
-// foldsCase reports whether the file system of dir folds case: a file written as
-// CaseProbe is found as caseprobe.
-func foldsCase(t *testing.T, dir string) bool {
-	t.Helper()
-	probe := filepath.Join(dir, "CaseProbe")
-	if err := os.WriteFile(probe, nil, 0o644); err != nil {
-		t.Fatal(err)
-	}
-	defer func() {
-		if err := os.Remove(probe); err != nil {
-			t.Error(err)
-		}
-	}()
-	_, err := os.Stat(filepath.Join(dir, "caseprobe"))
-	return err == nil
-}
-
 // catalogFixture is a corpus of the test catalog holding docs.
 func catalogFixture(t testing.TB, docs map[string]string) *fixture {
 	t.Helper()
@@ -191,7 +78,7 @@ func catalogFixture(t testing.TB, docs map[string]string) *fixture {
 // goldenFixture is a copy of a store golden corpus.
 func goldenFixture(t testing.TB, name string) *fixture {
 	t.Helper()
-	return newFixture(t, goldenDir(t, name), nil)
+	return newFixture(t, corpustest.GoldenDir(t, name), nil)
 }
 
 // on returns the fixture reporting to t, the test of a case.
@@ -228,23 +115,7 @@ func (f *fixture) msg(kind, entity string, body map[string]any, params ...any) [
 // msgAt builds a request message as msg does, at the request clock now.
 func (f *fixture) msgAt(now, kind, entity string, body map[string]any, params ...any) []byte {
 	f.t.Helper()
-	req := map[string]any{}
-	for k, v := range body {
-		req[k] = v
-	}
-	req["ir_version"] = 1
-	req["manifest_hash"] = f.e.Model().ManifestHash
-	req["kind"] = kind
-	req["entity"] = entity
-	req["n_params"] = len(params)
-	if params == nil {
-		params = []any{}
-	}
-	b, err := json.Marshal(map[string]any{"ir_version": 1, "manifest_hash": f.e.Model().ManifestHash, "request": req, "params": params, "now": now})
-	if err != nil {
-		f.t.Fatal(err)
-	}
-	return b
+	return corpustest.Message(f.t, f.e.Model().ManifestHash, now, kind, entity, body, params...)
 }
 
 // run executes a message against the fixture's corpus.

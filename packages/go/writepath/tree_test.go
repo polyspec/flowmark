@@ -2,6 +2,7 @@ package writepath
 
 import (
 	"context"
+	"github.com/polyspec/flowmark/packages/go/internal/corpustest"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -71,7 +72,7 @@ func TestTreeHandEditRacingCommit(t *testing.T) {
 		if err := s.Begin(ctx, false); err != nil {
 			t.Fatal(err)
 		}
-		want(t, s, f.msg("update", "notes", map[string]any{"set": sets(0, "title"), "where": whereID(1)}, "Tx root", "N3"), `{"affected":1,"keys":[]}`)
+		want(t, s, f.msg("update", "notes", map[string]any{"set": sets(0, "title"), "where": corpustest.WhereID(1)}, "Tx root", "N3"), `{"affected":1,"keys":[]}`)
 		f.c.tree.SetNotices(late)
 		hand := lines("# Hand root", "- position: 2")
 		f.write("notes/N3.flowmark.md", hand)
@@ -89,7 +90,7 @@ func TestTreeHandEditRacingCommit(t *testing.T) {
 				f.write("notes/N3.flowmark.md", lines("# Second root", "- position: 5"))
 			}
 		}
-		want(t, s, f.msg("update", "notes", map[string]any{"set": sets(0, "title"), "where": whereID(1)}, "Written root", "N3"), `{"affected":1,"keys":[]}`)
+		want(t, s, f.msg("update", "notes", map[string]any{"set": sets(0, "title"), "where": corpustest.WhereID(1)}, "Written root", "N3"), `{"affected":1,"keys":[]}`)
 		if got, want := f.file("notes/N3.flowmark.md"), lines("# Written root", "- position: 5"); got != want {
 			t.Fatalf("N3 = %q, want %q", got, want)
 		}
@@ -200,7 +201,7 @@ func TestTreeReadsChangedFiles(t *testing.T) {
 	f.wantRead("notes/N3.flowmark.md")
 
 	t.Log("40#opening-a-corpus: a write reads its target again under the lock, and the next operation reads it again, alone")
-	want(t, s, f.msg("update", "notes", map[string]any{"set": sets(0, "title"), "where": whereID(1)}, "Written root", "N3"), `{"affected":1,"keys":[]}`)
+	want(t, s, f.msg("update", "notes", map[string]any{"set": sets(0, "title"), "where": corpustest.WhereID(1)}, "Written root", "N3"), `{"affected":1,"keys":[]}`)
 	has(f.noteTitles(s), `"Written root"`)
 	if got := f.rec.documentsRead(t, f.root); len(got) == 0 || strings.Join(got, ",") != strings.Repeat("notes/N3.flowmark.md,", len(got)-1)+"notes/N3.flowmark.md" {
 		t.Fatalf("documents read = %v, want notes/N3.flowmark.md alone", got)

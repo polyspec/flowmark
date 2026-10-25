@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/polyspec/flowmark/packages/go/internal/corpustest"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -144,7 +145,7 @@ func FuzzSession(f *testing.F) {
 				_, err = s.Exec(ctx, fx.insertTag(label, kind))
 			case 1:
 				code = m.delete(arg%6 + 1)
-				_, err = s.Exec(ctx, fx.msg("delete", "tags", map[string]any{"where": whereID(0)}, arg%6+1))
+				_, err = s.Exec(ctx, fx.msg("delete", "tags", map[string]any{"where": corpustest.WhereID(0)}, arg%6+1))
 			case 2:
 				if m.inTx {
 					code = "CONFIG"
@@ -194,7 +195,7 @@ func FuzzSession(f *testing.F) {
 			case 8:
 				id, kind := arg%6+1, kinds[arg%3]
 				code = m.update(id, kind)
-				_, err = s.Exec(ctx, fx.msg("update", "tags", map[string]any{"set": sets(0, "kind"), "where": whereID(1)}, kind, id))
+				_, err = s.Exec(ctx, fx.msg("update", "tags", map[string]any{"set": sets(0, "kind"), "where": corpustest.WhereID(1)}, kind, id))
 			case 9:
 			}
 			if got := codeOf(err); got != code {

@@ -42,10 +42,7 @@ type Operand struct {
 // placement parent row (nil for a row of a files or document table). A column with
 // no value is NULL.
 func RowOperands(tb *catalog.Table, r *store.Row, parent *store.Row) func(column string) Operand {
-	placement := ""
-	if tb.Storage.Kind == catalog.StorageBlock {
-		placement = placementOf(tb)
-	}
+	placement := tb.Placement()
 	return func(col string) Operand {
 		switch {
 		case col == tb.Key:

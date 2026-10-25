@@ -2,8 +2,6 @@ package introspect_test
 
 import (
 	"github.com/polyspec/flowmark/packages/go/internal/corpustest"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/polyspec/flowmark/packages/go/catalog"
@@ -48,26 +46,6 @@ table notes {
 const peopleDoc = "# people\n| id | name |\n| --- | --- |\n| P1 | Ada |\n"
 
 const notesDoc = "# notes\n- N1 First owner:[P1](people.flowmark.md)\n"
-
-// writeTree writes files, keyed by their slash-separated corpus path, under a
-// fresh root and returns the root.
-func writeTree(t *testing.T, files map[string]string) string {
-	t.Helper()
-	root := t.TempDir()
-	for p, text := range files {
-		full := filepath.Join(root, filepath.FromSlash(p))
-		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(full, []byte(text), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := corpustest.WriteSetFile(filepath.Join(root, "dbspec")); err != nil {
-		t.Fatal(err)
-	}
-	return root
-}
 
 func validTree() map[string]string {
 	return map[string]string{
@@ -127,7 +105,7 @@ func requireCatalog(t *testing.T, res *introspect.Result) {
 }
 
 func TestValidCorpusReturnsItsCatalog(t *testing.T) {
-	res, err := introspect.Corpus(writeTree(t, validTree()))
+	res, err := introspect.Corpus(corpustest.NewTree(t, validTree()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,7 +118,7 @@ func TestValidCorpusReturnsItsCatalog(t *testing.T) {
 func TestNonCanonicalCatalogReturnsCanonicalForm(t *testing.T) {
 	files := validTree()
 	files["dbspec/core.dbs"] = "dbspec 1 core\n\n\n# the people of the team\ntable people {\n  id varchar(16)\n  name varchar(64)\n  primary key (id)\n  settings {\n    store document table\n    title name\n  }\n}"
-	res, err := introspect.Corpus(writeTree(t, files))
+	res, err := introspect.Corpus(corpustest.NewTree(t, files))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +128,7 @@ func TestNonCanonicalCatalogReturnsCanonicalForm(t *testing.T) {
 func TestFailingDocumentKeepsTheCatalog(t *testing.T) {
 	files := validTree()
 	files["people.flowmark.md"] = peopleDoc + "| P1 | Bea |\n"
-	res, err := introspect.Corpus(writeTree(t, files))
+	res, err := introspect.Corpus(corpustest.NewTree(t, files))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,7 +148,7 @@ func TestCatalogThatDoesNotLoad(t *testing.T) {
 	files := validTree()
 	files["dbspec/core.dbs"] = coreDbs + "table broken {\n"
 	files["people.flowmark.md"] = "not a document\n"
-	res, err := introspect.Corpus(writeTree(t, files))
+	res, err := introspect.Corpus(corpustest.NewTree(t, files))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -188,7 +166,7 @@ func TestCatalogThatDoesNotLoad(t *testing.T) {
 }
 
 func TestCorpusWithoutCatalog(t *testing.T) {
-	res, err := introspect.Corpus(writeTree(t, map[string]string{"people.flowmark.md": peopleDoc}))
+	res, err := introspect.Corpus(corpustest.NewTree(t, map[string]string{"people.flowmark.md": peopleDoc}))
 	if err != nil {
 		t.Fatal(err)
 	}

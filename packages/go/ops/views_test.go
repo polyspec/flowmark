@@ -1,10 +1,7 @@
 package ops
 
 import (
-	"context"
 	"github.com/polyspec/flowmark/packages/go/internal/corpustest"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -57,28 +54,8 @@ func viewsCorpus(t *testing.T, dbs string) *Corpus {
 			`| 2 | All | kanban | tasks | {"where":{"items":[]},"params":[]} | [] | rank |` + "\n" +
 			`| 3 | Broken | list | tasks | {"where":{"items":[{"pred":{"column":"size","op":"gt","p":0}}]},"params":[1]} | [] |  |` + "\n",
 	}
-	for p, text := range docs {
-		full := filepath.Join(root, filepath.FromSlash(p))
-		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(full, []byte(text), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := corpustest.WriteSetFile(filepath.Join(root, "dbspec")); err != nil {
-		t.Fatal(err)
-	}
-	c, err := Open(context.Background(), root, 0)
-	if err != nil {
-		t.Fatalf("Open: %v", err)
-	}
-	t.Cleanup(func() {
-		if err := c.Close(); err != nil {
-			t.Errorf("Close: %v", err)
-		}
-	})
-	return c
+	corpustest.WriteTree(t, root, docs)
+	return openCorpus(t, root)
 }
 
 // TestViews pins the views operation (spec 40 The faces, spec 100 Views): the view rows, and a view's rows through its

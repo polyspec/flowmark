@@ -3,8 +3,6 @@
 package mcp
 
 import (
-	"bufio"
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -15,10 +13,6 @@ import (
 
 	"github.com/polyspec/flowmark/packages/go/ops"
 )
-
-// maxLine is the longest message line the server reads: the sidecar protocol's message limit, which holds the answer
-// of any operation the faces share.
-const maxLine = 64 << 20
 
 // The JSON-RPC 2.0 error codes the server answers with.
 const (
@@ -54,34 +48,13 @@ type response struct {
 // each operation waiting wait for the lock, so every call reads the catalog as it stands. It returns an error only when
 // in or out fails.
 func Serve(root string, wait time.Duration, in io.Reader, out io.Writer) error {
-	w := bufio.NewWriter(out)
-	sc := bufio.NewScanner(in)
-	sc.Buffer(make([]byte, 64*1024), maxLine+1)
-	for sc.Scan() {
-		line := bytes.TrimSpace(sc.Bytes())
-		if len(line) == 0 {
-			continue
+	return ops.ServeLines(in, out, func(line []byte) (any, error) {
+		// handle answers nil for a notification, which a typed nil would not show.
+		if resp := handle(root, wait, line); resp != nil {
+			return resp, nil
 		}
-		resp := handle(root, wait, line)
-		if resp == nil {
-			continue
-		}
-		b, err := ops.JSON(resp)
-		if err != nil {
-			return err
-		}
-		if _, err := w.Write(b); err != nil {
-			return err
-		}
-		if err := w.WriteByte('\n'); err != nil {
-			return err
-		}
-		// The client reads each response while the session runs, so each one is flushed on its own.
-		if err := w.Flush(); err != nil {
-			return err
-		}
-	}
-	return sc.Err()
+		return nil, nil
+	})
 }
 
 // handle answers one message line, nil for a notification.

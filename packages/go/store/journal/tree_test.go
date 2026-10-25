@@ -2,6 +2,7 @@ package journal
 
 import (
 	"errors"
+	"github.com/polyspec/flowmark/packages/go/internal/corpustest"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -43,15 +44,7 @@ func (w *scriptedWatch) close() error {
 func scriptedTree(t *testing.T, files map[string]string) (*Tree, *scriptedWatch, *recorder, string) {
 	t.Helper()
 	root := t.TempDir()
-	for p, text := range files {
-		full := filepath.Join(root, filepath.FromSlash(p))
-		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(full, []byte(text), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
+	corpustest.WriteFiles(t, root, files)
 	rec := &recorder{}
 	c, err := New(root, rec)
 	if err != nil {
@@ -253,13 +246,7 @@ func TestTreeFolderReplacedBetweenRefreshAndRead(t *testing.T) {
 	root := t.TempDir()
 	write := func(p, text string) {
 		t.Helper()
-		full := filepath.Join(root, filepath.FromSlash(p))
-		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(full, []byte(text), 0o644); err != nil {
-			t.Fatal(err)
-		}
+		corpustest.WriteFiles(t, root, map[string]string{p: text})
 	}
 	write("t/k.flowmark.md", "old\n")
 	c, err := New(root, &recorder{})
@@ -313,13 +300,7 @@ func TestTreeNotifications(t *testing.T) {
 	root := t.TempDir()
 	write := func(p, text string) {
 		t.Helper()
-		full := filepath.Join(root, filepath.FromSlash(p))
-		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(full, []byte(text), 0o644); err != nil {
-			t.Fatal(err)
-		}
+		corpustest.WriteFiles(t, root, map[string]string{p: text})
 	}
 	write("t/x.flowmark.md", "x\n")
 	write("t/y.flowmark.md", "y\n")

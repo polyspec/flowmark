@@ -8,6 +8,7 @@ package writepath
 import (
 	"context"
 	"fmt"
+	"github.com/polyspec/flowmark/packages/go/internal/corpustest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -57,8 +58,8 @@ func TestOpenWithoutDescriptors(t *testing.T) {
 		docs[fmt.Sprintf("cards/C%d.flowmark.md", i)] = fmt.Sprintf("# Card %d\n", i)
 	}
 	root := t.TempDir()
-	writeTree(t, root, map[string]string{"dbspec/test.dbs": cardsDBS})
-	writeTree(t, root, docs)
+	corpustest.WriteTree(t, root, map[string]string{"dbspec/test.dbs": cardsDBS})
+	corpustest.WriteTree(t, root, docs)
 	cat, diags := catalog.Load(root)
 	if len(diags) > 0 || cat == nil {
 		t.Fatalf("catalog: %+v", diags)
@@ -102,8 +103,8 @@ func TestWatchDescriptors(t *testing.T) {
 		docs[fmt.Sprintf("cards/C%d.flowmark.md", i)] = fmt.Sprintf("# Card %d\n", i)
 	}
 	root := t.TempDir()
-	writeTree(t, root, map[string]string{"dbspec/test.dbs": cardsDBS})
-	writeTree(t, root, docs)
+	corpustest.WriteTree(t, root, map[string]string{"dbspec/test.dbs": cardsDBS})
+	corpustest.WriteTree(t, root, docs)
 	cat, diags := catalog.Load(root)
 	if len(diags) > 0 || cat == nil {
 		t.Fatalf("catalog: %+v", diags)

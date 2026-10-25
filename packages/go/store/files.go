@@ -582,7 +582,7 @@ func renderRow(lay *filesLayout, rel string, row *Row, lk Linker) ([]byte, [][]c
 			w.refuse(s.name, "the non-null section "+s.name+" has no value")
 		}
 	}
-	for _, name := range sortedBlocks(row) {
+	for _, name := range row.BlockNames() {
 		if lay.childNamed(name) == nil {
 			w.refuse(name, name+" is not a block of "+lay.table)
 		}

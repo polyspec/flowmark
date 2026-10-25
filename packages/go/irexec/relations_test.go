@@ -16,7 +16,7 @@ import (
 // every storage kind.
 func relationsDBS(t testing.TB) string {
 	t.Helper()
-	b, err := os.ReadFile(filepath.Join(moduleRoot(t), "store", "testdata", "relations", "dbspec", "flowmark.dbs"))
+	b, err := os.ReadFile(filepath.Join(corpustest.ModuleRoot(t), "store", "testdata", "relations", "dbspec", "flowmark.dbs"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,15 +47,7 @@ func TestRelationsCatalogRules(t *testing.T) {
 				t.Fatal("the edit found no anchor in the golden")
 			}
 			root := t.TempDir()
-			if err := os.MkdirAll(filepath.Join(root, "dbspec"), 0o755); err != nil {
-				t.Fatal(err)
-			}
-			if err := os.WriteFile(filepath.Join(root, "dbspec", "flowmark.dbs"), []byte(c.dbs), 0o644); err != nil {
-				t.Fatal(err)
-			}
-			if err := corpustest.WriteSetFile(filepath.Join(root, "dbspec")); err != nil {
-				t.Fatal(err)
-			}
+			corpustest.WriteTree(t, root, map[string]string{"dbspec/flowmark.dbs": c.dbs})
 			_, diags := catalog.Load(root)
 			found := ""
 			for _, d := range diags {

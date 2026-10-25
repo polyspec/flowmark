@@ -129,10 +129,7 @@ func (c *Corpus) linkTables(f *file) []string {
 	var visit func(r *store.Row)
 	visit = func(r *store.Row) {
 		tb, _ := c.cat.Table(r.Table)
-		placement := ""
-		if tb.Storage.Kind == catalog.StorageBlock {
-			placement = placementColumn(tb)
-		}
+		placement := tb.Placement()
 		for _, fk := range tb.ForeignKeys {
 			col := fk.Columns[0]
 			if col == placement || r.Scalars[col] == nil {

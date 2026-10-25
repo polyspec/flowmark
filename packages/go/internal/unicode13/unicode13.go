@@ -12,14 +12,12 @@ package unicode13
 //go:generate go run ./gen
 
 import (
-	"bufio"
 	"bytes"
 	"fmt"
+	"github.com/polyspec/flowmark/packages/go/internal/ucd"
 	"go/format"
 	"io"
 	"sort"
-	"strconv"
-	"strings"
 )
 
 // UnicodeVersion is the version of the Unicode data that the table is generated from.
@@ -79,7 +77,7 @@ var categoryNames = map[string]bool{
 // point that no range covers, are refused.
 func ParseCategories(r io.Reader) ([]CategoryRange, error) {
 	var ranges []CategoryRange
-	err := readRanges(r, "DerivedGeneralCategory", func(line int, lo, hi rune, value string) error {
+	err := ucd.ReadRanges(r, "DerivedGeneralCategory", UnicodeVersion, func(line int, lo, hi rune, value string) error {
 		if !categoryNames[value] {
 			return fmt.Errorf("line %d: %q is no general category", line, value)
 		}
@@ -119,7 +117,7 @@ func ParseCategories(r io.Reader) ([]CategoryRange, error) {
 // property.
 func ParseAlphabetic(r io.Reader) ([]Range, error) {
 	var ranges []Range
-	err := readRanges(r, "DerivedCoreProperties", func(line int, lo, hi rune, value string) error {
+	err := ucd.ReadRanges(r, "DerivedCoreProperties", UnicodeVersion, func(line int, lo, hi rune, value string) error {
 		if value == "Alphabetic" {
 			ranges = append(ranges, Range{Lo: lo, Hi: hi})
 		}
@@ -147,64 +145,24 @@ func ParseAlphabetic(r io.Reader) ([]Range, error) {
 	return out, nil
 }
 
-// readRanges reads the lines of a Unicode data file named name of UnicodeVersion, which
-// must begin with its version header, and calls each with the 1-based line number, the
-// range of its first field and its second field. A comment or a blank line is skipped.
-func readRanges(r io.Reader, name string, each func(line int, lo, hi rune, value string) error) error {
-	sc := bufio.NewScanner(r)
-	header := "# " + name + "-" + UnicodeVersion + ".txt"
-	headerSeen := false
-	for line := 1; sc.Scan(); line++ {
-		text := sc.Text()
-		if !headerSeen {
-			if text != header {
-				return fmt.Errorf("line 1 is %q; the file must begin with %q", text, header)
-			}
-			headerSeen = true
-		}
-		body, _, _ := strings.Cut(text, "#")
-		if strings.TrimSpace(body) == "" {
-			continue
-		}
-		span, value, ok := strings.Cut(body, ";")
-		if !ok {
-			return fmt.Errorf("line %d: no ';' in %q", line, text)
-		}
-		loText, hiText, isRange := strings.Cut(strings.TrimSpace(span), "..")
-		if !isRange {
-			hiText = loText
-		}
-		lo, err := parseCodePoint(loText)
-		if err != nil {
-			return fmt.Errorf("line %d: %w", line, err)
-		}
-		hi, err := parseCodePoint(hiText)
-		if err != nil {
-			return fmt.Errorf("line %d: %w", line, err)
-		}
-		if lo > hi {
-			return fmt.Errorf("line %d: the range %s is reversed", line, strings.TrimSpace(span))
-		}
-		if err := each(line, lo, hi, strings.TrimSpace(value)); err != nil {
-			return err
-		}
-	}
-	if err := sc.Err(); err != nil {
-		return err
-	}
-	if !headerSeen {
-		return fmt.Errorf("the file is empty")
-	}
-	return nil
-}
+// The data files in testdata/ that table.go is rendered from.
+const (
+	categoryFile   = "testdata/DerivedGeneralCategory-" + UnicodeVersion + ".txt"
+	alphabeticFile = "testdata/DerivedCoreProperties-" + UnicodeVersion + ".txt"
+)
 
-// parseCodePoint reads a code point written as hexadecimal digits.
-func parseCodePoint(s string) (rune, error) {
-	v, err := strconv.ParseUint(strings.TrimSpace(s), 16, 32)
-	if err != nil || v > 0x10FFFF {
-		return 0, fmt.Errorf("%q is not a code point", s)
+// Table returns the Go source of table.go rendered from the data files in testdata/, read from the package directory:
+// gen writes it, and a test requires the committed table to be it.
+func Table() ([]byte, error) {
+	categories, err := ucd.ParseFile(categoryFile, ParseCategories)
+	if err != nil {
+		return nil, err
 	}
-	return rune(v), nil
+	alphabetic, err := ucd.ParseFile(alphabeticFile, ParseAlphabetic)
+	if err != nil {
+		return nil, err
+	}
+	return Render(categories, alphabetic)
 }
 
 // Render returns the Go source of table.go for the category and Alphabetic ranges, in

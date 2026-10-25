@@ -5,38 +5,8 @@
 package main
 
 import (
-	"errors"
-	"fmt"
-	"os"
-
+	"github.com/polyspec/flowmark/packages/go/internal/ucd"
 	"github.com/polyspec/flowmark/packages/go/internal/unicodedcp"
 )
 
-const (
-	dataFile  = "testdata/DerivedCoreProperties-" + unicodedcp.UnicodeVersion + ".txt"
-	tableFile = "table.go"
-)
-
-func main() {
-	if err := run(); err != nil {
-		fmt.Fprintln(os.Stderr, "gen:", err)
-		os.Exit(1)
-	}
-}
-
-func run() (err error) {
-	f, err := os.Open(dataFile)
-	if err != nil {
-		return err
-	}
-	defer func() { err = errors.Join(err, f.Close()) }()
-	ranges, err := unicodedcp.Parse(f)
-	if err != nil {
-		return fmt.Errorf("%s: %w", dataFile, err)
-	}
-	src, err := unicodedcp.Render(ranges)
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(tableFile, src, 0o644)
-}
+func main() { ucd.Generate("table.go", unicodedcp.Table) }

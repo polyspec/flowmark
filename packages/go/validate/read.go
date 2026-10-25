@@ -3,7 +3,6 @@ package validate
 import (
 	"fmt"
 	"io/fs"
-	"sort"
 	"strings"
 
 	"github.com/polyspec/flowmark/packages/go/catalog"
@@ -149,12 +148,7 @@ func regularListed(entries []fs.DirEntry, name string) bool {
 // its block rows, held by file, in their tables.
 func (c *corpus) place(r *store.Row, file string, parent *store.Row) {
 	c.rows[r.Table] = append(c.rows[r.Table], placed{row: r, file: file, parent: parent})
-	names := make([]string, 0, len(r.Blocks))
-	for name := range r.Blocks {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	for _, name := range names {
+	for _, name := range r.BlockNames() {
 		for _, child := range r.Blocks[name] {
 			c.place(child, file, r)
 		}

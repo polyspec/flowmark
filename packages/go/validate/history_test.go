@@ -2,8 +2,6 @@ package validate
 
 import (
 	"github.com/polyspec/flowmark/packages/go/internal/corpustest"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/polyspec/flowmark/packages/go/catalog"
@@ -50,22 +48,8 @@ table ticket_history {
 func historyCorpus(t *testing.T, files map[string]string) (*catalog.Catalog, string) {
 	t.Helper()
 	root := t.TempDir()
-	write := func(rel, text string) {
-		p := filepath.Join(root, filepath.FromSlash(rel))
-		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(p, []byte(text), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	write("dbspec/flowmark.dbs", documentHistoryCatalog)
-	for rel, text := range files {
-		write(rel, text)
-	}
-	if err := corpustest.WriteSetFile(filepath.Join(root, "dbspec")); err != nil {
-		t.Fatal(err)
-	}
+	corpustest.WriteFiles(t, root, map[string]string{"dbspec/flowmark.dbs": documentHistoryCatalog})
+	corpustest.WriteTree(t, root, files)
 	cat, diags := catalog.Load(root)
 	if len(diags) > 0 {
 		t.Fatalf("catalog: %+v", diags)

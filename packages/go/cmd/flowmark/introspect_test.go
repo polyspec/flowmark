@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"github.com/polyspec/flowmark/packages/go/internal/corpustest"
-	"os"
-	"path/filepath"
 	"testing"
 )
 
@@ -14,18 +12,7 @@ func introspectCorpus(t *testing.T, files map[string]string) string {
 	t.Helper()
 	root := t.TempDir()
 	files["dbspec/canon.dbs"] = canonDBS
-	for p, text := range files {
-		full := filepath.Join(root, filepath.FromSlash(p))
-		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(full, []byte(text), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := corpustest.WriteSetFile(filepath.Join(root, "dbspec")); err != nil {
-		t.Fatal(err)
-	}
+	corpustest.WriteTree(t, root, files)
 	return root
 }
 

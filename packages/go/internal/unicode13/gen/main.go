@@ -6,48 +6,8 @@
 package main
 
 import (
-	"errors"
-	"fmt"
-	"os"
-
+	"github.com/polyspec/flowmark/packages/go/internal/ucd"
 	"github.com/polyspec/flowmark/packages/go/internal/unicode13"
 )
 
-const (
-	categoryFile   = "testdata/DerivedGeneralCategory-" + unicode13.UnicodeVersion + ".txt"
-	alphabeticFile = "testdata/DerivedCoreProperties-" + unicode13.UnicodeVersion + ".txt"
-	tableFile      = "table.go"
-)
-
-func main() {
-	if err := run(); err != nil {
-		fmt.Fprintln(os.Stderr, "gen:", err)
-		os.Exit(1)
-	}
-}
-
-func run() (err error) {
-	cf, err := os.Open(categoryFile)
-	if err != nil {
-		return err
-	}
-	defer func() { err = errors.Join(err, cf.Close()) }()
-	categories, err := unicode13.ParseCategories(cf)
-	if err != nil {
-		return fmt.Errorf("%s: %w", categoryFile, err)
-	}
-	af, err := os.Open(alphabeticFile)
-	if err != nil {
-		return err
-	}
-	defer func() { err = errors.Join(err, af.Close()) }()
-	alphabetic, err := unicode13.ParseAlphabetic(af)
-	if err != nil {
-		return fmt.Errorf("%s: %w", alphabeticFile, err)
-	}
-	src, err := unicode13.Render(categories, alphabetic)
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(tableFile, src, 0o644)
-}
+func main() { ucd.Generate("table.go", unicode13.Table) }

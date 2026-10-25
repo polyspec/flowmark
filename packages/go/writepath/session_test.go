@@ -3,6 +3,7 @@ package writepath
 import (
 	"context"
 	"errors"
+	"github.com/polyspec/flowmark/packages/go/internal/corpustest"
 	"strings"
 	"testing"
 
@@ -44,17 +45,17 @@ func TestSingleRequest(t *testing.T) {
 	t.Run("40#the-commit-protocol: a write that changes no byte writes nothing", func(t *testing.T) {
 		f := baseFixture(t)
 		s := f.session("cli")
-		want(t, s, f.msg("restore", "people", map[string]any{"where": whereID(0)}, "P1"), `{"affected":0,"keys":[]}`)
+		want(t, s, f.msg("restore", "people", map[string]any{"where": corpustest.WhereID(0)}, "P1"), `{"affected":0,"keys":[]}`)
 		f.rec.wantKinds(t, opened...)
 	})
 	t.Run("40#transactions: a history row and an order move commit with their write", func(t *testing.T) {
 		f := baseFixture(t)
 		s := f.session("cli")
-		want(t, s, f.msg("update", "items", map[string]any{"set": sets(0, "state"), "where": whereID(1)}, "doing", "T3"), `{"affected":1,"keys":[]}`)
+		want(t, s, f.msg("update", "items", map[string]any{"set": sets(0, "state"), "where": corpustest.WhereID(1)}, "doing", "T3"), `{"affected":1,"keys":[]}`)
 		if !strings.Contains(f.file("items.flowmark.md"), "## items row T3\n\n### item_history\n| id | from_state | to_state | at |\n| --- | --- | --- | --- |\n| 5 | waiting | doing | 2026-10-11 09:00:00.123456 |\n") {
 			t.Fatalf("items:\n%s", f.file("items.flowmark.md"))
 		}
-		want(t, s, f.msg("update", "notes", map[string]any{"set": sets(0, "position"), "where": whereID(1)}, 1, "N3"), `{"affected":1,"keys":[]}`)
+		want(t, s, f.msg("update", "notes", map[string]any{"set": sets(0, "position"), "where": corpustest.WhereID(1)}, 1, "N3"), `{"affected":1,"keys":[]}`)
 		// The ranks 1 and 2 leave no rank before N1's, so the group is renumbered.
 		if !strings.Contains(f.file("notes/N1.flowmark.md"), "- position: 2000\n") || !strings.Contains(f.file("notes/N3.flowmark.md"), "- position: 1000\n") {
 			t.Fatalf("N1:\n%s\nN3:\n%s", f.file("notes/N1.flowmark.md"), f.file("notes/N3.flowmark.md"))
@@ -321,7 +322,7 @@ func TestConflict(t *testing.T) {
 		f := baseFixture(t)
 		s := f.session("server")
 		must(t, s.Begin(context.Background(), false))
-		want(t, s, f.msg("update", "tags", map[string]any{"set": sets(0, "kind"), "where": whereID(1)}, "topic", 2), `{"affected":1,"keys":[]}`)
+		want(t, s, f.msg("update", "tags", map[string]any{"set": sets(0, "kind"), "where": corpustest.WhereID(1)}, "topic", 2), `{"affected":1,"keys":[]}`)
 		return f, s
 	}
 	t.Run("40#the-commit-protocol: a target edited by hand", func(t *testing.T) {
@@ -473,14 +474,14 @@ func TestRewriteRefusal(t *testing.T) {
 			func(f *fixture) []byte { return f.insertTag("web", "area") }, "tags.flowmark.md"},
 		{"10#encoding-and-line-structure: an order sibling", noncanonical("notes/N1.flowmark.md"),
 			func(f *fixture) []byte {
-				return f.msg("update", "notes", map[string]any{"set": sets(0, "position"), "where": whereID(1)}, 1, "N3")
+				return f.msg("update", "notes", map[string]any{"set": sets(0, "position"), "where": corpustest.WhereID(1)}, 1, "N3")
 			}, "notes/N1.flowmark.md"},
 		{"10#encoding-and-line-structure: a file holding a link to a row whose detail section appears", func() map[string]string {
 			docs := baseDocs()
 			docs["notes/N3.flowmark.md"] = lines("# Second root", "- item: [T3](../items.flowmark.md)", "- position: 2") + "\n"
 			return docs
 		}(), func(f *fixture) []byte {
-			return f.msg("update", "items", map[string]any{"set": sets(0, "body"), "where": whereID(1)}, "Now a body.", "T3")
+			return f.msg("update", "items", map[string]any{"set": sets(0, "body"), "where": corpustest.WhereID(1)}, "Now a body.", "T3")
 		}, "notes/N3.flowmark.md"},
 		{"10#encoding-and-line-structure: a file holding a dangling link to the row an insert gives", func() map[string]string {
 			docs := baseDocs()
@@ -517,8 +518,8 @@ func TestRewriteRefusal(t *testing.T) {
 		f := newFixture(t, executorCatalog(t), docs)
 		s := f.session("cli")
 		want(t, s, f.insertTag("web", "area"), `{"affected":1,"keys":[3]}`)
-		want(t, s, f.msg("update", "notes", map[string]any{"set": sets(0, "position"), "where": whereID(1)}, 1, "N3"), `{"affected":1,"keys":[]}`)
-		want(t, s, f.msg("update", "items", map[string]any{"set": sets(0, "body"), "where": whereID(1)}, "Now a body.", "T3"), `{"affected":1,"keys":[]}`)
+		want(t, s, f.msg("update", "notes", map[string]any{"set": sets(0, "position"), "where": corpustest.WhereID(1)}, 1, "N3"), `{"affected":1,"keys":[]}`)
+		want(t, s, f.msg("update", "items", map[string]any{"set": sets(0, "body"), "where": corpustest.WhereID(1)}, "Now a body.", "T3"), `{"affected":1,"keys":[]}`)
 		if !strings.Contains(f.file("notes/N3.flowmark.md"), "[T3](../items.flowmark.md#items-row-t3)") {
 			t.Fatalf("N3:\n%s", f.file("notes/N3.flowmark.md"))
 		}
@@ -543,7 +544,7 @@ func TestWholeFileDelete(t *testing.T) {
 		return f, f.session("cli")
 	}
 	del := func(f *fixture, key string) []byte {
-		return f.msg("delete", "cards", map[string]any{"where": whereID(0)}, key)
+		return f.msg("delete", "cards", map[string]any{"where": corpustest.WhereID(0)}, key)
 	}
 	t.Run("10#encoding-and-line-structure: a whole-file delete of a noncanonical file", func(t *testing.T) {
 		f, s := cards(t, map[string]string{"cards/C1.flowmark.md": "# One\n\n"})
@@ -697,7 +698,7 @@ func TestRepairCommit(t *testing.T) {
 		if _, err := s.Repair(context.Background(), "items", "T3", ""); err != nil {
 			t.Fatal(err)
 		}
-		want(t, s, f.msg("update", "items", map[string]any{"set": sets(0, "state", "evidence"), "where": whereID(2)}, "done", "Checked.", "T3"), `{"affected":1,"keys":[]}`)
+		want(t, s, f.msg("update", "items", map[string]any{"set": sets(0, "state", "evidence"), "where": corpustest.WhereID(2)}, "done", "Checked.", "T3"), `{"affected":1,"keys":[]}`)
 		must(t, s.Commit())
 		f.clean()
 	})

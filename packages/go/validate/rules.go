@@ -390,7 +390,7 @@ func (c *corpus) historyOf(tb *catalog.Table, sm *catalog.StateMachine) (func(pl
 	if !found {
 		return nil, false
 	}
-	if ht.Storage.Kind == catalog.StorageBlock && ht.Storage.Parent == tb.Name && placementOf(ht) == sm.History.Row {
+	if ht.Storage.Kind == catalog.StorageBlock && ht.Storage.Parent == tb.Name && ht.Placement() == sm.History.Row {
 		// A readable row's block is read whole with the row's own file.
 		return func(p placed) []placed {
 			var out []placed
@@ -413,16 +413,6 @@ func (c *corpus) historyOf(tb *catalog.Table, sm *catalog.StateMachine) (func(pl
 		}
 	}
 	return func(p placed) []placed { return byKey[p.row.Key] }, true
-}
-
-// placementOf returns the placement foreign key column of a block table.
-func placementOf(tb *catalog.Table) string {
-	for _, fk := range tb.ForeignKeys {
-		if fk.Name == tb.Storage.ParentForeignKey && len(fk.Columns) == 1 {
-			return fk.Columns[0]
-		}
-	}
-	return ""
 }
 
 // gap reports the history gap of the row p of a state table, whose history rows

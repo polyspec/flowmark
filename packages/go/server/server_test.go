@@ -218,13 +218,7 @@ func (f *fixture) waitEnded(session string) {
 
 func write(t testing.TB, root, rel, text string) {
 	t.Helper()
-	p := filepath.Join(root, filepath.FromSlash(rel))
-	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(p, []byte(text), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	corpustest.WriteFiles(t, root, map[string]string{rel: text})
 	if strings.HasPrefix(rel, "dbspec/") {
 		if err := corpustest.WriteSetFile(filepath.Join(root, "dbspec")); err != nil {
 			t.Fatal(err)

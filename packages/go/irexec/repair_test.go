@@ -76,12 +76,7 @@ func jobsCatalog(t testing.TB) string {
 		"  }",
 		"}",
 	)
-	if err := os.WriteFile(filepath.Join(dir, "dbspec", "jobs.dbs"), []byte(dbs), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := corpustest.WriteSetFile(filepath.Join(dir, "dbspec")); err != nil {
-		t.Fatal(err)
-	}
+	corpustest.WriteTree(t, dir, map[string]string{"dbspec/jobs.dbs": dbs})
 	return dir
 }
 
@@ -91,57 +86,7 @@ func jobsCatalog(t testing.TB) string {
 // required columns copied from the row.
 func TestRepair(t *testing.T) {
 	t.Run("50#a-state-changed-outside-the-engine: a row without history goes from the one initial state, in its own block", func(t *testing.T) {
-		f := catalogFixture(t, itemsWith(lines(
-			"# items",
-			"- [x] T1 Ship the parser owner:[P1](people.flowmark.md)",
-			"  - [~] T2 Write the tests due:2026-10-20",
-			"- [~] T3 Review the design",
-			"- [-] T4 Drop the old path",
-			"",
-			"## items row T1",
-			"",
-			"Parser body.",
-			"",
-			"### evidence",
-			"",
-			"Golden tests pass.",
-			"",
-			"### item_history",
-			"| id | from_state | to_state | at |",
-			"| --- | --- | --- | --- |",
-			"| 1 | waiting | doing | 2026-10-01 08:00:00.000000 |",
-			"| 2 | doing | done | 2026-10-01 09:00:00.000000 |",
-			"",
-			"#### item_history row 2",
-			"",
-			"##### evidence",
-			"",
-			"Golden tests pass.",
-			"",
-			"## items row T2",
-			"",
-			"### item_history",
-			"| id | from_state | to_state | at |",
-			"| --- | --- | --- | --- |",
-			"| 3 | waiting | doing | 2026-10-02 08:00:00.000000 |",
-			"",
-			"## items row T4",
-			"",
-			"### cause",
-			"",
-			"Superseded.",
-			"",
-			"### item_history",
-			"| id | from_state | to_state | at |",
-			"| --- | --- | --- | --- |",
-			"| 4 | waiting | dropped | 2026-10-03 08:00:00.000000 |",
-			"",
-			"#### item_history row 4",
-			"",
-			"##### cause",
-			"",
-			"Superseded.",
-		)))
+		f := catalogFixture(t, itemsWith(strings.Replace(baseDocs()["items.flowmark.md"], "- [ ] T3", "- [~] T3", 1)))
 		res, err := f.repair("items", "T3", "")
 		if err != nil {
 			t.Fatal(err)

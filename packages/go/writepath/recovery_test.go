@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/polyspec/flowmark/packages/go/internal/corpustest"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -94,7 +95,7 @@ func crashTx(f *fixture) [][]byte {
 	return [][]byte{
 		f.insertTag("web", "area"),
 		f.msg("insert", "people", map[string]any{"set": sets(0, "name")}, "Lin"),
-		f.msg("delete", "notes", map[string]any{"where": whereID(0)}, "N3"),
+		f.msg("delete", "notes", map[string]any{"where": corpustest.WhereID(0)}, "N3"),
 	}
 }
 

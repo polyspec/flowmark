@@ -1,6 +1,7 @@
 package writepath
 
 import (
+	"github.com/polyspec/flowmark/packages/go/internal/corpustest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,7 +12,7 @@ import (
 // document table sharded by the year of a date, and refs, which link to events.
 func shardDBS(t testing.TB) string {
 	t.Helper()
-	b, err := os.ReadFile(filepath.Join(moduleRoot(t), "store", "testdata", "shard", "dbspec", "flowmark.dbs"))
+	b, err := os.ReadFile(filepath.Join(corpustest.ModuleRoot(t), "store", "testdata", "shard", "dbspec", "flowmark.dbs"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,7 +42,7 @@ func TestShard(t *testing.T) {
 		if f.file("events/2026-10/E1.flowmark.md") == "" {
 			t.Fatal("the event is not in the folder of its month")
 		}
-		want(t, s, f.msg("update", "events", map[string]any{"set": []any{map[string]any{"column": "at", "p": 0}}, "where": whereID(1)},
+		want(t, s, f.msg("update", "events", map[string]any{"set": []any{map[string]any{"column": "at", "p": 0}}, "where": corpustest.WhereID(1)},
 			"2026-12-01 00:00:00.000000", "E1"), `{"affected":1,"keys":[]}`)
 		if f.file("events/2026-10/E1.flowmark.md") != "" || f.file("events/2026-12/E1.flowmark.md") == "" {
 			t.Fatal("the event did not move to the folder of its new month")

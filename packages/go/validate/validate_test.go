@@ -3,7 +3,6 @@ package validate
 import (
 	"fmt"
 	"github.com/polyspec/flowmark/packages/go/internal/corpustest"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -684,7 +683,7 @@ func TestValidatorRules(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			root := t.TempDir()
-			writeTree(t, root, tc.files)
+			corpustest.WriteTree(t, root, tc.files)
 			diags, err := Corpus(cat, root)
 			if err != nil {
 				t.Fatal(err)
@@ -692,77 +691,6 @@ func TestValidatorRules(t *testing.T) {
 			check(t, diags, tc.want)
 		})
 	}
-}
-
-// caseInsensitive reports whether the file system of dir folds case: then two
-// names that differ only in case are one file.
-func caseInsensitive(t *testing.T, dir string) bool {
-	t.Helper()
-	probe := filepath.Join(dir, "CaseProbe")
-	if err := os.WriteFile(probe, nil, 0o644); err != nil {
-		t.Fatal(err)
-	}
-	defer func() {
-		if err := os.Remove(probe); err != nil {
-			t.Error(err)
-		}
-	}()
-	_, err := os.Stat(filepath.Join(dir, "caseprobe"))
-	return err == nil
-}
-
-// writeTree writes files under root, creating their folders.
-func writeTree(t *testing.T, root string, files map[string]string) {
-	t.Helper()
-	for name, text := range files {
-		p := filepath.Join(root, filepath.FromSlash(name))
-		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(p, []byte(text), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := corpustest.WriteSetFile(filepath.Join(root, "dbspec")); err != nil {
-		t.Fatal(err)
-	}
-}
-
-// caseSensitiveEnv names the folder, on a case-sensitive file system, where a test
-// writes a corpus whose names differ only in case. It is read only when the test's
-// temporary folder folds case; it must then be set and absolute.
-const caseSensitiveEnv = "FLOWMARK_CASE_SENSITIVE_DIR"
-
-// caseSensitiveRoot returns an empty folder on a case-sensitive file system: the
-// test's temporary folder when its file system keeps case, and otherwise a new
-// folder under the one caseSensitiveEnv declares. It fails the test when neither
-// keeps case.
-func caseSensitiveRoot(t *testing.T) string {
-	t.Helper()
-	root := t.TempDir()
-	if !caseInsensitive(t, root) {
-		return root
-	}
-	dir := os.Getenv(caseSensitiveEnv)
-	if dir == "" {
-		t.Fatalf("the file system of %s folds case, so two names that differ only in case cannot be written; set %s to an absolute folder on a case-sensitive file system", root, caseSensitiveEnv)
-	}
-	if !filepath.IsAbs(dir) {
-		t.Fatalf("%s=%s is not an absolute path", caseSensitiveEnv, dir)
-	}
-	root, err := os.MkdirTemp(dir, "flowmark-case-")
-	if err != nil {
-		t.Fatalf("%s=%s: %v", caseSensitiveEnv, dir, err)
-	}
-	t.Cleanup(func() {
-		if err := os.RemoveAll(root); err != nil {
-			t.Error(err)
-		}
-	})
-	if caseInsensitive(t, root) {
-		t.Fatalf("%s=%s folds case", caseSensitiveEnv, dir)
-	}
-	return root
 }
 
 // TestFilesCaseDuplicate covers the case-only collision of two files rows. Two
@@ -792,8 +720,8 @@ func TestFilesCaseDuplicate(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			root := caseSensitiveRoot(t)
-			writeTree(t, root, tc.files)
+			root := corpustest.CaseSensitiveRoot(t)
+			corpustest.WriteTree(t, root, tc.files)
 			diags, err := Corpus(cat, root)
 			if err != nil {
 				t.Fatal(err)

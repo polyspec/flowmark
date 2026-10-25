@@ -29,12 +29,7 @@ func gaugesCatalog(t testing.TB) string {
 		"  }",
 		"}",
 	)
-	if err := os.WriteFile(filepath.Join(dir, "dbspec", "gauges.dbs"), []byte(dbs), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := corpustest.WriteSetFile(filepath.Join(dir, "dbspec")); err != nil {
-		t.Fatal(err)
-	}
+	corpustest.WriteTree(t, dir, map[string]string{"dbspec/gauges.dbs": dbs})
 	return dir
 }
 
@@ -84,12 +79,7 @@ func viewsCatalog(t testing.TB) string {
 		"  }",
 		"}",
 	)
-	if err := os.WriteFile(filepath.Join(dir, "dbspec", "flowmark.dbs"), []byte(dbs), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := corpustest.WriteSetFile(filepath.Join(dir, "dbspec")); err != nil {
-		t.Fatal(err)
-	}
+	corpustest.WriteTree(t, dir, map[string]string{"dbspec/flowmark.dbs": dbs})
 	return dir
 }
 

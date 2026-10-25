@@ -9,14 +9,12 @@ package unicodedcp
 //go:generate go run ./gen
 
 import (
-	"bufio"
 	"bytes"
 	"fmt"
+	"github.com/polyspec/flowmark/packages/go/internal/ucd"
 	"go/format"
 	"io"
 	"sort"
-	"strconv"
-	"strings"
 )
 
 // UnicodeVersion is the version of the Unicode data that the table is generated from.
@@ -43,48 +41,19 @@ func DefaultIgnorable(r rune) bool {
 // that is malformed, that is out of order or overlaps the one before, or that
 // names no code point is refused, and so is a file with no range of the property.
 func Parse(r io.Reader) ([]Range, error) {
-	sc := bufio.NewScanner(r)
-	header := "# DerivedCoreProperties-" + UnicodeVersion + ".txt"
-	headerSeen := false
 	var ranges []Range
-	for line := 1; sc.Scan(); line++ {
-		text := sc.Text()
-		if !headerSeen {
-			if text != header {
-				return nil, fmt.Errorf("line 1 is %q; the file must begin with %q", text, header)
-			}
-			headerSeen = true
+	err := ucd.ReadRanges(r, "DerivedCoreProperties", UnicodeVersion, func(line int, lo, hi rune, value string) error {
+		if value != property {
+			return nil
 		}
-		body, _, _ := strings.Cut(text, "#")
-		span, name, ok := strings.Cut(body, ";")
-		if !ok || strings.TrimSpace(name) != property {
-			continue
-		}
-		loText, hiText, isRange := strings.Cut(strings.TrimSpace(span), "..")
-		if !isRange {
-			hiText = loText
-		}
-		lo, err := parseCodePoint(loText)
-		if err != nil {
-			return nil, fmt.Errorf("line %d: %w", line, err)
-		}
-		hi, err := parseCodePoint(hiText)
-		if err != nil {
-			return nil, fmt.Errorf("line %d: %w", line, err)
-		}
-		switch {
-		case lo > hi:
-			return nil, fmt.Errorf("line %d: the range %s is reversed", line, span)
-		case len(ranges) > 0 && lo <= ranges[len(ranges)-1].Hi:
-			return nil, fmt.Errorf("line %d: the range %s is out of order or overlaps the one before", line, span)
+		if len(ranges) > 0 && lo <= ranges[len(ranges)-1].Hi {
+			return fmt.Errorf("line %d: the range %04X..%04X is out of order or overlaps the one before", line, lo, hi)
 		}
 		ranges = append(ranges, Range{Lo: lo, Hi: hi})
-	}
-	if err := sc.Err(); err != nil {
+		return nil
+	})
+	if err != nil {
 		return nil, err
-	}
-	if !headerSeen {
-		return nil, fmt.Errorf("the file is empty")
 	}
 	if len(ranges) == 0 {
 		return nil, fmt.Errorf("the file has no range of %s", property)
@@ -92,13 +61,17 @@ func Parse(r io.Reader) ([]Range, error) {
 	return ranges, nil
 }
 
-// parseCodePoint reads a code point written as hexadecimal digits.
-func parseCodePoint(s string) (rune, error) {
-	v, err := strconv.ParseUint(strings.TrimSpace(s), 16, 32)
-	if err != nil || v > 0x10FFFF {
-		return 0, fmt.Errorf("%q is not a code point", s)
+// dataFile is the data file in testdata/ that table.go is rendered from.
+const dataFile = "testdata/DerivedCoreProperties-" + UnicodeVersion + ".txt"
+
+// Table returns the Go source of table.go rendered from the data file in testdata/, read from the package directory:
+// gen writes it, and a test requires the committed table to be it.
+func Table() ([]byte, error) {
+	ranges, err := ucd.ParseFile(dataFile, Parse)
+	if err != nil {
+		return nil, err
 	}
-	return rune(v), nil
+	return Render(ranges)
 }
 
 // Render returns the Go source of table.go for ranges, in gofmt form.

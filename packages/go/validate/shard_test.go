@@ -2,7 +2,7 @@ package validate
 
 import (
 	"fmt"
-	"os"
+	"github.com/polyspec/flowmark/packages/go/internal/corpustest"
 	"path/filepath"
 	"testing"
 
@@ -38,13 +38,7 @@ func writeShardNotes(t *testing.T, cat *catalog.Catalog, root, rel string, notes
 
 func writeFile(t *testing.T, root, rel, text string) {
 	t.Helper()
-	p := filepath.Join(root, filepath.FromSlash(rel))
-	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(p, []byte(text), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	corpustest.WriteFiles(t, root, map[string]string{rel: text})
 }
 
 func event(title, at string) string { return "# " + title + "\n- at: " + at + "\n" }

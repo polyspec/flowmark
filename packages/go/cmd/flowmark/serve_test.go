@@ -37,21 +37,10 @@ table tags {
 func serveCorpus(t *testing.T, dbs string) string {
 	t.Helper()
 	root := filepath.Join(t.TempDir(), "board")
-	for rel, text := range map[string]string{
+	corpustest.WriteTree(t, root, map[string]string{
 		"dbspec/test.dbs":  dbs,
 		"tags.flowmark.md": "# tags\n| id | label |\n| --- | --- |\n| 1 | go |\n",
-	} {
-		p := filepath.Join(root, filepath.FromSlash(rel))
-		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(p, []byte(text), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := corpustest.WriteSetFile(filepath.Join(root, "dbspec")); err != nil {
-		t.Fatal(err)
-	}
+	})
 	return root
 }
 

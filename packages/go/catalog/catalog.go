@@ -46,6 +46,20 @@ type Table struct {
 	View         *View               // the view columns when the table is the view table, else nil
 }
 
+// Placement returns the placement foreign key column of a block table, the column that names its parent row, and ""
+// for a table of any other storage.
+func (t *Table) Placement() string {
+	if t.Storage.Kind != StorageBlock {
+		return ""
+	}
+	for _, fk := range t.ForeignKeys {
+		if fk.Name == t.Storage.ParentForeignKey && len(fk.Columns) == 1 {
+			return fk.Columns[0]
+		}
+	}
+	return ""
+}
+
 // The application schema (spec 100): the catalog document flowmark provides, and
 // its table whose rows are views.
 const (

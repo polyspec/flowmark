@@ -429,7 +429,7 @@ func (w *writer) insertRow(i int, ps []*int) *Error {
 		w.fault(g, tb.Name, tb.Key, codeConstraint, "the key has no value")
 		return nil
 	}
-	placement := placementColumn(tb)
+	placement := tb.Placement()
 	for _, c := range tb.Columns {
 		v, ok := vals[c.Name]
 		if !ok || c.Name == placement || c.Name == tb.Order {
@@ -740,7 +740,7 @@ func (w *writer) updateRows(rows []*rec, set []ir.Assign, stamp bool) *Error {
 		if err := w.transition(g, x, vals); err != nil {
 			return err
 		}
-		placement := placementColumn(tb)
+		placement := tb.Placement()
 		for _, c := range tb.Columns {
 			v, ok := vals[c.Name]
 			if !ok || c.Name == placement || c.Name == tb.Order {
@@ -845,7 +845,7 @@ func (w *writer) movePlacement(g *given, x *rec, v cell) *Error {
 		return err
 	}
 	if p == nil {
-		w.fault(g, tb.Name, placementColumn(tb), codeForeignKey, fmt.Sprintf("the foreign key %s names no %s row with the key %s", placementColumn(tb), tb.Storage.Parent, v.text))
+		w.fault(g, tb.Name, tb.Placement(), codeForeignKey, fmt.Sprintf("the foreign key %s names no %s row with the key %s", tb.Placement(), tb.Storage.Parent, v.text))
 		return nil
 	}
 	old := x.parent.row

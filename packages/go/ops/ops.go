@@ -4,7 +4,6 @@
 package ops
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -167,15 +166,7 @@ func Journal(root string) (*journal.Corpus, error) {
 
 // JSON returns the JSON text of an answer as every face writes it: without HTML escaping, so a value reads as it is
 // stored, and without a line feed.
-func JSON(v any) ([]byte, error) {
-	var b bytes.Buffer
-	enc := json.NewEncoder(&b)
-	enc.SetEscapeHTML(false)
-	if err := enc.Encode(v); err != nil {
-		return nil, err
-	}
-	return bytes.TrimSuffix(b.Bytes(), []byte("\n")), nil
-}
+func JSON(v any) ([]byte, error) { return irexec.MarshalPlain(v) }
 
 // Corpus is a corpus opened for the faces: its catalog and the write path.
 type Corpus struct {
@@ -225,6 +216,29 @@ func (c *Corpus) Close() error { return c.wp.Close() }
 // Session returns a new session of the write path named name, for the operations the faces run outside this package:
 // canon, install, history repair.
 func (c *Corpus) Session(name string) (*writepath.Session, error) { return c.wp.Session(name) }
+
+// RunJSON forms the operation op from its members (Parse), runs it in a new session named session and returns the JSON
+// of its answer as every face writes it (JSON).
+func (c *Corpus) RunJSON(ctx context.Context, session, op string, members map[string]json.RawMessage) ([]byte, error) {
+	r, err := Parse(op, members)
+	if err != nil {
+		return nil, err
+	}
+	a, err := c.Run(ctx, session, r)
+	if err != nil {
+		return nil, err
+	}
+	return JSON(a)
+}
+
+// RunText is RunJSON with the members given as the text of one JSON object; text that is no object is CONFIG.
+func (c *Corpus) RunText(ctx context.Context, session, op, members string) ([]byte, error) {
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(members), &m); err != nil || m == nil {
+		return nil, errf(codeConfig, "the members of %s are not a JSON object: %s", op, members)
+	}
+	return c.RunJSON(ctx, session, op, m)
+}
 
 // Run runs the operation r in a new session named session and returns its answer, which marshals to the answer's
 // JSON (spec 40 The faces).

@@ -5,8 +5,6 @@
 package sidecar
 
 import (
-	"bufio"
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -16,9 +14,6 @@ import (
 
 	"github.com/polyspec/flowmark/packages/go/ops"
 )
-
-// maxLine is the message limit of the protocol: 64 MiB before the line feed.
-const maxLine = 64 << 20
 
 // message is one message of the host: a page request or a closed handshake.
 type message struct {
@@ -41,26 +36,15 @@ type answer struct {
 // that is no request names no surface to answer, so it is written to errOut, which the host logs. It returns an error
 // only when in or out fails, or a line passes the message limit.
 func Serve(wait time.Duration, in io.Reader, out, errOut io.Writer) error {
-	w := bufio.NewWriter(out)
-	sc := bufio.NewScanner(in)
-	sc.Buffer(make([]byte, 64*1024), maxLine+1)
-	for sc.Scan() {
-		line := bytes.TrimSpace(sc.Bytes())
-		if len(line) == 0 {
-			continue
-		}
+	return ops.ServeLines(in, out, func(line []byte) (any, error) {
 		var m message
 		if err := json.Unmarshal(line, &m); err != nil {
-			if _, werr := fmt.Fprintf(errOut, "flowmark sidecar: the line %.200q is no message of protocol v1: %v\n", line, err); werr != nil {
-				return werr
-			}
-			continue
+			_, werr := fmt.Fprintf(errOut, "flowmark sidecar: the line %.200q is no message of protocol v1: %v\n", line, err)
+			return nil, werr
 		}
 		if len(m.Surface) == 0 || string(m.Surface) == "null" {
-			if _, werr := fmt.Fprintf(errOut, "flowmark sidecar: the message %.200q names no surface, so it has no answer\n", line); werr != nil {
-				return werr
-			}
-			continue
+			_, werr := fmt.Fprintf(errOut, "flowmark sidecar: the message %.200q names no surface, so it has no answer\n", line)
+			return nil, werr
 		}
 		a := answer{Surface: m.Surface}
 		if m.Closed {
@@ -70,22 +54,8 @@ func Serve(wait time.Duration, in io.Reader, out, errOut io.Writer) error {
 			a.CIDs = m.CIDs
 			a.Body = body(wait, m.Root, m.Body)
 		}
-		b, err := ops.JSON(a)
-		if err != nil {
-			return err
-		}
-		if _, err := w.Write(b); err != nil {
-			return err
-		}
-		if err := w.WriteByte('\n'); err != nil {
-			return err
-		}
-		// The host reads each answer while the process runs, so each one is flushed on its own.
-		if err := w.Flush(); err != nil {
-			return err
-		}
-	}
-	return sc.Err()
+		return a, nil
+	})
 }
 
 // body runs the operation of a request body over the corpus at root and returns the answer body: the operation's

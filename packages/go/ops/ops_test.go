@@ -5,98 +5,26 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/polyspec/flowmark/packages/go/internal/corpustest"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/polyspec/flowmark/packages/go/writepath"
 )
 
-// boardDBS is the catalog of the cases: a document list with a hierarchy, an order and a state machine whose history is
-// a block, and a document table with neither.
-const boardDBS = `dbspec 1 board
-
-table items {
-  id varchar(32)
-  parent varchar(32) null
-  state varchar(16) default 'waiting'
-  title varchar(255)
-  body text
-  position i32
-  owner varchar(32) null
-  evidence text null
-  primary key (id)
-  index ix_items_parent (parent)
-  index ix_items_owner (owner)
-  foreign key fk_items_parent (parent) references items (id) on delete restrict on update restrict
-  foreign key fk_items_owner (owner) references people (id) on delete restrict on update restrict
-  settings {
-    key_prefix 'T'
-    store document list
-    title title
-    body body
-    order position
-    markdown body
-    markdown evidence
-    checkbox state waiting ' '
-    checkbox state doing '~'
-    checkbox state done 'x'
-    state_machine state initial waiting
-    state_machine state waiting -> doing
-    state_machine state doing -> done require (evidence)
-    state_machine state terminal done
-    state_machine state history item_history row item from from_state to to_state at at
-  }
-}
-
-table item_history {
-  id i64 identity
-  item varchar(32)
-  from_state varchar(16)
-  to_state varchar(16)
-  at datetime(6)
-  evidence text null
-  primary key (id)
-  index ix_item_history_item (item)
-  foreign key fk_history_item (item) references items (id) on delete restrict on update restrict
-  settings {
-    store block fk_history_item table
-    markdown evidence
-  }
-}
-
-table people {
-  id varchar(32)
-  name varchar(64)
-  age i32 null
-  primary key (id)
-  settings {
-    store document table
-    title name
-  }
-}
-`
-
 // boardCorpus writes the board catalog with two people and no item, and opens it.
 func boardCorpus(t *testing.T) *Corpus {
 	t.Helper()
 	root := t.TempDir()
-	for p, text := range map[string]string{
-		"dbspec/board.dbs":   boardDBS,
+	corpustest.WriteTree(t, root, map[string]string{
+		"dbspec/board.dbs":   corpustest.BoardDBS,
 		"people.flowmark.md": "# people\n| id | name | age |\n| --- | --- | --- |\n| P1 | Ada | 36 |\n| P2 | Max |  |\n",
-	} {
-		full := filepath.Join(root, filepath.FromSlash(p))
-		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(full, []byte(text), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := corpustest.WriteSetFile(filepath.Join(root, "dbspec")); err != nil {
-		t.Fatal(err)
-	}
+	})
+	return openCorpus(t, root)
+}
+
+// openCorpus opens the corpus at root, closed when the test ends.
+func openCorpus(t *testing.T, root string) *Corpus {
+	t.Helper()
 	c, err := Open(context.Background(), root, 0)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
@@ -112,23 +40,8 @@ func boardCorpus(t *testing.T) *Corpus {
 // run parses the members, given as one JSON object, of operation op and runs it; it returns the answer as JSON.
 func run(t *testing.T, c *Corpus, op, members string) (string, error) {
 	t.Helper()
-	var m map[string]json.RawMessage
-	if err := json.Unmarshal([]byte(members), &m); err != nil {
-		t.Fatalf("members %s: %v", members, err)
-	}
-	r, err := Parse(op, m)
-	if err != nil {
-		return "", err
-	}
-	a, err := c.Run(context.Background(), "test", r)
-	if err != nil {
-		return "", err
-	}
-	b, err := json.Marshal(a)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return string(b), nil
+	b, err := c.RunText(context.Background(), "test", op, members)
+	return string(b), err
 }
 
 // ok runs an operation that must succeed and returns its answer.

@@ -117,10 +117,7 @@ func refusals(faults []fault) []store.Refusal {
 // file follow only when no such fault stands.
 func (w *writer) values() *Error {
 	tb := w.tb
-	placement := ""
-	if tb.Storage.Kind == catalog.StorageBlock {
-		placement = placementColumn(tb)
-	}
+	placement := tb.Placement()
 	for _, g := range w.given {
 		// A key is written only by an insert, since a key is never updated; its shape
 		// is a value of the row, so its fault precedes the row's key fault.
@@ -318,7 +315,7 @@ func (w *writer) uniques() *Error {
 func (w *writer) uniqueText(x *rec, u []string) (string, bool, *Error) {
 	parts := make([]string, len(u))
 	for i, col := range u {
-		if x.parent == nil && w.tb.Storage.Kind == catalog.StorageBlock && col == placementColumn(w.tb) {
+		if x.parent == nil && w.tb.Storage.Kind == catalog.StorageBlock && col == w.tb.Placement() {
 			return "", false, nil // a block row placed nowhere: its placement key names no row
 		}
 		v, err := w.next.value(x, col)
@@ -356,10 +353,7 @@ func isGiven(gs []*given, r *store.Row) bool {
 // table is needed. The placement key of a block row was checked as the row was
 // placed.
 func (w *writer) references() *Error {
-	placement := ""
-	if w.tb.Storage.Kind == catalog.StorageBlock {
-		placement = placementColumn(w.tb)
-	}
+	placement := w.tb.Placement()
 	for _, g := range w.given {
 		x := w.next.byRow[g.row]
 		if x == nil {
@@ -607,10 +601,7 @@ func (w *writer) linkTargets(before, after *linker) *Error {
 		return nil
 	}
 	for _, tb := range w.c.cat.Tables {
-		placement := ""
-		if tb.Storage.Kind == catalog.StorageBlock {
-			placement = placementColumn(tb)
-		}
+		placement := tb.Placement()
 		for _, fk := range tb.ForeignKeys {
 			col := fk.Columns[0]
 			if col == placement {
@@ -649,10 +640,7 @@ func (w *writer) needLinks(f *file) *Error {
 	var visit func(r *store.Row)
 	visit = func(r *store.Row) {
 		tb, _ := w.c.cat.Table(r.Table)
-		placement := ""
-		if tb.Storage.Kind == catalog.StorageBlock {
-			placement = placementColumn(tb)
-		}
+		placement := tb.Placement()
 		for _, fk := range tb.ForeignKeys {
 			col := fk.Columns[0]
 			if col == placement {

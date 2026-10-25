@@ -1,6 +1,7 @@
 package validate
 
 import (
+	"github.com/polyspec/flowmark/packages/go/internal/corpustest"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -25,40 +26,10 @@ var goldenRoots = []string{
 	"equivalence/files",
 }
 
-// moduleRoot returns the root of the module: the nearest ancestor of the test's
-// working directory that holds go.mod. The go tool declares that working directory
-// to be the package directory, and go.mod declares the module root, so another
-// package's testdata is found from a declared root rather than from where this
-// package stands. It fails the test when no ancestor holds go.mod.
-func moduleRoot(t testing.TB) string {
-	t.Helper()
-	wd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("module root: %v", err)
-	}
-	for dir := wd; ; {
-		if fi, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil && fi.Mode().IsRegular() {
-			return dir
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			t.Fatalf("module root: no ancestor of %s holds go.mod", wd)
-		}
-		dir = parent
-	}
-}
-
-// goldenDir returns the directory of a golden corpus of the store package,
-// <module root>/store/testdata/<name>.
-func goldenDir(t testing.TB, name string) string {
-	t.Helper()
-	return filepath.Join(moduleRoot(t), "store", "testdata", filepath.FromSlash(name))
-}
-
 // goldenDocs returns the corpus paths of the documents of a golden corpus, sorted.
 func goldenDocs(t testing.TB, name string) []string {
 	t.Helper()
-	dir := goldenDir(t, name)
+	dir := corpustest.GoldenDir(t, name)
 	var docs []string
 	err := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -93,7 +64,7 @@ func goldenCatalog(t testing.TB, name string) *catalog.Catalog {
 	if cat, ok := catalogCache[name]; ok {
 		return cat
 	}
-	cat, diags := catalog.Load(goldenDir(t, name))
+	cat, diags := catalog.Load(corpustest.GoldenDir(t, name))
 	if len(diags) > 0 || cat == nil {
 		t.Fatalf("golden catalog %s: %+v", name, diags)
 	}
@@ -101,34 +72,12 @@ func goldenCatalog(t testing.TB, name string) *catalog.Catalog {
 	return cat
 }
 
-// copyTree copies the regular files of the golden corpus src into dst.
-func copyTree(src, dst string) error {
-	return filepath.WalkDir(src, func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		rel, err := filepath.Rel(src, p)
-		if err != nil {
-			return err
-		}
-		target := filepath.Join(dst, rel)
-		if d.IsDir() {
-			return os.MkdirAll(target, 0o755)
-		}
-		data, err := os.ReadFile(p)
-		if err != nil {
-			return err
-		}
-		return os.WriteFile(target, data, 0o644)
-	})
-}
-
 // TestGoldensValidateClean validates every store golden corpus: a golden is an
 // accepting case, so a golden the engine's own validator rejects is not one.
 func TestGoldensValidateClean(t *testing.T) {
 	for _, name := range goldenRoots {
 		t.Run(name, func(t *testing.T) {
-			diags, err := Corpus(goldenCatalog(t, name), goldenDir(t, name))
+			diags, err := Corpus(goldenCatalog(t, name), corpustest.GoldenDir(t, name))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -147,7 +96,7 @@ func TestGoldensValidateClean(t *testing.T) {
 func FuzzCorpus(f *testing.F) {
 	for g, name := range goldenRoots {
 		for i, doc := range goldenDocs(f, name) {
-			data, err := os.ReadFile(filepath.Join(goldenDir(f, name), doc))
+			data, err := os.ReadFile(filepath.Join(corpustest.GoldenDir(f, name), doc))
 			if err != nil {
 				f.Fatal(err)
 			}
@@ -160,7 +109,7 @@ func FuzzCorpus(f *testing.F) {
 		doc := docs[int(i)%len(docs)]
 		cat := goldenCatalog(t, name)
 		root := t.TempDir()
-		if err := copyTree(goldenDir(t, name), root); err != nil {
+		if err := corpustest.CopyTree(corpustest.GoldenDir(t, name), root); err != nil {
 			t.Fatal(err)
 		}
 		if err := os.WriteFile(filepath.Join(root, filepath.FromSlash(doc)), data, 0o644); err != nil {

@@ -1,78 +1,28 @@
 package unicode13
 
 import (
-	"bytes"
-	"os"
+	"github.com/polyspec/flowmark/packages/go/internal/tabletest"
 	"slices"
 	"strings"
 	"testing"
 )
 
-const (
-	categoryFile   = "testdata/DerivedGeneralCategory-13.0.0.txt"
-	alphabeticFile = "testdata/DerivedCoreProperties-13.0.0.txt"
-	licenseFile    = "testdata/UNICODE-LICENSE.txt"
-)
+// licenseFile is the Unicode License v3 beside the data files.
+const licenseFile = "testdata/UNICODE-LICENSE.txt"
 
 // TestUnicodeLicense requires the Unicode License v3, under which the data files are
 // distributed, to stand beside them in full: its copyright and permission notice must
 // appear with every copy.
-func TestUnicodeLicense(t *testing.T) {
-	src, err := os.ReadFile(licenseFile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	text := string(src)
-	if !strings.HasPrefix(text, "UNICODE LICENSE V3\n") {
-		t.Fatalf("%s does not begin with the license title", licenseFile)
-	}
-	for _, want := range []string{"COPYRIGHT AND PERMISSION NOTICE", "Permission is hereby granted, free of charge,"} {
-		if !strings.Contains(text, want) {
-			t.Fatalf("%s lacks %q", licenseFile, want)
-		}
-	}
-}
+func TestUnicodeLicense(t *testing.T) { tabletest.License(t, licenseFile) }
 
 // TestTableIsFresh requires table.go to be the rendering of the data files, so a table
 // edited by hand, or left behind by a changed data file, fails here.
 func TestTableIsFresh(t *testing.T) {
-	cf, err := os.Open(categoryFile)
+	want, err := Table()
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() {
-		if err := cf.Close(); err != nil {
-			t.Error(err)
-		}
-	})
-	cats, err := ParseCategories(cf)
-	if err != nil {
-		t.Fatalf("%s: %v", categoryFile, err)
-	}
-	af, err := os.Open(alphabeticFile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := af.Close(); err != nil {
-			t.Error(err)
-		}
-	})
-	alpha, err := ParseAlphabetic(af)
-	if err != nil {
-		t.Fatalf("%s: %v", alphabeticFile, err)
-	}
-	want, err := Render(cats, alpha)
-	if err != nil {
-		t.Fatal(err)
-	}
-	got, err := os.ReadFile("table.go")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(got, want) {
-		t.Fatal("table.go is not the rendering of the data files: run go generate in internal/unicode13")
-	}
+	tabletest.Fresh(t, want, "the data files")
 }
 
 // TestCategory pins code points whose category in Unicode 13.0.0 VS Code's slug

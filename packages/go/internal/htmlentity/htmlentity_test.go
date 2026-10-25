@@ -1,7 +1,7 @@
 package htmlentity
 
 import (
-	"bytes"
+	"github.com/polyspec/flowmark/packages/go/internal/tabletest"
 	"os"
 	"testing"
 )
@@ -17,13 +17,7 @@ func TestTableIsFresh(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := os.ReadFile("table.go")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(got, want) {
-		t.Fatal("table.go is not the rendering of the data file; run go generate")
-	}
+	tabletest.Fresh(t, want, "the data file")
 }
 
 // TestReference pins the references that CommonMark's entity pattern reads, the

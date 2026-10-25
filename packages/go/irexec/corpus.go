@@ -119,12 +119,7 @@ func (c *Corpus) place(r *store.Row, path string, parent *rec) {
 	x := &rec{row: r, file: path, parent: parent, tb: tb}
 	c.recs[r.Table] = append(c.recs[r.Table], x)
 	c.byRow[r] = x
-	names := make([]string, 0, len(r.Blocks))
-	for name := range r.Blocks {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	for _, name := range names {
+	for _, name := range r.BlockNames() {
 		for _, child := range r.Blocks[name] {
 			c.place(child, path, x)
 		}
@@ -256,7 +251,7 @@ func (c *Corpus) value(x *rec, col string) (cell, *Error) {
 			return cell{null: true}, nil
 		}
 		return cell{text: strings.TrimSuffix(*v, "\n")}, nil
-	case tb.Storage.Kind == catalog.StorageBlock && col == placementColumn(tb):
+	case tb.Storage.Kind == catalog.StorageBlock && col == tb.Placement():
 		return cell{text: x.parent.row.Key}, nil
 	case tb.Storage.Kind == catalog.StorageFiles && col == tb.Order:
 		return c.position(x)
@@ -283,16 +278,6 @@ func (c *Corpus) typeFault(x *rec, col string) *Error {
 // isMarkdown reports whether col is a markdown column of tb other than the body.
 func isMarkdown(tb *catalog.Table, col string) bool {
 	return col != tb.Body && slices.Contains(tb.Markdown, col)
-}
-
-// placementColumn returns the placement foreign key column of a block table.
-func placementColumn(tb *catalog.Table) string {
-	for _, fk := range tb.ForeignKeys {
-		if fk.Name == tb.Storage.ParentForeignKey && len(fk.Columns) == 1 {
-			return fk.Columns[0]
-		}
-	}
-	return ""
 }
 
 // columnOf returns the column named col of tb; the request was validated against

@@ -1,6 +1,7 @@
 package irexec
 
 import (
+	"github.com/polyspec/flowmark/packages/go/internal/corpustest"
 	"strings"
 	"testing"
 
@@ -145,7 +146,7 @@ func TestInsert(t *testing.T) {
 		docs := baseDocs()
 		docs["notes/NX.flowmark.md"] = lines("# Upper", "- position: 3")
 		docs["notes/nx.flowmark.md"] = lines("# Lower", "- position: 4")
-		f := newFixtureIn(t, caseSensitiveRoot(t), catalogRoot, docs).on(t)
+		f := newFixtureIn(t, corpustest.CaseSensitiveRoot(t), catalogRoot, docs).on(t)
 		up := func(id string) []byte {
 			return f.msg("insert", "notes", map[string]any{"set": sets("id", "title", "body"), "on_duplicate": []any{set("title", 1)}}, id, "Upserted", "")
 		}

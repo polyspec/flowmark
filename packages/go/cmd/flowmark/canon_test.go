@@ -35,22 +35,11 @@ table notes {
 func canonCorpus(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
-	for p, text := range map[string]string{
+	corpustest.WriteTree(t, root, map[string]string{
 		"dbspec/canon.dbs":     canonDBS,
 		"tags.flowmark.md":     "# tags\r\n| id | label |\r\n| --- | --- |\r\n| 1 | go |\r\n",
 		"notes/N1.flowmark.md": "# A note\xff\n",
-	} {
-		full := filepath.Join(root, filepath.FromSlash(p))
-		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(full, []byte(text), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := corpustest.WriteSetFile(filepath.Join(root, "dbspec")); err != nil {
-		t.Fatal(err)
-	}
+	})
 	return root
 }
 

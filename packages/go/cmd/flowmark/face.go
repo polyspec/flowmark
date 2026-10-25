@@ -173,15 +173,7 @@ func face(out, errOut io.Writer, name string, args []string) (code int) {
 	} else if name == "row.insert" || name == "row.update" {
 		members["values"] = json.RawMessage("{}")
 	}
-	r, err := ops.Parse(name, members)
-	if err != nil {
-		return fail(errOut, name, err)
-	}
-	a, err := c.Run(ctx, "cli", r)
-	if err != nil {
-		return fail(errOut, name, err)
-	}
-	b, err := ops.JSON(a)
+	b, err := c.RunJSON(ctx, "cli", name, members)
 	if err != nil {
 		return fail(errOut, name, err)
 	}

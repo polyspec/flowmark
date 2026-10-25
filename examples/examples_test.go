@@ -5,7 +5,6 @@ package examples
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -54,21 +53,9 @@ func open(t *testing.T, root string) *ops.Corpus {
 // run runs the operation op with members, given as one JSON object, and returns its answer as JSON.
 func run(t *testing.T, c *ops.Corpus, op, members string) string {
 	t.Helper()
-	var m map[string]json.RawMessage
-	if err := json.Unmarshal([]byte(members), &m); err != nil {
-		t.Fatalf("members %s: %v", members, err)
-	}
-	r, err := ops.Parse(op, m)
+	b, err := c.RunText(context.Background(), "examples", op, members)
 	if err != nil {
 		t.Fatalf("%s %s: %v", op, members, err)
-	}
-	a, err := c.Run(context.Background(), "examples", r)
-	if err != nil {
-		t.Fatalf("%s %s: %v", op, members, err)
-	}
-	b, err := ops.JSON(a)
-	if err != nil {
-		t.Fatal(err)
 	}
 	return string(b)
 }

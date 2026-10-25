@@ -2,6 +2,7 @@ package writepath
 
 import (
 	"context"
+	"github.com/polyspec/flowmark/packages/go/internal/corpustest"
 	"strings"
 	"testing"
 	"time"
@@ -33,7 +34,7 @@ func TestRecheckDivergence(t *testing.T) {
 		s := f.session("server")
 		must(t, s.Begin(context.Background(), false))
 		// T3 gains a detail section, so every link to it is rewritten; a note linking T3 lands by hand.
-		want(t, s, f.msg("update", "items", map[string]any{"set": sets(0, "body"), "where": whereID(1)}, "Now a body.", "T3"), `{"affected":1,"keys":[]}`)
+		want(t, s, f.msg("update", "items", map[string]any{"set": sets(0, "body"), "where": corpustest.WhereID(1)}, "Now a body.", "T3"), `{"affected":1,"keys":[]}`)
 		f.write("notes/N4.flowmark.md", lines("# Third root", "- item: [T3](../items.flowmark.md)", "- position: 3"))
 		err := s.Commit()
 		fails(t, err, "WRITE_CONFLICT", "notes/N4.flowmark.md:1", "another result")
@@ -45,7 +46,7 @@ func TestRecheckDivergence(t *testing.T) {
 		f := baseFixture(t)
 		s := f.session("server")
 		must(t, s.Begin(context.Background(), false))
-		want(t, s, f.msg("update", "tags", map[string]any{"set": sets(0, "kind"), "where": whereID(1)}, "topic", 2), `{"affected":1,"keys":[]}`)
+		want(t, s, f.msg("update", "tags", map[string]any{"set": sets(0, "kind"), "where": corpustest.WhereID(1)}, "topic", 2), `{"affected":1,"keys":[]}`)
 		// Matches no note; a note that it matches lands by hand, and setting its weight to the weight it holds
 		// changes no byte.
 		want(t, s, f.msg("update", "notes", map[string]any{"set": sets(0, "weight"), "where": map[string]any{"items": []any{map[string]any{"pred": map[string]any{"column": "position", "op": "eq", "p": 1}}}}}, 0.25, 3), `{"affected":0,"keys":[]}`)

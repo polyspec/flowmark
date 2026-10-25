@@ -146,122 +146,11 @@ var (
 	committed = []journal.Kind{journal.LockAcquired, journal.Prepared, journal.Applied, journal.Collected, journal.LockReleased}
 )
 
-// moduleRoot returns the root of the module: the nearest ancestor of the test's working directory that holds go.mod.
-// The go tool declares that working directory to be the package directory.
-func moduleRoot(t testing.TB) string {
-	t.Helper()
-	wd, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-	for dir := wd; ; {
-		if fi, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil && fi.Mode().IsRegular() {
-			return dir
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			t.Fatalf("no ancestor of %s holds go.mod", wd)
-		}
-		dir = parent
-	}
-}
-
 // lines joins lines with line feeds and a final one.
 func lines(ls ...string) string { return strings.Join(ls, "\n") + "\n" }
 
-// baseDocs is the corpus of the executor's test catalog that most cases start from: items with their history in
-// blocks, people with a soft-deleted row, notes in files with a block of steps, and tags.
-func baseDocs() map[string]string {
-	return map[string]string{
-		"items.flowmark.md": lines(
-			"# items",
-			"- [x] T1 Ship the parser owner:[P1](people.flowmark.md)",
-			"  - [~] T2 Write the tests due:2026-10-20",
-			"- [ ] T3 Review the design",
-			"- [-] T4 Drop the old path",
-			"",
-			"## items row T1",
-			"",
-			"Parser body.",
-			"",
-			"### evidence",
-			"",
-			"Golden tests pass.",
-			"",
-			"### item_history",
-			"| id | from_state | to_state | at |",
-			"| --- | --- | --- | --- |",
-			"| 1 | waiting | doing | 2026-10-01 08:00:00.000000 |",
-			"| 2 | doing | done | 2026-10-01 09:00:00.000000 |",
-			"",
-			"#### item_history row 2",
-			"",
-			"##### evidence",
-			"",
-			"Golden tests pass.",
-			"",
-			"## items row T2",
-			"",
-			"### item_history",
-			"| id | from_state | to_state | at |",
-			"| --- | --- | --- | --- |",
-			"| 3 | waiting | doing | 2026-10-02 08:00:00.000000 |",
-			"",
-			"## items row T4",
-			"",
-			"### cause",
-			"",
-			"Superseded.",
-			"",
-			"### item_history",
-			"| id | from_state | to_state | at |",
-			"| --- | --- | --- | --- |",
-			"| 4 | waiting | dropped | 2026-10-03 08:00:00.000000 |",
-			"",
-			"#### item_history row 4",
-			"",
-			"##### cause",
-			"",
-			"Superseded.",
-		),
-		"people.flowmark.md": lines(
-			"# people",
-			"| id | name | email | age | active | score | joined | deleted_at | updated_at |",
-			"| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
-			"| P1 | Ada | ada@x.io | 36 | true | 1.50 | 2026-10-01 09:00:00 |  |  |",
-			"| P2 | Max |  |  | false | 0.00 | 2026-10-02 10:00:00 |  |  |",
-			"| P3 | Gone | gone@x.io |  | true | 0.00 | 2026-10-03 00:00:00 | 2026-10-05 00:00:00.000000 |  |",
-		),
-		"notes/N1.flowmark.md": lines(
-			"# First note",
-			"- item: [T1](../items.flowmark.md#items-row-t1)",
-			"- position: 1",
-			"- weight: 0.5",
-			"",
-			"Note body.",
-			"",
-			"## steps",
-			"- S1 Draft done:false",
-			"- S2 Review done:true",
-		),
-		"notes/N2.flowmark.md": lines(
-			"# Child note",
-			"- parent: [N1](N1.flowmark.md)",
-			"- position: 1",
-		),
-		"notes/N3.flowmark.md": lines(
-			"# Second root",
-			"- position: 2",
-		),
-		"tags.flowmark.md": lines(
-			"# tags",
-			"| id | label | kind |",
-			"| --- | --- | --- |",
-			"| 1 | go | topic |",
-			"| 2 | ops | area |",
-		),
-	}
-}
+// baseDocs is corpustest.BaseDocs, the corpus of the executor's test catalog that most cases start from.
+func baseDocs() map[string]string { return corpustest.BaseDocs() }
 
 // cardsDBS is a catalog of a files table that a document table references: a whole-file delete whose restrict check
 // needs a table other than its own.
@@ -299,27 +188,10 @@ type fixture struct {
 	rec  *recorder
 }
 
-// writeTree writes docs (corpus path to text) under root.
-func writeTree(t testing.TB, root string, docs map[string]string) {
-	t.Helper()
-	for p, text := range docs {
-		full := filepath.Join(root, filepath.FromSlash(p))
-		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(full, []byte(text), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := corpustest.WriteSetFile(filepath.Join(root, "dbspec")); err != nil {
-		t.Fatal(err)
-	}
-}
-
 // executorCatalog returns the dbspec text of the executor's test catalog.
 func executorCatalog(t testing.TB) string {
 	t.Helper()
-	b, err := os.ReadFile(filepath.Join(moduleRoot(t), "irexec", "testdata", "catalog", "dbspec", "flowmark.dbs"))
+	b, err := os.ReadFile(filepath.Join(corpustest.ModuleRoot(t), "irexec", "testdata", "catalog", "dbspec", "flowmark.dbs"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -331,8 +203,8 @@ func executorCatalog(t testing.TB) string {
 func newFixture(t testing.TB, dbs string, docs map[string]string) *fixture {
 	t.Helper()
 	root := t.TempDir()
-	writeTree(t, root, map[string]string{"dbspec/test.dbs": dbs})
-	writeTree(t, root, docs)
+	corpustest.WriteTree(t, root, map[string]string{"dbspec/test.dbs": dbs})
+	corpustest.WriteTree(t, root, docs)
 	return openFixture(t, root)
 }
 
@@ -393,28 +265,7 @@ func (f *fixture) msg(kind, entity string, body map[string]any, params ...any) [
 
 func buildMsg(t testing.TB, hash, kind, entity string, body map[string]any, params ...any) []byte {
 	t.Helper()
-	req := map[string]any{}
-	for k, v := range body {
-		req[k] = v
-	}
-	req["ir_version"] = 1
-	req["manifest_hash"] = hash
-	req["kind"] = kind
-	req["entity"] = entity
-	req["n_params"] = len(params)
-	if params == nil {
-		params = []any{}
-	}
-	b, err := json.Marshal(map[string]any{"ir_version": 1, "manifest_hash": hash, "request": req, "params": params, "now": testNow})
-	if err != nil {
-		t.Fatal(err)
-	}
-	return b
-}
-
-// whereID is the where of the row whose id is parameter i.
-func whereID(i int) map[string]any {
-	return map[string]any{"items": []any{map[string]any{"pred": map[string]any{"column": "id", "op": "eq", "p": i}}}}
+	return corpustest.Message(t, hash, testNow, kind, entity, body, params...)
 }
 
 // sets is the set of a request, each column assigned its parameter in order from first.
@@ -450,7 +301,7 @@ func (f *fixture) file(p string) string {
 // write writes a corpus file as a human edit would.
 func (f *fixture) write(p, text string) {
 	f.t.Helper()
-	writeTree(f.t, f.root, map[string]string{p: text})
+	corpustest.WriteTree(f.t, f.root, map[string]string{p: text})
 }
 
 // remove removes a corpus file as a human edit would.

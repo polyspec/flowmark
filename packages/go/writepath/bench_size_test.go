@@ -3,6 +3,7 @@ package writepath
 import (
 	"context"
 	"fmt"
+	"github.com/polyspec/flowmark/packages/go/internal/corpustest"
 	"os"
 	"path/filepath"
 	"sync"
@@ -27,7 +28,7 @@ var benchFileRows = []int{1000, 10000, 40000}
 func sizedNotes(b testing.TB, rows int) (string, int) {
 	b.Helper()
 	root := b.TempDir()
-	writeTree(b, root, map[string]string{"dbspec/test.dbs": shardDBS(b)})
+	corpustest.WriteTree(b, root, map[string]string{"dbspec/test.dbs": shardDBS(b)})
 	cat, diags := catalog.Load(root)
 	if len(diags) > 0 || cat == nil {
 		b.Fatalf("catalog: %+v", diags)
@@ -60,7 +61,7 @@ func BenchmarkFileSizeWrite(b *testing.B) {
 			s := f.session("bench")
 			ctx := context.Background()
 			loop(b, func(i int) {
-				m := f.msg("update", "notes", map[string]any{"set": []any{map[string]any{"column": "title", "p": 0}}, "where": whereID(1)}, fmt.Sprintf("Renamed %d", i), "N1")
+				m := f.msg("update", "notes", map[string]any{"set": []any{map[string]any{"column": "title", "p": 0}}, "where": corpustest.WhereID(1)}, fmt.Sprintf("Renamed %d", i), "N1")
 				if _, err := s.Exec(ctx, m); err != nil {
 					b.Fatal(err)
 				}
@@ -126,7 +127,7 @@ func BenchmarkSessions(b *testing.B) {
 					wg.Add(1)
 					go func() {
 						defer wg.Done()
-						m := f.msg("update", "notes", map[string]any{"set": sets(0, "weight"), "where": whereID(1)}, float64(turn.Add(1)), "N3")
+						m := f.msg("update", "notes", map[string]any{"set": sets(0, "weight"), "where": corpustest.WhereID(1)}, float64(turn.Add(1)), "N3")
 						if _, err := ss[k].Exec(ctx, m); err != nil {
 							b.Error(err)
 						}

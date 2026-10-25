@@ -12,7 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/fs"
+	"github.com/polyspec/flowmark/packages/go/internal/corpustest"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -41,63 +41,15 @@ var equivalenceRoots = []string{
 	"equivalence/files",
 }
 
-// moduleRoot returns the nearest ancestor of the test's working directory that holds
-// go.mod: the go tool runs a test in its package directory, and go.mod declares the
-// module root.
-func moduleRoot(t *testing.T) string {
-	t.Helper()
-	wd, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-	for dir := wd; ; {
-		if fi, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil && fi.Mode().IsRegular() {
-			return dir
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			t.Fatalf("no ancestor of %s holds go.mod", wd)
-		}
-		dir = parent
-	}
-}
-
 // corpus copies the store golden name into a temporary root, writes the files of
 // docs (corpus path to text) over it, and returns the root.
 func corpus(t *testing.T, name string, docs map[string]string) string {
 	t.Helper()
-	src := filepath.Join(moduleRoot(t), "store", "testdata", filepath.FromSlash(name))
 	root := t.TempDir()
-	err := filepath.WalkDir(src, func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		rel, err := filepath.Rel(src, p)
-		if err != nil {
-			return err
-		}
-		target := filepath.Join(root, rel)
-		if d.IsDir() {
-			return os.MkdirAll(target, 0o755)
-		}
-		data, err := os.ReadFile(p)
-		if err != nil {
-			return err
-		}
-		return os.WriteFile(target, data, 0o644)
-	})
-	if err != nil {
+	if err := corpustest.CopyTree(corpustest.GoldenDir(t, name), root); err != nil {
 		t.Fatal(err)
 	}
-	for p, text := range docs {
-		full := filepath.Join(root, filepath.FromSlash(p))
-		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(full, []byte(text), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
+	corpustest.WriteFiles(t, root, docs)
 	return root
 }
 
@@ -120,7 +72,7 @@ func open(t *testing.T, root string) *irexec.Corpus {
 // soft_delete column.
 func typesDocs(t *testing.T) map[string]string {
 	t.Helper()
-	src := filepath.Join(moduleRoot(t), "store", "testdata", "files", "dbspec", "flowmark.dbs")
+	src := filepath.Join(corpustest.ModuleRoot(t), "store", "testdata", "files", "dbspec", "flowmark.dbs")
 	data, err := os.ReadFile(src)
 	if err != nil {
 		t.Fatal(err)
@@ -147,7 +99,7 @@ func typesDocs(t *testing.T) map[string]string {
 // is bytes. Its first memo stores all four.
 func codecDocs(t *testing.T) map[string]string {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join(moduleRoot(t), "store", "testdata", "files", "dbspec", "flowmark.dbs"))
+	data, err := os.ReadFile(filepath.Join(corpustest.ModuleRoot(t), "store", "testdata", "files", "dbspec", "flowmark.dbs"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -550,7 +502,7 @@ func TestExportRefusals(t *testing.T) {
 // readGolden returns the text of the store golden file name.
 func readGolden(t *testing.T, name string) string {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join(moduleRoot(t), "store", "testdata", filepath.FromSlash(name)))
+	data, err := os.ReadFile(filepath.Join(corpustest.ModuleRoot(t), "store", "testdata", filepath.FromSlash(name)))
 	if err != nil {
 		t.Fatal(err)
 	}

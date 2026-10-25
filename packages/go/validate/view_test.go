@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/zlib"
 	"encoding/base64"
+	"github.com/polyspec/flowmark/packages/go/internal/corpustest"
 	"strings"
 	"testing"
 
@@ -215,7 +216,7 @@ func TestViewsAndCodecs(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			root := t.TempDir()
-			writeTree(t, root, tc.files)
+			corpustest.WriteTree(t, root, tc.files)
 			diags, err := Corpus(cat, root)
 			if err != nil {
 				t.Fatal(err)

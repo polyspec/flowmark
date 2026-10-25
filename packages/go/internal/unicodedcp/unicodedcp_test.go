@@ -1,64 +1,28 @@
 package unicodedcp
 
 import (
-	"bytes"
-	"os"
+	"github.com/polyspec/flowmark/packages/go/internal/tabletest"
 	"slices"
 	"strings"
 	"testing"
 )
 
-const (
-	dataFile    = "testdata/DerivedCoreProperties-17.0.0.txt"
-	licenseFile = "testdata/UNICODE-LICENSE.txt"
-)
+// licenseFile is the Unicode License v3 beside the data files.
+const licenseFile = "testdata/UNICODE-LICENSE.txt"
 
 // TestUnicodeLicense requires the Unicode License v3, under which the data file is
 // distributed, to stand beside it in full: its copyright and permission notice must
 // appear with every copy.
-func TestUnicodeLicense(t *testing.T) {
-	src, err := os.ReadFile(licenseFile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	text := string(src)
-	if !strings.HasPrefix(text, "UNICODE LICENSE V3\n") {
-		t.Fatalf("%s does not begin with the license title", licenseFile)
-	}
-	for _, want := range []string{"COPYRIGHT AND PERMISSION NOTICE", "Permission is hereby granted, free of charge,"} {
-		if !strings.Contains(text, want) {
-			t.Fatalf("%s lacks %q", licenseFile, want)
-		}
-	}
-}
+func TestUnicodeLicense(t *testing.T) { tabletest.License(t, licenseFile) }
 
 // TestTableIsFresh requires table.go to be the rendering of the data file, so a
 // table edited by hand, or left behind by a changed data file, fails here.
 func TestTableIsFresh(t *testing.T) {
-	f, err := os.Open(dataFile)
+	want, err := Table()
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() {
-		if err := f.Close(); err != nil {
-			t.Error(err)
-		}
-	})
-	ranges, err := Parse(f)
-	if err != nil {
-		t.Fatalf("%s: %v", dataFile, err)
-	}
-	want, err := Render(ranges)
-	if err != nil {
-		t.Fatal(err)
-	}
-	got, err := os.ReadFile("table.go")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(got, want) {
-		t.Fatal("table.go is not the rendering of " + dataFile + ": run go generate in internal/unicodedcp")
-	}
+	tabletest.Fresh(t, want, "the data file")
 }
 
 // TestDefaultIgnorable pins the code points named in the data file's header and

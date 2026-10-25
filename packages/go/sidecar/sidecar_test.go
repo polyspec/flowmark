@@ -4,46 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"github.com/polyspec/flowmark/packages/go/internal/corpustest"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 )
-
-const peopleDBS = `dbspec 1 people
-
-table people {
-  id varchar(32)
-  name varchar(64)
-  primary key (id)
-  settings {
-    store document table
-    title name
-  }
-}
-`
-
-// corpusRoot writes a corpus of one people table with one row and returns its root.
-func corpusRoot(t *testing.T) string {
-	t.Helper()
-	root := t.TempDir()
-	for p, text := range map[string]string{
-		"dbspec/people.dbs":  peopleDBS,
-		"people.flowmark.md": "# people\n| id | name |\n| --- | --- |\n| P1 | Ada |\n",
-	} {
-		full := filepath.Join(root, filepath.FromSlash(p))
-		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(full, []byte(text), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := corpustest.WriteSetFile(filepath.Join(root, "dbspec")); err != nil {
-		t.Fatal(err)
-	}
-	return root
-}
 
 // serve runs the sidecar over the input lines and returns its output lines and its standard error.
 func serve(t *testing.T, lines ...string) ([]string, string) {
@@ -76,7 +39,7 @@ func req(t *testing.T, s, root, body string, extra ...string) string {
 // TestSidecar pins the sidecar face (spec 40 The faces): protocol v1 of the soksak core specification over the
 // operations of any table.
 func TestSidecar(t *testing.T) {
-	root := corpusRoot(t)
+	root := corpustest.PeopleRoot(t)
 	t.Run("40#the-faces: a request is answered with the operation's answer, its id and its cids", func(t *testing.T) {
 		got, errText := serve(t,
 			req(t, "s1", root, `{"operation":"rows","table":"people","id":7}`, `"cids":["c1"]`),
@@ -103,9 +66,7 @@ func TestSidecar(t *testing.T) {
 			`{"surface":"s2","body":{"code":"CONFIG","error":"the request body is not an object of an operation and its members"}}`,
 			`{"surface":"s2","body":{"code":"CONFIG","error":"the root corpus is not an absolute path; the host sends the project directory"}}`,
 		}
-		if strings.Join(got, "\n") != strings.Join(want, "\n") {
-			t.Fatalf("answers:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
-		}
+		corpustest.EqualLines(t, got, want)
 	})
 	t.Run("40#the-faces: closed is answered, and a line that is no request goes to standard error", func(t *testing.T) {
 		r, jsonErr := json.Marshal(root)

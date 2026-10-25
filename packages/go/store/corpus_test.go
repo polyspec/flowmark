@@ -254,7 +254,7 @@ func TestIntegerKeysAndMandatorySection(t *testing.T) {
 func TestKeysCollideWithoutRegardToCase(t *testing.T) {
 	cat := loadFixture(t)
 	lk := fixtureLinker()
-	root := treeIn(t, caseSensitiveRoot(t), map[string]string{"tasks/T1.flowmark.md": withBase(), "tasks/t1.flowmark.md": withBase()}, nil)
+	root := treeIn(t, corpustest.CaseSensitiveRoot(t), map[string]string{"tasks/T1.flowmark.md": withBase(), "tasks/t1.flowmark.md": withBase()}, nil)
 	entries, err := os.ReadDir(filepath.Join(root, "tasks"))
 	if err != nil {
 		t.Fatal(err)
@@ -271,53 +271,6 @@ func TestKeysCollideWithoutRegardToCase(t *testing.T) {
 	if !reflect.DeepEqual(keys, []string{"T1", "t1"}) || len(diags) > 0 {
 		t.Fatalf("rows = %v, diagnostics = %+v; want both rows and no diagnostic", keys, diags)
 	}
-}
-
-// caseSensitiveEnv names the folder, on a case-sensitive file system, where a test writes two names that differ only in
-// case; scripts/go-test.mts, which make flowmark-test runs, provisions it, as the tests of irexec read it.
-const caseSensitiveEnv = "FLOWMARK_CASE_SENSITIVE_DIR"
-
-// caseSensitiveRoot returns an empty folder that keeps case: the test's temporary folder when its file system keeps
-// case, and otherwise a new folder under the one caseSensitiveEnv declares. It fails the test when neither keeps case.
-func caseSensitiveRoot(t *testing.T) string {
-	t.Helper()
-	root := t.TempDir()
-	if !foldsCase(t, root) {
-		return root
-	}
-	dir := os.Getenv(caseSensitiveEnv)
-	if dir == "" || !filepath.IsAbs(dir) {
-		t.Fatalf("the file system of %s folds case; set %s to an absolute folder on a case-sensitive file system", root, caseSensitiveEnv)
-	}
-	made, err := os.MkdirTemp(dir, "flowmark-case-")
-	if err != nil {
-		t.Fatalf("%s=%s: %v", caseSensitiveEnv, dir, err)
-	}
-	t.Cleanup(func() {
-		if err := os.RemoveAll(made); err != nil {
-			t.Error(err)
-		}
-	})
-	if foldsCase(t, made) {
-		t.Fatalf("%s=%s folds case", caseSensitiveEnv, dir)
-	}
-	return made
-}
-
-// foldsCase reports whether the file system of dir folds case.
-func foldsCase(t *testing.T, dir string) bool {
-	t.Helper()
-	probe := filepath.Join(dir, "CaseProbe")
-	if err := os.WriteFile(probe, nil, 0o644); err != nil {
-		t.Fatal(err)
-	}
-	defer func() {
-		if err := os.Remove(probe); err != nil {
-			t.Error(err)
-		}
-	}()
-	_, err := os.Stat(filepath.Join(dir, "caseprobe"))
-	return err == nil
 }
 
 // shardEvent is the file of an event at the time at.

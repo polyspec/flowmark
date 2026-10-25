@@ -3,6 +3,7 @@ package writepath
 import (
 	"context"
 	"fmt"
+	"github.com/polyspec/flowmark/packages/go/internal/corpustest"
 	"runtime"
 	"slices"
 	"testing"
@@ -144,7 +145,7 @@ func BenchmarkWrite(b *testing.B) {
 		s := f.session("bench")
 		ctx := context.Background()
 		loop(b, func(i int) {
-			m := f.msg("update", "notes", map[string]any{"set": sets(0, "weight"), "where": whereID(1)}, float64(i), "N3")
+			m := f.msg("update", "notes", map[string]any{"set": sets(0, "weight"), "where": corpustest.WhereID(1)}, float64(i), "N3")
 			if _, err := s.Exec(ctx, m); err != nil {
 				b.Fatal(err)
 			}

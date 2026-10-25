@@ -95,7 +95,7 @@ func (w *writer) historyRows(x *rec, sm *catalog.StateMachine) ([]*rec, *Error) 
 	if err := w.next.need(ht.Name); err != nil {
 		return nil, err
 	}
-	if ht.Storage.Kind == catalog.StorageBlock && ht.Storage.Parent == x.tb.Name && placementColumn(ht) == sm.History.Row {
+	if ht.Storage.Kind == catalog.StorageBlock && ht.Storage.Parent == x.tb.Name && ht.Placement() == sm.History.Row {
 		var out []*rec
 		for _, h := range x.row.Blocks[ht.Name] {
 			out = append(out, w.next.byRow[h])
@@ -150,10 +150,7 @@ func (w *writer) historyRow(x *rec, sm *catalog.StateMachine, from, to string, r
 	row := &store.Row{Table: ht.Name, Scalars: map[string]*string{}, Sections: map[string]*string{}}
 	id := w.nextIdentity(ht, ht.Key)
 	setValue(ht, row, ht.Key, id)
-	placement := ""
-	if ht.Storage.Kind == catalog.StorageBlock {
-		placement = placementColumn(ht)
-	}
+	placement := ht.Placement()
 	if sm.History.Row != placement {
 		setValue(ht, row, sm.History.Row, cell{text: x.row.Key})
 	}
