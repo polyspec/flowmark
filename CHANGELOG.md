@@ -2,6 +2,7 @@
 # Changelog
 
 ## Unreleased
+- The test workflow sets up the PHP of .php-version before the install of kit, as gates.yml does (T15-20).
 - The test workflow checks out the sibling kit and the polyspec packages and links them before the tests, so its CI jobs find the kit bootstrap (T15-19).
 - The gates workflow checks out the sibling kit and the polyspec packages and links them before the gates, so its CI run finds the kit bootstrap (T15-18).
 

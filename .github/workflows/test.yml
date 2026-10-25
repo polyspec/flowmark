@@ -30,6 +30,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: lts/*
+      # shivammathur/setup-php 2.40.0: the PHP of .php-version, which the install of kit requires, as in gates.yml (kit K193).
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962
+        if: ${{ hashFiles(format('{0}/.php-version', github.event.repository.name)) != '' }}
+        with:
+          php-version-file: ${{ github.event.repository.name }}/.php-version
+          tools: none
+          coverage: none
       - name: sibling checkouts
         env:
           SELF: ${{ github.event.repository.name }}

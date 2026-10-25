@@ -1,8 +1,9 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: a3b1639194440286863740a2977f9e2a6218d4abe0195fdbad04beaa3027c3ab -->
+<!-- source-sha256: f12869173291c10ca5abf2b8174d78298732b13fdb23924f965718dc884a5411 -->
 # Changelog
 
 ## Unreleased
+- test workflow는 gates.yml처럼 kit install 전에 .php-version의 PHP를 설치한다(T15-20).
 - test workflow가 test 전에 sibling kit과 polyspec package를 checkout하고 link하므로, CI job이 kit bootstrap을 찾는다(T15-19).
 - gates workflow가 gates 전에 sibling kit과 polyspec package를 checkout하고 link하므로, CI 실행이 kit bootstrap을 찾는다(T15-18).
 
