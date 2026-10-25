@@ -157,6 +157,14 @@
       "targets": [
         "rebuild-check"
       ]
+    },
+    {
+      "paths": [
+        "config/dependency-policy.json"
+      ],
+      "targets": [
+        "dependency-policy-check"
+      ]
     }
   ]
 }

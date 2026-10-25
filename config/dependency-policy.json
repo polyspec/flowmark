@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "composerPlatforms": [
+    {
+      "manifest": "examples/board/web/composer.json",
+      "php": "8.5.0"
+    }
+  ],
+  "pythonManifests": [],
+  "pythonLocks": [],
+  "npmLocks": [
+    "package-lock.json",
+    "examples/board/web/package-lock.json"
+  ],
+  "exceptions": []
+}

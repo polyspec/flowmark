@@ -1,9 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: f6c97a0ec05efdeecda51ec96389c27bc70792f864fc60fd1b80c6b89d2a6c53 -->
+<!-- source-sha256: a59c514f2040bbc5fe7a8df2d771d97838a59a395c57e0eaf646f2a016a30dc0 -->
 # Changelog
 
 ## Unreleased
 
+- config/dependency-policy.json이 board 예제의 PHP platform과 flowmark의 npm lock을 선언하므로 make dependency-policy-check가 통과한다(T15-15).
 - config/rebuild.json이 flowmark의 tool source인 script와 board 예제를 분류하므로 make rebuild-check가 통과한다(T15-14).
 - make lint-ts가 통과한다: root tsconfig.json이 script와 test의 형을 정하고, record-slugs.mts는 형이 있으며 자기 data를 packages/go 아래에서 읽고 쓰고, board client는 hyper의 형이 있는 client다(T15-13).
 - board 예제는 polyspec package의 release를 pin하고, make flowmark-install이 lock에서 설치하며 make install-link가 옆의 checkout으로 link하고, make lint-php가 그것에 대해 통과한다(T15-11).

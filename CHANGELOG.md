@@ -3,6 +3,7 @@
 
 ## Unreleased
 
+- config/dependency-policy.json declares the PHP platform of the board example and the npm locks of flowmark, so make dependency-policy-check passes (T15-15).
 - config/rebuild.json classes the tool sources of flowmark, its scripts and the board example, so make rebuild-check passes (T15-14).
 - make lint-ts passes: the root tsconfig.json types the scripts and tests, record-slugs.mts is typed and reads and writes its data under packages/go, and the board client is the typed client of hyper (T15-13).
 - The board example pins the releases of its polyspec packages, which make flowmark-install installs from their locks and make install-link links to the sibling checkouts, and make lint-php passes on it (T15-11).
