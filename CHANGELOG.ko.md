@@ -1,9 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: f3f659fece63737f7d3505d80aa6d57720fe53c0963c02bcb33dd15dbe2a7dac -->
+<!-- source-sha256: 2b5a6d7e35d5444cf8c8a8fb76d4cfedb26b762cc77d85ef08af5a0e64b5da90 -->
 # Changelog
 
 ## Unreleased
 
+- Go test가 corpus, fixture, request, recorder, table helper를 internal/corpustest, internal/tabletest, internal/ucd, journal.Recorder로 공유하고, 반복되던 library 조각이 각각 한 함수(ops.ServeLines, Corpus.RunJSON과 RunText, catalog Table.Placement와 Diagnostic.String, store Row.BlockNames와 FoldASCII)이므로 make duplication-check가 통과한다(T15-17).
 - token과 holder test는 platform 분기 없이 macOS의 동작을 검사하므로 make divergence-check가 통과한다(T15-16).
 - config/dependency-policy.json이 board 예제의 PHP platform과 flowmark의 npm lock을 선언하므로 make dependency-policy-check가 통과한다(T15-15).
 - config/rebuild.json이 flowmark의 tool source인 script와 board 예제를 분류하므로 make rebuild-check가 통과한다(T15-14).
@@ -110,40 +111,26 @@
 - T12.1-15: spec이 block table의 state machine이 column을 `require`할 수 있는지를 정한다. 상태 table과 이력 table이 모두 `markdown`으로 선언한 require된 column은 이력 행의 section이므로, H6를 넘는 layout은 깊이 규칙이 이미 정한 대로 이력 table 이름에서 schema 오류다. 두 table 어느 쪽도 `markdown`으로 선언하지 않은 require된 column은 cell이며 어떤 깊이에서도 허용된다. 둘 중 한쪽만 `markdown`으로 선언한 column은 이력 table 이름에서 schema 오류다: 이력 행은 값의 사본을 담고, section과 한 줄 자리는 서로 다른 값을 받기 때문이다. catalog는 `checkHistoryMarks`에서 그 어긋남을 검사하며, `TestLoadRequireOfMarkdownPastH6`이 이 판정을 고정하고 검사를 더하기 전에는 red였다. spec 30과 spec 100이 근거와 함께 영문과 국문으로 판정을 적는다.
 - T12.1-12: spec이 `document` codec이 규칙 없이 내린 판단을 적으며, codec은 그것을 따른다. document file의 행은 H1 바로 아래에 빈 줄 없이 서며, 그 자리의 빈 줄은 `format.noncanonical`이다. delimiter 행은 `| --- | --- |`이고, GFM이 읽는 다른 delimiter 형식은 `format.noncanonical`, 그 밖은 `format.block`이다. 상세 heading의 table 이름은 대소문자가 달라도 되며(`format.noncanonical`), 다른 table의 이름은 `format.block`이고, key는 대소문자를 구분한다. 상세 섹션은 자기가 이름 붙인 key를 바이트 단위로 가진 행을 취한다. 제목 token은 접두로 선언된 column과 맞으며, 맞는 token 뒤에 다른 token이 오면 `format.noncanonical`, 제목을 끝내면 `format.block`이고, 제목은 맞는 token을 모두 이스케이프하며 token 사이의 공백(tab 포함)을 그대로 둔다. field 앞에서 list 제목을 끝내는 tab은 `format.noncanonical`이다. list 표지 뒤의 tab은 item 내용의 들여쓰기를 옮기므로 `format.block`이다. 거절된 쓰기는 file이 아니라 요청에 위치한다: 각 거절은 table, key, 준 행들 가운데 index, column, rule을 밝히며, `store.Refusal`이 `RenderFile`과 `RenderDocument`의 줄 위치 진단을 대신한다. 바이트 단위로 공유된 key는 index를 싣고, 대소문자만 같은 쌍은 spec상 쓰기가 도입하는 행을 거절하며(executor의 검사, T12.4), codec의 backstop은 byte 순서에서 더 큰 key를 거절한다. 형제 순서와 순환 결함은 행마다이고, 없는 부모를 가진 행은 자기 결함만 가진다. `RenderFile`은 files table이 아닌 table에 대해 오류도 돌려준다. 읽기 쪽은 writer의 거절을 parser가 그 행에 대해 읽은 요소(제목, field, section이나 body)의 자리에 위치시키며, 메시지에 행과 column을 싣는다. 행 전체의 결함은 행의 첫 줄이다. 상세 heading의 table 이름과 `row`는 viewer가 하듯 소문자로 만든 뒤 비교한다. `catalog.Diagnostic`은 바뀌지 않았다. 읽기 진단이 있는 file을 다시 쓰는 커밋 수준의 거절과 executor가 렌더링 전에 실행하는 key 검사(T12.4)는 spec에 적었으며, 여기서는 구현하지 않았다.
 - T12.1-13: spec이 block codec이 규칙 없이 내린 판단을 적으며, 이제 두 spec이 어긋나지 않는다. block이나 document 행의 `parent`는 자기 file이 아니라 자기 block의 행을 가리킨다: 다른 block의 부모는 쓰기에서 `CONSTRAINT`, 읽기에서 `format.block`이며, 읽기는 거짓 `parent.cycle`을 더하지 않는다. block heading 뒤의 빈 줄은 개수와 무관하게 `format.noncanonical`이며, space와 tab만 있는 줄도 빈 줄로 센다. 자식 block은 행 scope에 한 번만 서고 두 번째는 `format.section`이다. 두 행의 block들이 공유하는 상세 key는 block이 배정한다. block 행은 자기 `files` 행을 그 file의 key에서 유도한 file 이름으로 link한다. codec은 이 판단을 따른다: 빈 줄 규칙은 모든 빈 줄을 건너뛰며 진단은 하나이고, file 자신의 행으로 가는 link는 linker 없이 유도하므로 render가 이를 `FOREIGN_KEY`로 거절하지 않는다. 쓰기는 없는 행을 가리키는 parent를 한 번만 `CONSTRAINT`로 거절하며, 그 옆에 붙던 거짓 `parent.cycle`은 없다.
-
 - T12.2.5: `store/testdata/equivalence` 아래에 storage 동등성 dataset을 더했다. table `entries`의 다섯 행을 다섯 corpus로 저장하며, 각 corpus는 자기 catalog를 가진다: files(행마다 file 하나), document list와 document table(`entries.flowmark.md`), 그리고 files table `plans` 아래의 block list와 block table이다. 다섯 catalog는 같은 column을 선언하고, block corpus만 placement foreign key `plan`을 더한다. 행은 title, 비어 있지 않은 body와 빈 body, 없음·빈 값·값이 있는 상태의 nullable summary section, text, int, bool, date와 NULL scalar, 그리고 상세 section이 없는 행을 포함하는 self foreign key `parent` 계층을 담는다. 이 계층은 list corpus에서 들여쓰기이고 table corpus에서는 명시적 `parent` column이다. 테스트는 다섯 corpus가 NULL을 포함해 모든 공유 column에서 같은 행으로 parse되는지, 각 저장이 행과 golden bytes를 왕복하는지 요구한다. file과 document fuzz target은 이 dataset의 golden을 seed로 읽으며, corpus마다 selector byte 하나로 고른다.
 - T12.2.4-1: store fixture에 `list` storage이고 table에 상태기계가 있는 block을 더했다: 각 items row 아래의 `item_checks`는 세 상태마다 checkbox glyph, 중첩 행, order column, 그리고 행의 상세 section 안의 `history` block(`item_check_history`)을 가진다. 허용과 거절 사례가 그것이 쓰는 각 규칙을 고정하고, items golden이 그 P1과 P2 왕복을 담으며, fuzz target은 그 golden으로 시드된다. catalog의 heading 깊이 규칙이 history block을 level 7에서 거절했으나 그 행은 거기서 heading을 쓰지 않는다. 이제 규칙은 행이 H6를 넘는 heading을 쓰는 layout만 거절하며, spec 30이 그렇게 적는다. body만 있는 level 7 행은 유효하고, level 7의 markdown column은 여전히 거절된다.
-
 - T12.2.2-6: `files`와 `document` codec이 spec 10의 상세 anchor 충돌 규칙을 적용한다. 상세 heading이 아닌 heading은 fold(F_G나 F_M, 끝 숫자 run을 뗀 것)가 상세 anchor의 fold와 같으면 거절한다. anchor와 같은 id를 정하는 attribute list와 anchor와 같은 HTML `id` 또는 `name`도 대소문자를 가리지 않고 거절한다. 쓰기가 충돌을 들이면 다른 heading을 이름으로 든 `CONSTRAINT`이며, 중복 key는 `DUPLICATE_KEY`로 남는다. 읽기의 충돌은 `format.block`이다. heading은 중첩된 것까지 CommonMark block 구조에서 얻고, inline 텍스트는 link, emphasis, code span, entity, raw HTML을 읽는 최소 reader가 commonmark.js 0.31.2에 대조한다. 모듈은 `golang.org/x/text` v0.42.0을 직접 의존성으로 추가한다. fold가 `norm.NFKD`를 쓰는데 표준 라이브러리에는 Unicode 17.0.0의 분해가 없기 때문이며, 테스트가 `norm.Version`을 17.0.0으로 고정한다. `internal/htmlentity`는 `entities` 3.0.1 데이터의 이름 참조를 담으며, 그 데이터에서 생성되고 테스트가 새로 만든 것과 대조한다.
-
 - T12.2.2-5: heading scanner가 CommonMark 0.31.2처럼 `#` 연속 뒤에 tab이 오는 ATX heading을 읽는다(줄 끝은 이미 읽었다). hash 뒤의 tab은 제목, section, block, 상세 heading의 비정규 철자(`format.noncanonical`)이며, scanner, section 경계, 상세 heading 파싱이 같은 읽기를 따른다. `##x`와 `#` 일곱 개는 여전히 텍스트다. spec 10은 상세 heading 규칙에 tab을 적는다.
-
 - T12.2.4: `block` storage codec이 부모 row의 scope 안의 child block을 parse하고 쓴다. block은 부모 section과 같은 level의 section이다: `files` row는 markdown section 뒤에 table 이름 순서로 level 2에 block을 두고, `document`와 block row는 detail section 안에서 그 section level에 둔다. block은 list 또는 table이며, 그 행들의 detail section이 뒤따르고, 재귀적이다. 행이 없는 block은 쓰지 않으며, 빈 block heading은 `format.noncanonical`이다. block 행은 중첩이 뜻하는 placement foreign key를 값으로 갖지 않고, `Row.Blocks`가 block마다 행을 저장 순서로 담는다. 쓰기는 선언되지 않은 block, 다른 table의 행, block 행에 준 placement key를 거절한다. T12.2.3의 쓰기 guard와 읽기 거절은 제거했고, production codec이 쓰는 `sp`를 test 파일에서 `store/row.go`로 옮겼다.
-
 - T12.2.3: `document` storage codec이 list와 table 형식의 `<table>.flowmark.md`를 parse하고 쓴다. H1, 그 아래의 행(list 행은 glyph, key, 제목, 오른쪽에서 escape와 함께 parse하는 field, 들여쓰기는 `parent`; table 행은 key가 먼저이고, pipe escape를 가진 cell, NULL과 빈 텍스트), 저장 순서의 detail section `## <table> row <key>`(본문과 section 포함)를 다룬다. `order`는 읽을 때 1부터 세는 형제 위치로 채우고, 쓸 때는 형제 집합마다 정확히 1..m으로 취한다. 쓰는 쪽은 행의 순서를 스스로 맞추며 정렬되지 않은 입력을 거절하지 않는다. 외래 key는 linker를 거친 link이며 dangling link는 쓰인 target을 유지한다. T12.2.4까지 쓰기는 catalog가 child block을 선언한 table을 거절하며, 오류는 table, block과 T12.2.4를 이름으로 든다. 그래서 어떤 쓰기도 block의 행을 떨어뜨리지 않는다. 읽기는 child block section을 담은 detail section을 같은 이름으로 거절한다. 시간 값이 `now`로 쓰이면 그 type이 아니다. 읽을 때는 쓰인 대로 두고 쓸 때는 거절하며, 텍스트 값 `now`는 텍스트다. 규칙마다 허용과 거절 사례가 있고 세 golden은 P1·P2이며, parse와 render fuzz target은 그 golden으로 seed된다.
-
 - T12.2.2-4: `files` codec이 H1 제목과 field list 값에 spec 10의 보이지 않는 문자 규칙을 적용한다. 양 끝의 보이지 않는 문자는 쓰기에서 `CONSTRAINT`로 거절되며, 읽기에서 CommonMark가 떼어내는 space나 tab은 `format.noncanonical`이고, 끝의 그 밖의 보이지 않는 문자는 `format.block`이다. 보이지 않는 문자는 U+1680을 뺀 White_Space 문자, 제어 문자, prepended concatenation mark를 뺀 형식 문자, Default_Ignorable_Code_Point 문자이며, 마지막 것은 Unicode 17.0.0 data 파일에서 생성한 table이고 테스트가 최신성을 확인한다. list 행과 table cell은 T12.2.3에서 따른다.
-
 - T12.1-11: spec과 plan이 열린 block의 읽기 쪽을 있는 그대로 적는다. 열린 채 남은 fence나 HTML block이 흡수한 줄은 CommonMark block 구조에서 경계가 아니고 viewer도 그 block 안에 보여 주므로 읽기에서 값의 텍스트다. 그런 block 뒤에 요소를 두는 쓰기만 `CONSTRAINT`다. 어떤 reader도 관찰할 수 없는 결함을 가리키는 열린 block의 읽기 `format.block` 구절은 철회하며, 최상위 열린 fence 문장은 이 규칙과 일관되게 고친다.
-
 - T12.2.2-3: `files` codec이 spec 10의 열린 block 규칙을 쓰기에 적용한다. 열어 둔 fence나 HTML block이 뒤따르는 요소를 흡수하면 값은 `CONSTRAINT`로 거절된다. block scanner는 CommonMark 0.31.2대로 type 6과 7의 HTML block을 읽으며, type 7 block은 문단을 중단하지 않는다. list 항목 안에 열린 block이 최상위 heading으로 닫히면 잘못이 아니다.
-
 - T12.1-9: spec과 plan이 단일 줄 값의 양 끝에 있는 보이지 않는 문자를 거절한다: U+1680을 뺀 Unicode White_Space 속성의 문자, 제어 문자(Cc), Prepended_Concatenation_Mark를 뺀 형식 문자(Cf, U+FEFF 포함), Default_Ignorable_Code_Point다(Unicode 17.0.0 기준). 그런 문자는 글리프 없이 그려지므로 독자는 볼 수 없고(U+1680과 prepended concatenation mark는 글리프가 있어 텍스트다) viewer들이 끝에서 떼어내는 문자 집합이 서로 다르므로, 모두 거절하면 viewer의 버전과 무관하게 각 viewer가 값의 텍스트를 보여 준다. 구분자의 정식 공백은 여전히 space다. 읽기에서 끝의 space나 tab은 CommonMark가 떼어내므로 `format.noncanonical`이며(list 제목의 끝에서 뒤따르는 토큰 앞의 tab은 `format.block`), 끝의 그 밖의 보이지 않는 문자는 쓰기 규칙이 다시 만들 수 없으므로 `format.block`이다. T12.1-8의 space와 tab 정의를 대체하며, framing 빈 줄을 space와 tab만 있는 줄로 명시한다.
-
 - T12.1-7: spec이 setext 규칙의 근거를 적는다. setext heading은 level 1 또는 2이고 모든 행 scope의 level L은 2 이상이므로 L보다 깊은 setext 밑줄은 없으며, spec 10의 setext 거절이 값의 모든 최상위 setext heading을 덮는다. plan도 같은 근거를 적는다.
-
 - T12.1-10: 섹션 경계와 값의 끝에 대해 하나의 규칙, 즉 CommonMark 0.31.2 block 구조를 spec이 적는다. 최상위 heading은 ATX heading이거나 최상위 문단을 닫는 setext heading이며, fence, 모든 type(1~7)의 HTML block, 컨테이너, 게으른 연속 줄, 문단 중단 규칙은 CommonMark가 정한 그대로 센다. fence나 HTML block을 열어 둔 값은 뒤따르는 요소가 그 안으로 흡수될 때에만 거절하며, 뒤따르는 최상위 요소가 닫는 컨테이너 안에 열린 채 남은 block은 결함이 아니다. 이것은 T12.1-6과 T12.1-8의 좁은 문장을 대체한다.
-
 - T12.2.2-2: block scanner가 CommonMark container를 읽는다. list 항목(항목의 내용 들여쓰기 기준, 순서 있는 항목과
   tab 들여쓰기 항목 포함)이나 block quote 안의 heading, fence 안의 줄, type 1~5 HTML block 안의 줄은 섹션 경계가
   아니며, 최상위 heading만 body를 끝낸다. setext 밑줄은 최상위 문단을 닫을 때만 heading이고, 게으른 연속 줄은
   CommonMark 0.31.2가 읽는 그대로 문단 글이다.
-
 - T12.1-8: spec이 다시 짠 `files` codec에 필요했던 읽기 규칙을 적는다. CommonMark type 1–5의 HTML block을 요소 앞에서 열어 둔 값은 쓰기에서 `CONSTRAINT`이듯 읽기에서 `format.block`이다. 열린 fence는 읽을 때 요소 앞에 설 수 없다: 그 안의 heading은 경계가 아니다. 해석한 텍스트가 비었거나 `\#`로 끝나는
   제목은 쓰기 규칙이 그 H1을 다시 만들 수 없으므로 읽기에서 `format.block`이다. 줄 끝은 CommonMark가 읽는 대로
   LF, CRLF, 뒤에 LF가 없는 CR이며, 그 중 CR이 있으면 `format.noncanonical`이다. 한 줄 자리 규칙의 공백은 space와
   tab이다.
-
 - T12.2.2-1: `files` codec와 store가 T12.1-3과 T12.1-4의 판정을 따른다. H1 제목은 마지막 `\#`을 `#`으로 읽고,
   마지막 `#` 연속이 공백이나 tab 뒤에 오거나 제목 전체이면 마지막 `#`을 escape해 쓰며, `\#`로 끝나는 제목은
   `CONSTRAINT`다. 줄 바꿈으로 시작하거나 끝나는 markdown 값, CR이나 U+0000을 가진 값은 거절되고, 요소 앞에서
@@ -153,14 +140,12 @@
   기록된 target) 유지되어 validator의 `type`, `reference.dangling`, `key.duplicate`로 넘어간다. key는 `-`로 끝날 수
   있고 `-_`는 없다. 렌더링이 떨어뜨리는 한 줄 자리의 공백은 `format.noncanonical`이다. field list 바로 뒤의 body
   줄은 `format.block`이다.
-
 - T12.1-6: spec이 T12.1-3의 질문에 답한다. `files` table의 자리에 있는 일반 file이나 symlink는 `corpus.walk`이며
   그 table은 사용할 수 없다. 자리의 폴더가 없으면 빈 table이다. field list가 없는 `files` 행의 첫 body나 섹션은
   H1 뒤 빈 줄 정확히 하나 다음에 온다. 열린 fence나 HTML block을 남기는 값은 그 뒤의 요소를 어느 쓰기가 놓든
   `CONSTRAINT`다. setext 규칙은 최상위 heading에만 적용되며, 섹션 경계도 그렇다. 잘못된 UTF-8 byte의
   `format.encoding`은 그 byte에 있고, 문서 전체나 `corpus.walk`의 결함은 줄 1, 열 1이며, `catalog` 열은 orm의 dbspec처럼
   code point를 센다. 파일 전체를 지우는 delete는 파일을 지우면 그 바이트를 다시 쓰지 않으므로 rewrite 거절에서 면제된다.
-
 - T12.1-5: spec이 `document` codec에 필요했던 판정을 적는다. `now`는 `datetime` 기본값에서 현재 시각을 뜻하는
   keyword이며 저장되지 않는다: `now`로 쓰인 시간 값은 그 type이 아니며, 텍스트 `now`는 text다. 저장 순서를 벗어난
   table 행은 `format.noncanonical`이고, file 안 행 사이의 `parent` 순환은 읽기에서 `parent.cycle`이며 그 file을
@@ -171,7 +156,6 @@
   dangling 참조는 쓴 target을 간직하며, 두 행이 공유하는 key를 가리키는 `parent` cell은 `format.block`이다. markdown
   값은 setext heading을 담지 않으며, fence나 HTML block을 열린 채로 남기면 뒤따르는 요소가 있을 때 `CONSTRAINT`다.
   catalog는 checkbox가 없는 list storage의 state machine을 거절하며, nullable 상태 column은 dbspec이 이미 거절한다.
-
 - T12.1-4: spec이 상세 anchor, key, identity의 판정을 적는다. 상세 heading의 anchor는 heading의 렌더된 inline
   텍스트에 대한 두 fold로 file의 heading들과 대조한다. GitHub, GitLab, VS Code를 위한 F_G는 Unicode 범주가 letter나
   십진 숫자가 아닌 문자를 지우고, 소문자로 바꾸고, NFKD로 분해하고, 결합 기호를 버리며, ASCII 글자와 숫자만 남긴다.
@@ -185,7 +169,6 @@
   key는 `--`와 `-_`를 담지 않고 ASCII이며, 음수 integer key는 거절된다. markdown table의 primary key는 integer, `bool`,
   `varchar`, `uuid`, `date` column이며, catalog는 다른 type을 table 위치에서 거절한다. `identity`는 `i64` key에만 허용되며,
   이는 dbspec이 이미 강제하고 catalog test가 고정한다. key의 날짜 범위는 0001부터 9999까지다.
-
 - T8.4-4: `TestAddWithoutPathOnEmptyCorpus`가 매번 통과한다. 이 test는 add 응답이 watcher의 변경
   event보다 먼저 온다고 가정했지만, 그 순서는 정해져 있지 않다: watcher는 add 자신의 쓰기를 보고하고,
   sidecar는 변경 event를 언제든 밀어 보낼 수 있다. 이제 test는 문자열 응답 하나가 `T1 added`이고,
@@ -193,16 +176,12 @@
   아직 쓸 수 있는 동안 반환하지 않는다: `stop`이 poll loop들을 기다리며, `go test -race`가 출력
   buffer에서 보고한 data race를 없앤다. poll loop는 멈추면 두 poll 사이의 대기를 마저 채우지 않고
   바로 끝난다.
-
 - T12.1-3: spec이 `files` codec에 필요한 판정을 적는다. 읽기에서 없는 non-null field나 section, 렌더링이 inline markdown을 넘어 텍스트와 다르게 보이는 한 줄 값, `-` 항목으로 시작하는 `files` body, field list 뒤에서 첫 줄이 두 column 이상(공백 또는 tab) 들여쓴 `files` body는 `format.block`이고, 렌더링이 한 줄 자리 둘레에서 떨어뜨리는 공백은 `format.noncanonical`이다. BOM이나 CR은 `format.noncanonical`이고, UTF-8이 아닌 byte나 U+0000은 `format.encoding`이다. 같은 읽기 결함은 쓰기에서 `CONSTRAINT`다. column type이 아닌 값, dangling 외래 key, 대소문자를 무시하고 겹치는 key는 validator 규칙(`type`, `reference.dangling`, `key.duplicate`)이며, dangling 외래 key나 중복 key를 새로 만드는 쓰기는 각각 `FOREIGN_KEY`, `DUPLICATE_KEY`다. 본문이 아닌 non-null `markdown` column은 언제나 있는 section이다. 마지막 `#` 연속이 공백이나 tab 뒤에 오거나 `#`뿐인 제목은 마지막 `#`을 `\#`로 쓰고, `\#`로 끝나는 제목은 거절한다. markdown 값은 줄 바꿈으로 시작하거나 끝나지 않는다. field list 뒤의 빈 줄은 비어 있지 않은 body나 section 앞에서만 서며, 문서는 LF 하나로 끝난다. `format.*` 진단이 있는 file을 다시 쓰는 logical write는 `CONSTRAINT`로 거절하며, `format.noncanonical`이면 `flowmark canon`을 밝힌다. spec 40은 문서 바이트를 정규화하는 유일한 연산인 `flowmark canon`을 추가하고, `format.*` 진단이 있는 file을 다시 써야 하는 commit을 거절한다. 거절은 `flowmark canon`의 대상, 추가된 column이 일으킨 진단에 대한 add-column migration, `files` 행의 file 전체를 지우는 delete를 면제하며, `format.block`, `format.section`, `format.encoding`이 있는 file을 가진 table은 그 행이 필요한 요청과 검사에 사용할 수 없다. `flowmark install`은 `.gitattributes`에 줄을 더하고, table folder가 없으면 빈 table이며, typed 값은 쓰기에서 canonical 형식으로 쓴다. table은 행이 있을 수 있는 모든 file을 가지며, block table은 placement parent의 file을 포함한다. 바이트 단위로 같은 key를 가진 두 행은 table을 사용할 수 없게 하고, 잘못된 type의 값을 평가하는 요청은 `CONSTRAINT`로 실패하며, 사용할 수 없는 table이 필요한 export는 실패하고 아무것도 쓰지 않는다. `corpus.walk` 항목이나 다른 대소문자의 suffix가 table의 자리에 있으면 사람이 corpus를 고치기 전까지 그 table은 사용할 수 없고, 고치면 다음 읽기에서 다시 사용할 수 있다. `type` 진단은 제약 검사가 그 값을 평가해야 할 때에만 commit을 실패시키며, 그 값을 읽는 export는 실패한다. `files` codec의 테스트 사례는 고정하는 spec section을 밝힌다.
-
 - T1.3-1: 참조 검사는 kit 검사처럼 kit의 `trackedFiles`로 Git이 무시하지 않는 checkout의 file을 읽는다.
   `.claude/worktrees/` 아래 agent worktree 같은 무시되는 directory가 더 이상 결과를 바꾸지 않는다.
-
 - T12.2.1-2: markdown table의 모든 외래 key는 하나의 column이며 어떤 table의 단일 column primary key를 가리킨다.
   composite 외래 key, 또는 unique이지만 key가 아닌 column을 가리키는 외래 key는 그 외래 key의 위치에 놓인
   `catalog` 진단이다. 행으로의 link는 그 행의 단일 column key만 가진다.
-
 - T12.2.2: `files` 저장이 행마다 `<table>/<key>.flowmark.md` 파일 하나를 parse하고 render한다. H1
   제목(`\#` escape 포함), 저장되는 scalar column의 field list(읽을 수 있는 값 형식), 본문, nullable
   markdown column의 level-2 section, 외래 key의 link(목표는 `Linker`가 준다)를 다룬다. literal은 고정된
@@ -212,7 +191,6 @@
   `corpus.walk`다. key 규칙을 깨는 key는 `format.block`이고, 규칙이 거절하는 쓰기는 `CONSTRAINT`다. child
   block section은 T12.2.4가 읽기 전까지 `format.section`이다. golden fixture는 byte 단위로 round-trip하며,
   parse와 emit은 fuzz한다.
-
 - T12.1-2: 상세 heading은 `<h> <table> row <key>`이고 anchor는 `<table>-row-<소문자 key>`다. 여러 부모 아래
   반복되는 block이나 markdown column heading은 더 이상 상세 anchor를 가져갈 수 없다(`items-1`은 `items row 1`이
   아니다). key는 `--`를 담지 않고 `-`로 끝나지 않는다. 상세 anchor는 GitHub slug의 두 중복 처리(github-slugger와
@@ -220,7 +198,6 @@
   `format.block`이고, 공백이 다른 표기는 `format.noncanonical`이다. link는 GitHub식 heading slug를 쓰는 viewer에서
   이어진다고 명시한다. catalog의 same-file 이름 규칙은 철회한다: markdown column이나 block table은 같은 file의
   다른 table과 같은 이름일 수 있다. 자식 table이 부모의 markdown column과 같은 이름이면 거절하는 규칙은 남는다.
-
 - T12.2.1-1: catalog는 `.dbs` 집합만 읽는다. `dbspec/flowmark.json`과 그 `translations` 필드를
   settings reader, Catalog API의 `Translations` 필드와 함께 제거한다. `dbspec/`의 다른 항목, 즉 다른
   이름의 file이나 folder는 모두 `catalog` 진단이며, 숨김 항목은 건너뛴다. spec 30의 이름 규칙을
@@ -229,7 +206,6 @@
   같은 file에 상세 section이 올 수 있는 다른 table(document table과 그 block 후손, files table의
   block 후손)과 같은 이름의 markdown column 또는 block table은 schema 오류다. 이름 비교는 대소문자를
   무시한다. fixture catalog는 더 이상 `dbspec/flowmark.json`을 갖지 않는다.
-
 - T12.1-1: spec이 읽을 수 있는 문서 판정을 명시한다. corpus 문서는 평범한 markdown 문서로 읽히는
   `*.flowmark.md` file이며 comment, frontmatter, doc-id, provenance, twin marker가 없다. `files` 행은
   `<table>/<key>.flowmark.md` file이고 key가 file 이름이며, key는 이식 가능한 file 이름이자 anchor다.
@@ -238,9 +214,7 @@
   `corpus.walk`를 정하며, spec 30은 `dbspec/flowmark.json`을 철회하고, sync provenance는 문서 밖으로
   옮긴다(open question 5). design plan, spec 00, spec 80은 철회된 흔적을 지우고, 계획은 polyspec
   스택의 board 앱을 더하고 Wails 예제 host를 유지한다.
-
 - T2.5-1: corpus golden 테스트가 네 개의 고정 디렉터리 밖의 모든 markdown 파일 대신 `config/documents.json`이 고른 문서를 읽는다. `make documents-check`와 같은 선택을 쓴다. 패키지의 `testdata` 디렉터리 아래 markdown fixture가 더는 `go test ./codec/`을 깨지 않으며, `config/documents.json`은 `**/testdata/**`를 문서에서 제외한다.
-
 - T12.2.1: `catalog` package가 corpus root의 catalog를 적재한다. orm의 `engine/dbspec`으로 `dbspec/*.dbs`
   집합을, `dbspec/flowmark.json` 번역과 함께 읽으며, spec이 명한 각 경우를 위치가 정해진 진단으로 거절한다:
   catalog 없음, `store` 없는 table, 복합 key, `aes`/`aes_version`/`blind_index`, `audit`/`immutable`,
@@ -249,53 +223,41 @@
   markdown column과 state machine을 가진다. glyph 표기를 바로잡는다: spec 100, spec 30과 markdown database
   계획은 checkbox glyph를 `'[ ]'` 등 대신 대괄호 사이의 한 글자(`waiting ' '`, `doing '~'`, `done 'o'`,
   `bypassed '!'`, `impossible '-'`)로 쓴다. orm의 `checkbox` setting이 정확히 한 글자를 받기 때문이다.
-
 - T12.1: 판정과 spec을 markdown database 계획 위에서 다시 쓴다. flowmark가 엔진이고 orm은 `markdown://`으로
   IR executor로서 접속한다. `dbspec/` catalog가 유일한 schema이고, 각 table은 `files`, `document`,
   `block` 저장을 선언하며, key는 불투명하다. canonical format은 행 scope, 섹션, list field, table cell을,
   operations는 server, session, commit 순서, 실패 code를, constraints는 이력·빈틈·사슬·repair를 갖는
   상태기계를 고정하며, `flowmark.dbs`가 응용 schema다. design plan은 revision 3을 기록하고 문서 안
   Mermaid authority(T8.5)는 철회한다.
-
 - T8.4-3: `go vet`이 예전 write path를 통과한다. `MoveItem`은 옮길 줄을 `append` 한 번으로 복사하며,
   T8.4가 더한 값이 없는 두 번째 `append`는 제거한다.
-
 - T8.4-2: repository는 빌드된 실행 파일을 추적하지 않는다. repository 루트의 `go build`가 쓴 루트의
   `flowmark`는 index에서 빠지고 ignore되며, `make build`는 `build/flowmark`에 쓴다.
-
 - T10-5: plugin repository는 빌드된 실행 파일을 추적하지 않는다. 16 MB example host binary는
   ignore하고 `go build -o example .`로 다시 만든다. 변경은
   plugin repository에 있다.
-
 - T10-4: 새 이슈 row는 column 맨 아래에 고정된다. 카드 목록이 column을 채우고 자기 안에서 스크롤
   하므로 카드가 몇 개든 row가 계속 보인다. 변경은 plugin repository에 있다.
-
 - T10-3: 보드의 모든 column이 가장 붐비는 column의 높이가 아니라 보드의 전체 높이를 쓰고, 카드가
   넘치면 자기 안에서 스크롤한다. 변경은 plugin repository에 있다.
-
 - T10-2: 새 이슈 row는 column의 마지막 카드 바로 아래에 따라오고 column 전체가 drop을 받는다.
   카드 목록이 column을 채우지 않아 늘어난 column에도 틈이 없다. 변경은 plugin repository에 있다.
-
 - T10-1: 보드는 문서가 갖지 않은 상태를 보여주지 않는다. 거절된 drop(done → doing, 또는
   evidence가 필요한 edge)이 카드를 drop한 column에 남기고 markdown은 상태를 지켰다. plugin은 이제
   옮기기 전에 drop을 판정하고, 모든 operation 뒤에 문서에서 다시 그리며, 빈 답에 column을 비우고,
   changed event에 state machine을 다시 읽는다. 변경은 plugin repository에 있다.
-
 - T7.3-3: sidecar 답은 온전한 한 줄로 남는다. watcher의 poll goroutine과 요청 loop가 lock 없이
   하나의 buffered stream에 썼기 때문에 push된 changed event가 답 줄을 찢을 수 있었고, 그러면
   page가 답 하나와 corpus에 대한 view를 잃었다. 이제 하나의 lock이 stream을 지키고, session
   종료도 그 lock 아래서 flush하며, root의 fingerprint 기준선은 surface를 watch할 때 — 첫 답보다
   앞서 — 잡아 그 답 직후의 편집도 감지한다.
-
 - T7.1-1: `flowmark items`가 sidecar가 섬기는 것과 같은 항목을 출력한다: path·assignee·due로
   끝나는 6개 tab column. executor 행이 path를 직접 실어 sidecar는 documents join을 버린다.
-
 - T8.6: write path가 table 형식을 섬긴다. 항목이 table에 사는 문서가 list 형식과 같은
   명령을 받는다: transition이 문서 자신의 edge대로 state cell을 다시 쓰고 add가 자동
   ID로 행을 더하며(NextID가 table 행을 읽는다) edit이 title cell을 고치고 move가 행
   순서를 바꾸고 remove가 행을 지운다. 문서당 하나의 문법 — checklist 행과 items
   table의 혼재는 거부한다.
-
 - T11: 항목이 사람과 날짜를 가진다. 항목 title은 `@assignee`와 `YYYY-MM-DD` 마감으로 끝날 수
   있고 — codec이 끝 token을 title에서 분리한다 — 문서는 `id`와 `name` column을 정의하는 사람
   table을 가진다. 첫 행이 owner다: 담당자 없는 항목은 owner의 것이다. `All("items")`이
@@ -304,17 +266,14 @@
 - T11 정정: 사람 table은 선언된 사람의 registry이지 owner 선언이 아니다 — 빈 담당자는
   self로 읽히고 board는 이름을 추측하지 않는다. 담당자는 하나의 일관된 형태로 id(`@max`)를
   보여주고 마감은 시간을 가질 수 있다(`YYYY-MM-DDTHH:MM[:SS]`, zone 선택).
-
 - T4.3: 항목은 table 형태로도 존재한다. header row가 state·id·title column을 정의하는 markdown table이
   그 문서의 항목 목록이다 — 문서가 쓴 header가 정의다 — 그리고 `All("items")`이 행 순서대로 행을
   반환한다. codec이 모든 data row의 절대 줄을 기록해 write path가 그들을 지목할 수 있다.
-
 - T8.5: 문서의 Mermaid block이 유일한 transition 권위다. Transition이 edge·필수 evidence·glyph를
   문서 자신의 state machine에서 읽고 — 선언되지 않은 edge는 거부된다 — AddItem이 `[*]` 줄이 가리키는
   상태에 새 항목을 놓으며, WIP gate가 상태 이름과 무관하게 kit glyph `[~]`를 `[o]`에 대해 세고,
   ApplySchema가 Mermaid block 자체를 다시 쓰고, 내장 5상태 table·frontmatter schema reader·쓰이지
   않는 문서 기반 wrapper·죽은 corpus mermaid walker는 사라진다.
-
 - T1.0: 저장소가 문서 쌍(README, AGENTS, CHANGELOG), `.flowmark/` ignore 규칙, 이 실행 checklist
   쌍과 함께 bootstrap된다.
 - T1.1: 설계 계획이 3개 lane의 적대 감사를 판정으로 접는다 — orm 안의 executor seam, 2절 멱등성,
@@ -352,7 +311,9 @@
 - T2.3: child block이 row로 추출된다 — kit grammar의 checklist 항목(상태·ID·제목·연속 줄)과 markdown table(header·cell) — unfenced payload에서만. malformed 항목은 located 거부다. T2가 완료된다.
 - T3.1: corpus validator가 문서 directory를 검사한다 — strict parse finding, corpus 전체의 doc-id·item ID 유일성, 산문의 모든 task-ID token(fenced block·inline code 제외)의 item 해석.
 - T3.2: go run ./cmd/flowmark validate .
+
 [validate] the corpus passes이 config/documents.json의 선택으로 corpus directory 위에서 를 실행하고 이 저장소의 corpus가 통과한다. T3가 완료된다.
+
 - T4.1: executor가 corpus row 위에서 one·all·count를 실행한다 — 첫 table로 documents와 checklist items — where predicate·ordering·limit와 함께. task-ID ordering은 segment별 숫자라 `T8.0.9`가 `T8.0.10` 앞에 오고 suffix는 base를 따른다.
 - T4.2: executor가 sum·avg·group_count·paginate를 실행한다 — 숫자 아닌 값 거부와 함께 정수 aggregate, 값별 count, total을 동반한 page. T4가 완료된다.
 - T8.1: application이 전환 table을 인코딩한다 — done은 terminal, 우회는 원인과 재시도 조건을, 불가는 원인을 요구 — 다섯 상태는 kit glyph에 대응하고 superseded 생성은 `T8.0.14-1`, `T8.0.14-2`로 번호를 매긴다.

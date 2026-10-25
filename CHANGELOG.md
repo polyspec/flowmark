@@ -3,6 +3,7 @@
 
 ## Unreleased
 
+- make duplication-check passes: the Go tests share their corpus, fixture, request, recorder and table helpers through internal/corpustest, internal/tabletest, internal/ucd and journal.Recorder, and the repeated library pieces are one function each (ops.ServeLines, Corpus.RunJSON and RunText, catalog Table.Placement and Diagnostic.String, store Row.BlockNames and FoldASCII) (T15-17).
 - The token and holder tests check the behavior on macOS with no branch on the platform, so make divergence-check passes (T15-16).
 - config/dependency-policy.json declares the PHP platform of the board example and the npm locks of flowmark, so make dependency-policy-check passes (T15-15).
 - config/rebuild.json classes the tool sources of flowmark, its scripts and the board example, so make rebuild-check passes (T15-14).
@@ -109,42 +110,28 @@
 - T12.1-15: the specifications decide whether a state machine of a block table may `require` a column. A required column that the state table and the history table both declare `markdown` is a section of the history rows, so the depth rule refuses a layout that puts it past H6, at the history table's name. A required column that neither table declares `markdown` is a cell and is allowed at any depth. A required column that only one of the two tables declares `markdown` is a schema error at the history table's name: a history row holds a copy of the value, and a section and a single-line place accept different values. The catalog checks the mismatch in `checkHistoryMarks`; `TestLoadRequireOfMarkdownPastH6` pins the rulings and was red before the check. Spec 30 and spec 100 state them, with their grounding, in English and Korean.
 - T12.1-12: the specifications state the calls the `document` codec made without a rule, and the codec follows them. The rows of a document file stand directly under the H1 with no blank line between them, and any blank line there is `format.noncanonical`; the delimiter row is `| --- | --- |`, a GFM delimiter form that differs is `format.noncanonical`, and anything else is `format.block`; a table name in a detail heading may differ in case (`format.noncanonical`), another table's name is `format.block`, and the key stays case-sensitive; a detail section takes the row whose key it names byte for byte; a title token matches a declared column by prefix, a matching token that another token follows is `format.noncanonical` and one that ends the title is `format.block`, the title escapes every matching token and keeps the white space between its tokens, a tab included; a tab that ends a list title before a field is `format.noncanonical`; a tab after the list marker is `format.block`, since it moves the item's content indent. A refused write is located in the request, not in a file: each refusal names its table, key, index among the rows given, column and rule, with `store.Refusal` replacing the line-located diagnostics of `RenderFile` and `RenderDocument`. A key shared byte for byte carries its index, of a pair equal only without regard to case, the spec refuses the row the write introduces (the executor's check, T12.4); the codec's backstop refuses the greater key in byte order; sibling-order and cycle faults are per row, and a dangling parent has its own fault only. `RenderFile` also returns an error for a table that is not a files table. The read side locates a writer refusal at the element the parser read for it (the title, a field, a section or the body of its row), with its row and column in the message; a whole-row fault is at the row's first line. A table or `row` name in a detail heading is compared after lowercasing, as the viewers lowercase it. `catalog.Diagnostic` is unchanged. The spec states the commit-level refusal of a rewrite that has a read diagnostic, and the key checks that the executor runs before rendering (T12.4); neither is implemented here.
 - T12.1-13: the specifications state the calls the block codec made without a rule, and no longer disagree. A `parent` of a block or document row names a row of its own block, not of its file: a parent in another block is `CONSTRAINT` on write and `format.block` on read, and the read no longer adds a false `parent.cycle`. A blank line after a block heading is `format.noncanonical` in any count, and a line of only spaces or tabs counts as one; a child block stands once in its row scope, a second one being `format.section`; a detail key shared by blocks of two rows is assigned by its block; a block row links its own `files` row by the file name, derived from that file's key. The codec follows each ruling: the blank-line rule skips every blank line under one diagnostic, and the link to a file's own row is derived without the linker, so a render no longer refuses it as `FOREIGN_KEY`. The writer refuses a parent that names no row once, as `CONSTRAINT`, without the false `parent.cycle` it used to add beside it.
-
 - T12.2.5: a storage-equivalence dataset under `store/testdata/equivalence`: the `entries` table of five rows is stored in five corpora, each with its own catalog: as files (one file per row), as a document list and a document table (`entries.flowmark.md`), and as a block list and a block table under the `plans` of a files table. The five catalogs declare the same columns, the block corpora adding only their placement foreign key `plan`. The rows cover a title, a non-empty and an empty body, a nullable summary section that is absent, present and empty, scalars of text, int, bool and date with NULL values, and a self foreign key `parent` hierarchy, which is the indentation in the list corpora and an explicit `parent` column in the table corpora, with a row that has no detail section. The test requires the five corpora to parse to the same rows on every shared column, NULL included, and each storage to round-trip its rows and its golden bytes. The file and document fuzz targets take the goldens of the dataset as seeds, each corpus selected by a byte.
 - T12.2.4-1: the store fixture has a block of `list` storage whose table has a state machine: `item_checks` under each items row, with a checkbox glyph for each of its three states, nested rows, an order column, and a `history` block (`item_check_history`) inside the detail section of its rows. Accepting and rejecting cases pin each rule it exercises, the items golden holds its P1 and P2 round trip, and the fuzz targets are seeded with that golden. The heading-depth rule of the catalog refused the history block at level 7, although its rows write no heading there; the rule now refuses a layout only when its rows write a heading past H6, as spec 30 states. A level-7 row with a body alone is valid, and a markdown column at level 7 stays refused.
-
 - T12.2.2-6: the `files` and `document` codecs apply the detail-anchor collision rule of spec 10. A heading that is not a detail heading is refused when its fold (F_G or F_M, with a final run of digits removed) equals the fold of a detail anchor. An attribute list that sets the id of an anchor, and an HTML `id` or `name` equal to an anchor, are refused too, compared without regard to case. A write that introduces a collision is `CONSTRAINT`, naming the other heading; a duplicate key stays `DUPLICATE_KEY`. A read of a collision is `format.block`. Headings come from the CommonMark block structure, nested ones included, and the inline text from a minimal reader of links, emphasis, code spans, entities and raw HTML, checked against commonmark.js 0.31.2. The module adds `golang.org/x/text` v0.42.0 as a direct dependency for `norm.NFKD`: the folds need the decomposition of Unicode 17.0.0, which the standard library lacks, and a test pins `norm.Version` to 17.0.0. `internal/htmlentity` holds the named references of the `entities` 3.0.1 data, generated from it and checked fresh by a test.
-
 - T12.2.2-5: the heading scanner reads an ATX heading whose `#` run is followed by a tab, as CommonMark 0.31.2 does; the end of the line was already read. A tab after the hashes is a noncanonical spelling of a title, section, block or detail heading (`format.noncanonical`), and the scanner, the section boundaries and the detail-heading parsing all follow the same reading. `##x` and a run of seven `#` stay text. Spec 10 names the tab in the detail heading rule.
-
 - T12.2.4: the `block` storage codec parses and writes the child blocks of a row. A block is a section at the level of its parent's sections: a `files` row holds its blocks at level 2 after its markdown sections, and a `document` or block row holds them in its detail section, in table name order. A block is its list or table, followed by the detail sections of its rows, recursively. A block with no rows is not written, and an empty block heading is `format.noncanonical`. A block row carries no placement foreign key, which its nesting implies; `Row.Blocks` holds each block's rows in storage order. A write refuses an undeclared block, rows of another table, and a placement key assigned to a block row. The T12.2.3 write guard and read refusal are removed, and `sp`, which the production codec used, moves from a test file into `store/row.go`.
-
 - T12.2.3: the `document` storage codec parses and writes `<table>.flowmark.md` for the list and the table shapes: the H1, the rows under it (a list row with its glyph, key, title and fields parsed from the right with their escapes, and indentation as `parent`; a table row with its key first, its cells with the pipe escape, NULL and the empty text), and the detail sections `## <table> row <key>` with their body and sections in storage order. `order` is filled with the 1-based sibling position on read and taken as exactly 1..m per sibling group on write; the writer orders the rows itself and never refuses unsorted input. Foreign keys are links through the linker, and a dangling link keeps its written target. Until T12.2.4 a write refuses a table whose catalog declares a child block, with an error that names the table, the block and T12.2.4, so that no write drops the block's rows; a read refuses a detail section that holds a child block section with the same naming. A temporal value written `now` is not of its type: it is kept as written on read and refused on write, while a text value `now` is text. The rules have accepting and rejecting cases, the three goldens are P1 and P2, and the parse and render fuzz targets are seeded with them.
-
 - T12.2.2-4: the `files` codec applies the invisible-character rule of spec 10 to the H1 title and to a field-list value. An invisible character at either end is refused on write as `CONSTRAINT`; on read a space or a tab that CommonMark strips is `format.noncanonical`, and any other invisible character at an end is `format.block`. The invisible characters are the White_Space characters other than U+1680, the controls, the format characters other than the prepended concatenation marks, and the Default_Ignorable_Code_Point characters; the last come from a table generated from the Unicode 17.0.0 data file and checked fresh by a test. List rows and table cells follow in T12.2.3.
-
 - T12.1-11: the specifications and the plan state the read side of an open block as it is. The lines that a fence or an HTML block left open takes in are the value's text on read, since under the CommonMark block structure they are no boundary and a viewer shows them inside the block; only the write that places an element after such a block is `CONSTRAINT`. The `format.block` read clause of an open block is withdrawn, as no reader can observe that fault, and the open top-level fence sentence reads consistently with this rule.
-
 - T12.2.2-3: the `files` codec applies the open-block rule of spec 10 on write: a value that leaves a fence or an HTML block open before the element that follows it, which that element would be taken into, is `CONSTRAINT`. The block scanner reads HTML blocks of types 6 and 7 as CommonMark 0.31.2 does, a type 7 block not interrupting a paragraph, and a block left open inside a list item that a top-level heading closes is no fault.
-
 - T12.1-9: the specifications and the plan refuse an invisible character at either end of a single-line value: one with the Unicode White_Space property other than U+1680, a control (Cc), a format character (Cf, including U+FEFF) other than a Prepended_Concatenation_Mark, or a Default_Ignorable_Code_Point, under Unicode 17.0.0. Such a character renders with no glyph, so a reader cannot see it; U+1680 and the prepended concatenation marks render with a glyph and are text. The viewers strip different sets of them at the edges, so refusing every one keeps each viewer's display the text of the value, whatever the viewer's version. The canonical separators stay the space. On read, a space or a tab at an end, which CommonMark strips, is `format.noncanonical` (a tab ending a list title before a following token is `format.block`), and any other invisible character at an end is `format.block`, since the write rule cannot produce it again. This replaces the space-and-tab definition of T12.1-8, and the framing blank line is spelled out as a line of only spaces and tabs.
-
 - T12.1-7: the specifications ground the setext rule. A setext heading is of level 1 or 2 and every row scope's level L is at least 2, so no setext underline lies deeper than L; the setext refusal of spec 10 therefore covers every top-level setext heading in a value, and the plan states the same grounding.
-
 - T12.1-10: the specifications state one rule for section boundaries and value ends, the CommonMark 0.31.2 block structure. A top-level heading is an ATX heading or a setext heading closing a top-level paragraph; fences, HTML blocks of every type (1 to 7), containers, lazy continuation lines and the interruption rules count as CommonMark states them. A value that leaves a fence or an HTML block open is refused only when the following element would be taken into it, and a block left open inside a container that a following top-level element closes is no fault. This replaces the narrower sentences of T12.1-6 and T12.1-8.
-
 - T12.2.2-2: the block scanner reads CommonMark containers. A heading inside a list item (by the content indent of
   the item, ordered and tab-indented ones included) or a block quote, a line inside a fence, and a line inside an HTML
   block of types 1 to 5 are not section boundaries; only a top-level heading ends a body. A setext underline is a
   heading only when it closes a top-level paragraph, and a lazy continuation line is paragraph text, as CommonMark
   0.31.2 reads it.
-
 - T12.1-8: the specifications state the read rules the `files` codec needed. A value that leaves an HTML block of
   CommonMark types 1–5 open before a following element is `format.block` on read, as it is `CONSTRAINT` on
   write; an open fence cannot precede an element on read, since a heading inside it is no boundary. A title whose decoded text is empty or ends in `\#` is `format.block` on read, since the write rule
   cannot produce its H1 again. A line ending is LF, CRLF or a bare CR as CommonMark reads it, and a CR in any of
   them is `format.noncanonical`. White space in the single-line rules is the space and the tab.
-
 - T12.2.2-1: the `files` codec and store follow the T12.1-3 and T12.1-4 rulings. An H1 title reads a final `\#`
   as `#`, is written with its last `#` escaped when its final hash run follows a space or a tab or is the whole
   title, and a title ending in `\#` is `CONSTRAINT`. A markdown value that begins or ends with a blank line, or
@@ -155,7 +142,6 @@
   read (a raw text, a written target) for the validator's `type`, `reference.dangling` and `key.duplicate`. A key may
   end with `-` and holds no `-_`. White space that rendering drops around a single-line place is
   `format.noncanonical`. A body line directly after the field list is `format.block`.
-
 - T12.1-6: the specifications answer the questions of T12.1-3. A regular file or a symlink at a `files` table's
   place is `corpus.walk`, and the table is unavailable; a missing folder stays an empty table. The first body or
   section of a `files` row without a field list follows the H1 after exactly one blank line. A value that leaves a
@@ -164,7 +150,6 @@
   byte, a whole-file or `corpus.walk` fault is at line 1, column 1, and `catalog` columns count code points, as
   orm's dbspec does. A whole-file delete is exempt from the rewrite refusal, since removing a file rewrites none of
   its bytes.
-
 - T12.1-5: the specifications state the rulings the `document` codec needed. `now` is dbspec's keyword for the
   current time in a `datetime` default and is never stored: a temporal value written `now` is not of its type, and a
   text `now` is text. A table row out of storage order is `format.noncanonical`; a `parent` cycle among a file's rows
@@ -177,7 +162,6 @@
   `format.block`. A value holds no setext heading, and a value that leaves a fence or an HTML block open is
   `CONSTRAINT` when an element follows. The catalog rejects a list storage of a state machine without a checkbox;
   dbspec already rejects a nullable state column.
-
 - T12.1-4: the specifications state the detail-anchor, key and identity rulings. A detail heading's
   anchor is checked against the headings of its file under two folds of the heading's rendered inline
   text. F_G, for GitHub, GitLab and VS Code, removes every character that is not a letter or a decimal
@@ -195,7 +179,6 @@
   is refused. The primary key of a markdown table is an integer, `bool`, `varchar`, `uuid` or `date`
   column, and the catalog rejects any other type at the table; `identity` is allowed only on an `i64` key,
   which dbspec already enforces and the catalog tests pin. A key's date range is 0001 to 9999.
-
 - T8.4-4: `TestAddWithoutPathOnEmptyCorpus` passes on every run. The test assumed the add answer
   comes before the watcher's change event, but the order is not defined: the watcher reports the
   add's own write, and a sidecar may push change events at any time. The test now asserts that the
@@ -203,17 +186,13 @@
   `Serve` also no longer returns while a poll goroutine can still write to the output: `stop` waits
   for the poll loops, which removes a data race that `go test -race` reported on the output buffer,
   and a poll loop ends at once when stopped instead of finishing its wait between two polls.
-
 - T12.1-3: the specifications state the rulings the `files` codec needed. On read, a missing non-null field or section, a single-line value that renders differently from its text beyond its inline markdown, a `files` body opening with a `-` item, and a `files` body whose first line is indented by two or more columns (spaces, or a tab) after a field list are `format.block`; white space that rendering drops around a single-line place is `format.noncanonical`; a BOM or a CR is `format.noncanonical`, and invalid UTF-8 or a U+0000 is `format.encoding`. The same read faults are `CONSTRAINT` on write. A value not of its column type, a dangling foreign key and a key equal to another without regard to case are validator rules (`type`, `reference.dangling`, `key.duplicate`); the writes that introduce a dangling key or a duplicate are `FOREIGN_KEY` and `DUPLICATE_KEY`. A non-null `markdown` column other than the body is always a section. A title whose final `#` run follows a space or a tab, or that is only `#`, writes its last `#` as `\#`, and a title ending in `\#` is refused. A markdown value never begins or ends with a line feed. The blank line after a field list stands only before a non-empty body or a section, and a document ends with one LF. A logical write that rewrites a file with a `format.*` diagnostic is refused as `CONSTRAINT`, naming `flowmark canon` when the diagnostic is `format.noncanonical`; spec 40 adds `flowmark canon`, the one operation that normalizes document bytes, and refuses a commit that must rewrite a file with a `format.*` diagnostic, exempting `flowmark canon` for its targets, the add-column migration for the diagnostics the added column causes, and a delete of a whole `files` row file; a table holding such a file is unavailable to the requests and checks that need its rows; `flowmark install` adds `*.flowmark.md text eol=lf` to `.gitattributes`; a missing table folder is an empty table; a typed scalar is written in its canonical form. A table holds every file its rows may be in, a block table including its placement parent's files; two rows with byte-for-byte equal keys make the table unavailable; a request that evaluates a value of the wrong type fails as `CONSTRAINT`; an export that needs an unavailable table fails and writes nothing. A `corpus.walk` entry at a table's place, or a suffix in another case, makes that table unavailable until a human repairs the corpus, and the table is then available again on the next read; a `type` diagnostic fails a commit only where a constraint check must evaluate the value, and an export that reads it fails. The `files` codec test cases name the spec section they pin.
-
 - T1.3-1: the reference check reads the files of the checkout that Git does not ignore, through
   kit's `trackedFiles`, as the kit checks do. Ignored directories such as the agent worktrees under
   `.claude/worktrees/` no longer change its result.
-
 - T12.2.1-2: every foreign key of a table is one column that references the one-column primary key
   of a table. A composite foreign key, or one referencing a unique non-key column, is a located
   `catalog` diagnostic at the foreign key. A link to a row has only the row's one-column key.
-
 - T12.2.2: the `files` storage parses and renders one `<table>/<key>.flowmark.md` per row: the H1
   title with its `\#` escape, the field list of the stored scalar columns in their readable value
   forms, the body, the level-2 sections of the nullable markdown columns, and foreign keys as links
@@ -225,7 +204,6 @@
   rules is `format.block`; a write the rules refuse is `CONSTRAINT`. A child block section is
   `format.section` until T12.2.4 reads it. The golden fixtures round-trip byte for byte, and parse
   and emit are fuzzed.
-
 - T12.1-2: a detail heading is `<h> <table> row <key>` with the anchor `<table>-row-<lowercased key>`,
   so a block or markdown-column heading repeated under several parents can no longer take a detail
   anchor (`items-1` is not `items row 1`). A key holds no `--` and does not end with `-`. A detail
@@ -234,7 +212,6 @@
   spelling is `format.noncanonical`. Links are stated to resolve in viewers with GitHub-style heading
   slugs. The catalog's same-file name rule is withdrawn: a markdown column or a block table may be
   named like another table of its file; the child-named-like-markdown-column rule stays.
-
 - T12.2.1-1: the catalog reads only the `.dbs` set. `dbspec/flowmark.json` and its `translations`
   field are removed, with the settings reader and the `Translations` field of the Catalog API. Any
   other entry in `dbspec/`, a file of another name or a folder, is a `catalog` diagnostic; hidden
@@ -244,7 +221,6 @@
   table named like another table whose detail sections stand in the same file (a document table
   with its block descendants, or the block descendants of a files table) is a schema error. The
   name comparison ignores case. The fixture catalog no longer carries `dbspec/flowmark.json`.
-
 - T12.1-1: the specifications state the readable-document ruling. A corpus document is a
   `*.flowmark.md` file that reads as an ordinary markdown document, with no comment, frontmatter,
   doc-id, provenance or twin marker. A `files` row is the file `<table>/<key>.flowmark.md` and its
@@ -255,9 +231,7 @@
   `dbspec/flowmark.json`; the sync provenance moves out of the document (open question 5). The
   design plan, spec 00 and spec 80 drop their withdrawn leftovers, and the plan adds the board
   app on the polyspec stack and keeps the Wails example host.
-
 - T2.5-1: the corpus golden test reads the documents `config/documents.json` selects, through the same selection as `make documents-check`, instead of every markdown file outside four hard-coded directories. A markdown fixture under a package's `testdata` directory no longer breaks `go test ./codec/`; `config/documents.json` excludes `**/testdata/**` from the documents.
-
 - T12.2.1: the `catalog` package loads the catalog of a corpus root. It reads the `dbspec/*.dbs`
   set with orm's `engine/dbspec` and the `dbspec/flowmark.json` translations, and rejects each
   case the spec names as a located diagnostic: a missing catalog, a table without `store`, a
@@ -268,7 +242,6 @@
   spec 100, spec 30 and the markdown database plan write each checkbox glyph as the one character
   between the brackets (`waiting ' '`, `doing '~'`, `done 'o'`, `bypassed '!'`, `impossible '-'`)
   instead of `'[ ]'` and its siblings, since orm's `checkbox` setting takes exactly one character.
-
 - T12.1: the rulings and specifications are rewritten on the markdown database plan. flowmark is
   the engine and orm reaches it as an IR executor by `markdown://`; the `dbspec/` catalog is the
   only schema; each table declares a `files`, `document` or `block` storage; keys are opaque; the
@@ -276,51 +249,40 @@
   server, sessions, the commit order and the failure codes; constraints pin the state machine
   with its history, gap, chain and repair; `flowmark.dbs` is the application schema. The design
   plan records revision 3 and the in-document Mermaid authority (T8.5) is withdrawn.
-
 - T8.4-3: `go vet` passes over the old write path. `MoveItem` copies the moved lines with one
   `append`; the second `append` with no values that T8.4 added is removed.
-
 - T8.4-2: the repository tracks no built executable. The root `flowmark`, written by a
   `go build` in the repository root, leaves the index and is ignored; `make build` writes
   `build/flowmark`.
-
 - T10-5: the plugin repository tracks no built executable. The 16 MB example host binary is
   ignored; `go build -o example .` regenerates it. The change lives in the plugin repository.
-
 - T10-4: the new-issue row is pinned to the bottom of its column. The card list fills the
   column and scrolls inside itself, so the row stays visible however many cards the column
   holds. The change lives in the plugin repository.
-
 - T10-3: every board column takes the full height of the board instead of the height of the
   busiest column, and scrolls inside itself when its cards overflow. The change lives in the
   plugin repository.
-
 - T10-2: the new-issue row follows the last card of its column and the whole column takes a
   drop; the card list no longer fills the column, so a stretched column leaves no gap. The
   change lives in the plugin repository.
-
 - T10-1: the board never shows a state the document does not hold. A refused drop (done →
   doing, or an edge that needs evidence) left the card in the column it was dropped on while
   the markdown kept its state; the plugin now judges a drop before moving anything and redraws
   from the document after every operation, clears the columns on an empty answer and re-reads
   the state machine on a changed event. The change lives in the plugin repository.
-
 - T7.3-3: the sidecar answers stay whole lines. The watcher's poll goroutine and the request
   loop wrote to one buffered stream without a lock, so a pushed changed event could tear an
   answer line — the page then lost an answer and its view of the corpus. One lock now guards
   the stream, the session end flushes under it, and a root's fingerprint baseline is taken when
   the surface is watched, before its first answer, so an edit right after that answer is seen.
-
 - T7.1-1: `flowmark items` prints the same item the sidecar serves: six tab-separated columns
   ending in the path, assignee and due. The executor rows carry the path directly, so the
   sidecar drops its documents join.
-
 - T8.6: the write path serves the table form. A document whose items live in a table gets the
   same commands as the list form: a transition rewrites the state cell by the document's own
   edges, an add appends a row with the auto ID (NextID reads table rows), an edit rewrites the
   title cell, a move reorders the row lines and a remove deletes the row. One grammar per
   document — checklist lines and an items table together are refused.
-
 - T11: items carry people and dates. An item title may close with `@assignee` and a
   `YYYY-MM-DD` due date — the codec splits the closing tokens from the title — and a document
   holds a people table by naming `id` and `name` columns. The first row is the owner: an item
@@ -331,19 +293,16 @@
   declaration — a blank assignee reads as self and the board never guesses a name; the
   assignee shows as its id (`@max`) in one consistent form, and a due may carry a time
   (`YYYY-MM-DDTHH:MM[:SS]` with an optional zone).
-
 - T4.3: items also live in table form. A markdown table whose header row names the state, id and
   title columns is the document's item list — the header the document writes is the definition —
   and `All("items")` returns its rows in row order; the codec records the absolute line of every
   data row so a write path can address them.
-
 - T8.5: the Mermaid block of the document is the only transition authority. Transition reads the
   edges, the required evidence and the glyphs from the document's own state machine — an
   undeclared edge is refused — AddItem lands a new item in the state the `[*]` line names, the
   WIP gate counts the kit glyphs `[~]` against `[o]` regardless of the state names, ApplySchema
   rewrites the Mermaid block itself, and the built-in five-state table, the frontmatter schema
   reader, the unused document-driven wrappers and the dead corpus mermaid walker are gone.
-
 - T1.0: the repository bootstraps with its document pairs (README, AGENTS, CHANGELOG), the
   `.flowmark/` ignore rule and this execution checklist pair.
 - T1.1: the design plan folds the three-lane adversarial audit into rulings — the executor seam
