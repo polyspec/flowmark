@@ -1,9 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: f62030a8065ed589b3eb26480f3c73b62b8e9a94a6941b1ea9919378c4c89f9d -->
+<!-- source-sha256: 595cb8a8a675279a9fc4d184964159c1edef6ce468ba6b3e2530436c137d04a7 -->
 # Changelog
 
 ## Unreleased
 
+- commit-msg-check는 check-commits를 $(KIT_EXT)로 실행하므로, commit hook은 kit이 dist를 실행하든 source를 실행하든 KIT의 tool을 실행한다(kit K613)(T15-3).
 - T16: flowmark가 ORM의 parameterized root page limit을 받는다. 정확한 IR commit을 고정하고, corpus를 읽기 전에 i64 parameter를 검증하며, page 행에 적용하고 `paginate` count는 모든 일치 행으로 유지한다. (T16)
 - flowmark가 kit 표준 0.0.54를 따른다: Go module은 `packages/go`에, plan은 `docs/plans/<plan>/`에 있고, check와 gate는 kit의 것이다 (T15).
 - T12-7: prose의 다른 repo task ID를 코드 span으로 쓴다. 그래서 make refs-check가 orm 항목을 flowmark task로 읽지 않는다.
