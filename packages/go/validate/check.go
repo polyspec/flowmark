@@ -73,6 +73,15 @@ func RowOperands(tb *catalog.Table, r *store.Row, parent *store.Row) func(column
 	}
 }
 
+// columnName is the column that the operand x of a check of table tb names; the catalog validated that it is one.
+func columnName(tb *catalog.Table, x dbspec.Expr) string {
+	ref, ok := x.(dbspec.ColumnRef)
+	if !ok {
+		panic(fmt.Sprintf("validate: a check of table %s tests %T, which is not a column", tb.Name, x))
+	}
+	return ref.Name
+}
+
 // EvalCheck evaluates the check predicate e of table tb over the operands values
 // returns, in SQL's three-valued logic. An atom — a comparison or an in — with a
 // NULL operand is unknown; otherwise an atom with a raw operand takes the truth
@@ -94,10 +103,10 @@ func EvalCheck(tb *catalog.Table, e dbspec.Expr, values func(column string) Oper
 		}
 		return comparison(tb, e, values, raw)
 	case dbspec.IsNull:
-		null := values(e.Operand.(dbspec.ColumnRef).Name).Null
+		null := values(columnName(tb, e.Operand)).Null
 		return truth(null != e.Negated)
 	case dbspec.In:
-		col := e.Operand.(dbspec.ColumnRef).Name
+		col := columnName(tb, e.Operand)
 		o := values(col)
 		switch {
 		case o.Null:

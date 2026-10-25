@@ -542,7 +542,10 @@ func (r *reader) valueFunction(f *ir.Func) (cell, dbspec.Type, *Error) {
 	var at time.Time
 	switch unit {
 	case "second", "minute", "hour":
-		x, _ := strconv.ParseFloat(pv.text, 64)
+		x, perr := strconv.ParseFloat(pv.text, 64)
+		if perr != nil {
+			return cell{}, dt, errf(codeInternal, "the interval %q of %s is no number: %v", pv.text, unit, perr)
+		}
 		x *= float64(sign) * map[string]float64{"second": 1, "minute": 60, "hour": 3600}[unit]
 		if math.Abs(x) > 1e13 {
 			return cell{null: true}, dt, nil
@@ -551,7 +554,10 @@ func (r *reader) valueFunction(f *ir.Func) (cell, dbspec.Type, *Error) {
 		shifted := now.Add(time.Duration(math.Round((x - whole) * float64(time.Second))))
 		at = time.Unix(shifted.Unix()+int64(whole), int64(shifted.Nanosecond())).UTC()
 	default:
-		n, _ := strconv.Atoi(pv.text)
+		n, perr := strconv.Atoi(pv.text)
+		if perr != nil {
+			return cell{}, dt, errf(codeInternal, "the interval %q of %s is no integer: %v", pv.text, unit, perr)
+		}
 		n *= sign
 		switch unit {
 		case "day":

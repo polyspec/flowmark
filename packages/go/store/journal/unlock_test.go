@@ -66,7 +66,10 @@ func TestUnlockRefusesRunningHolder(t *testing.T) {
 	if _, err := c.Unlock(l.Holder().String()); err == nil {
 		t.Fatal("Unlock with --holder removed a running holder")
 	}
-	data, _ := os.ReadFile(lockFile(root))
+	data, readErr := os.ReadFile(lockFile(root))
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
 	if string(data) != string(l.Holder().record()) {
 		t.Fatalf("lock = %q", data)
 	}

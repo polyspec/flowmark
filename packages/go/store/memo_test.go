@@ -99,7 +99,10 @@ func TestMemo(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			wantRows, wantDiags, _ := ParseDocument(hcat, "item_history", "item_history.flowmark.md", text, lk)
+			wantRows, wantDiags, parseErr := ParseDocument(hcat, "item_history", "item_history.flowmark.md", text, lk)
+			if parseErr != nil {
+				t.Fatal(parseErr)
+			}
 			if !reflect.DeepEqual(rows, wantRows) || !reflect.DeepEqual(diags, wantDiags) {
 				t.Fatalf("the memo answered %+v %+v, the parse %+v %+v", rows, diags, wantRows, wantDiags)
 			}

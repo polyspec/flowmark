@@ -749,7 +749,11 @@ func TestNew(t *testing.T) {
 				t.Error(err)
 			}
 		}()
-		if a := ln.Addr().(*net.TCPAddr); !a.IP.Equal(net.IPv4(127, 0, 0, 1)) || a.Port == 0 {
+		a, ok := ln.Addr().(*net.TCPAddr)
+		if !ok {
+			t.Fatalf("the address %v is no TCP address", ln.Addr())
+		}
+		if !a.IP.Equal(net.IPv4(127, 0, 0, 1)) || a.Port == 0 {
 			t.Fatalf("bound %v", a)
 		}
 	})

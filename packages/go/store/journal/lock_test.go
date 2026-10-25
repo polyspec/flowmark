@@ -117,7 +117,10 @@ func TestAcquireHeldLockRefused(t *testing.T) {
 		t.Fatalf("message %q does not name the holder", err)
 	}
 	wantKinds(t, rec, LockAcquired)
-	data, _ := os.ReadFile(lockFile(root))
+	data, readErr := os.ReadFile(lockFile(root))
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
 	if string(data) != string(first.Holder().record()) {
 		t.Fatalf("lock file changed to %q", data)
 	}
@@ -140,7 +143,10 @@ func TestAcquireStaleLockReported(t *testing.T) {
 			t.Fatalf("message %q does not name %q", err, part)
 		}
 	}
-	data, _ := os.ReadFile(lockFile(root))
+	data, readErr := os.ReadFile(lockFile(root))
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
 	if string(data) != string(gone.record()) {
 		t.Fatalf("stale lock changed to %q", data)
 	}
@@ -176,7 +182,10 @@ func TestAcquireMalformedRecord(t *testing.T) {
 			if err == nil || errors.As(err, &timeout) {
 				t.Fatalf("Acquire = %v, want a malformed-record error", err)
 			}
-			data, _ := os.ReadFile(lockFile(root))
+			data, readErr := os.ReadFile(lockFile(root))
+			if readErr != nil {
+				t.Fatal(readErr)
+			}
 			if string(data) != text {
 				t.Fatalf("lock file changed to %q", data)
 			}
@@ -211,7 +220,10 @@ func TestAcquireLostReplyOwnRecord(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Acquire = %v, want the lock held by its own record", err)
 	}
-	data, _ := os.ReadFile(lockFile(root))
+	data, readErr := os.ReadFile(lockFile(root))
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
 	if !linked || string(data) != string(l.Holder().record()) {
 		t.Fatalf("lock = %q, holder %+v", data, l.Holder())
 	}
@@ -231,7 +243,10 @@ func TestReleaseReplacedLockRefused(t *testing.T) {
 	if err := l.Release(); err == nil || !strings.Contains(err.Error(), "replaced") {
 		t.Fatalf("Release = %v, want a replaced-lock error", err)
 	}
-	data, _ := os.ReadFile(lockFile(root))
+	data, readErr := os.ReadFile(lockFile(root))
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
 	if string(data) != string(other.record()) {
 		t.Fatalf("lock file changed to %q", data)
 	}
@@ -276,7 +291,11 @@ func TestAcquireRefusesSymlink(t *testing.T) {
 		if _, err := c.Acquire(context.Background(), "s1", 0); err == nil || !strings.Contains(err.Error(), "symbolic link") {
 			t.Fatalf("Acquire = %v, want a symlink refusal", err)
 		}
-		if entries, _ := os.ReadDir(elsewhere); len(entries) != 0 {
+		entries, readErr := os.ReadDir(elsewhere)
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		if len(entries) != 0 {
 			t.Fatalf("the link target was written: %v", entries)
 		}
 	})

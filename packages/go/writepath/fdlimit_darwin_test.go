@@ -73,7 +73,9 @@ func TestOpenWithoutDescriptors(t *testing.T) {
 	func() {
 		defer limitDescriptors(t, 40)()
 		if c, err := open(); err == nil {
-			c.Close()
+			if cerr := c.Close(); cerr != nil {
+				t.Error(cerr)
+			}
 			t.Fatal("40#the-lock: the corpus opened with fewer descriptors than it has documents; want the open to fail")
 		}
 	}()

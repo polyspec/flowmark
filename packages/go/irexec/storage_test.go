@@ -80,7 +80,11 @@ func TestFilesStorageOrder(t *testing.T) {
 			var got []string
 			for _, r := range res.Answer.Rows {
 				v, _ := r.Get("id")
-				got = append(got, v.(string))
+				s, ok := v.(string)
+				if !ok {
+					t.Fatalf("the value %v is no string", v)
+				}
+				got = append(got, s)
 			}
 			if !slices.Equal(got, c.want) {
 				t.Fatalf("ids %v; want %v", got, c.want)

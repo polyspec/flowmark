@@ -109,7 +109,10 @@ func (e *Executor) decode(b []byte, orm bool) (*call, *Error) {
 	if !ok || now.null {
 		return nil, errf(codeIRInvalid, "now %q is not a datetime in the form YYYY-MM-DD HH:MM:SS.ffffff", m.Now)
 	}
-	tm, _ := parseDatetime(now.text)
+	tm, err := parseDatetime(now.text)
+	if err != nil {
+		return nil, errf(codeIRInvalid, "now %q is not a datetime: %v", m.Now, err)
+	}
 	return &call{req: req, params: m.Params, page: page, now: tm}, nil
 }
 

@@ -49,7 +49,10 @@ func child(mode string) int {
 			return 1
 		}
 		fmt.Print(string(h.record()))
-		_, _ = io.Copy(io.Discard, os.Stdin)
+		if _, err := io.Copy(io.Discard, os.Stdin); err != nil {
+			fmt.Println("error", err)
+			return 1
+		}
 		return 0
 	}
 	l, err := c.Acquire(context.Background(), os.Getenv("FLOWMARK_JOURNAL_SESSION"), 0)
@@ -78,7 +81,11 @@ func child(mode string) int {
 	case "abandon":
 		return 0
 	case "crash":
-		index, _ := strconv.Atoi(os.Getenv("FLOWMARK_JOURNAL_INDEX"))
+		index, err := strconv.Atoi(os.Getenv("FLOWMARK_JOURNAL_INDEX"))
+		if err != nil {
+			fmt.Println("error", err)
+			return 1
+		}
 		step := os.Getenv("FLOWMARK_JOURNAL_STEP")
 		c.fault = func(s string, i int) error {
 			if s == step && i == index {

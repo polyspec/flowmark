@@ -647,9 +647,9 @@ func TestDelete(t *testing.T) {
 	noSteps := baseDocs()
 	noSteps["notes/N1.flowmark.md"] = lines("# First note", "- item: [T1](../items.flowmark.md#items-row-t1)", "- position: 1", "", "Note body.")
 	nf := catalogFixture(t, noSteps)
-	for _, order := range [][]any{{"N1", "N2"}, {"N2", "N1"}} {
-		nf.sub(t, "50#keys-and-references: one delete of a referenced row and the row referencing it, parameters "+order[0].(string)+" then "+order[1].(string), func(f *fixture) {
-			err := f.failure(f.msg("delete", "notes", map[string]any{"where": where(pred("id", "in", map[string]any{"ps": []int{0, 1}}))}, order...), "FOREIGN_KEY")
+	for _, order := range [][]string{{"N1", "N2"}, {"N2", "N1"}} {
+		nf.sub(t, "50#keys-and-references: one delete of a referenced row and the row referencing it, parameters "+order[0]+" then "+order[1], func(f *fixture) {
+			err := f.failure(f.msg("delete", "notes", map[string]any{"where": where(pred("id", "in", map[string]any{"ps": []int{0, 1}}))}, order[0], order[1]), "FOREIGN_KEY")
 			wantFaults(f.t, err, []dupFault{{"notes", "N1", -1, "", "FOREIGN_KEY", "notes N2"}})
 		})
 	}

@@ -153,7 +153,10 @@ func snapshot(t *testing.T, root string) map[string]string {
 			if err != nil {
 				return err
 			}
-			rel, _ := filepath.Rel(root, p)
+			rel, relErr := filepath.Rel(root, p)
+			if relErr != nil {
+				t.Fatal(relErr)
+			}
 			out[filepath.ToSlash(rel)] = string(b)
 		}
 		return nil

@@ -1,9 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 1d82bd13eb3143762cc20d6d643069e943af90afaddbaaf4459698c48a08e5ac -->
+<!-- source-sha256: 9725cc26611bb91727da940aba5dd24dea685e054e5c65b090567a61129b92ea -->
 # Changelog
 
 ## Unreleased
 
+- Go module의 어떤 error나 type assertion도 버려지지 않는다: 각각은 반환되거나 보고되거나 깨진 불변식을 이름 붙이며, make lint-go가 통과한다(T15-10).
 - packages/go는 ir.ParamUses가 error를 돌려주는 link된 orm에 대해 compile되고 kit의 errorlint, nilerr, unused lint를 통과하며, gethostuuid syscall은 남는 이유를 적는다(T15-9).
 - .gitignore는 모든 .venv/를 무시하므로, make layout-check가 vulture lock 환경을 무시된 것으로 본다(T15-8).
 - config/owner-checks.json은 추적된 각 path에 그것을 소유하는 gate와 test를 주므로, make owner-check가 변경의 검사를 고른다(T15-7).

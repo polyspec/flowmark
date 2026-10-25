@@ -49,7 +49,11 @@ func child(mode string) int {
 		fmt.Println("error", err)
 		return 1
 	}
-	wait, _ := strconv.Atoi(os.Getenv("FLOWMARK_WRITEPATH_WAIT_MS"))
+	wait, err := strconv.Atoi(os.Getenv("FLOWMARK_WRITEPATH_WAIT_MS"))
+	if err != nil {
+		fmt.Println("error", err)
+		return 1
+	}
 	cat, diags := catalog.Load(root)
 	if len(diags) > 0 {
 		fmt.Println("error", diags)
@@ -71,7 +75,11 @@ func child(mode string) int {
 		return 1
 	}
 	if mode == "crash" {
-		index, _ := strconv.Atoi(os.Getenv("FLOWMARK_WRITEPATH_INDEX"))
+		index, err := strconv.Atoi(os.Getenv("FLOWMARK_WRITEPATH_INDEX"))
+		if err != nil {
+			fmt.Println("error", err)
+			return 1
+		}
 		step := os.Getenv("FLOWMARK_WRITEPATH_STEP")
 		j.SetFault(func(st string, i int) error {
 			if st == step && i == index {
@@ -94,7 +102,11 @@ func child(mode string) int {
 			report(err)
 			return 0
 		}
-		b, _ := json.Marshal(a)
+		b, err := json.Marshal(a)
+		if err != nil {
+			fmt.Println("error", err)
+			return 1
+		}
 		answers = append(answers, string(b))
 	}
 	if mode != "write" {

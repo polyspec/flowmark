@@ -52,7 +52,10 @@ func TestReleaseRefusesSameSessionOtherAcquisition(t *testing.T) {
 	if err := l.Release(); err == nil || !strings.Contains(err.Error(), "replaced") {
 		t.Fatalf("Release = %v, want a replaced-lock error", err)
 	}
-	data, _ := os.ReadFile(lockFile(root))
+	data, readErr := os.ReadFile(lockFile(root))
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
 	if string(data) != string(other.record()) {
 		t.Fatalf("lock file changed to %q", data)
 	}

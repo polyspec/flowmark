@@ -234,6 +234,16 @@ func apply(t *testing.T, c *irexec.Corpus, stmts []Statement) *sql.DB {
 	return db
 }
 
+// as is v as a T; the test fails when v is another type.
+func as[T any](t *testing.T, v any) T {
+	t.Helper()
+	x, ok := v.(T)
+	if !ok {
+		t.Fatalf("the value %v is a %T, not a %T", v, v, x)
+	}
+	return x
+}
+
 // native turns a parameter in the wire form into the value orm's DB.Execute takes for
 // a slot of the dbspec type col: an integer as int64, a number as float64, bytes decoded
 // from base64. Decimals, datetimes, times and text stay strings, which Execute binds by
@@ -246,19 +256,19 @@ func native(t *testing.T, col string, v any) any {
 	}
 	switch col {
 	case "i16", "i32", "i64":
-		n, err := v.(json.Number).Int64()
+		n, err := as[json.Number](t, v).Int64()
 		if err != nil {
 			t.Fatal(err)
 		}
 		return n
 	case "f64":
-		f, err := v.(json.Number).Float64()
+		f, err := as[json.Number](t, v).Float64()
 		if err != nil {
 			t.Fatal(err)
 		}
 		return f
 	case "bytes":
-		b, err := base64.StdEncoding.DecodeString(v.(string))
+		b, err := base64.StdEncoding.DecodeString(as[string](t, v))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -321,13 +331,13 @@ func wire(t *testing.T, typ dbspec.Type, v any) any {
 	}
 	switch typ.Kind {
 	case dbspec.TypeI16, dbspec.TypeI32, dbspec.TypeI64:
-		return json.Number(strconv.FormatInt(v.(int64), 10))
+		return json.Number(strconv.FormatInt(as[int64](t, v), 10))
 	case dbspec.TypeF64:
-		return json.Number(strconv.FormatFloat(v.(float64), 'f', -1, 64))
+		return json.Number(strconv.FormatFloat(as[float64](t, v), 'f', -1, 64))
 	case dbspec.TypeBool:
-		return v.(int64) == 1
+		return as[int64](t, v) == 1
 	case dbspec.TypeDecimal:
-		s := strconv.FormatInt(v.(int64), 10)
+		s := strconv.FormatInt(as[int64](t, v), 10)
 		neg := strings.HasPrefix(s, "-")
 		s = strings.TrimPrefix(s, "-")
 		for len(s) <= typ.Scale {
@@ -339,15 +349,15 @@ func wire(t *testing.T, typ dbspec.Type, v any) any {
 		}
 		return s
 	case dbspec.TypeBytes:
-		return base64.StdEncoding.EncodeToString(v.([]byte))
+		return base64.StdEncoding.EncodeToString(as[[]byte](t, v))
 	case dbspec.TypeDatetime:
-		s := v.(string)
+		s := as[string](t, v)
 		if len(s) == 19 {
 			s += "."
 		}
 		return s + strings.Repeat("0", 26-len(s))
 	case dbspec.TypeTime:
-		s := v.(string)
+		s := as[string](t, v)
 		if len(s) == 8 {
 			s += "."
 		}

@@ -546,11 +546,18 @@ func (c *Corpus) orderValue(x *rec, col string) (int64, bool) {
 
 // keyLess orders two canonical keys: numerically for an integer key, else by code
 // point, which is byte order in UTF-8.
+// integerKey is the value of the key k of a table with integer keys, which the read of the corpus validated as an integer.
+func integerKey(k string) int64 {
+	n, err := strconv.ParseInt(k, 10, 64)
+	if err != nil {
+		panic("irexec: the integer key " + strconv.Quote(k) + " is no integer: " + err.Error())
+	}
+	return n
+}
+
 func keyLess(integer bool, a, b string) bool {
 	if integer {
-		x, _ := strconv.ParseInt(a, 10, 64)
-		y, _ := strconv.ParseInt(b, 10, 64)
-		return x < y
+		return integerKey(a) < integerKey(b)
 	}
 	return a < b
 }

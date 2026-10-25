@@ -287,8 +287,9 @@ func (c *Corpus) commit(l *Lock, changes []Change, prepared *bool) error {
 	}
 	if err := writeDurable(stage, prepareName, append(record, '\n')); err != nil {
 		// A record renamed into place before its folder sync failed is in the stage, and recovery completes it.
-		*prepared, _ = regularExists(filepath.Join(stage, prepareName))
-		return err
+		exists, serr := regularExists(filepath.Join(stage, prepareName))
+		*prepared = exists
+		return errors.Join(err, serr)
 	}
 	*prepared = true
 	c.obs.Observe(Event{Kind: Prepared, Path: stage})

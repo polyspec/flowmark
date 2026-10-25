@@ -290,7 +290,10 @@ func (f *fixture) failure(m []byte, code string) *Error {
 func (f *fixture) checkFailure(m []byte, res *Result, err *Error, code string) {
 	f.t.Helper()
 	if err == nil {
-		b, _ := json.Marshal(res.Answer)
+		b, jsonErr := json.Marshal(res.Answer)
+		if jsonErr != nil {
+			f.t.Fatal(jsonErr)
+		}
 		f.t.Fatalf("request %s answered %s; want %s", m, b, code)
 	}
 	if err.Code != code {

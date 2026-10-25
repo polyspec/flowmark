@@ -1458,7 +1458,10 @@ func localLink(lay *docLayout, rel string, r *Row) string {
 	if hasDetail(lay, r) {
 		anchor = DetailAnchor(lay.table, r.Key)
 	}
-	link, _ := RelLink(rel, rel, anchor)
+	link, err := RelLink(rel, rel, anchor)
+	if err != nil {
+		panic("store: the link of " + rel + " to itself: " + err.Error())
+	}
 	return link
 }
 
@@ -1597,7 +1600,11 @@ func orderValue(r *Row, column string) int {
 	if v == nil {
 		return 0
 	}
-	n, _ := strconv.Atoi(*v)
+	n, err := strconv.Atoi(*v)
+	if err != nil {
+		// An unreadable order is its type fault, which the read reports (spec 10, diagnostics); it sorts as 0.
+		return 0
+	}
 	return n
 }
 

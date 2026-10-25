@@ -313,7 +313,11 @@ func TestJoins(t *testing.T) {
 		var ids []string
 		for _, r := range res.Answer.Rows {
 			v, _ := r.Get("id")
-			ids = append(ids, v.(string))
+			s, ok := v.(string)
+			if !ok {
+				t.Fatalf("the value %v is no string", v)
+			}
+			ids = append(ids, s)
 		}
 		if !slices.Equal(ids, []string{"N1", "N3"}) {
 			f.t.Fatalf("ids %v", ids)
@@ -481,7 +485,11 @@ func TestOrderAndLimit(t *testing.T) {
 		var ids []string
 		for _, r := range res.Answer.Rows {
 			v, _ := r.Get("id")
-			ids = append(ids, v.(string))
+			s, ok := v.(string)
+			if !ok {
+				t.Fatalf("the value %v is no string", v)
+			}
+			ids = append(ids, s)
 		}
 		if !slices.Equal(ids, []string{"N1", "N2", "N3"}) {
 			f.t.Fatalf("ids %v", ids)
@@ -533,7 +541,11 @@ func TestOrderNulls(t *testing.T) {
 		var out []string
 		for _, r := range f.ok(m).Answer.Rows {
 			v, _ := r.Get("id")
-			out = append(out, v.(string))
+			s, ok := v.(string)
+			if !ok {
+				t.Fatalf("the value %v is no string", v)
+			}
+			out = append(out, s)
 		}
 		return out
 	}
@@ -587,7 +599,11 @@ func TestClock(t *testing.T) {
 		var out []string
 		for _, r := range res.Answer.Rows {
 			v, _ := r.Get("id")
-			out = append(out, v.(string))
+			s, ok := v.(string)
+			if !ok {
+				t.Fatalf("the value %v is no string", v)
+			}
+			out = append(out, s)
 		}
 		return out
 	}

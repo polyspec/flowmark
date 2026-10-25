@@ -299,7 +299,10 @@ func noRepeatedMembers(dec *json.Decoder) error {
 			if err != nil {
 				return err
 			}
-			name, _ := k.(string)
+			name, ok := k.(string)
+			if !ok {
+				return fmt.Errorf("the member name %v is no string", k)
+			}
 			if seen[name] {
 				return fmt.Errorf("the member %s repeats", strconv.Quote(name))
 			}

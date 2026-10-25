@@ -138,10 +138,13 @@ func body(wait time.Duration, root string, raw json.RawMessage) (answer json.Raw
 // failure is the answer body of a failed request: {id, code, error}.
 func failure(id json.RawMessage, err error) json.RawMessage {
 	code, msg := ops.Failure(err)
-	b, _ := ops.JSON(struct {
+	b, err := ops.JSON(struct {
 		Code  string `json:"code"`
 		Error string `json:"error"`
-	}{code, msg}) // two strings always marshal
+	}{code, msg})
+	if err != nil {
+		panic("sidecar: two strings do not marshal: " + err.Error())
+	}
 	return withID(id, b)
 }
 

@@ -36,7 +36,9 @@ func TestPanicReleasesLock(t *testing.T) {
 		f := baseFixture(t)
 		s := f.session("cli")
 		mustPanic(t, func() {
-			_, _ = s.Rewrite(ctx, func(*irexec.Corpus) ([]Rewrite, error) { panic("compute") }, nil)
+			if _, err := s.Rewrite(ctx, func(*irexec.Corpus) ([]Rewrite, error) { panic("compute") }, nil); err != nil {
+				t.Errorf("Rewrite returned %v; want its panic", err)
+			}
 		})
 		want(t, f.session("other"), f.countTags(), `{"count":2}`)
 	})
@@ -46,7 +48,11 @@ func TestPanicReleasesLock(t *testing.T) {
 		must(t, s.Begin(ctx, false))
 		want(t, s, f.insertTag("web", "area"), `{"affected":1,"keys":[3]}`)
 		f.j.SetFault(panicAt("prepare"))
-		mustPanic(t, func() { _ = s.Commit() })
+		mustPanic(t, func() {
+			if err := s.Commit(); err != nil {
+				t.Errorf("Commit returned %v; want its panic", err)
+			}
+		})
 		f.j.SetFault(nil)
 		// The prepare record was durable: the commit is decided, and the next acquisition completes it.
 		want(t, f.session("other"), f.countTags(), `{"count":3}`)
@@ -62,7 +68,11 @@ func TestPanicReleasesLock(t *testing.T) {
 			t.Fatal("the commit succeeded; want its stage left by the fault")
 		}
 		f.j.SetFault(panicAt("renames"))
-		mustPanic(t, func() { _ = f.session("begin").Begin(ctx, false) })
+		mustPanic(t, func() {
+			if err := f.session("begin").Begin(ctx, false); err != nil {
+				t.Errorf("Begin returned %v; want its panic", err)
+			}
+		})
 		f.j.SetFault(nil)
 		want(t, f.session("other"), f.countTags(), `{"count":3}`)
 		f.clean()

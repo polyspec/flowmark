@@ -308,7 +308,10 @@ func (c *Corpus) run(ctx context.Context, s *writepath.Session, tb *catalog.Tabl
 		if tb.StateMachine == nil {
 			return nil, errf(codeConfig, "transition: the table %s declares no state machine", tb.Name)
 		}
-		state, _ := json.Marshal(r.State)
+		state, err := json.Marshal(r.State)
+		if err != nil {
+			return nil, err
+		}
 		values := map[string]json.RawMessage{}
 		for k, v := range r.Values {
 			values[k] = v
@@ -449,7 +452,10 @@ func (m *message) request(kind string, body map[string]any) []byte {
 // true or false, and a JSON string otherwise — so a text that is no value of its column reaches the executor, which
 // names the fault.
 func (c *Corpus) TextValue(table, column, text string) json.RawMessage {
-	str, _ := json.Marshal(text)
+	str, err := json.Marshal(text)
+	if err != nil {
+		panic("ops: a string does not marshal: " + err.Error())
+	}
 	tb, ok := c.cat.Table(table)
 	if !ok {
 		return str

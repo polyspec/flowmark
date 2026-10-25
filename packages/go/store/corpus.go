@@ -23,7 +23,11 @@ type FS interface {
 
 // DirFS returns the corpus folder root as an FS, each call reading the disk.
 func DirFS(root string) FS {
-	return os.DirFS(root).(FS)
+	f, ok := os.DirFS(root).(FS)
+	if !ok {
+		panic("store: the os.DirFS of " + root + " is no FS")
+	}
+	return f
 }
 
 // ParseFilesTable reads the rows of the files table of the corpus fsys:

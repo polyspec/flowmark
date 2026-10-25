@@ -3,6 +3,7 @@
 
 ## Unreleased
 
+- No error or type assertion of the Go modules is dropped: each is returned, reported or names its broken invariant, and make lint-go passes (T15-10).
 - packages/go compiles against the linked orm, whose ir.ParamUses returns an error, and passes the errorlint, nilerr and unused lints of kit; the gethostuuid syscall states why it stays (T15-9).
 - .gitignore ignores every .venv/, so make layout-check finds the vulture lock environment ignored (T15-8).
 - config/owner-checks.json gives each tracked path the gates and tests that own it, so make owner-check selects the checks of a change (T15-7).

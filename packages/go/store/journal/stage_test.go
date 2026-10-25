@@ -309,7 +309,11 @@ func TestCreateFolderRefusesSymlink(t *testing.T) {
 		if err := c.Commit(l, []Change{{Path: "linkdir/new/x.md", Data: []byte("x\n")}}); err == nil || !strings.Contains(err.Error(), "symbolic link") {
 			t.Fatalf("Commit = %v, want a symlink refusal", err)
 		}
-		if entries, _ := os.ReadDir(elsewhere); len(entries) != 0 {
+		entries, readErr := os.ReadDir(elsewhere)
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		if len(entries) != 0 {
 			t.Fatalf("written through the link: %v", entries)
 		}
 	})
@@ -327,7 +331,11 @@ func TestCreateFolderRefusesSymlink(t *testing.T) {
 		if err := c.Recover(l); err == nil || !strings.Contains(err.Error(), "symbolic link") {
 			t.Fatalf("Recover = %v, want a symlink refusal", err)
 		}
-		if entries, _ := os.ReadDir(elsewhere); len(entries) != 0 {
+		entries, readErr := os.ReadDir(elsewhere)
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		if len(entries) != 0 {
 			t.Fatalf("written through the link: %v", entries)
 		}
 	})

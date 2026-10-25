@@ -92,7 +92,10 @@ func TestAcquireOnExFATRefuses(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "hard links") {
 		t.Fatalf("Acquire = %v, want the hard-link refusal", err)
 	}
-	pendings, _ := filepath.Glob(filepath.Join(root, ".flowmark", "lock.*.pending"))
+	pendings, readErr := filepath.Glob(filepath.Join(root, ".flowmark", "lock.*.pending"))
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
 	if len(pendings) != 0 {
 		t.Fatalf("pending records left: %v", pendings)
 	}

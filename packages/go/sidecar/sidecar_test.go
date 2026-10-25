@@ -62,7 +62,10 @@ func serve(t *testing.T, lines ...string) ([]string, string) {
 // req is a request line of the surface s over root with body.
 func req(t *testing.T, s, root, body string, extra ...string) string {
 	t.Helper()
-	r, _ := json.Marshal(root)
+	r, jsonErr := json.Marshal(root)
+	if jsonErr != nil {
+		t.Fatal(jsonErr)
+	}
 	line := `{"surface":"` + s + `","root":` + string(r) + `,"body":` + body
 	for _, e := range extra {
 		line += "," + e
@@ -105,7 +108,10 @@ func TestSidecar(t *testing.T) {
 		}
 	})
 	t.Run("40#the-faces: closed is answered, and a line that is no request goes to standard error", func(t *testing.T) {
-		r, _ := json.Marshal(root)
+		r, jsonErr := json.Marshal(root)
+		if jsonErr != nil {
+			t.Fatal(jsonErr)
+		}
 		got, errText := serve(t,
 			`{"surface":"s3","root":`+string(r)+`,"closed":true}`,
 			`not json`,

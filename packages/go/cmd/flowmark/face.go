@@ -151,7 +151,11 @@ func face(out, errOut io.Writer, name string, args []string) (code int) {
 	for m, a := range positional {
 		switch m {
 		case "table", "state":
-			members[m], _ = json.Marshal(a.text)
+			b, err := json.Marshal(a.text)
+			if err != nil {
+				return fail(errOut, name, err)
+			}
+			members[m] = b
 		default:
 			members[m] = wire(column(m), a)
 		}
@@ -161,7 +165,11 @@ func face(out, errOut io.Writer, name string, args []string) (code int) {
 		for col, a := range values {
 			obj[col] = wire(col, a)
 		}
-		members["values"], _ = json.Marshal(obj)
+		b, err := json.Marshal(obj)
+		if err != nil {
+			return fail(errOut, name, err)
+		}
+		members["values"] = b
 	} else if name == "row.insert" || name == "row.update" {
 		members["values"] = json.RawMessage("{}")
 	}

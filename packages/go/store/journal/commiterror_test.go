@@ -37,7 +37,10 @@ func TestCommitErrorSaysPrepared(t *testing.T) {
 			t.Fatalf("Commit = %v, want an unprepared *CommitError", err)
 		}
 		if _, err := os.Lstat(filepath.Join(root, ".flowmark", "tx")); err == nil {
-			entries, _ := os.ReadDir(filepath.Join(root, ".flowmark", "tx"))
+			entries, readErr := os.ReadDir(filepath.Join(root, ".flowmark", "tx"))
+			if readErr != nil {
+				t.Fatal(readErr)
+			}
 			if len(entries) != 0 {
 				t.Fatalf("stages %v", entries)
 			}

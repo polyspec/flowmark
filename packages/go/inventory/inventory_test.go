@@ -74,7 +74,11 @@ func TestHardcodingInventory(t *testing.T) {
 		if d.IsDir() || !strings.HasSuffix(p, ".go") {
 			return nil
 		}
-		if abs, _ := filepath.Abs(p); abs == self {
+		abs, absErr := filepath.Abs(p)
+		if absErr != nil {
+			t.Fatal(absErr)
+		}
+		if abs == self {
 			return nil
 		}
 		b, err := os.ReadFile(p)
@@ -82,7 +86,10 @@ func TestHardcodingInventory(t *testing.T) {
 			return err
 		}
 		files++
-		rel, _ := filepath.Rel(root, p)
+		rel, relErr := filepath.Rel(root, p)
+		if relErr != nil {
+			t.Fatal(relErr)
+		}
 		rel = filepath.ToSlash(rel)
 		text := string(b)
 		for _, n := range names {

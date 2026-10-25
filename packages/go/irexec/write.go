@@ -505,7 +505,10 @@ func (w *writer) insertRow(i int, ps []*int) *Error {
 			return err
 		}
 	}
-	key0, _ := w.valueOf(g.row, tb.Key)
+	key0, err := w.valueOf(g.row, tb.Key)
+	if err != nil {
+		return err
+	}
 	return w.answerKey(key0)
 }
 
@@ -637,7 +640,10 @@ func (w *writer) onDuplicate(ps []*int) (bool, *Error) {
 	if err := w.updateRows([]*rec{met}, req.OnDuplicate, false); err != nil {
 		return false, err
 	}
-	key, _ := w.valueOf(met.row, w.tb.Key)
+	key, err := w.valueOf(met.row, w.tb.Key)
+	if err != nil {
+		return false, err
+	}
 	return true, w.answerKey(key)
 }
 

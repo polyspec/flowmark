@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -124,7 +125,10 @@ func TestLockWaitContextCanceled(t *testing.T) {
 	if !errors.Is(r.err, context.Canceled) {
 		t.Fatalf("Acquire = %v, want context.Canceled", r.err)
 	}
-	pendings, _ := filepath.Glob(filepath.Join(c.root, ".flowmark", "lock.*.pending"))
+	pendings, readErr := filepath.Glob(filepath.Join(c.root, ".flowmark", "lock.*.pending"))
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
 	if len(pendings) != 0 {
 		t.Fatalf("pending records left: %v", pendings)
 	}
@@ -346,5 +350,9 @@ func TestLockWaitHolderExitWakes(t *testing.T) {
 	if elapsed := time.Since(start); elapsed >= patience/2 {
 		t.Fatalf("the exit was learned after %s", elapsed)
 	}
-	_ = child.cmd.Wait()
+	// The holder was killed above, so its wait reports the signal.
+	var exit *exec.ExitError
+	if err := child.cmd.Wait(); !errors.As(err, &exit) || exit.ExitCode() != -1 {
+		t.Fatalf("the wait of the killed holder = %v, want its kill", err)
+	}
 }

@@ -70,7 +70,11 @@ func TestCanonCommand(t *testing.T) {
 		if out.String() != want {
 			t.Fatalf("out:\n%s\nwant:\n%s", out.String(), want)
 		}
-		if b, _ := os.ReadFile(filepath.Join(root, "tags.flowmark.md")); string(b) != canonical {
+		b, readErr := os.ReadFile(filepath.Join(root, "tags.flowmark.md"))
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		if string(b) != canonical {
 			t.Fatalf("tags:\n%q", b)
 		}
 	})
@@ -83,7 +87,11 @@ func TestCanonCommand(t *testing.T) {
 		if !strings.Contains(errOut.String(), "CONSTRAINT") || !strings.Contains(errOut.String(), "notes/N1.flowmark.md") {
 			t.Fatalf("stderr: %s", errOut.String())
 		}
-		if b, _ := os.ReadFile(filepath.Join(root, "tags.flowmark.md")); string(b) == canonical {
+		b, readErr := os.ReadFile(filepath.Join(root, "tags.flowmark.md"))
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		if string(b) == canonical {
 			t.Fatal("tags was rewritten")
 		}
 	})
