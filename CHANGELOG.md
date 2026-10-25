@@ -2,6 +2,7 @@
 # Changelog
 
 ## Unreleased
+- The gates workflow checks out the sibling kit and the polyspec packages and links them before the gates, so its CI run finds the kit bootstrap (T15-18).
 
 - make duplication-check passes: the Go tests share their corpus, fixture, request, recorder and table helpers through internal/corpustest, internal/tabletest, internal/ucd and journal.Recorder, and the repeated library pieces are one function each (ops.ServeLines, Corpus.RunJSON and RunText, catalog Table.Placement and Diagnostic.String, store Row.BlockNames and FoldASCII) (T15-17).
 - The token and holder tests check the behavior on macOS with no branch on the platform, so make divergence-check passes (T15-16).

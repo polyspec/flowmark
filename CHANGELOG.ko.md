@@ -1,8 +1,9 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 2b5a6d7e35d5444cf8c8a8fb76d4cfedb26b762cc77d85ef08af5a0e64b5da90 -->
+<!-- source-sha256: 3d88720078d09d1d858201a12b63b71c6a40a259ea3bc153b837209eb943e9f1 -->
 # Changelog
 
 ## Unreleased
+- gates workflow가 gates 전에 sibling kit과 polyspec package를 checkout하고 link하므로, CI 실행이 kit bootstrap을 찾는다(T15-18).
 
 - Go test가 corpus, fixture, request, recorder, table helper를 internal/corpustest, internal/tabletest, internal/ucd, journal.Recorder로 공유하고, 반복되던 library 조각이 각각 한 함수(ops.ServeLines, Corpus.RunJSON과 RunText, catalog Table.Placement와 Diagnostic.String, store Row.BlockNames와 FoldASCII)이므로 make duplication-check가 통과한다(T15-17).
 - token과 holder test는 platform 분기 없이 macOS의 동작을 검사하므로 make divergence-check가 통과한다(T15-16).

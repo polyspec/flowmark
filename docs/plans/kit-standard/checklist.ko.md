@@ -1,5 +1,5 @@
 <!-- doc-id: checklist-kit-standard -->
-<!-- source-sha256: e6f9bdc910c074daf2295fa5e7303fddf5ed189d9e00ad60af07e0b5c8568547 -->
+<!-- source-sha256: d028def1ffd112fc91b48a8f9c2c041584b21c50d0587adb2ed765645dbe36c8 -->
 # kit 표준 체크리스트
 
 | ID | Task | Deliverables | Verification | State |
@@ -21,4 +21,4 @@
 | T15-15 | make dependency-policy-check가 통과한다. 원인: flowmark에 config/dependency-policy.json이 없어서 board 예제의 PHP platform과 npm lock이 어디에도 선언되지 않는다. 수정: config/dependency-policy.json이 examples/board/web/composer.json의 platform과 lock package-lock.json, examples/board/web/package-lock.json을 선언하고, config/owner-checks.json이 dependency-policy-check로 그것을 소유한다 | config/dependency-policy.json, config/owner-checks.json | `make dependency-policy-check` | [o] |
 | T15-17 | flowmark의 Go에서 make duplication-check가 통과합니다. 원인: 각 패키지의 test가 다른 패키지의 corpus, fixture, request helper를 복사하고, 몇 library 함수가 다른 함수의 조각을 반복해 duplication-check가 Go clone 127개를 찾습니다. 수정: 반복된 조각마다 두 곳이 부르는 한 함수로 옮기고, test helper는 internal/corpustest로 옮깁니다. PHP와 TypeScript clone은 orm-gen이 쓴 파일이며, kit K640이 config/generated.json으로 제외합니다. | packages/go/internal/corpustest and the Go packages whose tests and functions call the shared pieces. | `make duplication-check` | [o] |
 | T15-16 | make divergence-check가 통과한다. 원인: packages/go/server의 token test와 packages/go/store/journal의 holder test가 runtime.GOOS로 분기해서 다른 platform에서는 다른 것을 단언한다. 수정: 둘은 flowmark을 개발하는 macOS의 동작, 곧 server.json의 mode 0600과 다른 사용자의 process인 process 1을 검사한다 | packages/go/server/server_test.go, packages/go/store/journal/holder_test.go | `make divergence-check` | [o] |
-| T15-18 | gates workflow는 sibling kit을 checkout한다(kit K473, K613; template T26.7-93). 원인: .github/workflows/gates.yml이 flowmark만 checkout해서 make install이 ../kit/scripts/kit/kit-bootstrap.mk를 찾지 못했고 CI run 40236380506이 실패했다. 수정: gates.yml은 template과 hyper의 workflow로, project를 저장소 이름의 폴더에 sibling checkout과 나란히 checkout하고 sibling kit을 install하고 package를 link한다 | .github/workflows/gates.yml | `cmp ../template/.github/workflows/gates.yml .github/workflows/gates.yml` | [~] |
+| T15-18 | gates workflow는 sibling kit을 checkout한다(kit K473, K613; template T26.7-93). 원인: .github/workflows/gates.yml이 flowmark만 checkout해서 make install이 ../kit/scripts/kit/kit-bootstrap.mk를 찾지 못했고 CI run 40236380506이 실패했다. 수정: gates.yml은 template과 hyper의 workflow로, project를 저장소 이름의 폴더에 sibling checkout과 나란히 checkout하고 sibling kit을 install하고 package를 link한다 | .github/workflows/gates.yml | `cmp ../template/.github/workflows/gates.yml .github/workflows/gates.yml` | [o] |
