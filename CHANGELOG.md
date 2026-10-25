@@ -3,6 +3,7 @@
 
 ## Unreleased
 
+- examples/board/web/.npmrc keeps only allow-remote, so npm links its file: packages and their bins and make toolchain-check passes (T15-6).
 - The rules of AGENTS begin with Own or Refines P17, and flowmark holds and installs the Git hooks of kit with config/generated.json, so make rules-check passes (T15-5).
 - flowmark takes kit from the checkout beside it: the Makefile includes the kit-bootstrap.mk of ../kit and declares its suite, the stale copies and config/php-lint are gone, and PRINCIPLES.md, its twin, .editorconfig and .claude/settings.json are links to ../kit (kit K514, K614, K621) (T15-4).
 - commit-msg-check runs check-commits by $(KIT_EXT), so the commit hook runs the tool of KIT whether kit runs dist or its sources (kit K613) (T15-3).
