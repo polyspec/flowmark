@@ -3,6 +3,7 @@
 
 ## Unreleased
 
+- flowmark takes kit from the checkout beside it: the Makefile includes the kit-bootstrap.mk of ../kit and declares its suite, the stale copies and config/php-lint are gone, and PRINCIPLES.md, its twin, .editorconfig and .claude/settings.json are links to ../kit (kit K514, K614, K621) (T15-4).
 - commit-msg-check runs check-commits by $(KIT_EXT), so the commit hook runs the tool of KIT whether kit runs dist or its sources (kit K613) (T15-3).
 - T16: flowmark accepts ORM's parameterized root page limit: it pins the exact IR commit, validates the i64 parameters before reading the corpus, applies them to page rows, and keeps `paginate`'s count over every match. (T16)
 - flowmark follows the kit standard 0.0.54: the Go modules lie in `packages/go`, the plans in `docs/plans/<plan>/`, and the checks and gates are kit's (T15).

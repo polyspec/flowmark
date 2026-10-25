@@ -39,9 +39,10 @@ them holds the rules of this repository.
 ## Rules
 
 - The shared tools are the package `@polyspec/kit`, a devDependency of the root `package.json` pinned to the asset URL of its
-  release with its integrity. The files of its `kit.copies` (`scripts/kit/kit-bootstrap.mk`, `scripts/kit/bootstrap/`, the
-  release workflow, `PRINCIPLES.md`, `config/layout.kit.yml` and the lint configuration) are copies that `make kit-sync`
-  writes from the installed package and `make kit-check` compares; they are changed in kit, never here. flowmark runs a kit
+  release with its integrity. The Makefile includes `../kit/scripts/kit/kit-bootstrap.mk`, the file of the kit checkout beside
+  it; the files of its `kit.copies` (`config/layout.kit.yml` and the three schemas that it names) are copies that `make kit-sync`
+  writes from the installed package and `make kit-check` compares, and `PRINCIPLES.md`, its twin, `.editorconfig` and
+  `.claude/settings.json` are links to the files of `../kit` (kit K614, K621); they are changed in kit. flowmark runs a kit
   tool through its make target or `$(KIT)/<tool>.$(KIT_EXT)`, and takes a generic need from its ecosystem library declared
   in its own `package.json`. A tool that kit lacks or gets wrong is reported to kit, never copied or edited here.
   Enforced by: `make kit-check`

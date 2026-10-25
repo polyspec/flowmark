@@ -1,5 +1,5 @@
 <!-- doc-id: agents -->
-<!-- source-sha256: 566a94197a8926b50321b4342c4bc81a40c4dbe50a73e05fec153abdb3c97a23 -->
+<!-- source-sha256: 83320130e6bad131f378fb29f5608b33bddbc08aa08f218df30a1c523d28abf3 -->
 # 개발 규칙
 
 [English](AGENTS.md)
@@ -34,9 +34,10 @@ GitHub, Jira), 응용 schema이고, [polyspec/orm](https://github.com/polyspec/o
 ## 규칙
 
 - 공유 tool은 package `@polyspec/kit`이다. root `package.json`의 devDependency이며 release asset URL과 integrity로
-  고정된다. 그 `kit.copies`의 파일(`scripts/kit/kit-bootstrap.mk`, `scripts/kit/bootstrap/`, release workflow,
-  `PRINCIPLES.md`, `config/layout.kit.yml`과 lint 설정)은 `make kit-sync`가 설치된 package에서 쓰고 `make kit-check`가
-  비교하는 사본이며, 바꿀 때는 kit에서 바꾸고 여기서는 바꾸지 않는다. flowmark는 kit tool을 make target이나
+  고정된다. Makefile은 옆의 kit checkout의 파일인 `../kit/scripts/kit/kit-bootstrap.mk`를 include하고, 그 `kit.copies`의
+  파일(`config/layout.kit.yml`과 그것이 이름 붙인 schema 세 개)은 `make kit-sync`가 설치된 package에서 쓰고 `make kit-check`가
+  비교하는 사본이며, `PRINCIPLES.md`, 그 짝, `.editorconfig`, `.claude/settings.json`은 `../kit`의 파일로 가는 link다(kit K614,
+  K621). 바꿀 때는 kit에서 바꾼다. flowmark는 kit tool을 make target이나
   `$(KIT)/<tool>.$(KIT_EXT)`로 실행하고, 일반적인 필요는 자기 `package.json`에 선언된 생태계 library에서 얻는다.
   kit이 없거나 잘못된 tool은 여기서 복사하거나 고치지 않고 kit에 보고한다.
   Enforced by: `make kit-check`

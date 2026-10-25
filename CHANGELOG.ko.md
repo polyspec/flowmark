@@ -1,9 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 595cb8a8a675279a9fc4d184964159c1edef6ce468ba6b3e2530436c137d04a7 -->
+<!-- source-sha256: 082071454d0cc929a54afc27f4ec83a05b6240402e5df5923ab8efedc97d0916 -->
 # Changelog
 
 ## Unreleased
 
+- flowmark은 옆의 checkout에서 kit을 받는다. Makefile은 ../kit의 kit-bootstrap.mk를 include하고 suite를 선언하며, stale 사본과 config/php-lint는 없어졌고, PRINCIPLES.md, 그 짝, .editorconfig, .claude/settings.json은 ../kit로 가는 link다(kit K514, K614, K621)(T15-4).
 - commit-msg-check는 check-commits를 $(KIT_EXT)로 실행하므로, commit hook은 kit이 dist를 실행하든 source를 실행하든 KIT의 tool을 실행한다(kit K613)(T15-3).
 - T16: flowmark가 ORM의 parameterized root page limit을 받는다. 정확한 IR commit을 고정하고, corpus를 읽기 전에 i64 parameter를 검증하며, page 행에 적용하고 `paginate` count는 모든 일치 행으로 유지한다. (T16)
 - flowmark가 kit 표준 0.0.54를 따른다: Go module은 `packages/go`에, plan은 `docs/plans/<plan>/`에 있고, check와 gate는 kit의 것이다 (T15).

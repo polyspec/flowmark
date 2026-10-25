@@ -1,5 +1,9 @@
-# The flowmark repository: the design phase holds documents only; the shared targets come from the installed @polyspec/kit.
-include scripts/kit/kit-bootstrap.mk
+# The flowmark repository: the shared targets come from the kit checkout beside it, whose kit-bootstrap.mk includes its kit.mk
+# and runs its sources as $(KIT)/<tool>.$(KIT_EXT) (kit K614, K613).
+include ../kit/scripts/kit/kit-bootstrap.mk
+
+# The suite of the repository: the gates of kit and its own checks and tests.
+CHECK_TARGETS := kit-check toolchain-check layout-check docs-check rules-check owner-validate rebuild-check language-check test-markers-check duplication-check dependency-policy-check parity-declarations-check parity-check commits-check link-state-check bypass-check suppression-check divergence-check lint-ts lint-php lint-go refs-check flowmark-test
 
 # The Go of the checkout, by its absolute path (kit-check: a recipe starts a tool by its absolute path, as NODE and ALINT of kit.mk do).
 GO := $(CURDIR)/var/tools/mise/shims/go
