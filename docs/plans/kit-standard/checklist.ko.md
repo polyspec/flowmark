@@ -1,5 +1,5 @@
 <!-- doc-id: checklist-kit-standard -->
-<!-- source-sha256: d41d9c404bb668fabb416549ed5baee5669921fbd11777fd726b6c3df28e556d -->
+<!-- source-sha256: 88d32b9e1e12f78cc05b8e6b6788011cab210374a9409c59dcbfa6c164a35d04 -->
 # kit 표준 체크리스트
 
 | ID | Task | Deliverables | Verification | State |
@@ -13,4 +13,4 @@
 | T15-6 | make toolchain-check가 통과한다. 원인: examples/board/web/.npmrc가 install-links=true와 bin-links=false를 두어서, npm이 각 file: 의존성을 link하지 않고 묶으며 bin을 link하지 않는다. 수정: 파일은 allow-remote=root만 둔다 | examples/board/web/.npmrc | `make toolchain-check` | [o] |
 | T15-7 | make owner-validate가 통과한다. 원인: flowmark에 config/owner-checks.json이 없어서 어떤 path도 owner가 없고 make owner-check가 아무것도 고르지 않는다. 수정: config/owner-checks.json이 추적된 각 path에 그것을 소유하는 gate와 test를 준다 | config/owner-checks.json | `make owner-validate` | [o] |
 | T15-8 | make layout-check가 통과한다. 원인: Git이 uv가 vulture lock을 위해 만드는 환경인 .mise/locks/pypi-vulture/2.16/.venv/를 무시하지 않아서, generated-files가 그것을 install 폴더로 보고한다(kit K372). 수정: .gitignore가 모든 .venv/를 무시한다 | .gitignore | `make layout-check` | [o] |
-| T15-9 | packages/go는 link된 orm에 대해 compile되고 kit의 errorlint, nilerr, unused lint를 통과한다. 원인: orm이 ir.ParamUses가 error를 돌려주게 바꿔서 irexec가 compile되지 않아 make flowmark-test가 실패한다. server는 error 형으로 switch했고, walk의 error 둘은 nil을 돌려주었으며, Linux watch share는 macOS에서 쓰이지 않는 field였고, test는 error를 %v로 format했다. 수정: checkParams는 fromIR로 error를 돌려주고, server는 errors.As로 coded error를 찾으며, 읽을 수 없는 폴더는 이름 붙은 diagnostic 하나이고, share는 watch factory에 있으며, test는 %w와 errors.As를 쓰고, gethostuuid syscall은 이유를 적는다 | packages/go/irexec, packages/go/server, packages/go/store, packages/go/writepath, tests/conformance/go | `make flowmark-test` | [ ] |
+| T15-9 | packages/go는 link된 orm에 대해 compile되고 kit의 errorlint, nilerr, unused lint를 통과한다. 원인: orm이 ir.ParamUses가 error를 돌려주게 바꿔서 irexec가 compile되지 않아 make flowmark-test가 실패한다. server는 error 형으로 switch했고, walk의 error 둘은 nil을 돌려주었으며, Linux watch share는 macOS에서 쓰이지 않는 field였고, test는 error를 %v로 format했다. 수정: checkParams는 fromIR로 error를 돌려주고, server는 errors.As로 coded error를 찾으며, 읽을 수 없는 폴더는 이름 붙은 diagnostic 하나이고, share는 watch factory에 있으며, test는 %w와 errors.As를 쓰고, gethostuuid syscall은 이유를 적는다 | packages/go/irexec, packages/go/server, packages/go/store, packages/go/writepath, tests/conformance/go | `make flowmark-test` | [~] |
