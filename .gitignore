@@ -10,3 +10,5 @@ var/
 go.work
 !/go.work
 go.work.sum
+# The environment that uv makes for a lock project, such as the vulture lock under .mise/locks.
+.venv/

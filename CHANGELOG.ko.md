@@ -1,9 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 5bbb1315155127b4a3306c13dc773803e5dc2f08f52484f6f42a47872968bf9a -->
+<!-- source-sha256: b67cc9188ab2455788e2c0c3920a73309efe7c9d27b23922b2d9dca3eea6fb1b -->
 # Changelog
 
 ## Unreleased
 
+- .gitignore는 모든 .venv/를 무시하므로, make layout-check가 vulture lock 환경을 무시된 것으로 본다(T15-8).
 - config/owner-checks.json은 추적된 각 path에 그것을 소유하는 gate와 test를 주므로, make owner-check가 변경의 검사를 고른다(T15-7).
 - examples/board/web/.npmrc는 allow-remote만 두므로, npm이 그 file: package와 bin을 link하고 make toolchain-check가 통과한다(T15-6).
 - AGENTS의 규칙은 Own 또는 Refines P17로 시작하고, flowmark은 config/generated.json과 함께 kit의 Git hook을 두고 설치하므로 make rules-check가 통과한다(T15-5).

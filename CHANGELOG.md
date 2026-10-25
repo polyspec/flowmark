@@ -3,6 +3,7 @@
 
 ## Unreleased
 
+- .gitignore ignores every .venv/, so make layout-check finds the vulture lock environment ignored (T15-8).
 - config/owner-checks.json gives each tracked path the gates and tests that own it, so make owner-check selects the checks of a change (T15-7).
 - examples/board/web/.npmrc keeps only allow-remote, so npm links its file: packages and their bins and make toolchain-check passes (T15-6).
 - The rules of AGENTS begin with Own or Refines P17, and flowmark holds and installs the Git hooks of kit with config/generated.json, so make rules-check passes (T15-5).

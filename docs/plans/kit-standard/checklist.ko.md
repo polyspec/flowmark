@@ -1,5 +1,5 @@
 <!-- doc-id: checklist-kit-standard -->
-<!-- source-sha256: 5dd8e41d763b9a9ee2a2abed07d123f86ebea6e5e5f110b0dd57abaee671ba75 -->
+<!-- source-sha256: 774c1a445804edfd13058ffdf06e1fe5ecbb2bc096e4db8999567bc5c94df7d0 -->
 # kit 표준 체크리스트
 
 | ID | Task | Deliverables | Verification | State |
@@ -12,4 +12,4 @@
 | T15-5 | make rules-check가 통과한다. 원인: AGENTS가 Own도 Refines도 아닌 규칙 아홉 개를 적고, 그중 세 개는 이 저장소의 용어 없이 P17을 적용하며, PRINCIPLES는 flowmark이 두지 않은 pre-commit과 pre-merge-commit hook을 가리킨다. 수정: 각 규칙은 Own 또는 Refines P17로 시작하고, P17 규칙은 적용하는 엔진 파일을 이름 붙이며, make hooks가 config/generated.json과 함께 kit의 Git hook을 쓴다 | AGENTS.md, .githooks, config/generated.json | `make rules-check` | [o] |
 | T15-6 | make toolchain-check가 통과한다. 원인: examples/board/web/.npmrc가 install-links=true와 bin-links=false를 두어서, npm이 각 file: 의존성을 link하지 않고 묶으며 bin을 link하지 않는다. 수정: 파일은 allow-remote=root만 둔다 | examples/board/web/.npmrc | `make toolchain-check` | [o] |
 | T15-7 | make owner-validate가 통과한다. 원인: flowmark에 config/owner-checks.json이 없어서 어떤 path도 owner가 없고 make owner-check가 아무것도 고르지 않는다. 수정: config/owner-checks.json이 추적된 각 path에 그것을 소유하는 gate와 test를 준다 | config/owner-checks.json | `make owner-validate` | [o] |
-| T15-8 | make layout-check가 통과한다. 원인: Git이 uv가 vulture lock을 위해 만드는 환경인 .mise/locks/pypi-vulture/2.16/.venv/를 무시하지 않아서, generated-files가 그것을 install 폴더로 보고한다(kit K372). 수정: .gitignore가 모든 .venv/를 무시한다 | .gitignore | `make layout-check` | [~] |
+| T15-8 | make layout-check가 통과한다. 원인: Git이 uv가 vulture lock을 위해 만드는 환경인 .mise/locks/pypi-vulture/2.16/.venv/를 무시하지 않아서, generated-files가 그것을 install 폴더로 보고한다(kit K372). 수정: .gitignore가 모든 .venv/를 무시한다 | .gitignore | `make layout-check` | [o] |

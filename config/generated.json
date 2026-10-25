@@ -1,5 +1,14 @@
 {
   "schema": 1,
   "paths": [],
-  "exceptions": []
+  "exceptions": [
+    "packages/go/internal/htmlentity/table.go",
+    "packages/go/internal/unicode13/table.go",
+    "packages/go/internal/unicodedcp/table.go",
+    "examples/board/web/node/model/models.ts",
+    "examples/board/web/src/Model/Comments.php",
+    "examples/board/web/src/Model/People.php",
+    "examples/board/web/src/Model/Posts.php",
+    "examples/board/web/src/Model/bootstrap.php"
+  ]
 }
