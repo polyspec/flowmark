@@ -1,8 +1,9 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 91e35aef48ca1a7cd74735b195b6d287363958345b78872fdab9a18685cba9ca -->
+<!-- source-sha256: 11dd2de0e14574f05b7a29e5530b04bb8ac5b5fea267acdfe2ca2b10c86aa3ed -->
 # Changelog
 
 ## Unreleased
+- workflow 이력의 외부 checklist 참조 표기를 바로잡는다 (T15-23).
 - kit 0.0.61을 적용하고 필요한 tool만 설치하여 TypeScript, Go, benchmark job을 독립 실행하며 CI 성공을 전제로 첫 Go module release를 구성한다 (T15-21).
 - test workflow는 gates.yml처럼 kit install 전에 .php-version의 PHP를 설치한다(T15-20).
 - test workflow가 test 전에 sibling kit과 polyspec package를 checkout하고 link하므로, CI job이 kit bootstrap을 찾는다(T15-19).

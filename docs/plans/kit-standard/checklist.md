@@ -25,4 +25,4 @@
 | T15-20 | The test workflow sets up the PHP of .php-version (kit K193; T15-19). Cause: .github/workflows/test.yml set up no PHP, so the install of kit found no PHP 8.5 of .php-version in CI run 40237120987. Fix: the workflow sets it up with the setup-php step of gates.yml before the install | .github/workflows/test.yml | `gh run list --repo polyspec/flowmark --workflow test.yml --branch main --limit 1 --json conclusion` | [o] |
 | T15-21 | Adopt kit 0.0.61, separate language CI tests and prepare the first release | package.json, package-lock.json, Makefile, workflows, release configuration and bilingual documentation | `node --test tests/go-test.test.mts` | [v] |
 | T15-22 | Use a published ORM commit that provides the required Go parameter-use API | packages/go/go.mod and go.sum | `cd packages/go && go test ./irexec -run TestParameterizedPageLimit -count=1` | [v] |
-| T15-23 | Quote external task IDs in the gates workflow history | Bilingual kit-standard checklists | `make refs-check` | [v] |
+| T15-23 | Quote external task IDs in the gates workflow history | Bilingual kit-standard checklists | `make refs-check` | [o] |
