@@ -1,5 +1,5 @@
 <!-- doc-id: checklist-kit-standard -->
-<!-- source-sha256: 0036e16ad507942d1708995818f9fa9c7529d754d12625d6503c199907642157 -->
+<!-- source-sha256: c99f89eed48af33e4e4dead4e3c2e5bf9b0462511c89fe0740c940bf4dc2c090 -->
 # kit 표준 체크리스트
 
 | ID | Task | Deliverables | Verification | State |
@@ -26,3 +26,4 @@
 | T15-20 | test workflow는 .php-version의 PHP를 설치한다(kit K193; T15-19). 원인: .github/workflows/test.yml이 PHP를 설치하지 않아서 CI run 40237120987에서 kit install이 .php-version의 PHP 8.5를 찾지 못했다. 수정: workflow가 install 전에 gates.yml의 setup-php step으로 그것을 설치한다 | .github/workflows/test.yml | `gh run list --repo polyspec/flowmark --workflow test.yml --branch main --limit 1 --json conclusion` | [o] |
 | T15-21 | kit 0.0.61을 적용하고 언어별 CI 테스트를 분리하며 첫 릴리즈를 준비한다 | package.json, package-lock.json, Makefile, workflows, release configuration and bilingual documentation | `node --test tests/go-test.test.mts` | [v] |
 | T15-22 | 필요한 Go parameter-use API를 제공하는 공개 ORM commit을 사용한다 | packages/go/go.mod and go.sum | `cd packages/go && go test ./irexec -run TestParameterizedPageLimit -count=1` | [v] |
+| T15-23 | gates workflow 이력의 외부 task ID를 code span으로 표기한다 | Bilingual kit-standard checklists | `make refs-check` | [ ] |
