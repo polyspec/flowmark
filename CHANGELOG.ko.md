@@ -1,8 +1,9 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 759fd0518b721545d10159d62f2f24e7a441640bd004d38f196d71e9aeb38764 -->
+<!-- source-sha256: 5e86f21ea8f2bb9e7c658cd04291cc071a18a3aded0eb6e3d1fce2e3c46ef144 -->
 # Changelog
 
 ## Unreleased
+- Linux journal test에서 ignored-event 결과와 decoder error를 함께 확인한다 (T15-24).
 - 공개된 ORM parameter-use API를 고정하고 잠긴 의존성으로 엔진, 예제, conformance test를 통과한다 (T15-22).
 - workflow 이력의 외부 checklist 참조 표기를 바로잡는다 (T15-23).
 - kit 0.0.61을 적용하고 언어별 test, build, lint와 benchmark를 독립 실행하며 잠긴 의존성을 설치한 뒤 Go 검사를 offline으로 실행한다 (T15-21).

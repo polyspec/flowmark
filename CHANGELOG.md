@@ -2,6 +2,7 @@
 # Changelog
 
 ## Unreleased
+- Check the Linux journal test decoder error as well as its ignored-event result (T15-24).
 - Pin the published ORM parameter-use API; the engine, examples and conformance tests pass against the locked dependency (T15-22).
 - Correct external checklist references in the workflow history (T15-23).
 - Adopt kit 0.0.61, run language tests, builds, lints and benchmarks independently, and enforce offline Go checks after locked dependency installation (T15-21).
