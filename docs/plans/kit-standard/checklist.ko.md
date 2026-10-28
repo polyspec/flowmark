@@ -1,5 +1,5 @@
 <!-- doc-id: checklist-kit-standard -->
-<!-- source-sha256: 0181f7942350740b2ff690d83c60809c1de46086933ab88b579e425ec78bc877 -->
+<!-- source-sha256: ee77843fd520bd821733f1d47ca55a5424a3c86ace7785746d37dd8d5f450602 -->
 # kit 표준 체크리스트
 
 | ID | Task | Deliverables | Verification | State |
@@ -28,3 +28,4 @@
 | T15-22 | 필요한 Go parameter-use API를 제공하는 공개 ORM commit을 사용한다 | packages/go/go.mod and go.sum | `cd packages/go && go test ./irexec -run TestParameterizedPageLimit -count=1` | [o] |
 | T15-23 | gates workflow 이력의 외부 task ID를 code span으로 표기한다 | Bilingual kit-standard checklists | `make refs-check` | [o] |
 | T15-24 | Linux journal test에서 inotify decoder error를 확인한다 | packages/go/store/journal/linux_test.go | `cd packages/go && GOOS=linux ../../var/tools/mise/shims/golangci-lint run ./store/journal/...` | [v] |
+| T15-25 | 잠긴 의존성 취약점을 해결하고 offline 감사 근거를 기록한다 | package-lock.json and config/dependency-review.json | `make dependency-policy-check` | [ ] |
