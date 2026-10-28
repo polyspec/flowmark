@@ -26,4 +26,4 @@
 | T15-21 | Adopt kit 0.0.61, separate language CI tests and prepare the first release | package.json, package-lock.json, Makefile, workflows, release configuration and bilingual documentation | `node --test tests/go-test.test.mts` | [~] |
 | T15-22 | Use a published ORM commit that provides the required Go parameter-use API | packages/go/go.mod and go.sum | `cd packages/go && go test ./irexec -run TestParameterizedPageLimit -count=1` | [o] |
 | T15-23 | Quote external task IDs in the gates workflow history | Bilingual kit-standard checklists | `make refs-check` | [o] |
-| T15-24 | Check the inotify decoder error in the Linux journal test | packages/go/store/journal/linux_test.go | `cd packages/go && GOOS=linux ../../var/tools/mise/shims/golangci-lint run ./store/journal/...` | [~] |
+| T15-24 | Check the inotify decoder error in the Linux journal test | packages/go/store/journal/linux_test.go | `cd packages/go && GOOS=linux ../../var/tools/mise/shims/golangci-lint run ./store/journal/...` | [v] |
