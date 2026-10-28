@@ -160,7 +160,8 @@
     },
     {
       "paths": [
-        "config/dependency-policy.json"
+        "config/dependency-policy.json",
+        "config/dependency-review.json"
       ],
       "targets": [
         "dependency-policy-check"
