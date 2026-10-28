@@ -165,6 +165,14 @@
       "targets": [
         "dependency-policy-check"
       ]
+    },
+    {
+      "paths": [
+        "config/release.json"
+      ],
+      "targets": [
+        "kit-check"
+      ]
     }
   ]
 }

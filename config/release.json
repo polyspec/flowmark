@@ -1,0 +1,25 @@
+{
+  "schema": 1,
+  "repositoryUrl": "https://github.com/polyspec/flowmark",
+  "changelog": "CHANGELOG.md",
+  "changelogTranslations": [
+    "CHANGELOG.ko.md"
+  ],
+  "checks": [
+    "gates",
+    "ci-passed"
+  ],
+  "packages": [],
+  "manifests": {
+    "package.json": "version"
+  },
+  "notReleased": {
+    "examples/board/web/package.json": "The private board example client, not a released package",
+    "examples/board/web/composer.json": "The board example application, not a released library",
+    "examples/go.mod": "The local example hosts, built within the root Go workspace",
+    "tests/conformance/go/go.mod": "The local conformance test harness, not a released module"
+  },
+  "goModules": {
+    "packages/go": "github.com/polyspec/flowmark/packages/go"
+  }
+}

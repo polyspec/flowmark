@@ -1,83 +1,98 @@
-# The tests of the repository on every platform it supports (T12.13): the platform-specific code of the lock, the
-# journal, the watch and the file system runs only on its own platform, so the gate is a run on each.
+# Language suites run concurrently, using only their own toolchains and released dependencies.
 name: test
 on:
   push:
     branches: [main]
   pull_request:
   workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
-  test:
-    name: test (${{ matrix.os }})
+  language:
+    name: ${{ matrix.language }} (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    # The project lies in the folder named by its repository, beside the sibling checkouts that the bootstrap of kit and
-    # make link read (kit K473, K613), as in gates.yml; every run step runs in it.
+    env:
+      GOWORK: ${{ github.workspace }}/go.work
     defaults:
       run:
         shell: bash
-        working-directory: ${{ github.event.repository.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        language: [typescript, go]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version-file: mise.toml
+          package-manager-cache: false
+      - name: bootstrap locked kit
+        run: npm_config_cache="$PWD/var/bootstrap/npm-cache" npm exec --yes --package="$(node -p 'require("./package.json").packageManager.split("+")[0]')" -- npm ci --ignore-scripts --allow-remote=root
+      - name: install npm
+        run: make install-tools TOOLS=npm
+      - name: install locked packages
+        run: make install-packages
+      - name: install Go
+        if: matrix.language == 'go'
+        run: make install-tools TOOLS=go
+      - uses: actions/cache@v4
+        if: matrix.language == 'go'
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+            ~/Library/Caches/go-build
+            ~/AppData/Local/go-build
+          key: go-${{ runner.os }}-${{ hashFiles('mise.lock', '**/go.sum') }}
+          restore-keys: go-${{ runner.os }}-
+      - name: TypeScript tests
+        if: matrix.language == 'typescript'
+        run: make flowmark-node-check
+      - name: Go tests
+        if: matrix.language == 'go'
+        run: make flowmark-go-check
+      - name: references
+        if: matrix.language == 'typescript' && runner.os == 'Linux'
+        run: make refs-check
+  benchmarks:
+    name: benchmarks (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    env:
+      GOWORK: ${{ github.workspace }}/go.work
+    defaults:
+      run:
+        shell: bash
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
-          path: ${{ github.event.repository.name }}
-      - uses: actions/setup-go@v5
+          node-version-file: mise.toml
+          package-manager-cache: false
+      - name: bootstrap locked kit
+        run: npm_config_cache="$PWD/var/bootstrap/npm-cache" npm exec --yes --package="$(node -p 'require("./package.json").packageManager.split("+")[0]')" -- npm ci --ignore-scripts --allow-remote=root
+      - name: install npm
+        run: make install-tools TOOLS=npm
+      - name: install locked packages
+        run: make install-packages
+      - name: install Go
+        run: make install-tools TOOLS=go
+      - uses: actions/cache@v4
         with:
-          go-version-file: ${{ github.event.repository.name }}/packages/go/go.mod
-      - uses: actions/setup-node@v4
-        with:
-          node-version: lts/*
-      # shivammathur/setup-php 2.40.0: the PHP of .php-version, which the install of kit requires, as in gates.yml (kit K193).
-      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962
-        if: ${{ hashFiles(format('{0}/.php-version', github.event.repository.name)) != '' }}
-        with:
-          php-version-file: ${{ github.event.repository.name }}/.php-version
-          tools: none
-          coverage: none
-      - name: sibling checkouts
-        env:
-          SELF: ${{ github.event.repository.name }}
-        run: |
-          repositories=$(node -e '
-            const { execFileSync } = require("node:child_process");
-            const fs = require("node:fs");
-            const locks = execFileSync("git", ["ls-files", "-z"], { encoding: "utf8" }).split("\0")
-              .filter(file => /(^|\/)(package-lock\.json|composer\.lock|uv\.lock|Cargo\.lock|pylock[^/]*\.toml)$/.test(file));
-            const names = new Set();
-            for (const file of locks) {
-              for (const match of fs.readFileSync(file, "utf8").matchAll(/github\.com\/polyspec\/([A-Za-z0-9._-]+?)(?:\.git)?(?=[\/"#?])/g)) {
-                if (match[1] !== process.env.SELF) names.add(match[1]);
-              }
-            }
-            for (const name of [...names].sort()) console.log(name);
-          ')
-          for repository in $repositories; do
-            git clone --depth 1 "https://github.com/polyspec/$repository.git" "../$repository"
-          done
-      # The consumer bootstrap runs the sources of the sibling kit checkout, which import its packages; install them in that fresh
-      # clone before make install reads it. Nothing is built (kit K613).
-      - name: install sibling kit
-        run: |
-          if [ -d ../kit/.git ]; then
-            make -C ../kit install-tools TOOLS=npm
-            make -C ../kit install-packages
-          fi
-      - name: install
-        run: make install
-      - name: link
-        run: make link
-      # make flowmark-test runs the node tests, the Go tests of every Go module and, on macOS, the mount test of the
-      # case-sensitive folder; the same make target runs on each platform of the matrix.
-      - name: flowmark tests
-        run: make flowmark-test
-      # The reference check of the documents: every task ID that a document names resolves to a checklist item.
-      - name: references
-        run: make refs-check
-      # The benchmarks of writepath, whose numbers the scale envelope of spec 40 states (T12.5-3, T12.13): one run
-      # per platform, its output kept as an artifact of the run.
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+            ~/Library/Caches/go-build
+            ~/AppData/Local/go-build
+          key: go-bench-${{ runner.os }}-${{ hashFiles('mise.lock', '**/go.sum') }}
+          restore-keys: go-${{ runner.os }}-
       - name: benchmarks
         run: |
           # The watch of macOS holds one descriptor per document (spec 40), so the benchmark corpus needs more open
@@ -94,4 +109,14 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: benchmarks-${{ matrix.os }}
-          path: ${{ github.event.repository.name }}/benchmarks.txt
+          path: benchmarks.txt
+  ci-passed:
+    if: always()
+    needs: [language, benchmarks]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: require every suite
+        env:
+          LANGUAGE: ${{ needs.language.result }}
+          BENCHMARKS: ${{ needs.benchmarks.result }}
+        run: test "$LANGUAGE" = success && test "$BENCHMARKS" = success

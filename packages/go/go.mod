@@ -1,6 +1,6 @@
 module github.com/polyspec/flowmark/packages/go
 
-go 1.27.2
+go 1.27.3
 
 require (
 	github.com/polyspec/orm/packages/go v0.0.19-0.20261024061702-5fb006f263ca

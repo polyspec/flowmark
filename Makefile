@@ -1,6 +1,5 @@
-# The flowmark repository: the shared targets come from the kit checkout beside it, whose kit-bootstrap.mk includes its kit.mk
-# and runs its sources as $(KIT)/<tool>.$(KIT_EXT) (kit K614, K613).
-include ../kit/scripts/kit/kit-bootstrap.mk
+# Shared targets come from the locked installed kit package.
+include node_modules/@polyspec/kit/scripts/kit/kit-bootstrap.mk
 
 # The suite of the repository: the gates of kit and its own checks and tests.
 CHECK_TARGETS := kit-check toolchain-check layout-check docs-check rules-check owner-validate rebuild-check language-check test-markers-check duplication-check dependency-policy-check parity-declarations-check parity-check commits-check link-state-check bypass-check suppression-check divergence-check lint-ts lint-php lint-go refs-check flowmark-test
@@ -15,15 +14,18 @@ GO := $(CURDIR)/var/tools/mise/shims/go
 refs-check: ## Check that every task ID a document names resolves to a checklist item; offline
 	$(NODE) scripts/check-refs.mts
 
-# The repository's own tests. test, the task of kit, runs them as a prerequisite; the recipe of kit runs nothing more.
-.PHONY: flowmark-test
-flowmark-test: ## Run the tests of the repository's own code and scripts; offline
+# Independent language suites let CI run without installing unrelated toolchains.
+.PHONY: flowmark-test flowmark-node-check flowmark-go-check
+flowmark-test: flowmark-node-check flowmark-go-check ## Run all repository tests; offline
+
+flowmark-node-check: ## Run the Node infrastructure tests; offline
 	$(NODE) --test tests/*.test.mts
-	$(NODE) scripts/go-test.mts
-# The macOS folder of the case-sensitive tests is mounted by hdiutil, which only macOS has, so its test runs only there.
 ifeq ($(shell uname -s),Darwin)
 	$(NODE) --test tests/darwin/*.test.mts
 endif
+
+flowmark-go-check: ## Run all Go modules with a case-sensitive folder; offline
+	$(NODE) scripts/go-test.mts
 
 test: flowmark-test
 

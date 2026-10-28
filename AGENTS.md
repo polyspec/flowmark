@@ -38,20 +38,18 @@ them holds the rules of this repository.
 
 ## Rules
 
-- Own: The shared tools are the package `@polyspec/kit`, a devDependency of the root `package.json` pinned to the asset URL of its
-  release with its integrity. The Makefile includes `../kit/scripts/kit/kit-bootstrap.mk`, the file of the kit checkout beside
-  it; the files of its `kit.copies` (`config/layout.kit.yml` and the three schemas that it names) are copies that `make kit-sync`
-  writes from the installed package and `make kit-check` compares, and `PRINCIPLES.md`, its twin, `.editorconfig` and
-  `.claude/settings.json` are links to the files of `../kit` (kit K614, K621); they are changed in kit. flowmark runs a kit
-  tool through its make target or `$(KIT)/<tool>.$(KIT_EXT)`, and takes a generic need from its ecosystem library declared
-  in its own `package.json`. A tool that kit lacks or gets wrong is reported to kit, never copied or edited here.
+- Own: The shared tools are the installed package `@polyspec/kit`, pinned by its release asset URL and lock integrity.
+  The Makefile includes `node_modules/@polyspec/kit/scripts/kit/kit-bootstrap.mk`; `make kit-sync` writes its declared
+  copies and `make kit-check` compares them. Shared files are changed in kit. flowmark runs kit tools through their make
+  targets or `$(KIT)/<tool>.$(KIT_EXT)` and declares ecosystem libraries in its own package manifests.
   Enforced by: `make kit-check`
-- Own: `make flowmark-test` is the full suite of the repository's own code: it runs the node tests of `tests/` and
-  `scripts/go-test.mts`, which provisions the case-sensitive folder some Go tests need (on macOS a Case-sensitive APFS image
-  under `var/`, on Windows `fsutil`, elsewhere a folder it probes) and runs `go test ./...` with it in each Go module of the
-  repository (`packages/go`, `examples`, `tests/conformance/go`). A bare `go test ./...` on
-  a file system that folds case fails those tests by design and names the variable they need. The CI workflow runs the same
-  two commands on Linux, Windows and macOS.
+- Own: `make flowmark-test` aggregates `flowmark-node-check` and `flowmark-go-check`. CI runs these independently on
+  Linux, Windows and macOS, alongside separate TypeScript and PHP lint jobs and benchmark jobs. Each job installs only
+  its required tools and locked packages; tests use released dependencies without sibling checkouts. The Node suite includes
+  the macOS mount test on macOS. The Go runner provisions the case-sensitive folder (APFS on macOS, fsutil on Windows,
+  a probed folder elsewhere) and runs all three Go modules: `packages/go`, `examples`, `tests/conformance/go`.
+  A bare Go test on a case-folding file system fails by design and names the required variable. The final `ci-passed`
+  job requires every job to succeed before release.
   Enforced by: `make flowmark-test`
 - Own: The engine is a database, so its unit tests are dense: every grammar and constraint rule has at least one accepting and one
   rejecting case, table-driven, with its edge cases; every storage has P1/P2 golden fixtures covering every column type and

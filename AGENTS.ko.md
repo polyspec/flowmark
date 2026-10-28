@@ -1,5 +1,5 @@
 <!-- doc-id: agents -->
-<!-- source-sha256: 1901c92be9f3a9764421d2574f5dfa40ccb4b843b6c6f37f5b9ab29d939d10be -->
+<!-- source-sha256: a5644b9697105a7096767154582f87ac5ac39fcd967405a5481f8be299d28afd -->
 # 개발 규칙
 
 [English](AGENTS.md)
@@ -33,19 +33,17 @@ GitHub, Jira), 응용 schema이고, [polyspec/orm](https://github.com/polyspec/o
 
 ## 규칙
 
-- Own: 공유 tool은 package `@polyspec/kit`이다. root `package.json`의 devDependency이며 release asset URL과 integrity로
-  고정된다. Makefile은 옆의 kit checkout의 파일인 `../kit/scripts/kit/kit-bootstrap.mk`를 include하고, 그 `kit.copies`의
-  파일(`config/layout.kit.yml`과 그것이 이름 붙인 schema 세 개)은 `make kit-sync`가 설치된 package에서 쓰고 `make kit-check`가
-  비교하는 사본이며, `PRINCIPLES.md`, 그 짝, `.editorconfig`, `.claude/settings.json`은 `../kit`의 파일로 가는 link다(kit K614,
-  K621). 바꿀 때는 kit에서 바꾼다. flowmark는 kit tool을 make target이나
-  `$(KIT)/<tool>.$(KIT_EXT)`로 실행하고, 일반적인 필요는 자기 `package.json`에 선언된 생태계 library에서 얻는다.
-  kit이 없거나 잘못된 tool은 여기서 복사하거나 고치지 않고 kit에 보고한다.
+- Own: 공유 tool은 설치된 package `@polyspec/kit`이며 release asset URL과 lock integrity로 고정한다.
+  Makefile은 `node_modules/@polyspec/kit/scripts/kit/kit-bootstrap.mk`를 include한다. `make kit-sync`는 선언된 사본을 쓰고
+  `make kit-check`는 비교한다. 공유 파일은 kit에서 바꾼다. flowmark는 make target 또는 `$(KIT)/<tool>.$(KIT_EXT)`로
+  kit tool을 실행하고 생태계 library는 자신의 package manifest에 선언한다.
   Enforced by: `make kit-check`
-- Own: `make flowmark-test`는 이 저장소 자체 코드의 전체 모음이다: `tests/`의 node test와 `scripts/go-test.mts`를
-  실행하며, 일부 Go test가 필요로 하는 대소문자 구분 폴더를 마련한 뒤(macOS에서는 `var/` 아래의 Case-sensitive APFS
-  image, Windows에서는 `fsutil`, 그 밖에서는 탐지하는 폴더) 그것으로 저장소의 각 Go module(`packages/go`, `examples`, `tests/conformance/go`)에서 `go test ./...`를 실행한다. 대소문자를 접는
-  파일 시스템에서 맨 `go test ./...`를 실행하면 설계대로 그 test들이 실패하며, 필요한 변수를 알려 준다. CI workflow는
-  Linux, Windows, macOS에서 같은 두 명령을 실행한다.
+- Own: `make flowmark-test`는 `flowmark-node-check`와 `flowmark-go-check`를 합친다. CI는 Linux, Windows, macOS에서
+  둘을 독립적으로 실행하며 TypeScript와 PHP lint 및 benchmark도 별도 job으로 실행한다. 각 job은 필요한 tool과
+  lock의 package만 설치하며 sibling checkout 없이 released dependency로 test한다. Node suite는 macOS에서 mount test를
+  포함한다. Go runner는 대소문자 구분 폴더(macOS APFS, Windows fsutil, 그 밖에서는 탐지한 폴더)를 마련하고
+  `packages/go`, `examples`, `tests/conformance/go` 세 Go module을 실행한다. 대소문자를 접는 파일 시스템에서 맨 Go test는
+  설계대로 실패하며 필요한 변수를 알려 준다. 최종 `ci-passed` job은 모든 job이 성공해야 release를 허용한다.
   Enforced by: `make flowmark-test`
 - Own: 엔진은 database이므로 그 unit test는 촘촘하다: 모든 문법과 제약 규칙에는 허용과 거절의 사례가 최소 하나씩 있고
   표 주도이며 edge case를 포함한다. 모든 storage에는 모든 column type과 NULL 및 빈 형태를 덮는 P1/P2 golden
