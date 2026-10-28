@@ -1,5 +1,5 @@
 <!-- doc-id: checklist-kit-standard -->
-<!-- source-sha256: 7eaeb68cc341349a5875c9e5c6e63a4cf8315962b0c0f9307055ca4004d8e69f -->
+<!-- source-sha256: 82fd86e241f43a1d964ed157047b2f1ebe0a011388fe0018d819b1ab7ce3aa0b -->
 # kit 표준 체크리스트
 
 | ID | Task | Deliverables | Verification | State |
@@ -27,4 +27,4 @@
 | T15-21 | kit 0.0.61을 적용하고 언어별 CI 테스트를 분리하며 첫 릴리즈를 준비한다 | package.json, package-lock.json, Makefile, workflows, release configuration and bilingual documentation | `node --test tests/go-test.test.mts` | [~] |
 | T15-22 | 필요한 Go parameter-use API를 제공하는 공개 ORM commit을 사용한다 | packages/go/go.mod and go.sum | `cd packages/go && go test ./irexec -run TestParameterizedPageLimit -count=1` | [o] |
 | T15-23 | gates workflow 이력의 외부 task ID를 code span으로 표기한다 | Bilingual kit-standard checklists | `make refs-check` | [o] |
-| T15-24 | Linux journal test에서 inotify decoder error를 확인한다 | packages/go/store/journal/linux_test.go | `cd packages/go && GOOS=linux ../../var/tools/mise/shims/golangci-lint run ./store/journal/...` | [ ] |
+| T15-24 | Linux journal test에서 inotify decoder error를 확인한다 | packages/go/store/journal/linux_test.go | `cd packages/go && GOOS=linux ../../var/tools/mise/shims/golangci-lint run ./store/journal/...` | [~] |

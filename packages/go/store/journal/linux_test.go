@@ -66,8 +66,8 @@ func TestInotifyEventsWake(t *testing.T) {
 	if _, _, err := inotifyWakes([]byte{1, 2, 3}); err == nil {
 		t.Error("a truncated event was accepted")
 	}
-	if _, ignored, _ := inotifyWakes(inotifyBuffer(ev{unix.IN_IGNORED, ""})); !ignored {
-		t.Error("IN_IGNORED was not reported")
+	if _, ignored, err := inotifyWakes(inotifyBuffer(ev{unix.IN_IGNORED, ""})); err != nil || !ignored {
+		t.Errorf("IN_IGNORED: ignored = %t, error = %v", ignored, err)
 	}
 }
 
