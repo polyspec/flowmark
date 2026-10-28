@@ -4,7 +4,7 @@
 ## Unreleased
 - Pin the published ORM parameter-use API; the engine, examples and conformance tests pass against the locked dependency (T15-22).
 - Correct external checklist references in the workflow history (T15-23).
-- Adopt kit 0.0.61 and run TypeScript, Go and benchmark jobs independently with selected tool installation; configure the first Go module release behind successful CI (T15-21).
+- Adopt kit 0.0.61, run language tests, builds, lints and benchmarks independently, and enforce offline Go checks after locked dependency installation (T15-21).
 - The test workflow sets up the PHP of .php-version before the install of kit, as gates.yml does (T15-20).
 - The test workflow checks out the sibling kit and the polyspec packages and links them before the tests, so its CI jobs find the kit bootstrap (T15-19).
 - The gates workflow checks out the sibling kit and the polyspec packages and links them before the gates, so its CI run finds the kit bootstrap (T15-18).

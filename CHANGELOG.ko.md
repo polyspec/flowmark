@@ -1,11 +1,11 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 56e1f160902946974f5eba36a85aadefddec0d1423c67f87522d0ee52737df4a -->
+<!-- source-sha256: 759fd0518b721545d10159d62f2f24e7a441640bd004d38f196d71e9aeb38764 -->
 # Changelog
 
 ## Unreleased
 - 공개된 ORM parameter-use API를 고정하고 잠긴 의존성으로 엔진, 예제, conformance test를 통과한다 (T15-22).
 - workflow 이력의 외부 checklist 참조 표기를 바로잡는다 (T15-23).
-- kit 0.0.61을 적용하고 필요한 tool만 설치하여 TypeScript, Go, benchmark job을 독립 실행하며 CI 성공을 전제로 첫 Go module release를 구성한다 (T15-21).
+- kit 0.0.61을 적용하고 언어별 test, build, lint와 benchmark를 독립 실행하며 잠긴 의존성을 설치한 뒤 Go 검사를 offline으로 실행한다 (T15-21).
 - test workflow는 gates.yml처럼 kit install 전에 .php-version의 PHP를 설치한다(T15-20).
 - test workflow가 test 전에 sibling kit과 polyspec package를 checkout하고 link하므로, CI job이 kit bootstrap을 찾는다(T15-19).
 - gates workflow가 gates 전에 sibling kit과 polyspec package를 checkout하고 link하므로, CI 실행이 kit bootstrap을 찾는다(T15-18).
