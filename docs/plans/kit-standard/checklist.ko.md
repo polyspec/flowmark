@@ -1,5 +1,5 @@
 <!-- doc-id: checklist-kit-standard -->
-<!-- source-sha256: 6ec441cee530f58491797e33091aff9ef0bf7ddd1e365d137ed4fe9d416c575c -->
+<!-- source-sha256: f56733ef69feb8e6e8dae71df2093afc7f95d9a8373ccfd6f13928837f350e0e -->
 # kit 표준 체크리스트
 
 | ID | Task | Deliverables | Verification | State |
@@ -24,6 +24,6 @@
 | T15-18 | gates workflow는 sibling kit을 checkout한다(kit K473, K613; template `T26.7-93`). 원인: .github/workflows/gates.yml이 flowmark만 checkout해서 make install이 ../kit/scripts/kit/kit-bootstrap.mk를 찾지 못했고 CI run 40236380506이 실패했다. 수정: gates.yml은 template과 hyper의 workflow로, project를 저장소 이름의 폴더에 sibling checkout과 나란히 checkout하고 sibling kit을 install하고 package를 link한다 | .github/workflows/gates.yml | `cmp ../template/.github/workflows/gates.yml .github/workflows/gates.yml` | [o] |
 | T15-19 | test workflow는 sibling kit을 checkout한다(kit K473, K613; T15-18). 원인: .github/workflows/test.yml이 flowmark만 checkout해서 make install이 ../kit/scripts/kit/kit-bootstrap.mk를 찾지 못했고 CI run 40236703970의 모든 job이 실패했다. 수정: gates.yml처럼 project는 sibling checkout과 나란히 저장소 이름의 폴더에 있고, workflow는 test 전에 sibling kit을 install하고 package를 link한다 | .github/workflows/test.yml | `gh run list --repo polyspec/flowmark --workflow test.yml --branch main --limit 1 --json conclusion` | [o] |
 | T15-20 | test workflow는 .php-version의 PHP를 설치한다(kit K193; T15-19). 원인: .github/workflows/test.yml이 PHP를 설치하지 않아서 CI run 40237120987에서 kit install이 .php-version의 PHP 8.5를 찾지 못했다. 수정: workflow가 install 전에 gates.yml의 setup-php step으로 그것을 설치한다 | .github/workflows/test.yml | `gh run list --repo polyspec/flowmark --workflow test.yml --branch main --limit 1 --json conclusion` | [o] |
-| T15-21 | kit 0.0.61을 적용하고 언어별 CI 테스트를 분리하며 첫 릴리즈를 준비한다 | package.json, package-lock.json, Makefile, workflows, release configuration and bilingual documentation | `node --test tests/go-test.test.mts` | [v] |
+| T15-21 | kit 0.0.61을 적용하고 언어별 CI 테스트를 분리하며 첫 릴리즈를 준비한다 | package.json, package-lock.json, Makefile, workflows, release configuration and bilingual documentation | `node --test tests/go-test.test.mts` | [~] |
 | T15-22 | 필요한 Go parameter-use API를 제공하는 공개 ORM commit을 사용한다 | packages/go/go.mod and go.sum | `cd packages/go && go test ./irexec -run TestParameterizedPageLimit -count=1` | [o] |
 | T15-23 | gates workflow 이력의 외부 task ID를 code span으로 표기한다 | Bilingual kit-standard checklists | `make refs-check` | [o] |
