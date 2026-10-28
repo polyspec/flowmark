@@ -1,5 +1,5 @@
 <!-- doc-id: checklist-kit-standard -->
-<!-- source-sha256: 5ef0e4b32244ae1980924c1ae72bfe8cc9bba9f2a6f1bffa871e2d8481209412 -->
+<!-- source-sha256: c257c92420d030e6a70874c29485ab7be0194447b5198a385474fb8a190c8b2e -->
 # kit 표준 체크리스트
 
 | ID | Task | Deliverables | Verification | State |
@@ -24,7 +24,7 @@
 | T15-18 | gates workflow는 sibling kit을 checkout한다(kit K473, K613; template `T26.7-93`). 원인: .github/workflows/gates.yml이 flowmark만 checkout해서 make install이 ../kit/scripts/kit/kit-bootstrap.mk를 찾지 못했고 CI run 40236380506이 실패했다. 수정: gates.yml은 template과 hyper의 workflow로, project를 저장소 이름의 폴더에 sibling checkout과 나란히 checkout하고 sibling kit을 install하고 package를 link한다 | .github/workflows/gates.yml | `cmp ../template/.github/workflows/gates.yml .github/workflows/gates.yml` | [o] |
 | T15-19 | test workflow는 sibling kit을 checkout한다(kit K473, K613; T15-18). 원인: .github/workflows/test.yml이 flowmark만 checkout해서 make install이 ../kit/scripts/kit/kit-bootstrap.mk를 찾지 못했고 CI run 40236703970의 모든 job이 실패했다. 수정: gates.yml처럼 project는 sibling checkout과 나란히 저장소 이름의 폴더에 있고, workflow는 test 전에 sibling kit을 install하고 package를 link한다 | .github/workflows/test.yml | `gh run list --repo polyspec/flowmark --workflow test.yml --branch main --limit 1 --json conclusion` | [o] |
 | T15-20 | test workflow는 .php-version의 PHP를 설치한다(kit K193; T15-19). 원인: .github/workflows/test.yml이 PHP를 설치하지 않아서 CI run 40237120987에서 kit install이 .php-version의 PHP 8.5를 찾지 못했다. 수정: workflow가 install 전에 gates.yml의 setup-php step으로 그것을 설치한다 | .github/workflows/test.yml | `gh run list --repo polyspec/flowmark --workflow test.yml --branch main --limit 1 --json conclusion` | [o] |
-| T15-21 | kit 0.0.61을 적용하고 언어별 CI 테스트를 분리하며 첫 릴리즈를 준비한다 | package.json, package-lock.json, Makefile, workflows, release configuration and bilingual documentation | `node --test tests/go-test.test.mts` | [~] |
+| T15-21 | kit 0.0.61을 적용하고 언어별 CI 테스트를 분리하며 첫 릴리즈를 준비한다 | package.json, package-lock.json, Makefile, workflows, release configuration and bilingual documentation | `node --test tests/go-test.test.mts` | [!] 원인: kit `K730` (Windows bootstrap)과 `K731` (독립 consumer gates)에 막혀 있다; 재시도: kit `K730`과 `K731` 완료 후 flowmark의 모든 필수 CI job이 통과하면 재시도한다 |
 | T15-22 | 필요한 Go parameter-use API를 제공하는 공개 ORM commit을 사용한다 | packages/go/go.mod and go.sum | `cd packages/go && go test ./irexec -run TestParameterizedPageLimit -count=1` | [o] |
 | T15-23 | gates workflow 이력의 외부 task ID를 code span으로 표기한다 | Bilingual kit-standard checklists | `make refs-check` | [o] |
 | T15-24 | Linux journal test에서 inotify decoder error를 확인한다 | packages/go/store/journal/linux_test.go | `cd packages/go && GOOS=linux ../../var/tools/mise/shims/golangci-lint run ./store/journal/...` | [o] |
