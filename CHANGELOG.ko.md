@@ -1,8 +1,9 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 11dd2de0e14574f05b7a29e5530b04bb8ac5b5fea267acdfe2ca2b10c86aa3ed -->
+<!-- source-sha256: 56e1f160902946974f5eba36a85aadefddec0d1423c67f87522d0ee52737df4a -->
 # Changelog
 
 ## Unreleased
+- 공개된 ORM parameter-use API를 고정하고 잠긴 의존성으로 엔진, 예제, conformance test를 통과한다 (T15-22).
 - workflow 이력의 외부 checklist 참조 표기를 바로잡는다 (T15-23).
 - kit 0.0.61을 적용하고 필요한 tool만 설치하여 TypeScript, Go, benchmark job을 독립 실행하며 CI 성공을 전제로 첫 Go module release를 구성한다 (T15-21).
 - test workflow는 gates.yml처럼 kit install 전에 .php-version의 PHP를 설치한다(T15-20).
