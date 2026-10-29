@@ -1,5 +1,5 @@
 <!-- doc-id: checklist-kit-standard -->
-<!-- source-sha256: 6cf873157b0f783f589e1f92c43747223c1632e897c73e2846d1f444c8e5a144 -->
+<!-- source-sha256: 62c10424152081e637746354e086314bf40e7aaf290798cf9fd9469540cec43d -->
 # kit 표준 체크리스트
 
 | ID | Task | Deliverables | Verification | State |
@@ -39,3 +39,4 @@
 | T15-33 | flowmark은 commits check를 실행하지 않는다: CHECK_TARGETS에는 commits-check가 없고, CI workflow에는 commit range 단계가 없으며, PRINCIPLES.md는 commits-check 강제를 이름하지 않는다. 원인: kit K805가 commits-check와 그 CI 단계를 삭제한다 | Makefile, .github/workflows/gates.yml, .github/workflows/release.yml, PRINCIPLES.md | `make kit-check kit-ci-plan` | [o] |
 | T15-34 | flowmark은 kit K812가 삭제하는 release version check를 실행하지 않는다: kit-sync는 release-versions 단계가 없는 release.yml을 쓴다. 원인: kit K812가 release-versions를 삭제해 flowmark의 release workflow가 더는 없는 target을 부른다 | .github/workflows/release.yml | `make kit-check` | [o] |
 | T15-35 | flowmark은 0.0.66 대신 release된 kit 0.0.70을 받는다: package.json의 pin과 그 lock, make kit-sync의 사본, make hooks의 hook. 원인: kit 0.0.70이 K797부터 K817까지의 족쇄를 지우는데 flowmark은 아직 0.0.66에서 설치한다 | package.json, package-lock.json | `make kit-check` | [v] |
+| T15-36 | flowmark이 kit 0.0.70 대신 release된 kit 0.0.72를 받아 Windows에서 mise의 go shim이 실행되게 한다. 원인: CI 40914845998이 windows-latest의 "install locked Go dependencies"에서 "mise-shim: failed to execute mise: program not found"로 실패한다. kit 0.0.72는 Windows에서 mise binary를 PATH에 둔다(K820) | package.json, package-lock.json | `make kit-check` | [ ] |
