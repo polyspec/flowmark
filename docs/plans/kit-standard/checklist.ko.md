@@ -1,5 +1,5 @@
 <!-- doc-id: checklist-kit-standard -->
-<!-- source-sha256: 99c1dde6d1cd4c1f4489a095ee75a26336d04fd3ed5b04ce6521639f341d0f9b -->
+<!-- source-sha256: ac85b9a902e9eb855cf88daed038293b0880f64bf216eb9964313580aeba9138 -->
 # kit 표준 체크리스트
 
 | ID | Task | Deliverables | Verification | State |
@@ -45,5 +45,5 @@
 | T15-39 | benchmarks job은 열린 파일 한도를 POSIX runner에서만 올린다. Windows에는 그 resource limit이 없다. 원인: CI 40938620154가 windows-latest의 benchmarks 단계 "ulimit -n 65536"에서 "cannot modify limit: Operation not permitted"로 실패한다 | .github/workflows/test.yml | `make kit-check` | [v] |
 | T15-40 | flowmark은 0.0.72 대신 release된 kit 0.0.73을 받는다: package.json의 pin과 그 lock, make kit-sync의 사본과 make hooks의 hook. 원인: kit 0.0.73이 K826, K827, K830과 함께 release되었다 | package.json, package-lock.json | `make kit-check` | [v] |
 | T15-41 | kit 0.0.74 채택: kit이 삭제하는 toolchain-check와 link-state-check를 CHECK_TARGETS와 gates workflow에서 제거하고 link-state-check 자리에 link-check를 실행한다. 원인: kit K854가 toolchain-check를 삭제하고 K869가 link-state-check를 link-check로 바꾸므로, 이를 부르는 flowmark target은 kit에 없는 target을 부른다 | Makefile, .github/workflows/gates.yml, CHANGELOG.md, CHANGELOG.ko.md | `make kit-check` | [ ] |
-| T15-42 | checkout의 link 선언 파일을 쓴다. 원인: kit K869는 checkout마다 하나의 link 선언이 경우별 복사, link, 설치를 대신하게 하므로, flowmark는 link하는 orm Go module을 거기에 선언한다 | config/links.json, CHANGELOG.md, CHANGELOG.ko.md | `make link-check` | [ ] |
+| T15-42 | checkout의 link 선언 파일을 쓴다. 원인: kit K869는 checkout마다 하나의 link 선언이 경우별 복사, link, 설치를 대신하게 하므로, flowmark는 link하는 orm Go module을 거기에 선언한다 | the link declaration file (K869), CHANGELOG.md, CHANGELOG.ko.md | `make link-check` | [ ] |
 | T15-43 | ci-setup이 부르는 deps-<runtime> target을 정의한다. 원인: kit K859는 package 설치 감싸기를 멈추고 ci-setup은 runtime마다 repository의 deps-<runtime> target을 내보내므로, flowmark는 자신의 make target으로 설치를 소유한다 | Makefile, config/ci.json, .github/workflows/test.yml, CHANGELOG.md, CHANGELOG.ko.md | `make kit-check` | [ ] |
