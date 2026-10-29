@@ -2,6 +2,7 @@
 # Changelog
 
 ## Unreleased
+- Run no release version check, which kit K812 deletes: release.yml is the copy of kit without the release-versions step (T15-34).
 - Run no commits check, which kit K805 deletes: CHECK_TARGETS has no commits-check, gates.yml no commit range step, and the principles and release.yml are the copies of kit (T15-33).
 - Run the hooks of kit K805: .githooks/pre-commit no longer calls the deleted commit gates, and .githooks/pre-merge-commit is deleted (T15-32).
 - Delete the pre-push hook .githooks/pre-push with the kit K804 push gate (T15-31).
