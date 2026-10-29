@@ -1,8 +1,9 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 48d51eb54964c96e9add2d6844c1a98b2010bb99768afe9ed787ee06957b0be0 -->
+<!-- source-sha256: a590b839eb48a961eb33a6fc778a16424dc2624aaf06f5408453906dd35d9162 -->
 # Changelog
 
 ## Unreleased
+- kit K801이 삭제하는 main writer hook .githooks/reference-transaction을 삭제한다 (T15-29).
 - dependency-policy-check 실행을 멈추고 그 config와 review 기록을 삭제한다. package manager가 lock을 검증하기 때문이다 (T15-26).
 - kit 0.0.66을 채택한다: pin과 그 lock, 동기화된 kit 파일, review 기록 (T15-27).
 - fast-uri 취약점을 제거하고 offline 검증을 위한 잠긴 의존성 감사 결과를 기록한다 (T15-25).
