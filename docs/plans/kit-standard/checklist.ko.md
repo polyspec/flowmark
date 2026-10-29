@@ -1,5 +1,5 @@
 <!-- doc-id: checklist-kit-standard -->
-<!-- source-sha256: 018fe4933567b3ea61015830b9ff8c03511c6056c50c1bf986315035f16cf99b -->
+<!-- source-sha256: ebc939a559ffc2a7c0f71501a3a10f469410e271f78b06609fc3e06a4e10366b -->
 # kit 표준 체크리스트
 
 | ID | Task | Deliverables | Verification | State |
@@ -32,3 +32,4 @@
 | T15-26 | flowmark은 kit이 삭제하는 dependency target을 하나도 지정하지 않는다(kit `K784`, `K786`): CHECK_TARGETS, config/owner-checks.json, 그 target만 읽는 config 파일 | Makefile, config/owner-checks.json, config/dependency-policy.json, config/dependency-review.json | `make owner-validate` | [o] |
 | T15-27 | flowmark은 release된 kit 0.0.66을 채택한다: pin, 그 lock, 동기화된 kit 파일, review 기록. 원인: gates와 test workflow가 lock된 kit 0.0.64에서 실패한다(run 40827787677, 40827787680, 3ab0805) | package.json, package-lock.json, the files of make kit-sync, config/dependency-review.json | `make kit-check` | [o] |
 | T15-28 | config/toolchain.json은 kit K788과 K789가 삭제하는 것을 언급하지 않는다: 그 comment에서 pythonBackend와 dependency review가 빠진다. 원인: kit이 build backend pin과 dependency review를 삭제하므로, comment가 더는 없는 선언을 언급한다 | config/toolchain.json | `make kit-check` | [ ] |
+| T15-29 | flowmark에는 main writer hook이 없다: 추적되는 .githooks/reference-transaction을 삭제한다. 원인: kit K801이 그 hook과 writer 변수를 삭제한다 | .githooks/reference-transaction | `make kit-check` | [ ] |
