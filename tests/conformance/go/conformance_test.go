@@ -160,11 +160,14 @@ func loadVectors(t *testing.T) []*vector {
 	return out
 }
 
-// TestVectors runs every vector, then checks the equivalence groups and the coverage of every storage.
+// TestVectors runs every vector, then checks the equivalence groups and the coverage of every storage. Each vector runs
+// in its own folder, so the vectors run in parallel and the test lasts as long as its slowest vectors, not as long as
+// their sum (T15-45); the two checks read only the vectors.
 func TestVectors(t *testing.T) {
 	vectors := loadVectors(t)
 	for _, v := range vectors {
 		t.Run(v.Name, func(t *testing.T) {
+			t.Parallel()
 			if err := runVector(t.TempDir(), v); err != nil {
 				t.Fatal(err)
 			}

@@ -328,6 +328,8 @@ func wire(t *testing.T, typ dbspec.Type, v any) any {
 // TestExportRebuildsTheCorpus pins that the export's statements create the catalog's
 // tables in a database and insert every row of the corpus, soft-deleted rows
 // included, each table's rows in storage order, with the values the engine reads.
+// Each case has its own corpus and database, so the cases run in parallel and the
+// test lasts as long as its slowest case, not as long as their sum (T15-45).
 func TestExportRebuildsTheCorpus(t *testing.T) {
 	cases := map[string]string{}
 	for _, name := range equivalenceRoots {
@@ -338,6 +340,7 @@ func TestExportRebuildsTheCorpus(t *testing.T) {
 	cases["files (codec columns)"] = corpus(t, "files", codecDocs(t))
 	for name, root := range cases {
 		t.Run("70#the-export: "+name+" rebuilds in SQLite", func(t *testing.T) {
+			t.Parallel()
 			c := open(t, root)
 			stmts, err := Export(c, dbspec.DialectSQLite)
 			if err != nil {

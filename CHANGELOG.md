@@ -2,6 +2,7 @@
 # Changelog
 
 ## Unreleased
+- T15-45: the cases of TestExportRebuildsTheCorpus and TestVectors run in parallel, so the Go tests pass on windows-latest within the 30s limit that kit gives every test (T15-45)
 - T15-46: config/release.json requires only the ci-passed check, which exists on every commit (T15-46)
 - T15-44: 0.0.1 is released (T15-44)
 

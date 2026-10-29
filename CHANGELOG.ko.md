@@ -1,8 +1,9 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 1f118584a469aacfca81d8f39acce7ec164c277be14cf15bbda0785ad58599b1 -->
+<!-- source-sha256: 27e7b673aaeeed641d4eba9e9595a265e4dd2e63058914343772b13f8a3a0ea6 -->
 # Changelog
 
 ## Unreleased
+- T15-45: TestExportRebuildsTheCorpus와 TestVectors의 case가 병렬로 돌아, Go test가 windows-latest에서 kit이 모든 test에 주는 30s 한도 안에 통과한다 (T15-45)
 - T15-46: config/release.json은 모든 커밋에 있는 ci-passed 검사만 요구한다 (T15-46)
 - T15-44: 0.0.1을 릴리스한다 (T15-44)
 
