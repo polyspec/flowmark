@@ -1,8 +1,9 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: a590b839eb48a961eb33a6fc778a16424dc2624aaf06f5408453906dd35d9162 -->
+<!-- source-sha256: c1c1f724f7b8def43b2860800e8050a52455bd2933d389b6c47fab6fd86317ee -->
 # Changelog
 
 ## Unreleased
+- pre-commit hook은 삭제된 main writer hook을 위해 commit하는 git을 더 이상 기록하지 않는다 (T15-30).
 - kit K801이 삭제하는 main writer hook .githooks/reference-transaction을 삭제한다 (T15-29).
 - dependency-policy-check 실행을 멈추고 그 config와 review 기록을 삭제한다. package manager가 lock을 검증하기 때문이다 (T15-26).
 - kit 0.0.66을 채택한다: pin과 그 lock, 동기화된 kit 파일, review 기록 (T15-27).

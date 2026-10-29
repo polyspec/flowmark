@@ -2,6 +2,7 @@
 # Changelog
 
 ## Unreleased
+- The pre-commit hook no longer records the committing git for the deleted main writer hook (T15-30).
 - Delete the main writer hook .githooks/reference-transaction, which kit K801 deletes (T15-29).
 - Stop running dependency-policy-check and delete its config and the review record, because the package managers verify their locks (T15-26).
 - Adopt kit 0.0.66: the pin and its lock, the synced kit files and the review record (T15-27).
