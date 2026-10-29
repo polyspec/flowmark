@@ -1,5 +1,5 @@
 <!-- doc-id: checklist-kit-standard -->
-<!-- source-sha256: 90689e7a407d4690fb7c24d2f6aa0ec557a1d711a48659c6a6ff65399cc29af7 -->
+<!-- source-sha256: 06acae4a781f6771dedaee6e9eb4099d8061489b3ad02531ba07928449913abd -->
 # kit 표준 체크리스트
 
 | ID | Task | Deliverables | Verification | State |
@@ -38,3 +38,4 @@
 | T15-32 | flowmark은 kit K805의 hook을 실행한다: make hooks가 commit-gates-hook 없는 .githooks/pre-commit을 쓰고, .githooks/pre-merge-commit을 삭제한다. 원인: kit K805가 commits-check, commit gate, pre-merge-commit hook을 삭제해서, pre-commit hook이 삭제된 target을 호출하고 모든 commit을 거부했다 | .githooks/pre-commit, .githooks/pre-merge-commit | `make hooks-check` | [o] |
 | T15-33 | flowmark은 commits check를 실행하지 않는다: CHECK_TARGETS에는 commits-check가 없고, CI workflow에는 commit range 단계가 없으며, PRINCIPLES.md는 commits-check 강제를 이름하지 않는다. 원인: kit K805가 commits-check와 그 CI 단계를 삭제한다 | Makefile, .github/workflows/gates.yml, .github/workflows/release.yml, PRINCIPLES.md | `make kit-check kit-ci-plan` | [o] |
 | T15-34 | flowmark은 kit K812가 삭제하는 release version check를 실행하지 않는다: kit-sync는 release-versions 단계가 없는 release.yml을 쓴다. 원인: kit K812가 release-versions를 삭제해 flowmark의 release workflow가 더는 없는 target을 부른다 | .github/workflows/release.yml | `make kit-check` | [o] |
+| T15-35 | flowmark은 0.0.66 대신 release된 kit 0.0.70을 받는다: package.json의 pin과 그 lock, make kit-sync의 사본, make hooks의 hook. 원인: kit 0.0.70이 K797부터 K817까지의 족쇄를 지우는데 flowmark은 아직 0.0.66에서 설치한다 | package.json, package-lock.json | `make kit-check` | [ ] |
