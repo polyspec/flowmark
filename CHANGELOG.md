@@ -2,6 +2,7 @@
 # Changelog
 
 ## Unreleased
+- Adopt kit 0.0.66: the pin and its lock, the synced kit files and the review record (T15-27).
 - Remove the fast-uri advisories and record the locked dependency audit for offline verification (T15-25).
 - Check the Linux journal test decoder error as well as its ignored-event result (T15-24).
 - Pin the published ORM parameter-use API; the engine, examples and conformance tests pass against the locked dependency (T15-22).
