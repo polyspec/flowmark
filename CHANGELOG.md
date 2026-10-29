@@ -2,6 +2,7 @@
 # Changelog
 
 ## Unreleased
+- Delete the pre-push hook .githooks/pre-push with the kit K804 push gate; config/checklist.json hooks names commit-msg (T15-31).
 - The comment of config/toolchain.json names no pythonBackend and no dependency review, which kit K788 and K789 delete (T15-28).
 - The pre-commit hook no longer records the committing git for the deleted main writer hook (T15-30).
 - Delete the main writer hook .githooks/reference-transaction, which kit K801 deletes (T15-29).

@@ -1,8 +1,9 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: dab883f7df9fd5f0c27dc4c8572770d5cba556d01d42cf7a3bb5cb945d2ba792 -->
+<!-- source-sha256: 46f31f2730c35d522e616fbabeda6f2416574a0372f51da70804b7660121377c -->
 # Changelog
 
 ## Unreleased
+- kit K804의 push gate와 함께 pre-push hook .githooks/pre-push를 삭제한다. config/checklist.json의 hooks는 commit-msg를 이름한다 (T15-31).
 - config/toolchain.json의 comment는 kit K788과 K789가 삭제하는 pythonBackend와 dependency review를 이름하지 않는다 (T15-28).
 - pre-commit hook은 삭제된 main writer hook을 위해 commit하는 git을 더 이상 기록하지 않는다 (T15-30).
 - kit K801이 삭제하는 main writer hook .githooks/reference-transaction을 삭제한다 (T15-29).

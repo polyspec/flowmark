@@ -8,7 +8,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { checkReferences } from '../scripts/check-refs.mts';
 
-const CHECKLIST = { schema: 1, hooks: ['pre-push', 'commit-msg'], idPattern: 'T[0-9]+(?:[.-][0-9]+)*' };
+const CHECKLIST = { schema: 1, hooks: ['commit-msg'], idPattern: 'T[0-9]+(?:[.-][0-9]+)*' };
 const DOCUMENTS = { schema: 1, include: ['**/*.md'], exclude: ['tests/kit/**'] };
 const LIST = '# List checklist\n\n| ID | Task | Deliverables | Verification | State |\n|---|---|---|---|---|\n| T1 | Write the parser | - | - | [o] |\n| T2 | Print the union | - | - | [ ] |\n';
 
