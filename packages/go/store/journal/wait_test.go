@@ -350,9 +350,9 @@ func TestLockWaitHolderExitWakes(t *testing.T) {
 	if elapsed := time.Since(start); elapsed >= patience/2 {
 		t.Fatalf("the exit was learned after %s", elapsed)
 	}
-	// The holder was killed above, so its wait reports the signal.
+	// The holder was killed above, so its wait reports the kill.
 	var exit *exec.ExitError
-	if err := child.cmd.Wait(); !errors.As(err, &exit) || exit.ExitCode() != -1 {
+	if err := child.cmd.Wait(); !errors.As(err, &exit) || exit.ExitCode() != killedExitCode {
 		t.Fatalf("the wait of the killed holder = %v, want its kill", err)
 	}
 }

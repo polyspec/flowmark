@@ -91,16 +91,11 @@ func TestZombieHolderReadsEnded(t *testing.T) {
 	}
 }
 
-// otherUserPID is the process of another user that the host has: process 1, launchd of root on macOS.
-func otherUserPID() int {
-	return 1
-}
-
 // A process of another user exists (kill answers EPERM); with its start matching it is running.
 func TestOtherUserProcessReadsRunning(t *testing.T) {
 	c, _ := newCorpus(t, t.TempDir())
 	h := selfRecord(t, c, "s")
-	pid := otherUserPID()
+	pid := otherUserPID
 	h.PID = pid
 	start, err := processStart(pid)
 	if err != nil {

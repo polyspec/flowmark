@@ -1,8 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 73a8c00a9a4c8a5d540b2eda4c3a4794c2eb2861a5d1b861cf1593aeb039a5c7 -->
+<!-- source-sha256: b7f0484d91c033bae364de47c0d5efd943f930fbd8e751ad7ef406014fbc55c9 -->
 # Changelog
 
 ## Unreleased
+
+- journal 시험은 다른 사용자의 process와 kill된 holder의 exit code를 platform별로 명시한다: Windows는 process 1이 없고 kill을 TerminateProcess로 끝내므로 process 4(System)와 exit code 1이다(T15-38).
 - benchmarks job은 열린 파일 한도를 POSIX runner에서만 올린다. Windows에는 그 resource limit이 없어 `ulimit -n 65536`이 실패했다(T15-39).
 - 0.0.70 대신 release된 kit 0.0.72를 받아 Windows에서 mise의 go shim이 실행되게 한다: kit이 그곳에서 mise binary를 PATH에 둔다(K820). kit-sync가 CI의 link 단계가 없는 gates.yml(K824)과 그 principles를 쓴다 (T15-36).
 - 0.0.66 대신 release된 kit 0.0.70을 받는다: package.json의 pin과 그 lock이며, lock에는 kit이 삭제한 toml-patch 의존이 더 이상 없다. T15-33과 T15-34가 이미 그 사본을 가지므로 kit-sync와 make hooks는 아무것도 바꾸지 않는다 (T15-35).
@@ -25,7 +27,6 @@
 - test workflow는 gates.yml처럼 kit install 전에 .php-version의 PHP를 설치한다(T15-20).
 - test workflow가 test 전에 sibling kit과 polyspec package를 checkout하고 link하므로, CI job이 kit bootstrap을 찾는다(T15-19).
 - gates workflow가 gates 전에 sibling kit과 polyspec package를 checkout하고 link하므로, CI 실행이 kit bootstrap을 찾는다(T15-18).
-
 - Go test가 corpus, fixture, request, recorder, table helper를 internal/corpustest, internal/tabletest, internal/ucd, journal.Recorder로 공유하고, 반복되던 library 조각이 각각 한 함수(ops.ServeLines, Corpus.RunJSON과 RunText, catalog Table.Placement와 Diagnostic.String, store Row.BlockNames와 FoldASCII)이므로 make duplication-check가 통과한다(T15-17).
 - token과 holder test는 platform 분기 없이 macOS의 동작을 검사하므로 make divergence-check가 통과한다(T15-16).
 - config/dependency-policy.json이 board 예제의 PHP platform과 flowmark의 npm lock을 선언하므로 make dependency-policy-check가 통과한다(T15-15).

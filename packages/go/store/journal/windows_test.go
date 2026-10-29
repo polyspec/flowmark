@@ -12,6 +12,13 @@ import (
 	"golang.org/x/sys/windows"
 )
 
+// otherUserPID is the process of another user that the host has: process 4, System, which Windows always numbers 4.
+const otherUserPID = 4
+
+// killedExitCode is the exit code that os/exec reports for a process ended by Kill: Kill is TerminateProcess with exit
+// code 1 on Windows.
+const killedExitCode = 1
+
 // These tests run only on Windows; this repository's hosts are macOS, so they are compiled with
 // `GOOS=windows go test -c` and run on a Windows host.
 

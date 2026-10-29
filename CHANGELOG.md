@@ -2,6 +2,8 @@
 # Changelog
 
 ## Unreleased
+
+- The journal tests name the process of another user and the exit code of a killed holder per platform: process 4 (System) and exit code 1 on Windows, which has no process 1 and ends a killed process by TerminateProcess (T15-38).
 - The benchmarks job raises the open-file limit on POSIX runners only; Windows has no such resource limit, and its `ulimit -n 65536` failed (T15-39).
 - Take the released kit 0.0.72 in place of 0.0.70, so the go shim of mise runs on Windows: kit puts the binary of mise on PATH there (K820); kit-sync writes gates.yml without the link steps of CI (K824) and its principles (T15-36).
 - Take the released kit 0.0.70 in place of 0.0.66: the pin of package.json and its lock, which no longer holds the toml-patch dependency that kit deleted; kit-sync and make hooks change nothing, since T15-33 and T15-34 already hold its copies (T15-35).
@@ -24,7 +26,6 @@
 - The test workflow sets up the PHP of .php-version before the install of kit, as gates.yml does (T15-20).
 - The test workflow checks out the sibling kit and the polyspec packages and links them before the tests, so its CI jobs find the kit bootstrap (T15-19).
 - The gates workflow checks out the sibling kit and the polyspec packages and links them before the gates, so its CI run finds the kit bootstrap (T15-18).
-
 - make duplication-check passes: the Go tests share their corpus, fixture, request, recorder and table helpers through internal/corpustest, internal/tabletest, internal/ucd and journal.Recorder, and the repeated library pieces are one function each (ops.ServeLines, Corpus.RunJSON and RunText, catalog Table.Placement and Diagnostic.String, store Row.BlockNames and FoldASCII) (T15-17).
 - The token and holder tests check the behavior on macOS with no branch on the platform, so make divergence-check passes (T15-16).
 - config/dependency-policy.json declares the PHP platform of the board example and the npm locks of flowmark, so make dependency-policy-check passes (T15-15).
