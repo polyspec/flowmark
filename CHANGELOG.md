@@ -2,6 +2,7 @@
 # Changelog
 
 ## Unreleased
+- The benchmarks job raises the open-file limit on POSIX runners only; Windows has no such resource limit, and its `ulimit -n 65536` failed (T15-39).
 - Take the released kit 0.0.72 in place of 0.0.70, so the go shim of mise runs on Windows: kit puts the binary of mise on PATH there (K820); kit-sync writes gates.yml without the link steps of CI (K824) and its principles (T15-36).
 - Take the released kit 0.0.70 in place of 0.0.66: the pin of package.json and its lock, which no longer holds the toml-patch dependency that kit deleted; kit-sync and make hooks change nothing, since T15-33 and T15-34 already hold its copies (T15-35).
 - Run no release version check, which kit K812 deletes: release.yml is the copy of kit without the release-versions step (T15-34).

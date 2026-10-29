@@ -87,10 +87,12 @@ jobs:
           GOSUMDB: 'off'
           GOFLAGS: -mod=readonly
         run: |
-          ulimit -Sn; ulimit -Hn
-          if [ "$(uname -s)" = Darwin ]; then sudo sysctl -w kern.maxfiles=65536; fi
-          if [ "$(uname -s)" = Darwin ]; then sudo sysctl -w kern.maxfilesperproc=65536; fi
-          ulimit -n 65536
+          # The open-file limit is a POSIX resource limit; Windows has none to raise (T15-39).
+          if [ "$RUNNER_OS" != Windows ]; then
+            ulimit -Sn; ulimit -Hn
+            if [ "$RUNNER_OS" = macOS ]; then sudo sysctl -w kern.maxfiles=65536 kern.maxfilesperproc=65536; fi
+            ulimit -n 65536
+          fi
           make flowmark-benchmarks | tee benchmarks.txt
       - uses: actions/upload-artifact@v4
         with:
