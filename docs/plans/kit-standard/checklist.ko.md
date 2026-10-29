@@ -1,5 +1,5 @@
 <!-- doc-id: checklist-kit-standard -->
-<!-- source-sha256: 05c9730097e30f21d59400928294203e9ef404e39629e3a4dc4ac5da9773fa5c -->
+<!-- source-sha256: 8bfbd9f07eed8c51a1ebbfa7ebcefb6886d6932ebc0a0b74cda7cf72a28cd0d9 -->
 # kit 표준 체크리스트
 
 | ID | Task | Deliverables | Verification | State |
@@ -44,3 +44,4 @@
 | T15-38 | journal 시험은 다른 사용자의 process와 kill된 holder의 종료를 platform별로 명시한다: Windows는 process 4(System)와 exit code 1, 그 밖은 process 1과 signal. 원인: CI 40938620154가 windows-latest에서 실패한다. TestOtherUserProcessReadsRunning은 Windows에 없는 process 1을 열고, TestLockWaitHolderExitWakes는 signal의 exit code -1을 바라지만 Windows의 kill은 exit code 1의 TerminateProcess다 | packages/go/store/journal/holder_test.go, packages/go/store/journal/wait_test.go, packages/go/store/journal/unix_test.go, packages/go/store/journal/windows_test.go | `make test-go CASES='TestOtherUserProcessReadsRunning\|TestLockWaitHolderExitWakes'` | [v] |
 | T15-39 | benchmarks job은 열린 파일 한도를 POSIX runner에서만 올린다. Windows에는 그 resource limit이 없다. 원인: CI 40938620154가 windows-latest의 benchmarks 단계 "ulimit -n 65536"에서 "cannot modify limit: Operation not permitted"로 실패한다 | .github/workflows/test.yml | `make kit-check` | [v] |
 | T15-40 | flowmark은 0.0.72 대신 release된 kit 0.0.73을 받는다: package.json의 pin과 그 lock, make kit-sync의 사본과 make hooks의 hook. 원인: kit 0.0.73이 K826, K827, K830과 함께 release되었다 | package.json, package-lock.json | `make kit-check` | [v] |
+| T15-41 | kit 0.0.74 채택: kit이 삭제하는 toolchain-check와 link-state-check를 CHECK_TARGETS와 gates workflow에서 제거하고 link-state-check 자리에 link-check를 실행한다. 원인: kit K854가 toolchain-check를 삭제하고 K869가 link-state-check를 link-check로 바꾸므로, 이를 부르는 flowmark target은 kit에 없는 target을 부른다 | Makefile, .github/workflows/gates.yml, CHANGELOG.md, CHANGELOG.ko.md | `make kit-check` | [ ] |
