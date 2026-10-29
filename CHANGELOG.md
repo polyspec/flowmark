@@ -2,6 +2,7 @@
 # Changelog
 
 ## Unreleased
+- Run the hooks of kit K805: .githooks/pre-commit no longer calls the deleted commit gates, and .githooks/pre-merge-commit is deleted (T15-32).
 - Delete the pre-push hook .githooks/pre-push with the kit K804 push gate (T15-31).
 - config/checklist.json hooks names commit-msg alone, and so does the checklist fixture of tests/check-refs.test.mts (T15-31).
 - The comment of config/toolchain.json names no pythonBackend and no dependency review, which kit K788 and K789 delete (T15-28).

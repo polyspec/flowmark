@@ -1,8 +1,9 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 456bd03f00f9e97d91c52a45f6c9dbb9a822faf44cf0e9ddc7f8241e8ecc1c06 -->
+<!-- source-sha256: a1b65dcd4b3e7932d5c4648a3806cd34a95b7cc9327e5de1b23c030d232a7a60 -->
 # Changelog
 
 ## Unreleased
+- kit K805의 hook을 실행한다: .githooks/pre-commit은 삭제된 commit gate를 더 이상 호출하지 않고, .githooks/pre-merge-commit을 삭제한다 (T15-32).
 - kit K804의 push gate와 함께 pre-push hook .githooks/pre-push를 삭제한다 (T15-31).
 - config/checklist.json의 hooks와 tests/check-refs.test.mts의 checklist fixture는 commit-msg만 이름한다 (T15-31).
 - config/toolchain.json의 comment는 kit K788과 K789가 삭제하는 pythonBackend와 dependency review를 이름하지 않는다 (T15-28).

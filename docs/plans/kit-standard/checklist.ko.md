@@ -1,5 +1,5 @@
 <!-- doc-id: checklist-kit-standard -->
-<!-- source-sha256: 53bf66c301fccace127ade70fa51049bc7c5fb630601f4b72ef04682a537a0ad -->
+<!-- source-sha256: 97e7a54ef0c177eaed0c151c799e0c29c39c7f0f9da02862558a100bc7186d05 -->
 # kit 표준 체크리스트
 
 | ID | Task | Deliverables | Verification | State |
@@ -35,4 +35,4 @@
 | T15-29 | flowmark에는 main writer hook이 없다: 추적되는 .githooks/reference-transaction을 삭제한다. 원인: kit K801이 그 hook과 writer 변수를 삭제한다 | .githooks/reference-transaction | `make kit-check` | [o] |
 | T15-30 | make hooks가 commit하는 git의 기록 없이 .githooks/pre-commit을 써서 make hooks-check가 통과한다. 원인: T15-29가 kit K801의 main writer hook을 삭제했지만 그것을 위해 commit하는 git을 기록하던 pre-commit hook을 남겼다 | .githooks/pre-commit | `make hooks-check` | [o] |
 | T15-31 | flowmark에는 pre-push hook이 없다: 추적되는 .githooks/pre-push를 삭제하고 config/checklist.json의 hooks는 commit-msg만 이름한다. 원인: kit K804가 push gate와 그 hook을 삭제해서, hook이 더 이상 없는 target을 호출하고 모든 push가 실패한다 | .githooks/pre-push, config/checklist.json, tests/check-refs.test.mts | `make hooks-check` | [o] |
-| T15-32 | flowmark은 kit K805의 hook을 실행한다: make hooks가 commit-gates-hook 없는 .githooks/pre-commit을 쓰고, .githooks/pre-merge-commit을 삭제한다. 원인: kit K805가 commits-check, commit gate, pre-merge-commit hook을 삭제해서, pre-commit hook이 삭제된 target을 호출하고 모든 commit을 거부했다 | .githooks/pre-commit, .githooks/pre-merge-commit | `make hooks-check` | [ ] |
+| T15-32 | flowmark은 kit K805의 hook을 실행한다: make hooks가 commit-gates-hook 없는 .githooks/pre-commit을 쓰고, .githooks/pre-merge-commit을 삭제한다. 원인: kit K805가 commits-check, commit gate, pre-merge-commit hook을 삭제해서, pre-commit hook이 삭제된 target을 호출하고 모든 commit을 거부했다 | .githooks/pre-commit, .githooks/pre-merge-commit | `make hooks-check` | [o] |
