@@ -1,5 +1,5 @@
 <!-- doc-id: checklist-kit-standard -->
-<!-- source-sha256: a36bb64e8c2b5c4e26718ec59f8057c7182202ab9dc41610dce159ebd0214aba -->
+<!-- source-sha256: 99a4a82c7265d703270d316f7596405a781ff6c35d05647e712cea1f4c060ca3 -->
 # kit 표준 체크리스트
 
 | ID | Task | Deliverables | Verification | State |
@@ -33,3 +33,4 @@
 | T15-27 | flowmark은 release된 kit 0.0.66을 채택한다: pin, 그 lock, 동기화된 kit 파일, review 기록. 원인: gates와 test workflow가 lock된 kit 0.0.64에서 실패한다(run 40827787677, 40827787680, 3ab0805) | package.json, package-lock.json, the files of make kit-sync, config/dependency-review.json | `make kit-check` | [o] |
 | T15-28 | config/toolchain.json은 kit K788과 K789가 삭제하는 것을 언급하지 않는다: 그 comment에서 pythonBackend와 dependency review가 빠진다. 원인: kit이 build backend pin과 dependency review를 삭제하므로, comment가 더는 없는 선언을 언급한다 | config/toolchain.json | `make kit-check` | [ ] |
 | T15-29 | flowmark에는 main writer hook이 없다: 추적되는 .githooks/reference-transaction을 삭제한다. 원인: kit K801이 그 hook과 writer 변수를 삭제한다 | .githooks/reference-transaction | `make kit-check` | [o] |
+| T15-30 | make hooks가 commit하는 git의 기록 없이 .githooks/pre-commit을 써서 make hooks-check가 통과한다. 원인: T15-29가 kit K801의 main writer hook을 삭제했지만 그것을 위해 commit하는 git을 기록하던 pre-commit hook을 남겼다 | .githooks/pre-commit | `make hooks-check` | [ ] |
