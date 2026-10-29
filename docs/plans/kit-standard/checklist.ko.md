@@ -1,5 +1,5 @@
 <!-- doc-id: checklist-kit-standard -->
-<!-- source-sha256: a1c8eb9c6ca190b92ed20702e8cc2df787e93bec95e61e890face1e68ce8964b -->
+<!-- source-sha256: 12aede5bdc3c81757195ee1d80735416e9c35ec74f91b399327b20c25f48f7cb -->
 # kit 표준 체크리스트
 
 | ID | Task | Deliverables | Verification | State |
@@ -29,3 +29,4 @@
 | T15-23 | gates workflow 이력의 외부 task ID를 code span으로 표기한다 | Bilingual kit-standard checklists | `make refs-check` | [o] |
 | T15-24 | Linux journal test에서 inotify decoder error를 확인한다 | packages/go/store/journal/linux_test.go | `cd packages/go && GOOS=linux ../../var/tools/mise/shims/golangci-lint run ./store/journal/...` | [o] |
 | T15-25 | 잠긴 의존성 취약점을 해결하고 offline 감사 근거를 기록한다 | package-lock.json and config/dependency-review.json | `make dependency-policy-check` | [o] |
+| T15-26 | flowmark은 kit이 삭제하는 dependency target을 하나도 지정하지 않는다(kit `K784`, `K786`): CHECK_TARGETS, config/owner-checks.json, 그 target만 읽는 config 파일 | Makefile, config/owner-checks.json, config/dependency-policy.json, config/dependency-review.json | `make owner-validate` | [ ] |
