@@ -1,9 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: d83affc876f699941b004c4a8cc67187c388cb7d4b7ec5560492eeeae7f8dd9a -->
+<!-- source-sha256: ed417784fc999ff56f2bb31b6b4a16ec250b316ce40eced131c986c79d3328c5 -->
 # Changelog
 
 ## Unreleased
 
+- 0.0.72 대신 K826, K827, K830을 담은 release된 kit 0.0.73을 받는다. 그 사본은 바뀌지 않는다(T15-40).
 - `flowmark serve`는 Windows에서 `.flowmark/server.json`을 그 소유자에게만 권한을 주는 보호된 access list로 만든다(40-ops 요구). 그곳에서 os.OpenFile의 권한 bit는 읽기 전용 속성만 정하므로 파일이 폴더의 access list를 상속했다(T15-37).
 - journal 시험은 다른 사용자의 process와 kill된 holder의 exit code를 platform별로 명시한다: Windows는 process 1이 없고 kill을 TerminateProcess로 끝내므로 process 4(System)와 exit code 1이다(T15-38).
 - benchmarks job은 열린 파일 한도를 POSIX runner에서만 올린다. Windows에는 그 resource limit이 없어 `ulimit -n 65536`이 실패했다(T15-39).

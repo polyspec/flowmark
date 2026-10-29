@@ -3,6 +3,7 @@
 
 ## Unreleased
 
+- Take the released kit 0.0.73 in place of 0.0.72, which carries K826, K827 and K830; its copies are unchanged (T15-40).
 - `flowmark serve` creates `.flowmark/server.json` on Windows with a protected access list that grants its owner alone, as 40-ops requires; the permission bits of os.OpenFile set only the read-only attribute there, so the file inherited the access list of its folder (T15-37).
 - The journal tests name the process of another user and the exit code of a killed holder per platform: process 4 (System) and exit code 1 on Windows, which has no process 1 and ends a killed process by TerminateProcess (T15-38).
 - The benchmarks job raises the open-file limit on POSIX runners only; Windows has no such resource limit, and its `ulimit -n 65536` failed (T15-39).
