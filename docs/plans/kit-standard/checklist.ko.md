@@ -1,5 +1,5 @@
 <!-- doc-id: checklist-kit-standard -->
-<!-- source-sha256: ac9b30b6c2f2f93738a4dd13ec0d18ae265de48ce4e3c33eea83e621f664b6f6 -->
+<!-- source-sha256: 5bdedeffdc7065c381519ec5f8a36e97b9322b5ee764210ccbd7847edf68ad17 -->
 # kit 표준 체크리스트
 
 | ID | Task | Deliverables | Verification | State |
@@ -31,6 +31,6 @@
 | T15-25 | 잠긴 의존성 취약점을 해결하고 offline 감사 근거를 기록한다 | package-lock.json and config/dependency-review.json | `make dependency-policy-check` | [o] |
 | T15-26 | flowmark은 kit이 삭제하는 dependency target을 하나도 지정하지 않는다(kit `K784`, `K786`): CHECK_TARGETS, config/owner-checks.json, 그 target만 읽는 config 파일 | Makefile, config/owner-checks.json, config/dependency-policy.json, config/dependency-review.json | `make owner-validate` | [o] |
 | T15-27 | flowmark은 release된 kit 0.0.66을 채택한다: pin, 그 lock, 동기화된 kit 파일, review 기록. 원인: gates와 test workflow가 lock된 kit 0.0.64에서 실패한다(run 40827787677, 40827787680, 3ab0805) | package.json, package-lock.json, the files of make kit-sync, config/dependency-review.json | `make kit-check` | [o] |
-| T15-28 | config/toolchain.json은 kit K788과 K789가 삭제하는 것을 언급하지 않는다: 그 comment에서 pythonBackend와 dependency review가 빠진다. 원인: kit이 build backend pin과 dependency review를 삭제하므로, comment가 더는 없는 선언을 언급한다 | config/toolchain.json | `make toolchain-check` | [~] |
+| T15-28 | config/toolchain.json은 kit K788과 K789가 삭제하는 것을 언급하지 않는다: 그 comment에서 pythonBackend와 dependency review가 빠진다. 원인: kit이 build backend pin과 dependency review를 삭제하므로, comment가 더는 없는 선언을 언급한다 | config/toolchain.json | `make toolchain-check` | [o] |
 | T15-29 | flowmark에는 main writer hook이 없다: 추적되는 .githooks/reference-transaction을 삭제한다. 원인: kit K801이 그 hook과 writer 변수를 삭제한다 | .githooks/reference-transaction | `make kit-check` | [o] |
 | T15-30 | make hooks가 commit하는 git의 기록 없이 .githooks/pre-commit을 써서 make hooks-check가 통과한다. 원인: T15-29가 kit K801의 main writer hook을 삭제했지만 그것을 위해 commit하는 git을 기록하던 pre-commit hook을 남겼다 | .githooks/pre-commit | `make hooks-check` | [o] |

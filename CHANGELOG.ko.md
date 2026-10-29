@@ -1,8 +1,9 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: c1c1f724f7b8def43b2860800e8050a52455bd2933d389b6c47fab6fd86317ee -->
+<!-- source-sha256: dab883f7df9fd5f0c27dc4c8572770d5cba556d01d42cf7a3bb5cb945d2ba792 -->
 # Changelog
 
 ## Unreleased
+- config/toolchain.json의 comment는 kit K788과 K789가 삭제하는 pythonBackend와 dependency review를 이름하지 않는다 (T15-28).
 - pre-commit hook은 삭제된 main writer hook을 위해 commit하는 git을 더 이상 기록하지 않는다 (T15-30).
 - kit K801이 삭제하는 main writer hook .githooks/reference-transaction을 삭제한다 (T15-29).
 - dependency-policy-check 실행을 멈추고 그 config와 review 기록을 삭제한다. package manager가 lock을 검증하기 때문이다 (T15-26).
