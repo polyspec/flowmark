@@ -3,6 +3,9 @@
 # Changelog
 
 ## Unreleased
+- T15-44: 0.0.1을 릴리스한다 (T15-44)
+
+## 0.0.1
 
 - 0.0.72 대신 K826, K827, K830을 담은 release된 kit 0.0.73을 받는다. 그 사본은 바뀌지 않는다(T15-40).
 - `flowmark serve`는 Windows에서 `.flowmark/server.json`을 그 소유자에게만 권한을 주는 보호된 access list로 만든다(40-ops 요구). 그곳에서 os.OpenFile의 권한 bit는 읽기 전용 속성만 정하므로 파일이 폴더의 access list를 상속했다(T15-37).

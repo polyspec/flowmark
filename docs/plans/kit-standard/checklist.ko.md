@@ -1,5 +1,5 @@
 <!-- doc-id: checklist-kit-standard -->
-<!-- source-sha256: 60bf5a0375aa5117d96c84041039bb85b2516c10c0ec50201d5d9178d5eb779f -->
+<!-- source-sha256: 84646dccead90a83ce0359ecfa78d1ab1aec273639673c24f8bd4a57c02fe38e -->
 # kit 표준 체크리스트
 
 | ID | Task | Deliverables | Verification | State |
@@ -47,3 +47,4 @@
 | T15-41 | kit 0.0.74 채택: kit이 삭제하는 toolchain-check와 link-state-check를 CHECK_TARGETS와 gates workflow에서 제거하고 link-state-check 자리에 link-check를 실행한다. 원인: kit K854가 toolchain-check를 삭제하고 K869가 link-state-check를 link-check로 바꾸므로, 이를 부르는 flowmark target은 kit에 없는 target을 부른다 | Makefile, .github/workflows/gates.yml, CHANGELOG.md, CHANGELOG.ko.md | `make kit-check` | [ ] |
 | T15-42 | checkout의 link 선언 파일을 쓴다. 원인: kit K869는 checkout마다 하나의 link 선언이 경우별 복사, link, 설치를 대신하게 하므로, flowmark는 link하는 orm Go module을 거기에 선언한다 | the link declaration file (K869), CHANGELOG.md, CHANGELOG.ko.md | `make link-check` | [ ] |
 | T15-43 | ci-setup이 부르는 deps-<runtime> target을 정의한다. 원인: kit K859는 package 설치 감싸기를 멈추고 ci-setup은 runtime마다 repository의 deps-<runtime> target을 내보내므로, flowmark는 자신의 make target으로 설치를 소유한다 | Makefile, config/ci.json, .github/workflows/test.yml, CHANGELOG.md, CHANGELOG.ko.md | `make kit-check` | [ ] |
+| T15-44 | flowmark의 첫 릴리스 0.0.1을 낸다. 원인: main에 0.0.1 작업 전체와 kit 0.0.73이 있으나 태그가 없다. 수용: CHANGELOG.md와 CHANGELOG.ko.md가 새 ## Unreleased 아래에 ## 0.0.1을 가지고, package.json이 0.0.1을 적으며, gates와 ci-passed가 통과한 커밋의 annotated 태그 v0.0.1이 GitHub 릴리스를 공개한다. | CHANGELOG.md(.ko) | Red: `gh release view v0.0.1 -R polyspec/flowmark` finds no release. Green: the release.yml run of the tag v0.0.1 passes and `gh release view v0.0.1 -R polyspec/flowmark` shows it public. | [~] |
