@@ -1,5 +1,5 @@
 <!-- doc-id: checklist-kit-standard -->
-<!-- source-sha256: 953bf4e0216a770f8b9d700c10dc26d6fe7aec5b2106fd578c4da04b57881459 -->
+<!-- source-sha256: 3c61673f96dbaaf7737272acb10097ed710d2aa4f8b060776224e55db1038c32 -->
 # kit 표준 체크리스트
 
 | ID | Task | Deliverables | Verification | State |
@@ -40,3 +40,4 @@
 | T15-34 | flowmark은 kit K812가 삭제하는 release version check를 실행하지 않는다: kit-sync는 release-versions 단계가 없는 release.yml을 쓴다. 원인: kit K812가 release-versions를 삭제해 flowmark의 release workflow가 더는 없는 target을 부른다 | .github/workflows/release.yml | `make kit-check` | [o] |
 | T15-35 | flowmark은 0.0.66 대신 release된 kit 0.0.70을 받는다: package.json의 pin과 그 lock, make kit-sync의 사본, make hooks의 hook. 원인: kit 0.0.70이 K797부터 K817까지의 족쇄를 지우는데 flowmark은 아직 0.0.66에서 설치한다 | package.json, package-lock.json | `make kit-check` | [v] |
 | T15-36 | flowmark이 kit 0.0.70 대신 release된 kit 0.0.72를 받아 Windows에서 mise의 go shim이 실행되게 한다. 원인: CI 40914845998이 windows-latest의 "install locked Go dependencies"에서 "mise-shim: failed to execute mise: program not found"로 실패한다. kit 0.0.72는 Windows에서 mise binary를 PATH에 둔다(K820) | package.json, package-lock.json, .github/workflows/gates.yml, PRINCIPLES.md, PRINCIPLES.ko.md | `make kit-check` | [v] |
+| T15-37 | flowmark은 Windows에서 server.json을 그 소유자에게만 권한을 주는 보호된 access list로 만든다(40-ops 요구). 원인: CI 40938620154가 windows-latest의 TestToken에서 "server.json mode -rw-rw-rw-, want 0600"으로 실패한다. Windows에서 os.OpenFile은 읽기 전용 속성만 정하므로 token 파일이 폴더의 access list를 상속한다 | packages/go/server/token.go, packages/go/server/create_unix.go, packages/go/server/create_windows.go, packages/go/server/server_test.go, packages/go/server/owner_unix_test.go, packages/go/server/owner_windows_test.go | `make test-go` | [ ] |
