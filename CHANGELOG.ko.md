@@ -1,5 +1,5 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: e3bf12a21f9936f51f88c2b0fafc0765c8c2de8a1279175d3f64d8cdd985c08f -->
+<!-- source-sha256: 15565acdb8f5a2d2d017f2d92d0da1a9845a61d178fd4005fe1e8dc59aaa3712 -->
 # Changelog
 
 ## Unreleased
@@ -7,7 +7,7 @@
 - Linux journal test에서 ignored-event 결과와 decoder error를 함께 확인한다 (T15-24).
 - 공개된 ORM parameter-use API를 고정하고 잠긴 의존성으로 엔진, 예제, conformance test를 통과한다 (T15-22).
 - workflow 이력의 외부 checklist 참조 표기를 바로잡는다 (T15-23).
-- kit 0.0.61을 적용하고 언어별 test, build, lint와 benchmark를 독립 실행하며 잠긴 의존성을 설치한 뒤 Go 검사를 offline으로 실행한다 (T15-21).
+- kit 0.0.64를 적용하고 consumer test runner를 제거하며 provider workspace test, infrastructure test와 독립 CI gates를 사용한다 (T15-21).
 - test workflow는 gates.yml처럼 kit install 전에 .php-version의 PHP를 설치한다(T15-20).
 - test workflow가 test 전에 sibling kit과 polyspec package를 checkout하고 link하므로, CI job이 kit bootstrap을 찾는다(T15-19).
 - gates workflow가 gates 전에 sibling kit과 polyspec package를 checkout하고 link하므로, CI 실행이 kit bootstrap을 찾는다(T15-18).

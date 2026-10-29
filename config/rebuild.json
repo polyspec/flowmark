@@ -74,10 +74,6 @@
       "kind": "policy",
       "reason": "flowmark's rule that every task ID a document names resolves to an item of a checklist; no ecosystem tool reads the IDs of these checklists"
     },
-    "scripts/go-test.mts": {
-      "kind": "ecosystem",
-      "tool": "go test runs the tests of each Go module, on macOS on the case-sensitive folder that hdiutil mounts"
-    },
     "scripts/record-slugs.mts": {
       "kind": "ecosystem",
       "tool": "gh api asks GitHub's renderer, VS Code's own slugify.ts runs on markdown-it, and cargo builds gitlab-glfm-markdown, whose heading ids are recorded"

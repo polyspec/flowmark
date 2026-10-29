@@ -3,12 +3,14 @@
   "comment": "The toolchains of flowmark that no other file declares (S-44-2). Node.js is node of mise.toml. flowmark is a Go module with no Python or Rust package, so it declares no pythonBackend and no Rust toolchain; the PHP of the board example (examples/board/web) is declared by .php-version, and composer by mise.toml, for the PHP lint of kit. mise is the release that make install-tools TOOLS=npm installs; mise.toml declares the tools it installs at the pins of kit (Go, Python with uv, golangci-lint and deadcode of the Go lints, govulncheck of the dependency review, alint of make layout-check) and mise.lock locks them.",
   "exceptions": [],
   "mise": {
-    "version": "2026.10.8",
+    "version": "2026.10.10",
     "sha256": {
-      "darwin-arm64": "8228699f316dc17931beb86f7a1aac70e4685535430441492ff4e857c72535ad",
-      "darwin-x64": "28c924c5703c6344489bc73227c59da2194eaf7fd962c5f3d233b9524b7419e9",
-      "linux-x64": "e908ea27810ae358c9a9a7d897ea10197bdc38d39839243e1b36acc31cbef868",
-      "linux-arm64": "88aea77e41c2a3c45a9cbd64df9516ba887017442846213b3de178acbd3c9a46"
+      "darwin-arm64": "6f99b395c8d2a4364fd5cf6a73521fb7f8444831a330db6a4c7cea9a58d69930",
+      "darwin-x64": "63f308ac41c86ab9b3fbaecf26e8825264e9731960d6c665778d64e0e9b47151",
+      "linux-x64": "58063fdda315c29ff7504daf8f2414462d6a52e4de2243c3ce23f849975a4ab5",
+      "linux-arm64": "b67f4ad5e35199b14362aa64d065977f8513a2046430179c2ab42262914a73b0",
+      "windows-x64": "44b8254542c2261f6917220c3d33631f1d8354fb9f547f7b8070a7dede889e86",
+      "windows-arm64": "9e875e5ae7fe800d9c07358174fe6b58abe5cceb7dc8dd2f29b4afe1efe1f173"
     }
   }
 }

@@ -1,9 +1,5 @@
 {
   "schema": 1,
-  "binaries": {
-    "go": "the Go toolchain that scripts/go-test.mts runs in each Go module",
-    "hdiutil": "the macOS tool that tests/darwin mounts the case-sensitive image with, run only on macOS by make flowmark-test"
-  },
   "ignore": {
     "packages/go/store/testdata/slug/vscode-slugify.ts": "the VS Code slugify source that store tests read as data; scripts/record-slugs.mts writes it, and nothing imports it",
     "examples/board/web/node/model/models.ts": "the models that orm-gen generates from the corpus catalog (T15-11); their exports are the API of the models, which the server reads in part"

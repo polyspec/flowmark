@@ -1,5 +1,5 @@
 <!-- doc-id: agents -->
-<!-- source-sha256: a5644b9697105a7096767154582f87ac5ac39fcd967405a5481f8be299d28afd -->
+<!-- source-sha256: ae3097d45f6edd5a3b77154ce554a5e29fc23f0cfced3b62f52532af92eac117 -->
 # 개발 규칙
 
 [English](AGENTS.md)
@@ -38,13 +38,13 @@ GitHub, Jira), 응용 schema이고, [polyspec/orm](https://github.com/polyspec/o
   `make kit-check`는 비교한다. 공유 파일은 kit에서 바꾼다. flowmark는 make target 또는 `$(KIT)/<tool>.$(KIT_EXT)`로
   kit tool을 실행하고 생태계 library는 자신의 package manifest에 선언한다.
   Enforced by: `make kit-check`
-- Own: `make flowmark-test`는 `flowmark-node-check`와 `flowmark-go-check`를 합친다. CI는 Linux, Windows, macOS에서
-  둘을 독립적으로 실행하며 TypeScript와 PHP lint 및 benchmark도 별도 job으로 실행한다. 각 job은 필요한 tool과
-  lock의 package만 설치하며 sibling checkout 없이 released dependency로 test한다. Node suite는 macOS에서 mount test를
-  포함한다. Go runner는 대소문자 구분 폴더(macOS APFS, Windows fsutil, 그 밖에서는 탐지한 폴더)를 마련하고
-  `packages/go`, `examples`, `tests/conformance/go` 세 Go module을 실행한다. 대소문자를 접는 파일 시스템에서 맨 Go test는
-  설계대로 실패하며 필요한 변수를 알려 준다. 최종 `ci-passed` job은 모든 job이 성공해야 release를 허용한다.
-  Enforced by: `make flowmark-test`
+- Own: test 탐색, 실행과 대소문자 구분 자원은 Kit이 소유한다. `make test-go`는 추적된 `go.work`의 모든 module을,
+  `make test-infrastructure`는 루트 TypeScript test를 실행한다. `CASE_SENSITIVE_ENV`는 Kit이 준비하고 정리하는
+  `FLOWMARK_CASE_SENSITIVE_DIR`를 지정한다. CI는 언어별 잠긴 사전 의존성을 독립 설치하고 Linux, Windows, macOS에서
+  provider의 build, test, gate 경로만 사용한다. benchmark는 Kit native runner로 writepath test와 함께 실행한다.
+  Kit 지원 부족을 consumer runner로 대체하지 않고 Kit issue로 보고하며 모든 필수 검사와 provider release proof가
+  성공해야 release한다.
+  Enforced by: `make kit-check`
 - Own: 엔진은 database이므로 그 unit test는 촘촘하다: 모든 문법과 제약 규칙에는 허용과 거절의 사례가 최소 하나씩 있고
   표 주도이며 edge case를 포함한다. 모든 storage에는 모든 column type과 NULL 및 빈 형태를 덮는 P1/P2 golden
   fixture가 있다. parse와 emit은 golden fixture를 seed로 `go test -fuzz`로 fuzz하며, fuzzer가 찾은 실패 입력은
@@ -53,7 +53,7 @@ GitHub, Jira), 응용 schema이고, [polyspec/orm](https://github.com/polyspec/o
 - Own: 다중 플랫폼은 필수 요구다: lock, journal, watch, 파일 시스템의 플랫폼별 코드는 CI matrix의 각 플랫폼에서 돌고,
   이식 가능한 구현을 플랫폼 꼼수로 대신하지 않는다. lock은 kit의 holder-lock 선례를 따르며, 현재 요구를 만족하는 가장
   단순한 구현이 이긴다.
-  Enforced by: `make flowmark-test`
+  Enforced by: `make test-go`
 - Own: 각 repository는 자기 checklist를 운영한다: 다른 repository의 작업은 거기서 추적하고, 여기서는 그 ID를 code span으로
   참조한다. 그래서 `make refs-check`는 다른 repository의 항목을 이 repository의 항목으로 읽지 않는다.
   Enforced by: `make refs-check`

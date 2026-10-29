@@ -1,4 +1,4 @@
-# Language suites run concurrently, using only their own toolchains and released dependencies.
+# All test discovery, execution and case-sensitive resources belong to Kit.
 name: test
 on:
   push:
@@ -14,8 +14,6 @@ jobs:
   language:
     name: ${{ matrix.language }} (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    env:
-      GOWORK: ${{ github.workspace }}/go.work
     defaults:
       run:
         shell: bash
@@ -30,51 +28,32 @@ jobs:
         with:
           node-version-file: mise.toml
           package-manager-cache: false
-      - name: bootstrap locked kit
+      - name: bootstrap the locked Kit package
         run: npm_config_cache="$PWD/var/bootstrap/npm-cache" npm exec --yes --package="$(node -p 'require("./package.json").packageManager.split("+")[0]')" -- npm ci --ignore-scripts --allow-remote=root
-      - name: install npm
+      - name: install pinned npm and Node
         run: make install-tools TOOLS=npm
       - name: install Go
         if: matrix.language == 'go'
         run: make install-tools TOOLS=go
-      - uses: actions/cache@v4
+      - name: install locked Go dependencies
         if: matrix.language == 'go'
-        with:
-          path: |
-            ~/go/pkg/mod
-            ~/.cache/go-build
-            ~/Library/Caches/go-build
-            ~/AppData/Local/go-build
-          key: go-${{ runner.os }}-${{ hashFiles('mise.lock', '**/go.sum') }}
-          restore-keys: go-${{ runner.os }}-
-      - name: download locked Go dependencies
-        if: matrix.language == 'go'
-        run: cd packages/go && ../../var/tools/mise/shims/go mod download
-      - name: build Go
+        run: make flowmark-go-install
+      - name: build and test the complete Go workspace offline
         if: matrix.language == 'go'
         env:
           GOPROXY: 'off'
           GOSUMDB: 'off'
           GOFLAGS: -mod=readonly
-        run: make flowmark-build
-      - name: TypeScript tests
+        run: make build-go test-go
+      - name: test TypeScript infrastructure through Kit
         if: matrix.language == 'typescript'
-        run: make flowmark-node-check
-      - name: Go tests
-        if: matrix.language == 'go'
-        env:
-          GOPROXY: 'off'
-          GOSUMDB: 'off'
-          GOFLAGS: -mod=readonly
-        run: make flowmark-go-check
+        run: make test-infrastructure
       - name: references
         if: matrix.language == 'typescript' && runner.os == 'Linux'
         run: make refs-check
   benchmarks:
     name: benchmarks (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    env:
-      GOWORK: ${{ github.workspace }}/go.work
     defaults:
       run:
         shell: bash
@@ -88,113 +67,50 @@ jobs:
         with:
           node-version-file: mise.toml
           package-manager-cache: false
-      - name: bootstrap locked kit
+      - name: bootstrap the locked Kit package
         run: npm_config_cache="$PWD/var/bootstrap/npm-cache" npm exec --yes --package="$(node -p 'require("./package.json").packageManager.split("+")[0]')" -- npm ci --ignore-scripts --allow-remote=root
-      - name: install npm
+      - name: install pinned npm and Node
         run: make install-tools TOOLS=npm
       - name: install Go
         run: make install-tools TOOLS=go
-      - uses: actions/cache@v4
-        with:
-          path: |
-            ~/go/pkg/mod
-            ~/.cache/go-build
-            ~/Library/Caches/go-build
-            ~/AppData/Local/go-build
-          key: go-bench-${{ runner.os }}-${{ hashFiles('mise.lock', '**/go.sum') }}
-          restore-keys: go-${{ runner.os }}-
-      - name: download locked Go dependencies
-        run: cd packages/go && ../../var/tools/mise/shims/go mod download
-      - name: benchmarks
+      - name: install locked Go dependencies
+        run: make flowmark-go-install
+      - name: build the workspace offline
+        env:
+          GOPROXY: 'off'
+          GOSUMDB: 'off'
+          GOFLAGS: -mod=readonly
+        run: make build-go
+      - name: benchmarks through the Kit runner
         env:
           GOPROXY: 'off'
           GOSUMDB: 'off'
           GOFLAGS: -mod=readonly
         run: |
-          # The watch of macOS holds one descriptor per document (spec 40), so the benchmark corpus needs more open
-          # files than the runner's defaults allow. The standard raises are the rlimit and, on macOS, the per-process
-          # file ceiling the kernel enforces beside it (kern.maxfilesperproc); each raise names its result in the
-          # log, and a corpus that still does not fit fails the benchmark with the engine's DRIVER rule.
           ulimit -Sn; ulimit -Hn
-          if [ "$(uname -s)" = Darwin ]; then sysctl kern.maxfilesperproc kern.maxfiles; fi
-          if [ "$(uname -s)" = Darwin ]; then sudo sysctl -w kern.maxfiles=65536 || echo 'raise: kern.maxfiles refused'; fi
-          if [ "$(uname -s)" = Darwin ]; then sudo sysctl -w kern.maxfilesperproc=65536 || echo 'raise: kern.maxfilesperproc refused'; fi
-          ulimit -n 65536 || echo 'raise: the rlimit was refused'
-          ulimit -Sn; ulimit -Hn
-          (cd packages/go && ../../var/tools/mise/shims/go test ./writepath -run '^$' -bench . -benchmem) | tee benchmarks.txt
+          if [ "$(uname -s)" = Darwin ]; then sudo sysctl -w kern.maxfiles=65536; fi
+          if [ "$(uname -s)" = Darwin ]; then sudo sysctl -w kern.maxfilesperproc=65536; fi
+          ulimit -n 65536
+          make flowmark-benchmarks | tee benchmarks.txt
       - uses: actions/upload-artifact@v4
         with:
           name: benchmarks-${{ matrix.os }}
           path: benchmarks.txt
-  checks:
-    name: ${{ matrix.runtime }} checks
+  ci-passed:
+    if: always()
+    needs: [language, benchmarks]
     runs-on: ubuntu-24.04
-    env:
-      GOWORK: ${{ github.workspace }}/go.work
-    defaults:
-      run:
-        shell: bash
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runtime: typescript
-            tools: npm
-          - runtime: go
-            tools: go golangciLint deadcode
-          - runtime: php
-            tools: php composer phpcs phpstan
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
           node-version-file: mise.toml
           package-manager-cache: false
-      - name: bootstrap locked kit
+      - name: bootstrap the locked Kit package
         run: npm_config_cache="$PWD/var/bootstrap/npm-cache" npm exec --yes --package="$(node -p 'require("./package.json").packageManager.split("+")[0]')" -- npm ci --ignore-scripts --allow-remote=root
-      - name: install npm
+      - name: install pinned npm and Node
         run: make install-tools TOOLS=npm
-      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962
-        if: matrix.runtime == 'php'
-        with:
-          php-version-file: .php-version
-          tools: none
-          coverage: none
-      - name: install selected tools
-        if: matrix.runtime != 'typescript'
+      - name: require every mandatory job
         env:
-          TOOLS: ${{ matrix.tools }}
-        run: make install-tools TOOLS="$TOOLS"
-      - name: install TypeScript dependencies
-        if: matrix.runtime == 'typescript'
-        run: cd examples/board/web && ../../../var/tools/bin/npm ci --ignore-scripts --allow-remote=root
-      - name: install PHP dependencies
-        if: matrix.runtime == 'php'
-        run: var/tools/mise/shims/composer install --no-interaction --working-dir=examples/board/web
-      - name: install Go dependencies
-        if: matrix.runtime == 'go'
-        run: cd packages/go && ../../var/tools/mise/shims/go mod download
-      - name: TypeScript build and checks
-        if: matrix.runtime == 'typescript'
-        run: make build-ts lint-ts
-      - name: PHP build and checks
-        if: matrix.runtime == 'php'
-        run: make build-php lint-php
-      - name: Go build and checks
-        if: matrix.runtime == 'go'
-        env:
-          GOPROXY: 'off'
-          GOSUMDB: 'off'
-          GOFLAGS: -mod=readonly
-        run: make flowmark-build lint-go
-  ci-passed:
-    if: always()
-    needs: [language, benchmarks, checks]
-    runs-on: ubuntu-24.04
-    steps:
-      - name: require every suite
-        env:
-          LANGUAGE: ${{ needs.language.result }}
-          BENCHMARKS: ${{ needs.benchmarks.result }}
-          CHECKS: ${{ needs.checks.result }}
-        run: test "$LANGUAGE" = success && test "$BENCHMARKS" = success && test "$CHECKS" = success
+          RESULTS: ${{ toJSON(needs) }}
+        run: make ci-passed

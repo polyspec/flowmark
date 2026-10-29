@@ -21,9 +21,8 @@ rules:
 
   # K244: the Go suite of the conformance vectors crosses packages, so it lies in tests/conformance/go, a module of its own; the
   # vectors and catalogs that every runtime reads lie beside it in tests/conformance/. tests/kit holds the tests of kit.
-  # tests/darwin holds the node test of the macOS mount, which only the macOS run of make flowmark-test reads (hdiutil).
   - id: layout-root-tests
-    paths: ["tests/*", "!tests/kit", "!tests/conformance", "!tests/darwin"]
+    paths: ["tests/*", "!tests/kit", "!tests/conformance"]
 
   # S9: the infrastructure is TypeScript, and these files are the exceptions that the rule allows, each with its reason.
   - id: layout-infrastructure-typescript

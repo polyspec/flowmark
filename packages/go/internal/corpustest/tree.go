@@ -16,7 +16,7 @@ import (
 const TestNow = "2026-10-11 09:00:00.123456"
 
 // CaseSensitiveEnv names the folder, on a case-sensitive file system, where a test writes a corpus whose file names
-// differ only in case; scripts/go-test.mts, which make test runs, provisions it. It is read only when the test's
+// differ only in case; Kit provisions it for make test-go with CASE_SENSITIVE_ENV. It is read only when the test's
 // temporary folder folds case, and must then be set and absolute.
 const CaseSensitiveEnv = "FLOWMARK_CASE_SENSITIVE_DIR"
 

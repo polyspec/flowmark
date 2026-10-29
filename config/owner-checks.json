@@ -31,10 +31,10 @@
         "go.work"
       ],
       "targets": [
-        "flowmark-test",
         "lint-go",
         "duplication-check",
-        "lint-ts"
+        "lint-ts",
+        "test-go"
       ]
     },
     {
@@ -42,9 +42,9 @@
         "tests/**"
       ],
       "targets": [
-        "flowmark-test",
         "lint-ts",
-        "duplication-check"
+        "duplication-check",
+        "test-infrastructure"
       ]
     },
     {
@@ -61,11 +61,11 @@
         "examples/**"
       ],
       "targets": [
-        "flowmark-test",
         "lint-go",
         "lint-ts",
         "lint-php",
-        "duplication-check"
+        "duplication-check",
+        "test-go"
       ]
     },
     {
@@ -73,9 +73,9 @@
         "scripts/**"
       ],
       "targets": [
-        "flowmark-test",
         "lint-ts",
-        "duplication-check"
+        "duplication-check",
+        "test-infrastructure"
       ]
     },
     {
@@ -170,6 +170,14 @@
     {
       "paths": [
         "config/release.json"
+      ],
+      "targets": [
+        "kit-check"
+      ]
+    },
+    {
+      "paths": [
+        "config/ci.json"
       ],
       "targets": [
         "kit-check"

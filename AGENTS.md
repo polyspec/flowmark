@@ -43,14 +43,13 @@ them holds the rules of this repository.
   copies and `make kit-check` compares them. Shared files are changed in kit. flowmark runs kit tools through their make
   targets or `$(KIT)/<tool>.$(KIT_EXT)` and declares ecosystem libraries in its own package manifests.
   Enforced by: `make kit-check`
-- Own: `make flowmark-test` aggregates `flowmark-node-check` and `flowmark-go-check`. CI runs these independently on
-  Linux, Windows and macOS, alongside separate TypeScript and PHP lint jobs and benchmark jobs. Each job installs only
-  its required tools and locked packages; tests use released dependencies without sibling checkouts. The Node suite includes
-  the macOS mount test on macOS. The Go runner provisions the case-sensitive folder (APFS on macOS, fsutil on Windows,
-  a probed folder elsewhere) and runs all three Go modules: `packages/go`, `examples`, `tests/conformance/go`.
-  A bare Go test on a case-folding file system fails by design and names the required variable. The final `ci-passed`
-  job requires every job to succeed before release.
-  Enforced by: `make flowmark-test`
+- Own: Kit owns test discovery, execution and case-sensitive resources. `make test-go` covers every module in the tracked
+  `go.work`; `make test-infrastructure` covers the root TypeScript tests. `CASE_SENSITIVE_ENV` names
+  `FLOWMARK_CASE_SENSITIVE_DIR`, which Kit prepares and cleans up. CI independently installs locked prerequisites for each
+  language and runs only the provider build, test and gate paths on Linux, Windows and macOS. Benchmarks use Kit's native
+  runner together with the writepath tests. No consumer runner substitutes for missing Kit support; defects are reported
+  as Kit issues, and release requires all mandatory checks and the provider release proof.
+  Enforced by: `make kit-check`
 - Own: The engine is a database, so its unit tests are dense: every grammar and constraint rule has at least one accepting and one
   rejecting case, table-driven, with its edge cases; every storage has P1/P2 golden fixtures covering every column type and
   both the NULL and the empty forms; parse and emit are fuzzed (`go test -fuzz`) with the golden fixtures as seeds, and a
@@ -59,7 +58,7 @@ them holds the rules of this repository.
 - Own: Multi-platform is a hard requirement: the platform-specific code of the lock, the journal, the watch and the file system
   runs on each platform of the CI matrix, and no platform trick stands in for a portable implementation; locks follow kit's
   holder-lock precedent, and the simplest implementation that satisfies the current requirements wins.
-  Enforced by: `make flowmark-test`
+  Enforced by: `make test-go`
 - Own: Each repository runs its own checklists: work in another repository is tracked there and referenced here by its ID in a
   code span, so that `make refs-check` reads no other repository's item as one of this repository.
   Enforced by: `make refs-check`

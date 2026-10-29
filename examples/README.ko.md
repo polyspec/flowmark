@@ -1,12 +1,12 @@
 <!-- doc-id: examples -->
-<!-- source-sha256: 7aadf20c8878b66a6e87f0ede21033e1880b79fd1a279311fdc0c11f0aabae80 -->
+<!-- source-sha256: 507691fc4d7d630ff343235c0ee346260b0d59f402d3b5e9995548a63f10f74b -->
 # Examples
 
 [English](README.md)
 
 엔진의 예제 corpus들이다. 각 folder가 corpus root이며, `dbspec/` catalog와 엔진이 쓴
 `*.flowmark.md` 문서를 담는다. 모든 행은 엔진을 거쳐 쓰였고, 이 folder의 test
-(`cd examples && go test ./...`, `make flowmark-test`에 포함)는 face의 operation만으로 corpus의 복사본을 읽고
+(이 workspace module을 포함하는 `make test-go`)는 face의 operation만으로 corpus의 복사본을 읽고
 바꾸므로 corpus는 valid하고 canonical한 상태를 유지한다.
 
 어느 face로든 열 수 있다. 예: `flowmark rows examples/tracker/aggregate-list items`.
