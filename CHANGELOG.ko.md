@@ -3,6 +3,7 @@
 # Changelog
 
 ## Unreleased
+- 0.0.66 대신 release된 kit 0.0.70을 받는다: package.json의 pin과 그 lock이며, lock에는 kit이 삭제한 toml-patch 의존이 더 이상 없다. T15-33과 T15-34가 이미 그 사본을 가지므로 kit-sync와 make hooks는 아무것도 바꾸지 않는다 (T15-35).
 - kit K812가 삭제하는 release version check를 실행하지 않는다: release.yml은 release-versions 단계가 없는 kit의 사본이다 (T15-34).
 - kit K805가 삭제하는 commits check를 실행하지 않는다: CHECK_TARGETS에는 commits-check가, gates.yml에는 commit range 단계가 없고, principles와 release.yml은 kit의 사본이다 (T15-33).
 - kit K805의 hook을 실행한다: .githooks/pre-commit은 삭제된 commit gate를 더 이상 호출하지 않고, .githooks/pre-merge-commit을 삭제한다 (T15-32).
