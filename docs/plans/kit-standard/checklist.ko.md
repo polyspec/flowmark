@@ -1,5 +1,5 @@
 <!-- doc-id: checklist-kit-standard -->
-<!-- source-sha256: ace59fe1b5e4887023a9e4044f77f1b7a05398aed674db0a36df8633d4cd8654 -->
+<!-- source-sha256: f15f8d83abfbeda12ae279c9efc99e0d0ce455f548c0e74dae33170632622c49 -->
 # kit 표준 체크리스트
 
 | ID | Task | Deliverables | Verification | State |
@@ -36,4 +36,4 @@
 | T15-30 | make hooks가 commit하는 git의 기록 없이 .githooks/pre-commit을 써서 make hooks-check가 통과한다. 원인: T15-29가 kit K801의 main writer hook을 삭제했지만 그것을 위해 commit하는 git을 기록하던 pre-commit hook을 남겼다 | .githooks/pre-commit | `make hooks-check` | [o] |
 | T15-31 | flowmark에는 pre-push hook이 없다: 추적되는 .githooks/pre-push를 삭제하고 config/checklist.json의 hooks는 commit-msg만 이름한다. 원인: kit K804가 push gate와 그 hook을 삭제해서, hook이 더 이상 없는 target을 호출하고 모든 push가 실패한다 | .githooks/pre-push, config/checklist.json, tests/check-refs.test.mts | `make hooks-check` | [o] |
 | T15-32 | flowmark은 kit K805의 hook을 실행한다: make hooks가 commit-gates-hook 없는 .githooks/pre-commit을 쓰고, .githooks/pre-merge-commit을 삭제한다. 원인: kit K805가 commits-check, commit gate, pre-merge-commit hook을 삭제해서, pre-commit hook이 삭제된 target을 호출하고 모든 commit을 거부했다 | .githooks/pre-commit, .githooks/pre-merge-commit | `make hooks-check` | [o] |
-| T15-33 | flowmark은 commits check를 실행하지 않는다: CHECK_TARGETS에는 commits-check가 없고, CI workflow에는 commit range 단계가 없으며, PRINCIPLES.md는 commits-check 강제를 이름하지 않는다. 원인: kit K805가 commits-check와 그 CI 단계를 삭제한다 | Makefile, .github/workflows/gates.yml, PRINCIPLES.md | `make kit-check` | [ ] |
+| T15-33 | flowmark은 commits check를 실행하지 않는다: CHECK_TARGETS에는 commits-check가 없고, CI workflow에는 commit range 단계가 없으며, PRINCIPLES.md는 commits-check 강제를 이름하지 않는다. 원인: kit K805가 commits-check와 그 CI 단계를 삭제한다 | Makefile, .github/workflows/gates.yml, PRINCIPLES.md | `make kit-check` | [~] |
