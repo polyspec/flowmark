@@ -1,8 +1,9 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: a1b65dcd4b3e7932d5c4648a3806cd34a95b7cc9327e5de1b23c030d232a7a60 -->
+<!-- source-sha256: 1a1aaad734999e2dd063ec14817a3efaf4078c41fe3020b4609256b6810b9a5c -->
 # Changelog
 
 ## Unreleased
+- kit K805가 삭제하는 commits check를 실행하지 않는다: CHECK_TARGETS에는 commits-check가, gates.yml에는 commit range 단계가 없고, principles와 release.yml은 kit의 사본이다 (T15-33).
 - kit K805의 hook을 실행한다: .githooks/pre-commit은 삭제된 commit gate를 더 이상 호출하지 않고, .githooks/pre-merge-commit을 삭제한다 (T15-32).
 - kit K804의 push gate와 함께 pre-push hook .githooks/pre-push를 삭제한다 (T15-31).
 - config/checklist.json의 hooks와 tests/check-refs.test.mts의 checklist fixture는 commit-msg만 이름한다 (T15-31).
