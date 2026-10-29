@@ -1,5 +1,5 @@
 <!-- doc-id: checklist-kit-standard -->
-<!-- source-sha256: e6314a32954aa3a221ae40fab30994c46b36550bd595dc485493b71e8bd548f8 -->
+<!-- source-sha256: a87b3f05894c7fb80b69f08e18137aa9d9d97fd92a686ab83837912afcdbb313 -->
 # kit 표준 체크리스트
 
 | ID | Task | Deliverables | Verification | State |
@@ -42,3 +42,4 @@
 | T15-36 | flowmark이 kit 0.0.70 대신 release된 kit 0.0.72를 받아 Windows에서 mise의 go shim이 실행되게 한다. 원인: CI 40914845998이 windows-latest의 "install locked Go dependencies"에서 "mise-shim: failed to execute mise: program not found"로 실패한다. kit 0.0.72는 Windows에서 mise binary를 PATH에 둔다(K820) | package.json, package-lock.json, .github/workflows/gates.yml, PRINCIPLES.md, PRINCIPLES.ko.md | `make kit-check` | [v] |
 | T15-37 | flowmark은 Windows에서 server.json을 그 소유자에게만 권한을 주는 보호된 access list로 만든다(40-ops 요구). 원인: CI 40938620154가 windows-latest의 TestToken에서 "server.json mode -rw-rw-rw-, want 0600"으로 실패한다. Windows에서 os.OpenFile은 읽기 전용 속성만 정하므로 token 파일이 폴더의 access list를 상속한다 | packages/go/server/token.go, packages/go/server/create_unix.go, packages/go/server/create_windows.go, packages/go/server/server_test.go, packages/go/server/owner_unix_test.go, packages/go/server/owner_windows_test.go | `make test-go` | [ ] |
 | T15-38 | journal 시험은 다른 사용자의 process와 kill된 holder의 종료를 platform별로 명시한다: Windows는 process 4(System)와 exit code 1, 그 밖은 process 1과 signal. 원인: CI 40938620154가 windows-latest에서 실패한다. TestOtherUserProcessReadsRunning은 Windows에 없는 process 1을 열고, TestLockWaitHolderExitWakes는 signal의 exit code -1을 바라지만 Windows의 kill은 exit code 1의 TerminateProcess다 | packages/go/store/journal/holder_test.go, packages/go/store/journal/wait_test.go, packages/go/store/journal/unix_test.go, packages/go/store/journal/windows_test.go | `make test-go` | [ ] |
+| T15-39 | benchmarks job은 열린 파일 한도를 POSIX runner에서만 올린다. Windows에는 그 resource limit이 없다. 원인: CI 40938620154가 windows-latest의 benchmarks 단계 "ulimit -n 65536"에서 "cannot modify limit: Operation not permitted"로 실패한다 | .github/workflows/test.yml | `make kit-check` | [ ] |
