@@ -3,6 +3,7 @@
 # Changelog
 
 ## Unreleased
+- 0.0.70 대신 release된 kit 0.0.72를 받아 Windows에서 mise의 go shim이 실행되게 한다: kit이 그곳에서 mise binary를 PATH에 둔다(K820). kit-sync가 CI의 link 단계가 없는 gates.yml(K824)과 그 principles를 쓴다 (T15-36).
 - 0.0.66 대신 release된 kit 0.0.70을 받는다: package.json의 pin과 그 lock이며, lock에는 kit이 삭제한 toml-patch 의존이 더 이상 없다. T15-33과 T15-34가 이미 그 사본을 가지므로 kit-sync와 make hooks는 아무것도 바꾸지 않는다 (T15-35).
 - kit K812가 삭제하는 release version check를 실행하지 않는다: release.yml은 release-versions 단계가 없는 kit의 사본이다 (T15-34).
 - kit K805가 삭제하는 commits check를 실행하지 않는다: CHECK_TARGETS에는 commits-check가, gates.yml에는 commit range 단계가 없고, principles와 release.yml은 kit의 사본이다 (T15-33).

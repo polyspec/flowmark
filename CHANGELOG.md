@@ -2,6 +2,7 @@
 # Changelog
 
 ## Unreleased
+- Take the released kit 0.0.72 in place of 0.0.70, so the go shim of mise runs on Windows: kit puts the binary of mise on PATH there (K820); kit-sync writes gates.yml without the link steps of CI (K824) and its principles (T15-36).
 - Take the released kit 0.0.70 in place of 0.0.66: the pin of package.json and its lock, which no longer holds the toml-patch dependency that kit deleted; kit-sync and make hooks change nothing, since T15-33 and T15-34 already hold its copies (T15-35).
 - Run no release version check, which kit K812 deletes: release.yml is the copy of kit without the release-versions step (T15-34).
 - Run no commits check, which kit K805 deletes: CHECK_TARGETS has no commits-check, gates.yml no commit range step, and the principles and release.yml are the copies of kit (T15-33).
