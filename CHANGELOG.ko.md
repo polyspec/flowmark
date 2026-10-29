@@ -1,5 +1,5 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 01d3df82b7ddd75ceb6d8793f4053bd31da0e74e05442ae511b9007594467058 -->
+<!-- source-sha256: 426c9f440e65a166f81691f2cba3c624f929dbf211e6eacb16f94f2a761235e2 -->
 # Changelog
 
 ## Unreleased
@@ -7,7 +7,8 @@
 - Linux journal test에서 ignored-event 결과와 decoder error를 함께 확인한다 (T15-24).
 - 공개된 ORM parameter-use API를 고정하고 잠긴 의존성으로 엔진, 예제, conformance test를 통과한다 (T15-22).
 - workflow 이력의 외부 checklist 참조 표기를 바로잡는다 (T15-23).
-- kit 0.0.64를 적용하고 consumer test runner를 제거하며 provider workspace test, infrastructure test와 독립 CI gates를 사용한다. benchmark는 측정한 시간에서 정한 120 s test timeout을 선언한다 (T15-21).
+- kit 0.0.64를 적용하고 consumer test runner를 제거하며 provider workspace test, infrastructure test와 독립 CI gates를 사용한다 (T15-21).
+- benchmark는 측정한 시간에서 정한 120 s test timeout을 선언한다 (T15-21).
 - test workflow는 gates.yml처럼 kit install 전에 .php-version의 PHP를 설치한다(T15-20).
 - test workflow가 test 전에 sibling kit과 polyspec package를 checkout하고 link하므로, CI job이 kit bootstrap을 찾는다(T15-19).
 - gates workflow가 gates 전에 sibling kit과 polyspec package를 checkout하고 link하므로, CI 실행이 kit bootstrap을 찾는다(T15-18).
