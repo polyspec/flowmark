@@ -1,5 +1,5 @@
 <!-- doc-id: checklist-kit-standard -->
-<!-- source-sha256: 5bdedeffdc7065c381519ec5f8a36e97b9322b5ee764210ccbd7847edf68ad17 -->
+<!-- source-sha256: 14bac308e35b3dc1f379982a43eb7e77bdfbaa7790468fa553b15b114fa8bae5 -->
 # kit 표준 체크리스트
 
 | ID | Task | Deliverables | Verification | State |
@@ -34,3 +34,4 @@
 | T15-28 | config/toolchain.json은 kit K788과 K789가 삭제하는 것을 언급하지 않는다: 그 comment에서 pythonBackend와 dependency review가 빠진다. 원인: kit이 build backend pin과 dependency review를 삭제하므로, comment가 더는 없는 선언을 언급한다 | config/toolchain.json | `make toolchain-check` | [o] |
 | T15-29 | flowmark에는 main writer hook이 없다: 추적되는 .githooks/reference-transaction을 삭제한다. 원인: kit K801이 그 hook과 writer 변수를 삭제한다 | .githooks/reference-transaction | `make kit-check` | [o] |
 | T15-30 | make hooks가 commit하는 git의 기록 없이 .githooks/pre-commit을 써서 make hooks-check가 통과한다. 원인: T15-29가 kit K801의 main writer hook을 삭제했지만 그것을 위해 commit하는 git을 기록하던 pre-commit hook을 남겼다 | .githooks/pre-commit | `make hooks-check` | [o] |
+| T15-31 | flowmark에는 pre-push hook이 없다: 추적되는 .githooks/pre-push를 삭제하고 config/checklist.json의 hooks는 commit-msg만 이름한다. 원인: kit K804가 push gate와 그 hook을 삭제해서, hook이 더 이상 없는 target을 호출하고 모든 push가 실패한다 | .githooks/pre-push, config/checklist.json, tests/check-refs.test.mts | `make hooks-check` | [ ] |
