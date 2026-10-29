@@ -1,5 +1,5 @@
 <!-- doc-id: checklist-kit-standard -->
-<!-- source-sha256: 5a61ee581bc4762fb99f274489cb07fb06177f93197503394b2c06f462f2e1d9 -->
+<!-- source-sha256: c3a398cd86844cb01fd57f1c00e267960f3d1456fc384dbf5a7714a800db2d60 -->
 # kit 표준 체크리스트
 
 | ID | Task | Deliverables | Verification | State |
@@ -29,5 +29,5 @@
 | T15-23 | gates workflow 이력의 외부 task ID를 code span으로 표기한다 | Bilingual kit-standard checklists | `make refs-check` | [o] |
 | T15-24 | Linux journal test에서 inotify decoder error를 확인한다 | packages/go/store/journal/linux_test.go | `cd packages/go && GOOS=linux ../../var/tools/mise/shims/golangci-lint run ./store/journal/...` | [o] |
 | T15-25 | 잠긴 의존성 취약점을 해결하고 offline 감사 근거를 기록한다 | package-lock.json and config/dependency-review.json | `make dependency-policy-check` | [o] |
-| T15-26 | flowmark은 kit이 삭제하는 dependency target을 하나도 지정하지 않는다(kit `K784`, `K786`): CHECK_TARGETS, config/owner-checks.json, 그 target만 읽는 config 파일 | Makefile, config/owner-checks.json, config/dependency-policy.json, config/dependency-review.json | `make owner-validate` | [ ] |
+| T15-26 | flowmark은 kit이 삭제하는 dependency target을 하나도 지정하지 않는다(kit `K784`, `K786`): CHECK_TARGETS, config/owner-checks.json, 그 target만 읽는 config 파일 | Makefile, config/owner-checks.json, config/dependency-policy.json, config/dependency-review.json | `make owner-validate` | [~] |
 | T15-27 | flowmark은 release된 kit 0.0.66을 채택한다: pin, 그 lock, 동기화된 kit 파일, review 기록. 원인: gates와 test workflow가 lock된 kit 0.0.64에서 실패한다(run 40827787677, 40827787680, 3ab0805) | package.json, package-lock.json, the files of make kit-sync, config/dependency-review.json | `make kit-check` | [o] |
