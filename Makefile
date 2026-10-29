@@ -52,6 +52,8 @@ flowmark-node-install: ## Install the board example npm lock; ONLINE
 flowmark-php-install: ## Install the board example Composer lock; ONLINE
 	$(ONLINE) $(COMPOSER) install --no-interaction --working-dir=examples/board/web
 
+# A parent benchmark runs through all of its sub-benchmarks: BenchmarkShardOpen took 31.9 s on an Apple M3 Pro, past the
+# runner's 30 s default, so each test is given 120 s, about four times the slowest measured one.
 .PHONY: flowmark-benchmarks
 flowmark-benchmarks: ## Run writepath tests and benchmarks through the Kit runner; offline
-	$(NODE) $(KIT)/run-tests.$(KIT_EXT) go --cwd packages/go -- -bench . -benchmem ./writepath
+	$(NODE) $(KIT)/run-tests.$(KIT_EXT) go --timeout 120 --cwd packages/go -- -bench . -benchmem ./writepath
