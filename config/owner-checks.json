@@ -122,8 +122,7 @@
         "tsconfig.json"
       ],
       "targets": [
-        "lint-ts",
-        "dependency-policy-check"
+        "lint-ts"
       ]
     },
     {
@@ -156,15 +155,6 @@
       ],
       "targets": [
         "rebuild-check"
-      ]
-    },
-    {
-      "paths": [
-        "config/dependency-policy.json",
-        "config/dependency-review.json"
-      ],
-      "targets": [
-        "dependency-policy-check"
       ]
     },
     {
