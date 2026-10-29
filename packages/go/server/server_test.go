@@ -380,13 +380,7 @@ func TestToken(t *testing.T) {
 		if !tokenLine.MatchString(text) || !strings.Contains(text, `"`+tok+`"`) {
 			t.Fatalf("server.json = %q, token %q", text, tok)
 		}
-		fi, err := os.Stat(file(root))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if fi.Mode().Perm() != 0o600 {
-			t.Fatalf("server.json mode %v, want 0600", fi.Mode().Perm())
-		}
+		wantOwnerOnly(t, file(root))
 		again, err := Token(root, false)
 		if err != nil || again != tok {
 			t.Fatalf("second start: %q, %v; want %q", again, err, tok)

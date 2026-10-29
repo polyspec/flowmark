@@ -1,9 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: b7f0484d91c033bae364de47c0d5efd943f930fbd8e751ad7ef406014fbc55c9 -->
+<!-- source-sha256: d83affc876f699941b004c4a8cc67187c388cb7d4b7ec5560492eeeae7f8dd9a -->
 # Changelog
 
 ## Unreleased
 
+- `flowmark serve`는 Windows에서 `.flowmark/server.json`을 그 소유자에게만 권한을 주는 보호된 access list로 만든다(40-ops 요구). 그곳에서 os.OpenFile의 권한 bit는 읽기 전용 속성만 정하므로 파일이 폴더의 access list를 상속했다(T15-37).
 - journal 시험은 다른 사용자의 process와 kill된 holder의 exit code를 platform별로 명시한다: Windows는 process 1이 없고 kill을 TerminateProcess로 끝내므로 process 4(System)와 exit code 1이다(T15-38).
 - benchmarks job은 열린 파일 한도를 POSIX runner에서만 올린다. Windows에는 그 resource limit이 없어 `ulimit -n 65536`이 실패했다(T15-39).
 - 0.0.70 대신 release된 kit 0.0.72를 받아 Windows에서 mise의 go shim이 실행되게 한다: kit이 그곳에서 mise binary를 PATH에 둔다(K820). kit-sync가 CI의 link 단계가 없는 gates.yml(K824)과 그 principles를 쓴다 (T15-36).

@@ -93,7 +93,7 @@ func ensureFolder(dir string) error {
 
 // writeSynced creates the file p, readable and writable by its owner only, with data, and syncs it.
 func writeSynced(p string, data []byte) error {
-	f, err := os.OpenFile(p, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	f, err := createOwnerOnly(p)
 	if err != nil {
 		return err
 	}

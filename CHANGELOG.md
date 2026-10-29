@@ -3,6 +3,7 @@
 
 ## Unreleased
 
+- `flowmark serve` creates `.flowmark/server.json` on Windows with a protected access list that grants its owner alone, as 40-ops requires; the permission bits of os.OpenFile set only the read-only attribute there, so the file inherited the access list of its folder (T15-37).
 - The journal tests name the process of another user and the exit code of a killed holder per platform: process 4 (System) and exit code 1 on Windows, which has no process 1 and ends a killed process by TerminateProcess (T15-38).
 - The benchmarks job raises the open-file limit on POSIX runners only; Windows has no such resource limit, and its `ulimit -n 65536` failed (T15-39).
 - Take the released kit 0.0.72 in place of 0.0.70, so the go shim of mise runs on Windows: kit puts the binary of mise on PATH there (K820); kit-sync writes gates.yml without the link steps of CI (K824) and its principles (T15-36).
