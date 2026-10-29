@@ -1,5 +1,5 @@
 <!-- doc-id: checklist-kit-standard -->
-<!-- source-sha256: cf2ccfbe7423584d1d8120a4c22e14101d50737b7858420b97d85ce6c00f003a -->
+<!-- source-sha256: 018fe4933567b3ea61015830b9ff8c03511c6056c50c1bf986315035f16cf99b -->
 # kit 표준 체크리스트
 
 | ID | Task | Deliverables | Verification | State |
@@ -31,3 +31,4 @@
 | T15-25 | 잠긴 의존성 취약점을 해결하고 offline 감사 근거를 기록한다 | package-lock.json and config/dependency-review.json | `make dependency-policy-check` | [o] |
 | T15-26 | flowmark은 kit이 삭제하는 dependency target을 하나도 지정하지 않는다(kit `K784`, `K786`): CHECK_TARGETS, config/owner-checks.json, 그 target만 읽는 config 파일 | Makefile, config/owner-checks.json, config/dependency-policy.json, config/dependency-review.json | `make owner-validate` | [o] |
 | T15-27 | flowmark은 release된 kit 0.0.66을 채택한다: pin, 그 lock, 동기화된 kit 파일, review 기록. 원인: gates와 test workflow가 lock된 kit 0.0.64에서 실패한다(run 40827787677, 40827787680, 3ab0805) | package.json, package-lock.json, the files of make kit-sync, config/dependency-review.json | `make kit-check` | [o] |
+| T15-28 | config/toolchain.json은 kit K788과 K789가 삭제하는 것을 언급하지 않는다: 그 comment에서 pythonBackend와 dependency review가 빠진다. 원인: kit이 build backend pin과 dependency review를 삭제하므로, comment가 더는 없는 선언을 언급한다 | config/toolchain.json | `make kit-check` | [ ] |
