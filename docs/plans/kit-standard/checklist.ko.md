@@ -1,5 +1,5 @@
 <!-- doc-id: checklist-kit-standard -->
-<!-- source-sha256: 12aede5bdc3c81757195ee1d80735416e9c35ec74f91b399327b20c25f48f7cb -->
+<!-- source-sha256: 2dd39df2f28960138a52ae471038877611c80e4fbf056f78b72503bfa9ea5999 -->
 # kit 표준 체크리스트
 
 | ID | Task | Deliverables | Verification | State |
@@ -30,3 +30,4 @@
 | T15-24 | Linux journal test에서 inotify decoder error를 확인한다 | packages/go/store/journal/linux_test.go | `cd packages/go && GOOS=linux ../../var/tools/mise/shims/golangci-lint run ./store/journal/...` | [o] |
 | T15-25 | 잠긴 의존성 취약점을 해결하고 offline 감사 근거를 기록한다 | package-lock.json and config/dependency-review.json | `make dependency-policy-check` | [o] |
 | T15-26 | flowmark은 kit이 삭제하는 dependency target을 하나도 지정하지 않는다(kit `K784`, `K786`): CHECK_TARGETS, config/owner-checks.json, 그 target만 읽는 config 파일 | Makefile, config/owner-checks.json, config/dependency-policy.json, config/dependency-review.json | `make owner-validate` | [ ] |
+| T15-27 | flowmark은 release된 kit 0.0.66을 채택한다: pin, 그 lock, 동기화된 kit 파일, review 기록. 원인: gates와 test workflow가 lock된 kit 0.0.64에서 실패한다(run 40827787677, 40827787680, 3ab0805) | package.json, package-lock.json, the files of make kit-sync, config/dependency-review.json | `make kit-check` | [ ] |
