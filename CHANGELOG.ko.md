@@ -1,8 +1,9 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: ed417784fc999ff56f2bb31b6b4a16ec250b316ce40eced131c986c79d3328c5 -->
+<!-- source-sha256: 1f118584a469aacfca81d8f39acce7ec164c277be14cf15bbda0785ad58599b1 -->
 # Changelog
 
 ## Unreleased
+- T15-46: config/release.json은 모든 커밋에 있는 ci-passed 검사만 요구한다 (T15-46)
 - T15-44: 0.0.1을 릴리스한다 (T15-44)
 
 ## 0.0.1
