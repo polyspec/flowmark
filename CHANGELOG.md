@@ -2,6 +2,7 @@
 # Changelog
 
 ## Unreleased
+- T15-48: flowmark takes the released kit 0.0.77 in place of 0.0.75, with the gates and PRINCIPLES that kit-sync writes from it; the link declaration .links names the orm checkout, toolchain-check leaves the suite, and the earlier prepare-commit-msg hook is removed (T15-48)
 - T15-47: flowmark takes the released kit 0.0.75 in place of 0.0.73, with the release workflow that kit-sync writes from it (T15-47)
 - T15-45: the cases of TestExportRebuildsTheCorpus and TestVectors run in parallel, so the Go tests pass on windows-latest within the 30s limit that kit gives every test (T15-45)
 - T15-46: config/release.json requires only the ci-passed check, which exists on every commit (T15-46)

@@ -2,7 +2,7 @@
 include node_modules/@polyspec/kit/scripts/kit/kit-bootstrap.mk
 
 # The suite of the repository: the gates of kit and its own checks and tests.
-CHECK_TARGETS := kit-check toolchain-check layout-check docs-check rules-check owner-validate rebuild-check language-check test-markers-check duplication-check parity-declarations-check parity-check link-state-check bypass-check suppression-check divergence-check lint-ts lint-php lint-go refs-check test-go test-infrastructure
+CHECK_TARGETS := kit-check layout-check docs-check rules-check owner-validate rebuild-check language-check test-markers-check duplication-check parity-declarations-check parity-check link-check bypass-check suppression-check divergence-check lint-ts lint-php lint-go refs-check test-go test-infrastructure
 
 # The Composer of mise.toml, by its shim, which installs the PHP packages of the board example.
 COMPOSER := $(KIT_TOOLS)/mise/shims/composer

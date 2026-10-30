@@ -1,8 +1,9 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 343370b67ee430c13cb18140e5c8bb64ed1e542331ddd77876d01184d6861989 -->
+<!-- source-sha256: 5ea8766542a0a8fc5c391bd190c435b6033b8f6f6861194d6c75760f4e53fcba -->
 # Changelog
 
 ## Unreleased
+- T15-48: flowmark은 0.0.75 대신 release된 kit 0.0.77을 받고, kit-sync가 그로부터 쓰는 gates와 PRINCIPLES를 받는다. 링크 선언 .links는 orm checkout을 이름 짓고, toolchain-check는 검사 묶음에서 빠지며, 이전 prepare-commit-msg hook은 제거한다 (T15-48)
 - T15-47: flowmark은 0.0.73 대신 release된 kit 0.0.75를 받고, kit-sync가 그로부터 쓰는 release workflow를 받는다 (T15-47)
 - T15-45: TestExportRebuildsTheCorpus와 TestVectors의 case가 병렬로 돌아, Go test가 windows-latest에서 kit이 모든 test에 주는 30s 한도 안에 통과한다 (T15-45)
 - T15-46: config/release.json은 모든 커밋에 있는 ci-passed 검사만 요구한다 (T15-46)

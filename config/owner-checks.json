@@ -111,7 +111,7 @@
         ".php-version"
       ],
       "targets": [
-        "toolchain-check"
+        "kit-check"
       ]
     },
     {

@@ -12,3 +12,5 @@ go.work
 go.work.sum
 # The environment that uv makes for a lock project, such as the vulture lock under .mise/locks.
 .venv/
+# The link declaration of the checkout (K869): the provider checkouts that make link names, one path per line.
+/.links
