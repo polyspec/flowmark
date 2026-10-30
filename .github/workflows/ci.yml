@@ -1,5 +1,6 @@
-# All test discovery, execution and case-sensitive resources belong to Kit.
-name: test
+# All test discovery, execution and case-sensitive resources belong to Kit. The release takes the id of a successful push run of
+# this workflow on main (release.yml, make release-tag), whose job ci-passed requires every other job.
+name: ci
 on:
   push:
     branches: [main]
@@ -8,9 +9,14 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: test-${{ github.ref }}
+  group: ci-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  # The gates of kit (kit S12): ci-pipeline.yml, which kit-sync copies, plans and runs the shared, parity and runtime gates.
+  kit:
+    uses: ./.github/workflows/ci-pipeline.yml
+    permissions:
+      contents: read
   language:
     name: ${{ matrix.language }} (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -100,7 +106,7 @@ jobs:
           path: benchmarks.txt
   ci-passed:
     if: always()
-    needs: [language, benchmarks]
+    needs: [language, benchmarks, kit]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1

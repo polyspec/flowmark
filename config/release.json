@@ -5,9 +5,6 @@
   "changelogTranslations": [
     "CHANGELOG.ko.md"
   ],
-  "checks": [
-    "ci-passed"
-  ],
   "packages": [],
   "manifests": {
     "package.json": "version"

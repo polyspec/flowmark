@@ -1,8 +1,9 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 42eaf05c273ad4a05dcd1e7f05008d4d346ccf9de8053b4de4cc34862af41ed8 -->
+<!-- source-sha256: c20cd269913f934c3c588d4028772b241d2b9e9f13d56a8b8a6131d6d560646d -->
 # Changelog
 
 ## Unreleased
+- T15-50: kit 0.0.80을 채택한다: CI는 `.github/workflows/ci.yml`이며 그 job `kit`이 kit의 `ci-pipeline.yml` 검사를 실행하고 `ci-passed`가 그것을 needs로 가진다. release는 성공한 `ci.yml` run의 id로 하는 `release.yml` dispatch이고 version은 change log의 가장 새로운 `## X.Y.Z`다. kit의 Windows tree 정지는 더는 무관한 process를 겨누지 않으며, 그것이 windows-latest에서 `make test-infrastructure`를 실패시켰다 (T15-50)
 - T15-49: 0.0.2를 릴리스한다 (T15-49)
 
 ## 0.0.2

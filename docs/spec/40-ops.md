@@ -571,7 +571,7 @@ The engine states the size of a corpus it serves within the latency target above
   - Hosting such a corpus on macOS raises the limits an operator controls, because the kernel caps open files twice
     besides the rlimit: per process (`kern.maxfilesperproc`) and system-wide (`kern.maxfiles`). A process that holds
     C open corpora of N documents needs about C·N descriptors, so the three are raised together — the CI workflow of
-    `.github/workflows/test.yml` does it before its benchmarks and names the values the runner allowed in its log. The
+    `.github/workflows/ci.yml` does it before its benchmarks and names the values the runner allowed in its log. The
     `descriptors` column of the benchmark artifacts counts the whole process, which holds the fixture's corpus and the
     freshly opened one, about two per document; one corpus alone holds one per folder and document, as the board
     measurement above shows.

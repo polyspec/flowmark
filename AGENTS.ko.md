@@ -1,5 +1,5 @@
 <!-- doc-id: agents -->
-<!-- source-sha256: ae3097d45f6edd5a3b77154ce554a5e29fc23f0cfced3b62f52532af92eac117 -->
+<!-- source-sha256: df8e2b2d22460d512dc2dc525ba16214e6ecdb8c345f1c8bb6c6f3ec9c955572 -->
 # 개발 규칙
 
 [English](AGENTS.md)
@@ -45,6 +45,13 @@ GitHub, Jira), 응용 schema이고, [polyspec/orm](https://github.com/polyspec/o
   Kit 지원 부족을 consumer runner로 대체하지 않고 Kit issue로 보고하며 모든 필수 검사와 provider release proof가
   성공해야 release한다.
   Enforced by: `make kit-check`
+- Own: release는 `main`에서 성공한 `.github/workflows/ci.yml` push run의 id로 하는 `.github/workflows/release.yml`의
+  dispatch다. 그 run의 job `ci-passed`는 kit의 gate를 포함한 다른 모든 job을 needs로 가진다:
+  `gh workflow run release.yml -f run=<id>`. 그 version X.Y.Z는 그 run의 commit에 있는 CHANGELOG.md의 가장 새로운 section
+  `## X.Y.Z`이며, `## Unreleased`에 항목이 있는 동안 release는 거부된다. `make release-tag`가 그 commit에 annotated tag
+  `vX.Y.Z`와 `packages/go/vX.Y.Z`를 만든다. 손으로 tag를 만들고 옮기고 push하는 사람은 없으며, push한 tag는 release를
+  시작하지 않는다.
+  Enforced by: `make release-tag`
 - Own: 엔진은 database이므로 그 unit test는 촘촘하다: 모든 문법과 제약 규칙에는 허용과 거절의 사례가 최소 하나씩 있고
   표 주도이며 edge case를 포함한다. 모든 storage에는 모든 column type과 NULL 및 빈 형태를 덮는 P1/P2 golden
   fixture가 있다. parse와 emit은 golden fixture를 seed로 `go test -fuzz`로 fuzz하며, fuzzer가 찾은 실패 입력은

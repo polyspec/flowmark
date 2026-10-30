@@ -1,5 +1,5 @@
 <!-- doc-id: spec-ops -->
-<!-- source-sha256: 797cb9816576da464a8dda467164f01df28c62f6764c91a415b5a2c1de6e2e8d -->
+<!-- source-sha256: 1c904c91dec70add8a9e3bf02dfda730dabd75ee4a809f00ec48cbd90f2631c5 -->
 # Operations
 
 [English](40-ops.md)
@@ -496,7 +496,7 @@ MySQL과 PostgreSQL은 `datetime(p)` column을 `NOW(6)`와 여섯 자리로 비�
     남기지 않는다.
   - 이런 corpus를 macOS에서 운영하려면 운영자가 제어하는 한도를 올린다. kernel은 rlimit 외에 open file을 두 번
     제한한다: process마다(`kern.maxfilesperproc`)와 system 전체(`kern.maxfiles`). corpus N개를 연 process는 문서
-    M개짜리 corpus마다 약 N·M의 descriptor가 필요하므로 셋을 함께 올린다 — `.github/workflows/test.yml`의 CI
+    M개짜리 corpus마다 약 N·M의 descriptor가 필요하므로 셋을 함께 올린다 — `.github/workflows/ci.yml`의 CI
     workflow가 benchmark 앞에서 그렇게 하고 runner가 허용한 값을 log에 남긴다. benchmark artifact의
     `descriptors` 값은 process 전체를 세는데 거기에는 fixture가 연 corpus와 새로 연 corpus가 있어 문서마다 약
     두 개다. corpus 하나만 놓고 보면 folder와 문서마다 하나로, 위의 board 측정이 그것을 보인다.
