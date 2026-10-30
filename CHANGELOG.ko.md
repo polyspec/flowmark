@@ -1,8 +1,9 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 27e7b673aaeeed641d4eba9e9595a265e4dd2e63058914343772b13f8a3a0ea6 -->
+<!-- source-sha256: 343370b67ee430c13cb18140e5c8bb64ed1e542331ddd77876d01184d6861989 -->
 # Changelog
 
 ## Unreleased
+- T15-47: flowmark은 0.0.73 대신 release된 kit 0.0.75를 받고, kit-sync가 그로부터 쓰는 release workflow를 받는다 (T15-47)
 - T15-45: TestExportRebuildsTheCorpus와 TestVectors의 case가 병렬로 돌아, Go test가 windows-latest에서 kit이 모든 test에 주는 30s 한도 안에 통과한다 (T15-45)
 - T15-46: config/release.json은 모든 커밋에 있는 ci-passed 검사만 요구한다 (T15-46)
 - T15-44: 0.0.1을 릴리스한다 (T15-44)
