@@ -1,13 +1,12 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 769141ee87a4e7f87772b18b9bc68d1cf5bb3e90881b0a1d32bb0aab1cfdaf7b -->
+<!-- source-sha256: 4dd2f07422190f053260e94235ec14246c2bc2d0168414ef96f4b1febcc69106 -->
 # Changelog
 
 ## Unreleased
-- T17: TestLockWaitOverflowRetries는 해제를 세 번째 attempt가 시작할 때 붙잡힌 동안에만 하므로, 첫 wake의 attempt가 해제 전에 실패했다고 더 이상 가정하지 않는다. windows-latest에서는 그 attempt의 link가 해제 뒤에 올 수 있어 테스트가 attempt를 둘이 아니라 하나로 셌다 (T17)
-- T15-49: 0.0.2를 릴리스한다 (T15-49)
 
 ## 0.0.2
 
+- T17: TestLockWaitOverflowRetries는 해제를 세 번째 attempt가 시작할 때 붙잡힌 동안에만 하므로, 첫 wake의 attempt가 해제 전에 실패했다고 더 이상 가정하지 않는다. windows-latest에서는 그 attempt의 link가 해제 뒤에 올 수 있어 테스트가 attempt를 둘이 아니라 하나로 셌다 (T17)
 - T18: BenchmarkShardInsert가 insert마다 overflow 수(overflows/op)와 tree 읽기 수(tree-reads/op)를 보고하므로, Windows 실행에서 corpus tree가 통째로 다시 읽히는지 보인다. Windows 시간 초과의 원인은 아직 증명되지 않았고, 그 수정은 이 측정을 기다린다 (T18)
 - T15-48: flowmark은 0.0.75 대신 release된 kit 0.0.77을 받고, kit-sync가 그로부터 쓰는 gates와 PRINCIPLES를 받는다. 링크 선언 .links는 orm checkout을 이름 짓고, toolchain-check는 검사 묶음에서 빠지며, 이전 prepare-commit-msg hook은 제거한다 (T15-48)
 - T15-47: flowmark은 0.0.73 대신 release된 kit 0.0.75를 받고, kit-sync가 그로부터 쓰는 release workflow를 받는다 (T15-47)

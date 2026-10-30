@@ -2,11 +2,10 @@
 # Changelog
 
 ## Unreleased
-- T17: TestLockWaitOverflowRetries releases the lock only while its third attempt is held at its start, so it no longer assumes that the first wake's attempt failed before the release; on windows-latest that attempt could link after the release, and the test counted one attempt, not two (T17)
-- T15-49: 0.0.2 is released (T15-49)
 
 ## 0.0.2
 
+- T17: TestLockWaitOverflowRetries releases the lock only while its third attempt is held at its start, so it no longer assumes that the first wake's attempt failed before the release; on windows-latest that attempt could link after the release, and the test counted one attempt, not two (T17)
 - T18: BenchmarkShardInsert reports the overflows and the tree reads of each insert (overflows/op, tree-reads/op), so the Windows run shows whether the corpus tree is read again whole; the cause of the Windows timeout is not yet proven, and its fix waits for that measurement (T18)
 - T15-48: flowmark takes the released kit 0.0.77 in place of 0.0.75, with the gates and PRINCIPLES that kit-sync writes from it; the link declaration .links names the orm checkout, toolchain-check leaves the suite, and the earlier prepare-commit-msg hook is removed (T15-48)
 - T15-47: flowmark takes the released kit 0.0.75 in place of 0.0.73, with the release workflow that kit-sync writes from it (T15-47)
