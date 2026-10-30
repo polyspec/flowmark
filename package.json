@@ -1,6 +1,6 @@
 {
   "name": "@soksak/sidecar-flowmark",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "private": true,
   "description": "Flowmark sidecar: the markdown text database over line-delimited JSON.",
   "license": "Apache-2.0",

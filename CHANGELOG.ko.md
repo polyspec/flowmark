@@ -3,6 +3,10 @@
 # Changelog
 
 ## Unreleased
+- T15-49: 0.0.2를 릴리스한다 (T15-49)
+
+## 0.0.2
+
 - T15-48: flowmark은 0.0.75 대신 release된 kit 0.0.77을 받고, kit-sync가 그로부터 쓰는 gates와 PRINCIPLES를 받는다. 링크 선언 .links는 orm checkout을 이름 짓고, toolchain-check는 검사 묶음에서 빠지며, 이전 prepare-commit-msg hook은 제거한다 (T15-48)
 - T15-47: flowmark은 0.0.73 대신 release된 kit 0.0.75를 받고, kit-sync가 그로부터 쓰는 release workflow를 받는다 (T15-47)
 - T15-45: TestExportRebuildsTheCorpus와 TestVectors의 case가 병렬로 돌아, Go test가 windows-latest에서 kit이 모든 test에 주는 30s 한도 안에 통과한다 (T15-45)
