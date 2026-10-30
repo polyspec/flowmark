@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/polyspec/flowmark/packages/go/store/journal"
 )
 
 // The benchmarks of a corpus of the same documents stored flat and sharded by month (spec 20 Time shards): the
@@ -84,16 +86,61 @@ func BenchmarkShardOpen(b *testing.B) {
 
 // BenchmarkShardInsert is the insert of one event into the corpus kept in memory, flat and sharded.
 func BenchmarkShardInsert(b *testing.B) {
-	shardLayouts(b, func(b *testing.B, f *fixture) {
-		s := f.session("bench")
-		ctx := context.Background()
-		loop(b, func(i int) {
-			m := f.msg("insert", "events", map[string]any{"set": sets(0, "title", "at")}, fmt.Sprintf("Bench %d", i), "2026-10-20 10:00:00.000000")
-			if _, err := s.Exec(ctx, m); err != nil {
-				b.Fatal(err)
-			}
-		})
+	shardLayouts(b, benchShardInsert)
+}
+
+// benchShardInsert inserts one event per op into the corpus of f, and reports per op the overflows of the corpus tree
+// (corpus.overflow) and the reads it made of the disk (corpus.read).
+func benchShardInsert(b *testing.B, f *fixture) {
+	s := f.session("bench")
+	ctx := context.Background()
+	f.rec.reset()
+	loop(b, func(i int) {
+		m := f.msg("insert", "events", map[string]any{"set": sets(0, "title", "at")}, fmt.Sprintf("Bench %d", i), "2026-10-20 10:00:00.000000")
+		if _, err := s.Exec(ctx, m); err != nil {
+			b.Fatal(err)
+		}
 	})
+	events := f.rec.Events()
+	b.ReportMetric(eventsPerOp(events, journal.CorpusOverflow, b.N), "overflows/op")
+	b.ReportMetric(eventsPerOp(events, journal.CorpusRead, b.N), "tree-reads/op")
+}
+
+// eventsPerOp returns the number of events of kind among events, divided by ops.
+func eventsPerOp(events []journal.Event, kind journal.Kind, ops int) float64 {
+	n := 0
+	for _, e := range events {
+		if e.Kind == kind {
+			n++
+		}
+	}
+	return float64(n) / float64(ops)
+}
+
+// TestShardInsertMetrics: BenchmarkShardInsert reports the overflows and the tree reads of each insert, so a Windows
+// run shows whether the corpus tree is read again whole. A forced overflow (the test seam of the tree's notices) is
+// counted, and without one there is none; the count per insert is not pinned, since an insert refreshes the tree
+// once before its lock and once under it (writepath.go read).
+func TestShardInsertMetrics(t *testing.T) {
+	for _, forced := range []bool{false, true} {
+		r := testing.Benchmark(func(b *testing.B) {
+			f := newFixture(b, eventCatalog(b, true), eventDocs(10, true))
+			if forced {
+				f.c.tree.SetNotices(func(journal.Notices) journal.Notices { return journal.Notices{Overflow: true} })
+			}
+			benchShardInsert(b, f)
+		})
+		overflows := r.Extra["overflows/op"]
+		if forced && overflows <= 0 {
+			t.Errorf("forced overflow: overflows/op = %v, want more than 0", overflows)
+		}
+		if !forced && overflows != 0 {
+			t.Errorf("no forced overflow: overflows/op = %v, want 0", overflows)
+		}
+		if got := r.Extra["tree-reads/op"]; got <= 0 {
+			t.Errorf("forced overflow %v: tree-reads/op = %v, want more than 0", forced, got)
+		}
+	}
 }
 
 // BenchmarkShardRead is a count of the events of the corpus kept in memory, flat and sharded.

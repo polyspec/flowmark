@@ -1,5 +1,5 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 3ca45ee67b1b229f2dd12c1db90d733cb188f46342c76fc8907fee0a754314ca -->
+<!-- source-sha256: 769141ee87a4e7f87772b18b9bc68d1cf5bb3e90881b0a1d32bb0aab1cfdaf7b -->
 # Changelog
 
 ## Unreleased
@@ -8,6 +8,7 @@
 
 ## 0.0.2
 
+- T18: BenchmarkShardInsert가 insert마다 overflow 수(overflows/op)와 tree 읽기 수(tree-reads/op)를 보고하므로, Windows 실행에서 corpus tree가 통째로 다시 읽히는지 보인다. Windows 시간 초과의 원인은 아직 증명되지 않았고, 그 수정은 이 측정을 기다린다 (T18)
 - T15-48: flowmark은 0.0.75 대신 release된 kit 0.0.77을 받고, kit-sync가 그로부터 쓰는 gates와 PRINCIPLES를 받는다. 링크 선언 .links는 orm checkout을 이름 짓고, toolchain-check는 검사 묶음에서 빠지며, 이전 prepare-commit-msg hook은 제거한다 (T15-48)
 - T15-47: flowmark은 0.0.73 대신 release된 kit 0.0.75를 받고, kit-sync가 그로부터 쓰는 release workflow를 받는다 (T15-47)
 - T15-45: TestExportRebuildsTheCorpus와 TestVectors의 case가 병렬로 돌아, Go test가 windows-latest에서 kit이 모든 test에 주는 30s 한도 안에 통과한다 (T15-45)
