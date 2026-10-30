@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -145,35 +146,59 @@ func TestLockWaitArmFailureRefuses(t *testing.T) {
 	}
 }
 
+// attemptStarted waits for the attempt numbered want to start, bounded by patience.
+func attemptStarted(t *testing.T, started <-chan int64, want int64) {
+	t.Helper()
+	select {
+	case k := <-started:
+		if k != want {
+			t.Fatalf("attempt %d started, want attempt %d", k, want)
+		}
+	case <-time.After(patience):
+		t.Fatalf("attempt %d did not start", want)
+	}
+}
+
 // An overflow (any wake the watch reports) starts exactly one more attempt; the wait goes on while the lock is held.
+// The step lock-attempt is published when an attempt starts, before its link. The waiter runs its attempts one after
+// another, so the third attempt starts only after the second has ended; the third is held at its start until the lock
+// is released, so the release is ordered before the link that acquires.
 func TestLockWaitOverflowRetries(t *testing.T) {
 	c, rec := newCorpus(t, t.TempDir())
 	holder := acquire(t, c, "s1")
 	fake := &fakeWatch{ch: make(chan wake, 1)}
 	c.newWatch = func() (lockWatch, error) { return fake, nil }
-	tried := make(chan struct{}, 8)
-	n := countAttempts(c, map[string]func(){"lock-attempt": func() { tried <- struct{}{} }})
+	var n atomic.Int64
+	started := make(chan int64, 8)
+	gate := make(chan struct{})
+	c.fault = func(step string, _ int) error {
+		if step == "lock-attempt" {
+			k := n.Add(1)
+			started <- k
+			if k == 3 {
+				<-gate
+			}
+		}
+		return nil
+	}
 	ch := acquireAsync(c, "s2", time.Hour)
 	rec.waitFor(t, 1, kindIs(LockWaiting))
 	before := n.Load()
-	for len(tried) > 0 {
-		<-tried
-	}
+	attemptStarted(t, started, 1)
 	fake.ch <- wake{kind: wakeLock}
-	select {
-	case <-tried:
-	case <-time.After(patience):
-		t.Fatal("the overflow started no attempt")
-	}
+	attemptStarted(t, started, 2)
 	select {
 	case r := <-ch:
 		t.Fatalf("the wait ended while the lock was held: %v", r.err)
 	default:
 	}
-	if err := holder.Release(); err != nil {
+	fake.ch <- wake{kind: wakeLock}
+	attemptStarted(t, started, 3)
+	err := holder.Release()
+	close(gate)
+	if err != nil {
 		t.Fatal(err)
 	}
-	fake.ch <- wake{kind: wakeLock}
 	if r := await(t, ch); r.err != nil {
 		t.Fatal(r.err)
 	}

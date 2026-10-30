@@ -2,6 +2,7 @@
 # Changelog
 
 ## Unreleased
+- T17: TestLockWaitOverflowRetries releases the lock only while its third attempt is held at its start, so it no longer assumes that the first wake's attempt failed before the release; on windows-latest that attempt could link after the release, and the test counted one attempt, not two (T17)
 - T15-49: 0.0.2 is released (T15-49)
 
 ## 0.0.2

@@ -1,8 +1,9 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 5ea8766542a0a8fc5c391bd190c435b6033b8f6f6861194d6c75760f4e53fcba -->
+<!-- source-sha256: 3ca45ee67b1b229f2dd12c1db90d733cb188f46342c76fc8907fee0a754314ca -->
 # Changelog
 
 ## Unreleased
+- T17: TestLockWaitOverflowRetries는 해제를 세 번째 attempt가 시작할 때 붙잡힌 동안에만 하므로, 첫 wake의 attempt가 해제 전에 실패했다고 더 이상 가정하지 않는다. windows-latest에서는 그 attempt의 link가 해제 뒤에 올 수 있어 테스트가 attempt를 둘이 아니라 하나로 셌다 (T17)
 - T15-49: 0.0.2를 릴리스한다 (T15-49)
 
 ## 0.0.2
