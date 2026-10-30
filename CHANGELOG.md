@@ -2,6 +2,7 @@
 # Changelog
 
 ## Unreleased
+- T15-49: 0.0.2 is released (T15-49)
 
 ## 0.0.2
 

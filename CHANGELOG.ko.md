@@ -1,8 +1,9 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 4dd2f07422190f053260e94235ec14246c2bc2d0168414ef96f4b1febcc69106 -->
+<!-- source-sha256: 42eaf05c273ad4a05dcd1e7f05008d4d346ccf9de8053b4de4cc34862af41ed8 -->
 # Changelog
 
 ## Unreleased
+- T15-49: 0.0.2를 릴리스한다 (T15-49)
 
 ## 0.0.2
 
