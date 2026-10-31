@@ -52,6 +52,22 @@ flowmark-node-install: ## Install the board example npm lock; ONLINE
 flowmark-php-install: ## Install the board example Composer lock; ONLINE
 	$(ONLINE) $(COMPOSER) install --no-interaction --working-dir=examples/board/web
 
+# The models of the board example are generated, never tracked (P34): the orm-gen of the installed @polyspec/orm and
+# polyspec/orm writes them from the corpus catalog, and lint-ts and lint-php, which read them, write them first.
+BOARD := examples/board/web
+PHP := $(firstword $(wildcard $(KIT_TOOLS)/bin/php.cmd $(KIT_TOOLS)/bin/php))
+.PHONY: board-models board-models-ts board-models-php
+board-models: board-models-ts board-models-php ## Write the TypeScript and PHP models of the board example from the corpus catalog; offline
+
+board-models-ts: ## Write node/model/models.ts of the board example with the orm-gen of its npm lock; offline
+	cd $(BOARD) && $(NODE) node_modules/@polyspec/orm/dist/bin/orm-gen.js gen --set ../block/dbspec/dbspec-set.json --out node/model --scan node/posts.ts
+
+board-models-php: ## Write src/Model of the board example with the orm-gen of its Composer lock; offline
+	cd $(BOARD) && $(PHP) vendor/bin/orm-gen gen --set ../block/dbspec/dbspec-set.json --out src/Model --namespace 'Flowmark\Board\Model'
+
+lint-ts: board-models-ts
+lint-php: board-models-php
+
 # A parent benchmark runs through all of its sub-benchmarks: BenchmarkShardOpen took 31.9 s on an Apple M3 Pro, past the
 # runner's 30 s default, so each test is given 120 s, about four times the slowest measured one.
 .PHONY: flowmark-benchmarks

@@ -2,6 +2,7 @@
 # Changelog
 
 ## Unreleased
+- T15-53: Kit 0.0.82 is adopted: config/generated.json tracks the Go tables of `packages/go/internal` with their reason, the board example models leave Git and `make board-models` writes them with the orm-gen of the board's locks (its Composer entry of polyspec/orm declares `bin/orm-gen`), and config/ci.json declares `parityMode` none.
 - T20: The Windows lock watch no longer closes a holder process handle that its wait may still hold: armHolder retires the replaced handle, run closes retired handles between two waits, and stopping the watch closes the rest. A closed handle in the wait failed TestConcurrentSessions on windows-latest (run 41169665288) (T20)
 - T15-52: config/documents.json no longer excludes tests/kit/**, which holds no file since T15 replaced the vendored kit tests with the installed kit package.
 - T15-50: Kit 0.0.80 is adopted: CI is `.github/workflows/ci.yml`, whose job `kit` runs the checks of kit's `ci-pipeline.yml` and whose `ci-passed` needs it, and a release is a dispatch of `release.yml` with the id of a successful `ci.yml` run, versioned by the newest `## X.Y.Z` of the change log; the Windows tree stop of kit no longer targets an unrelated process, which failed `make test-infrastructure` on windows-latest (T15-50)

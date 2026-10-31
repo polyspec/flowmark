@@ -18,10 +18,6 @@
       "kind": "ecosystem",
       "tool": "node:http through App.server of @polyspec/hyper-server serves the board example"
     },
-    "examples/board/web/node/model/models.ts": {
-      "kind": "ecosystem",
-      "tool": "orm-gen of @polyspec/orm generates it from the corpus catalog (the commands of the board README)"
-    },
     "examples/board/web/node/postForm.ts": {
       "kind": "ecosystem",
       "tool": "@polyspec/crudui-generator-html renders the post form of the board example"
@@ -37,26 +33,6 @@
     "examples/board/web/src/Assets.php": {
       "kind": "policy",
       "reason": "reads the manifest that the asset build writes (HY-76) for the layout of the board example; no ecosystem tool names the assets of this build"
-    },
-    "examples/board/web/src/Model/Comments.php": {
-      "kind": "ecosystem",
-      "tool": "orm-gen of polyspec/orm generates it from the corpus catalog (the commands of the board README)"
-    },
-    "examples/board/web/src/Model/People.php": {
-      "kind": "ecosystem",
-      "tool": "orm-gen of polyspec/orm generates it from the corpus catalog (the commands of the board README)"
-    },
-    "examples/board/web/src/Model/Posts.php": {
-      "kind": "ecosystem",
-      "tool": "orm-gen of polyspec/orm generates it from the corpus catalog (the commands of the board README)"
-    },
-    "examples/board/web/src/Model/bootstrap.php": {
-      "kind": "ecosystem",
-      "tool": "orm-gen of polyspec/orm generates it from the corpus catalog (the commands of the board README)"
-    },
-    "examples/board/web/src/Model/schema_declarations.php": {
-      "kind": "ecosystem",
-      "tool": "orm-gen of polyspec/orm generates it from the corpus catalog (the commands of the board README)"
     },
     "examples/board/web/src/Pages.php": {
       "kind": "policy",

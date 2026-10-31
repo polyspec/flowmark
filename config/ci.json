@@ -1,5 +1,6 @@
 {
   "schema": 1,
+  "parityMode": "none",
   "setup": {
     "shared": [],
     "parity": [],

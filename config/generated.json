@@ -1,15 +1,22 @@
 {
   "schema": 1,
-  "paths": [],
-  "exceptions": [
-    "packages/go/internal/htmlentity/table.go",
-    "packages/go/internal/unicode13/table.go",
-    "packages/go/internal/unicodedcp/table.go",
+  "paths": [
     "examples/board/web/node/model/models.ts",
-    "examples/board/web/src/Model/Comments.php",
-    "examples/board/web/src/Model/People.php",
-    "examples/board/web/src/Model/Posts.php",
-    "examples/board/web/src/Model/bootstrap.php",
-    "examples/board/web/src/Model/schema_declarations.php"
-  ]
+    "examples/board/web/src/Model/**"
+  ],
+  "tracked": [
+    {
+      "path": "packages/go/internal/htmlentity/table.go",
+      "reason": "go generate writes it from testdata/entities-3.0.1.json; the Go module packages/go is installed as the tagged tree, so the table is part of it"
+    },
+    {
+      "path": "packages/go/internal/unicode13/table.go",
+      "reason": "go generate writes it from DerivedGeneralCategory.txt of Unicode 13.0.0; the Go module packages/go is installed as the tagged tree, so the table is part of it"
+    },
+    {
+      "path": "packages/go/internal/unicodedcp/table.go",
+      "reason": "go generate writes it from DerivedCoreProperties.txt of Unicode 17.0.0; the Go module packages/go is installed as the tagged tree, so the table is part of it"
+    }
+  ],
+  "exceptions": []
 }

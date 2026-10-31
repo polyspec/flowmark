@@ -55,9 +55,8 @@ field마다 그 밑에 error를 남기며 422로 답한다. template은 신뢰�
 
 같은 애플리케이션이 orm의 TypeScript client 위에서 hyper의 Node.js 서버로도 돈다. `node/`에 `main.ts`,
 `handlers.ts`, `posts.ts`(같은 메서드 다섯 개, 비동기)와 같은 catalog에서 생성한 `node/model/`의 model이
-있다(이 folder에서 `node node_modules/@polyspec/orm/dist/bin/orm-gen.js gen --set ../block/dbspec/dbspec-set.json
---out node/model --scan node/posts.ts`. `--scan`은
-`posts.ts`가 부르는 조건과 join 메서드를 선언하게 한다). 이 folder에서 `npm install`을 하고 위의 1, 2단계를
+있다(checkout 최상위의 `make board-models-ts`가 이 folder의 npm lock의 orm-gen을 `--scan node/posts.ts`와 함께
+실행한다. `--scan`은 `posts.ts`가 부르는 조건과 join 메서드를 선언하게 한다). 이 folder에서 `npm install`을 하고 위의 1, 2단계를
 마친 뒤 `npm run build:node`로 서버를 번들하며, corpus의 DSN은 환경변수로 준다:
 
 ```sh
@@ -66,9 +65,9 @@ FLOWMARK_DSN='markdown://127.0.0.1:<port>/board?token=<token>' BOARD_SESSIONS=<s
 
 두 서버는 같게 답한다. 목록의 모든 페이지의 행과 글 하나의 페이지가 같게 나온다.
 
-`src/Model/`의 model은 flowmark 옆 orm checkout의 orm-gen으로 corpus catalog에서 생성한다(이 folder에서
-`php ../../../../orm/vendor-php/bin/orm-gen gen --set ../block/dbspec/dbspec-set.json --out src/Model
---namespace 'Flowmark\Board\Model'`). hash를 바꾸는 catalog 변경은 model을 다시
+`src/Model/`의 model은 checkout 최상위의 `make board-models-php`가 이 folder의 Composer lock의
+`vendor/bin/orm-gen`으로 corpus catalog에서 생성한다. 두 model folder는 Git에 두지 않으며(P34), `make board-models`가
+둘 다 쓰고 `make lint-ts`와 `make lint-php`는 먼저 그것을 쓴다. hash를 바꾸는 catalog 변경은 model을 다시
 생성해야 하며, server는 다른 hash의 model을 거절한다(`SCHEMA_HASH_MISMATCH`).
 
 ## 글 1000개에서 잰 값

@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "935f1a0223579cc3dd306940dcbed37c",
+    "content-hash": "4d64e174ffcfbf48026ac768a49ef16b",
     "packages": [
         {
             "name": "nikic/php-parser",
@@ -360,6 +360,9 @@
                 "purrphp/yaml": "^1.0",
                 "symfony/yaml": "^8.1"
             },
+            "bin": [
+                "bin/orm-gen"
+            ],
             "type": "library",
             "autoload": {
                 "psr-4": {

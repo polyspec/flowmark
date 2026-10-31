@@ -14,3 +14,6 @@ go.work.sum
 .venv/
 # The link declaration of the checkout (K869): the provider checkouts that make link names, one path per line.
 /.links
+# The models of the board example, which make board-models writes from the corpus catalog (P34).
+/examples/board/web/node/model/models.ts
+/examples/board/web/src/Model/
