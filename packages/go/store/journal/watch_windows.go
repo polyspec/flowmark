@@ -29,8 +29,11 @@ type windowsWatch struct {
 	done   chan struct{}
 	armed  bool
 
-	mu   sync.Mutex
-	proc windows.Handle
+	// mu guards proc and retired. proc is the holder's process handle that run waits on; retired holds the handles that
+	// armHolder replaced, which run closes at the top of its loop, outside every wait.
+	mu      sync.Mutex
+	proc    windows.Handle
+	retired []windows.Handle
 }
 
 // watchArmError names the cause of a watch that cannot be armed.
@@ -92,12 +95,20 @@ func (w *windowsWatch) wakes() <-chan wake { return w.ch }
 func (w *windowsWatch) run() {
 	defer close(w.done)
 	for {
+		// The retired handles leave the lock here, so the snapshot below holds none of them: a handle is closed only
+		// between two waits, never while a wait may still hold it.
 		w.mu.Lock()
+		retired := w.retired
+		w.retired = nil
 		handles := []windows.Handle{w.ov.HEvent, w.cancel, w.rearm}
 		if w.proc != 0 {
 			handles = append(handles, w.proc)
 		}
 		w.mu.Unlock()
+		if err := closeRetired(retired); err != nil {
+			send(w.ch, wake{kind: wakeError, err: fmt.Errorf("closing the holder's process handle: %w", err)})
+			return
+		}
 		r, err := windows.WaitForMultipleObjects(handles, false, windows.INFINITE)
 		if err != nil {
 			send(w.ch, wake{kind: wakeError, err: fmt.Errorf("WaitForMultipleObjects: %w", err)})
@@ -136,15 +147,15 @@ func (w *windowsWatch) run() {
 			return
 		case 2:
 		case 3:
+			// The exited handle is the one in the snapshot; if armHolder has replaced it since, it is already retired.
+			exited := handles[3]
 			send(w.ch, wake{kind: wakeHolderExit})
 			w.mu.Lock()
-			err := windows.CloseHandle(w.proc)
-			w.proc = 0
-			w.mu.Unlock()
-			if err != nil {
-				send(w.ch, wake{kind: wakeError, err: fmt.Errorf("closing the holder's process handle: %w", err)})
-				return
+			if w.proc == exited {
+				w.proc = 0
+				w.retired = append(w.retired, exited)
 			}
+			w.mu.Unlock()
 		}
 	}
 }
@@ -215,17 +226,24 @@ func (w *windowsWatch) armHolder(h Holder) error {
 	case err != nil:
 		return fmt.Errorf("OpenProcess %d: %w", h.PID, err)
 	}
+	// The replaced handle is not closed here: run's wait may hold it. It joins retired, and run closes it at the top of its
+	// loop, after the wait that holds it has returned.
 	w.mu.Lock()
-	old := w.proc
+	if w.proc != 0 {
+		w.retired = append(w.retired, w.proc)
+	}
 	w.proc = proc
 	w.mu.Unlock()
-	if err := windows.SetEvent(w.rearm); err != nil {
-		return err
+	return windows.SetEvent(w.rearm)
+}
+
+// closeRetired closes the handles that armHolder replaced. Only run calls it, between two waits.
+func closeRetired(handles []windows.Handle) error {
+	var errs []error
+	for _, h := range handles {
+		errs = append(errs, windows.CloseHandle(h))
 	}
-	if old != 0 {
-		return windows.CloseHandle(old)
-	}
-	return nil
+	return errors.Join(errs...)
 }
 
 func (w *windowsWatch) close() error {
@@ -236,12 +254,17 @@ func (w *windowsWatch) close() error {
 	return errors.Join(err, w.closeHandles())
 }
 
+// closeHandles closes every handle of the watch, the replaced ones among them; it runs once the watch has stopped.
 func (w *windowsWatch) closeHandles() error {
+	w.mu.Lock()
+	retired := w.retired
+	w.retired = nil
+	w.mu.Unlock()
 	var errs []error
 	for _, h := range []windows.Handle{w.dir, w.ov.HEvent, w.cancel, w.rearm, w.proc} {
 		if h != 0 {
 			errs = append(errs, windows.CloseHandle(h))
 		}
 	}
-	return errors.Join(errs...)
+	return errors.Join(append(errs, closeRetired(retired))...)
 }

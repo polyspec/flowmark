@@ -3,6 +3,7 @@
 # Changelog
 
 ## Unreleased
+- T20: Windows lock watch는 대기 중일 수 있는 holder 프로세스 핸들을 더는 닫지 않는다. armHolder는 교체된 핸들을 retired에 넣고, run은 두 대기 사이에 retired 핸들을 닫으며, watch를 멈추면 나머지를 닫는다. 대기 중 닫힌 핸들 때문에 windows-latest에서 TestConcurrentSessions가 실패했다(실행 41169665288) (T20)
 - T15-52: config/documents.json은 더 이상 tests/kit/**를 제외하지 않는다. T15가 vendor한 kit test를 설치된 kit package로 바꾼 뒤로 그 경로에는 파일이 없다.
 - T15-50: kit 0.0.80을 채택한다: CI는 `.github/workflows/ci.yml`이며 그 job `kit`이 kit의 `ci-pipeline.yml` 검사를 실행하고 `ci-passed`가 그것을 needs로 가진다. release는 성공한 `ci.yml` run의 id로 하는 `release.yml` dispatch이고 version은 change log의 가장 새로운 `## X.Y.Z`다. kit의 Windows tree 정지는 더는 무관한 process를 겨누지 않으며, 그것이 windows-latest에서 `make test-infrastructure`를 실패시켰다 (T15-50)
 - T15-49: 0.0.2를 릴리스한다 (T15-49)
