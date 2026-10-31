@@ -1,8 +1,9 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 9f2a025ab3fe91eff57c6b5beca3f727495ff8675d28b8dcabb961d1a29d2641 -->
+<!-- source-sha256: 408a48b69d037eed5f8b7510a51471e180d8acc953fcde1723118fafb54b83fd -->
 # Changelog
 
 ## Unreleased
+- T21: Kit 0.0.85를 쓴다(0.0.82 대신). package.json과 그 lock은 릴리스 asset `polyspec-kit-0.0.85.tgz`를 고정한다. 이 이름은 P39의 npm pack 이름을 유지하며, PRINCIPLES.md와 PRINCIPLES.ko.md는 그 복사본이다. config/release.json은 package를 선언하지 않으므로 schema가 요구하는 product와 runtime이 없고, 트리의 어떤 텍스트도 옛 `-npm-` 또는 `-php-` 형식으로 asset 이름을 만들지 않는다 (T21).
 - T15-53-1: kit 0.0.82가 요구하는 대로 mise.toml의 npm을 쓴다(K938). package.json은 packageManager 대신 devEngines에 npm 12.2.0을 선언하고, mise.toml은 `npm:npm`을 선언하며, mise.lock과 .mise/locks/npm-npm/12.2.0의 sidecar가 그것을 고정하고, ci.yml의 bootstrap 단계는 devEngines의 npm을 checkout 밖에서 실행한다. T15-53의 CI는 devEngines를 읽는 job kit에서 실패했었다.
 - T15-53: Kit 0.0.82를 쓴다. config/generated.json은 `packages/go/internal`의 Go table을 이유와 함께 tracked로 두고, board 예제 model은 Git에서 빠지며 `make board-models`가 board lock의 orm-gen으로 쓰고(polyspec/orm의 Composer entry가 `bin/orm-gen`을 선언한다), config/ci.json은 `parityMode` none을 선언한다.
 - T20: Windows lock watch는 대기 중일 수 있는 holder 프로세스 핸들을 더는 닫지 않는다. armHolder는 교체된 핸들을 retired에 넣고, run은 두 대기 사이에 retired 핸들을 닫으며, watch를 멈추면 나머지를 닫는다. 대기 중 닫힌 핸들 때문에 windows-latest에서 TestConcurrentSessions가 실패했다(실행 41169665288) (T20)

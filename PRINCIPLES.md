@@ -180,6 +180,14 @@ repository.
 - P38 main may be written directly, by one actor per checkout, through commits; a branch reaches main by the fast-forward of
   `make land`, which runs the gates that its changed paths select (K404, K446, K603).
   Enforced by: none, make land is the way a branch reaches main, and no hook can see which way a change took.
+- P39 A release asset keeps the file name its packer gives: npm pack's `scope-name-<version>.tgz`, the
+  `vendor-name-<version>.zip` of the Composer zip that kit packs, and the PEP 427 `<dist>-<version>-<tags>.whl` of a wheel,
+  whose file name pip parses to install it. Each package asset carries the GitHub label
+  `<vendor>-<product>-<runtime>-<version>`: the vendor is the owner of repositoryUrl, and the product and the runtime are
+  declared for each package in config/release.json, the runtime one of the six runtimes ts, go, rust, php, php-ext and
+  python. A package manager's name never stands in for the runtime, and the package name is never read for the product or
+  the runtime. Only package assets carry a label; packages.json, a file of the release, carries none (K980).
+  Enforced by: `make release-assets`, `make release-publish`
 
 ## Repository standards
 

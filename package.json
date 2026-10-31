@@ -17,7 +17,7 @@
     }
   },
   "devDependencies": {
-    "@polyspec/kit": "https://github.com/polyspec/kit/releases/download/v0.0.82/polyspec-kit-npm-0.0.82.tgz",
+    "@polyspec/kit": "https://github.com/polyspec/kit/releases/download/v0.0.85/polyspec-kit-0.0.85.tgz",
     "@types/node": "^26.6.5",
     "yaml": "^2.9.1"
   }

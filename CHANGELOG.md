@@ -2,6 +2,7 @@
 # Changelog
 
 ## Unreleased
+- T21: Kit 0.0.85 is adopted in place of 0.0.82: package.json and its lock pin its release asset `polyspec-kit-0.0.85.tgz`, whose name keeps the npm pack name of P39, and PRINCIPLES.md and PRINCIPLES.ko.md are its copies. config/release.json declares no package, so its schema asks no product or runtime, and no text of the tree builds an asset name from the old `-npm-` or `-php-` form (T21).
 - T15-53-1: The npm of mise.toml is adopted, as kit 0.0.82 requires (K938): package.json declares npm 12.2.0 in devEngines in place of packageManager, mise.toml declares `npm:npm`, mise.lock and its sidecar under .mise/locks/npm-npm/12.2.0 lock it, and the bootstrap steps of ci.yml run the npm of devEngines outside the checkout. The CI run of T15-53 had failed in the job kit, whose bootstrap reads devEngines.
 - T15-53: Kit 0.0.82 is adopted: config/generated.json tracks the Go tables of `packages/go/internal` with their reason, the board example models leave Git and `make board-models` writes them with the orm-gen of the board's locks (its Composer entry of polyspec/orm declares `bin/orm-gen`), and config/ci.json declares `parityMode` none.
 - T20: The Windows lock watch no longer closes a holder process handle that its wait may still hold: armHolder retires the replaced handle, run closes retired handles between two waits, and stopping the watch closes the rest. A closed handle in the wait failed TestConcurrentSessions on windows-latest (run 41169665288) (T20)
