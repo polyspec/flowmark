@@ -2,6 +2,7 @@
 # Changelog
 
 ## Unreleased
+- T15-52: config/documents.json no longer excludes tests/kit/**, which holds no file since T15 replaced the vendored kit tests with the installed kit package.
 - T15-50: Kit 0.0.80 is adopted: CI is `.github/workflows/ci.yml`, whose job `kit` runs the checks of kit's `ci-pipeline.yml` and whose `ci-passed` needs it, and a release is a dispatch of `release.yml` with the id of a successful `ci.yml` run, versioned by the newest `## X.Y.Z` of the change log; the Windows tree stop of kit no longer targets an unrelated process, which failed `make test-infrastructure` on windows-latest (T15-50)
 - T15-49: 0.0.2 is released (T15-49)
 
