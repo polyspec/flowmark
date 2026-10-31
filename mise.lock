@@ -31,6 +31,12 @@ url = "https://github.com/asamarts/alint/releases/download/v0.18.2/alint-v0.18.2
 url_api = "https://api.github.com/repos/asamarts/alint/releases/assets/636119387"
 provenance = "github-attestations"
 
+[tools."github:asamarts/alint"."platforms.windows-x64"]
+checksum = "sha256:f87b81fa1e2081d2ddb1e8ecbbbbad845ceee5a0e170eef579da78a91325491c"
+url = "https://github.com/asamarts/alint/releases/download/v0.18.2/alint-v0.18.2-x86_64-pc-windows-msvc.tar.gz"
+url_api = "https://api.github.com/repos/asamarts/alint/releases/assets/636119395"
+provenance = "github-attestations"
+
 [[tools.go]]
 version = "1.27.3"
 backend = "core:go"
@@ -99,6 +105,18 @@ url = "https://github.com/golangci/golangci-lint/releases/download/v2.14.0/golan
 url_api = "https://api.github.com/repos/golangci/golangci-lint/releases/assets/585813755"
 provenance = "github-attestations"
 
+[tools.golangci-lint."platforms.windows-arm64"]
+checksum = "sha256:6399496aef883e5d2f77ea93e6e54fdd05bc2695f64071d8de0b0579cad92274"
+url = "https://github.com/golangci/golangci-lint/releases/download/v2.14.0/golangci-lint-2.14.0-windows-arm64.zip"
+url_api = "https://api.github.com/repos/golangci/golangci-lint/releases/assets/585813645"
+provenance = "github-attestations"
+
+[tools.golangci-lint."platforms.windows-x64"]
+checksum = "sha256:b15f903d1649283a2ab6e8d2f0c317eaf1f9f6b3763950e7e8b7e72a43dd724f"
+url = "https://github.com/golangci/golangci-lint/releases/download/v2.14.0/golangci-lint-2.14.0-windows-amd64.zip"
+url_api = "https://api.github.com/repos/golangci/golangci-lint/releases/assets/585813793"
+provenance = "github-attestations"
+
 [[tools."http:composer"]]
 version = "2.10.3"
 backend = "http:composer"
@@ -117,6 +135,14 @@ checksum = "sha256:7a2d379d5b8ffdaa028580ef26494c36d2feef4b178d3dd1473a4dbc5e17c
 url = "https://getcomposer.org/download/2.10.3/composer.phar"
 
 [tools."http:composer"."platforms.macos-x64"]
+checksum = "sha256:7a2d379d5b8ffdaa028580ef26494c36d2feef4b178d3dd1473a4dbc5e17c8d6"
+url = "https://getcomposer.org/download/2.10.3/composer.phar"
+
+[tools."http:composer"."platforms.windows-arm64"]
+checksum = "sha256:7a2d379d5b8ffdaa028580ef26494c36d2feef4b178d3dd1473a4dbc5e17c8d6"
+url = "https://getcomposer.org/download/2.10.3/composer.phar"
+
+[tools."http:composer"."platforms.windows-x64"]
 checksum = "sha256:7a2d379d5b8ffdaa028580ef26494c36d2feef4b178d3dd1473a4dbc5e17c8d6"
 url = "https://getcomposer.org/download/2.10.3/composer.phar"
 
@@ -149,6 +175,12 @@ url = "https://nodejs.org/dist/v26.12.0/node-v26.12.0-win-arm64.zip"
 checksum = "sha256:50efaf01a08c520b4bbe499c09a8c5a5c370002c419c0d9da2c6815d3066a453"
 url = "https://nodejs.org/dist/v26.12.0/node-v26.12.0-win-x64.zip"
 
+[[tools."npm:npm"]]
+version = "12.2.0"
+aube = { path = ".mise/locks/npm-npm/12.2.0", digest = "sha256:ce704ee0a99dacc7181715a5d854470a968908ad4eed463cf838cfba38b1f027" }
+backend = "npm:npm"
+specifiers = ["12.2.0"]
+
 [[tools."pypi:vulture"]]
 version = "2.16"
 backend = "pypi:vulture"
@@ -180,6 +212,16 @@ checksum = "sha256:f0137337ecf6234b30c9c955219dae2d71e1a00387c4d204d6c6929e24bf9
 url = "https://github.com/astral-sh/python-build-standalone/releases/download/20261013/cpython-3.14.8+20261013-x86_64-apple-darwin-install_only_stripped.tar.gz"
 provenance = "github-attestations"
 
+[tools.python."platforms.windows-arm64"]
+checksum = "sha256:5179469eae3dd77dd2ab09f913efaa1d071ef7d52af50b8f38be2a2173005771"
+url = "https://github.com/astral-sh/python-build-standalone/releases/download/20261020/cpython-3.14.8+20261020-aarch64-pc-windows-msvc-install_only_stripped.tar.gz"
+provenance = "github-attestations"
+
+[tools.python."platforms.windows-x64"]
+checksum = "sha256:6761cf0dd740591df7643cf55fd03913c8ec7ddd88b419fe2f170abe3479e198"
+url = "https://github.com/astral-sh/python-build-standalone/releases/download/20261020/cpython-3.14.8+20261020-x86_64-pc-windows-msvc-install_only_stripped.tar.gz"
+provenance = "github-attestations"
+
 [[tools.ruff]]
 version = "0.17.1"
 backend = "aqua:astral-sh/ruff"
@@ -209,6 +251,18 @@ url = "https://github.com/astral-sh/ruff/releases/download/0.17.1/ruff-x86_64-ap
 url_api = "https://api.github.com/repos/astral-sh/ruff/releases/assets/644283566"
 provenance = "github-attestations"
 
+[tools.ruff."platforms.windows-arm64"]
+checksum = "sha256:2f8ba07c7b2b8d1f011056968360e99e9ac7f0815e2d02eaab958255e110b1df"
+url = "https://github.com/astral-sh/ruff/releases/download/0.17.1/ruff-aarch64-pc-windows-msvc.zip"
+url_api = "https://api.github.com/repos/astral-sh/ruff/releases/assets/644283315"
+provenance = "github-attestations"
+
+[tools.ruff."platforms.windows-x64"]
+checksum = "sha256:a841fb7e59680508b9394bfea32e369b3907cc6620a491c65d8d1f479498db82"
+url = "https://github.com/astral-sh/ruff/releases/download/0.17.1/ruff-x86_64-pc-windows-msvc.zip"
+url_api = "https://api.github.com/repos/astral-sh/ruff/releases/assets/644283579"
+provenance = "github-attestations"
+
 [[tools.uv]]
 version = "0.12.24"
 backend = "aqua:astral-sh/uv"
@@ -236,4 +290,16 @@ provenance = "github-attestations"
 checksum = "sha256:4fa82e37cb94767661f532b001e470b67a186c7260e305bd84ddb78fd545c0b6"
 url = "https://github.com/astral-sh/uv/releases/download/0.12.24/uv-x86_64-apple-darwin.tar.gz"
 url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/622873012"
+provenance = "github-attestations"
+
+[tools.uv."platforms.windows-arm64"]
+checksum = "sha256:7c38608c8a18ee137d748a1773053b07ec8f3a30fab49aebaa6f4e4efeceb019"
+url = "https://github.com/astral-sh/uv/releases/download/0.12.24/uv-x86_64-pc-windows-msvc.zip"
+url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/622873038"
+provenance = "github-attestations"
+
+[tools.uv."platforms.windows-x64"]
+checksum = "sha256:7c38608c8a18ee137d748a1773053b07ec8f3a30fab49aebaa6f4e4efeceb019"
+url = "https://github.com/astral-sh/uv/releases/download/0.12.24/uv-x86_64-pc-windows-msvc.zip"
+url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/622873038"
 provenance = "github-attestations"

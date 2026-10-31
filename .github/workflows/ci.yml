@@ -35,7 +35,12 @@ jobs:
           node-version-file: mise.toml
           package-manager-cache: false
       - name: bootstrap the locked Kit package
-        run: npm_config_cache="$PWD/var/bootstrap/npm-cache" npm exec --yes --package="$(node -p 'require("./package.json").packageManager.split("+")[0]')" -- npm ci --ignore-scripts --allow-remote=root
+        # npm 11 of the runner refuses to run in a folder whose devEngines names npm 12.2.0 (EBADDEVENGINES), so the npm of
+        # devEngines runs outside the checkout with --prefix (K938-1).
+        run: |
+          root="$PWD"
+          version="$(node -p 'require("./package.json").devEngines.packageManager.version')"
+          (cd "${RUNNER_TEMP:?RUNNER_TEMP is not set; run this step in a workflow of GitHub Actions, whose runner sets it}" && npm_config_cache="$root/var/bootstrap/npm-cache" npm exec --yes --package="npm@$version" -- npm --prefix "$root" ci --ignore-scripts --allow-remote=root)
       - name: install pinned npm and Node
         run: make install-tools TOOLS=npm
       - name: install Go
@@ -74,7 +79,12 @@ jobs:
           node-version-file: mise.toml
           package-manager-cache: false
       - name: bootstrap the locked Kit package
-        run: npm_config_cache="$PWD/var/bootstrap/npm-cache" npm exec --yes --package="$(node -p 'require("./package.json").packageManager.split("+")[0]')" -- npm ci --ignore-scripts --allow-remote=root
+        # npm 11 of the runner refuses to run in a folder whose devEngines names npm 12.2.0 (EBADDEVENGINES), so the npm of
+        # devEngines runs outside the checkout with --prefix (K938-1).
+        run: |
+          root="$PWD"
+          version="$(node -p 'require("./package.json").devEngines.packageManager.version')"
+          (cd "${RUNNER_TEMP:?RUNNER_TEMP is not set; run this step in a workflow of GitHub Actions, whose runner sets it}" && npm_config_cache="$root/var/bootstrap/npm-cache" npm exec --yes --package="npm@$version" -- npm --prefix "$root" ci --ignore-scripts --allow-remote=root)
       - name: install pinned npm and Node
         run: make install-tools TOOLS=npm
       - name: install Go
@@ -115,7 +125,12 @@ jobs:
           node-version-file: mise.toml
           package-manager-cache: false
       - name: bootstrap the locked Kit package
-        run: npm_config_cache="$PWD/var/bootstrap/npm-cache" npm exec --yes --package="$(node -p 'require("./package.json").packageManager.split("+")[0]')" -- npm ci --ignore-scripts --allow-remote=root
+        # npm 11 of the runner refuses to run in a folder whose devEngines names npm 12.2.0 (EBADDEVENGINES), so the npm of
+        # devEngines runs outside the checkout with --prefix (K938-1).
+        run: |
+          root="$PWD"
+          version="$(node -p 'require("./package.json").devEngines.packageManager.version')"
+          (cd "${RUNNER_TEMP:?RUNNER_TEMP is not set; run this step in a workflow of GitHub Actions, whose runner sets it}" && npm_config_cache="$root/var/bootstrap/npm-cache" npm exec --yes --package="npm@$version" -- npm --prefix "$root" ci --ignore-scripts --allow-remote=root)
       - name: install pinned npm and Node
         run: make install-tools TOOLS=npm
       - name: require every mandatory job

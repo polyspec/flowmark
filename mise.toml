@@ -1,8 +1,10 @@
 # The tools that mise installs into var/tools/mise: `make toolchain-lock` writes their digests into mise.lock and
-# `make install-tools` installs them with `mise install --locked`. node, go and python are at the pins of kit.
+# `make install-tools` installs them with `mise install --locked`. node, npm, go and python are at the pins of kit; devEngines of
+# package.json names the same npm (K938).
 [tools]
 "http:composer" = { version = "2.10.3", url = "https://getcomposer.org/download/{{ version }}/composer.phar", checksum = "sha256:7a2d379d5b8ffdaa028580ef26494c36d2feef4b178d3dd1473a4dbc5e17c8d6", bin = "composer" }
 node = "26.12.0"
+"npm:npm" = "12.2.0"
 go = "1.27.3"
 python = "3.14.8"
 uv = "0.12.24"

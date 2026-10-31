@@ -3,6 +3,7 @@
 # Changelog
 
 ## Unreleased
+- T15-53-1: kit 0.0.82가 요구하는 대로 mise.toml의 npm을 쓴다(K938). package.json은 packageManager 대신 devEngines에 npm 12.2.0을 선언하고, mise.toml은 `npm:npm`을 선언하며, mise.lock과 .mise/locks/npm-npm/12.2.0의 sidecar가 그것을 고정하고, ci.yml의 bootstrap 단계는 devEngines의 npm을 checkout 밖에서 실행한다. T15-53의 CI는 devEngines를 읽는 job kit에서 실패했었다.
 - T15-53: Kit 0.0.82를 쓴다. config/generated.json은 `packages/go/internal`의 Go table을 이유와 함께 tracked로 두고, board 예제 model은 Git에서 빠지며 `make board-models`가 board lock의 orm-gen으로 쓰고(polyspec/orm의 Composer entry가 `bin/orm-gen`을 선언한다), config/ci.json은 `parityMode` none을 선언한다.
 - T20: Windows lock watch는 대기 중일 수 있는 holder 프로세스 핸들을 더는 닫지 않는다. armHolder는 교체된 핸들을 retired에 넣고, run은 두 대기 사이에 retired 핸들을 닫으며, watch를 멈추면 나머지를 닫는다. 대기 중 닫힌 핸들 때문에 windows-latest에서 TestConcurrentSessions가 실패했다(실행 41169665288) (T20)
 - T15-52: config/documents.json은 더 이상 tests/kit/**를 제외하지 않는다. T15가 vendor한 kit test를 설치된 kit package로 바꾼 뒤로 그 경로에는 파일이 없다.
