@@ -17,6 +17,12 @@ refs-check: ## Check that every task ID a document names resolves to a checklist
 # Kit owns native test discovery, workspace coverage and case-sensitive resources.
 test-go: CASE_SENSITIVE_ENV := FLOWMARK_CASE_SENSITIVE_DIR
 
+# The suites of flowmark, each runtime independently: the Node suite of the root infrastructure, and the Go workspace.
+.PHONY: flowmark-node-check flowmark-go-check flowmark-test
+flowmark-node-check: test-infrastructure ## Run the Node suite of the root infrastructure; offline
+flowmark-go-check: build-go test-go ## Build and test the complete Go workspace; offline
+flowmark-test: flowmark-node-check flowmark-go-check ## Run the Node and the Go suites (AGENTS: flowmark-test); offline
+
 # The complete local install adds the locked board dependencies after the Kit bootstrap.
 .PHONY: flowmark-install
 flowmark-install: install-kit deps-php deps-node ## Install the Composer and npm packages of the board example from their locks; ONLINE

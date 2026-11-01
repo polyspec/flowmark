@@ -45,10 +45,10 @@ jobs:
           GOPROXY: 'off'
           GOSUMDB: 'off'
           GOFLAGS: -mod=readonly
-        run: make build-go test-go
+        run: make flowmark-go-check
       - name: test TypeScript infrastructure through Kit
         if: matrix.language == 'typescript'
-        run: make test-infrastructure
+        run: make flowmark-node-check
       - name: references
         if: matrix.language == 'typescript' && runner.os == 'Linux'
         run: make refs-check
