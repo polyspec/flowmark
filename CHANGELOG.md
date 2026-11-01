@@ -4,6 +4,7 @@
 ## Unreleased
 
 - T15-54: flowmark adopts Kit 0.0.92 (T15-54).
+- T19: The layout benchmarks report setup-ms, the time newFixture-equivalent setup takes outside the timed loop, and teardown-ms, the corpus close and the folder removal, so a Windows run shows the time that the per-op metrics do not (T19).
 - T15-1: The target flowmark-test aggregates flowmark-node-check and flowmark-go-check, and ci.yml runs them in its typescript and go jobs; the composer packages stay vcs forks until the batch release, so T15-1 stays held on that cause (T15-1).
 - T15-41: The gates name no target that kit deletes: CHECK_TARGETS of the Makefile holds neither toolchain-check nor link-state-check, and link-check runs in their place, as T15-48 left it (T15-41).
 - T15-51: The job ci-passed of ci.yml is deleted: the run succeeds only when every job of it succeeds, and the repository jobs language and benchmarks need kit as the gates of kit do, so the release reads the conclusion of the run (T15-51).

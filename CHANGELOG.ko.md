@@ -1,10 +1,11 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 16c1fbf9f83fc52b1c2d7db118fcbfc73b912b3af150323dad9fcbe7cc7dbc97 -->
+<!-- source-sha256: aef45401188344f15961634dac0e547ae7449065b5de189b9d00c36cd02e59aa -->
 # Changelog
 
 ## Unreleased
 
 - T15-54: flowmark이 Kit 0.0.92를 채택한다 (T15-54).
+- T19: layout 벤치마크는 타이머 밖의 setup 시간 setup-ms와 corpus 닫기 및 폴더 제거 시간 teardown-ms를 보고하므로, Windows run은 per-op metric이 보이지 않는 그 시간을 보여 준다 (T19).
 - T15-1: flowmark-test target은 flowmark-node-check와 flowmark-go-check를 묶고, ci.yml은 typescript와 go job에서 그것들을 실행한다. composer 패키지는 일괄 release 전까지 vcs fork로 남으므로 T15-1은 그 원인으로 보류된다 (T15-1).
 - T15-41: 검사 묶음은 kit이 삭제한 target을 이름 짓지 않는다: Makefile의 CHECK_TARGETS에는 toolchain-check와 link-state-check가 없고, T15-48이 남긴 대로 link-check가 그 자리에서 실행된다 (T15-41).
 - T15-51: ci.yml의 job ci-passed를 삭제한다: run은 그 모든 job이 성공할 때만 성공하며, 저장소 job인 language와 benchmarks는 kit의 gate처럼 kit을 needs로 가지므로 release는 run의 결론을 읽는다 (T15-51).

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/polyspec/flowmark/packages/go/internal/corpustest"
 	"github.com/polyspec/flowmark/packages/go/store/journal"
 )
 
@@ -64,7 +65,11 @@ func shardLayouts(b *testing.B, bench func(b *testing.B, f *fixture)) {
 		}
 		for _, events := range benchFolderEvents {
 			b.Run(fmt.Sprintf("%s/events=%d", name, events), func(b *testing.B) {
-				bench(b, newFixture(b, eventCatalog(b, sharded), eventDocs(events, sharded)))
+				lf := newLayoutFixture(b, eventCatalog(b, sharded), eventDocs(events, sharded))
+				bench(b, lf.fixture)
+				// The metrics follow the loop: the first call of b.Loop resets the metrics reported before it.
+				b.ReportMetric(float64(lf.Setup.Microseconds())/1000, "setup-ms")
+				b.ReportMetric(float64(lf.Teardown().Microseconds())/1000, "teardown-ms")
 			})
 		}
 	}
@@ -166,4 +171,45 @@ func TestShardLayoutFixtureTimes(t *testing.T) {
 	if _, err := os.Stat(root); !os.IsNotExist(err) {
 		t.Errorf("the folder %s survives the teardown: %v", root, err)
 	}
+}
+
+// layoutFixture is the fixture of a layout benchmark, with the time its setup took and the folder it is kept in, which
+// the teardown removes with the corpus closed (T19).
+type layoutFixture struct {
+	*fixture
+	Setup time.Duration
+	root  string
+}
+
+// newLayoutFixture is newFixture with the setup timed. The folder is made here instead of by t.TempDir, so that its
+// removal is timed in Teardown; the removal is the one t.TempDir makes at the end of the test.
+func newLayoutFixture(tb testing.TB, dbs string, docs map[string]string) *layoutFixture {
+	tb.Helper()
+	start := time.Now()
+	root, err := os.MkdirTemp("", "flowmark-layout-")
+	if err != nil {
+		tb.Fatal(err)
+	}
+	// A failed test still leaves no folder; a folder that Teardown removed is no error.
+	tb.Cleanup(func() {
+		if err := os.RemoveAll(root); err != nil {
+			tb.Errorf("removing %s: %v", root, err)
+		}
+	})
+	corpustest.WriteTree(tb, root, map[string]string{"dbspec/test.dbs": dbs})
+	corpustest.WriteTree(tb, root, docs)
+	f := openFixture(tb, root)
+	return &layoutFixture{fixture: f, Setup: time.Since(start), root: root}
+}
+
+// Teardown closes the corpus, which is idempotent, removes the folder and returns the time that took.
+func (l *layoutFixture) Teardown() time.Duration {
+	start := time.Now()
+	if err := l.c.Close(); err != nil {
+		l.t.Fatalf("closing the corpus: %v", err)
+	}
+	if err := os.RemoveAll(l.root); err != nil {
+		l.t.Fatalf("removing the folder: %v", err)
+	}
+	return time.Since(start)
 }
