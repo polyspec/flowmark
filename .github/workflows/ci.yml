@@ -30,8 +30,8 @@ jobs:
         language: [typescript, go]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-      # The bootstrap of kit (K992): the Node.js of mise.toml, the locked kit package, the npm of var/tools and the packages.
-      - uses: ./.github/actions/kit-bootstrap
+      - name: Bootstrap kit, npm and the packages of package-lock.json (K992)
+        uses: ./.github/actions/kit-bootstrap
       - name: install Go
         if: matrix.language == 'go'
         run: make install-tools TOOLS=go
@@ -63,8 +63,8 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-      # The bootstrap of kit (K992): the Node.js of mise.toml, the locked kit package, the npm of var/tools and the packages.
-      - uses: ./.github/actions/kit-bootstrap
+      - name: Bootstrap kit, npm and the packages of package-lock.json (K992)
+        uses: ./.github/actions/kit-bootstrap
       - name: install Go
         run: make install-tools TOOLS=go
       - name: install locked Go dependencies
@@ -98,8 +98,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-      # The bootstrap of kit (K992): the Node.js of mise.toml, the locked kit package, the npm of var/tools and the packages.
-      - uses: ./.github/actions/kit-bootstrap
+      - name: Bootstrap kit, npm and the packages of package-lock.json (K992)
+        uses: ./.github/actions/kit-bootstrap
       - name: require every mandatory job
         env:
           RESULTS: ${{ toJSON(needs) }}
