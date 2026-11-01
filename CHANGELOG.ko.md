@@ -1,8 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 039663c27603fafd96125db761310a47f0e48a049d1c3542cf1a8251f401354f -->
+<!-- source-sha256: c09eae7bbf43bcfa7835eee8d67d6b93a1212cfe4cce6e6328694c73ee1ddd62 -->
 # Changelog
 
 ## Unreleased
+
+## 0.0.4
 
 - T24: Kit 0.0.87을 쓴다(0.0.86 대신). package.json과 그 lock은 릴리스 asset `polyspec-kit-0.0.87.tgz`를 고정하고, make kit-sync가 쓰는 복사본(release.yml, ci-pipeline.yml, .github/actions/kit-bootstrap)은 그 버전을 따른다. ci.yml의 모든 job은 bootstrap 단계의 인라인 복사본 대신 공유 로컬 action `./.github/actions/kit-bootstrap`으로 kit을 bootstrap하므로, 각 job은 package-lock.json의 패키지도 함께 설치한다 (T24).
 - T24-2: board 예제는 polyspec 릴리스 template 0.0.18, hyper 0.0.24, crudui 0.0.11을 쓴다. examples/board/web/composer.json은 각 릴리스의 packages.json을 composer repository로 지정하고 새 버전을 require하며, composer.lock은 고정된 Composer로 다시 쓰고, package.json과 package-lock.json은 같은 버전의 릴리스 asset을 고정한다 (T24-2).
