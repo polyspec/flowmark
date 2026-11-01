@@ -4,67 +4,10 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "acb6f840f5c2623995022340cc0db0c2",
+    "content-hash": "9397e06e7345e64e1dd64d7ddc7d7ee7",
     "packages": [
         {
-            "name": "nikic/php-parser",
-            "version": "v5.9.0",
-            "source": {
-                "type": "git",
-                "url": "https://github.com/nikic/PHP-Parser.git",
-                "reference": "9e33da9553fe7786f0962b35f4e4ecf01be89def"
-            },
-            "dist": {
-                "type": "zip",
-                "url": "https://api.github.com/repos/nikic/PHP-Parser/zipball/9e33da9553fe7786f0962b35f4e4ecf01be89def",
-                "reference": "9e33da9553fe7786f0962b35f4e4ecf01be89def",
-                "shasum": ""
-            },
-            "require": {
-                "ext-json": "*",
-                "ext-tokenizer": "*",
-                "php": ">=7.4"
-            },
-            "require-dev": {
-                "ircmaxell/php-yacc": "^0.0.7",
-                "phpunit/phpunit": "^9.0"
-            },
-            "bin": [
-                "bin/php-parse"
-            ],
-            "type": "library",
-            "extra": {
-                "branch-alias": {
-                    "dev-master": "5.x-dev"
-                }
-            },
-            "autoload": {
-                "psr-4": {
-                    "PhpParser\\": "lib/PhpParser"
-                }
-            },
-            "notification-url": "https://packagist.org/downloads/",
-            "license": [
-                "BSD-3-Clause"
-            ],
-            "authors": [
-                {
-                    "name": "Nikita Popov"
-                }
-            ],
-            "description": "A PHP parser written in PHP",
-            "keywords": [
-                "parser",
-                "php"
-            ],
-            "support": {
-                "issues": "https://github.com/nikic/PHP-Parser/issues",
-                "source": "https://github.com/nikic/PHP-Parser/tree/v5.9.0"
-            },
-            "time": "2026-09-13T18:51:52+00:00"
-        },
-        {
-            "name": "opis/json-schema",
+            "name": "min-0-max/json-schema",
             "version": "v2.6.0-p1",
             "source": {
                 "type": "git",
@@ -132,6 +75,63 @@
                 "validator"
             ],
             "time": "2026-10-15T02:57:09+00:00"
+        },
+        {
+            "name": "nikic/php-parser",
+            "version": "v5.9.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/nikic/PHP-Parser.git",
+                "reference": "9e33da9553fe7786f0962b35f4e4ecf01be89def"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/nikic/PHP-Parser/zipball/9e33da9553fe7786f0962b35f4e4ecf01be89def",
+                "reference": "9e33da9553fe7786f0962b35f4e4ecf01be89def",
+                "shasum": ""
+            },
+            "require": {
+                "ext-json": "*",
+                "ext-tokenizer": "*",
+                "php": ">=7.4"
+            },
+            "require-dev": {
+                "ircmaxell/php-yacc": "^0.0.7",
+                "phpunit/phpunit": "^9.0"
+            },
+            "bin": [
+                "bin/php-parse"
+            ],
+            "type": "library",
+            "extra": {
+                "branch-alias": {
+                    "dev-master": "5.x-dev"
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "PhpParser\\": "lib/PhpParser"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "BSD-3-Clause"
+            ],
+            "authors": [
+                {
+                    "name": "Nikita Popov"
+                }
+            ],
+            "description": "A PHP parser written in PHP",
+            "keywords": [
+                "parser",
+                "php"
+            ],
+            "support": {
+                "issues": "https://github.com/nikic/PHP-Parser/issues",
+                "source": "https://github.com/nikic/PHP-Parser/tree/v5.9.0"
+            },
+            "time": "2026-09-13T18:51:52+00:00"
         },
         {
             "name": "opis/string",
@@ -260,17 +260,17 @@
         },
         {
             "name": "polyspec/crudui-generator",
-            "version": "0.0.11",
+            "version": "0.0.12",
             "dist": {
                 "type": "zip",
-                "url": "https://github.com/polyspec/crudui/releases/download/v0.0.11/polyspec-crudui-generator-php-0.0.11.zip",
-                "shasum": "aedb6446d50f6c64166281aad4e36fe4c778c402"
+                "url": "https://github.com/polyspec/crudui/releases/download/v0.0.12/polyspec-crudui-generator-php-0.0.12.zip",
+                "shasum": "3059d08b75920c783883a56cf1bc3e8b02e38014"
             },
             "require": {
                 "ext-mbstring": "*",
                 "php": ">=8.4",
                 "php-64bit": "^8.2",
-                "polyspec/crudui-validator": "0.0.11"
+                "polyspec/crudui-validator": "0.0.12"
             },
             "require-dev": {
                 "phpunit/phpunit": "^13.4.1"
@@ -299,11 +299,11 @@
         },
         {
             "name": "polyspec/crudui-validator",
-            "version": "0.0.11",
+            "version": "0.0.12",
             "dist": {
                 "type": "zip",
-                "url": "https://github.com/polyspec/crudui/releases/download/v0.0.11/polyspec-crudui-validator-php-0.0.11.zip",
-                "shasum": "f827ab925d254aa8673ff901c18ceff302a7a098"
+                "url": "https://github.com/polyspec/crudui/releases/download/v0.0.12/polyspec-crudui-validator-php-0.0.12.zip",
+                "shasum": "4614b42b89d2833efcb09661f7ff460f49ae0b7a"
             },
             "require": {
                 "php": ">=8.4"
@@ -340,15 +340,15 @@
         },
         {
             "name": "polyspec/hyper-server",
-            "version": "0.0.24",
+            "version": "0.0.25",
             "dist": {
                 "type": "zip",
-                "url": "https://github.com/polyspec/hyper/releases/download/v0.0.24/polyspec-hyper-server-php-0.0.24.zip",
-                "shasum": "2d974d85fdd76646eaaf7ca7e6639d2a5b9dee13"
+                "url": "https://github.com/polyspec/hyper/releases/download/v0.0.25/polyspec-hyper-server-php-0.0.25.zip",
+                "shasum": "3e1429595c2846a88bd87a6b3efc708ba208c1e6"
             },
             "require": {
                 "php": ">=8.4",
-                "polyspec/template": "0.0.18"
+                "polyspec/template": "0.0.19"
             },
             "require-dev": {
                 "laravel/pint": "^1.32.1",
@@ -469,15 +469,15 @@
         },
         {
             "name": "polyspec/template",
-            "version": "0.0.18",
+            "version": "0.0.19",
             "dist": {
                 "type": "zip",
-                "url": "https://github.com/polyspec/template/releases/download/v0.0.18/polyspec-template-php-0.0.18.zip",
-                "shasum": "a3ed7e9354eef2b03c17bfb523e1fa192fbba1c4"
+                "url": "https://github.com/polyspec/template/releases/download/v0.0.19/polyspec-template-php-0.0.19.zip",
+                "shasum": "a90524721b8308372ea5d8d26b8dfafb47655a02"
             },
             "require": {
                 "ext-mbstring": "*",
-                "opis/json-schema": "^2.6",
+                "min-0-max/json-schema": "*",
                 "php": ">=8.4"
             },
             "require-dev": {

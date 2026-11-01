@@ -1,5 +1,5 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 898340b3bfc0a2033fc46beb33d788d7a7e9c030587dd97225f154799f50fef9 -->
+<!-- source-sha256: 285063cdf5a478a69b9df13ed09f8eab0ef5494fc0f813ec4a53eaf360dff960 -->
 # Changelog
 
 ## Unreleased
@@ -8,6 +8,7 @@
 - T24-2: board 예제는 polyspec 릴리스 template 0.0.18, hyper 0.0.24, crudui 0.0.11을 쓴다. examples/board/web/composer.json은 각 릴리스의 packages.json을 composer repository로 지정하고 새 버전을 require하며, composer.lock은 고정된 Composer로 다시 쓰고, package.json과 package-lock.json은 같은 버전의 릴리스 asset을 고정한다 (T24-2).
 - T24-4: Kit 0.0.88을 쓴다(0.0.87 대신). package.json과 그 lock은 릴리스 asset `polyspec-kit-0.0.88.tgz`를 고정하고, make kit-sync가 쓰는 복사본(PRINCIPLES.md, PRINCIPLES.ko.md)은 그 버전을 따른다 (T24-4).
 - T24-5: ci.yml의 language와 benchmarks job은 kit 0.0.88의 S12 파이프라인 규칙대로 `needs: kit`으로 job kit을 뒤따른다 (K998) (T24-5).
+- T24-7: board 예제는 template 0.0.19, hyper 0.0.25, crudui 0.0.12를 한 변경으로 쓴다. hyper 0.0.25는 template 0.0.19를, crudui 0.0.12는 자기 validator 0.0.12를 require하기 때문이다. examples/board/web/composer.json은 각 릴리스의 packages.json을 지정하고 새 버전을 require하며, package.json과 package-lock.json은 같은 버전의 tarball을 고정하고, composer.lock은 고정된 Composer가 갱신한다 (T24-7).
 
 ## 0.0.3
 

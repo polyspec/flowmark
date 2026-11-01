@@ -7,6 +7,7 @@
 - T24-2: The board example takes template 0.0.18, hyper 0.0.24 and crudui 0.0.11: examples/board/web/composer.json names each release packages.json as its composer repository and requires the new versions, its composer.lock is regenerated with the pinned Composer, and package.json and package-lock.json pin the release assets of the same versions (T24-2).
 - T24-4: Kit 0.0.88 is adopted in place of 0.0.87: package.json and its lock pin its release asset `polyspec-kit-0.0.88.tgz`, and the copies that make kit-sync writes (PRINCIPLES.md and PRINCIPLES.ko.md) follow it (T24-4).
 - T24-5: The jobs language and benchmarks of ci.yml follow the job kit with `needs: kit`, as the S12 pipeline rule of kit 0.0.88 requires (K998) (T24-5).
+- T24-7: The board example takes template 0.0.19, hyper 0.0.25 and crudui 0.0.12 in one change, since hyper 0.0.25 requires template 0.0.19 and crudui 0.0.12 requires its validator 0.0.12: examples/board/web/composer.json names each release packages.json and requires the new versions, package.json and package-lock.json pin the tarballs of the same versions, and composer.lock is updated by the pinned Composer (T24-7).
 
 ## 0.0.3
 
