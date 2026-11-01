@@ -1,8 +1,9 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 408a48b69d037eed5f8b7510a51471e180d8acc953fcde1723118fafb54b83fd -->
+<!-- source-sha256: 92038c4317b6505ceea1e24a72c8006ae2b3d9fe870b32ad7bd80db14ef1fb13 -->
 # Changelog
 
 ## Unreleased
+- T22: board 예제는 template 0.0.17, hyper 0.0.23, crudui 0.0.10, orm 0.0.20, ordered-json 0.0.16을 쓴다. examples/board/web/composer.json은 인라인 zip package 대신 릴리스마다 composer repository 하나(그 릴리스의 packages.json)를 선언하고 새 버전을 require하며, composer.lock을 다시 쓴다. examples의 npm과 Go 고정 버전도 같은 버전으로 옮긴다 (T22).
 - T21: Kit 0.0.85를 쓴다(0.0.82 대신). package.json과 그 lock은 릴리스 asset `polyspec-kit-0.0.85.tgz`를 고정한다. 이 이름은 P39의 npm pack 이름을 유지하며, PRINCIPLES.md와 PRINCIPLES.ko.md는 그 복사본이다. config/release.json은 package를 선언하지 않으므로 schema가 요구하는 product와 runtime이 없고, 트리의 어떤 텍스트도 옛 `-npm-` 또는 `-php-` 형식으로 asset 이름을 만들지 않는다 (T21).
 - T15-53-1: kit 0.0.82가 요구하는 대로 mise.toml의 npm을 쓴다(K938). package.json은 packageManager 대신 devEngines에 npm 12.2.0을 선언하고, mise.toml은 `npm:npm`을 선언하며, mise.lock과 .mise/locks/npm-npm/12.2.0의 sidecar가 그것을 고정하고, ci.yml의 bootstrap 단계는 devEngines의 npm을 checkout 밖에서 실행한다. T15-53의 CI는 devEngines를 읽는 job kit에서 실패했었다.
 - T15-53: Kit 0.0.82를 쓴다. config/generated.json은 `packages/go/internal`의 Go table을 이유와 함께 tracked로 두고, board 예제 model은 Git에서 빠지며 `make board-models`가 board lock의 orm-gen으로 쓰고(polyspec/orm의 Composer entry가 `bin/orm-gen`을 선언한다), config/ci.json은 `parityMode` none을 선언한다.
