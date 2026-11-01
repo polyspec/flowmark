@@ -1,8 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: c09eae7bbf43bcfa7835eee8d67d6b93a1212cfe4cce6e6328694c73ee1ddd62 -->
+<!-- source-sha256: dcbcb5e49a9181bb5db10e2786856f8a25d46657b515914e9a81f222f22b15a6 -->
 # Changelog
 
 ## Unreleased
+
+- T24-12: board-models-ts recipe는 package 안의 파일 dist/bin/orm-gen.js 대신 @polyspec/orm이 선언한 orm-gen bin, node_modules/.bin/orm-gen을 실행한다. flowmark는 orm에 선언된 interface로만 닿는다.
 
 ## 0.0.4
 

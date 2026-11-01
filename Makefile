@@ -60,7 +60,7 @@ PHP := $(firstword $(wildcard $(KIT_TOOLS)/bin/php.cmd $(KIT_TOOLS)/bin/php))
 board-models: board-models-ts board-models-php ## Write the TypeScript and PHP models of the board example from the corpus catalog; offline
 
 board-models-ts: ## Write node/model/models.ts of the board example with the orm-gen of its npm lock; offline
-	cd $(BOARD) && $(NODE) node_modules/@polyspec/orm/dist/bin/orm-gen.js gen --set ../block/dbspec/dbspec-set.json --out node/model --scan node/posts.ts
+	cd $(BOARD) && $(NODE) node_modules/.bin/orm-gen gen --set ../block/dbspec/dbspec-set.json --out node/model --scan node/posts.ts
 
 board-models-php: ## Write src/Model of the board example with the orm-gen of its Composer lock; offline
 	cd $(BOARD) && $(PHP) vendor/bin/orm-gen gen --set ../block/dbspec/dbspec-set.json --out src/Model --namespace 'Flowmark\Board\Model'

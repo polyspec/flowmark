@@ -3,6 +3,8 @@
 
 ## Unreleased
 
+- T24-12: The board-models-ts recipe runs the orm-gen bin that @polyspec/orm declares, node_modules/.bin/orm-gen, in place of the file dist/bin/orm-gen.js inside the package, so flowmark reaches orm only through its declared interface.
+
 ## 0.0.4
 
 - T24: Kit 0.0.87 is adopted in place of 0.0.86: package.json and its lock pin its release asset `polyspec-kit-0.0.87.tgz`, the copies that make kit-sync writes (release.yml, ci-pipeline.yml and .github/actions/kit-bootstrap) follow it, and every job of ci.yml bootstraps kit through the shared action `./.github/actions/kit-bootstrap` in place of its inline copy of the bootstrap steps, so each job also installs the packages of package-lock.json (T24).
