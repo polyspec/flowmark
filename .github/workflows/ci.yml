@@ -19,6 +19,7 @@ jobs:
       contents: read
   language:
     name: ${{ matrix.language }} (${{ matrix.os }})
+    needs: kit
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -53,6 +54,7 @@ jobs:
         run: make refs-check
   benchmarks:
     name: benchmarks (${{ matrix.os }})
+    needs: kit
     runs-on: ${{ matrix.os }}
     defaults:
       run:
