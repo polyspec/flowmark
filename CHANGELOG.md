@@ -3,6 +3,8 @@
 
 ## Unreleased
 
+- T24: Kit 0.0.87 is adopted in place of 0.0.86: package.json and its lock pin its release asset `polyspec-kit-0.0.87.tgz`, the copies that make kit-sync writes (release.yml, ci-pipeline.yml and .github/actions/kit-bootstrap) follow it, and every job of ci.yml bootstraps kit through the shared action `./.github/actions/kit-bootstrap` in place of its inline copy of the bootstrap steps, so each job also installs the packages of package-lock.json (T24).
+
 ## 0.0.3
 
 - T23: Kit 0.0.86 is adopted in place of 0.0.85: package.json and its lock pin its release asset `polyspec-kit-0.0.86.tgz`, PRINCIPLES.md, PRINCIPLES.ko.md and .github/workflows/release.yml are the copies that make kit-sync writes, and the release workflow now starts by itself on a successful push run of ci on main. config/release.json lists no package, so no product or runtime is declared (T23).

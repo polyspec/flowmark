@@ -1,8 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: e5bef6132a850e2377a99b3f4d40af93e829c38f60b6702a4248734bce78c5bb -->
+<!-- source-sha256: 327116414b1bc12f7310bbfd1f40dffee4b656c4cfc0b5e31a09326c8b8e46b0 -->
 # Changelog
 
 ## Unreleased
+
+- T24: Kit 0.0.87을 쓴다(0.0.86 대신). package.json과 그 lock은 릴리스 asset `polyspec-kit-0.0.87.tgz`를 고정하고, make kit-sync가 쓰는 복사본(release.yml, ci-pipeline.yml, .github/actions/kit-bootstrap)은 그 버전을 따른다. ci.yml의 모든 job은 bootstrap 단계의 인라인 복사본 대신 공유 로컬 action `./.github/actions/kit-bootstrap`으로 kit을 bootstrap하므로, 각 job은 package-lock.json의 패키지도 함께 설치한다 (T24).
 
 ## 0.0.3
 
