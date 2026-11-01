@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "efbcaa6200d9b4ce2e796a277ec8aa86",
+    "content-hash": "acb6f840f5c2623995022340cc0db0c2",
     "packages": [
         {
             "name": "nikic/php-parser",
@@ -260,17 +260,17 @@
         },
         {
             "name": "polyspec/crudui-generator",
-            "version": "0.0.10",
+            "version": "0.0.11",
             "dist": {
                 "type": "zip",
-                "url": "https://github.com/polyspec/crudui/releases/download/v0.0.10/polyspec-crudui-generator-php-0.0.10.zip",
-                "shasum": "3358d6249a6b4bb76b29860e28a4538ac89fa2a0"
+                "url": "https://github.com/polyspec/crudui/releases/download/v0.0.11/polyspec-crudui-generator-php-0.0.11.zip",
+                "shasum": "aedb6446d50f6c64166281aad4e36fe4c778c402"
             },
             "require": {
                 "ext-mbstring": "*",
                 "php": ">=8.4",
                 "php-64bit": "^8.2",
-                "polyspec/crudui-validator": "0.0.10"
+                "polyspec/crudui-validator": "0.0.11"
             },
             "require-dev": {
                 "phpunit/phpunit": "^13.4.1"
@@ -299,11 +299,11 @@
         },
         {
             "name": "polyspec/crudui-validator",
-            "version": "0.0.10",
+            "version": "0.0.11",
             "dist": {
                 "type": "zip",
-                "url": "https://github.com/polyspec/crudui/releases/download/v0.0.10/polyspec-crudui-validator-php-0.0.10.zip",
-                "shasum": "d7671776fb8e9f4dcaf97f19deaaad7d313171f6"
+                "url": "https://github.com/polyspec/crudui/releases/download/v0.0.11/polyspec-crudui-validator-php-0.0.11.zip",
+                "shasum": "f827ab925d254aa8673ff901c18ceff302a7a098"
             },
             "require": {
                 "php": ">=8.4"
@@ -340,15 +340,15 @@
         },
         {
             "name": "polyspec/hyper-server",
-            "version": "0.0.23",
+            "version": "0.0.24",
             "dist": {
                 "type": "zip",
-                "url": "https://github.com/polyspec/hyper/releases/download/v0.0.23/polyspec-hyper-server-php-0.0.23.zip",
-                "shasum": "efa7b756f76600d3f7f040f2bfe0ddfbe18c37fd"
+                "url": "https://github.com/polyspec/hyper/releases/download/v0.0.24/polyspec-hyper-server-php-0.0.24.zip",
+                "shasum": "2d974d85fdd76646eaaf7ca7e6639d2a5b9dee13"
             },
             "require": {
                 "php": ">=8.4",
-                "polyspec/template": "0.0.17"
+                "polyspec/template": "0.0.18"
             },
             "require-dev": {
                 "laravel/pint": "^1.32.1",
@@ -469,11 +469,11 @@
         },
         {
             "name": "polyspec/template",
-            "version": "0.0.17",
+            "version": "0.0.18",
             "dist": {
                 "type": "zip",
-                "url": "https://github.com/polyspec/template/releases/download/v0.0.17/polyspec-template-php-0.0.17.zip",
-                "shasum": "c60ca69d2c4fc8dc933298ea3e0f6506435299b3"
+                "url": "https://github.com/polyspec/template/releases/download/v0.0.18/polyspec-template-php-0.0.18.zip",
+                "shasum": "a3ed7e9354eef2b03c17bfb523e1fa192fbba1c4"
             },
             "require": {
                 "ext-mbstring": "*",

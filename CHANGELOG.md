@@ -4,6 +4,7 @@
 ## Unreleased
 
 - T24: Kit 0.0.87 is adopted in place of 0.0.86: package.json and its lock pin its release asset `polyspec-kit-0.0.87.tgz`, the copies that make kit-sync writes (release.yml, ci-pipeline.yml and .github/actions/kit-bootstrap) follow it, and every job of ci.yml bootstraps kit through the shared action `./.github/actions/kit-bootstrap` in place of its inline copy of the bootstrap steps, so each job also installs the packages of package-lock.json (T24).
+- T24-2: The board example takes template 0.0.18, hyper 0.0.24 and crudui 0.0.11: examples/board/web/composer.json names each release packages.json as its composer repository and requires the new versions, its composer.lock is regenerated with the pinned Composer, and package.json and package-lock.json pin the release assets of the same versions (T24-2).
 
 ## 0.0.3
 
