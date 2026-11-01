@@ -11,6 +11,7 @@
 - T24-8: packages/go is tidied with the pinned go, so go.sum drops the stale lines of orm v0.0.18 and of its pseudo-version, and go mod tidy -diff exits 0 (T24-8).
 - T24-9: examples and tests/conformance/go require the in-repo module packages/go at its released version v0.0.3, as orm's examples require their own packages/go at a released version; go.work still serves the local tree, and go mod tidy -diff exits 0 with GOWORK=off and with the workspace (T24-9).
 - T24-10: The uv lock of the vulture tool is written by the uv of mise.toml, 0.12.24, so uv lock --check exits 0; vulture stays at 2.16, and the digest of that directory in mise.lock follows through make toolchain-lock (T24-10).
+- T24-11: flowmark takes orm 0.0.21 and its ordered-json 0.0.18: the board example names their release packages.json and tarballs, its composer.lock is updated by the pinned Composer, and packages/go requires github.com/polyspec/orm/packages/go v0.0.21 in place of its pseudo-version.
 
 ## 0.0.3
 

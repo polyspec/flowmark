@@ -1,5 +1,5 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 1600d2963e6191b7c022c744817f4e781720828804fd6f647d127cc7c7199380 -->
+<!-- source-sha256: 039663c27603fafd96125db761310a47f0e48a049d1c3542cf1a8251f401354f -->
 # Changelog
 
 ## Unreleased
@@ -12,6 +12,7 @@
 - T24-8: packages/go는 고정된 go로 tidy하므로 go.sum은 orm v0.0.18과 그 pseudo-version의 오래된 줄을 버리고, go mod tidy -diff는 0으로 끝난다 (T24-8).
 - T24-9: examples와 tests/conformance/go는 저장소 안 모듈 packages/go를 릴리스 버전 v0.0.3으로 require한다. orm의 examples가 자기 packages/go를 릴리스 버전으로 require하는 것과 같다. go.work는 여전히 로컬 트리를 제공하며, go mod tidy -diff는 GOWORK=off와 workspace 양쪽에서 0으로 끝난다 (T24-9).
 - T24-10: vulture 도구의 uv lock은 mise.toml의 uv 0.12.24로 다시 쓰여 uv lock --check가 0으로 끝난다. vulture는 2.16으로 남고, mise.lock의 그 디렉터리 digest는 make toolchain-lock으로 따라 바뀐다 (T24-10).
+- T24-11: flowmark가 orm 0.0.21과 그 ordered-json 0.0.18을 받는다. board 예제는 두 release의 packages.json과 tarball을 쓰고, composer.lock은 고정된 Composer가 갱신하며, packages/go는 pseudo-version 대신 github.com/polyspec/orm/packages/go v0.0.21을 요구한다.
 
 ## 0.0.3
 
