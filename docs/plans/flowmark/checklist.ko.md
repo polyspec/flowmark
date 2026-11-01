@@ -1,5 +1,5 @@
 <!-- doc-id: execution-checklist -->
-<!-- source-sha256: 399ea18d21bba944ad99be86ec9d1b2a4db101e2acf5305d2fea21cea35294b5 -->
+<!-- source-sha256: 824413b80b9c7960ee07dd013d2483857c51630e02554aec7340a3c9e796e125 -->
 # 실행 체크리스트
 
 | ID | Task | Deliverables | Verification | State |
@@ -89,3 +89,4 @@
 | T24-4 | flowmark는 kit 0.0.87 대신 kit 0.0.88을 쓴다: package.json과 그 lock은 릴리스 asset polyspec-kit-0.0.88.tgz를 고정하고, make kit-sync가 쓰는 복사본은 그 버전을 따른다 (T24 후속). | package.json, package-lock.json, .github/workflows/ci-pipeline.yml, .github/workflows/release.yml, .github/actions/kit-bootstrap/action.yml, CHANGELOG.md, CHANGELOG.ko.md, docs/plans/flowmark/checklist.md, docs/plans/flowmark/checklist.ko.md | `make rules-check` `make docs-check` `make owner-validate` | [v] |
 | T24-5 | ci.yml의 language와 benchmarks job은 kit 0.0.88의 S12 파이프라인 규칙대로 job kit 뒤에 needs: kit으로 이어진다. job kit이 shared gate를 먼저 한 번 실행한다 (K998). kit-gates-static이 ci.yml:20(language)과 ci.yml:54(benchmarks)에서 본 항목이다. | .github/workflows/ci.yml | `make kit-check` `make layout-check` | [v] |
 | T24-7 | board 예제는 template 0.0.19, hyper 0.0.25, crudui 0.0.12를 한 변경으로 쓴다. hyper 0.0.25는 template 0.0.19를 require하고 crudui 0.0.12는 자기 validator 0.0.12를 require하므로, Composer는 하나만 따로 올릴 수 없다. examples/board/web/composer.json은 세 릴리스 각각의 packages.json을 지정하고 같은 버전을 require하며, package.json과 package-lock.json은 릴리스 asset 목록에서 복사한 같은 버전의 tarball을 고정하고, composer.lock은 고정된 Composer가 갱신한다 (T24 후속). | examples/board/web/composer.json, examples/board/web/composer.lock, examples/board/web/package.json, examples/board/web/package-lock.json, CHANGELOG.md, CHANGELOG.ko.md, docs/plans/flowmark/checklist.md, docs/plans/flowmark/checklist.ko.md | `make kit-gates-static` `make lint-ts` `make lint-php` `make layout-check` `make docs-check` `make refs-check` | [v] |
+| T24-8 | packages/go/go.sum에는 orm v0.0.18과 그 pseudo-version의 오래된 줄이 남아 있다. go mod tidy가 이를 지운다. 모듈은 고정된 go로 tidy하므로 go.sum은 모듈 그래프의 합만 담는다 (T24 후속). | packages/go/go.sum, CHANGELOG.md, CHANGELOG.ko.md, docs/plans/flowmark/checklist.md, docs/plans/flowmark/checklist.ko.md | `cd packages/go && go mod tidy -diff` `cd packages/go && go mod verify` | [v] |
