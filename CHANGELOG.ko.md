@@ -1,9 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 3cf11db31e1b95ce6b85b9fcea06a4aa66db9a8b5502be0ff18e4a4ce4912083 -->
+<!-- source-sha256: 805b91e0f419aafa9fd2c975ac8ac0929dbeca5ba4d50bb097e59e4f572662e1 -->
 # Changelog
 
 ## Unreleased
 
+- T15-54: flowmark이 Kit 0.0.92를 채택한다 (T15-54).
 - T15-51: ci.yml의 job ci-passed를 삭제한다: run은 그 모든 job이 성공할 때만 성공하며, 저장소 job인 language와 benchmarks는 kit의 gate처럼 kit을 needs로 가지므로 release는 run의 결론을 읽는다 (T15-51).
 - T15-43: 설치 target은 ci-setup이 부르는 deps-<runtime> target이다(K859): deps-go, deps-node, deps-php가 flowmark-go-install, flowmark-node-install, flowmark-php-install을 대신하고, config/ci.json과 ci.yml의 go job이 이들을 부르며, flowmark-install은 deps-php와 deps-node를 실행한다 (T15-43).
 - T24-12: board-models-ts recipe는 package 안의 파일 dist/bin/orm-gen.js 대신 @polyspec/orm이 선언한 orm-gen bin, node_modules/.bin/orm-gen을 실행한다. flowmark는 orm에 선언된 interface로만 닿는다.
