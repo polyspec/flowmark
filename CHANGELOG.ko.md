@@ -1,9 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 90a5e356e92821943b82bf071758de90f17896632cdc29c6cb761702c7cc212b -->
+<!-- source-sha256: 3cf11db31e1b95ce6b85b9fcea06a4aa66db9a8b5502be0ff18e4a4ce4912083 -->
 # Changelog
 
 ## Unreleased
 
+- T15-51: ci.yml의 job ci-passed를 삭제한다: run은 그 모든 job이 성공할 때만 성공하며, 저장소 job인 language와 benchmarks는 kit의 gate처럼 kit을 needs로 가지므로 release는 run의 결론을 읽는다 (T15-51).
 - T15-43: 설치 target은 ci-setup이 부르는 deps-<runtime> target이다(K859): deps-go, deps-node, deps-php가 flowmark-go-install, flowmark-node-install, flowmark-php-install을 대신하고, config/ci.json과 ci.yml의 go job이 이들을 부르며, flowmark-install은 deps-php와 deps-node를 실행한다 (T15-43).
 - T24-12: board-models-ts recipe는 package 안의 파일 dist/bin/orm-gen.js 대신 @polyspec/orm이 선언한 orm-gen bin, node_modules/.bin/orm-gen을 실행한다. flowmark는 orm에 선언된 interface로만 닿는다.
 
@@ -28,7 +29,7 @@
 - T15-53: Kit 0.0.82를 쓴다. config/generated.json은 `packages/go/internal`의 Go table을 이유와 함께 tracked로 두고, board 예제 model은 Git에서 빠지며 `make board-models`가 board lock의 orm-gen으로 쓰고(polyspec/orm의 Composer entry가 `bin/orm-gen`을 선언한다), config/ci.json은 `parityMode` none을 선언한다.
 - T20: Windows lock watch는 대기 중일 수 있는 holder 프로세스 핸들을 더는 닫지 않는다. armHolder는 교체된 핸들을 retired에 넣고, run은 두 대기 사이에 retired 핸들을 닫으며, watch를 멈추면 나머지를 닫는다. 대기 중 닫힌 핸들 때문에 windows-latest에서 TestConcurrentSessions가 실패했다(실행 41169665288) (T20)
 - T15-52: config/documents.json은 더 이상 tests/kit/**를 제외하지 않는다. T15가 vendor한 kit test를 설치된 kit package로 바꾼 뒤로 그 경로에는 파일이 없다.
-- T15-50: kit 0.0.80을 채택한다: CI는 `.github/workflows/ci.yml`이며 그 job `kit`이 kit의 `ci-pipeline.yml` 검사를 실행하고 `ci-passed`가 그것을 needs로 가진다. release는 성공한 `ci.yml` run의 id로 하는 `release.yml` dispatch이고 version은 change log의 가장 새로운 `## X.Y.Z`다. kit의 Windows tree 정지는 더는 무관한 process를 겨누지 않으며, 그것이 windows-latest에서 `make test-infrastructure`를 실패시켰다 (T15-50)
+- T15-50: kit 0.0.80을 채택한다: CI는 `.github/workflows/ci.yml`이며 그 job `kit`이 kit의 `ci-pipeline.yml` 검사를 실행하고 나머지 job이 그것을 needs로 가지며, run은 모든 job이 성공할 때만 성공한다. release는 성공한 `ci.yml` run의 id로 하는 `release.yml` dispatch이고 version은 change log의 가장 새로운 `## X.Y.Z`다. kit의 Windows tree 정지는 더는 무관한 process를 겨누지 않으며, 그것이 windows-latest에서 `make test-infrastructure`를 실패시켰다 (T15-50)
 - T15-49: 0.0.2를 릴리스한다 (T15-49)
 
 ## 0.0.2

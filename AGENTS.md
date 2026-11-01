@@ -51,7 +51,7 @@ them holds the rules of this repository.
   as Kit issues, and release requires all mandatory checks and the provider release proof.
   Enforced by: `make kit-check`
 - Own: A release is a dispatch of `.github/workflows/release.yml` with the id of a successful push run of
-  `.github/workflows/ci.yml` on `main`, whose job `ci-passed` needs every other job, the gates of kit among them:
+  `.github/workflows/ci.yml` on `main`, whose run succeeds only when every job of it succeeds, the gates of kit among them:
   `gh workflow run release.yml -f run=<id>`. Its version X.Y.Z is the newest section `## X.Y.Z` of CHANGELOG.md at the
   commit of that run, and the release is refused while `## Unreleased` holds an entry. `make release-tag` creates the
   annotated tags `vX.Y.Z` and `packages/go/vX.Y.Z` at that commit; no one creates, moves or pushes a tag by hand, and a

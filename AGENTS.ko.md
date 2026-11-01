@@ -46,7 +46,7 @@ GitHub, Jira), 응용 schema이고, [polyspec/orm](https://github.com/polyspec/o
   성공해야 release한다.
   Enforced by: `make kit-check`
 - Own: release는 `main`에서 성공한 `.github/workflows/ci.yml` push run의 id로 하는 `.github/workflows/release.yml`의
-  dispatch다. 그 run의 job `ci-passed`는 kit의 gate를 포함한 다른 모든 job을 needs로 가진다:
+  dispatch다. 그 run은 kit의 gate를 포함한 그 모든 job이 성공할 때만 성공한다:
   `gh workflow run release.yml -f run=<id>`. 그 version X.Y.Z는 그 run의 commit에 있는 CHANGELOG.md의 가장 새로운 section
   `## X.Y.Z`이며, `## Unreleased`에 항목이 있는 동안 release는 거부된다. `make release-tag`가 그 commit에 annotated tag
   `vX.Y.Z`와 `packages/go/vX.Y.Z`를 만든다. 손으로 tag를 만들고 옮기고 push하는 사람은 없으며, push한 tag는 release를

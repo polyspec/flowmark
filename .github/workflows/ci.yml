@@ -1,5 +1,5 @@
 # All test discovery, execution and case-sensitive resources belong to Kit. The release takes the id of a successful push run of
-# this workflow on main (release.yml, make release-tag), whose job ci-passed requires every other job.
+# this workflow on main (release.yml, make release-tag); the run succeeds only when every job of it succeeds (T15-51).
 name: ci
 on:
   push:
@@ -94,15 +94,3 @@ jobs:
         with:
           name: benchmarks-${{ matrix.os }}
           path: benchmarks.txt
-  ci-passed:
-    if: always()
-    needs: [language, benchmarks, kit]
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-      - name: Bootstrap kit, npm and the packages of package-lock.json (K992)
-        uses: ./.github/actions/kit-bootstrap
-      - name: require every mandatory job
-        env:
-          RESULTS: ${{ toJSON(needs) }}
-        run: make ci-passed
