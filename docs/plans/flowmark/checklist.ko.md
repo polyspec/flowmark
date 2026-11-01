@@ -1,5 +1,5 @@
 <!-- doc-id: execution-checklist -->
-<!-- source-sha256: c17841534e846c16d8fef318d9757885d86096358eceaa14d20facdade0d852c -->
+<!-- source-sha256: 135f055205c8db0e2be31c751f229023d2168820b79450d710253bd6969b8090 -->
 # 실행 체크리스트
 
 | ID | Task | Deliverables | Verification | State |
@@ -86,3 +86,4 @@
 | T24 | flowmark는 kit 0.0.86 대신 kit 0.0.87을 쓴다: package.json과 그 lock의 고정, make kit-sync가 쓰는 복사본(release.yml, ci-pipeline.yml과 bootstrap action .github/actions/kit-bootstrap), 그리고 ci.yml의 모든 job은 bootstrap 단계의 인라인 복사본 대신 공유 로컬 action ./.github/actions/kit-bootstrap으로 kit을 bootstrap한다. | package.json, package-lock.json, .github/workflows/ci.yml, .github/workflows/ci-pipeline.yml, .github/workflows/release.yml, .github/actions/kit-bootstrap/action.yml, CHANGELOG.md, CHANGELOG.ko.md, docs/plans/flowmark/checklist.md, docs/plans/flowmark/checklist.ko.md | `make kit-check` `make docs-check` `make rules-check` `make refs-check` `make layout-check` `make lint-ts` `make owner-validate` | [v] |
 | T24-1 | ci.yml의 bootstrap 세 자리가 brief의 step 문구와 정확히 같다: checkout 바로 뒤의 이름 붙은 step 'Bootstrap kit, npm and the packages of package-lock.json (K992)'과 그 uses 줄 ./.github/actions/kit-bootstrap이며, 주석 줄은 없앤다 (T24 후속). | ci.yml | `make kit-check` `make rules-check` `make docs-check` `make lint-ts` | [v] |
 | T24-2 | board 예제는 polyspec 릴리스 template 0.0.18, hyper 0.0.24, crudui 0.0.11을 쓴다: examples/board/web/composer.json은 각 릴리스의 packages.json을 composer repository로 지정하고 새 버전을 require하며, composer.lock은 고정된 Composer로 다시 쓴다. package.json과 package-lock.json은 같은 버전의 릴리스 asset을 릴리스 asset 목록에서 복사해 고정한다 (T24 후속). | examples/board/web/composer.json, examples/board/web/composer.lock, examples/board/web/package.json, examples/board/web/package-lock.json, CHANGELOG.md, CHANGELOG.ko.md | `make kit-check` `make rules-check` `make docs-check` `make lint-ts` | [v] |
+| T24-4 | flowmark는 kit 0.0.87 대신 kit 0.0.88을 쓴다: package.json과 그 lock은 릴리스 asset polyspec-kit-0.0.88.tgz를 고정하고, make kit-sync가 쓰는 복사본은 그 버전을 따른다 (T24 후속). | package.json, package-lock.json, .github/workflows/ci-pipeline.yml, .github/workflows/release.yml, .github/actions/kit-bootstrap/action.yml, CHANGELOG.md, CHANGELOG.ko.md, docs/plans/flowmark/checklist.md, docs/plans/flowmark/checklist.ko.md | `make rules-check` `make docs-check` `make owner-validate` | [v] |
