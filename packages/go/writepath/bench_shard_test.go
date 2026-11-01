@@ -3,8 +3,10 @@ package writepath
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/polyspec/flowmark/packages/go/store/journal"
 )
@@ -148,4 +150,20 @@ func BenchmarkShardRead(b *testing.B) {
 	shardLayouts(b, func(b *testing.B, f *fixture) {
 		benchCount(b, f, "events")
 	})
+}
+
+// TestShardLayoutFixtureTimes: a layout fixture reports the time its setup takes, and its teardown closes the corpus, removes
+// the folder and reports the time that takes, so the Windows runs show the time outside the timed loop (T19).
+func TestShardLayoutFixtureTimes(t *testing.T) {
+	lf := newLayoutFixture(t, eventCatalog(t, true), eventDocs(50, true))
+	if lf.Setup <= 0 {
+		t.Fatalf("setup time %v, want a positive time", lf.Setup)
+	}
+	root := lf.root
+	if teardown := lf.Teardown(); teardown <= 0 {
+		t.Fatalf("teardown time %v, want a positive time", teardown)
+	}
+	if _, err := os.Stat(root); !os.IsNotExist(err) {
+		t.Errorf("the folder %s survives the teardown: %v", root, err)
+	}
 }
