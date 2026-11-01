@@ -1,5 +1,5 @@
 <!-- doc-id: execution-checklist -->
-<!-- source-sha256: 824413b80b9c7960ee07dd013d2483857c51630e02554aec7340a3c9e796e125 -->
+<!-- source-sha256: c92930681e3adce92ea424bfa734686c37202c29e2112acb465c9c32f71ce912 -->
 # 실행 체크리스트
 
 | ID | Task | Deliverables | Verification | State |
@@ -90,3 +90,4 @@
 | T24-5 | ci.yml의 language와 benchmarks job은 kit 0.0.88의 S12 파이프라인 규칙대로 job kit 뒤에 needs: kit으로 이어진다. job kit이 shared gate를 먼저 한 번 실행한다 (K998). kit-gates-static이 ci.yml:20(language)과 ci.yml:54(benchmarks)에서 본 항목이다. | .github/workflows/ci.yml | `make kit-check` `make layout-check` | [v] |
 | T24-7 | board 예제는 template 0.0.19, hyper 0.0.25, crudui 0.0.12를 한 변경으로 쓴다. hyper 0.0.25는 template 0.0.19를 require하고 crudui 0.0.12는 자기 validator 0.0.12를 require하므로, Composer는 하나만 따로 올릴 수 없다. examples/board/web/composer.json은 세 릴리스 각각의 packages.json을 지정하고 같은 버전을 require하며, package.json과 package-lock.json은 릴리스 asset 목록에서 복사한 같은 버전의 tarball을 고정하고, composer.lock은 고정된 Composer가 갱신한다 (T24 후속). | examples/board/web/composer.json, examples/board/web/composer.lock, examples/board/web/package.json, examples/board/web/package-lock.json, CHANGELOG.md, CHANGELOG.ko.md, docs/plans/flowmark/checklist.md, docs/plans/flowmark/checklist.ko.md | `make kit-gates-static` `make lint-ts` `make lint-php` `make layout-check` `make docs-check` `make refs-check` | [v] |
 | T24-8 | packages/go/go.sum에는 orm v0.0.18과 그 pseudo-version의 오래된 줄이 남아 있다. go mod tidy가 이를 지운다. 모듈은 고정된 go로 tidy하므로 go.sum은 모듈 그래프의 합만 담는다 (T24 후속). | packages/go/go.sum, CHANGELOG.md, CHANGELOG.ko.md, docs/plans/flowmark/checklist.md, docs/plans/flowmark/checklist.ko.md | `cd packages/go && go mod tidy -diff` `cd packages/go && go mod verify` | [v] |
+| T24-9 | examples/go.mod와 tests/conformance/go/go.mod는 저장소 안 모듈 github.com/polyspec/flowmark/packages/go를 릴리스 버전 v0.0.3으로 require한다. orm의 examples가 자기 packages/go를 릴리스 버전으로 require하는 것과 같다. go.work는 여전히 로컬 트리를 제공하며, go mod tidy가 requirement와 sum을 쓴다 (T24 후속). | examples/go.mod, examples/go.sum, tests/conformance/go/go.mod, tests/conformance/go/go.sum, CHANGELOG.md, CHANGELOG.ko.md, docs/plans/flowmark/checklist.md, docs/plans/flowmark/checklist.ko.md | `cd examples && go mod tidy -diff` `cd tests/conformance/go && go mod tidy -diff` `cd examples && GOWORK=off go mod tidy -diff` `cd tests/conformance/go && GOWORK=off go mod tidy -diff` `make lint-go` | [v] |

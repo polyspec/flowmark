@@ -1,5 +1,5 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 2ba90f544df4065e0e6fe83ef6d300a50289bc6cb81c0fa038c2150ea18d1e02 -->
+<!-- source-sha256: 54f52d431488c9ff4896240056c445a7518ef245f0db59a6bed05c0bba6e0a66 -->
 # Changelog
 
 ## Unreleased
@@ -10,6 +10,7 @@
 - T24-5: ci.yml의 language와 benchmarks job은 kit 0.0.88의 S12 파이프라인 규칙대로 `needs: kit`으로 job kit을 뒤따른다 (K998) (T24-5).
 - T24-7: board 예제는 template 0.0.19, hyper 0.0.25, crudui 0.0.12를 한 변경으로 쓴다. hyper 0.0.25는 template 0.0.19를, crudui 0.0.12는 자기 validator 0.0.12를 require하기 때문이다. examples/board/web/composer.json은 각 릴리스의 packages.json을 지정하고 새 버전을 require하며, package.json과 package-lock.json은 같은 버전의 tarball을 고정하고, composer.lock은 고정된 Composer가 갱신한다 (T24-7).
 - T24-8: packages/go는 고정된 go로 tidy하므로 go.sum은 orm v0.0.18과 그 pseudo-version의 오래된 줄을 버리고, go mod tidy -diff는 0으로 끝난다 (T24-8).
+- T24-9: examples와 tests/conformance/go는 저장소 안 모듈 packages/go를 릴리스 버전 v0.0.3으로 require한다. orm의 examples가 자기 packages/go를 릴리스 버전으로 require하는 것과 같다. go.work는 여전히 로컬 트리를 제공하며, go mod tidy -diff는 GOWORK=off와 workspace 양쪽에서 0으로 끝난다 (T24-9).
 
 ## 0.0.3
 
