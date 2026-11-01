@@ -10,6 +10,7 @@
 - T24-7: The board example takes template 0.0.19, hyper 0.0.25 and crudui 0.0.12 in one change, since hyper 0.0.25 requires template 0.0.19 and crudui 0.0.12 requires its validator 0.0.12: examples/board/web/composer.json names each release packages.json and requires the new versions, package.json and package-lock.json pin the tarballs of the same versions, and composer.lock is updated by the pinned Composer (T24-7).
 - T24-8: packages/go is tidied with the pinned go, so go.sum drops the stale lines of orm v0.0.18 and of its pseudo-version, and go mod tidy -diff exits 0 (T24-8).
 - T24-9: examples and tests/conformance/go require the in-repo module packages/go at its released version v0.0.3, as orm's examples require their own packages/go at a released version; go.work still serves the local tree, and go mod tidy -diff exits 0 with GOWORK=off and with the workspace (T24-9).
+- T24-10: The uv lock of the vulture tool is written by the uv of mise.toml, 0.12.24, so uv lock --check exits 0; vulture stays at 2.16, and the digest of that directory in mise.lock follows through make toolchain-lock (T24-10).
 
 ## 0.0.3
 

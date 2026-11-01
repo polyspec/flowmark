@@ -1,5 +1,5 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 54f52d431488c9ff4896240056c445a7518ef245f0db59a6bed05c0bba6e0a66 -->
+<!-- source-sha256: 1600d2963e6191b7c022c744817f4e781720828804fd6f647d127cc7c7199380 -->
 # Changelog
 
 ## Unreleased
@@ -11,6 +11,7 @@
 - T24-7: board 예제는 template 0.0.19, hyper 0.0.25, crudui 0.0.12를 한 변경으로 쓴다. hyper 0.0.25는 template 0.0.19를, crudui 0.0.12는 자기 validator 0.0.12를 require하기 때문이다. examples/board/web/composer.json은 각 릴리스의 packages.json을 지정하고 새 버전을 require하며, package.json과 package-lock.json은 같은 버전의 tarball을 고정하고, composer.lock은 고정된 Composer가 갱신한다 (T24-7).
 - T24-8: packages/go는 고정된 go로 tidy하므로 go.sum은 orm v0.0.18과 그 pseudo-version의 오래된 줄을 버리고, go mod tidy -diff는 0으로 끝난다 (T24-8).
 - T24-9: examples와 tests/conformance/go는 저장소 안 모듈 packages/go를 릴리스 버전 v0.0.3으로 require한다. orm의 examples가 자기 packages/go를 릴리스 버전으로 require하는 것과 같다. go.work는 여전히 로컬 트리를 제공하며, go mod tidy -diff는 GOWORK=off와 workspace 양쪽에서 0으로 끝난다 (T24-9).
+- T24-10: vulture 도구의 uv lock은 mise.toml의 uv 0.12.24로 다시 쓰여 uv lock --check가 0으로 끝난다. vulture는 2.16으로 남고, mise.lock의 그 디렉터리 digest는 make toolchain-lock으로 따라 바뀐다 (T24-10).
 
 ## 0.0.3
 

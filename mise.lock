@@ -185,7 +185,7 @@ specifiers = ["12.2.0"]
 version = "2.16"
 backend = "pypi:vulture"
 specifiers = ["2.16"]
-uv = { path = ".mise/locks/pypi-vulture/2.16", digest = "sha256:75a4b6cc3f74f156a5b0fef5f9fe773db6c37be2b8d6af9ee96a32875d22a431" }
+uv = { path = ".mise/locks/pypi-vulture/2.16", digest = "sha256:3109a35e85bc4db3d660644a2989048856ad73775a5dec65662744ec417e5632" }
 
 [[tools.python]]
 version = "3.14.8"
