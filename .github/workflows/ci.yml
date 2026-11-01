@@ -38,7 +38,7 @@ jobs:
         run: make install-tools TOOLS=go
       - name: install locked Go dependencies
         if: matrix.language == 'go'
-        run: make flowmark-go-install
+        run: make deps-go
       - name: build and test the complete Go workspace offline
         if: matrix.language == 'go'
         env:
@@ -70,7 +70,7 @@ jobs:
       - name: install Go
         run: make install-tools TOOLS=go
       - name: install locked Go dependencies
-        run: make flowmark-go-install
+        run: make deps-go
       - name: build the workspace offline
         env:
           GOPROXY: 'off'

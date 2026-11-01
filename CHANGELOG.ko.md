@@ -1,9 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: dcbcb5e49a9181bb5db10e2786856f8a25d46657b515914e9a81f222f22b15a6 -->
+<!-- source-sha256: 90a5e356e92821943b82bf071758de90f17896632cdc29c6cb761702c7cc212b -->
 # Changelog
 
 ## Unreleased
 
+- T15-43: 설치 target은 ci-setup이 부르는 deps-<runtime> target이다(K859): deps-go, deps-node, deps-php가 flowmark-go-install, flowmark-node-install, flowmark-php-install을 대신하고, config/ci.json과 ci.yml의 go job이 이들을 부르며, flowmark-install은 deps-php와 deps-node를 실행한다 (T15-43).
 - T24-12: board-models-ts recipe는 package 안의 파일 dist/bin/orm-gen.js 대신 @polyspec/orm이 선언한 orm-gen bin, node_modules/.bin/orm-gen을 실행한다. flowmark는 orm에 선언된 interface로만 닿는다.
 
 ## 0.0.4

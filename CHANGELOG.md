@@ -3,6 +3,7 @@
 
 ## Unreleased
 
+- T15-43: The install targets are the deps-<runtime> targets that ci-setup calls (K859): deps-go, deps-node and deps-php replace flowmark-go-install, flowmark-node-install and flowmark-php-install, config/ci.json and the go job of ci.yml name them, and flowmark-install runs deps-php and deps-node (T15-43).
 - T24-12: The board-models-ts recipe runs the orm-gen bin that @polyspec/orm declares, node_modules/.bin/orm-gen, in place of the file dist/bin/orm-gen.js inside the package, so flowmark reaches orm only through its declared interface.
 
 ## 0.0.4

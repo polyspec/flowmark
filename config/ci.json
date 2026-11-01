@@ -6,18 +6,14 @@
     "parity": [],
     "runtimes": {
       "go": [
-        "flowmark-go-install",
+        "deps-go",
         "build-go"
       ],
-      "php": [
-        "flowmark-php-install"
-      ],
+      "php": [],
       "php-ext": [],
       "python": [],
       "rust": [],
-      "ts": [
-        "flowmark-node-install"
-      ]
+      "ts": []
     }
   },
   "tools": {

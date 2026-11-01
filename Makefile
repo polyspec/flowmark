@@ -19,9 +19,7 @@ test-go: CASE_SENSITIVE_ENV := FLOWMARK_CASE_SENSITIVE_DIR
 
 # The complete local install adds the locked board dependencies after the Kit bootstrap.
 .PHONY: flowmark-install
-flowmark-install: install-kit ## Install the Composer and npm packages of the board example from their locks; ONLINE
-	$(ONLINE) $(COMPOSER) install --no-interaction --working-dir=examples/board/web
-	cd examples/board/web && $(ONLINE) $(NPM) ci
+flowmark-install: install-kit deps-php deps-node ## Install the Composer and npm packages of the board example from their locks; ONLINE
 
 install: flowmark-install
 
@@ -41,15 +39,16 @@ flowmark-build: ## Build the executable that sidecar.json names
 
 build: flowmark-build
 
-# Locked online dependency preparation, selected independently by each CI job.
-.PHONY: flowmark-go-install flowmark-node-install flowmark-php-install
-flowmark-go-install: ## Download the locked Go workspace dependencies; ONLINE
+# Locked online dependency preparation: ci-setup calls one deps-<runtime> target per runtime of config/ci.json (K859), so
+# the installs are owned here, each as the locked install of its package manager.
+.PHONY: deps-go deps-node deps-php
+deps-go: ## Download the locked Go workspace dependencies; ONLINE
 	cd packages/go && $(ONLINE) $(GO) mod download
 
-flowmark-node-install: ## Install the board example npm lock; ONLINE
+deps-node: ## Install the board example npm lock; ONLINE
 	cd examples/board/web && $(ONLINE) $(NPM) ci
 
-flowmark-php-install: ## Install the board example Composer lock; ONLINE
+deps-php: ## Install the board example Composer lock; ONLINE
 	$(ONLINE) $(COMPOSER) install --no-interaction --working-dir=examples/board/web
 
 # The models of the board example are generated, never tracked (P34): the orm-gen of the installed @polyspec/orm and
