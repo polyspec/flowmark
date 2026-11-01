@@ -2,6 +2,9 @@
 # Changelog
 
 ## Unreleased
+
+## 0.0.3
+
 - T23: Kit 0.0.86 is adopted in place of 0.0.85: package.json and its lock pin its release asset `polyspec-kit-0.0.86.tgz`, PRINCIPLES.md, PRINCIPLES.ko.md and .github/workflows/release.yml are the copies that make kit-sync writes, and the release workflow now starts by itself on a successful push run of ci on main. config/release.json lists no package, so no product or runtime is declared (T23).
 - T22: The board example takes template 0.0.17, hyper 0.0.23, crudui 0.0.10, orm 0.0.20 and ordered-json 0.0.16: examples/board/web/composer.json names one composer repository per release packages.json in place of the inline zip packages and requires the new versions, its composer.lock is regenerated, and the npm and Go pins of examples move to the same versions (T22).
 - T21: Kit 0.0.85 is adopted in place of 0.0.82: package.json and its lock pin its release asset `polyspec-kit-0.0.85.tgz`, whose name keeps the npm pack name of P39, and PRINCIPLES.md and PRINCIPLES.ko.md are its copies. config/release.json declares no package, so its schema asks no product or runtime, and no text of the tree builds an asset name from the old `-npm-` or `-php-` form (T21).
