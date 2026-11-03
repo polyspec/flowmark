@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- T19: run 41317062220은 Windows에서 layout metric을 보인다: sharded events=20000의 비용은 insert가 아니라 fixture의 setup과 teardown이다. 이 행은 다음 실행들을 기다린다.
 - T15-2: flowmark은 구현이 하나이고 config/parity.json이 없으므로, make parity-declarations-check는 kit 0.0.92에서 선언할 unit 없이 통과한다.
 - T15-42: checkout의 link 선언 .links는 T15-48 줄대로 orm과 kit checkout을 쓰고, make link-check가 그 위에서 통과한다. 이 파일은 tracked되지 않는 local 파일로 남는다.
 - T24-13: 검사 internal-paths-check는 의존성의 source나 build output을 경로로 쓴 tracked 줄에서 실패하고(K1002), CHECK_TARGETS가 실행한다. T24-12 항목은 파일을 package 안의 위치로 쓴다.
