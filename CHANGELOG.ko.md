@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- T24-13: 검사 internal-paths-check는 의존성의 source나 build output을 경로로 쓴 tracked 줄에서 실패하고(K1002), CHECK_TARGETS가 실행한다. T24-12 항목은 파일을 package 안의 위치로 쓴다.
 - T15-54: flowmark이 Kit 0.0.92를 채택한다 (T15-54).
 - T19: layout 벤치마크는 타이머 밖의 setup 시간 setup-ms와 corpus 닫기 및 폴더 제거 시간 teardown-ms를 보고하므로, Windows run은 per-op metric이 보이지 않는 그 시간을 보여 준다 (T19).
 - T15-1: flowmark-test target은 flowmark-node-check와 flowmark-go-check를 묶고, ci.yml은 typescript와 go job에서 그것들을 실행한다. composer 패키지는 일괄 release 전까지 vcs fork로 남으므로 T15-1은 그 원인으로 보류된다 (T15-1).

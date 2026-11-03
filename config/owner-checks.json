@@ -70,6 +70,14 @@
     },
     {
       "paths": [
+        "scripts/check-internal-paths.mts"
+      ],
+      "targets": [
+        "internal-paths-check"
+      ]
+    },
+    {
+      "paths": [
         "scripts/**"
       ],
       "targets": [
