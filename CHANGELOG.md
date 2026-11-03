@@ -3,6 +3,7 @@
 
 ## Unreleased
 
+- T15-42: The link declaration .links of the checkout names the orm and kit checkouts, as the T15-48 line says, and make link-check holds on it; the file stays local and untracked.
 - T24-13: The check internal-paths-check fails on a tracked line that names the source or the build output of a dependency by its path (K1002), and CHECK_TARGETS runs it; the T24-12 row names the file by its place inside the package.
 - T15-54: flowmark adopts Kit 0.0.92 (T15-54).
 - T19: The layout benchmarks report setup-ms, the time newFixture-equivalent setup takes outside the timed loop, and teardown-ms, the corpus close and the folder removal, so a Windows run shows the time that the per-op metrics do not (T19).
