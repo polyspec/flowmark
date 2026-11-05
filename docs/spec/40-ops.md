@@ -258,6 +258,49 @@ The order of the commit protocol is normative.
   the operating system's notification belongs to the long-lived corpus of `T12.5-2`, and a polling
   watch is not a substitute.
 
+## SQL statements
+
+The control message `{"op": "statement", "sql", "params"}` runs one statement of SQLite's dialect on the corpus, and its
+answer is that of a SQLite connection: `columns`, `rows`, `affected`, `last_insert_id` and `more`. This is how orm reaches a
+corpus: an orm markdown connection is a SQLite connection whose statements this server answers, so every plan, codec and
+utility of orm's SQLite dialect holds on a corpus, and a client has only this driver to implement.
+
+- **What runs them.** The corpus is materialized into an in-memory SQLite database: the schema of its documents and of
+  `dbspec/statements.json`, then its rows. The statement runs there. The difference of its rows goes back through the
+  executor as one write per table, so the corpus's rules still judge it and the commit protocol writes it; SQLite has
+  already judged NOT NULL and the foreign keys, its triggers wrote their rows, and a codec does not judge what a statement
+  stores. The database stands between statements under the lock while the corpus does not differ from it.
+- **Schema statements.** A schema statement is its own transaction: an open transaction commits first and a new one goes
+  on after it. A statement that changes the schema is appended to `dbspec/statements.json`, and the tables it changed
+  are written again under their new columns; a document keeps its text. `CREATE ... IF NOT EXISTS` and `DROP ... IF
+  EXISTS` that find what they state change nothing and take no lock.
+- **Tables.** A table takes its columns, its declared types and its key from its statement. A primary key that SQLite lets
+  hold NULL names no row, so such a table keys by its rowid, as does a table with no primary key.
+- **Transactions.** `BEGIN IMMEDIATE` and `BEGIN EXCLUSIVE` take the lock at once. A plain `BEGIN` takes no lock: its first
+  read fixes the corpus it reads, and its first write takes the lock. A wait that ends is `CANCELED` ending in
+  `(SQLITE_BUSY)`, and a write after a commit newer than its first read is `CANCELED` ending in `(SQLITE_BUSY_SNAPSHOT)`;
+  both leave the transaction open for its `ROLLBACK`. A deferred failure of a foreign key fails at `COMMIT` and leaves the
+  transaction open, as on SQLite.
+- **Reads.** A read that finds the lock held by another session reads what is committed, on a database of its own, and never
+  waits for a writer: the behaviour of SQLite in WAL mode.
+- **Session settings.** `foreign_keys`, `query_only`, `busy_timeout` and `locking_mode` are the session's. Under
+  `locking_mode = EXCLUSIVE` the lock its next transaction takes stays after that transaction, until the mode is `NORMAL`
+  again. Any other `PRAGMA` setting holds for the session's own statements.
+- **A corpus the process may only read.** The lock cannot be written, so a write is `READ_ONLY` and a read needs no lock.
+- **Rows.** An answer holds at most 1000 rows or 1 MiB; with `more` true, `{"op": "fetch"}` answers the next batch and
+  `{"op": "close"}` ends them. A closed connection interrupts its statement, so a result takes the memory of what its client
+  reads.
+- **Values.** A value of a row is a JSON number, string or null. `{"bytes": base64}` is a blob, `{"text": base64}` a text that
+  is not UTF-8, and `{"float": "+Inf"}` or `{"float": "-Inf"}` an infinity, which JSON cannot hold. A failure carries
+  `result_code`, SQLite's result code, when it has one.
+
+`flowmark serve --synchronous off` commits without waiting for the disk, for a corpus that is disposable, as a test
+database is; `on`, the default, waits. Grounding: `F_FULLFSYNC` takes tens of milliseconds, and a test seeds thousands of rows.
+
+Grounding: SQLite's dialect is a language every orm runtime already speaks; a second query path on a corpus would make each
+runtime port a second executor, and each would drift. The engine keeps its IR for its own faces (CLI, MCP, sidecar) and as
+the writer of the difference.
+
 ## The lock
 
 - **One portable lock.** Every operation — read or write, from any face — takes the same lock

@@ -36,6 +36,9 @@ func fileIdentity(f *os.File) (fileID, error) {
 // syncDir syncs a folder, so the names created, renamed or removed in it are on disk (POSIX); the runtime's Sync is
 // F_FULLFSYNC on macOS.
 func syncDir(dir string) error {
+	if asynchronous.Load() {
+		return nil
+	}
 	f, err := os.Open(dir)
 	if err != nil {
 		return err

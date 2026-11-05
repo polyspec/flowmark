@@ -371,7 +371,7 @@ func (c *Corpus) run(ctx context.Context, s *writepath.Session, tb *catalog.Tabl
 func (c *Corpus) load(ctx context.Context, s *writepath.Session, tb *catalog.Table, rows []map[string]json.RawMessage) (any, error) {
 	var total int64
 	for start := 0; start < len(rows); {
-		m := message{hash: c.cat.ManifestHash, table: tb.Name}
+		m := message{hash: c.cat.ManifestHash, table: tb.Name, seed: true}
 		end := start + 1
 		for end < len(rows) && sameColumns(rows[start], rows[end]) {
 			end++
@@ -464,6 +464,8 @@ type message struct {
 	hash   string
 	table  string
 	params []json.RawMessage
+	// seed marks the insert of rows.load, which also takes the rows of an external table (spec 30 External documents).
+	seed bool
 }
 
 // param adds a parameter and returns its index.
@@ -511,7 +513,7 @@ func (m *message) byKey(tb *catalog.Table, key json.RawMessage) map[string]any {
 	if len(tb.KeyParts) > 0 {
 		var text string
 		if err := json.Unmarshal(key, &text); err == nil {
-			values := strings.Split(text, catalog.KeySeparator)
+			values := catalog.SplitKey(text)
 			if len(values) == len(tb.KeyParts) {
 				items := make([]any, len(values))
 				for i, name := range tb.KeyParts {
@@ -559,7 +561,11 @@ func (m *message) request(kind string, body map[string]any) []byte {
 	req["entity"] = m.table
 	req["n_params"] = len(params)
 	now := time.Now().UTC().Truncate(time.Microsecond).Format("2006-01-02 15:04:05.000000")
-	b, err := json.Marshal(map[string]any{"ir_version": ir.Version, "manifest_hash": m.hash, "request": req, "params": params, "now": now})
+	wire := map[string]any{"ir_version": ir.Version, "manifest_hash": m.hash, "request": req, "params": params, "now": now}
+	if m.seed {
+		wire["seed"] = true
+	}
+	b, err := json.Marshal(wire)
 	if err != nil {
 		// Every part is a map, a string, a number or a parameter that a face decoded as JSON.
 		panic("ops: the request message does not marshal: " + err.Error())

@@ -278,8 +278,9 @@ func (c *client) wantError(code string, parts ...string) {
 	got := c.recv()
 	var a struct {
 		Error *struct {
-			Code    string `json:"code"`
-			Message string `json:"message"`
+			Code       string `json:"code"`
+			Message    string `json:"message"`
+			ResultCode int    `json:"result_code"`
 		} `json:"error"`
 	}
 	dec := json.NewDecoder(strings.NewReader(got))

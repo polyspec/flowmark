@@ -3,8 +3,9 @@
 
 [한국어](60-dialect.ko.md)
 
-orm reaches a corpus through the DSN scheme `markdown://`, which selects an **IR executor** rather
-than a SQL dialect ([operations](40-ops.md) holds the server and the DSN). This specification is
+orm reaches a corpus through the DSN scheme `markdown://`, whose connection is a SQLite connection whose statements the
+server answers ([SQL statements](40-ops.md#sql-statements)): on an orm client every surface behaves as on SQLite. The tables
+below state the **IR executor**, which the engine's own faces (CLI, MCP, sidecar) run. This specification is
 the integration contract: the wire, and what each orm surface does on a corpus, or the orm error code it answers —
 `CAPABILITY_UNSUPPORTED` for a surface the executor does not run, `OPERATOR_NOT_ALLOWED`,
 `IR_INVALID` and `CODEC_ENCODE` as orm's rules give them for every backend. The orm side of the

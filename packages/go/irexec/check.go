@@ -58,8 +58,9 @@ func (w *writer) rowRules() *Error {
 		return nil
 	}
 	for _, g := range w.given {
-		for _, f := range validate.JudgeRow(w.c.cat, w.r.e.model, w.tb, g.row) {
-			if f.Rule == validate.RuleCodec && !g.inserted && !g.assigned[f.Column] {
+		for _, f := range validate.JudgeRow(w.c.cat, w.r.model(), w.tb, g.row) {
+			// A codec judges what a model writes; a SQL statement writes the bytes it was given, as on a SQL connection.
+			if f.Rule == validate.RuleCodec && (w.r.cl.stated || (!g.inserted && !g.assigned[f.Column])) {
 				continue
 			}
 			w.fault(g, w.tb.Name, f.Column, codeConstraint, f.Rule+": "+f.Message)

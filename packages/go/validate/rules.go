@@ -171,7 +171,7 @@ func (c *corpus) danglingComposite(p placed, tb *catalog.Table) {
 		if !named {
 			continue
 		}
-		key := strings.Join(values, catalog.KeySeparator)
+		key := catalog.JoinKey(values)
 		if !slices.ContainsFunc(c.rows[fk.Table], func(q placed) bool { return q.row.Key == key }) {
 			c.report(p, fk.Columns[0], ruleDangling, fmt.Sprintf("the foreign key %s names no %s row with the key %s", fk.Name, fk.Table, key))
 		}

@@ -54,8 +54,8 @@ column을 이름 붙인다 — column 이름이 동작을 고르지 않는다.
 - **기본 저장**: `store` setting이 없는 table은 자기 문서 하나에 `document table`로 저장한다. 그래서 SQL
   데이터베이스용으로 쓴 dbspec 문서를 그대로 corpus에 설치할 수 있다.
 - **composite key**: `document`나 `block` 저장 table은 여러 column의 primary key를 가질 수 있다. key cell은 값을
-  `.`으로 이어 담고 heading은 column 이름을 `.`으로 잇는다. 예: `| tenant.account | name |`, `| 900.1 | a |`. key의 어떤
-  값도 `.`을 담지 않으므로 cell의 읽기는 하나다. 각 값은 그 column type의 key 규칙을 따르고, 읽기와 쓰기는 그 column을
+  `/`로 이어 담고 heading은 column 이름을 `/`로 잇는다. 예: `| tenant/account | name |`, `| 900/1 | a |`. key type의 어떤
+  값도 `/`를 담지 않으므로 cell의 읽기는 하나다. 각 값은 그 column type의 key 규칙을 따르고, 읽기와 쓰기는 그 column을
   column으로 본다. composite 외래 key는 link가 아니라 평범한 값을 담고 그 table의 key 전체를 가리키며, validator의
   `reference.dangling`이 적용된다.
 - **거절**: corpus에서 각각 schema 오류다 — `files` 저장 table의 composite primary key(파일 이름은 key column 하나로 정한다), `audit`(대신 `state_machine … history`가 전이를 기록한다), 외부 `use` 문서,

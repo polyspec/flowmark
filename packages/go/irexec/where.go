@@ -108,7 +108,7 @@ func (ev *env) with(path string, x *rec) *env {
 
 // buildScope returns the scope of q at path and of its joins.
 func (r *reader) buildScope(q *ir.Query, path string) *scope {
-	ent := r.e.model.Entities[q.Entity]
+	ent := r.model().Entities[q.Entity]
 	tb, _ := r.c.cat.Table(ent.Table)
 	s := &scope{q: q, ent: ent, tb: tb, path: path, byRel: map[string]*scope{}}
 	for _, j := range q.Joins {

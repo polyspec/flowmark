@@ -221,6 +221,44 @@
   오류에 쓰며, host가 그것을 log에 남긴다. sidecar는 변경 event를 보내지 않는다: 운영체제 알림으로
   움직이는 corpus watch는 `T12.5-2`의 오래 사는 corpus에 속하며, polling watch는 그 대체가 아니다.
 
+## SQL statements
+
+control message `{"op": "statement", "sql", "params"}`는 SQLite dialect의 문장 하나를 corpus에서 실행하고, 답은 SQLite
+연결의 답과 같다: `columns`, `rows`, `affected`, `last_insert_id`, `more`. orm은 이 경로로 corpus에 닿는다. orm의 markdown
+연결은 이 server가 문장에 답하는 SQLite 연결이므로 orm SQLite dialect의 plan, codec, utility가 corpus에서 그대로 성립하고,
+client가 구현할 것은 이 driver뿐이다.
+
+- **실행하는 곳.** corpus를 in-memory SQLite database로 옮긴다: document와 `dbspec/statements.json`의 schema, 그다음 행.
+  문장은 거기서 실행된다. 행의 차이는 표마다 쓰기 하나로 executor를 거쳐 돌아가므로 corpus의 규칙이 판정하고 commit
+  protocol이 기록한다. NOT NULL과 foreign key는 SQLite가 이미 판정했고, trigger는 자기 행을 썼으며, codec은 문장이 저장한
+  값을 판정하지 않는다. database는 corpus와 다르지 않은 동안 lock 아래에서 문장 사이에 유지된다.
+- **Schema 문장.** schema 문장은 자기만의 transaction이다: 열린 transaction은 먼저 commit하고 그 뒤에 새 transaction이
+  이어진다. schema를 바꾼 문장은 `dbspec/statements.json`에 덧붙고, 바뀐 표는 새 column으로 다시 쓰이며, document의 글은
+  그대로다. 이미 그 상태인 `CREATE ... IF NOT EXISTS`와 `DROP ... IF EXISTS`는 아무것도 바꾸지 않고 lock을 잡지 않는다.
+- **표.** 표는 column, 선언 타입, key를 자기 문장에서 받는다. SQLite가 NULL을 허용하는 primary key는 행을 가리키지
+  못하므로 그런 표는 primary key가 없는 표처럼 rowid를 key로 쓴다.
+- **Transaction.** `BEGIN IMMEDIATE`와 `BEGIN EXCLUSIVE`는 곧바로 lock을 잡는다. 일반 `BEGIN`은 lock을 잡지 않는다: 첫
+  읽기가 읽을 corpus를 정하고, 첫 쓰기가 lock을 잡는다. 대기가 끝나면 `(SQLITE_BUSY)`로 끝나는 `CANCELED`이고, 첫 읽기보다
+  새로운 commit 뒤의 쓰기는 `(SQLITE_BUSY_SNAPSHOT)`으로 끝나는 `CANCELED`이며, 둘 다 `ROLLBACK`을 위해 transaction을 열어
+  둔다. 지연된 foreign key 실패는 SQLite처럼 `COMMIT`에서 실패하고 transaction을 열어 둔다.
+- **읽기.** 다른 session이 lock을 쥔 것을 본 읽기는 자기 database에서 commit된 것을 읽고 writer를 기다리지 않는다. WAL
+  mode의 SQLite와 같은 동작이다.
+- **Session 설정.** `foreign_keys`, `query_only`, `busy_timeout`, `locking_mode`는 session의 것이다. `locking_mode =
+  EXCLUSIVE`에서는 다음 transaction이 잡은 lock이 그 transaction 뒤에도 남고, mode가 `NORMAL`로 돌아오면 놓는다. 다른
+  `PRAGMA` 설정은 session 자신의 문장에만 적용된다.
+- **읽을 수만 있는 corpus.** lock을 쓸 수 없으므로 쓰기는 `READ_ONLY`이고 읽기는 lock이 필요 없다.
+- **행.** 답 하나는 최대 1000행 또는 1 MiB를 담는다. `more`가 true이면 `{"op": "fetch"}`가 다음 묶음을 답하고
+  `{"op": "close"}`가 끝낸다. 닫힌 연결은 자기 문장을 중단하므로 결과는 client가 읽는 만큼의 메모리만 쓴다.
+- **값.** 행의 값은 JSON number, string, null이다. `{"bytes": base64}`는 blob, `{"text": base64}`는 UTF-8이 아닌 text,
+  `{"float": "+Inf"}`와 `{"float": "-Inf"}`는 JSON이 담지 못하는 무한대다. 실패에 SQLite result code가 있으면 `result_code`에
+  담는다.
+
+`flowmark serve --synchronous off`는 disk를 기다리지 않고 commit한다. 시험 database처럼 버려도 되는 corpus용이고, 기본값
+`on`은 기다린다. 근거: `F_FULLFSYNC`는 수십 밀리초가 걸리고 시험은 수천 행을 넣는다.
+
+근거: SQLite dialect는 모든 orm runtime이 이미 쓰는 언어다. corpus에 두 번째 query 경로를 두면 runtime마다 두 번째 executor를
+이식하게 되고 서로 어긋난다. 엔진은 IR을 자기 face(CLI, MCP, sidecar)와 차이를 쓰는 writer로 유지한다.
+
 ## Lock
 
 - **portable lock 하나.** 모든 operation — 읽기든 쓰기든, 어느 face에서든 — 은 같은 lock file,

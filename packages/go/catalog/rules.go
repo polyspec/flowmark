@@ -19,7 +19,10 @@ func (l *loader) checkTable(d *document, t *dbspec.Table) (Storage, bool) {
 		report("table " + t.Name + " is a reserved file name on Windows")
 	}
 	for _, name := range t.PrimaryKey.Columns {
-		if c := columnOf(t, name); c != nil && !isKeyType(c.Type.Kind) {
+		// A table in table shape holds its key in a cell, so every type a cell reads may key it; a file name, a heading
+		// and an anchor hold only the key types.
+		inCell := (t.Settings == nil || t.Settings.Store == nil) || t.Settings.Store.Shape == string(ShapeTable)
+		if c := columnOf(t, name); c != nil && !inCell && !isKeyType(c.Type.Kind) {
 			report("primary key column " + c.Name + " of table " + t.Name + " has type " + c.Type.String() + ", which is not a key type (an integer, bool, varchar, uuid or date)")
 		}
 	}
@@ -31,9 +34,6 @@ func (l *loader) checkTable(d *document, t *dbspec.Table) (Storage, bool) {
 		if len(c.Stages) > 0 && c.Stages[len(c.Stages)-1] == "yaml" {
 			report("column " + c.Column + " ends its codec with the stage yaml, whose encoder ends every value with a line feed")
 		}
-	}
-	if s.Audit != nil {
-		report("table " + t.Name + " has an audit setting")
 	}
 	if sm := s.StateMachine; sm != nil {
 		if sm.History == nil {
@@ -140,6 +140,9 @@ func (d *document) position(kind string, path ...string) (int, int) {
 // registered set is not checked here: the parse of the set reports it.
 func (l *loader) checkForeignKeys() {
 	for _, r := range l.order {
+		if r.doc.external {
+			continue
+		}
 		for _, fk := range r.table.ForeignKeys {
 			target, ok := l.refs[fk.Table]
 			if !ok {

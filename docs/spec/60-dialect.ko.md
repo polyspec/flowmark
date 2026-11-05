@@ -4,8 +4,8 @@
 
 [English](60-dialect.md)
 
-orm은 DSN scheme `markdown://`으로 corpus에 접속하며, 이 scheme은 SQL dialect가 아니라 **IR executor**를
-고른다(server와 DSN은 [operations](40-ops.md)에 있다). 이 spec은 통합 계약이다: wire, 그리고 각 orm
+orm은 DSN scheme `markdown://`으로 corpus에 접속하며, 이 연결은 server가 문장에 답하는 SQLite 연결이다([SQL statements](40-ops.md#sql-statements)).
+orm client에서 모든 surface는 SQLite와 같이 동작한다. 아래 표는 엔진 자신의 face(CLI, MCP, sidecar)가 실행하는 **IR executor**를 말한다. 이 spec은 통합 계약이다: wire, 그리고 각 orm
 surface가 corpus에서 무엇을 하는지, 또는 어떤 orm 오류 code로 답하는지 — executor가 실행하지 않는
 surface는 `CAPABILITY_UNSUPPORTED`, 그리고 orm의 규칙이 모든 backend에 주는 대로 `OPERATOR_NOT_ALLOWED`,
 `IR_INVALID`, `CODEC_ENCODE`. 계약의 orm 쪽 — protocol 절, 오류 code `WRITE_CONFLICT`, executor가

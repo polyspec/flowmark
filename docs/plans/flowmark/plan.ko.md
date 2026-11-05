@@ -131,6 +131,8 @@ flowmark = the markdown database engine (one Go binary)
 
 **T1b — spec 문서** (다음 session; EN/KO 쌍, 문서당 commit 1개, twin stamp): `00-overview`, `10-canonical-format`(§2), `20-document-model`(§3), `30-schema`(§4), `40-ops`(§5), `50-constraints`(§6), 그리고 skeleton `60-dialect`(capability table을 전체 내용으로), `70-sync`, `80-migration`, `90-conformance`, 전체 내용 `100-checklist`, `110-open-questions`. 문서별 완료 기준: 모든 판정이 근거를 동반한 명제로 나타난다 (prose 분량이 아니라 결정 수).
 
+**판정: orm은 SQL로 corpus에 닿는다.** orm의 markdown 연결은 server가 문장에 답하는 SQLite 연결이므로([SQL statements](../../spec/40-ops.md#sql-statements)) orm의 recipe는 다른 database처럼 flowmark에서 실행되고 runtime은 driver 하나만 이식한다. 이 판정은 요청에 SQL text가 없다는 이전 판정을 대체한다. 이전 판정은 runtime마다 두 번째 executor client를 이식하게 했고 대부분의 recipe를 빠뜨렸다. IR은 엔진 자신의 face와 문장의 차이를 쓰는 writer로 남는다. 성능은 database 수준이 아니어도 되지만 동작은 database 수준이어야 한다.
+
 **T9 conformance 계약 (지금 확정)**: markdown vector는 corpus-before + IR request + 기대 corpus-after / 기대 rows이며 Go executor에 대해 실행한다. SQL/binds 비교는 적용되지 않는다(SQL이 없으므로). 다른 client가 executor를 port할 때 교차 비교가 시작된다. (Revision 3: vector는 flowmark 엔진에 대해 실행하고, orm의 executor conformance는 flowmark build를 고정한다.)
 
 **이후 phase (checklist `[ ]` 항목으로만 등록)**: T2 codec(Go), T3 validator, T4 executor, T5 orm markdown-executor 통합(manifest setting, state-machine sub-grammar — orm 저장소 변경), T6 sync(adapter 계약과 database adapter; GitHub·Jira adapter는 그 아래에 등록), T7 세 개의 face — CLI·MCP server·soksak sidecar(protocol v1: stdio JSON lines, surface routing, host 소유 lifecycle; MCP tool 목록 mini-spec 먼저, lock은 작업마다 또는 server transaction마다 잡힌다(§5)), T8 checklist app(local issue model), T9 conformance vectors, T10 자기 repo의 soksak plugin — local 칸반 보드와 issue tracker, 또 하나의 thin consumer로서 view 전용 write path 없음.

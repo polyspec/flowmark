@@ -18,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/polyspec/flowmark/packages/go/statement"
 	"github.com/polyspec/flowmark/packages/go/writepath"
 )
 
@@ -259,6 +260,9 @@ var controlFields = map[string]map[string]bool{
 	"savepoint":   {"name": true},
 	"release":     {"name": true},
 	"rollback_to": {"name": true},
+	"statement":   {"sql": true, "params": true},
+	"fetch":       {},
+	"close":       {},
 }
 
 // message answers one message of a connected session: a request message, or a control message when it has op.
@@ -296,11 +300,43 @@ func (s *Server) message(sess *writepath.Session, line []byte) []byte {
 		}
 	}
 	var c struct {
-		ReadOnly bool   `json:"read_only"`
-		Name     string `json:"name"`
+		ReadOnly bool              `json:"read_only"`
+		Name     string            `json:"name"`
+		SQL      string            `json:"sql"`
+		Params   []json.RawMessage `json:"params"`
+		Text     string            `json:"text"`
+		External string            `json:"external"`
 	}
 	if err := json.Unmarshal(line, &c); err != nil {
 		return errorLine(codeIRInvalid, fmt.Sprintf("the control message %s: %v", op, err))
+	}
+	if op == "statement" {
+		a, err := statement.Run(context.Background(), sess, c.SQL, c.Params)
+		if err != nil {
+			return failureLine(err)
+		}
+		b, err := json.Marshal(a)
+		if err != nil {
+			return errorLine(codeInternal, "writing the answer: "+err.Error())
+		}
+		return b
+	}
+	if op == "fetch" {
+		a, err := statement.Fetch(sess)
+		if err != nil {
+			return failureLine(err)
+		}
+		b, err := json.Marshal(a)
+		if err != nil {
+			return errorLine(codeInternal, "writing the answer: "+err.Error())
+		}
+		return b
+	}
+	if op == "close" {
+		if err := statement.Close(sess); err != nil {
+			return failureLine(err)
+		}
+		return okLine
 	}
 	var err error
 	switch op {
@@ -361,6 +397,14 @@ func failureLine(err error) []byte {
 	code, msg := f.Failure()
 	if any(f) != any(err) {
 		msg = err.Error()
+	}
+	var coded interface{ ResultCode() int }
+	if errors.As(err, &coded) && coded.ResultCode() != 0 {
+		b, err := json.Marshal(map[string]map[string]any{"error": {"code": code, "message": msg, "result_code": coded.ResultCode()}})
+		if err != nil {
+			panic(err) // strings and a number always marshal
+		}
+		return b
 	}
 	return errorLine(code, msg)
 }

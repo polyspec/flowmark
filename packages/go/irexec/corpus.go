@@ -89,6 +89,31 @@ func Open(cat *catalog.Catalog, fsys store.FS, m *validate.Memo) (*Corpus, error
 	return c, nil
 }
 
+// FilesOf returns the paths of the files that hold rows of table.
+func (c *Corpus) FilesOf(table string) ([]string, error) {
+	var out []string
+	for p, f := range c.files {
+		if f.table == table {
+			out = append(out, p)
+		}
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
+// Rebased returns the corpus under the catalog cat of the schema statements that stand next, without the files of drop:
+// the tables a schema statement changed, whose rows come again from the statement's database.
+func (c *Corpus) Rebased(cat *catalog.Catalog, drop []string) *Corpus {
+	n := c.clone()
+	n.cat = cat
+	for _, p := range drop {
+		delete(n.files, p)
+	}
+	n.unavailable = map[string]catalog.Diagnostic{}
+	n.index()
+	return n
+}
+
 // index builds the rows of each table from the files.
 func (c *Corpus) index() {
 	c.recs = map[string][]*rec{}
@@ -150,6 +175,48 @@ func (c *Corpus) Rows(table string) ([][]any, error) {
 			v, err := c.value(x, col.Name)
 			if err != nil {
 				return nil, err
+			}
+			w, err := output(col.Type, v)
+			if err != nil {
+				return nil, err
+			}
+			row[i] = w
+		}
+		out = append(out, row)
+	}
+	return out, nil
+}
+
+// StoredRows returns every row of table as Rows does, each value that is not of its column's type as the file holds it: a
+// store.Literal, or the text. The database of a SQL statement holds them as a statement stored them (spec 40 SQL statements).
+func (c *Corpus) StoredRows(table string) ([][]any, error) {
+	if _, ok := c.cat.Table(table); !ok {
+		return nil, errf(codeEntityUnknown, "the catalog has no table %s", table)
+	}
+	recs, err := c.rows(table)
+	if err != nil {
+		return nil, err
+	}
+	out := make([][]any, 0, len(recs))
+	for _, x := range recs {
+		row := make([]any, len(x.tb.Columns))
+		for i, col := range x.tb.Columns {
+			if raw, ok := x.row.Raw[col.Name]; ok {
+				if store.IsLiteral(raw) {
+					row[i] = store.Literal(raw)
+				} else {
+					row[i] = raw
+				}
+				continue
+			}
+			v, err := c.value(x, col.Name)
+			if err != nil {
+				return nil, err
+			}
+			if !v.null && (col.Type.Kind == dbspec.TypeDatetime || col.Type.Kind == dbspec.TypeTime || col.Type.Kind == dbspec.TypeDate) {
+				// SQLite holds these as text, at the precision of the type, which is how the file holds them.
+				row[i] = v.text
+				continue
 			}
 			w, err := output(col.Type, v)
 			if err != nil {
@@ -227,6 +294,9 @@ func (c *Corpus) Differs(o *Corpus) []string {
 type cell struct {
 	null bool
 	text string
+	// raw is a text that is no value of its column's type, which a statement of SQL may store: SQLite's types do not
+	// bind a column, and the file holds it as written.
+	raw bool
 }
 
 // value returns the value of column col of row x. The key, the title, the body, a
@@ -239,7 +309,7 @@ func (c *Corpus) value(x *rec, col string) (cell, *Error) {
 	tb := x.tb
 	r := x.row
 	if i := tb.KeyPart(col); i >= 0 {
-		values := strings.Split(r.Key, catalog.KeySeparator)
+		values := catalog.SplitKey(r.Key)
 		if i >= len(values) {
 			return cell{}, errf(codeConstraint, "the key %s of %s has no value of %s", r.Key, tb.Name, col)
 		}

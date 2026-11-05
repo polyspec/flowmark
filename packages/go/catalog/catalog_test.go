@@ -342,7 +342,7 @@ func TestLoadSetFile(t *testing.T) {
 		file  string
 		want  string
 	}{
-		{"no set file", map[string]string{"notes.md": "# notes\n"}, "dbspec/dbspec-set.json", "no dbspec/dbspec-set.json"},
+		{"no set file and another file", map[string]string{"notes.md": "# notes\n"}, "dbspec/notes.md", "unexpected file"},
 		{"a document the set does not list", map[string]string{"a.dbs": doc("a"), "b.dbs": doc("b"), "dbspec-set.json": `{"schema":1,"documents":["a.dbs"]}`}, "dbspec/b.dbs", "dbspec/b.dbs is not listed in dbspec/dbspec-set.json"},
 		{"a listed document outside dbspec", map[string]string{"a.dbs": doc("a"), "dbspec-set.json": `{"schema":1,"documents":["a.dbs","../outside.dbs"]}`}, "dbspec/dbspec-set.json", "set.path"},
 		{"a listed document in a folder", map[string]string{"a.dbs": doc("a"), "sub/": "", "sub/c.dbs": doc("c"), "dbspec-set.json": `{"schema":1,"documents":["a.dbs","sub/c.dbs"]}`}, "dbspec/dbspec-set.json", "listed document dbspec/sub/c.dbs is not directly in dbspec/"},
@@ -359,7 +359,7 @@ func TestLoadSetFile(t *testing.T) {
 				if err := os.WriteFile(filepath.Join(root, "ext", "e.dbs"), []byte(doc("e")), 0o644); err != nil {
 					t.Fatal(err)
 				}
-				c.want = "external document ext/e.dbs: the catalog uses no document outside its set"
+				c.want = "listed document ext/e.dbs is not directly in dbspec/"
 			}
 			cat, diags := catalog.Load(root)
 			expectRejected(t, cat, diags)
@@ -411,7 +411,7 @@ func TestLoadAcceptsCompositePrimaryKey(t *testing.T) {
 		t.Fatalf("composite: %v\n%s", diags, text)
 	}
 	tb, _ := cat.Table("item_links")
-	if tb.Key != "id.kind" || !slices.Equal(tb.KeyParts, []string{"id", "kind"}) {
+	if tb.Key != "id/kind" || !slices.Equal(tb.KeyParts, []string{"id", "kind"}) {
 		t.Fatalf("key %q parts %v", tb.Key, tb.KeyParts)
 	}
 }
@@ -513,7 +513,7 @@ func TestLoadKeyring(t *testing.T) {
 	}
 }
 
-func TestLoadRejectsAuditSetting(t *testing.T) {
+func TestLoadTakesAuditSetting(t *testing.T) {
 	audited := `table audit_record {
   seq i64 identity
   request_id varchar(64)
@@ -551,9 +551,14 @@ table service_history {
 }
 
 table views {`
-	cat, diags, text := loadEdited(t, [2]string{"table views {", audited})
-	expectRejected(t, cat, diags)
-	expectTableDiag(t, diags, text, "service", "audit setting")
+	cat, diags, _ := loadEdited(t, [2]string{"table views {", audited})
+	if len(diags) > 0 || cat == nil {
+		t.Fatalf("diagnostics: %v", diags)
+	}
+	tb, ok := cat.Table("service")
+	if !ok || tb.Audit == nil {
+		t.Fatalf("service has no audit: %+v", tb)
+	}
 }
 
 func TestLoadAcceptsImmutableSetting(t *testing.T) {
@@ -1482,7 +1487,7 @@ table views {`, key)
 // integer, bool, varchar, uuid or date column: a key of any other type is a
 // located catalog diagnostic, since the key shape cannot carry its text.
 func TestLoadKeyColumnTypes(t *testing.T) {
-	accepted := []string{"i16", "i32", "i64", "bool", "varchar(32)", "uuid", "date"}
+	accepted := []string{"i16", "i32", "i64", "bool", "varchar(32)", "uuid", "date", "time(0)", "datetime(0)", "decimal(4,2)", "f64"}
 	for _, key := range accepted {
 		t.Run("accepts "+key, func(t *testing.T) {
 			cat, diags, _ := loadEdited(t, [2]string{"table views {", keyedTable(key)})
@@ -1494,7 +1499,8 @@ func TestLoadKeyColumnTypes(t *testing.T) {
 	rejected := []string{"time(0)", "datetime(0)", "decimal(4,2)", "f64"}
 	for _, key := range rejected {
 		t.Run("rejects "+key, func(t *testing.T) {
-			cat, diags, text := loadEdited(t, [2]string{"table views {", keyedTable(key)})
+			listed := strings.Replace(keyedTable(key), "store document table", "store document list", 1)
+			cat, diags, text := loadEdited(t, [2]string{"table views {", listed})
 			expectRejected(t, cat, diags)
 			expectTableDiag(t, diags, text, "keyed", "is not a key type")
 		})

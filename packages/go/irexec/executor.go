@@ -16,6 +16,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"slices"
 	"time"
 
 	"github.com/polyspec/flowmark/packages/go/catalog"
@@ -30,16 +31,77 @@ import (
 type Executor struct {
 	cat   *catalog.Catalog
 	model *runtimemodel.Model
+	// loading is the model a face's load reads: an external table takes rows there, since a corpus holds its rows and
+	// the set that owns the document does not reach them (spec 30 External documents).
+	loading *runtimemodel.Model
+	// stated is the model of the difference of a SQL statement, which SQLite has judged: a column's NOT NULL is its own.
+	stated *runtimemodel.Model
 }
 
 // New returns the executor of cat. The catalog was loaded valid, so its set builds
 // a runtime model; an error says that it did not.
 func New(cat *catalog.Catalog) (*Executor, error) {
-	m, diags := runtimemodel.Build(cat.Documents)
+	m := &runtimemodel.Model{Entities: map[string]*runtimemodel.Entity{}}
+	if len(cat.Documents) > 0 {
+		var diags []dbspec.Diagnostic
+		if m, diags = runtimemodel.Build(cat.Documents); len(diags) > 0 {
+			return nil, &Error{Code: "SCHEMA_INVALID", Msg: runtimemodel.DiagnosticsError(diags)}
+		}
+	}
+	loading := *m
+	loading.Entities = map[string]*runtimemodel.Entity{}
+	for name, ent := range m.Entities {
+		owned := *ent
+		owned.External = false
+		loading.Entities[name] = &owned
+	}
+	// The difference of a SQL statement also writes the tables that schema statements added.
+	if cat.Added != nil && len(cat.Added.Tables) > 0 {
+		all, diags := runtimemodel.Build(append(slices.Clone(cat.Documents), cat.Added))
+		if len(diags) > 0 {
+			return nil, &Error{Code: "SCHEMA_INVALID", Msg: runtimemodel.DiagnosticsError(diags)}
+		}
+		for name, ent := range all.Entities {
+			if _, set := m.Entities[name]; !set {
+				loading.Entities[name] = ent
+			}
+		}
+	}
+	stated, err := statedModel(cat)
+	if err != nil {
+		return nil, err
+	}
+	stated.ManifestHash = m.ManifestHash
+	return &Executor{cat: cat, model: m, loading: &loading, stated: stated}, nil
+}
+
+// statedModel is the model of the difference of a SQL statement, over every table of the corpus: SQLite has judged the
+// statement, so a column's NOT NULL is not the model's to refuse, and an external table takes rows like any other.
+func statedModel(cat *catalog.Catalog) (*runtimemodel.Model, error) {
+	open := make([]*dbspec.Document, len(cat.Stated))
+	for i, d := range cat.Stated {
+		c := *d
+		c.External = false
+		c.Tables = slices.Clone(d.Tables)
+		for j := range c.Tables {
+			t := &c.Tables[j]
+			t.Columns = slices.Clone(t.Columns)
+			for k := range t.Columns {
+				if !slices.Contains(t.PrimaryKey.Columns, t.Columns[k].Name) {
+					t.Columns[k].Null = true
+				}
+			}
+		}
+		open[i] = &c
+	}
+	if len(open) == 0 {
+		return &runtimemodel.Model{Entities: map[string]*runtimemodel.Entity{}}, nil
+	}
+	m, diags := runtimemodel.Build(open)
 	if len(diags) > 0 {
 		return nil, &Error{Code: "SCHEMA_INVALID", Msg: runtimemodel.DiagnosticsError(diags)}
 	}
-	return &Executor{cat: cat, model: m}, nil
+	return m, nil
 }
 
 // Model returns the runtime model of the executor's catalog.
@@ -48,19 +110,45 @@ func (e *Executor) Model() *runtimemodel.Model { return e.model }
 // message is one request message of the protocol: {ir_version, manifest_hash,
 // request, params, now}.
 type message struct {
-	IRVersion    int               `json:"ir_version"`
-	ManifestHash string            `json:"manifest_hash"`
-	Request      json.RawMessage   `json:"request"`
-	Params       []json.RawMessage `json:"params"`
-	Now          string            `json:"now"`
+	IRVersion    int    `json:"ir_version"`
+	ManifestHash string `json:"manifest_hash"`
+	// Audit is the key of the audit record of the transaction, for a write of an audited table (spec 50 Audit).
+	Audit json.RawMessage `json:"audit,omitempty"`
+	// Seed marks the insert of rows.load, which only a face sends.
+	Seed bool `json:"seed,omitempty"`
+	// ForeignKeysOff marks a seed of a connection whose foreign_keys is off: no foreign key judges its rows.
+	ForeignKeysOff *bool `json:"foreign_keys_off,omitempty"`
+	// Keys and Updates name the rows of a difference of a SQL statement: a delete takes the rows of Keys, and an update
+	// gives each row of Updates its own values. Each key holds the parameters of its key columns.
+	Keys    [][]int           `json:"keys,omitempty"`
+	Updates []StatedUpdate    `json:"updates,omitempty"`
+	Request json.RawMessage   `json:"request"`
+	Params  []json.RawMessage `json:"params"`
+	Now     string            `json:"now"`
+}
+
+// StatedUpdate is the update of one row of a difference of a SQL statement.
+type StatedUpdate struct {
+	Key []int       `json:"key"`
+	Set []ir.Assign `json:"set"`
 }
 
 // call is a decoded and validated request with its parameters and clock.
 type call struct {
-	req    *ir.Request
-	params []json.RawMessage
-	page   *pageLimit
-	now    time.Time
+	req   *ir.Request
+	audit *cell
+	// seed is a write a face forms from stored rows: rows.load, or the difference of a SQL statement.
+	seed bool
+	// noForeignKeys is a seed of a connection whose foreign_keys is off.
+	noForeignKeys bool
+	// stated is the difference of a SQL statement.
+	stated bool
+	// keys and updates are the rows the difference names.
+	keys    [][]int
+	updates []StatedUpdate
+	params  []json.RawMessage
+	page    *pageLimit
+	now     time.Time
 }
 
 // decode reads one request message. The message and its request each carry the
@@ -87,7 +175,14 @@ func (e *Executor) decode(b []byte, orm bool) (*call, *Error) {
 	if len(m.Request) == 0 || string(bytes.TrimSpace(m.Request)) == "null" {
 		return nil, errf(codeIRInvalid, "the request message has no request")
 	}
-	req, err := ir.Decode(e.model, m.Request)
+	decodeModel := e.model
+	if !orm && m.Seed {
+		decodeModel = e.loading
+		if m.ForeignKeysOff != nil {
+			decodeModel = e.stated
+		}
+	}
+	req, err := ir.Decode(decodeModel, m.Request)
 	if err != nil {
 		return nil, fromIR(err)
 	}
@@ -113,7 +208,16 @@ func (e *Executor) decode(b []byte, orm bool) (*call, *Error) {
 	if err != nil {
 		return nil, errf(codeIRInvalid, "now %q is not a datetime: %v", m.Now, err)
 	}
-	return &call{req: req, params: m.Params, page: page, now: tm}, nil
+	var audit *cell
+	if len(m.Audit) > 0 && string(m.Audit) != "null" {
+		v := cell{text: string(m.Audit)}
+		var text string
+		if json.Unmarshal(m.Audit, &text) == nil {
+			v.text = text
+		}
+		audit = &v
+	}
+	return &call{keys: m.Keys, updates: m.Updates, req: req, audit: audit, seed: !orm && m.Seed, stated: !orm && m.Seed && m.ForeignKeysOff != nil, noForeignKeys: !orm && m.Seed && m.ForeignKeysOff != nil && *m.ForeignKeysOff, params: m.Params, page: page, now: tm}, nil
 }
 
 // IsWrite reports whether the request message msg holds a write — insert, update,
@@ -176,6 +280,18 @@ func (e *Executor) execute(c *Corpus, msg []byte, orm bool) (*Result, error) {
 func (e *Executor) run(c *Corpus, cl *call) (*Result, *Error) {
 	if c.cat != e.cat {
 		return nil, errf(codeInternal, "the corpus was read with another catalog than the executor's")
+	}
+	entities := e.model.Entities
+	if cl.seed {
+		entities = e.loading.Entities
+		if cl.stated {
+			entities = e.stated.Entities
+		}
+	}
+	if ent := entities[cl.req.Entity]; ent != nil {
+		if _, ok := c.cat.Table(ent.Table); !ok {
+			return nil, errf("DRIVER", "no such table: %s", ent.Table)
+		}
 	}
 	if isWriteKind(cl.req.Kind) {
 		return e.write(c, cl)

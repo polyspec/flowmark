@@ -544,7 +544,7 @@ func (p *docParser) listRow(lineNo int, line string, indent int) *docRec {
 		}
 		last = idx
 		rec.row.setAt(tok.name, lineNo, colAt(line, tok.start))
-		p.scalarValue(lineNo, colAt(line, tok.start), rec, lay.fields[idx], tok.value)
+		p.scalarValue(lineNo, colAt(line, tok.start), rec, lay.fields[idx], tok.value, tok.quoted)
 	}
 	return rec
 }
@@ -794,7 +794,7 @@ func docKeyFault(lay *docLayout, key string) string {
 	if len(lay.parts) > 0 {
 		return compositeKeyFault(lay.parts, key)
 	}
-	if msg := keyFault(key); msg != "" {
+	if msg := docShapeFault(lay, key); msg != "" {
 		return msg
 	}
 	if canon, ok := readable(lay.key.Type, key); !ok || canon != key {
@@ -806,7 +806,7 @@ func docKeyFault(lay *docLayout, key string) string {
 // scalarValue reads the value v of column c of rec, found at line and col: a
 // foreign key is a link, to be resolved with the other links of the file; any
 // other value is checked against its single-line rules and its column type.
-func (p *docParser) scalarValue(line, col int, rec *docRec, c dbspec.Column, v string) {
+func (p *docParser) scalarValue(line, col int, rec *docRec, c dbspec.Column, v string, quoted bool) {
 	if table, isFK := p.lay.fks[c.Name]; isFK {
 		key, target, ok := splitLink(v)
 		if !ok {
@@ -820,12 +820,17 @@ func (p *docParser) scalarValue(line, col int, rec *docRec, c dbspec.Column, v s
 		}
 		return
 	}
-	if msg := singleLineFault(v); msg != "" {
+	msg := singleLineFault(v)
+	if quoted {
+		// The quotes show an invisible character at an end of the value.
+		msg = quotedFault(v)
+	}
+	if msg != "" {
 		p.fail(line, col, RuleBlock, "the value has "+msg)
 		return
 	}
 	canon, ok := readable(c.Type, v)
-	if !ok {
+	if !ok || (!quoted && IsLiteral(v)) {
 		rec.row.Raw[c.Name] = v
 		rec.row.Scalars[c.Name] = sp(v)
 		return
@@ -1027,6 +1032,10 @@ func (p *docParser) tableRow(lineNo int, text string) *docRec {
 		p.fail(lineNo, colAt(text, cells[0].at+1), RuleBlock, "the key is missing")
 		return nil
 	}
+	if invisibleAtEnd(key) && !strings.HasPrefix(trimWhite(cells[0].raw), `"`) {
+		p.fail(lineNo, colAt(text, cells[0].at+1), RuleBlock, "the key has an invisible character at an end")
+		return nil
+	}
 	if msg := docKeyFault(lay, key); msg != "" {
 		p.fail(lineNo, colAt(text, cells[0].at+1), RuleBlock, msg)
 		return nil
@@ -1053,7 +1062,7 @@ func (p *docParser) tableRow(lineNo int, text string) *docRec {
 			rec.row.Title = v
 			continue
 		}
-		p.scalarValue(lineNo, col, rec, c, v)
+		p.scalarValue(lineNo, col, rec, c, v, strings.HasPrefix(trimWhite(cell.raw), `"`))
 	}
 	return rec
 }
@@ -1584,7 +1593,7 @@ func siblingLess(lay *docLayout, a, b *Row) bool {
 		return orderValue(a, lay.order) < orderValue(b, lay.order)
 	}
 	if len(lay.parts) > 0 {
-		x, y := strings.Split(a.Key, catalog.KeySeparator), strings.Split(b.Key, catalog.KeySeparator)
+		x, y := catalog.SplitKey(a.Key), catalog.SplitKey(b.Key)
 		for i, part := range lay.parts {
 			if i >= len(x) || i >= len(y) {
 				return len(x) < len(y)

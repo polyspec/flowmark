@@ -388,6 +388,14 @@ scalar 값은 dbspec literal이 아니라 읽을 수 있는 형식으로 쓴다.
 - `files` 행의 body는 `-` list 항목으로 시작하지 않으며, field list 뒤에 두 column 이상(space 또는 tab) 들여쓴 줄로 시작하지도 않는다: 그런 body의 쓰기는 `CONSTRAINT`다. 읽을 때 H1 바로 뒤의 `-` 항목들이 field list이므로, `-` 항목으로 시작하는 body는 `format.block`이며, field list가 앞서 있을 때 첫 줄이 두 column 이상(space 또는 tab) 들여쓴 body도 `format.block`이다. 빈 줄 없이 field list 바로 뒤에 오는 body 줄은 `format.block`이다. CommonMark가 그것을 마지막 항목의 연속으로 읽기 때문이다. body는 `*`나 `+` list나 다른 어떤 블록으로도 시작할 수 있다. 근거: H1 뒤의 `-` 항목은 문법상 field이므로, 그런 body는 쓴 body로 다시 읽힐 수 없다.
 - column 순서의 `- <저장되는 scalar column>: <value>` 꼴이 아닌 항목은 `format.block`이다; canonical separator 밖의 space나 tab은 `format.noncanonical`이다([한 줄 자리](#한-줄-자리) 참조). non-null column의 없는 항목은 `format.block`이다. 엔진은 insert에서 default를 명시적으로 쓴다.
 
+## Stored literals
+
+column의 타입이나 cell의 text가 담지 못하는, 문장이 쓴 값은 따옴표 없는 stored literal이다: `x'6162'`는 blob, `t'ff'`는 그
+byte의 text, `n'1.5'`는 숫자다. SQLite는 값을 column 타입에 묶지 않고 text는 줄바꿈, raw HTML, UTF-8이 아닌 byte를 담을 수
+있으므로, corpus는 문장이 저장한 것을 유지해 같은 값을 다시 읽는다. literal처럼 읽히는 text는 따옴표로 쓰며, 따옴표 cell은
+literal이 아니다. files 행의 field에는 따옴표 형식이 없으므로 그런 text는 그곳에서 `CONSTRAINT`다. model이나 face의 쓰기는
+literal을 만들지 않고 [한 줄 자리](#한-줄-자리)의 규칙을 따른다. primary key에는 literal 형식이 없다.
+
 ## 외래 key의 link
 
 - 외래 key 값은 scalar를 쓰는 모든 자리에서 link `[<key>](<target>)`다: list 행의 field, table의 cell,

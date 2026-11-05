@@ -2,6 +2,7 @@ package irexec
 
 import (
 	"encoding/json"
+	"github.com/polyspec/orm/packages/go/engine/runtimemodel"
 	"math/big"
 	"math/rand/v2"
 	"slices"
@@ -88,7 +89,7 @@ func (r *reader) prepare(q *ir.Query) *Error {
 		case usesFulltext(x.Where) || usesFulltext(x.On):
 			err = errf(codeOpNotAllowed, "fulltext: a corpus has no full-text index")
 		}
-		tables[r.e.model.Entities[x.Entity].Table] = true
+		tables[r.model().Entities[x.Entity].Table] = true
 	})
 	if err != nil {
 		return err
@@ -173,7 +174,7 @@ func (r *reader) statement(q *ir.Query, outer *frame, deleted bool, keep func(*r
 	}
 	var envs []*env
 	for _, x := range base {
-		if s.ent.SoftDelete != "" {
+		if s.ent.SoftDelete != "" && !r.cl.seed {
 			v, err := r.c.value(x, s.ent.SoftDelete)
 			if err != nil {
 				return nil, nil, err
@@ -1090,4 +1091,16 @@ func (r *reader) subScalar(sub *ir.Sub, fr *frame) (cell, dbspec.Type, *Error) {
 		return cell{null: true}, t, nil
 	}
 	return vals[0], t, nil
+}
+
+// model is the runtime model the request reads: a face's load and the difference of a SQL statement read the tables a set
+// does not own too.
+func (r *reader) model() *runtimemodel.Model {
+	if r.cl.stated {
+		return r.e.stated
+	}
+	if r.cl.seed {
+		return r.e.loading
+	}
+	return r.e.model
 }

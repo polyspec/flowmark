@@ -45,7 +45,7 @@ func RowOperands(tb *catalog.Table, r *store.Row, parent *store.Row) func(column
 	placement := tb.Placement()
 	return func(col string) Operand {
 		if i := tb.KeyPart(col); i >= 0 {
-			if values := strings.Split(r.Key, catalog.KeySeparator); i < len(values) {
+			if values := catalog.SplitKey(r.Key); i < len(values) {
 				return Operand{Text: values[i]}
 			}
 		}

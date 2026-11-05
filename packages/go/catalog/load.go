@@ -26,6 +26,15 @@ const (
 // document set, and the corpus rules. It returns a catalog only when there
 // are no diagnostics; otherwise it returns nil and every diagnostic found.
 func Load(root string) (*Catalog, []Diagnostic) {
+	added, err := ReadStatements(root)
+	if err != nil {
+		return nil, []Diagnostic{fileDiagnostic(StatementsFile, err.Error())}
+	}
+	return LoadStatements(root, added)
+}
+
+// LoadStatements is Load with the schema statements given: the catalog a corpus has once they stand.
+func LoadStatements(root string, added []string) (*Catalog, []Diagnostic) {
 	entries, err := os.ReadDir(filepath.Join(root, dbspecDir))
 	if err != nil {
 		msg := "cannot read dbspec/: " + err.Error()
@@ -38,8 +47,23 @@ func Load(root string) (*Catalog, []Diagnostic) {
 	docs := l.readDocuments(root, entries)
 	allParsed := l.parseSet(docs)
 	var hash string
-	if allParsed {
+	if allParsed && len(docs) > 0 {
 		hash = l.manifest(docs)
+	}
+	// The documents of the manifest, before the statements change the tables of the corpus.
+	var manifested []*dbspec.Document
+	var files []string
+	for _, d := range docs {
+		manifested = append(manifested, d.parsed)
+		files = append(files, d.file)
+	}
+	var addedDoc *dbspec.Document
+	if len(added) > 0 && allParsed {
+		var err error
+		if addedDoc, err = l.applyStatements(docs, added); err != nil {
+			return nil, []Diagnostic{fileDiagnostic(StatementsFile, err.Error())}
+		}
+		docs = append(docs, &document{file: StatementsFile, name: AddedDocument, parsed: addedDoc})
 	}
 	l.collectTables(docs)
 	l.checkForeignKeys()
@@ -55,10 +79,11 @@ func Load(root string) (*Catalog, []Diagnostic) {
 	if err != nil {
 		return nil, []Diagnostic{fileDiagnostic(KeyringVariable, err.Error())}
 	}
-	cat := &Catalog{ManifestHash: hash, Keys: keys}
+	cat := &Catalog{ManifestHash: hash, Keys: keys, Documents: manifested, Files: files, Added: addedDoc, Statements: added}
 	for _, d := range docs {
-		cat.Documents = append(cat.Documents, d.parsed)
-		cat.Files = append(cat.Files, d.file)
+		if d.parsed != nil {
+			cat.Stated = append(cat.Stated, d.parsed)
+		}
 	}
 	for _, r := range l.order {
 		cat.Tables = append(cat.Tables, buildTable(r))
@@ -68,10 +93,12 @@ func Load(root string) (*Catalog, []Diagnostic) {
 
 // document is one dbspec/*.dbs file of the set.
 type document struct {
-	file   string // relative to the root, slash-separated
-	name   string // the header name, which the document set keys it by
-	text   string
-	parsed *dbspec.Document
+	file string // relative to the root, slash-separated
+	// external is a document the set uses and does not own: its used tables are read-only (spec 30 External documents).
+	external bool
+	name     string // the header name, which the document set keys it by
+	text     string
+	parsed   *dbspec.Document
 	// positions are the declaration positions of the parsed document, in source order.
 	positions []dbspec.Position
 }
@@ -125,16 +152,17 @@ func (l *loader) readDocuments(root string, entries []fs.DirEntry) []*document {
 		}
 	}
 	if !hasSet {
-		l.add(fileDiagnostic(setFile, "no "+setFile))
+		// A dbspec/ with no document is a corpus with no declared table, as a new database: SQL may create its tables.
+		if slices.ContainsFunc(entries, func(e fs.DirEntry) bool { return strings.HasSuffix(e.Name(), dbsExt) }) {
+			l.add(fileDiagnostic(setFile, "no "+setFile))
+		}
 	} else {
 		set, errs := dbspec.ReadSet(filepath.Join(root, dbspecDir, dbspec.SetFileName))
 		for _, e := range errs {
 			l.add(fileDiagnostic(setFile, "dbspec "+e.Rule+": "+e.Message))
 		}
-		for _, f := range set.External {
-			l.add(fileDiagnostic(setFile, "external document "+corpusPath(root, f.Path)+": the catalog uses no document outside its set"))
-		}
-		for _, f := range set.Documents {
+		owned := len(set.Documents)
+		for i, f := range append(slices.Clone(set.Documents), set.External...) {
 			file, ok := l.documentFile(root, f.Path)
 			if !ok {
 				l.add(fileDiagnostic(setFile, "listed document "+file+" is not directly in dbspec/"))
@@ -148,14 +176,14 @@ func (l *loader) readDocuments(root string, entries []fs.DirEntry) []*document {
 			if len(ds) > 0 {
 				continue
 			}
-			docs = append(docs, &document{file: file, text: text})
+			docs = append(docs, &document{file: file, text: text, external: i >= owned})
 		}
 	}
 	for _, e := range entries {
 		name := e.Name()
 		file := dbspecDir + "/" + name
 		switch {
-		case strings.HasPrefix(name, "."), name == dbspec.SetFileName:
+		case strings.HasPrefix(name, "."), name == dbspec.SetFileName, dbspecDir+"/"+name == StatementsFile:
 		case e.IsDir():
 			l.add(fileDiagnostic(file, "unexpected directory in dbspec/"))
 		case strings.HasSuffix(name, dbsExt):
@@ -190,13 +218,23 @@ func corpusPath(root, joined string) string {
 // header, parses it with the others as the documents its use lines name, and reports a repeated name on the later
 // document. It reports false when a document has a diagnostic.
 func (l *loader) parseSet(docs []*document) bool {
-	texts := make([]string, len(docs))
-	for i, d := range docs {
-		texts[i] = d.text
+	var owned, external []string
+	var inOrder []*document
+	for _, d := range docs {
+		if !d.external {
+			owned = append(owned, d.text)
+			inOrder = append(inOrder, d)
+		}
+	}
+	for _, d := range docs {
+		if d.external {
+			external = append(external, d.text)
+			inOrder = append(inOrder, d)
+		}
 	}
 	ok := true
-	for i, r := range dbspec.ParseSet(texts, nil) {
-		d := docs[i]
+	for i, r := range dbspec.ParseSet(owned, external) {
+		d := inOrder[i]
 		d.name = r.Name
 		for _, x := range r.Diagnostics {
 			l.add(Diagnostic{File: d.file, Line: x.Line, Column: x.Column, Rule: rule, Message: "dbspec " + x.Rule + ": " + x.Message})
@@ -237,6 +275,9 @@ func (l *loader) collectTables(docs []*document) {
 		}
 		for i := range d.parsed.Tables {
 			t := &d.parsed.Tables[i]
+			if d.external && !usedBySet(docs, d.parsed.Name, t.Name) {
+				continue
+			}
 			if first, dup := l.refs[t.Name]; dup {
 				l.add(l.tableDiag(d, t.Name, "table "+t.Name+" is also declared by "+first.doc.file))
 				continue
@@ -247,6 +288,21 @@ func (l *loader) collectTables(docs []*document) {
 			l.order = append(l.order, r)
 		}
 	}
+}
+
+// usedBySet reports whether an owned document of the set uses the table of the external document.
+func usedBySet(docs []*document, external, table string) bool {
+	for _, d := range docs {
+		if d.external || d.parsed == nil {
+			continue
+		}
+		for _, u := range d.parsed.Uses {
+			if u.Document == external && slices.Contains(u.Tables, table) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // resolveLayout computes the row scope of every table and reports a layout
@@ -357,6 +413,7 @@ func buildTable(r *tableRef) *Table {
 	if s == nil {
 		s = &dbspec.Settings{}
 	}
+	external := r.doc.external
 	out := &Table{
 		Name:        t.Name,
 		Document:    r.doc.parsed.Name,
@@ -364,6 +421,10 @@ func buildTable(r *tableRef) *Table {
 		ForeignKeys: t.ForeignKeys,
 		Storage:     r.storage,
 		RowScope:    r.scope,
+	}
+	if external {
+		// The set does not own its relations: an external table is its columns, its key and its unique keys.
+		out.ForeignKeys = nil
 	}
 	for _, u := range t.Uniques {
 		out.Uniques = append(out.Uniques, slices.Clone(u.Columns))
@@ -398,6 +459,7 @@ func buildTable(r *tableRef) *Table {
 		out.Codecs[c.Column] = slices.Clone(c.Stages)
 	}
 	out.Immutable = s.Immutable != nil
+	out.Audit = s.Audit
 	if s.AESVersion != nil {
 		out.AESVersion = s.AESVersion.Column
 	}

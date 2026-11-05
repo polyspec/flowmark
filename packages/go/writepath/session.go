@@ -4,13 +4,18 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
+	"io/fs"
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
+	"time"
 
 	"github.com/polyspec/flowmark/packages/go/catalog"
 	"github.com/polyspec/flowmark/packages/go/irexec"
 	"github.com/polyspec/flowmark/packages/go/store/journal"
+	"github.com/polyspec/flowmark/packages/go/validate"
 )
 
 // Session is one session of a corpus: a server connection, or one command of the CLI, MCP or sidecar. Its requests
@@ -22,6 +27,24 @@ type Session struct {
 	mu     sync.Mutex
 	tx     *tx
 	closed bool
+	// queryOnly is the query_only of a SQL connection: a transaction the session's statements open is read-only.
+	queryOnly atomic.Bool
+	// foreignKeysOff is the foreign_keys of a SQL connection, read before each of the session's statements.
+	foreignKeysOff atomic.Bool
+	// cursor is the rows of the session's last statement that go on.
+	cursor atomic.Pointer[io.Closer]
+	// ended is a transaction a statement ended, as RAISE(ROLLBACK) ends one.
+	ended atomic.Bool
+	// settings are the other PRAGMA settings of a SQL connection, which only its own statements see.
+	settings map[string]string
+	// busyMS is the busy_timeout of a SQL connection plus one, the wait of its lock; 0 is the corpus's wait.
+	busyMS atomic.Int64
+	// kept is the lock that the session holds across its transactions, under locking_mode EXCLUSIVE.
+	kept atomic.Pointer[journal.Lock]
+	// exclusive is the locking_mode EXCLUSIVE of a SQL connection.
+	exclusive atomic.Bool
+	// deferred is the transaction of a plain BEGIN, which holds no lock until its first write.
+	deferred *Deferred
 	// life ends when Close is called, before Close waits for a request in progress: it ends that request's lock
 	// wait, as a closed connection does.
 	life context.Context
@@ -123,6 +146,245 @@ func (s *Session) ExecFace(ctx context.Context, msg []byte) (*irexec.Answer, err
 	return s.do(ctx, op{write: irexec.IsWrite(msg), run: func(c *irexec.Corpus) (*irexec.Result, error) { return s.c.exec.ExecuteFace(c, msg) }})
 }
 
+// acquire takes the corpus lock with the wait of the session.
+func (s *Session) acquire(ctx context.Context) (*journal.Lock, error) {
+	if l := s.kept.Load(); l != nil {
+		return l, nil
+	}
+	wait := s.c.wait
+	if ms := s.busyMS.Load(); ms > 0 {
+		wait = time.Duration(ms-1) * time.Millisecond
+	}
+	l, err := s.c.acquireWait(ctx, s.name, wait)
+	if err == nil && s.exclusive.Load() {
+		l.Keep(true)
+		s.kept.Store(l)
+	}
+	return l, err
+}
+
+// SetExclusive sets the locking_mode of a SQL connection: under EXCLUSIVE the lock its next transaction takes stays when
+// the transaction ends, and NORMAL gives it back when no transaction holds it.
+func (s *Session) SetExclusive(on bool) error {
+	s.exclusive.Store(on)
+	if on {
+		return nil
+	}
+	l := s.kept.Swap(nil)
+	if l == nil {
+		return nil
+	}
+	l.Keep(false)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.tx != nil {
+		return nil
+	}
+	return release(l, nil)
+}
+
+// Deferred is the transaction of a plain BEGIN of a SQL connection before its first write: it holds no lock, and what it
+// reads is the corpus Pinned, which its first read fixes. Savepoints are those it has set.
+type Deferred struct {
+	Pinned     *irexec.Corpus
+	Savepoints []string
+}
+
+// Deferred returns the session's deferred transaction, nil when it has none.
+func (s *Session) Deferred() *Deferred { return s.deferred }
+
+// SetDeferred sets the session's deferred transaction.
+func (s *Session) SetDeferred(d *Deferred) { s.deferred = d }
+
+// Snapshot returns the corpus that a read without the lock sees: what is committed, read now when the lock is free or no
+// one can hold it, and the corpus last committed while another session writes one.
+func (s *Session) Snapshot(ctx context.Context) (*irexec.Corpus, error) {
+	if s.kept.Load() != nil {
+		return s.c.read()
+	}
+	l, err := s.c.j.Acquire(ctx, s.name, 0)
+	if err == nil {
+		defer func() { _ = l.Release() }()
+		if err := s.c.j.Recover(l); err != nil {
+			return nil, driverError("recovering the corpus", err)
+		}
+		return s.c.read()
+	}
+	if errors.Is(err, fs.ErrPermission) {
+		return s.c.read()
+	}
+	var timeout *journal.LockTimeout
+	if c := s.c.committed.Load(); c != nil && errors.As(err, &timeout) {
+		return c, nil
+	}
+	return nil, lockError(err)
+}
+
+// ReadSnapshot calls read with the slot of the database of the reads without the lock, and with what releases it. A read
+// that returns true keeps the database, and calls the release when it ends.
+func (s *Session) ReadSnapshot(read func(slot *io.Closer, unlock func()) (bool, error)) error {
+	s.c.readMu.Lock()
+	keep, err := read(&s.c.readHeld, s.c.readMu.Unlock)
+	if !keep {
+		s.c.readMu.Unlock()
+	}
+	return err
+}
+
+// SetBusyTimeout sets the wait of the session's lock.
+func (s *Session) SetBusyTimeout(ms int64) { s.busyMS.Store(ms + 1) }
+
+// Settings returns the PRAGMA settings of the session's statements. Requests of a session run one at a time.
+func (s *Session) Settings() map[string]string { return s.settings }
+
+// SetSetting sets a PRAGMA setting of the session's statements.
+func (s *Session) SetSetting(name, value string) {
+	if s.settings == nil {
+		s.settings = map[string]string{}
+	}
+	s.settings[name] = value
+}
+
+// SetEnded records that a statement ended the session's transaction, whose ROLLBACK then has nothing to do.
+func (s *Session) SetEnded(ended bool) { s.ended.Store(ended) }
+
+// Ended reports whether a statement ended the session's transaction, until the next one begins.
+func (s *Session) Ended() bool { return s.ended.Load() }
+
+// Transaction reports whether a transaction is open in the session, for the holder of its lock.
+func (s *Session) Transaction() bool { return s.tx != nil }
+
+// ReadCommitted calls read with the corpus last committed, the slot of the database of such reads and what releases that
+// database, and reports true, when another session holds the lock; a free lock, or a corpus not read yet, is false and
+// read is not called. A read that returns true keeps the database, and calls the release when it ends.
+func (s *Session) ReadCommitted(ctx context.Context, read func(c *irexec.Corpus, slot *io.Closer, unlock func()) (bool, error)) (bool, error) {
+	if s.kept.Load() != nil {
+		return false, nil
+	}
+	c := s.c.committed.Load()
+	l, err := s.c.j.Acquire(ctx, s.name, 0)
+	if err == nil {
+		// The lock is free: the statement reads under it, from the database of its writers.
+		return false, l.Release()
+	}
+	var timeout *journal.LockTimeout
+	switch {
+	case errors.Is(err, fs.ErrPermission):
+		// No one can hold the lock of a corpus the process may only read, and reading needs none.
+		if c, err = s.c.read(); err != nil {
+			return false, err
+		}
+	case !errors.As(err, &timeout), c == nil:
+		return false, nil
+	}
+	return true, s.ReadSnapshot(func(slot *io.Closer, unlock func()) (bool, error) { return read(c, slot, unlock) })
+}
+
+// Life is the context that the session's Close ends.
+func (s *Session) Life() context.Context { return s.life }
+
+// SetCursor keeps the rows of the session's last statement, which go on.
+func (s *Session) SetCursor(c io.Closer) { s.cursor.Store(&c) }
+
+// Cursor returns the rows of the session's last statement that go on, nil when none.
+func (s *Session) Cursor() io.Closer {
+	if c := s.cursor.Load(); c != nil {
+		return *c
+	}
+	return nil
+}
+
+// TakeCursor returns the rows that go on and forgets them.
+func (s *Session) TakeCursor() io.Closer {
+	if c := s.cursor.Swap(nil); c != nil {
+		return *c
+	}
+	return nil
+}
+
+// ForeignKeysOff reports whether the session's statements run with foreign_keys off.
+func (s *Session) ForeignKeysOff() bool { return s.foreignKeysOff.Load() }
+
+// SetForeignKeysOff sets the foreign_keys of the session's statements.
+func (s *Session) SetForeignKeysOff(off bool) { s.foreignKeysOff.Store(off) }
+
+// QueryOnly reports the query_only of the session's statements.
+func (s *Session) QueryOnly() bool { return s.queryOnly.Load() }
+
+// SetQueryOnly sets the query_only of the session's statements.
+func (s *Session) SetQueryOnly(on bool) { s.queryOnly.Store(on) }
+
+// Held returns what package statement keeps between statements of the corpus. The caller holds the lock: it is in a
+// transaction of the session.
+func (s *Session) Held() io.Closer { return s.c.held }
+
+// SetHeld sets what package statement keeps between statements of the corpus, under the lock as Held.
+func (s *Session) SetHeld(h io.Closer) { s.c.held = h }
+
+// View calls read with the corpus the session reads: its transaction's post-image, or the corpus read now under the
+// lock. A statement of SQL reads through it and writes what it changed as requests (package statement).
+func (s *Session) View(ctx context.Context, read func(*irexec.Corpus) error) error {
+	_, err := s.do(ctx, op{run: func(c *irexec.Corpus) (*irexec.Result, error) {
+		if err := read(c); err != nil {
+			return nil, err
+		}
+		return &irexec.Result{Answer: &irexec.Answer{}}, nil
+	}})
+	return err
+}
+
+// Reschema commits the files and the schema statements that compute derives from the corpus, as its own transaction under
+// the lock, and takes the catalog it returns: the corpus has the tables of a schema statement from here on (spec 40 SQL
+// statements).
+func (s *Session) Reschema(ctx context.Context, compute func(*irexec.Corpus) (*catalog.Catalog, []journal.Change, error)) (err error) {
+	ctx, leave, err := s.enter(ctx)
+	if err != nil {
+		return err
+	}
+	defer leave()
+	if s.tx != nil {
+		return newError(codeConfig, "a schema statement is its own transaction; commit or roll back the open transaction first")
+	}
+	l, err := s.acquire(ctx)
+	if err != nil {
+		return err
+	}
+	written := false
+	defer func() { err = releaseAfter(l, written, err) }()
+	base, err := s.c.read()
+	if err != nil {
+		return err
+	}
+	cat, changes, err := compute(base)
+	if err != nil {
+		return err
+	}
+	if len(changes) == 0 {
+		return nil
+	}
+	paths := make([]string, len(changes))
+	for i, ch := range changes {
+		paths[i] = ch.Path
+	}
+	s.c.tree.Forget(paths...)
+	defer s.c.tree.Forget(paths...)
+	if written, err = s.c.journalCommit(l, changes); err != nil {
+		return err
+	}
+	e, err := irexec.New(cat)
+	if err != nil {
+		return err
+	}
+	s.c.cat, s.c.exec, s.c.memo = cat, e, validate.NewMemo()
+	return nil
+}
+
+// Executor returns the executor of the corpus's catalog. Under the lock, as Held.
+func (s *Session) Executor() *irexec.Executor { return s.c.exec }
+
+// Root returns the root of the corpus.
+func (s *Session) Root() string { return s.c.root }
+
 // Repair runs the history repair of the row of table whose key is key (spec 50 Repair), from the initial state from
 // when it is given, at the engine clock: a write, inside or outside a transaction.
 func (s *Session) Repair(ctx context.Context, table, key, from string) (*irexec.Answer, error) {
@@ -218,7 +480,7 @@ func (s *Session) do(ctx context.Context, o op) (*irexec.Answer, error) {
 // on the corpus read again, still under the lock; a second conflict is returned (spec 40 Transactions).
 // The lock is released on every way out, a panic included.
 func (s *Session) single(ctx context.Context, o op) (a *irexec.Answer, err error) {
-	l, err := s.c.acquire(ctx, s.name)
+	l, err := s.acquire(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -275,7 +537,7 @@ func (s *Session) Begin(ctx context.Context, readOnly bool) (err error) {
 	if s.tx != nil {
 		return newError(codeConfig, "a transaction is already open in the session %s; commit or roll it back before begin", s.name)
 	}
-	l, err := s.c.acquire(ctx, s.name)
+	l, err := s.acquire(ctx)
 	if err != nil {
 		return err
 	}
@@ -393,9 +655,17 @@ func (s *Session) Close() error {
 		return nil
 	}
 	s.closed = true
+	if c := s.TakeCursor(); c != nil {
+		_ = c.Close()
+	}
+	var err error
 	if t := s.tx; t != nil {
 		s.tx = nil
-		return release(t.lock, nil)
+		err = release(t.lock, nil)
 	}
-	return nil
+	if l := s.kept.Swap(nil); l != nil {
+		l.Keep(false)
+		err = release(l, err)
+	}
+	return err
 }

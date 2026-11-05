@@ -56,8 +56,8 @@ behaviour.
 ## Corpus rules on dbspec constructs
 
 - **Composite keys**: a table in `document` or `block` storage may have a primary key of several columns. Its key cell holds the
-  values joined by `.` and its heading the column names joined by `.`, as `| tenant.account | name |` and `| 900.1 | a |`; no value
-  of a key holds `.`, so the cell has one reading. Each value follows the key rules of its column type; a read and a write see the
+  values joined by `/` and its heading the column names joined by `/`, as `| tenant/account | name |` and `| 900/1 | a |`; no value
+  of a key type holds `/`, so the cell has one reading. Each value follows the key rules of its column type; a read and a write see the
   columns as columns. A composite foreign key holds plain values, not a link, and names the whole key of its table; the validator's
   `reference.dangling` applies to it.
 - **Default storage**: a table without a `store` setting is stored `document table`, in one document of

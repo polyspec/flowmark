@@ -250,6 +250,14 @@ func (dw *docWriter) value(rr rowRef, name, column, v string, level int, body, a
 // another table, a key that is not a key, a value or section that is no column of
 // the table, a title, body or non-null value that is missing or unwritable, a
 // state without a checkbox and a parent that names no row.
+// docShapeFault names the rule of the shape of a key in the layout lay.
+func docShapeFault(lay *docLayout, key string) string {
+	if lay.list {
+		return listKeyFault(lay.key.Type, key)
+	}
+	return shapedKeyFault(lay.key.Type, key)
+}
+
 // checkRow refuses the values of row r, which the writer has entered, that the
 // document cannot hold, each at the column that names the value.
 func (w *writer) checkRow(lay *docLayout, byKey map[string]int, r *Row) {
@@ -260,7 +268,7 @@ func (w *writer) checkRow(lay *docLayout, byKey map[string]int, r *Row) {
 		if msg := compositeKeyFault(lay.parts, r.Key); msg != "" {
 			w.refuse(lay.key.Name, "the key: "+msg)
 		}
-	} else if msg := keyFault(r.Key); msg != "" {
+	} else if msg := docShapeFault(lay, r.Key); msg != "" {
 		w.refuse(lay.key.Name, "the key: "+msg)
 	} else if canon, ok := readable(lay.key.Type, r.Key); !ok || canon != r.Key {
 		w.refuse(lay.key.Name, "the key is not the canonical text of a "+lay.key.Type.String()+" key")
@@ -463,6 +471,9 @@ func (dw *docWriter) writeTable(lay *docLayout, rows []*Row, idx, order []int) {
 			default:
 				if text, ok := dw.valueText(lay, r, c, *v, rows); ok {
 					cell = cellText(text)
+					if raw, kept := r.Raw[c.Name]; kept && raw == text && IsLiteral(text) {
+						cell = text
+					}
 				}
 			}
 			w.enter(rr, c.Name)
@@ -496,8 +507,8 @@ func (dw *docWriter) valueText(lay *docLayout, r *Row, c dbspec.Column, v string
 	case !utf8.ValidString(v):
 		w.refuse(c.Name, c.Name+" is not UTF-8")
 		return "", false
-	case singleLineFault(v) != "":
-		w.refuse(c.Name, c.Name+" has "+singleLineFault(v))
+	case quotedFault(v) != "":
+		w.refuse(c.Name, c.Name+" has "+quotedFault(v))
 		return "", false
 	}
 	if raw, kept := r.Raw[c.Name]; kept && raw == v {
@@ -632,13 +643,13 @@ func listToken(name, text string) string {
 }
 
 // cellText writes the text of a table cell: the empty text is "", a text that begins
-// with a quote is quoted, and each pipe is written \|.
+// with a quote or has an invisible character at an end is quoted, and each pipe is written \|.
 func cellText(v string) string {
 	t := v
 	switch {
 	case v == "":
 		t = `""`
-	case strings.HasPrefix(v, `"`):
+	case strings.HasPrefix(v, `"`), invisibleAtEnd(v), IsLiteral(v):
 		t = `"` + escapeQuoted(v) + `"`
 	}
 	return strings.ReplaceAll(t, "|", `\|`)

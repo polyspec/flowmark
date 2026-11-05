@@ -158,8 +158,8 @@ func (w *writer) values() *Error {
 					}
 				case !utf8.ValidString(*v):
 					w.fault(g, tb.Name, col, codeConstraint, col+" is not UTF-8")
-				case store.SingleLineFault(*v) != "":
-					w.fault(g, tb.Name, col, codeConstraint, col+" has "+store.SingleLineFault(*v))
+				case store.ValueFault(tb, *v) != "":
+					w.fault(g, tb.Name, col, codeConstraint, col+" has "+store.ValueFault(tb, *v))
 				}
 			}
 		}
@@ -190,31 +190,43 @@ func (w *writer) keyChecks() []fault {
 	}
 	// The table's rows before the write: the rows the request does not give.
 	others := w.c.recs[w.tb.Name]
+	firstOther := make(map[string]*rec, len(others))
+	othersOfFold := make(map[string][]*rec, len(others))
+	for _, x := range others {
+		if _, held := firstOther[x.row.Key]; !held {
+			firstOther[x.row.Key] = x
+		}
+		fold := store.FoldKey(x.row.Key)
+		othersOfFold[fold] = append(othersOfFold[fold], x)
+	}
+	firstGiven := make(map[string]int, len(ins))
+	timesGiven := make(map[string]int, len(ins))
+	givenOfFold := make(map[string][]*given, len(ins))
+	for i, g := range ins {
+		k := g.row.Key
+		if timesGiven[k] == 0 {
+			firstGiven[k] = i
+		}
+		timesGiven[k]++
+		fold := store.FoldKey(k)
+		givenOfFold[fold] = append(givenOfFold[fold], g)
+	}
 	var faults []fault
 	for i, g := range ins {
 		k := g.row.Key
 		idx := -1
-		for j, o := range ins {
-			if j != i && o.row.Key == k {
-				idx = g.index
-			}
+		if timesGiven[k] > 1 {
+			idx = g.index
 		}
 		refuse := func(msg string) {
 			faults = append(faults, fault{store.Refusal{Table: w.tb.Name, Key: k, Index: idx, Column: w.tb.Key, Rule: codeDuplicateKey, Message: msg}, g.seq})
 			w.duplicated(g)
 		}
-		byteGiven := -1
-		for j := 0; j < i; j++ {
-			if ins[j].row.Key == k {
-				byteGiven = j
-				break
-			}
-		}
-		if byteGiven >= 0 {
-			refuse(fmt.Sprintf("the key %s equals the key of the row at index %d of the rows given", k, ins[byteGiven].index))
+		if j := firstGiven[k]; j < i {
+			refuse(fmt.Sprintf("the key %s equals the key of the row at index %d of the rows given", k, ins[j].index))
 			continue
 		}
-		if x := firstByKey(others, func(o string) bool { return o == k }); x != nil {
+		if x := firstOther[k]; x != nil {
 			refuse(fmt.Sprintf("the key %s equals the key of the %s row in %s", k, w.tb.Name, x.file))
 			continue
 		}
@@ -224,14 +236,15 @@ func (w *writer) keyChecks() []fault {
 		var leastGiven *given
 		var leastRow *rec
 		consider := func(o string) bool {
-			return o != k && store.FoldKey(o) == store.FoldKey(k) && (least == "" || o < least)
+			return o != k && (least == "" || o < least)
 		}
-		for _, o := range ins {
+		fold := store.FoldKey(k)
+		for _, o := range givenOfFold[fold] {
 			if o.row.Key < k && consider(o.row.Key) {
 				least, leastGiven, leastRow = o.row.Key, o, nil
 			}
 		}
-		for _, x := range others {
+		for _, x := range othersOfFold[fold] {
 			if consider(x.row.Key) {
 				least, leastGiven, leastRow = x.row.Key, nil, x
 			}
@@ -353,6 +366,9 @@ func isGiven(gs []*given, r *store.Row) bool {
 // table is needed. The placement key of a block row was checked as the row was
 // placed.
 func (w *writer) references() *Error {
+	if w.r.cl.noForeignKeys {
+		return nil
+	}
 	placement := w.tb.Placement()
 	for _, g := range w.given {
 		x := w.next.byRow[g.row]
