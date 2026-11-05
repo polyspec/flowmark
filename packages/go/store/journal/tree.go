@@ -5,10 +5,13 @@ import (
 	"fmt"
 	"github.com/polyspec/flowmark/packages/go/internal/cost"
 	"io/fs"
+	"maps"
 	"path"
+	"slices"
 	"strings"
 	"sync"
 
+	"github.com/polyspec/flowmark/packages/go/internal/pmap"
 	"github.com/polyspec/flowmark/packages/go/store"
 )
 
@@ -34,10 +37,14 @@ type Tree struct {
 	c    *Corpus
 	disk store.FS
 
-	mu    sync.Mutex
-	w     treeWatch
-	dirs  map[string][]fs.DirEntry
-	files map[string][]byte
+	mu sync.Mutex
+	w  treeWatch
+	// dirs and files hold what the reads asked for, by corpus path, ordered so that what lies under a path is one range.
+	dirs  pmap.Map[string, []fs.DirEntry]
+	files pmap.Map[string, []byte]
+	// changed holds the paths dropped since the last Changes that the tree held, and all whether everything was.
+	changed map[string]bool
+	all     bool
 	// fault is a failure of the watch met by a read; Fault returns it and Refresh clears it, since a read that met it
 	// cached nothing.
 	fault error
@@ -73,7 +80,7 @@ func (c *Corpus) Tree(k *cost.Counts) (*Tree, error) {
 	if err != nil {
 		return nil, fmt.Errorf("watching the corpus %s: %w", c.root, err)
 	}
-	return &Tree{c: c, disk: store.DirFS(c.root), w: w, dirs: map[string][]fs.DirEntry{}, files: map[string][]byte{}, cost: k}, nil
+	return &Tree{c: c, disk: store.DirFS(c.root), w: w, changed: map[string]bool{}, cost: k}, nil
 }
 
 // SetNotices installs the test seam that rewrites the notifications each Refresh takes — to hold one back, as a
@@ -98,16 +105,14 @@ func (t *Tree) Refresh() error {
 	if err != nil {
 		// The notifications the failed drain took are lost with it, so nothing the tree holds is known current: the
 		// next read reads the whole corpus again, as after an overflow, and this operation fails naming the cause.
-		t.dirs = map[string][]fs.DirEntry{}
-		t.files = map[string][]byte{}
+		t.dropAll()
 		return fmt.Errorf("taking the change notifications of the corpus: %w", err)
 	}
 	if t.notices != nil {
 		n = t.notices(n)
 	}
 	if n.Overflow {
-		t.dirs = map[string][]fs.DirEntry{}
-		t.files = map[string][]byte{}
+		t.dropAll()
 		t.c.obs.Observe(Event{Kind: CorpusOverflow, Path: t.c.root})
 		return nil
 	}
@@ -129,52 +134,84 @@ func (t *Tree) Forget(paths ...string) {
 	for _, p := range paths {
 		t.drop(p, true)
 		for d := path.Dir(p); d != "."; d = path.Dir(d) {
-			delete(t.dirs, d)
+			t.dropDir(d)
 		}
-		delete(t.dirs, ".")
+		t.dropDir(".")
 	}
 }
 
 // drop drops the bytes and the entries held at p; moved drops what lies under p and the entries of its folder too.
 // A path the tree held is published as corpus.changed.
 func (t *Tree) drop(p string, moved bool) {
-	held := false
-	if _, ok := t.files[p]; ok {
-		delete(t.files, p)
-		held = true
-	}
-	if _, ok := t.dirs[p]; ok {
-		delete(t.dirs, p)
-		held = true
-	}
+	held := t.dropFile(p)
+	held = t.dropDir(p) || held
 	if moved {
 		if p == "." {
-			held = held || len(t.files) > 0 || len(t.dirs) > 0
-			t.files = map[string][]byte{}
-			t.dirs = map[string][]fs.DirEntry{}
+			held = held || t.files.Len() > 0 || t.dirs.Len() > 0
+			t.dropAll()
 		} else {
 			under := p + "/"
-			for q := range t.files {
-				if strings.HasPrefix(q, under) {
-					delete(t.files, q)
-					held = true
-				}
+			for _, q := range underKeys(t.files, under) {
+				held = t.dropFile(q) || held
 			}
-			for q := range t.dirs {
-				if strings.HasPrefix(q, under) {
-					delete(t.dirs, q)
-					held = true
-				}
+			for _, q := range underKeys(t.dirs, under) {
+				held = t.dropDir(q) || held
 			}
-			if _, ok := t.dirs[path.Dir(p)]; ok {
-				delete(t.dirs, path.Dir(p))
-				held = true
-			}
+			held = t.dropDir(path.Dir(p)) || held
 		}
 	}
 	if held {
 		t.c.obs.Observe(Event{Kind: CorpusChanged, Path: t.c.abs(p)})
 	}
+}
+
+// underKeys returns the keys of m that begin with under, which stand together in its order.
+func underKeys[V any](m pmap.Map[string, V], under string) []string {
+	var out []string
+	for q := range m.From(under) {
+		if !strings.HasPrefix(q, under) {
+			break
+		}
+		out = append(out, q)
+	}
+	return out
+}
+
+// dropFile drops the bytes held at p, recording p as changed, and reports whether the tree held them.
+func (t *Tree) dropFile(p string) bool {
+	if _, ok := t.files.Get(p); !ok {
+		return false
+	}
+	t.files = t.files.Delete(p)
+	t.changed[p] = true
+	return true
+}
+
+// dropDir drops the entries held at p, recording p as changed, and reports whether the tree held them.
+func (t *Tree) dropDir(p string) bool {
+	if _, ok := t.dirs.Get(p); !ok {
+		return false
+	}
+	t.dirs = t.dirs.Delete(p)
+	t.changed[p] = true
+	return true
+}
+
+// dropAll drops everything the tree holds, so the next read reads the whole corpus and Changes reports all.
+func (t *Tree) dropAll() {
+	t.dirs, t.files = pmap.Map[string, []fs.DirEntry]{}, pmap.Map[string, []byte]{}
+	t.changed, t.all = map[string]bool{}, true
+}
+
+// Changes returns, sorted, the paths of the folders and files the tree held and dropped since the last Changes —
+// by a notification, by Forget, or by an overflow, which reports all instead — and starts the next record. A read that
+// kept what it made of the tree reads again only these paths (plan, Ruling: an operation costs what it touches).
+func (t *Tree) Changes() (paths []string, all bool) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	paths, all = slices.Sorted(maps.Keys(t.changed)), t.all
+	t.changed, t.all = map[string]bool{}, false
+	return paths, all
 }
 
 // Fault returns the failure of the watch that a read since the last Refresh met; the write path fails the operation
@@ -203,7 +240,7 @@ func (t *Tree) arm(rel string, dir bool) error {
 func (t *Tree) ReadDir(name string) ([]fs.DirEntry, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	if es, ok := t.dirs[name]; ok {
+	if es, ok := t.dirs.Get(name); ok {
 		return es, nil
 	}
 	if err := t.arm(name, true); err != nil {
@@ -215,7 +252,7 @@ func (t *Tree) ReadDir(name string) ([]fs.DirEntry, error) {
 	if err != nil {
 		return nil, err
 	}
-	t.dirs[name] = es
+	t.dirs = t.dirs.Set(name, es)
 	return es, nil
 }
 
@@ -223,7 +260,7 @@ func (t *Tree) ReadDir(name string) ([]fs.DirEntry, error) {
 func (t *Tree) ReadFile(name string) ([]byte, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	if b, ok := t.files[name]; ok {
+	if b, ok := t.files.Get(name); ok {
 		return b, nil
 	}
 	if err := t.arm(name, false); err != nil {
@@ -235,7 +272,7 @@ func (t *Tree) ReadFile(name string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	t.files[name] = b
+	t.files = t.files.Set(name, b)
 	return b, nil
 }
 
@@ -248,7 +285,7 @@ func (t *Tree) Close() error {
 	}
 	err := t.w.close()
 	t.w = nil
-	t.dirs, t.files = nil, nil
+	t.dirs, t.files = pmap.Map[string, []fs.DirEntry]{}, pmap.Map[string, []byte]{}
 	return err
 }
 

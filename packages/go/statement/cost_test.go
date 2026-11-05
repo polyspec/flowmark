@@ -140,8 +140,12 @@ type costOp struct {
 // costOps are the point operations of the cost cases: a read, an insert, an update and a delete on each table, and an
 // external edit of one file, answered by the read after it.
 var costOps = []costOp{
-	{"read task", func(t *testing.T, s *writepath.Session, _ string) { run(t, s, "SELECT title FROM tasks WHERE id = 'T7'") }},
-	{"read note", func(t *testing.T, s *writepath.Session, _ string) { run(t, s, "SELECT title FROM notes WHERE id = 'N7'") }},
+	{"read task", func(t *testing.T, s *writepath.Session, _ string) {
+		run(t, s, "SELECT title FROM tasks WHERE id = 'T7'")
+	}},
+	{"read note", func(t *testing.T, s *writepath.Session, _ string) {
+		run(t, s, "SELECT title FROM notes WHERE id = 'N7'")
+	}},
 	{"insert task", func(t *testing.T, s *writepath.Session, _ string) {
 		run(t, s, "INSERT INTO tasks (project, title) VALUES ('P2', 'added')")
 	}},
@@ -179,6 +183,8 @@ var costOps = []costOp{
 func measure(t *testing.T, rows int) map[string]cost.Snapshot {
 	t.Helper()
 	s, root := openCost(t, rows)
+	// The first statement fills the database of the session from the corpus, once; the operations are measured after it.
+	run(t, s, "SELECT COUNT(*) FROM tasks")
 	out := map[string]cost.Snapshot{}
 	for _, op := range costOps {
 		before := s.Cost().Snapshot()
@@ -190,7 +196,28 @@ func measure(t *testing.T, rows int) map[string]cost.Snapshot {
 
 // equalCost names, for each operation, the counters whose count is equal at every size of costSizes. A row of the plan
 // that makes an operation cost what it touches adds its counters here, red before the row.
-var equalCost = map[string][]cost.Counter{}
+var equalCost = map[string][]cost.Counter{
+	// T38: a read reads what changed since the read before it.
+	"read task":     readCost,
+	"read note":     readCost,
+	"external edit": editReadCost,
+	"insert task":   writeReadCost,
+	"insert note":   writeReadCost,
+	"update task":   writeReadCost,
+	"update note":   writeReadCost,
+	"delete task":   writeReadCost,
+	"delete note":   writeReadCost,
+}
+
+// readCost are the counts of a corpus read: the documents it visits and parses, and the rows it places and indexes.
+var readCost = []cost.Counter{cost.FilesVisited, cost.FilesParsed, cost.RowsPlaced, cost.RowsIndexed}
+
+// editReadCost are the counts of the read after an external edit; the rows the edit's database refresh indexes are T42's.
+var editReadCost = []cost.Counter{cost.FilesVisited, cost.FilesParsed, cost.RowsPlaced}
+
+// writeReadCost are the counts of the reads of a write, at its start and under the lock at its commit; the rows its
+// post-image indexes are T39's.
+var writeReadCost = []cost.Counter{cost.FilesVisited, cost.FilesParsed, cost.RowsPlaced}
 
 // TestCost measures what each point operation touches at each size of costSizes (plan, Ruling: an operation costs what
 // it touches): the counts are the engine's own, so two corpora of the same rows count the same, every operation reads

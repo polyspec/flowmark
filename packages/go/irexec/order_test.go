@@ -129,7 +129,7 @@ func TestFilesOrderRank(t *testing.T) {
 		// N1 1000, N3 2000, N4 x: position 3 stands after N3 and before N4.
 		res := f.ok(ins("N5", 3))
 		wantTargets(t, res, "notes/N5.flowmark.md")
-		if r := res.Post.Next.files["notes/N5.flowmark.md"].rows[0].Scalars["position"]; r == nil || *r != "3000" {
+		if r := res.Post.Next.file("notes/N5.flowmark.md").rows[0].Scalars["position"]; r == nil || *r != "3000" {
 			t.Fatalf("N5 rank %v", r)
 		}
 		wantFaults(t, f.failure(ins("N5", 4), "CONSTRAINT"), nil)

@@ -1,5 +1,5 @@
 <!-- doc-id: spec-ops -->
-<!-- source-sha256: 39cc92b44cd386815e7a0655e4baa4f189fc50f1310e4abacda810b8e0973eae -->
+<!-- source-sha256: 215bd3246803cfd9a458f09fdaf4824756a3ade316c625cecca8ac2651498c27 -->
 # Operations
 
 [English](40-ops.md)
@@ -64,6 +64,17 @@
   - 문서는 bytes가 바뀌었거나, 그 parse가 다른 file에서 유도한 link target이 바뀌었을 때 — detail
     section이 생기거나 사라진 행, 공유가 된 key, 행이 나타난 dangling link — 만 다시 parse한다. 다른
     문서의 행은 operation 사이에 그대로 두며 결코 바꾸지 않는다. 쓰기는 그 사본을 바꾼다.
+  - 읽기는 단위별로 유지한다: folder와 문서가 각각 하나의 단위이고, 그 결과는 그것이 읽는 것 — folder는
+    entry, 문서는 bytes — 과 그 parse가 물은 link target에만 달려 있다. entry가 바뀐 folder는 entry를
+    다시 나열하고, 새 entry와 종류가 바뀐 entry(folder가 된 문서, 문서 대신 들어선 symbolic link)의
+    단위를 만들며, 사라진 entry의 단위를 그 아래 전부와 함께 없앤다. 그 비용은 corpus가 아니라 그
+    folder의 entry다. 첫 pass는 각 key의 target을 그것을 담은 문서별로 유지하고, 둘째 pass는 각 key를
+    물은 link가 있는 문서를 key별로 유지한다. 그래서 target이 바뀐 key는 정확히 그 문서들만 다시
+    parse한다. 각 표의 중복 key와 표를 쓸 수 없게 하는 읽을 수 없는 entry는 표별로 유지하므로, 표를 쓸
+    수 있는지는 그 행 없이 안다. 읽기는 문서나 진단이 바뀐 path를 다음 corpus에 넘기고, 그 corpus는 나머지
+    문서를 모두 이전 corpus와 공유한다. 읽기는 path마다 처음부터 읽은 결과와 같다: `validate`의
+    `TestLive`와 `FuzzLive`가 모든 case와 golden corpus의 모든 변경 뒤에 이를 확인하고, `irexec`의
+    `TestFromSnapshot`이 이전 corpus 위에 만든 corpus를 확인한다.
   - 걸 수 없는 watch는 원인을 밝히며 operation을 `DRIVER`로 실패시킨다: macOS에서는 열린 file 한도
     (`ulimit -n`, `kern.maxfilesperproc`), Linux에서는 `fs.inotify.max_user_watches`.
 
@@ -509,9 +520,10 @@ MySQL과 PostgreSQL은 `datetime(p)` column을 `NOW(6)`와 여섯 자리로 비�
 
 - command별 p95 지연 목표를 여기서 선언한다([open questions](110-open-questions.md)의 corpus 규모에서
   수백 millisecond).
-- 열린 corpus의 operation은 바뀐 것만 disk에서 읽고, parse가 달라질 수 있는 문서만 parse한다
-  ([corpus 열기](#corpus-열기)). 그래도 memory 안에서 corpus의 행을 훑으므로 그 비용은 bytes가 아니라
-  행에 따라 커진다. `writepath`의 benchmark `BenchmarkOpen`, `BenchmarkRead`, `BenchmarkWrite`가 이를
+- 열린 corpus의 operation은 바뀐 것만 disk에서 읽고, parse가 달라질 수 있는 문서의 행만 parse하고
+  배치한다([corpus 열기](#corpus-열기)). 그래서 operation의 읽기 비용은 corpus가 아니라 바뀐 것이다.
+  `statement`의 `TestCost`가 이를 확인한다: 읽기가 방문하고 parse하는 문서와 배치하고 색인하는 행은
+  1,000행과 100,000행에서 같다. `writepath`의 benchmark `BenchmarkOpen`, `BenchmarkRead`, `BenchmarkWrite`가 이를
   규모 한계에서 잰다: 작은 corpus 옆에 행 하나짜리 문서 10k를 두고, 각 operation의 CPU 시간과 wall
   시간의 95번째 백분위를 보고한다. macOS(Apple M3 Pro, `T12.5-2`)에서 읽기는 CPU 68 ms, 쓰기 — lock
   아래의 transaction 하나를 journal로 commit — 는 216 ms로 예산 안이다. wall 시간 p95인 273 ms와 1.1 s는

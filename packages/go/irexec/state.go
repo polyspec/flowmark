@@ -98,7 +98,7 @@ func (w *writer) historyRows(x *rec, sm *catalog.StateMachine) ([]*rec, *Error) 
 	if ht.Storage.Kind == catalog.StorageBlock && ht.Storage.Parent == x.tb.Name && ht.Placement() == sm.History.Row {
 		var out []*rec
 		for _, h := range x.row.Blocks[ht.Name] {
-			out = append(out, w.next.byRow[h])
+			out = append(out, w.next.recOf(h))
 		}
 		return out, nil
 	}
@@ -176,10 +176,10 @@ func (w *writer) historyRow(x *rec, sm *catalog.StateMachine, from, to string, r
 		w.touched[x.file] = true
 	case catalog.StorageDocument:
 		path := ht.Name + docSuffix
-		f := w.next.files[path]
+		f := w.next.file(path)
 		if f == nil {
 			f = &file{table: ht.Name}
-			w.next.files[path] = f
+			w.next.setFile(path, f)
 		}
 		f.rows = append(f.rows, row)
 		w.touched[path] = true
@@ -214,7 +214,7 @@ func (w *writer) limits() *Error {
 			continue
 		}
 		n := int64(0)
-		for _, x := range w.next.recs[w.tb.Name] {
+		for _, x := range w.next.tableRecs(w.tb.Name) {
 			v, err := w.next.value(x, sm.Column)
 			if err != nil {
 				return err

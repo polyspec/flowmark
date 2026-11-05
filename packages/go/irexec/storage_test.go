@@ -15,7 +15,7 @@ func TestGoldenReads(t *testing.T) {
 		for ename, ent := range f.e.Model().Entities {
 			f.sub(t, "60#surfaces: "+name+" "+ename, func(f *fixture) {
 				res := f.ok(f.msg("all", ename, nil))
-				if got, want := len(res.Answer.Rows), len(f.c.recs[ent.Table]); got != want {
+				if got, want := len(res.Answer.Rows), len(f.c.tableRecs(ent.Table)); got != want {
 					f.t.Fatalf("%d rows; the store read %d", got, want)
 				}
 				count := f.ok(f.msg("count", ename, nil))

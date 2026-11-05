@@ -37,7 +37,7 @@ type CanonReport struct {
 func (c *Corpus) Canon(named []string) ([]CanonTarget, []CanonReport, *Error) {
 	var paths []string
 	if len(named) == 0 {
-		for p := range c.files {
+		for p := range c.files.All() {
 			paths = append(paths, p)
 		}
 	} else {
@@ -50,7 +50,7 @@ func (c *Corpus) Canon(named []string) ([]CanonTarget, []CanonReport, *Error) {
 	sort.Strings(paths)
 	var unknown []string
 	for _, p := range paths {
-		if c.files[p] == nil && !hasKey(c.walk, p) {
+		if _, walk := c.walk.Get(p); c.file(p) == nil && !walk {
 			unknown = append(unknown, fmt.Sprintf("%q", p))
 		}
 	}
@@ -59,7 +59,7 @@ func (c *Corpus) Canon(named []string) ([]CanonTarget, []CanonReport, *Error) {
 	}
 	var reports []CanonReport
 	if len(named) == 0 {
-		for p, d := range c.walk {
+		for p, d := range c.walk.All() {
 			reports = append(reports, CanonReport{Path: p, Diagnostic: d})
 		}
 	}
@@ -81,7 +81,7 @@ func (c *Corpus) Canon(named []string) ([]CanonTarget, []CanonReport, *Error) {
 		if err != nil {
 			return nil, nil, err
 		}
-		if !bytes.Equal(out, c.files[p].data) {
+		if !bytes.Equal(out, c.file(p).data) {
 			targets = append(targets, CanonTarget{Path: p, After: out})
 		}
 	}
@@ -93,18 +93,14 @@ func (c *Corpus) Canon(named []string) ([]CanonTarget, []CanonReport, *Error) {
 }
 
 // hasKey reports whether m holds k.
-func hasKey(m map[string]catalog.Diagnostic, k string) bool {
-	_, ok := m[k]
-	return ok
-}
-
 // canonLeaves reports why canon cannot rewrite the corpus path p, false when it can: p is a corpus.walk entry, or a
 // document with a diagnostic of a file it cannot read — format.block, format.section, format.encoding, a parent.cycle
 // among its rows — or with a link that needs an unavailable table.
 func (c *Corpus) canonLeaves(p string) (CanonReport, bool) {
-	f := c.files[p]
+	f := c.file(p)
 	if f == nil {
-		return CanonReport{Path: p, Diagnostic: c.walk[p]}, true
+		d, _ := c.walk.Get(p)
+		return CanonReport{Path: p, Diagnostic: d}, true
 	}
 	for _, d := range f.diags {
 		switch d.Rule {
@@ -168,7 +164,7 @@ func sortedBlocks(r *store.Row) []string {
 // derives. The rendered bytes must read back without a diagnostic: anything else is internal, since the read of the
 // file accepted its rows.
 func (c *Corpus) canonical(p string, lk *linker) ([]byte, *Error) {
-	f := c.files[p]
+	f := c.file(p)
 	tb, _ := c.cat.Table(f.table)
 	var out []byte
 	var rf []store.Refusal

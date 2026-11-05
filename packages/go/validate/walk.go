@@ -20,32 +20,41 @@ const docSuffix = ".flowmark.md"
 func walkRoot(cat *catalog.Catalog, fsys store.FS, entries []fs.DirEntry) []catalog.Diagnostic {
 	var diags []catalog.Diagnostic
 	for _, e := range entries {
-		name := e.Name()
-		if strings.HasPrefix(name, ".") || name == dbspecDir {
-			continue
-		}
-		if hasTableNamed(cat, name) {
-			continue
-		}
-		if t, ok := docPlaceOf(cat, name); ok && name == t+docSuffix {
-			if !e.Type().IsRegular() {
-				diags = append(diags, walkDiag(name, "a document of the table "+t+" is not a regular file"))
-			}
-			continue
-		}
-		if t, ok := foldedPlace(cat, name); ok && (e.IsDir() || e.Type()&fs.ModeSymlink != 0 || hasDocSuffixFold(name)) {
-			diags = append(diags, walkDiag(name, "the name differs in case from the place of the table "+t))
-			continue
-		}
-		if hasDocSuffixFold(name) {
-			diags = append(diags, walkDiag(name, "a document that matches no table place is not a row"))
-			continue
-		}
-		if e.IsDir() {
-			diags = append(diags, walkFolder(fsys, name)...)
+		switch en := rootEntry(cat, e); en.Kind {
+		case store.EntryDiag:
+			diags = append(diags, walkDiag(e.Name(), en.Reason))
+		case store.EntryFolder:
+			diags = append(diags, walkFolder(fsys, e.Name())...)
 		}
 	}
 	return diags
+}
+
+// rootEntry classifies the entry e of the corpus root for the walk outside the table places: the place of a files or
+// sharded table and a regular document of a document table are the tables' own (EntrySkip, as are hidden entries and
+// the catalog folder); a document table's document that is no regular file, a case variant of a place, and a document
+// that matches no place are walk diagnostics; any other folder is walked as outside every place (EntryFolder).
+func rootEntry(cat *catalog.Catalog, e fs.DirEntry) store.Entry {
+	name := e.Name()
+	if strings.HasPrefix(name, ".") || name == dbspecDir || hasTableNamed(cat, name) {
+		return store.Entry{}
+	}
+	if t, ok := docPlaceOf(cat, name); ok && name == t+docSuffix {
+		if !e.Type().IsRegular() {
+			return store.Entry{Kind: store.EntryDiag, Reason: "a document of the table " + t + " is not a regular file"}
+		}
+		return store.Entry{}
+	}
+	if t, ok := foldedPlace(cat, name); ok && (e.IsDir() || e.Type()&fs.ModeSymlink != 0 || hasDocSuffixFold(name)) {
+		return store.Entry{Kind: store.EntryDiag, Reason: "the name differs in case from the place of the table " + t}
+	}
+	if hasDocSuffixFold(name) {
+		return store.Entry{Kind: store.EntryDiag, Reason: "a document that matches no table place is not a row"}
+	}
+	if e.IsDir() {
+		return store.Entry{Kind: store.EntryFolder}
+	}
+	return store.Entry{}
 }
 
 // dbspecDir is the folder of the catalog, which the corpus walk does not read.
@@ -57,23 +66,34 @@ const dbspecDir = "dbspec"
 func walkFolder(fsys store.FS, rel string) []catalog.Diagnostic {
 	entries, err := fsys.ReadDir(rel)
 	if err != nil {
-		return []catalog.Diagnostic{walkDiag(rel, "cannot read the folder: "+err.Error())}
+		return []catalog.Diagnostic{walkDiag(rel, store.FolderFailure(err))}
 	}
 	var diags []catalog.Diagnostic
 	for _, e := range entries {
-		name := e.Name()
-		if strings.HasPrefix(name, ".") {
-			continue
-		}
-		path := rel + "/" + name
-		switch {
-		case hasDocSuffixFold(name):
-			diags = append(diags, walkDiag(path, "a document outside every table place is not a row"))
-		case e.IsDir():
+		path := rel + "/" + e.Name()
+		switch en := outsideEntry(e); en.Kind {
+		case store.EntryDiag:
+			diags = append(diags, walkDiag(path, en.Reason))
+		case store.EntryFolder:
 			diags = append(diags, walkFolder(fsys, path)...)
 		}
 	}
 	return diags
+}
+
+// outsideEntry classifies the entry e of a folder outside every table place: a document is a walk diagnostic, a folder
+// is walked, and any other entry is outside the database.
+func outsideEntry(e fs.DirEntry) store.Entry {
+	name := e.Name()
+	switch {
+	case strings.HasPrefix(name, "."):
+		return store.Entry{}
+	case hasDocSuffixFold(name):
+		return store.Entry{Kind: store.EntryDiag, Reason: "a document outside every table place is not a row"}
+	case e.IsDir():
+		return store.Entry{Kind: store.EntryFolder}
+	}
+	return store.Entry{}
 }
 
 // walkDiag is a corpus.walk diagnostic of an entry, located at its first line.

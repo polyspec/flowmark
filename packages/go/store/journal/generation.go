@@ -24,7 +24,7 @@ const Generations = 64
 // Generation is the content of the generation file: N is the number of the last commit, 0 for a corpus that no commit
 // of this protocol wrote, and Commits the paths of the last Generations commits, oldest first, the last of number N.
 type Generation struct {
-	N       uint64           `json:"generation"`
+	N       uint64             `json:"generation"`
 	Commits []GenerationCommit `json:"commits"`
 }
 

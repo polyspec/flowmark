@@ -390,3 +390,51 @@ func TestTreeNotifications(t *testing.T) {
 	step("40#opening-a-corpus: a file in the renamed folder written", func() { writeFile(t, root, "old/y.flowmark.md", "y2\n") },
 		map[string]string{"old/x.flowmark.md": "x3\n", "old/y.flowmark.md": "y2\n", "t/w.flowmark.md": "w\n"}, "old/y.flowmark.md")
 }
+
+// TestTreeChanges pins what the tree reports as changed since the last Changes: each path it held and dropped — a file
+// or folder a notification names, what lies under a moved path and its folder, the folders of a forgotten path — and
+// all after an overflow or a failed drain; a path it never held is not reported, since no read used it.
+func TestTreeChanges(t *testing.T) {
+	files := map[string]string{"a.flowmark.md": "a\n", "t/x.flowmark.md": "x\n", "t/y.flowmark.md": "y\n", "t/s/z.flowmark.md": "z\n", "tt/w.flowmark.md": "w\n"}
+	held := []string{".", "t/", "t/s/", "tt/", "a.flowmark.md", "t/x.flowmark.md", "t/y.flowmark.md", "t/s/z.flowmark.md", "tt/w.flowmark.md"}
+	for _, tc := range []struct {
+		name   string
+		notice Notices
+		drain  error
+		forget []string
+		want   []string
+		all    bool
+	}{
+		{name: "nothing changed", want: []string{}},
+		{name: "a changed file", notice: Notices{Changed: []string{"t/x.flowmark.md"}}, want: []string{"t/x.flowmark.md"}},
+		{name: "a changed folder", notice: Notices{Changed: []string{"t"}}, want: []string{"t"}},
+		{name: "a path the tree never held", notice: Notices{Changed: []string{"t/new.flowmark.md"}}, want: []string{}},
+		{name: "a moved folder, what lies under it and its folder, and no sibling of a like name", notice: Notices{Moved: []string{"t"}},
+			want: []string{".", "t", "t/s", "t/s/z.flowmark.md", "t/x.flowmark.md", "t/y.flowmark.md"}},
+		{name: "a moved file and its folder", notice: Notices{Moved: []string{"t/y.flowmark.md"}}, want: []string{"t", "t/y.flowmark.md"}},
+		{name: "a forgotten path and its folders", forget: []string{"t/s/z.flowmark.md"}, want: []string{".", "t", "t/s", "t/s/z.flowmark.md"}},
+		{name: "a forgotten path the tree never held drops its folders", forget: []string{"t/s/new.flowmark.md"}, want: []string{".", "t", "t/s"}},
+		{name: "an overflow", notice: Notices{Overflow: true}, want: []string{}, all: true},
+		{name: "a failed drain", drain: errors.New("lost"), want: []string{}, all: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tr, w, _, _ := scriptedTree(t, files)
+			readAll(t, tr, held...)
+			if paths, all := tr.Changes(); len(paths) != 0 || all {
+				t.Fatalf("reads report %v, %v as changed", paths, all)
+			}
+			w.next, w.drainErr = tc.notice, tc.drain
+			if err := tr.Refresh(); (err != nil) != (tc.drain != nil) {
+				t.Fatalf("Refresh = %v", err)
+			}
+			tr.Forget(tc.forget...)
+			paths, all := tr.Changes()
+			if !slices.Equal(paths, tc.want) || all != tc.all {
+				t.Fatalf("Changes = %v, %v; want %v, %v", paths, all, tc.want, tc.all)
+			}
+			if paths, all := tr.Changes(); len(paths) != 0 || all {
+				t.Fatalf("a second Changes reports %v, %v", paths, all)
+			}
+		})
+	}
+}

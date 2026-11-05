@@ -60,7 +60,7 @@ func open(t *testing.T, root string) *irexec.Corpus {
 	if len(diags) > 0 {
 		t.Fatalf("catalog: %+v", diags)
 	}
-	c, err := irexec.Open(cat, store.DirFS(root), nil)
+	c, err := irexec.Open(cat, store.DirFS(root))
 	if err != nil {
 		t.Fatal(err)
 	}

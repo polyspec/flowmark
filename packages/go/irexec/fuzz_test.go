@@ -65,7 +65,7 @@ func seedMessages(f *fixture) [][]byte {
 			f.msg("group_count", n, map[string]any{"group_by": []string{key}}),
 			f.msg("paginate", n, map[string]any{"limit": map[string]any{"offset": 0, "count": 1}, "order": []any{map[string]any{"column": key, "desc": true}}}),
 		)
-		for _, x := range f.c.recs[ent.Table] {
+		for _, x := range f.c.tableRecs(ent.Table) {
 			v, err := f.c.value(x, key)
 			if err != nil {
 				break

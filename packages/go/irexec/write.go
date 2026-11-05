@@ -120,8 +120,8 @@ func (w *writer) request() *Error {
 // statedRows returns a function that finds the row of the next corpus that a key of a difference names. SQLite judged the
 // statement, so a row the corpus does not hold is a fault of the engine.
 func (w *writer) statedRows() func(ps []int) (*rec, *Error) {
-	byKey := make(map[string]*rec, len(w.c.recs[w.tb.Name]))
-	for _, x := range w.c.recs[w.tb.Name] {
+	byKey := make(map[string]*rec, len(w.c.tableRecs(w.tb.Name)))
+	for _, x := range w.c.tableRecs(w.tb.Name) {
 		byKey[x.row.Key] = x
 	}
 	names := w.tb.KeyParts
@@ -173,10 +173,10 @@ func (w *writer) statedDelete() *Error {
 			w.touched[x.file] = true
 		}
 		for path := range w.touched {
-			f := w.next.files[path]
+			f := w.next.file(path)
 			f.rows = slices.DeleteFunc(slices.Clone(f.rows), func(r *store.Row) bool { return gone[r] })
 			if len(f.rows) == 0 && w.tb.Storage.Shard != nil {
-				delete(w.next.files, path)
+				w.next.dropFile(path)
 			}
 		}
 		w.next.index()
@@ -206,14 +206,14 @@ func (w *writer) statedUpdate() *Error {
 
 // clone returns a deep copy of the corpus's rows, which a write changes.
 func (c *Corpus) clone() *Corpus {
-	n := &Corpus{cat: c.cat, files: map[string]*file{}, unavailable: c.unavailable, walk: c.walk, cost: c.cost}
-	for p, f := range c.files {
+	n := &Corpus{cat: c.cat, unavailable: c.unavailable, walk: c.walk, cost: c.cost}
+	for p, f := range c.files.All() {
 		c.cost.Add(cost.RowsCopied, len(f.rows))
 		rows := make([]*store.Row, len(f.rows))
 		for i, r := range f.rows {
 			rows[i] = cloneRow(r)
 		}
-		n.files[p] = &file{table: f.table, data: f.data, rows: rows, diags: f.diags}
+		n.setFile(p, &file{table: f.table, data: f.data, rows: rows, diags: f.diags})
 	}
 	n.index()
 	return n
@@ -246,9 +246,9 @@ func cloneRow(r *store.Row) *store.Row {
 func (w *writer) nextOf(x *rec) *rec {
 	if w.copies == nil {
 		w.copies = map[*rec]*rec{}
-		for t, xs := range w.c.recs {
+		for t, xs := range w.c.allRecs() {
 			for i, y := range xs {
-				w.copies[y] = w.next.recs[t][i]
+				w.copies[y] = w.next.tableRecs(t)[i]
 			}
 		}
 	}
@@ -298,7 +298,7 @@ func (w *writer) sharedGiven(g *given) bool {
 
 // valueOf returns the value of column col of row in the next corpus.
 func (w *writer) valueOf(row *store.Row, col string) (cell, *Error) {
-	return w.next.value(w.next.byRow[row], col)
+	return w.next.value(w.next.recOf(row), col)
 }
 
 // assignValue computes the value an assignment gives column f of a row whose value
@@ -624,12 +624,12 @@ func (w *writer) insertRow(i int, ps []*int) *Error {
 			return nil
 		}
 		g.row.Path = path
-		if _, exists := w.next.files[path]; exists {
+		if exists := w.next.file(path) != nil; exists {
 			// The key equals an existing row's key byte for byte: the key check
 			// reports it; the row is placed nowhere.
 			return nil
 		}
-		w.next.files[path] = &file{table: tb.Name, rows: []*store.Row{g.row}}
+		w.next.setFile(path, &file{table: tb.Name, rows: []*store.Row{g.row}})
 		w.touched[path] = true
 		placedIn, placedUnder = path, nil
 	case catalog.StorageDocument:
@@ -640,10 +640,10 @@ func (w *writer) insertRow(i int, ps []*int) *Error {
 		if path == "" {
 			return nil
 		}
-		f := w.next.files[path]
+		f := w.next.file(path)
 		if f == nil {
 			f = &file{table: tb.Name}
-			w.next.files[path] = f
+			w.next.setFile(path, f)
 		}
 		f.rows = append(f.rows, g.row)
 		w.touched[path] = true
@@ -711,7 +711,7 @@ func (w *writer) placementRow(tb *catalog.Table, v cell) (*rec, *Error) {
 	if v.null {
 		return nil, nil
 	}
-	for _, x := range w.next.recs[tb.Storage.Parent] {
+	for _, x := range w.next.tableRecs(tb.Storage.Parent) {
 		if x.row.Key == v.text {
 			return x, nil
 		}
@@ -722,7 +722,7 @@ func (w *writer) placementRow(tb *catalog.Table, v cell) (*rec, *Error) {
 // nextIdentity allocates max+1 over the identity column of the table's rows.
 func (w *writer) nextIdentity(tb *catalog.Table, col string) cell {
 	max := int64(0)
-	for _, x := range w.next.recs[tb.Name] {
+	for _, x := range w.next.tableRecs(tb.Name) {
 		v, err := w.next.value(x, col)
 		if err != nil || v.null {
 			continue
@@ -737,8 +737,8 @@ func (w *writer) nextIdentity(tb *catalog.Table, col string) cell {
 // nextPrefixed allocates <p><n + 1>, n the largest decimal suffix without a leading
 // zero among the keys of the form <p><n> (spec 20 Keys).
 func (w *writer) nextPrefixed(tb *catalog.Table, p string) cell {
-	keys := make([]string, 0, len(w.next.recs[tb.Name]))
-	for _, x := range w.next.recs[tb.Name] {
+	keys := make([]string, 0, len(w.next.tableRecs(tb.Name)))
+	for _, x := range w.next.tableRecs(tb.Name) {
 		keys = append(keys, x.row.Key)
 	}
 	return cell{text: NextPrefixed(p, keys)}
@@ -788,7 +788,7 @@ func (w *writer) onDuplicate(ps []*int) (bool, *Error) {
 	var met *rec
 	joinKey(w.tb, vals)
 	if k, ok := vals[w.tb.Key]; ok && !k.null {
-		for _, x := range w.next.recs[w.tb.Name] {
+		for _, x := range w.next.tableRecs(w.tb.Name) {
 			switch {
 			case x.row.Key == k.text:
 				met = x
@@ -798,7 +798,7 @@ func (w *writer) onDuplicate(ps []*int) (bool, *Error) {
 			}
 		}
 	}
-	for _, x := range w.next.recs[w.tb.Name] {
+	for _, x := range w.next.tableRecs(w.tb.Name) {
 		for _, k := range w.tb.Uniques {
 			equal := true
 			for _, col := range k {
@@ -904,7 +904,7 @@ func (w *writer) updateRows(rows []*rec, set []ir.Assign, stamp bool) *Error {
 		return errf(codeConstraint, "an update that assigns the order column %s matches %d rows; it must match exactly one", tb.Order, len(rows))
 	}
 	for i, x := range rows {
-		x = w.next.byRow[x.row] // an earlier row's move may have re-indexed the corpus
+		x = w.next.recOf(x.row) // an earlier row's move may have re-indexed the corpus
 		g := &given{row: x.row, index: i, assigned: map[string]bool{}, before: map[string]cell{}}
 		w.take(g)
 		for _, c := range tb.Columns {
@@ -942,13 +942,13 @@ func (w *writer) updateRows(rows []*rec, set []ir.Assign, stamp bool) *Error {
 			return err
 		}
 		setColumns(tb, x.row, vals)
-		x = w.next.byRow[x.row]
+		x = w.next.recOf(x.row)
 		w.touched[x.file] = true
 		if sh := tb.Storage.Shard; sh != nil && g.assigned[sh.Column] {
 			if err := w.moveShard(g, x, vals[sh.Column]); err != nil {
 				return err
 			}
-			x = w.next.byRow[x.row]
+			x = w.next.recOf(x.row)
 		}
 		moved := false
 		var oldParent *store.Row
@@ -1009,23 +1009,23 @@ func (w *writer) moveShard(g *given, x *rec, v cell) *Error {
 		return nil
 	}
 	if tb.Storage.Kind == catalog.StorageFiles {
-		if _, exists := w.next.files[to]; exists {
+		if exists := w.next.file(to) != nil; exists {
 			w.fault(g, tb.Name, tb.Storage.Shard.Column, codeDuplicateKey, fmt.Sprintf("the key %s already stands in %s", x.row.Key, to))
 			return nil
 		}
-		delete(w.next.files, x.file)
+		w.next.dropFile(x.file)
 		x.row.Path = to
-		w.next.files[to] = &file{table: tb.Name, rows: []*store.Row{x.row}}
+		w.next.setFile(to, &file{table: tb.Name, rows: []*store.Row{x.row}})
 	} else {
-		from := w.next.files[x.file]
+		from := w.next.file(x.file)
 		from.rows = slices.DeleteFunc(slices.Clone(from.rows), func(r *store.Row) bool { return r == x.row })
 		if len(from.rows) == 0 {
-			delete(w.next.files, x.file)
+			w.next.dropFile(x.file)
 		}
-		dest := w.next.files[to]
+		dest := w.next.file(to)
 		if dest == nil {
 			dest = &file{table: tb.Name}
-			w.next.files[to] = dest
+			w.next.setFile(to, dest)
 		}
 		dest.rows = append(slices.Clone(dest.rows), x.row)
 	}
@@ -1120,7 +1120,7 @@ func (w *writer) delete() *Error {
 // took with its block or its file is gone already.
 func (w *writer) removeBackward(rows []*rec) *Error {
 	for _, x := range slices.Backward(rows) {
-		x = w.next.byRow[x.row]
+		x = w.next.recOf(x.row)
 		if x == nil {
 			continue // it stood in a block or a file that an earlier removal took
 		}
@@ -1196,7 +1196,7 @@ func (w *writer) referencing(x *rec, visit func(y *rec, t *catalog.Table, fk dbs
 			if err := w.next.need(t.Name); err != nil {
 				return err
 			}
-			for _, y := range w.next.recs[t.Name] {
+			for _, y := range w.next.tableRecs(t.Name) {
 				key, named, err := w.next.referencedKey(y, fk, x.tb)
 				if err != nil {
 					return err
@@ -1282,12 +1282,12 @@ func (w *writer) removeRow(x *rec) *Error {
 	}
 	switch tb.Storage.Kind {
 	case catalog.StorageFiles:
-		delete(w.next.files, x.file)
+		w.next.dropFile(x.file)
 	case catalog.StorageDocument:
-		f := w.next.files[x.file]
+		f := w.next.file(x.file)
 		f.rows = slices.DeleteFunc(slices.Clone(f.rows), func(r *store.Row) bool { return r == x.row })
 		if len(f.rows) == 0 && tb.Storage.Shard != nil {
-			delete(w.next.files, x.file)
+			w.next.dropFile(x.file)
 		}
 	case catalog.StorageBlock:
 		p := x.parent.row

@@ -114,7 +114,9 @@ type Corpus struct {
 	exec *irexec.Executor
 	j    *journal.Corpus
 	tree *journal.Tree
-	memo *validate.Memo
+	// live keeps the read of the corpus between its reads, which read again only what changed (plan, Ruling: an
+	// operation costs what it touches).
+	live *validate.Live
 	// cost counts the work of the corpus's operations (plan, Ruling: an operation costs what it touches).
 	cost  *cost.Counts
 	root  string
@@ -150,7 +152,7 @@ func Open(ctx context.Context, cat *catalog.Catalog, j *journal.Corpus, wait tim
 	if err != nil {
 		return nil, driverError("watching the corpus", err)
 	}
-	c := &Corpus{cat: cat, exec: e, j: j, tree: tree, memo: validate.NewMemo(k), cost: k, root: j.Root(), wait: wait, clock: engineClock}
+	c := &Corpus{cat: cat, exec: e, j: j, tree: tree, live: validate.NewLive(cat, k), cost: k, root: j.Root(), wait: wait, clock: engineClock}
 	l, err := c.acquire(ctx, "open")
 	if err != nil {
 		return nil, errors.Join(err, c.Close())
@@ -225,25 +227,33 @@ func releaseAfter(l *journal.Lock, written bool, err error) error {
 // Cost returns the counts of the work of the corpus's operations.
 func (c *Corpus) Cost() *cost.Counts { return c.cost }
 
-// read reads the corpus as a request reads it.
+// read reads the corpus as a request reads it, under the lock: the paths the tree dropped since the read before, and
+// the paths of the commits since its generation, which the tree forgets first, whatever their notifications said; a
+// generation no longer kept reads the whole corpus (spec 40 The commit generation).
 func (c *Corpus) read() (*irexec.Corpus, error) {
-	// The generation is read before the tree, under the lock, so no commit lands between the two (spec 40 The commit
-	// generation).
+	// The generation is read before the tree, under the lock, so no commit lands between the two.
 	g, err := c.j.Generation()
 	if err != nil {
 		return nil, driverError("reading the commit generation of the corpus", err)
 	}
+	paths, kept := g.Since(c.readAt.Load())
+	c.tree.Forget(paths...)
 	if err := c.tree.Refresh(); err != nil {
+		c.live.Reset()
 		return nil, driverError("reading the corpus", err)
 	}
-	cur, err := irexec.Open(c.cat, c.tree, c.memo)
+	changed, all := c.tree.Changes()
+	s, err := c.live.Read(c.tree, changed, all || !kept)
 	if err == nil {
 		// A path whose watch could not be armed was not read: the read has no answer.
 		err = c.tree.Fault()
 	}
 	if err != nil {
+		// The next read reads the whole corpus, since this one kept no corpus to read on from.
+		c.live.Reset()
 		return nil, driverError("reading the corpus", err)
 	}
+	cur := irexec.FromSnapshot(c.cat, s, c.committed.Load(), c.cost)
 	c.readAt.Store(g.N)
 	c.committed.Store(cur)
 	return cur, nil

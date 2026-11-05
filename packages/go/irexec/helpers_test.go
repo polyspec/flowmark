@@ -98,7 +98,7 @@ func (f *fixture) sub(t *testing.T, name string, fn func(f *fixture)) {
 // reopen reads the corpus of the fixture again.
 func (f *fixture) reopen() {
 	f.t.Helper()
-	c, err := Open(f.cat, store.DirFS(f.root), nil)
+	c, err := Open(f.cat, store.DirFS(f.root))
 	if err != nil {
 		f.t.Fatal(err)
 	}
@@ -232,11 +232,11 @@ func (f *fixture) commit(res *Result) {
 	}
 	f.reopen()
 	next := res.Post.Next
-	if len(next.files) != len(f.c.files) {
-		f.t.Fatalf("the next corpus holds %d files; the committed corpus %d", len(next.files), len(f.c.files))
+	if next.files.Len() != f.c.files.Len() {
+		f.t.Fatalf("the next corpus holds %d files; the committed corpus %d", next.files.Len(), f.c.files.Len())
 	}
-	for p, file := range f.c.files {
-		nf := next.files[p]
+	for p, file := range f.c.files.All() {
+		nf := next.file(p)
 		if nf == nil || string(nf.data) != string(file.data) || len(nf.rows) != len(file.rows) {
 			f.t.Fatalf("the next corpus differs from the committed corpus at %s", p)
 		}

@@ -382,7 +382,7 @@ func (s *Session) Reschema(ctx context.Context, compute func(*irexec.Corpus) (*c
 	if err != nil {
 		return err
 	}
-	s.c.cat, s.c.exec, s.c.memo = cat, e, validate.NewMemo(s.c.cost)
+	s.c.cat, s.c.exec, s.c.live = cat, e, validate.NewLive(cat, s.c.cost)
 	return nil
 }
 

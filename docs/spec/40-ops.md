@@ -73,6 +73,20 @@ The order of the commit protocol is normative.
     from another file changed — a row whose detail section appeared or disappeared, a key that became
     shared, a dangling link whose row appeared. The rows of the other documents are kept between
     operations and never changed; a write changes copies of them.
+  - The read is kept by unit: each folder and each document is one, and its result depends only on
+    what it reads — a folder its entries, a document its bytes — and on the link targets its parse
+    asked for. A folder whose entries changed lists them again, builds the units of its new entries
+    and of those whose kind changed (a document that became a folder, a symbolic link in a
+    document's stead), and removes the units of the entries gone, with everything under them; its
+    cost is its entries, not the corpus. The first pass keeps the targets of every key by the
+    document that holds it, and the second pass keeps, by key, the documents whose links asked for
+    it, so a key whose target changed parses again exactly those documents. The duplicate keys of
+    each table and the unreadable entries that make a table unavailable are kept by table, so the
+    availability of a table is known without its rows. The read hands the next corpus the paths
+    whose document or diagnostics changed, and that corpus shares every other document with the one
+    before it. A read is the read from nothing, path for path: `TestLive` and `FuzzLive` of
+    `validate` hold it after every change of every case and golden corpus, and `TestFromSnapshot` of
+    `irexec` holds the corpus built on the one before.
   - A watch that cannot be armed fails the operation as `DRIVER`, naming the cause: on macOS the
     limit of open files (`ulimit -n`, `kern.maxfilesperproc`), on Linux
     `fs.inotify.max_user_watches`.
@@ -587,9 +601,11 @@ and MySQL and PostgreSQL compare a `datetime(p)` column with `NOW(6)` at six dig
 
 - A per-command p95 latency target is declared here (hundreds of milliseconds at the corpus
   envelope of [open questions](110-open-questions.md)).
-- An operation on an opened corpus reads from the disk only what changed and parses only the
-  documents whose parse can differ ([opening a corpus](#opening-a-corpus)); it still walks the rows
-  of the corpus in memory, so its cost grows with the rows, not with the bytes. The benchmarks
+- An operation on an opened corpus reads from the disk only what changed and parses and places
+  only the rows of the documents whose parse can differ ([opening a corpus](#opening-a-corpus)), so
+  the read of an operation costs what changed, not the corpus. `TestCost` of `statement` holds it:
+  the documents a read visits and parses and the rows it places and indexes are the same at 1,000
+  and at 100,000 rows. The benchmarks
   `BenchmarkOpen`, `BenchmarkRead` and `BenchmarkWrite` of `writepath` measure it at the envelope,
   10k one-row documents beside a small corpus, reporting the CPU time of each operation and the
   95th percentile of its wall time. On macOS (Apple M3 Pro, `T12.5-2`) a read takes 68 ms of CPU and

@@ -189,7 +189,7 @@ func (w *writer) keyChecks() []fault {
 		return nil
 	}
 	// The table's rows before the write: the rows the request does not give.
-	others := w.c.recs[w.tb.Name]
+	others := w.c.tableRecs(w.tb.Name)
 	firstOther := make(map[string]*rec, len(others))
 	othersOfFold := make(map[string][]*rec, len(others))
 	for _, x := range others {
@@ -283,7 +283,7 @@ func (w *writer) uniques() *Error {
 			if !g.inserted && !assignsAny(g, u) {
 				continue
 			}
-			x := w.next.byRow[g.row]
+			x := w.next.recOf(g.row)
 			if x == nil {
 				x = &rec{row: g.row, tb: w.tb}
 			}
@@ -305,7 +305,7 @@ func (w *writer) uniques() *Error {
 				continue
 			}
 			seen[k] = g
-			for _, x := range w.next.recs[w.tb.Name] {
+			for _, x := range w.next.tableRecs(w.tb.Name) {
 				if x.row == g.row || isGiven(w.given, x.row) {
 					continue
 				}
@@ -371,7 +371,7 @@ func (w *writer) references() *Error {
 	}
 	placement := w.tb.Placement()
 	for _, g := range w.given {
-		x := w.next.byRow[g.row]
+		x := w.next.recOf(g.row)
 		if x == nil {
 			continue
 		}
@@ -391,7 +391,7 @@ func (w *writer) references() *Error {
 			if err := w.next.need(fk.Table); err != nil {
 				return err
 			}
-			if firstByKey(w.next.recs[fk.Table], func(k string) bool { return k == key }) == nil {
+			if firstByKey(w.next.tableRecs(fk.Table), func(k string) bool { return k == key }) == nil {
 				w.fault(g, w.tb.Name, col, codeForeignKey, fmt.Sprintf("the foreign key %s names no %s row with the key %s", col, fk.Table, key))
 			}
 		}
@@ -408,7 +408,7 @@ func (w *writer) parents() *Error {
 		return nil
 	}
 	for _, g := range w.given {
-		x := w.next.byRow[g.row]
+		x := w.next.recOf(g.row)
 		if x == nil || (!g.inserted && !g.assigned[pc]) {
 			continue
 		}
@@ -419,7 +419,7 @@ func (w *writer) parents() *Error {
 		if v.null {
 			continue
 		}
-		p := firstByKey(w.next.recs[w.tb.Name], func(k string) bool { return k == v.text })
+		p := firstByKey(w.next.tableRecs(w.tb.Name), func(k string) bool { return k == v.text })
 		if p == nil {
 			continue // the reference check reports it
 		}
@@ -444,7 +444,7 @@ func (w *writer) parents() *Error {
 			if cv.null {
 				break
 			}
-			cur = firstByKey(w.next.recs[w.tb.Name], func(k string) bool { return k == cv.text })
+			cur = firstByKey(w.next.tableRecs(w.tb.Name), func(k string) bool { return k == cv.text })
 		}
 	}
 	return nil
@@ -465,7 +465,7 @@ type linkTarget struct {
 func newLinker(c *Corpus) (*linker, error) {
 	lk := &linker{c: c, targets: map[string]linkTarget{}}
 	for _, tb := range c.cat.Tables {
-		for _, x := range c.recs[tb.Name] {
+		for _, x := range c.tableRecs(tb.Name) {
 			k := tb.Name + "\x00" + x.row.Key
 			if t, ok := lk.targets[k]; ok {
 				t.shared = true
@@ -519,7 +519,7 @@ func (w *writer) render() (*PostImage, []store.Refusal, *Error) {
 	}
 	paths := sortedTables(w.touched)
 	for _, path := range paths {
-		if f := w.next.files[path]; f != nil {
+		if f := w.next.file(path); f != nil {
 			if err := w.needLinks(f); err != nil {
 				return nil, nil, err
 			}
@@ -528,10 +528,10 @@ func (w *writer) render() (*PostImage, []store.Refusal, *Error) {
 	post := &PostImage{Next: w.next}
 	var faults []store.Refusal
 	for _, path := range paths {
-		f := w.next.files[path]
+		f := w.next.file(path)
 		var prev []byte
 		var diags []catalog.Diagnostic
-		if old := w.c.files[path]; old != nil {
+		if old := w.c.file(path); old != nil {
 			prev, diags = old.data, old.diags
 		}
 		if f == nil {
@@ -599,7 +599,7 @@ func (w *writer) readBack(path string, f *file, out []byte, lk store.Linker) *Er
 		d := diags[0]
 		return errf(codeInternal, "the rendered %s does not read back clean: %d:%d %s: %s", path, d.Line, d.Column, d.Rule, d.Message)
 	}
-	w.next.files[path] = &file{table: f.table, data: out, rows: rows}
+	w.next.setFile(path, &file{table: f.table, data: out, rows: rows})
 	return nil
 }
 
@@ -632,7 +632,7 @@ func (w *writer) linkTargets(before, after *linker) *Error {
 			if err := w.next.need(tb.Name); err != nil {
 				return err
 			}
-			for _, x := range w.next.recs[tb.Name] {
+			for _, x := range w.next.tableRecs(tb.Name) {
 				v, err := w.next.value(x, col)
 				if err != nil || v.null {
 					continue
