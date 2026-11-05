@@ -52,7 +52,7 @@ func TestDecidedCommitRecoveryFails(t *testing.T) {
 	f.j.SetFault(nil)
 	f.rec.reset()
 	want(t, f.session("cli"), f.countTags(), `{"count":3}`)
-	f.rec.wantKinds(t, journal.LockAcquired, journal.Applied, journal.Collected, journal.Replayed, journal.LockReleased)
+	f.rec.wantKinds(t, journal.LockAcquired, journal.Applied, journal.Generated, journal.Collected, journal.Replayed, journal.LockReleased)
 	if got := snapshot(t, f.root); !reflect.DeepEqual(got, afterCrashTx(t)) {
 		t.Fatalf("corpus = %v", got)
 	}
@@ -206,7 +206,7 @@ func TestOpenRecovers(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		rec.wantKinds(t, journal.LockAcquired, journal.Applied, journal.Collected, journal.Replayed, journal.LockReleased)
+		rec.wantKinds(t, journal.LockAcquired, journal.Applied, journal.Generated, journal.Collected, journal.Replayed, journal.LockReleased)
 		if got := snapshot(t, f.root); !reflect.DeepEqual(got, afterCrashTx(t)) {
 			t.Fatalf("corpus = %v", got)
 		}

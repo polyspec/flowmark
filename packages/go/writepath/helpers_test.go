@@ -103,7 +103,7 @@ func (r *recorder) wantKinds(t testing.TB, want ...journal.Kind) {
 // The event sequences of the tests.
 var (
 	opened    = []journal.Kind{journal.LockAcquired, journal.LockReleased}
-	committed = []journal.Kind{journal.LockAcquired, journal.Prepared, journal.Applied, journal.Collected, journal.LockReleased}
+	committed = []journal.Kind{journal.LockAcquired, journal.Prepared, journal.Applied, journal.Generated, journal.Collected, journal.LockReleased}
 )
 
 // lines joins lines with line feeds and a final one.

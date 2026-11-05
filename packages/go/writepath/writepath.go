@@ -127,6 +127,8 @@ type Corpus struct {
 	held io.Closer
 	// committed is the corpus last read under the lock, which a read answers from while another session holds it.
 	committed atomic.Pointer[irexec.Corpus]
+	// readAt is the commit generation the corpus was last read at under the lock.
+	readAt atomic.Uint64
 	// readHeld is the database of those reads, under readMu.
 	readHeld io.Closer
 	readMu   sync.Mutex
@@ -225,6 +227,12 @@ func (c *Corpus) Cost() *cost.Counts { return c.cost }
 
 // read reads the corpus as a request reads it.
 func (c *Corpus) read() (*irexec.Corpus, error) {
+	// The generation is read before the tree, under the lock, so no commit lands between the two (spec 40 The commit
+	// generation).
+	g, err := c.j.Generation()
+	if err != nil {
+		return nil, driverError("reading the commit generation of the corpus", err)
+	}
 	if err := c.tree.Refresh(); err != nil {
 		return nil, driverError("reading the corpus", err)
 	}
@@ -236,9 +244,13 @@ func (c *Corpus) read() (*irexec.Corpus, error) {
 	if err != nil {
 		return nil, driverError("reading the corpus", err)
 	}
+	c.readAt.Store(g.N)
 	c.committed.Store(cur)
 	return cur, nil
 }
+
+// Generation returns the commit generation the corpus was last read at under the lock.
+func (c *Corpus) Generation() uint64 { return c.readAt.Load() }
 
 // Close closes the corpus: the watch of its tree. An operation of a closed corpus fails.
 func (c *Corpus) Close() error {

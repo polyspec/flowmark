@@ -18,6 +18,9 @@ const (
 	Prepared Kind = "journal.prepared"
 	// Applied: every rename is performed and the commit record is written (steps 6–7).
 	Applied Kind = "journal.applied"
+	// Generated: the commit generation is written after a commit record (spec 40 The commit generation); Path is the
+	// generation file and Detail the generation's number.
+	Generated Kind = "journal.generation"
 	// Collected: the stage is removed (step 8).
 	Collected Kind = "journal.collected"
 	// Replayed: recovery completed a stage that holds a prepare or a commit record.

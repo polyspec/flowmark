@@ -236,6 +236,11 @@ func (c *Corpus) commit(l *Lock, changes []Change, prepared *bool) error {
 	if err := c.ensureDir(txRel); err != nil {
 		return fmt.Errorf("journal: %w", err)
 	}
+	// The generation the commit record takes is read after the renames; one that cannot be read refuses the commit
+	// here, before anything is staged.
+	if _, err := c.Generation(); err != nil {
+		return err
+	}
 	if err := c.checkDevices(renames); err != nil {
 		return err
 	}
@@ -383,15 +388,73 @@ func (c *Corpus) complete(stage string, renames []rename) error {
 	if err := c.step("renames", 0); err != nil {
 		return err
 	}
-	// Step 7: the commit record.
-	if err := writeDurable(stage, commitName, []byte("{}\n")); err != nil {
+	// Step 7: the commit record, which holds the generation the commit takes, and then the generation itself.
+	n, err := c.commitGeneration(stage)
+	if err != nil {
+		return err
+	}
+	record, err := json.Marshal(commitRecord{Generation: n})
+	if err != nil {
+		return fmt.Errorf("journal: %w", err)
+	}
+	if err := writeDurable(stage, commitName, append(record, '\n')); err != nil {
 		return err
 	}
 	c.obs.Observe(Event{Kind: Applied, Path: stage})
 	if err := c.step("commit", 0); err != nil {
 		return err
 	}
+	if err := c.publishGeneration(n, renames); err != nil {
+		return err
+	}
+	if err := c.step("generation", 0); err != nil {
+		return err
+	}
 	return c.collect(stage)
+}
+
+// collectCommitted collects a stage that holds its commit record, writing its generation first when the corpus's is
+// before it: the commit was interrupted between its commit record and its generation. A stage whose generation is
+// written needs its renames no more, so one whose collection removed its records is collected as it is.
+func (c *Corpus) collectCommitted(stage string) error {
+	rec, err := readCommit(stage)
+	if err != nil {
+		return err
+	}
+	g, err := c.Generation()
+	if err != nil {
+		return err
+	}
+	if rec.Generation == 0 || rec.Generation > g.N {
+		n := rec.Generation
+		if n == 0 {
+			n = g.N + 1
+		}
+		renames, err := stageRenames(stage)
+		if err != nil {
+			return err
+		}
+		if err := c.publishGeneration(n, renames); err != nil {
+			return err
+		}
+	}
+	return c.collect(stage)
+}
+
+// stageRenames reads the renames of a committed stage from its prepare record, or from the record its collection
+// renamed aside.
+func stageRenames(stage string) ([]rename, error) {
+	for _, name := range []string{prepareName, collectedName} {
+		ok, err := regularExists(filepath.Join(stage, name))
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			rec, err := readRecord(stage, name)
+			return rec.Renames, err
+		}
+	}
+	return nil, fmt.Errorf("journal: the committed stage %s holds no prepare record, so the paths of its generation are not known", stage)
 }
 
 // ensureCopy makes sure the source of rename n holds its post-image, writing it again from the blob when absent.
@@ -556,7 +619,7 @@ func (c *Corpus) Recover(l *Lock) error {
 	}
 	switch {
 	case committed:
-		err = c.collect(stage)
+		err = c.collectCommitted(stage)
 	case prepared:
 		var rec prepareRecord
 		if rec, err = readPrepare(stage); err == nil {
@@ -587,8 +650,12 @@ func regularExists(p string) (bool, error) {
 }
 
 // readPrepare reads and checks a prepare record; one that does not parse is an error, never an absent record.
-func readPrepare(stage string) (prepareRecord, error) {
-	p := filepath.Join(stage, prepareName)
+func readPrepare(stage string) (prepareRecord, error) { return readRecord(stage, prepareName) }
+
+// readRecord reads and checks the prepare record of a stage under name: its own name, or the name its collection gives
+// it.
+func readRecord(stage, name string) (prepareRecord, error) {
+	p := filepath.Join(stage, name)
 	data, _, err := readShared(p)
 	if err != nil {
 		return prepareRecord{}, fmt.Errorf("journal: %w", err)

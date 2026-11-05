@@ -41,7 +41,7 @@ func TestCommitAppliesAndCollects(t *testing.T) {
 	if s := stages(t, c); len(s) != 0 {
 		t.Fatalf("stages left: %v", s)
 	}
-	wantKinds(t, rec, LockAcquired, Prepared, Applied, Collected)
+	wantKinds(t, rec, LockAcquired, Prepared, Applied, Generated, Collected)
 }
 
 // Re-running the same commit is idempotent: the second run finds the post-image and leaves it.
@@ -176,6 +176,7 @@ var crashPoints = []struct {
 	{"rename", 3, true, Replayed},
 	{"renames", 0, true, Replayed},
 	{"commit", 0, true, Replayed},
+	{"generation", 0, true, Replayed},
 	{"collect", 0, true, Replayed},
 }
 
@@ -210,6 +211,8 @@ func TestCrashAtEveryStep(t *testing.T) {
 			if s := stages(t, c2); len(s) != 0 {
 				t.Fatalf("stages left: %v", s)
 			}
+			// The commit record holds the generation, so a commit from it on is generation 1 once, with its paths.
+			wantGeneration(t, c2, map[bool]Generation{false: {Commits: []GenerationCommit{}}, true: fixtureGeneration(1)}[p.new])
 			kinds := rec.kinds()
 			if kinds[len(kinds)-1] != p.event {
 				t.Fatalf("events = %v, want the last %s", kinds, p.event)
@@ -232,7 +235,7 @@ func TestCrashDuringReplay(t *testing.T) {
 	for _, p := range []struct {
 		step  string
 		index int
-	}{{"rename", 0}, {"rename", 2}, {"renames", 0}, {"commit", 0}, {"collect", 0}} {
+	}{{"rename", 0}, {"rename", 2}, {"renames", 0}, {"commit", 0}, {"generation", 0}, {"collect", 0}} {
 		t.Run(fmt.Sprintf("%s#%d", p.step, p.index), func(t *testing.T) {
 			c, l, root, _, _, after := crashed(t, "prepare", 0)
 			c.fault = crashAt(p.step, p.index)
@@ -241,6 +244,7 @@ func TestCrashDuringReplay(t *testing.T) {
 			}
 			c.fault = nil
 			wantRecovered(t, c, l, root, after)
+			wantGeneration(t, c, fixtureGeneration(1))
 		})
 	}
 }

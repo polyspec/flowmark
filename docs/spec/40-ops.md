@@ -509,7 +509,8 @@ the writer of the difference.
    when it finds a target at its pre-hash and `<n>.<hash>` absent it writes the copy again from
    `<hash>`. An empty table folder left by an interruption is an empty table
    ([document model](20-document-model.md#storage)).
-7. Write the commit record.
+7. Write the commit record, which holds the commit's generation, and then the
+   [commit generation](#the-commit-generation) with the paths of the renames.
 8. Collect the stage: the prepare record is renamed aside first, so a stage interrupted while it
    is collected holds the commit record alone and is collected again; collecting removes the
    `<n>.deleted` files.
@@ -520,8 +521,35 @@ recorded states stay in the stage for a recovery refusal. The journal needs no h
 
 Every hash of the journal and of recovery is the SHA-256 of the file's raw bytes, as 64
 lowercase hex digits (raw-file-bytes hashing, [design plan](../plans/flowmark/plan.md)). Each step
-is published: `journal.prepared` after step 5, `journal.applied` after step 7,
-`journal.collected` after step 8, and on opening `journal.replayed` or `journal.discarded`.
+is published: `journal.prepared` after step 5, `journal.applied` after the commit record of step 7,
+`journal.generation` after its generation, `journal.collected` after step 8, and on opening
+`journal.replayed` or `journal.discarded`.
+
+### The commit generation
+
+- `.flowmark/generation` is the declared place of the corpus's commit generation: one JSON object
+  `{"generation": N, "commits": [{"generation": n, "paths": [...]}, ...]}`, where N is the number of
+  the last commit, 0 with no commits for a corpus that no commit has written, and `commits` the last
+  64 commits, oldest first and numbered in order up to N, each with the corpus paths it wrote or
+  deleted, sorted. A file of another form, a folder or a link in its place is refused, naming it.
+- A commit takes the generation after the one written: its commit record holds that number, and the
+  file is then replaced whole, through a partial name and a rename, as every stage file is; so a
+  reader that takes no lock reads one generation or the next, never a part. The commit reads the
+  generation before it stages anything, and one it cannot read refuses the commit there.
+- A recovery that completes a prepared stage writes its commit record and generation as the commit
+  does; one that collects a stage whose commit record holds a generation after the file's writes it
+  first, with the paths of the stage's prepare record, so a crash between the commit record and the
+  generation loses no commit, and a recovery run again writes nothing. A commit record of an earlier
+  engine holds no generation and takes the next one. A stage whose record names a generation after
+  the file's and holds no prepare record is refused, since its paths are not known. A generation file
+  removed or replaced by hand while a commit record names a later generation keeps that commit alone,
+  so a corpus read before it learns no paths and reads the whole tree.
+- A corpus carries the generation it was read at, read under the lock before the tree. Another
+  process learns from the file alone which paths the commits after its read wrote; a read older than
+  the 64 kept commits learns none and reads the whole tree. A hand edit goes through no commit and
+  has no generation; it is learned from the tree's notifications.
+  Grounding: a second handle of a corpus otherwise learns another's commit only through the
+  notifications of every file it wrote, and cannot tell a commit from a hand edit.
 
 Durability across power loss needs each step's files and folder entries on disk before the next
 step begins. A file is synced by the runtime's sync (`fsync`; `F_FULLFSYNC` on macOS;

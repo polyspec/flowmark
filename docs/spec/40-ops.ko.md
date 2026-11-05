@@ -1,5 +1,5 @@
 <!-- doc-id: spec-ops -->
-<!-- source-sha256: 1c904c91dec70add8a9e3bf02dfda730dabd75ee4a809f00ec48cbd90f2631c5 -->
+<!-- source-sha256: 39cc92b44cd386815e7a0655e4baa4f189fc50f1310e4abacda810b8e0973eae -->
 # Operations
 
 [English](40-ops.md)
@@ -439,7 +439,8 @@ client가 구현할 것은 이 driver뿐이다.
    옮긴다. replay도 똑같이 한다: 제자리에 있는 folder는 건너뛰고 stage에 있는 folder는 옮기며, 대상이
    pre-hash에 있고 `<n>.<hash>`가 없으면 `<hash>`에서 사본을 다시 쓴다. 중단으로 남은 빈 table folder는
    빈 table이다([문서 모델](20-document-model.ko.md#저장)).
-7. commit record를 쓴다.
+7. commit의 generation을 가진 commit record를 쓰고, 이어서 rename의 경로와 함께
+   [commit generation](#commit-generation)을 쓴다.
 8. stage를 거둔다: prepare record를 먼저 옆으로 rename하므로, 거두는 도중 중단된 stage는 commit
    record만 가지며 다시 거두어진다. 거두기는 `<n>.deleted` file을 지운다.
 
@@ -448,8 +449,33 @@ client가 구현할 것은 이 driver뿐이다.
 journal은 hard link가 필요 없다.
 
 journal과 복구의 모든 hash는 file의 raw byte의 SHA-256이며 소문자 hex 64자리다(raw-file-bytes hashing,
-[design plan](../plans/flowmark/plan.ko.md)). 각 단계는 publish된다: 5단계 뒤 `journal.prepared`, 7단계 뒤
-`journal.applied`, 8단계 뒤 `journal.collected`, 열 때 `journal.replayed`나 `journal.discarded`다.
+[design plan](../plans/flowmark/plan.ko.md)). 각 단계는 publish된다: 5단계 뒤 `journal.prepared`, 7단계의 commit
+record 뒤 `journal.applied`, 그 generation 뒤 `journal.generation`, 8단계 뒤 `journal.collected`, 열 때
+`journal.replayed`나 `journal.discarded`다.
+
+### Commit generation
+
+- `.flowmark/generation`은 corpus의 commit generation의 선언된 장소다: JSON object 하나
+  `{"generation": N, "commits": [{"generation": n, "paths": [...]}, ...]}`이며, N은 마지막 commit의 번호이고
+  어떤 commit도 쓰지 않은 corpus에서는 commit 없이 0이다. `commits`는 마지막 64개 commit을 오래된 것부터
+  N까지 차례로 번호 매겨 가지며, 각각 그 commit이 쓰거나 지운 corpus 경로를 정렬해 가진다. 다른 형태의
+  file, 그 장소의 folder나 link는 그것을 밝혀 거절한다.
+- commit은 쓰인 generation의 다음 번호를 받는다: commit record가 그 번호를 가지며, 이어서 file은 모든
+  stage file처럼 부분 이름과 rename으로 통째로 바뀐다. 그래서 lock을 잡지 않는 reader도 한 generation이나
+  그다음을 읽으며 일부를 읽지 않는다. commit은 무엇이든 stage하기 전에 generation을 읽으며, 읽을 수 없는
+  generation은 거기서 commit을 거절한다.
+- prepare된 stage를 완료하는 복구는 commit처럼 commit record와 generation을 쓴다. commit record가 file보다
+  뒤의 generation을 가진 stage를 거두는 복구는 stage의 prepare record의 경로로 먼저 그것을 쓴다. 그래서
+  commit record와 generation 사이의 crash도 commit을 잃지 않고, 다시 실행한 복구는 아무것도 쓰지 않는다.
+  이전 engine의 commit record는 generation이 없으며 다음 번호를 받는다. record가 file보다 뒤의 generation을
+  밝히고 prepare record가 없는 stage는 그 경로를 알 수 없으므로 거절한다. commit record가 더 뒤의 generation을
+  밝히는 동안 손으로 지우거나 바꾼 generation file은 그 commit만 가지므로, 그 전에 읽은 corpus는 경로를
+  얻지 못하고 tree 전체를 다시 읽는다.
+- corpus는 자신을 읽은 generation을 가지며, 이는 lock 아래에서 tree보다 먼저 읽는다. 다른 process는 file만으로
+  자신의 read 뒤의 commit들이 쓴 경로를 안다. 보관한 64개 commit보다 오래된 read는 경로를 얻지 못하고 tree
+  전체를 다시 읽는다. 손 편집은 commit을 거치지 않아 generation이 없으며 tree의 알림으로 알게 된다.
+  근거: 그렇지 않으면 corpus의 두 번째 handle은 다른 handle의 commit을 그것이 쓴 모든 file의 알림으로만 알게
+  되며, commit과 손 편집을 구별하지 못한다.
 
 전원 손실을 넘는 내구성은 각 단계의 file과 folder 항목이 다음 단계가 시작하기 전에 disk에 있기를
 요구한다. file은 runtime의 sync(`fsync`, macOS에서는 `F_FULLFSYNC`, Windows에서는 `FlushFileBuffers`)로
