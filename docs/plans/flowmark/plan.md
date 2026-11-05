@@ -132,6 +132,96 @@ flowmark = the markdown database engine (one Go binary)
 
 **Ruling: orm reaches a corpus by SQL.** An orm markdown connection is a SQLite connection whose statements the server answers ([SQL statements](../../spec/40-ops.md#sql-statements)), so a recipe of orm runs on flowmark as on any database and a runtime ports one driver. This replaces the earlier ruling that a request carries no SQL text: that ruling asked every runtime to port a second executor client and left most recipes out. The IR stays for the engine's own faces and as the writer of a statement's difference. Performance is not a database's, and a database's behaviour is required.
 
+**Ruling: an operation costs what it touches.** A statement, and every operation of the engine's faces, costs the files it
+changes and the rows it touches, not the size of the corpus; reads run beside a writer as on SQLite in WAL mode. The code
+of T31 contradicts this in every layer an operation passes through, and none of it was measured:
+
+- the corpus read under the lock (`writepath.Corpus.read`) runs `validate.Read`, two passes over every file, the
+  availability rules over every row, and `irexec.Open` with `index` over every row, at `Begin` and again at the commit;
+- every write request deep-copies every row (`irexec.Corpus.clone`), and the commit compares every file
+  (`Corpus.Differs`);
+- a SQL write reads every row of every table before and after it (`execute`, `allRows`, `diff`), `placeBack` reads the
+  whole order table, `allocate` every key of the prefix, and a changed corpus is copied into a new database whole;
+- a read writes a lock record, a read whose rows go on holds the corpus lock until it is closed, and a second read waits
+  for the first one's cursor; the database is `:memory:` behind `database/sql`, which may replace its connection with an
+  empty database.
+
+Each layer is a row, in this order, and each row's Red is a count of the cost counters of T36:
+
+1. **Cost counters (T36).** The engine counts the files it reads, parses and compares, the rows it indexes and copies, and
+   the rows a statement reads and writes in its database. A test runs a point read, and a point insert, update and delete
+   on an order table and on a `key_prefix` table with sibling groups of a fixed size, and an external edit of one file,
+   waited for by its notification, at 1,000 and at 100,000 rows; each count is equal at both sizes, and
+   `testing.AllocsPerRun` differs by no more than a stated constant. These tests are the Red of the rows below and turn
+   green row by row; benchmarks report the times and gate nothing.
+2. **The commit generation (T37).** The journal publishes a generation in its declared place: a counter, and the paths of
+   each commit for a stated number of generations back. A commit increments it at its commit record, after its renames and
+   before its stage is collected, with that record's fsync, and so does a recovery that completes a commit. A corpus carries the generation it was
+   read at. An external edit goes through no commit and has no generation; it is learned from the tree's notifications.
+3. **An incremental corpus read (T38).** A read takes the paths the tree's notifications name since the last read and the
+   paths of the commits since its generation, which it forgets in the tree first; a generation older than the stated
+   number, and an overflow, read the tree again. `validate` and `irexec.Open` read those files and keep the cross-file
+   rules (duplicate keys, parent cycles, availability, positions, and references: a foreign key that names a key of another
+   file) in indexes they update for those files; a changed key reads again the files that reference it, which a reverse
+   index of references names. The corpus read incrementally equals the corpus read from nothing, table-driven and fuzzed.
+4. **A copy-on-write post-image (T39).** A write copies the files it changes and shares the others. The commit reads its
+   targets from disk, whatever the notifications said, and compares them and the paths the notifications name; `Differs`
+   stays for the conflict check of those paths alone.
+5. **Keyed row access (T40).** A stored row of a table is read by its key without reading the table; `placeBack` places
+   the sibling group a write moved; `allocate` takes the largest key of a prefix from an index that the corpus keeps.
+6. **The difference of a statement is published (T41).** The database's writer connection is one `*sql.Conn` held for its life,
+   on which SQLite's preupdate hook records which rows a statement, its triggers and its foreign key actions touched: table,
+   operation, old and new rowid, and the old and new key. A key the hook reports is read with its length
+   (`sqlite3_value_bytes`, through polyspec's fork of the driver, whose text reading stops at a NUL); a key whose text is not
+   whole, or that breaks the rule of keys (spec 20 Keys, `store.keyFault`), fails the statement before any write is
+   formed. The driver and its fork are Go, and the build needs no cgo. The temp schema is ignored, and the hook records nothing during a fill, a refresh or
+   `placeBack`. The rows are coalesced by their final key, in the order the hook reports them, which is the order the rows
+   a statement inserts are placed in; the old row is the corpus's stored row of its key (T40) and the new row is read by key
+   with the projection of `rowsOf`; a key that changed is a delete and an insert. Each statement runs under a savepoint of
+   the writer transaction, and a failure the callback records rolls back to that savepoint when the statement returns and
+   fails it. The writes formed from the hook equal the writes `diff` forms, which stays as the oracle of a differential
+   test, table-driven and fuzzed, over triggers, CASCADE, REPLACE, UPSERT, WITHOUT ROWID, rowid tables, key changes and
+   statements that fail midway.
+7. **A refresh of the changed rows (T42).** A database whose corpus differs takes the rows of the paths of the commits since
+   its generation and of the paths the notifications named since its last refresh, and, when a table's availability
+   changed, that whole table; a new catalog builds a new database. The refresh runs outside a transaction with foreign
+   keys off, the standing triggers dropped and checks ignored, as the fill does. A row keyed by rowid keeps its stored rowid;
+   the rowid of another row is the database's own, so a `SELECT` without `ORDER BY` has no stated order, as in SQLite. An
+   AUTOINCREMENT counter is part of the corpus: after a write the statement reads `sqlite_sequence`, which the hook does not
+   report, one row for each AUTOINCREMENT table, and the counters that rose go into the commit, to `dbspec/sequences.json`;
+   a fill and a refresh take the larger of the stored counter and the largest key in the corpus, so no key is given twice,
+   a key written by hand included, as SQLite's AUTOINCREMENT gives none. The refreshed
+   database equals the database filled from the same corpus from nothing, table for table, by key, `sqlite_sequence`
+   included.
+8. **Reads without the lock (T43).** A read runs its statement on a reader connection and holds no corpus lock while it
+   runs; a cursor holds a reader connection and no lock. The database is brought to the corpus before the read: when the
+   lock is free, the read takes it for the refresh alone, so a lock record is written once for each change and not for each
+   read; when a live holder has the lock, the read refreshes without it, consistent when the generation is equal before and
+   after and no prepare record is present at either check, and otherwise answers from the database's generation, which
+   the spec states, and reads again on the generation's notification, never on a timer; a prepared stage of a holder that
+   has ended is recovered by the read, which takes the lock to do it, as a SQLite reader rolls back a hot journal, and the
+   spec states this one write of a read. A database behind the generation a read found is refreshed once, by the read that
+   finds it first, when the writer connection is free; a local transaction holding the writer connection means no other
+   process can commit, so a read then answers from the database's generation, as stated. The database is a file private to
+   the process at `.flowmark/sql/<process>.db`, named by host, pid and start time, with its `-wal` and `-shm`, in WAL mode
+   with SQLite's automatic checkpoint (`wal_autocheckpoint` stated), one writer connection and a pool of reader connections
+   of a stated size, a read that finds the pool full waiting on a release. The engine creates `.flowmark/sql` and checks it
+   and the database's path with lstat; the database opens with `SQLITE_OPEN_NOFOLLOW`, set through polyspec's fork of the
+   driver if its DSN lacks it; on Windows a reparse point at those paths is refused before open. The recovery at open
+   removes the files of processes of this host that have ended, as it removes their pending lock records; the files of
+   another host's process are never removed, as stated. The writer connection holds a `BEGIN IMMEDIATE` transaction from a
+   statement to the corpus commit, commits after the corpus commit is written and rolls back on every refusal; a SQLite
+   commit that fails after a written corpus commit marks the database to be built again. A deferred transaction holds a
+   reader connection from its first read and upgrades by comparing generations. A corpus the process may only read keeps
+   its database in memory and its reads run one at a time, stated as such.
+9. **The limits are stated (T44).** docs/spec/40-ops.md states the costs that T36 counts and the times the benchmarks
+   measure at 1,000, 10,000 and 100,000 rows, as the limits of the path.
+
+The unit tests of each row are dense: every rule a row adds has accepting and refusing cases, table-driven with its edge
+cases, and each equality with the corpus or the database built from nothing is a fuzzed test whose seeds are the golden
+fixtures. A row is done when its Red count of T36 is green, its tests pass, the lint and the gates of kit pass, and the spec
+says what it changed.
+
 **T9 conformance contract (stated now)**: markdown vectors are corpus-before + IR request + expected corpus-after / expected rows, run against the Go executor; SQL/binds comparison does not apply (there is no SQL). Cross-client comparison begins when other clients port the executor. (Revision 3: vectors run against the flowmark engine; orm's executor conformance pins a flowmark build.)
 
 **Later phases (registered as `[ ]` checklist items only)**: T2 codec (Go), T3 validator, T4 executor, T5 orm markdown-executor integration (manifest settings, state-machine sub-grammar — orm-repo changes), T6 sync (the adapter contract and the database adapter; GitHub and Jira adapters register under it), T7 the three faces — CLI, MCP server and soksak sidecar (protocol v1: JSON lines over stdio, surface routing, host-owned lifecycle; the MCP tool list gets its mini-spec first, and the lock is held per operation or per server transaction (§5)), T8 checklist app (the local issue model), T9 conformance vectors, T10 the soksak plugin in its own repository — the local kanban board and issue tracker as one more thin consumer, with no view-specific write path.

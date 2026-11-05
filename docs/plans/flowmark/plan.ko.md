@@ -1,5 +1,5 @@
 <!-- doc-id: plans-design-plan -->
-<!-- source-sha256: 2c7ada9f0db4013181028f7e0ee881f6abe058a27de9f316c5e0b9346ededf5d -->
+<!-- source-sha256: 77482f09e9f922a771fde20938773273166a62c2e9e17cd7debfb98e624264df -->
 # flowmark 설계 계획
 
 Revision 2 — 3개 lane의 적대 감사 결과(engine core, orm 통합, 운영)와 multi-platform 지시를 아래 판정에 접는다. 감사의 blocker는 전부 판정이 되었고, 부수지 못한 주장은 문서 끝에 남긴다.
@@ -132,6 +132,80 @@ flowmark = the markdown database engine (one Go binary)
 **T1b — spec 문서** (다음 session; EN/KO 쌍, 문서당 commit 1개, twin stamp): `00-overview`, `10-canonical-format`(§2), `20-document-model`(§3), `30-schema`(§4), `40-ops`(§5), `50-constraints`(§6), 그리고 skeleton `60-dialect`(capability table을 전체 내용으로), `70-sync`, `80-migration`, `90-conformance`, 전체 내용 `100-checklist`, `110-open-questions`. 문서별 완료 기준: 모든 판정이 근거를 동반한 명제로 나타난다 (prose 분량이 아니라 결정 수).
 
 **판정: orm은 SQL로 corpus에 닿는다.** orm의 markdown 연결은 server가 문장에 답하는 SQLite 연결이므로([SQL statements](../../spec/40-ops.md#sql-statements)) orm의 recipe는 다른 database처럼 flowmark에서 실행되고 runtime은 driver 하나만 이식한다. 이 판정은 요청에 SQL text가 없다는 이전 판정을 대체한다. 이전 판정은 runtime마다 두 번째 executor client를 이식하게 했고 대부분의 recipe를 빠뜨렸다. IR은 엔진 자신의 face와 문장의 차이를 쓰는 writer로 남는다. 성능은 database 수준이 아니어도 되지만 동작은 database 수준이어야 한다.
+
+**판정: 연산은 건드린 만큼 비용이 든다.** 문장과 엔진 face의 모든 연산은 corpus 크기가 아니라 자신이 바꾸는 파일과 건드리는 행만큼
+비용이 들고, 읽기는 WAL mode의 SQLite처럼 writer 옆에서 실행된다. T31의 코드는 연산이 지나는 모든 계층에서 이것에 어긋나고, 어느
+것도 측정된 적이 없다:
+
+- lock 아래의 corpus 읽기(`writepath.Corpus.read`)는 `Begin`에서, 그리고 commit에서 다시 `validate.Read`(모든 파일에 대한 두 번의
+  pass와 모든 행에 대한 availability 규칙)와 `irexec.Open`, `index`(모든 행)를 실행한다;
+- 모든 쓰기 요청은 모든 행을 깊이 복사하고(`irexec.Corpus.clone`), commit은 모든 파일을 비교한다(`Corpus.Differs`);
+- SQL 쓰기는 문장 전후에 모든 표의 모든 행을 읽고(`execute`, `allRows`, `diff`), `placeBack`은 순서 있는 표 전체를,
+  `allocate`는 prefix의 모든 key를 읽으며, 바뀐 corpus는 새 database에 통째로 복사된다;
+- 읽기는 lock 기록을 쓰고, 행이 이어지는 읽기는 닫힐 때까지 corpus lock을 쥐며, 두 번째 읽기는 첫 읽기의 cursor를 기다린다.
+  database는 `database/sql` 뒤의 `:memory:`이고, `database/sql`은 그 연결을 빈 database로 바꿀 수 있다.
+
+각 계층은 이 순서의 행이며, 각 행의 Red는 T36 비용 counter의 수치다:
+
+1. **비용 counter(T36).** 엔진은 자신이 읽고 parsing하고 비교하는 파일, index하고 복사하는 행, 문장이 database에서 읽고 쓰는 행을
+   센다. 시험은 한 행 읽기, 크기가 고정된 형제 묶음을 가진 순서 있는 표와 `key_prefix` 표에서의 한 행 insert, update, delete, 그리고
+   알림으로 기다리는 파일 하나의 외부 편집을 1,000행과 100,000행에서 실행한다. 각 수치는 두 크기에서 같고, `testing.AllocsPerRun`은
+   명시된 상수 이상 다르지 않다. 이 시험들은 아래 행들의 Red이며 행마다 green이 된다. benchmark는 시간을 보고하고 아무것도 막지
+   않는다.
+2. **commit 세대(T37).** journal은 선언된 위치에 세대를 알린다: counter와, 명시된 수만큼의 이전 세대까지 각 commit의 경로다.
+   commit은 자신의 commit record에서, rename 뒤 stage를 수거하기 전에, 그 record의 fsync와 함께 세대를 올리고, commit을 마치는
+   recovery도 그렇게 한다. corpus는 자신을 읽은 세대를 지닌다. 외부 편집은 commit을 거치지 않으므로 세대가 없고, tree의 알림으로
+   알려진다.
+3. **증분 corpus 읽기(T38).** 읽기는 지난 읽기 이후 tree의 알림이 이름 댄 경로와, 자신의 세대 이후 commit들의 경로를 받으며, 후자는
+   먼저 tree에서 잊는다. 명시된 수보다 오래된 세대와 overflow는 tree를 다시 읽는다. `validate`와 `irexec.Open`은 그 파일을 읽고,
+   파일을 넘는 규칙(중복 key, 부모 순환, availability, 위치, 그리고 참조: 다른 파일의 key를 이름 대는 foreign key)을 그 파일에 대해
+   갱신하는 index로 유지한다. 바뀐 key는 그것을 참조하는 파일을 다시 읽으며, 참조의 역 index가 그 파일을 이름 댄다. 증분으로 읽은
+   corpus는 처음부터 읽은 corpus와 같고, 이는 표 형식이며 fuzz된다.
+4. **copy-on-write post-image(T39).** 쓰기는 자신이 바꾸는 파일만 복사하고 나머지는 공유한다. commit은 알림이 무엇을 말했든 자신의
+   target을 disk에서 읽고, 그것과 알림이 이름 댄 경로를 비교한다. `Differs`는 그 경로만의 conflict 검사에 남는다.
+5. **key로 행 접근(T40).** 표의 저장된 행은 표를 읽지 않고 key로 읽는다. `placeBack`은 쓰기가 옮긴 형제 묶음을 배치하고,
+   `allocate`는 corpus가 유지하는 index에서 prefix의 가장 큰 key를 가져온다.
+6. **문장의 차이는 알려진다(T41).** database의 writer 연결은 수명 동안 쥐는 `*sql.Conn` 하나이고, 그 위에서 SQLite의 preupdate
+   hook은 문장, 그 trigger, foreign key action이 건드린 행을 기록한다: 표, 연산, 예전과 새 rowid, 그리고 예전과 새 key. hook이 알리는
+   key는 그 길이로 읽는다(`sqlite3_value_bytes`, NUL에서 text 읽기를 멈추는 driver의 polyspec fork를 통해). text가 온전하지 않거나
+   key 규칙(spec 20 Keys, `store.keyFault`)을 어기는 key는 쓰기를 만들기 전에 문장을 실패시킨다. driver와 그 fork는 Go이고, 빌드에 cgo는 필요 없다. temp schema는 무시하고, hook은
+   fill, refresh, `placeBack` 동안 아무것도 기록하지 않는다. 행은 hook이 알린 순서로 최종 key에 따라 합쳐지며, 그 순서가 문장이
+   insert한 행을 배치하는 순서다. 예전 행은 그 key의 corpus 저장 행이고(T40), 새 행은 `rowsOf`의 projection으로 key에 따라 읽는다.
+   바뀐 key는 delete 하나와 insert 하나다. 각 문장은 writer transaction의 savepoint 아래에서 실행되고, callback이 기록한 실패는
+   문장이 돌아올 때 그 savepoint로 되돌리고 문장을 실패시킨다. hook으로 만든 쓰기는 `diff`가 만드는 쓰기와 같으며, `diff`는
+   trigger, CASCADE, REPLACE, UPSERT, WITHOUT ROWID, rowid 표, key 변경, 중간에 실패하는 문장에 대한 표 형식이고 fuzz된 차등 시험의
+   oracle로 남는다.
+7. **바뀐 행의 refresh(T42).** corpus가 다른 database는 자신의 세대 이후 commit들의 경로와 지난 refresh 이후 알림이 이름 댄 경로의
+   행을 받고, 표의 availability가 바뀌었으면 그 표 전체를 받는다. 새 catalog는 새 database를 만든다. refresh는 fill처럼 transaction
+   밖에서 foreign key를 끄고, 서 있는 trigger를 내리고, check를 무시한 채 실행된다. rowid로 key를 삼는 행은 저장된 rowid를 유지한다.
+   다른 행의 rowid는 database 자신의 것이므로 `ORDER BY` 없는 `SELECT`에는 SQLite처럼 명시된 순서가 없다. AUTOINCREMENT counter는
+   corpus의 일부다: 쓰기 뒤에 문장은 hook이 알리지 않는 `sqlite_sequence`를 AUTOINCREMENT 표마다 한 행씩 읽고, 오른 counter는
+   commit에 들어가 `dbspec/sequences.json`에 쓰인다. fill과 refresh는 저장된 counter와 corpus의 가장 큰 key 중 큰 것을 가져오므로,
+   손으로 쓴 key를 포함해 어떤 key도 두 번 주지 않으며, 이는 SQLite의 AUTOINCREMENT가 주지 않는 것과 같다. refresh한 database는 같은
+   corpus로 처음부터 채운 database와 표마다, key에 따라, `sqlite_sequence`까지 같다.
+8. **lock 없는 읽기(T43).** 읽기는 reader 연결에서 문장을 실행하고 실행하는 동안 corpus lock을 쥐지 않는다. cursor는 reader 연결을
+   쥐고 lock은 쥐지 않는다. database는 읽기 전에 corpus에 맞춰진다: lock이 비어 있으면 읽기는 refresh에만 lock을 잡으므로 lock 기록은
+   읽기마다가 아니라 변경마다 한 번 쓰인다. 살아 있는 holder가 lock을 쥐고 있으면 읽기는 lock 없이 refresh하며, 세대가 앞뒤로 같고
+   어느 검사에도 prepare record가 없으면 일관되고, 그렇지 않으면 database의 세대로 답하고(spec이 이를 명시한다) 세대의 알림에 다시
+   읽으며 timer로는 절대 읽지 않는다. 끝난 holder의 prepare된 stage는 읽기가 lock을 잡아 recover하며, 이는 SQLite reader가 hot
+   journal을 되돌리는 것과 같고, spec은 읽기의 이 쓰기 하나를 명시한다. 읽기가 찾은 세대보다 뒤처진 database는 writer 연결이 비어
+   있을 때 그것을 처음 찾은 읽기가 한 번 refresh한다. 지역 transaction이 writer 연결을 쥐고 있으면 다른 process는 commit할 수 없으므로
+   읽기는 명시된 대로 database의 세대로 답한다. database는 `.flowmark/sql/<process>.db`에 있는 process 전용 파일이고, host, pid,
+   시작 시각으로 이름이 붙으며, `-wal`과 `-shm`을 가지고, SQLite의 자동 checkpoint(`wal_autocheckpoint` 명시)와 함께 WAL mode이며,
+   writer 연결 하나와 명시된 크기의 reader 연결 pool을 가진다. pool이 찬 것을 본 읽기는 반환을 기다린다. 엔진은 `.flowmark/sql`을
+   만들고 그것과 database 경로를 lstat으로 검사한다. database는 `SQLITE_OPEN_NOFOLLOW`로 열리고, driver의 DSN에 그것이 없으면
+   polyspec의 driver fork로 설정한다. Windows에서는 그 경로의 reparse point를 열기 전에 거부한다. 시작할 때의 recovery는 끝난 holder의
+   pending lock 기록을 지우듯이 이 host에서 끝난 process의 파일을 지운다. 다른 host의 process 파일은 명시된 대로 절대 지우지 않는다.
+   writer 연결은 문장부터 corpus commit까지 `BEGIN IMMEDIATE` transaction을 쥐고, corpus commit이 쓰인 뒤 commit하며, 모든 거부에서
+   되돌린다. corpus commit이 쓰인 뒤 실패한 SQLite commit은 database를 다시 만들도록 표시한다. 지연 transaction은 첫 읽기부터 reader
+   연결을 쥐고 세대를 비교해 upgrade한다. process가 읽기만 할 수 있는 corpus는 database를 memory에 두고 읽기를 하나씩 실행하며, 이를
+   명시한다.
+9. **한계는 명시된다(T44).** docs/spec/40-ops.md는 T36이 세는 비용과 benchmark가 1,000, 10,000, 100,000행에서 측정한 시간을 이
+   경로의 한계로 명시한다.
+
+각 행의 단위 시험은 촘촘하다: 행이 더하는 모든 규칙은 받아들이는 case와 거부하는 case를 표 형식으로 경계 case와 함께 가지며,
+처음부터 만든 corpus나 database와의 각 동등성은 golden fixture를 seed로 하는 fuzz 시험이다. 행은 T36의 Red 수치가 green이 되고, 그
+시험이 통과하고, kit의 lint와 gate가 통과하고, spec이 바뀐 것을 말할 때 끝난다.
 
 **T9 conformance 계약 (지금 확정)**: markdown vector는 corpus-before + IR request + 기대 corpus-after / 기대 rows이며 Go executor에 대해 실행한다. SQL/binds 비교는 적용되지 않는다(SQL이 없으므로). 다른 client가 executor를 port할 때 교차 비교가 시작된다. (Revision 3: vector는 flowmark 엔진에 대해 실행하고, orm의 executor conformance는 flowmark build를 고정한다.)
 
