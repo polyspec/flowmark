@@ -254,8 +254,8 @@ client가 구현할 것은 이 driver뿐이다.
 - **행.** 답 하나는 최대 1000행 또는 1 MiB를 담는다. `more`가 true이면 `{"op": "fetch"}`가 다음 묶음을 답하고
   `{"op": "close"}`가 끝낸다. 닫힌 연결은 자기 문장을 중단하므로 결과는 client가 읽는 만큼의 메모리만 쓴다.
 - **값.** 행의 값은 JSON number, string, null이다. `{"bytes": base64}`는 blob, `{"text": base64}`는 UTF-8이 아닌 text,
-  `{"float": "+Inf"}`와 `{"float": "-Inf"}`는 JSON이 담지 못하는 무한대다. 실패에 SQLite result code가 있으면 `result_code`에
-  담는다.
+  `{"float": "+Inf"}`와 `{"float": "-Inf"}`는 JSON이 담지 못하는 무한대다. 매개변수도 같은 형식을 받으므로 행에서 읽은 값은
+  그대로 다시 bind되며, 그 밖의 object와 array는 `DRIVER`다. 실패에 SQLite result code가 있으면 `result_code`에 담는다.
 
 `flowmark serve --synchronous off`는 disk를 기다리지 않고 commit한다. 시험 database처럼 버려도 되는 corpus용이고, 기본값
 `on`은 기다린다. 근거: `F_FULLFSYNC`는 수십 밀리초가 걸리고 시험은 수천 행을 넣는다.

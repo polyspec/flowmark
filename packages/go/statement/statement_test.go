@@ -376,6 +376,44 @@ func TestStoredLiterals(t *testing.T) {
 	}
 }
 
+// TestParameterForms holds the bound values that a statement takes: each value form that an answer writes binds the
+// value it stands for, so a value read from a row binds back unchanged, and every other object is refused.
+func TestParameterForms(t *testing.T) {
+	s, _ := open(t)
+	run(t, s, "CREATE TABLE vals (id INTEGER PRIMARY KEY, v)")
+	accepted := []struct{ name, param, want string }{
+		{"an integer", `7`, `[[7,"integer"]]`},
+		{"a fraction", `1.5`, `[[1.5,"real"]]`},
+		{"a text", `"abc"`, `[["abc","text"]]`},
+		{"a null", `null`, `[[null,"null"]]`},
+		{"a blob", `{"bytes":"YWI="}`, `[[{"bytes":"YWI="},"blob"]]`},
+		{"a text that is not UTF-8", `{"text":"/w=="}`, `[[{"text":"/w=="},"text"]]`},
+		{"an infinity", `{"float":"+Inf"}`, `[[{"float":"+Inf"},"real"]]`},
+		{"a negative infinity", `{"float":"-Inf"}`, `[[{"float":"-Inf"},"real"]]`},
+	}
+	for i, v := range accepted {
+		run(t, s, fmt.Sprintf("INSERT INTO vals (id, v) VALUES (%d, ?)", i+1), v.param)
+		a := run(t, s, "SELECT v, typeof(v) FROM vals WHERE id = ?", fmt.Sprint(i+1))
+		if got := cells(a); got != v.want {
+			t.Errorf("%s: read %s, want %s", v.name, got, v.want)
+		}
+	}
+	refusedForms := []struct{ name, param string }{
+		{"an object of no form", `{"x":"1"}`},
+		{"a blob that is not base64", `{"bytes":"!"}`},
+		{"a text that is not base64", `{"text":"!"}`},
+		{"a float that is not an infinity", `{"float":"1"}`},
+		{"two forms in one object", `{"bytes":"YQ==","text":"YQ=="}`},
+		{"an array", `[1]`},
+	}
+	for _, v := range refusedForms {
+		_, err := statement.Run(context.Background(), s, "SELECT ?", []json.RawMessage{json.RawMessage(v.param)})
+		if err == nil || !strings.Contains(err.Error(), "parameter 0") {
+			t.Errorf("%s: %v, want a refusal of parameter 0", v.name, err)
+		}
+	}
+}
+
 // TestLiveTables pins what a table takes from its statement: a key that holds no NULL, the type it declares, and rows of
 // any key text.
 func TestLiveTables(t *testing.T) {

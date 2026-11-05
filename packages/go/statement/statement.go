@@ -854,7 +854,9 @@ func control(ctx context.Context, s *writepath.Session, text string) (bool, erro
 	return false, nil
 }
 
-// arguments reads the bound values of a statement: a JSON number, string, boolean or null, or {"bytes": base64}.
+// arguments reads the bound values of a statement: a JSON number, string, boolean or null, or one of the forms that an
+// answer writes for a value that JSON cannot hold (answerValue): {"bytes": base64} for a blob, {"text": base64} for a text
+// that is not UTF-8 and {"float": "+Inf"} or {"float": "-Inf"} for an infinity.
 func arguments(params []json.RawMessage) ([]any, error) {
 	out := make([]any, len(params))
 	for i, raw := range params {
@@ -874,20 +876,51 @@ func arguments(params []json.RawMessage) ([]any, error) {
 				return nil, &Error{codeDriver, fmt.Sprintf("parameter %d: %s is no number", i, t)}
 			}
 		case map[string]any:
-			text, ok := t["bytes"].(string)
-			if !ok || len(t) != 1 {
-				return nil, &Error{codeDriver, fmt.Sprintf("parameter %d: an object is {\"bytes\": base64}", i)}
-			}
-			b, err := base64.StdEncoding.DecodeString(text)
+			value, err := argumentForm(t)
 			if err != nil {
 				return nil, &Error{codeDriver, fmt.Sprintf("parameter %d: %v", i, err)}
 			}
-			out[i] = b
+			out[i] = value
+		case []any:
+			return nil, &Error{codeDriver, fmt.Sprintf("parameter %d: an array is no value", i)}
 		default:
 			out[i] = v
 		}
 	}
 	return out, nil
+}
+
+// argumentForm is the value of an object parameter, one form with one member.
+func argumentForm(t map[string]any) (any, error) {
+	const forms = `an object is {"bytes": base64}, {"text": base64} or {"float": "+Inf" | "-Inf"}`
+	if len(t) != 1 {
+		return nil, errors.New(forms)
+	}
+	for name, member := range t {
+		text, ok := member.(string)
+		if !ok {
+			return nil, errors.New(forms)
+		}
+		switch name {
+		case "bytes", "text":
+			b, err := base64.StdEncoding.DecodeString(text)
+			if err != nil {
+				return nil, err
+			}
+			if name == "text" {
+				return string(b), nil
+			}
+			return b, nil
+		case "float":
+			switch text {
+			case "+Inf":
+				return math.Inf(1), nil
+			case "-Inf":
+				return math.Inf(-1), nil
+			}
+		}
+	}
+	return nil, errors.New(forms)
 }
 
 // materialize returns an in-memory SQLite database that holds the schema and the rows of the corpus.

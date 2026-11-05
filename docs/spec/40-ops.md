@@ -297,7 +297,8 @@ utility of orm's SQLite dialect holds on a corpus, and a client has only this dr
   `{"op": "close"}` ends them. A closed connection interrupts its statement, so a result takes the memory of what its client
   reads.
 - **Values.** A value of a row is a JSON number, string or null. `{"bytes": base64}` is a blob, `{"text": base64}` a text that
-  is not UTF-8, and `{"float": "+Inf"}` or `{"float": "-Inf"}` an infinity, which JSON cannot hold. A failure carries
+  is not UTF-8, and `{"float": "+Inf"}` or `{"float": "-Inf"}` an infinity, which JSON cannot hold. A parameter takes the same
+  forms, so a value read from a row binds back unchanged; any other object, and an array, is `DRIVER`. A failure carries
   `result_code`, SQLite's result code, when it has one.
 
 `flowmark serve --synchronous off` commits without waiting for the disk, for a corpus that is disposable, as a test
