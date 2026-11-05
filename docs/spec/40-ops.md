@@ -276,6 +276,12 @@ utility of orm's SQLite dialect holds on a corpus, and a client has only this dr
   EXISTS` that find what they state change nothing and take no lock.
 - **Tables.** A table takes its columns, its declared types and its key from its statement. A primary key that SQLite lets
   hold NULL names no row, so such a table keys by its rowid, as does a table with no primary key.
+- **Assigned columns.** A `key_prefix` key and an `order` position are the corpus's to assign, so the schema of the
+  statements lets each hold NULL, as SQLite's `INTEGER PRIMARY KEY` does. An insert that leaves one out, or gives it NULL,
+  is given the next key of the prefix ([document model](20-document-model.md#keys)) or the next position under its parent,
+  in the order its rows were inserted, and a `RETURNING` of the key reads the key the row was given. An `ON CONFLICT` meets
+  a key byte for byte, as SQLite's does, and a key equal to another only without regard to case is `DUPLICATE_KEY`: the
+  rule of keys judges every write.
 - **Transactions.** `BEGIN IMMEDIATE` and `BEGIN EXCLUSIVE` take the lock at once. A plain `BEGIN` takes no lock: its first
   read fixes the corpus it reads, and its first write takes the lock. A wait that ends is `CANCELED` ending in
   `(SQLITE_BUSY)`, and a write after a commit newer than its first read is `CANCELED` ending in `(SQLITE_BUSY_SNAPSHOT)`;

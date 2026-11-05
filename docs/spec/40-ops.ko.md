@@ -237,6 +237,10 @@ client가 구현할 것은 이 driver뿐이다.
   그대로다. 이미 그 상태인 `CREATE ... IF NOT EXISTS`와 `DROP ... IF EXISTS`는 아무것도 바꾸지 않고 lock을 잡지 않는다.
 - **표.** 표는 column, 선언 타입, key를 자기 문장에서 받는다. SQLite가 NULL을 허용하는 primary key는 행을 가리키지
   못하므로 그런 표는 primary key가 없는 표처럼 rowid를 key로 쓴다.
+- **할당 column.** `key_prefix` key와 `order` 위치는 corpus가 할당하므로, 문장의 schema는 SQLite의 `INTEGER PRIMARY KEY`처럼
+  둘 다 NULL을 허용한다. 하나를 빠뜨리거나 NULL을 준 insert는 prefix의 다음 key([document model](20-document-model.ko.md#key))나
+  parent 아래 다음 위치를 행이 insert된 순서대로 받고, key의 `RETURNING`은 행이 받은 key를 읽는다. `ON CONFLICT`는 SQLite처럼
+  key를 byte 단위로 만나며, 대소문자만 다른 key는 `DUPLICATE_KEY`다: key 규칙이 모든 쓰기를 판정한다.
 - **Transaction.** `BEGIN IMMEDIATE`와 `BEGIN EXCLUSIVE`는 곧바로 lock을 잡는다. 일반 `BEGIN`은 lock을 잡지 않는다: 첫
   읽기가 읽을 corpus를 정하고, 첫 쓰기가 lock을 잡는다. 대기가 끝나면 `(SQLITE_BUSY)`로 끝나는 `CANCELED`이고, 첫 읽기보다
   새로운 commit 뒤의 쓰기는 `(SQLITE_BUSY_SNAPSHOT)`으로 끝나는 `CANCELED`이며, 둘 다 `ROLLBACK`을 위해 transaction을 열어

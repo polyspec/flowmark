@@ -426,3 +426,73 @@ func TestManyRowsOfOneStatement(t *testing.T) {
 		t.Fatalf("%s rows left", got)
 	}
 }
+
+// openBoard opens a session on a corpus of the board catalog, whose items take a key_prefix key and an order position.
+func openBoard(t *testing.T) (*writepath.Session, string) {
+	t.Helper()
+	root := t.TempDir()
+	corpustest.WriteTree(t, root, map[string]string{
+		"dbspec/dbspec-set.json": `{"schema": 1, "documents": ["board.dbs"]}`,
+		"dbspec/board.dbs":       corpustest.BoardDBS,
+	})
+	c, err := ops.Open(context.Background(), root, 0)
+	corpustest.Opened(t, c, err)
+	s, err := c.Session("statement-board")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+	return s, root
+}
+
+// TestAssignedColumns pins that an insert may leave out what the corpus assigns: a key_prefix key, allocated <p><n + 1>
+// over the keys of the form <p><n>, and an order position, the next one under the row's parent. A RETURNING of the key
+// reads the key the row was given, and the key column reads as one that may hold NULL, as SQLite's INTEGER PRIMARY KEY
+// does.
+func TestAssignedColumns(t *testing.T) {
+	s, root := openBoard(t)
+	returned := func(text string) string {
+		t.Helper()
+		return fmt.Sprint(run(t, s, text).Rows)
+	}
+	if got := returned("INSERT INTO items (title, body) VALUES ('a', '') RETURNING id"); got != "[[T1]]" {
+		t.Fatalf("returned %s, want [[T1]]", got)
+	}
+	if got := returned("INSERT INTO items (title, body) VALUES ('b', ''), ('c', '') RETURNING id, title"); got != "[[T2 b] [T3 c]]" {
+		t.Fatalf("returned %s, want [[T2 b] [T3 c]]", got)
+	}
+	run(t, s, "INSERT INTO items (id, title, body) VALUES ('T10', 'd', ''), ('T011', 'e', ''), ('Tx', 'f', '')")
+	if got := returned("INSERT INTO items (id, title, body) VALUES (NULL, 'g', '') RETURNING id"); got != "[[T11]]" {
+		t.Fatalf("returned %s, want [[T11]]", got)
+	}
+	// An upsert that meets a row returns that row's key.
+	if got := returned("INSERT INTO items (id, title, body) VALUES ('T10', 'd2', '') ON CONFLICT (id) DO UPDATE SET title = excluded.title RETURNING id"); got != "[[T10]]" {
+		t.Fatalf("returned %s, want [[T10]]", got)
+	}
+	run(t, s, "INSERT INTO items (id, title, body) VALUES ('T20', 'h', '')")
+	run(t, s, "BEGIN")
+	run(t, s, "INSERT INTO items (title, body) VALUES ('i', '')")
+	if got := returned("INSERT INTO items (title, body) VALUES ('j', '') RETURNING id"); got != "[[T22]]" {
+		t.Fatalf("returned %s in a transaction, want [[T22]]", got)
+	}
+	run(t, s, "COMMIT")
+	if got := fmt.Sprint(run(t, s, `SELECT "notnull", pk FROM pragma_table_info('items') WHERE name = 'id'`).Rows[0]); got != "[0 1]" {
+		t.Fatalf("the key column reads %s, want [0 1]", got)
+	}
+	// A new corpus reads the files: the keys and the positions are the corpus's own.
+	c, err := ops.Open(context.Background(), root, 0)
+	corpustest.Opened(t, c, err)
+	fresh, err := c.Session("statement-board-fresh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = fresh.Close() })
+	const positions = "SELECT id, position, title FROM items ORDER BY position"
+	want := "[[T1 1 a] [T2 2 b] [T3 3 c] [T10 4 d2] [T011 5 e] [Tx 6 f] [T11 7 g] [T20 8 h] [T21 9 i] [T22 10 j]]"
+	if got := fmt.Sprint(run(t, fresh, positions).Rows); got != want {
+		t.Fatalf("the files hold %s, want %s", got, want)
+	}
+	if got := fmt.Sprint(run(t, s, positions).Rows); got != want {
+		t.Fatalf("the session reads %s, want %s", got, want)
+	}
+}

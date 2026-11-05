@@ -745,9 +745,18 @@ func (w *writer) nextIdentity(tb *catalog.Table, col string) cell {
 // nextPrefixed allocates <p><n + 1>, n the largest decimal suffix without a leading
 // zero among the keys of the form <p><n> (spec 20 Keys).
 func (w *writer) nextPrefixed(tb *catalog.Table, p string) cell {
-	max := new(big.Int)
+	keys := make([]string, 0, len(w.next.recs[tb.Name]))
 	for _, x := range w.next.recs[tb.Name] {
-		k := x.row.Key
+		keys = append(keys, x.row.Key)
+	}
+	return cell{text: NextPrefixed(p, keys)}
+}
+
+// NextPrefixed is the key that key_prefix p allocates after keys: <p><n + 1>, where n is the largest decimal suffix
+// without a leading zero among the keys of the form <p><n> (spec 20 "Keys").
+func NextPrefixed(p string, keys []string) string {
+	max := new(big.Int)
+	for _, k := range keys {
 		if !strings.HasPrefix(k, p) {
 			continue
 		}
@@ -760,7 +769,7 @@ func (w *writer) nextPrefixed(tb *catalog.Table, p string) cell {
 			max = n
 		}
 	}
-	return cell{text: p + new(big.Int).Add(max, big.NewInt(1)).String()}
+	return p + new(big.Int).Add(max, big.NewInt(1)).String()
 }
 
 // onDuplicate applies the on_duplicate assignments to the row that the inserted row
