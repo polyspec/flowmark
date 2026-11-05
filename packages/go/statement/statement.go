@@ -393,15 +393,7 @@ func upgrade(ctx context.Context, s *writepath.Session) error {
 			stale = true
 			return nil
 		}
-		h, err := heldFor(ctx, s, c)
-		if err != nil {
-			return err
-		}
-		if _, err := h.db.ExecContext(ctx, "BEGIN"); err != nil {
-			return driverError(err)
-		}
-		h.owner, h.base = s, c
-		return nil
+		return beginHeld(ctx, s, c)
 	})
 	if err != nil {
 		return abandon(err)
@@ -517,21 +509,30 @@ func nextBatch(rows *sql.Rows, a *Answer, columns int) (bool, error) {
 	return false, nil
 }
 
+// emptyAnswer is the answer of rows with their columns and no row yet, and the number of the columns.
+func emptyAnswer(rows *sql.Rows) (*Answer, int, error) {
+	types, err := rows.ColumnTypes()
+	if err != nil {
+		return nil, 0, driverError(err)
+	}
+	a := &Answer{Columns: make([]Column, len(types)), Rows: [][]any{}}
+	for i, t := range types {
+		a.Columns[i] = Column{Name: t.Name(), Type: t.DatabaseTypeName()}
+	}
+	return a, len(types), nil
+}
+
 // readBatch runs a read and answers its first batch, with the rows when they go on.
 func readBatch(ctx context.Context, db *sql.DB, text string, args []any) (*Answer, *sql.Rows, error) {
 	rows, err := db.QueryContext(ctx, text, args...)
 	if err != nil {
 		return nil, nil, driverError(err)
 	}
-	types, err := rows.ColumnTypes()
+	a, n, err := emptyAnswer(rows)
 	if err != nil {
-		return nil, nil, errors.Join(driverError(err), rows.Close())
+		return nil, nil, errors.Join(err, rows.Close())
 	}
-	a := &Answer{Columns: make([]Column, len(types)), Rows: [][]any{}}
-	for i, t := range types {
-		a.Columns[i] = Column{Name: t.Name(), Type: t.DatabaseTypeName()}
-	}
-	more, err := nextBatch(rows, a, len(types))
+	more, err := nextBatch(rows, a, n)
 	if err != nil {
 		return nil, nil, errors.Join(err, rows.Close())
 	}
@@ -655,23 +656,26 @@ func temporalWire(typ dbspec.Type, text string) string {
 // setting reads a PRAGMA that sets a value.
 var setting = regexp.MustCompile(`(?i)^PRAGMA\s+([a-z_]+)\s*=\s*"?([a-z0-9_-]+)"?$`)
 
+// beginHeld opens the transaction of the database that the session holds for corpus c.
+func beginHeld(ctx context.Context, s *writepath.Session, c *irexec.Corpus) error {
+	h, err := heldFor(ctx, s, c)
+	if err != nil {
+		return err
+	}
+	if _, err := h.db.ExecContext(ctx, "BEGIN"); err != nil {
+		return driverError(err)
+	}
+	h.owner, h.base = s, c
+	return nil
+}
+
 // begin opens the session's transaction and the database's own, so that SQLite judges at COMMIT what it defers to it.
 func begin(ctx context.Context, s *writepath.Session) error {
 	if err := s.Begin(ctx, s.QueryOnly()); err != nil {
 		return err
 	}
 	s.SetEnded(false)
-	err := s.View(ctx, func(c *irexec.Corpus) error {
-		h, err := heldFor(ctx, s, c)
-		if err != nil {
-			return err
-		}
-		if _, err := h.db.ExecContext(ctx, "BEGIN"); err != nil {
-			return driverError(err)
-		}
-		h.owner, h.base = s, c
-		return nil
-	})
+	err := s.View(ctx, func(c *irexec.Corpus) error { return beginHeld(ctx, s, c) })
 	if err != nil {
 		drop(s)
 		return errors.Join(err, s.Rollback())
@@ -1033,14 +1037,22 @@ func standingTriggers(ctx context.Context, tx *sql.Tx) (map[string]string, error
 
 func quote(name string) string { return `"` + strings.ReplaceAll(name, `"`, `""`) + `"` }
 
-func insertText(tb *catalog.Table) string {
+// columnNames are the names of the columns of tb in a statement: each quoted, and the row id column as SQLite names it.
+func columnNames(tb *catalog.Table) []string {
 	names := make([]string, len(tb.Columns))
-	marks := make([]string, len(tb.Columns))
 	for i, col := range tb.Columns {
 		names[i] = quote(col.Name)
 		if col.Name == catalog.RowIDColumn {
 			names[i] = catalog.RowIDColumn
 		}
+	}
+	return names
+}
+
+func insertText(tb *catalog.Table) string {
+	names := columnNames(tb)
+	marks := make([]string, len(tb.Columns))
+	for i := range marks {
 		marks[i] = "?"
 	}
 	return "INSERT INTO " + quote(tb.Name) + " (" + strings.Join(names, ", ") + ") VALUES (" + strings.Join(marks, ", ") + ")"
@@ -1202,16 +1214,12 @@ func query(ctx context.Context, db *sql.DB, text string, args []any) (*Answer, e
 		return nil, driverError(err)
 	}
 	defer func() { _ = rows.Close() }()
-	types, err := rows.ColumnTypes()
+	a, n, err := emptyAnswer(rows)
 	if err != nil {
-		return nil, driverError(err)
-	}
-	a := &Answer{Columns: make([]Column, len(types)), Rows: [][]any{}}
-	for i, t := range types {
-		a.Columns[i] = Column{Name: t.Name(), Type: t.DatabaseTypeName()}
+		return nil, err
 	}
 	for rows.Next() {
-		row, err := scan(rows, len(types))
+		row, err := scan(rows, n)
 		if err != nil {
 			return nil, driverError(err)
 		}
@@ -1321,12 +1329,8 @@ func allRows(ctx context.Context, db *sql.DB, c *irexec.Corpus) (map[string]tabl
 
 // rowsOf reads the rows of tb from db.
 func rowsOf(ctx context.Context, db *sql.DB, tb *catalog.Table) ([][]any, error) {
-	names := make([]string, len(tb.Columns))
-	for i, col := range tb.Columns {
-		names[i] = quote(col.Name)
-		if col.Name == catalog.RowIDColumn {
-			names[i] = catalog.RowIDColumn
-		}
+	names := columnNames(tb)
+	for i := range names {
 		// Without its declared type the driver reads the stored value itself, not a time of a DATE or DATETIME column.
 		names[i] = "+" + names[i]
 	}

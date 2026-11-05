@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -499,18 +498,16 @@ func TestLoadKeyring(t *testing.T) {
 			}
 		})
 	}
-	if runtime.GOOS != "windows" {
-		t.Run("a symbolic link", func(t *testing.T) {
-			link := filepath.Join(outside, "link.json")
-			if err := os.Symlink(write(outside, "target.json", good), link); err != nil {
-				t.Fatal(err)
-			}
-			t.Setenv(catalog.KeyringVariable, link)
-			if cat, diags := catalog.Load(root); cat != nil || len(diags) != 1 || !strings.Contains(diags[0].Message, "not a regular file") {
-				t.Fatalf("catalog %v, diagnostics %+v", cat, diags)
-			}
-		})
-	}
+	t.Run("a symbolic link", func(t *testing.T) {
+		link := filepath.Join(outside, "link.json")
+		if err := os.Symlink(write(outside, "target.json", good), link); err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv(catalog.KeyringVariable, link)
+		if cat, diags := catalog.Load(root); cat != nil || len(diags) != 1 || !strings.Contains(diags[0].Message, "not a regular file") {
+			t.Fatalf("catalog %v, diagnostics %+v", cat, diags)
+		}
+	})
 }
 
 func TestLoadTakesAuditSetting(t *testing.T) {

@@ -161,35 +161,50 @@ func (c *Corpus) Catalog() *catalog.Catalog { return c.cat }
 // CONSTRAINT, naming the diagnostic, when the table is unavailable or a value is not
 // of its column type, and as ENTITY_UNKNOWN when the catalog has no such table.
 func (c *Corpus) Rows(table string) ([][]any, error) {
-	if _, ok := c.cat.Table(table); !ok {
-		return nil, errf(codeEntityUnknown, "the catalog has no table %s", table)
-	}
-	recs, err := c.rows(table)
-	if err != nil {
-		return nil, err
-	}
-	out := make([][]any, 0, len(recs))
-	for _, x := range recs {
-		row := make([]any, len(x.tb.Columns))
-		for i, col := range x.tb.Columns {
-			v, err := c.value(x, col.Name)
-			if err != nil {
-				return nil, err
-			}
-			w, err := output(col.Type, v)
-			if err != nil {
-				return nil, err
-			}
-			row[i] = w
+	return c.tableRows(table, func(x *rec, col dbspec.Column) (any, error) {
+		v, err := c.value(x, col.Name)
+		if err != nil {
+			return nil, err
 		}
-		out = append(out, row)
-	}
-	return out, nil
+		return cellOutput(col, v)
+	})
 }
 
 // StoredRows returns every row of table as Rows does, each value that is not of its column's type as the file holds it: a
 // store.Literal, or the text. The database of a SQL statement holds them as a statement stored them (spec 40 SQL statements).
 func (c *Corpus) StoredRows(table string) ([][]any, error) {
+	return c.tableRows(table, func(x *rec, col dbspec.Column) (any, error) {
+		if raw, ok := x.row.Raw[col.Name]; ok {
+			if store.IsLiteral(raw) {
+				return store.Literal(raw), nil
+			}
+			return raw, nil
+		}
+		v, err := c.value(x, col.Name)
+		if err != nil {
+			return nil, err
+		}
+		if !v.null && (col.Type.Kind == dbspec.TypeDatetime || col.Type.Kind == dbspec.TypeTime || col.Type.Kind == dbspec.TypeDate) {
+			// SQLite holds these as text, at the precision of the type, which is how the file holds them.
+			return v.text, nil
+		}
+		return cellOutput(col, v)
+	})
+}
+
+// cellOutput is the wire value of v in column col, its failure an error only when there is one: output answers a typed
+// *Error, which as an error is never nil.
+func cellOutput(col dbspec.Column, v cell) (any, error) {
+	w, err := output(col.Type, v)
+	if err != nil {
+		return nil, err
+	}
+	return w, nil
+}
+
+// tableRows returns every row of table in storage order, each the cells that of gives for the columns of the table in
+// declaration order; it fails as ENTITY_UNKNOWN when the catalog has no such table.
+func (c *Corpus) tableRows(table string, of func(*rec, dbspec.Column) (any, error)) ([][]any, error) {
 	if _, ok := c.cat.Table(table); !ok {
 		return nil, errf(codeEntityUnknown, "the catalog has no table %s", table)
 	}
@@ -201,24 +216,7 @@ func (c *Corpus) StoredRows(table string) ([][]any, error) {
 	for _, x := range recs {
 		row := make([]any, len(x.tb.Columns))
 		for i, col := range x.tb.Columns {
-			if raw, ok := x.row.Raw[col.Name]; ok {
-				if store.IsLiteral(raw) {
-					row[i] = store.Literal(raw)
-				} else {
-					row[i] = raw
-				}
-				continue
-			}
-			v, err := c.value(x, col.Name)
-			if err != nil {
-				return nil, err
-			}
-			if !v.null && (col.Type.Kind == dbspec.TypeDatetime || col.Type.Kind == dbspec.TypeTime || col.Type.Kind == dbspec.TypeDate) {
-				// SQLite holds these as text, at the precision of the type, which is how the file holds them.
-				row[i] = v.text
-				continue
-			}
-			w, err := output(col.Type, v)
+			w, err := of(x, col)
 			if err != nil {
 				return nil, err
 			}

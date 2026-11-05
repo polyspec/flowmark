@@ -311,26 +311,10 @@ func (s *Server) message(sess *writepath.Session, line []byte) []byte {
 		return errorLine(codeIRInvalid, fmt.Sprintf("the control message %s: %v", op, err))
 	}
 	if op == "statement" {
-		a, err := statement.Run(context.Background(), sess, c.SQL, c.Params)
-		if err != nil {
-			return failureLine(err)
-		}
-		b, err := json.Marshal(a)
-		if err != nil {
-			return errorLine(codeInternal, "writing the answer: "+err.Error())
-		}
-		return b
+		return answerLine(statement.Run(context.Background(), sess, c.SQL, c.Params))
 	}
 	if op == "fetch" {
-		a, err := statement.Fetch(sess)
-		if err != nil {
-			return failureLine(err)
-		}
-		b, err := json.Marshal(a)
-		if err != nil {
-			return errorLine(codeInternal, "writing the answer: "+err.Error())
-		}
-		return b
+		return answerLine(statement.Fetch(sess))
 	}
 	if op == "close" {
 		if err := statement.Close(sess); err != nil {
@@ -407,4 +391,16 @@ func failureLine(err error) []byte {
 		return b
 	}
 	return errorLine(code, msg)
+}
+
+// answerLine is the line of a statement's answer, or of its failure.
+func answerLine(a *statement.Answer, err error) []byte {
+	if err != nil {
+		return failureLine(err)
+	}
+	b, err := json.Marshal(a)
+	if err != nil {
+		return errorLine(codeInternal, "writing the answer: "+err.Error())
+	}
+	return b
 }

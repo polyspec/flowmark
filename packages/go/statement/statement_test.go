@@ -37,7 +37,8 @@ table tags {
 }
 `
 
-func open(t *testing.T) (*writepath.Session, string) {
+// openCorpus opens a new corpus of the set of this file.
+func openCorpus(t *testing.T) (*ops.Corpus, string) {
 	t.Helper()
 	root := t.TempDir()
 	corpustest.WriteTree(t, root, map[string]string{
@@ -46,6 +47,12 @@ func open(t *testing.T) (*writepath.Session, string) {
 	})
 	c, err := ops.Open(context.Background(), root, 0)
 	corpustest.Opened(t, c, err)
+	return c, root
+}
+
+func open(t *testing.T) (*writepath.Session, string) {
+	t.Helper()
+	c, root := openCorpus(t)
 	s, err := c.Session("statement-test")
 	if err != nil {
 		t.Fatal(err)
@@ -236,13 +243,7 @@ func TestWithIsRead(t *testing.T) {
 // openTwo opens two sessions of one corpus.
 func openTwo(t *testing.T) (*writepath.Session, *writepath.Session, string) {
 	t.Helper()
-	root := t.TempDir()
-	corpustest.WriteTree(t, root, map[string]string{
-		"dbspec/dbspec-set.json": `{"schema": 1, "documents": ["board.dbs"]}`,
-		"dbspec/board.dbs":       set,
-	})
-	c, err := ops.Open(context.Background(), root, 0)
-	corpustest.Opened(t, c, err)
+	c, root := openCorpus(t)
 	a, err := c.Session("statement-a")
 	if err != nil {
 		t.Fatal(err)
