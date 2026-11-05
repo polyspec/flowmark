@@ -85,8 +85,6 @@ func (r *reader) prepare(q *ir.Query) *Error {
 		switch {
 		case x.ForceIdx != "":
 			err = errf(codeCapability, "force_index: indexes are derived, not named, on a corpus")
-		case x.Lock == "update_nowait" || x.Lock == "share_nowait":
-			err = errf(codeCapability, "lock %s is not supported on a corpus", x.Lock)
 		case usesFulltext(x.Where) || usesFulltext(x.On):
 			err = errf(codeOpNotAllowed, "fulltext: a corpus has no full-text index")
 		}

@@ -369,6 +369,10 @@ func buildTable(r *tableRef) *Table {
 		out.Uniques = append(out.Uniques, slices.Clone(u.Columns))
 	}
 	out.Checks = slices.Clone(t.Checks)
+	if len(t.PrimaryKey.Columns) > 1 {
+		out.KeyParts = slices.Clone(t.PrimaryKey.Columns)
+		out.Key = strings.Join(out.KeyParts, KeySeparator)
+	}
 	if len(t.PrimaryKey.Columns) == 1 {
 		out.Key = t.PrimaryKey.Columns[0]
 	}

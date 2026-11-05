@@ -123,8 +123,6 @@ func TestReadRejects(t *testing.T) {
 		{"60#surfaces: avg of an unknown column", f.msg("avg", "people", map[string]any{"agg": "nope"}), "COLUMN_UNKNOWN"},
 		{"60#surfaces: group_count needs group_by", f.msg("group_count", "items", nil), "IR_INVALID"},
 		{"60#surfaces: paginate with a limit of no row is invalid", f.msg("paginate", "items", map[string]any{"limit": map[string]any{"offset": 0, "count": 0}}), "IR_INVALID"},
-		{"60#surfaces: lock update_nowait is unsupported", f.msg("one", "items", map[string]any{"lock": "update_nowait"}), "CAPABILITY_UNSUPPORTED"},
-		{"60#surfaces: lock share_nowait is unsupported", f.msg("all", "items", map[string]any{"lock": "share_nowait"}), "CAPABILITY_UNSUPPORTED"},
 		{"60#surfaces: fulltext is not allowed", f.msg("all", "items", map[string]any{"where": where(map[string]any{"pred": map[string]any{"cols": []string{"title"}, "op": "fulltext", "p": 0}})}, "x"), "OPERATOR_NOT_ALLOWED"},
 		{"60#surfaces: fulltext_boolean is not allowed", f.msg("all", "items", map[string]any{"where": where(map[string]any{"pred": map[string]any{"cols": []string{"title"}, "op": "fulltext_boolean", "p": 0}})}, "x"), "OPERATOR_NOT_ALLOWED"},
 		{"60#surfaces: fulltext in a nested group is not allowed", f.msg("count", "items", map[string]any{"where": where(map[string]any{"group": where(map[string]any{"pred": map[string]any{"cols": []string{"title"}, "op": "fulltext", "p": 0}})})}, "x"), "OPERATOR_NOT_ALLOWED"},
@@ -140,6 +138,15 @@ func TestReadRejects(t *testing.T) {
 	}
 	for _, c := range cases {
 		f.sub(t, c.name, func(f *fixture) { f.fails(c.msg, c.code) })
+	}
+}
+
+// TestNowaitLocks pins that a nowait lock is a no-op as the other locks are: a transaction already holds the corpus lock,
+// so it waits for no row (spec 60 Surfaces).
+func TestNowaitLocks(t *testing.T) {
+	f := baseFixture(t)
+	for _, lock := range []string{"update_nowait", "share_nowait"} {
+		f.ok(f.msg("all", "items", map[string]any{"lock": lock}))
 	}
 }
 

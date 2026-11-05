@@ -61,8 +61,12 @@ func layoutColumns(tb *catalog.Table, skip func(name string) bool) (key dbspec.C
 		markdown[m] = true
 	}
 	keyFound := false
+	if len(tb.KeyParts) > 0 {
+		key, keyFound = tb.KeyColumn(), true
+	}
 	for _, c := range tb.Columns {
 		switch {
+		case tb.KeyPart(c.Name) >= 0:
 		case c.Name == tb.Key:
 			key, keyFound = c, true
 		case skip(c.Name):

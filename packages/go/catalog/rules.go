@@ -18,11 +18,8 @@ func (l *loader) checkTable(d *document, t *dbspec.Table) (Storage, bool) {
 	if reservedName(t.Name) {
 		report("table " + t.Name + " is a reserved file name on Windows")
 	}
-	if len(t.PrimaryKey.Columns) > 1 {
-		report("table " + t.Name + " has a composite primary key (" + strings.Join(t.PrimaryKey.Columns, ", ") + ")")
-	}
-	if len(t.PrimaryKey.Columns) == 1 {
-		if c := columnOf(t, t.PrimaryKey.Columns[0]); c != nil && !isKeyType(c.Type.Kind) {
+	for _, name := range t.PrimaryKey.Columns {
+		if c := columnOf(t, name); c != nil && !isKeyType(c.Type.Kind) {
 			report("primary key column " + c.Name + " of table " + t.Name + " has type " + c.Type.String() + ", which is not a key type (an integer, bool, varchar, uuid or date)")
 		}
 	}
@@ -45,6 +42,9 @@ func (l *loader) checkTable(d *document, t *dbspec.Table) (Storage, bool) {
 		if !slices.ContainsFunc(sm.Lines, func(line dbspec.StateLineSetting) bool { return line.Initial }) {
 			report("state machine on column " + sm.Column + " has no initial state")
 		}
+	}
+	if len(t.PrimaryKey.Columns) > 1 && s.Store != nil && s.Store.Kind == "files" {
+		report("table " + t.Name + ": files storage names a file by one key column, and the primary key is composite (" + strings.Join(t.PrimaryKey.Columns, ", ") + ")")
 	}
 	if s.Store == nil {
 		// A table that declares no storage is a table in one document of its own (spec 30).
@@ -146,11 +146,10 @@ func (l *loader) checkForeignKeys() {
 				continue
 			}
 			pk := target.table.PrimaryKey.Columns
+			references := slices.Sorted(slices.Values(fk.References))
 			switch {
-			case len(fk.Columns) != 1 || len(fk.References) != 1:
-				l.add(l.fkDiag(r.doc, r.table.Name, fk.Name, "foreign key "+fk.Name+" is composite ("+strings.Join(fk.Columns, ", ")+"); a link needs one column"))
-			case len(pk) != 1 || pk[0] != fk.References[0]:
-				l.add(l.fkDiag(r.doc, r.table.Name, fk.Name, "foreign key "+fk.Name+" references "+fk.Table+" ("+strings.Join(fk.References, ", ")+"), which is not the one-column primary key of "+fk.Table))
+			case !slices.Equal(references, slices.Sorted(slices.Values(pk))):
+				l.add(l.fkDiag(r.doc, r.table.Name, fk.Name, "foreign key "+fk.Name+" references "+fk.Table+" ("+strings.Join(fk.References, ", ")+"), which is not the primary key of "+fk.Table))
 			}
 		}
 	}

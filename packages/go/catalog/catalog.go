@@ -3,6 +3,7 @@ package catalog
 
 import (
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/polyspec/orm/packages/go/engine/dbspec"
@@ -43,6 +44,7 @@ type Table struct {
 	Storage      Storage
 	RowScope     int
 	Key          string
+	KeyParts     []string // the columns of a composite primary key, in its declared order; Key is them joined by KeySeparator
 	Title        string
 	Body         string
 	Order        string
@@ -53,6 +55,38 @@ type Table struct {
 	AESVersion   string              // the column that records the key version of the row, "" when none does
 	BlindIndexes map[string]string   // the blind index column of each aes column that has one
 	View         *View               // the view columns when the table is the view table, else nil
+}
+
+// KeySeparator joins the values of a composite key in its key cell, and the names of its columns in its heading. No key
+// value holds it, since a key holds only A-Z, a-z, 0-9, _ and - (spec 30 Composite keys).
+const KeySeparator = "."
+
+// KeyPart returns the place of column col in the composite primary key of the table, or -1.
+func (t *Table) KeyPart(col string) int {
+	return slices.Index(t.KeyParts, col)
+}
+
+// KeyColumn returns the column of the key cell: the declared key column, or a text column named by a composite key.
+func (t *Table) KeyColumn() dbspec.Column {
+	if len(t.KeyParts) > 0 {
+		return dbspec.Column{Name: t.Key, Type: dbspec.Type{Kind: dbspec.TypeVarchar, Length: 243}}
+	}
+	for _, c := range t.Columns {
+		if c.Name == t.Key {
+			return c
+		}
+	}
+	return dbspec.Column{}
+}
+
+// ColumnNamed returns the column of the table with the name.
+func (t *Table) ColumnNamed(name string) (dbspec.Column, bool) {
+	for _, c := range t.Columns {
+		if c.Name == name {
+			return c, true
+		}
+	}
+	return dbspec.Column{}, false
 }
 
 // Placement returns the placement foreign key column of a block table, the column that names its parent row, and ""

@@ -265,6 +265,15 @@ func setValue(tb *catalog.Table, row *store.Row, col string, v cell) {
 		}
 		return s + "\n"
 	}
+	if i := tb.KeyPart(col); i >= 0 {
+		values := strings.Split(row.Key, catalog.KeySeparator)
+		for len(values) < len(tb.KeyParts) {
+			values = append(values, "")
+		}
+		values[i] = v.text
+		row.Key = strings.Join(values, catalog.KeySeparator)
+		return
+	}
 	switch {
 	case col == tb.Key:
 		row.Key = v.text
@@ -431,6 +440,7 @@ func (w *writer) insertRow(i int, ps []*int) *Error {
 			}
 		}
 	}
+	joinKey(tb, vals)
 	key, keyGiven := vals[tb.Key]
 	g.row.Key = key.text
 	w.take(g)
@@ -523,7 +533,7 @@ func (w *writer) insertRow(i int, ps []*int) *Error {
 
 // answerKey appends the key k of a written row to the answer's keys.
 func (w *writer) answerKey(k cell) *Error {
-	o, err := output(columnOf(w.tb, w.tb.Key).Type, k)
+	o, err := output(w.tb.KeyColumn().Type, k)
 	if err != nil {
 		return err
 	}
@@ -606,6 +616,7 @@ func (w *writer) onDuplicate(ps []*int) (bool, *Error) {
 	// least in byte order (spec 60 Surfaces, primary key comparison). The met row keeps
 	// its key, since a key is never updated.
 	var met *rec
+	joinKey(w.tb, vals)
 	if k, ok := vals[w.tb.Key]; ok && !k.null {
 		for _, x := range w.next.recs[w.tb.Name] {
 			switch {
@@ -922,22 +933,68 @@ func (w *writer) refuseImmutable(rows []*rec) *Error {
 	return nil
 }
 
+// joinKey sets the value of the key cell of a composite key from the values of its columns: absent when one has no value
+// yet, NULL when one is NULL.
+func joinKey(tb *catalog.Table, vals map[string]cell) {
+	if len(tb.KeyParts) == 0 {
+		return
+	}
+	values := make([]string, len(tb.KeyParts))
+	for i, name := range tb.KeyParts {
+		v, ok := vals[name]
+		if !ok {
+			return
+		}
+		if v.null {
+			vals[tb.Key] = cell{null: true}
+			return
+		}
+		values[i] = v.text
+	}
+	vals[tb.Key] = cell{text: strings.Join(values, catalog.KeySeparator)}
+}
+
+// referencedKey is the key of the row the foreign key fk of row y names in the table target, false when one of its
+// columns is NULL, since a NULL names no row.
+func (c *Corpus) referencedKey(y *rec, fk dbspec.ForeignKey, target *catalog.Table) (string, bool, *Error) {
+	if len(fk.Columns) == 1 {
+		v, err := c.value(y, fk.Columns[0])
+		if err != nil || v.null {
+			return "", false, err
+		}
+		return v.text, true, nil
+	}
+	values := make([]string, len(target.KeyParts))
+	for i, name := range target.KeyParts {
+		at := slices.Index(fk.References, name)
+		if at < 0 {
+			return "", false, errf(codeInternal, "foreign key %s does not reference %s", fk.Name, name)
+		}
+		v, err := c.value(y, fk.Columns[at])
+		if err != nil || v.null {
+			return "", false, err
+		}
+		values[i] = v.text
+	}
+	return strings.Join(values, catalog.KeySeparator), true, nil
+}
+
 // referencing calls visit for each row whose foreign key names the row x, the rows of every table that may reference it.
 func (w *writer) referencing(x *rec, visit func(y *rec, t *catalog.Table, fk dbspec.ForeignKey) *Error) *Error {
 	for _, t := range w.c.cat.Tables {
 		for _, fk := range t.ForeignKeys {
-			if fk.Table != x.tb.Name || len(fk.Columns) != 1 {
+			if fk.Table != x.tb.Name {
 				continue
 			}
 			if err := w.next.need(t.Name); err != nil {
 				return err
 			}
 			for _, y := range w.next.recs[t.Name] {
-				v, err := w.next.value(y, fk.Columns[0])
+				key, named, err := w.next.referencedKey(y, fk, x.tb)
 				if err != nil {
 					return err
 				}
-				if v.null || v.text != x.row.Key {
+				if !named || key != x.row.Key {
 					continue
 				}
 				if err := visit(y, t, fk); err != nil {
@@ -985,7 +1042,9 @@ func (w *writer) restrict(x *rec, seq int, gone []*rec) *Error {
 			return nil
 		case dbspec.ActionSetNull:
 			if !taken {
-				setValue(t, y.row, fk.Columns[0], cell{null: true})
+				for _, col := range fk.Columns {
+					setValue(t, y.row, col, cell{null: true})
+				}
 				w.touched[y.file] = true
 			}
 			return nil

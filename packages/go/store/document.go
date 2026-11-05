@@ -21,6 +21,7 @@ import (
 // It holds the key, the title, body and order, the state and parent, the scalar
 // columns, sections and foreign keys, the row scope level, and the child blocks.
 type docLayout struct {
+	parts     []dbspec.Column // the columns of a composite key, nil for one key column
 	table     string
 	list      bool
 	scope     int // the level of the row scope: the level of its sections
@@ -71,6 +72,10 @@ func layoutOfTable(cat *catalog.Catalog, tb *catalog.Table, placement string, in
 		glyphs: map[string]string{}, states: map[string]string{},
 	}
 	var err error
+	for _, name := range tb.KeyParts {
+		part, _ := tb.ColumnNamed(name)
+		lay.parts = append(lay.parts, part)
+	}
 	lay.key, lay.sections, lay.scalars, lay.fks, err = layoutColumns(tb, func(name string) bool {
 		return name == tb.Order || name == tb.Body || name == placement
 	})
@@ -786,6 +791,9 @@ func newRow(table, key, title string) *Row {
 
 // docKeyFault names the key rule that key breaks, or "" when it is canonical.
 func docKeyFault(lay *docLayout, key string) string {
+	if len(lay.parts) > 0 {
+		return compositeKeyFault(lay.parts, key)
+	}
 	if msg := keyFault(key); msg != "" {
 		return msg
 	}
@@ -1574,6 +1582,18 @@ func storageOrder(lay *docLayout, rows []*Row) (order, depth, unreached []int) {
 func siblingLess(lay *docLayout, a, b *Row) bool {
 	if lay.order != "" {
 		return orderValue(a, lay.order) < orderValue(b, lay.order)
+	}
+	if len(lay.parts) > 0 {
+		x, y := strings.Split(a.Key, catalog.KeySeparator), strings.Split(b.Key, catalog.KeySeparator)
+		for i, part := range lay.parts {
+			if i >= len(x) || i >= len(y) {
+				return len(x) < len(y)
+			}
+			if x[i] != y[i] {
+				return keyLess(part.Type, x[i], y[i])
+			}
+		}
+		return false
 	}
 	return keyLess(lay.key.Type, a.Key, b.Key)
 }

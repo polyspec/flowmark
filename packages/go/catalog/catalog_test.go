@@ -401,14 +401,41 @@ func TestLoadDefaultsTableWithoutStore(t *testing.T) {
 	}
 }
 
-func TestLoadRejectsCompositePrimaryKey(t *testing.T) {
+func TestLoadAcceptsCompositePrimaryKey(t *testing.T) {
 	// identity must be the only key column, so the composite key drops it.
 	root, text := editedCorpus(t,
 		[2]string{"  id i64 identity\n  from_item", "  id i64\n  from_item"},
 		[2]string{"  kind varchar(16)\n  primary key (id)", "  kind varchar(16)\n  primary key (id, kind)"})
 	cat, diags := catalog.Load(root)
+	if cat == nil || len(diags) != 0 {
+		t.Fatalf("composite: %v\n%s", diags, text)
+	}
+	tb, _ := cat.Table("item_links")
+	if tb.Key != "id.kind" || !slices.Equal(tb.KeyParts, []string{"id", "kind"}) {
+		t.Fatalf("key %q parts %v", tb.Key, tb.KeyParts)
+	}
+}
+
+func TestLoadRejectsCompositeKeyInFiles(t *testing.T) {
+	root := t.TempDir()
+	corpustest.WriteTree(t, root, map[string]string{"dbspec/flowmark.dbs": `dbspec 1 flowmark
+
+table pages {
+  a varchar(8)
+  b varchar(8)
+  name varchar(8)
+  primary key (a, b)
+  settings {
+    store files
+    title name
+  }
+}
+`})
+	cat, diags := catalog.Load(root)
 	expectRejected(t, cat, diags)
-	expectTableDiag(t, diags, text, "item_links", "composite primary key")
+	if !strings.Contains(fmt.Sprint(diags), "files storage names a file by one key column") {
+		t.Fatalf("diagnostics %v", diags)
+	}
 }
 
 // TestLoadAcceptsAES pins that a corpus declares aes, aes_version and blind_index, and that the table holds them
@@ -1418,13 +1445,13 @@ func TestLoadRejectsForeignKeyNotToPrimaryKey(t *testing.T) {
 			name:  "composite foreign key",
 			edits: [][2]string{{"table views {", gridTables}},
 			fk:    "fk_slot_grid",
-			msg:   "is composite",
+			msg:   "not the primary key",
 		},
 		{
 			name:  "foreign key to a unique non-key column",
 			edits: [][2]string{{"table views {", tagTables("code")}},
 			fk:    "fk_tag_use_tag",
-			msg:   "not the one-column primary key",
+			msg:   "not the primary key",
 		},
 	}
 	for _, c := range cases {

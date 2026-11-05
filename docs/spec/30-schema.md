@@ -55,9 +55,14 @@ behaviour.
 
 ## Corpus rules on dbspec constructs
 
+- **Composite keys**: a table in `document` or `block` storage may have a primary key of several columns. Its key cell holds the
+  values joined by `.` and its heading the column names joined by `.`, as `| tenant.account | name |` and `| 900.1 | a |`; no value
+  of a key holds `.`, so the cell has one reading. Each value follows the key rules of its column type; a read and a write see the
+  columns as columns. A composite foreign key holds plain values, not a link, and names the whole key of its table; the validator's
+  `reference.dangling` applies to it.
 - **Default storage**: a table without a `store` setting is stored `document table`, in one document of
   its own, so a dbspec document written for a SQL database installs on a corpus as it is.
-- **Rejected** on a corpus, each a schema error: a composite primary key; `audit` (`state_machine … history` records
+- **Rejected** on a corpus, each a schema error: a composite primary key of a table in `files` storage, which names a file by one key column; `audit` (`state_machine … history` records
   transitions instead); an external `use` document; a `codec` whose last stage
   is `yaml` — orm's encoder (go-yaml's `Marshal`) ends every value with a line feed, which no place of
   the format holds, while a later stage encodes it away. A view table is declared by the
@@ -75,10 +80,9 @@ behaviour.
   name. Grounding: a key is a file name and an anchor, so its text must hold only the key shape
   ([document model](20-document-model.md#keys)). A `date` is written `YYYY-MM-DD` with a year from 0001 to 9999, the range orm's date literal rule accepts, so its text has four digits and no sign, and its `-` only separates. The ordinary values of `time` and `datetime` hold `:`. The non-integral values of a `decimal` of scale above 0 and of an `f64` hold `.`, and a negative value of any of these types begins with `-`, so they can never meet the shape. A `decimal` of scale 0 holds only integers, which an integer type keys, so it is refused with the other decimals; an `f64`'s whole values are likewise integers that an integer type keys, so an `f64` key adds only values the shape refuses. `text` and `bytes` are refused by dbspec's own
   key rule. A negative integer key is refused per value, not per type ([document model](20-document-model.md#keys)).
-- **Foreign keys.** Every foreign key of a table is one column that references the one-column
-  primary key of a table. A composite foreign key, or one that references a unique non-key
-  column, is a schema error, located at the foreign key. Grounding: a foreign key is written as a
-  link to the referenced row, and a row has a link only through its one-column key.
+- **Foreign keys.** Every foreign key of a table references the primary key of a table. One that
+  references a unique non-key column is a schema error, located at the foreign key. Grounding: a
+  one-column foreign key is written as a link to the referenced row, and a row has a link through its key.
 - **Block placement.** The column of a block table's placement foreign key — the foreign key its
   `store block <fk>` setting names — is non-null; a nullable one is a schema error, located at the
   block table's name. Grounding: a block row stands inside the scope of the row its placement

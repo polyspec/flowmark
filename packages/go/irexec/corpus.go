@@ -238,6 +238,13 @@ type cell struct {
 func (c *Corpus) value(x *rec, col string) (cell, *Error) {
 	tb := x.tb
 	r := x.row
+	if i := tb.KeyPart(col); i >= 0 {
+		values := strings.Split(r.Key, catalog.KeySeparator)
+		if i >= len(values) {
+			return cell{}, errf(codeConstraint, "the key %s of %s has no value of %s", r.Key, tb.Name, col)
+		}
+		return cell{text: values[i]}, nil
+	}
 	switch {
 	case col == tb.Key:
 		return cell{text: r.Key}, nil

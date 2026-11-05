@@ -138,6 +138,44 @@ func (c *corpus) dangling(p placed) {
 		d := p.row.Dangling[col]
 		c.report(p, col, ruleDangling, fmt.Sprintf("the foreign key %s names no %s row with the key %s", col, target, d.Key))
 	}
+	c.danglingComposite(p, tb)
+}
+
+// danglingComposite reports each composite foreign key that names no row: such a key holds plain values, not a link, so
+// the store resolves nothing for it. A column NULL names no row, and a value not of its type is its type fault alone.
+func (c *corpus) danglingComposite(p placed, tb *catalog.Table) {
+	operands := RowOperands(tb, p.row, nil)
+	for _, fk := range tb.ForeignKeys {
+		if len(fk.Columns) < 2 || c.isBlocked(fk.Table) {
+			continue
+		}
+		target, ok := c.cat.Table(fk.Table)
+		if !ok {
+			continue
+		}
+		values := make([]string, len(target.KeyParts))
+		named := true
+		for i, name := range target.KeyParts {
+			at := slices.Index(fk.References, name)
+			if at < 0 {
+				named = false
+				break
+			}
+			v := operands(fk.Columns[at])
+			if v.Null || v.Raw {
+				named = false
+				break
+			}
+			values[i] = v.Text
+		}
+		if !named {
+			continue
+		}
+		key := strings.Join(values, catalog.KeySeparator)
+		if !slices.ContainsFunc(c.rows[fk.Table], func(q placed) bool { return q.row.Key == key }) {
+			c.report(p, fk.Columns[0], ruleDangling, fmt.Sprintf("the foreign key %s names no %s row with the key %s", fk.Name, fk.Table, key))
+		}
+	}
 }
 
 // duplicates reports each row whose key equals the key of an earlier row of the

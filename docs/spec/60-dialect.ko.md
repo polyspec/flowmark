@@ -63,8 +63,7 @@ surface는 `CAPABILITY_UNSUPPORTED`, 그리고 orm의 규칙이 모든 backend�
 | `optimistic` | 지원. 일치가 없으면 `OPTIMISTIC_LOCK` |
 | `on_duplicate` | insert된 행과 만날 수 있는 key — insert가 `identity`나 `key_prefix`에 맡기지 않는 한 primary key, 그리고 각 unique key — 가 정확히 하나이고 insert가 그 모든 column을 배정할 때 지원한다. 그 key가 충돌 대상이며, 그 밖의 `on_duplicate`는 `IR_INVALID`다(MySQL의 아무 key 규칙과 PostgreSQL과 SQLite의 충돌 대상을 같은 key로 만드는 orm의 규칙). primary key는 아래 비교가 정하는 대로 행과 만난다. 근거: MySQL은 자신의 key 순서로 아무 unique key에서나 행과 만나는 반면, PostgreSQL과 SQLite는 충돌 대상 하나를 지정하고 다른 key에서의 만남은 `DUPLICATE_KEY`다. 행과 만날 수 있는 key가 하나이면 셋은 구성상 같다 |
 | primary key 비교 | A–Z의 대소문자를 가리지 않는다. SQL에서 orm의 binary collation과 다른데, key는 file 이름이자 anchor이기 때문이다([document model](20-document-model.ko.md#key)): key가 다른 key와 대소문자를 무시하고 같은 insert는 `DUPLICATE_KEY`이며, 충돌 key가 primary key인 `on_duplicate` insert는 그 행 — 바이트 단위로 같은 key가 먼저, 아니면 byte 순서에서 가장 작은 것 — 과 만나고, 그 행은 자기 key를 유지한다. 근거: `ON DUPLICATE KEY UPDATE`와 `ON CONFLICT`는 충돌 key의 index가 그 index의 비교로 보고하는 중복에서 작동한다 |
-| `lock` `update`, `share` | 문서화된 no-op으로 받는다: server transaction이 이미 corpus lock을 잡고 있다 |
-| `lock` `update_nowait`, `share_nowait` | `CAPABILITY_UNSUPPORTED` |
+| `lock` `update`, `share`, `update_nowait`, `share_nowait` | 문서화된 no-op으로 받아들인다: server transaction이 이미 corpus lock을 쥐고 있어 어떤 행도 기다리지 않는다 |
 | relation(`limit_per_parent`, `if_parent`, `flatten`, `key_by`, `no_cascade_delete`) | 지원. executor가 조립하며, `flatten` relation은 `one` relation으로 답하고 client model이 그것을 부모의 array와 JSON 형태에 병합한다(orm의 규칙). `key_by`는 non-null column이어야 한다(아니면 `IR_INVALID`). 근거: orm은 병합을 client model의 array와 JSON 형태에 두며, 부모가 가진 이름은 부모의 값을 유지한다. 병합된 답은 client에게 부모 자신의 column과 구별할 수 없는 행을 넘긴다. NULL collection key는 client 언어마다 다르게 답하므로, nullable `key_by`는 형태로 거절한다 |
 | subquery(`tuple_in`, `tuple_not_in`, scalar `Sub` aggregate) | 지원 |
 | scalar column subquery(`agg` 없는 `columns.sub`) | `limit` count 1과, 그 entity의 모든 primary key column을 담고 `random`이 없는 `order`가 있을 때 유효하며, 아니면 `IR_INVALID`다(orm의 규칙). 값은 그 행의 column이며, 일치하는 행이 없으면 NULL이다. 근거: 여러 행의 scalar subquery는 MySQL 1242, PostgreSQL 21000, SQLite에서는 첫 행이므로, 한 행을 내는 형태만이 하나의 결과를 가진다 |
@@ -83,7 +82,8 @@ surface는 `CAPABILITY_UNSUPPORTED`, 그리고 orm의 규칙이 모든 backend�
 | savepoint | 중첩 stage |
 | `orderByRandom` | 지원. 순서에 seed를 쓰지 않는다 |
 | audit 값을 가진 transaction | `CAPABILITY_UNSUPPORTED` |
-| `isolation`, `timeoutMs` option | `CAPABILITY_UNSUPPORTED` |
+| `isolation` option | 모든 level을 받아들인다: transaction은 `begin`부터 끝까지 corpus lock을 쥐고 행의 사본 위에서 실행되므로 혼자 실행되는 것과 같고, 이는 어떤 option이 요구하는 level 이상이다 |
+| `timeoutMs` option | `CAPABILITY_UNSUPPORTED`, PostgreSQL 외 모든 데이터베이스에 대한 orm의 규칙 |
 | `getQuery()`, statement event, `subscribe()` | `CAPABILITY_UNSUPPORTED` — SQL 텍스트가 없다 |
 | `force_index` | `CAPABILITY_UNSUPPORTED` — index는 이름을 지정하지 않고 파생된다 |
 | `fulltext` | `OPERATOR_NOT_ALLOWED`: SQLite는 table에 full-text index가 없다(orm dialects.md) |

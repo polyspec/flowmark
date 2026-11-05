@@ -256,7 +256,11 @@ func (w *writer) checkRow(lay *docLayout, byKey map[string]int, r *Row) {
 	if r.Table != lay.table {
 		w.refuse("", "the row is of table "+r.Table+", not "+lay.table)
 	}
-	if msg := keyFault(r.Key); msg != "" {
+	if len(lay.parts) > 0 {
+		if msg := compositeKeyFault(lay.parts, r.Key); msg != "" {
+			w.refuse(lay.key.Name, "the key: "+msg)
+		}
+	} else if msg := keyFault(r.Key); msg != "" {
 		w.refuse(lay.key.Name, "the key: "+msg)
 	} else if canon, ok := readable(lay.key.Type, r.Key); !ok || canon != r.Key {
 		w.refuse(lay.key.Name, "the key is not the canonical text of a "+lay.key.Type.String()+" key")

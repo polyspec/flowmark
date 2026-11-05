@@ -92,7 +92,7 @@ aggregate냐 split이냐는 저장 선언이다. 논리 관계는 모든 저장�
 
 ## Key
 
-- markdown table은 단일 column primary key를 갖는다. composite primary key는 schema 오류다. 음수 integer key는
+- `files` 저장 table은 단일 column primary key를 갖고, `document`나 `block` 저장 table은 composite primary key를 가질 수 있다([schema](30-schema.md)). 음수 integer key는
   거절된다: 그 `-`가 key를 시작하여 아래 모양에 어긋난다. 쓰기에서는 `CONSTRAINT`이고 읽기에서는 `format.block`이다.
   모든 저장에서 모양을 깨는 key가 그렇듯이 말이다.
 - `files` 행의 key는 file 이름에서 `.flowmark.md`를 뺀 것이다.

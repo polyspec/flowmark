@@ -508,8 +508,32 @@ func (m *message) sets(tb *catalog.Table, values map[string]json.RawMessage) []m
 
 // byKey is the where of the row whose primary key is key.
 func (m *message) byKey(tb *catalog.Table, key json.RawMessage) map[string]any {
+	if len(tb.KeyParts) > 0 {
+		var text string
+		if err := json.Unmarshal(key, &text); err == nil {
+			values := strings.Split(text, catalog.KeySeparator)
+			if len(values) == len(tb.KeyParts) {
+				items := make([]any, len(values))
+				for i, name := range tb.KeyParts {
+					items[i] = map[string]any{"pred": map[string]any{"column": name, "op": "eq", "p": m.param(partValue(tb, name, values[i]))}}
+				}
+				return map[string]any{"where": map[string]any{"items": items}}
+			}
+		}
+	}
 	pred := map[string]any{"column": tb.Key, "op": "eq", "p": m.param(key)}
 	return map[string]any{"where": map[string]any{"items": []any{map[string]any{"pred": pred}}}}
+}
+
+// partValue is the JSON value of one value of a composite key, by the type of its column.
+func partValue(tb *catalog.Table, column, text string) json.RawMessage {
+	c, _ := tb.ColumnNamed(column)
+	switch c.Type.Kind {
+	case dbspec.TypeI16, dbspec.TypeI32, dbspec.TypeI64, dbspec.TypeBool:
+		return json.RawMessage(text)
+	}
+	quoted, _ := json.Marshal(text)
+	return quoted
 }
 
 // update is the body of an update of the row whose key is key, assigning set.

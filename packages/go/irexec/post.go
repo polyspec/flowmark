@@ -122,7 +122,7 @@ func (w *writer) values() *Error {
 		// A key is written only by an insert, since a key is never updated; its shape
 		// is a value of the row, so its fault precedes the row's key fault.
 		if g.inserted && g.row.Key != "" {
-			if msg := store.KeyFault(g.row.Key); msg != "" {
+			if msg := store.TableKeyFault(tb, g.row.Key); msg != "" {
 				w.fault(g, tb.Name, tb.Key, codeConstraint, "the key: "+msg)
 			}
 		}
@@ -131,7 +131,7 @@ func (w *writer) values() *Error {
 			if !g.inserted && !g.assigned[col] {
 				continue
 			}
-			if col == tb.Key || col == placement || col == tb.Order {
+			if col == tb.Key || tb.KeyPart(col) >= 0 || col == placement || col == tb.Order {
 				continue
 			}
 			switch {
@@ -361,21 +361,22 @@ func (w *writer) references() *Error {
 		}
 		for _, fk := range w.tb.ForeignKeys {
 			col := fk.Columns[0]
-			if col == placement || (!g.inserted && !g.assigned[col]) {
+			if col == placement || (!g.inserted && !slices.ContainsFunc(fk.Columns, func(c string) bool { return g.assigned[c] })) {
 				continue
 			}
-			v, err := w.next.value(x, col)
+			target, _ := w.c.cat.Table(fk.Table)
+			key, named, err := w.next.referencedKey(x, fk, target)
 			if err != nil {
 				return err
 			}
-			if v.null {
+			if !named {
 				continue
 			}
 			if err := w.next.need(fk.Table); err != nil {
 				return err
 			}
-			if firstByKey(w.next.recs[fk.Table], func(k string) bool { return k == v.text }) == nil {
-				w.fault(g, w.tb.Name, col, codeForeignKey, fmt.Sprintf("the foreign key %s names no %s row with the key %s", col, fk.Table, v.text))
+			if firstByKey(w.next.recs[fk.Table], func(k string) bool { return k == key }) == nil {
+				w.fault(g, w.tb.Name, col, codeForeignKey, fmt.Sprintf("the foreign key %s names no %s row with the key %s", col, fk.Table, key))
 			}
 		}
 	}
@@ -603,6 +604,9 @@ func (w *writer) linkTargets(before, after *linker) *Error {
 	for _, tb := range w.c.cat.Tables {
 		placement := tb.Placement()
 		for _, fk := range tb.ForeignKeys {
+			if len(fk.Columns) != 1 {
+				continue // a composite foreign key holds plain values, not a link
+			}
 			col := fk.Columns[0]
 			if col == placement {
 				continue
@@ -642,6 +646,9 @@ func (w *writer) needLinks(f *file) *Error {
 		tb, _ := w.c.cat.Table(r.Table)
 		placement := tb.Placement()
 		for _, fk := range tb.ForeignKeys {
+			if len(fk.Columns) != 1 {
+				continue // a composite foreign key holds plain values, not a link
+			}
 			col := fk.Columns[0]
 			if col == placement {
 				continue

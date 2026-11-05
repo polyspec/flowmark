@@ -102,7 +102,7 @@ or one folder without end (`files`).
 
 ## Keys
 
-- A markdown table has a single-column primary key; a composite primary key is a schema error. A
+- A table in `files` storage has a single-column primary key; a table in `document` or `block` storage may have a composite one ([schema](30-schema.md)). A
   negative integer key is refused: its `-` begins the key, against the shape below. On write it is
   `CONSTRAINT`; on read it is `format.block` in every storage, as any key that breaks the shape.
 - A `files` row's key is its file name without `.flowmark.md`.

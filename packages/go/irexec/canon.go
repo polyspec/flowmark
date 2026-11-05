@@ -131,6 +131,9 @@ func (c *Corpus) linkTables(f *file) []string {
 		tb, _ := c.cat.Table(r.Table)
 		placement := tb.Placement()
 		for _, fk := range tb.ForeignKeys {
+			if len(fk.Columns) != 1 {
+				continue // a composite foreign key holds plain values, not a link
+			}
 			col := fk.Columns[0]
 			if col == placement || r.Scalars[col] == nil {
 				continue

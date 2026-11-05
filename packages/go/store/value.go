@@ -6,6 +6,8 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"fmt"
+	"github.com/polyspec/flowmark/packages/go/catalog"
 	"github.com/polyspec/flowmark/packages/go/internal/unicodedcp"
 	"github.com/polyspec/orm/packages/go/engine/dbspec"
 )
@@ -26,6 +28,36 @@ func SingleLineFault(v string) string { return singleLineFault(v) }
 // KeyFault names the key shape rule that key breaks, or "" when none (see the
 // document model, "Keys"): the rule a writer checks of a key before it renders a file.
 func KeyFault(key string) string { return keyFault(key) }
+
+// TableKeyFault names the key shape rule that a key of the table breaks, or "" when none.
+func TableKeyFault(tb *catalog.Table, key string) string {
+	if len(tb.KeyParts) == 0 {
+		return keyFault(key)
+	}
+	parts := make([]dbspec.Column, len(tb.KeyParts))
+	for i, name := range tb.KeyParts {
+		parts[i], _ = tb.ColumnNamed(name)
+	}
+	return compositeKeyFault(parts, key)
+}
+
+// compositeKeyFault names the rule that the key cell of a composite key breaks: it holds one canonical value of each
+// key column, joined by the separator (spec 30 Composite keys).
+func compositeKeyFault(parts []dbspec.Column, key string) string {
+	values := strings.Split(key, catalog.KeySeparator)
+	if len(values) != len(parts) {
+		return fmt.Sprintf("the key holds %d values, and the primary key has %d columns", len(values), len(parts))
+	}
+	for i, part := range parts {
+		if msg := keyFault(values[i]); msg != "" {
+			return part.Name + ": " + msg
+		}
+		if canon, ok := readable(part.Type, values[i]); !ok || canon != values[i] {
+			return part.Name + ": the key is not the canonical text of a " + part.Type.String() + " key"
+		}
+	}
+	return ""
+}
 
 // FoldKey returns key with A-Z lower-cased and every other byte kept: the fold under
 // which two keys are equal without regard to case. The key shape holds A-Z and a-z
