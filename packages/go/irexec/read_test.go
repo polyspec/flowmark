@@ -318,6 +318,32 @@ func TestJoins(t *testing.T) {
 			f.t.Fatalf("ids %v", ids)
 		}
 	})
+	f.sub(t, "60#surfaces: a join's order items follow the order items of its parent", func(f *fixture) {
+		ordered := func(joined map[string]any, root ...map[string]any) []string {
+			q := map[string]any{"columns": none, "joins": []any{map[string]any{"rel": "own", "kind": "left", "left": "owner", "right": "id",
+				"query": map[string]any{"entity": "people", "columns": none, "order": []any{joined}}}}}
+			if len(root) > 0 {
+				q["order"] = root
+			}
+			return rowIDs(t, f.ok(f.msg("all", "items", q)))
+		}
+		stored := f.ids("items", nil)
+		if len(stored) < 2 || stored[0] != "T1" {
+			f.t.Fatalf("the fixture must hold T1 and a row with no owner first: %v", stored)
+		}
+		desc := ordered(map[string]any{"column": "id", "desc": true})
+		if desc[0] != "T1" {
+			f.t.Fatalf("descending, the row with an owner comes first: %v", desc)
+		}
+		asc := ordered(map[string]any{"column": "id"})
+		if asc[len(asc)-1] != "T1" {
+			f.t.Fatalf("ascending, NULL sorts before every value: %v", asc)
+		}
+		root := ordered(map[string]any{"column": "id"}, map[string]any{"column": "id"})
+		if !slices.Equal(root, stored) {
+			f.t.Fatalf("the order of the parent comes first: %v", root)
+		}
+	})
 	f.sub(t, "60#surfaces: a join kind other than inner or left is invalid", func(f *fixture) {
 		f.fails(f.msg("all", "notes", map[string]any{"joins": []any{join("outer", map[string]any{})}}), "IR_INVALID")
 	})

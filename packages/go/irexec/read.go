@@ -338,24 +338,43 @@ func compareKeys(a, b sortKey) int {
 	return compare(a.v, b.v)
 }
 
-// order sorts envs by the order items of s, stably: rows that every item ties
+// scopedOrder is an order item with the scope whose row it reads.
+type scopedOrder struct {
+	scope *scope
+	order ir.Order
+}
+
+// orderItems returns the order items of s and then those of its joins in their order, as a statement renders them.
+func orderItems(s *scope) []scopedOrder {
+	items := make([]scopedOrder, 0, len(s.q.Order))
+	for _, o := range s.q.Order {
+		items = append(items, scopedOrder{s, o})
+	}
+	for _, j := range s.joins {
+		items = append(items, orderItems(j.sc)...)
+	}
+	return items
+}
+
+// order sorts envs by the order items of s and of its joins, stably: rows that every item ties
 // stay in storage order. A column sorts by its type, a column function by its
 // result, and random by a random number that is not seeded. NULL sorts before every
 // value ascending and after every value descending.
 func (r *reader) order(s *scope, envs []*env) ([]*env, *Error) {
-	items := s.q.Order
+	items := orderItems(s)
 	if len(items) == 0 {
 		return envs, nil
 	}
 	keys := make(map[*env][]sortKey, len(envs))
 	for _, ev := range envs {
 		ks := make([]sortKey, len(items))
-		for i, o := range items {
+		for i, item := range items {
+			o := item.order
 			if o.Random {
 				ks[i] = sortKey{random: rand.Float64()}
 				continue
 			}
-			v, t, err := r.col(s, ev, o.Column)
+			v, t, err := r.col(item.scope, ev, o.Column)
 			if err != nil {
 				return nil, err
 			}
@@ -379,7 +398,8 @@ func (r *reader) order(s *scope, envs []*env) ([]*env, *Error) {
 	out := slices.Clone(envs)
 	sort.SliceStable(out, func(a, b int) bool {
 		ka, kb := keys[out[a]], keys[out[b]]
-		for i, o := range items {
+		for i, item := range items {
+			o := item.order
 			var c int
 			if o.Random {
 				switch {
