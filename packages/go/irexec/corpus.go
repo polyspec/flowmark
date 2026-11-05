@@ -142,13 +142,10 @@ func (c *Corpus) FilesOf(table string) ([]string, error) {
 // Rebased returns the corpus under the catalog cat of the schema statements that stand next, without the files of drop:
 // the tables a schema statement changed, whose rows come again from the statement's database.
 func (c *Corpus) Rebased(cat *catalog.Catalog, drop []string) *Corpus {
-	n := c.clone()
-	n.cat = cat
+	n := &Corpus{cat: cat, files: c.files, walk: c.walk, unavailable: map[string]catalog.Diagnostic{}, cost: c.cost}
 	for _, p := range drop {
 		n.dropFile(p)
 	}
-	n.unavailable = map[string]catalog.Diagnostic{}
-	n.index()
 	return n
 }
 
@@ -162,12 +159,6 @@ func (c *Corpus) tableRecs(table string) []*rec {
 func (c *Corpus) recOf(r *store.Row) *rec {
 	c.ensureIndex()
 	return c.byRow[r]
-}
-
-// allRecs returns the records of every table, building the index of the corpus at the first call.
-func (c *Corpus) allRecs() map[string][]*rec {
-	c.ensureIndex()
-	return c.recs
 }
 
 // ensureIndex builds the index of the corpus when it is not built.
@@ -335,20 +326,13 @@ func (c *Corpus) Data(path string) []byte {
 // bytes, and the file named by the diagnostic of each table whose unavailability
 // differs — a walk entry has no bytes in the corpus, so its table's diagnostic stands
 // for it. The write path reads it to know whether a corpus re-read under the lock is
-// the one a transaction read, and to name a change that landed.
+// the one a transaction read, and to name a change that landed. The documents the two
+// corpora share are not compared, so corpora read or written one from the other cost
+// the paths they changed (plan, Ruling: an operation costs what it touches).
 func (c *Corpus) Differs(o *Corpus) []string {
 	set := map[string]bool{}
-	c.cost.Add(cost.FilesCompared, c.files.Len())
-	for p, f := range c.files.All() {
-		if g := o.file(p); g == nil || !bytes.Equal(f.data, g.data) || (f.data == nil) != (g.data == nil) {
-			set[p] = true
-		}
-	}
-	for p := range o.files.All() {
-		if c.file(p) == nil {
-			set[p] = true
-		}
-	}
+	same := func(f, g *file) bool { return f == g || bytes.Equal(f.data, g.data) && (f.data == nil) == (g.data == nil) }
+	c.cost.Add(cost.FilesCompared, pmap.Diff(c.files, o.files, same, func(p string) { set[p] = true }))
 	for _, tb := range c.cat.Tables {
 		a, aok := c.unavailable[tb.Name]
 		b, bok := o.unavailable[tb.Name]

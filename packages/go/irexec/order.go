@@ -66,6 +66,7 @@ func (w *writer) siblings(x *rec) ([]*rec, *Error) {
 // setOrder gives row y the stored order value v — its rank in files storage, its
 // position in the others — and marks its file changed.
 func (w *writer) setOrder(y *rec, v int64) {
+	w.own(y)
 	setValue(y.tb, y.row, y.tb.Order, cell{text: strconv.FormatInt(v, 10)})
 	w.touched[y.file] = true
 	w.next.reorder()

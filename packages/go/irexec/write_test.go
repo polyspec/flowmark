@@ -322,8 +322,8 @@ func TestKeyChecks(t *testing.T) {
 	})
 	f.sub(t, "10#diagnostics: a DUPLICATE_KEY from the codec is internal", func(f *fixture) {
 		r := &reader{e: f.e, c: f.c, cl: &call{}}
-		w := &writer{r: r, c: f.c, next: f.c.clone(), touched: map[string]bool{"tags.flowmark.md": true}}
-		doc := w.next.file("tags.flowmark.md")
+		w := &writer{r: r, c: f.c, next: f.c.fork(), touched: map[string]bool{"tags.flowmark.md": true}}
+		doc := w.ownFile("tags.flowmark.md")
 		doc.rows = append(doc.rows, cloneRow(doc.rows[0]))
 		if _, _, err := w.render(); err == nil || err.Code != "INTERNAL" {
 			f.t.Fatalf("render: %v; want INTERNAL", err)

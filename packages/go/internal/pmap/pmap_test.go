@@ -186,6 +186,92 @@ func FuzzMap(f *testing.F) {
 		}
 		for i := range olds {
 			wantModel(t, olds[i], oldModels[i])
+			wantDiff(t, olds[i], m, oldModels[i], model)
+		}
+	})
+}
+
+// modelDiff returns the keys a and b do not hold alike, ascending.
+func modelDiff(a, b map[int]string) []int {
+	var out []int
+	for k, v := range a {
+		if w, ok := b[k]; !ok || w != v {
+			out = append(out, k)
+		}
+	}
+	for k := range b {
+		if _, ok := a[k]; !ok {
+			out = append(out, k)
+		}
+	}
+	slices.Sort(out)
+	return out
+}
+
+func sameString(x, y string) bool { return x == y }
+
+// wantDiff requires Diff of a and b, both ways, to yield the keys their models do not hold alike, in ascending order.
+func wantDiff(t *testing.T, a, b Map[int, string], ma, mb map[int]string) {
+	t.Helper()
+	for _, c := range [][2]Map[int, string]{{a, b}, {b, a}} {
+		var got []int
+		Diff(c[0], c[1], sameString, func(k int) { got = append(got, k) })
+		if want := modelDiff(ma, mb); !slices.Equal(got, want) {
+			t.Fatalf("Diff yields %v, want %v", got, want)
+		}
+	}
+}
+
+// TestDiff pins Diff against Go's maps, and that two maps one was changed from the other are compared at the keys of
+// the changes, whatever the keys they hold.
+func TestDiff(t *testing.T) {
+	build := func(keys ...int) (Map[int, string], map[int]string) {
+		var m Map[int, string]
+		model := map[int]string{}
+		for _, k := range keys {
+			m, model[k] = m.Set(k, "v"), "v"
+		}
+		return m, model
+	}
+	for _, tc := range []struct {
+		name string
+		a, b []int
+	}{
+		{"two empty maps", nil, nil},
+		{"an empty map and another", nil, []int{1, 2, 3}},
+		{"disjoint keys", []int{1, 3, 5}, []int{2, 4, 6}},
+		{"the same keys built in other orders", []int{1, 2, 3, 4, 5}, []int{5, 4, 3, 2, 1}},
+		{"overlapping keys", []int{1, 2, 3, 4}, []int{3, 4, 5, 6}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			a, ma := build(tc.a...)
+			b, mb := build(tc.b...)
+			wantDiff(t, a, b, ma, mb)
+		})
+	}
+	t.Run("a value that differs at the same key", func(t *testing.T) {
+		a, ma := build(1, 2, 3)
+		b, mb := a.Set(2, "w"), map[int]string{1: "v", 2: "w", 3: "v"}
+		wantDiff(t, a, b, ma, mb)
+	})
+	t.Run("a change compares the keys of its paths, not every key", func(t *testing.T) {
+		const n = 100000
+		var a Map[int, string]
+		for k := range n {
+			a = a.Set(k, "v")
+		}
+		b := a.Set(n/2, "w").Delete(7).Set(n+1, "v")
+		var got []int
+		compared := Diff(a, b, sameString, func(k int) { got = append(got, k) })
+		if !slices.Equal(got, []int{7, n / 2, n + 1}) {
+			t.Fatalf("Diff yields %v", got)
+		}
+		t.Logf("Diff compares %d keys of %d for three changes", compared, n)
+		if compared > 400 {
+			t.Fatalf("Diff compares %d keys of %d for three changes", compared, n)
+		}
+		if Diff(a, a, sameString, func(int) { t.Fatal("a map differs from itself") }) != 0 {
+			t.Fatal("a map compares keys with itself")
 		}
 	})
 }

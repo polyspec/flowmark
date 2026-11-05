@@ -113,7 +113,9 @@ func FuzzExecute(f *testing.F) {
 
 // outcome runs msg and returns its answer, or its error code, as bytes.
 func outcome(t *testing.T, fx *fixture, msg []byte) []byte {
+	before := imageOf(fx.c)
 	res, err := fx.e.Execute(fx.c, msg)
+	wantImage(t, fx.c, before)
 	if err != nil {
 		var e *Error
 		if !errors.As(err, &e) {

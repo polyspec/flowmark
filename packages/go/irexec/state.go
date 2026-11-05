@@ -169,6 +169,7 @@ func (w *writer) historyRow(x *rec, sm *catalog.StateMachine, from, to string, r
 		if placement != sm.History.Row || ht.Storage.Parent != x.tb.Name {
 			return cell{}, errf(codeInternal, "the catalog admitted the history storage block %s of %s", ht.Storage.ParentForeignKey, ht.Name)
 		}
+		x = w.own(x)
 		if x.row.Blocks == nil {
 			x.row.Blocks = map[string][]*store.Row{}
 		}
@@ -176,7 +177,7 @@ func (w *writer) historyRow(x *rec, sm *catalog.StateMachine, from, to string, r
 		w.touched[x.file] = true
 	case catalog.StorageDocument:
 		path := ht.Name + docSuffix
-		f := w.next.file(path)
+		f := w.ownFile(path)
 		if f == nil {
 			f = &file{table: ht.Name}
 			w.next.setFile(path, f)

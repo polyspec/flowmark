@@ -3,6 +3,7 @@ package statement_test
 import (
 	"context"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -138,7 +139,8 @@ type costOp struct {
 }
 
 // costOps are the point operations of the cost cases: a read, an insert, an update and a delete on each table, and an
-// external edit of one file, answered by the read after it.
+// external edit of one file, answered by the read after it. The reads come first, on the corpus the warming statement
+// read, so nothing changed before them.
 var costOps = []costOp{
 	{"read task", func(t *testing.T, s *writepath.Session, _ string) {
 		run(t, s, "SELECT title FROM tasks WHERE id = 'T7'")
@@ -212,16 +214,40 @@ var equalCost = map[string][]cost.Counter{
 // readCost are the counts of a corpus read: the documents it visits and parses, and the rows it places and indexes.
 var readCost = []cost.Counter{cost.FilesVisited, cost.FilesParsed, cost.RowsPlaced, cost.RowsIndexed}
 
+// quietCost names the operations that count nothing: a read of a corpus nothing changed since the statement before it.
+var quietCost = map[string]bool{"read task": true, "read note": true}
+
 // editReadCost are the counts of the read after an external edit; the rows the edit's database refresh indexes are T42's.
 var editReadCost = []cost.Counter{cost.FilesVisited, cost.FilesParsed, cost.RowsPlaced}
 
-// writeReadCost are the counts of the reads of a write, at its start and under the lock at its commit; the rows its
-// post-image indexes are T39's.
-var writeReadCost = []cost.Counter{cost.FilesVisited, cost.FilesParsed, cost.RowsPlaced}
+// writeReadCost are the counts of the reads of a write, at its start and under the lock at its commit, and the rows its
+// post-image copies (T39); the rows the post-image indexes are T40's.
+var writeReadCost = []cost.Counter{cost.FilesVisited, cost.FilesParsed, cost.RowsPlaced, cost.RowsCopied}
+
+// logCost names, for each operation, the counters whose count grows at most with the logarithm of the documents of
+// the corpus: a comparison of two corpora walks the paths of the ordered map of their documents to the documents that
+// differ, as a lookup in a B-tree walks its depth (T39). Each count is at most logFactor times the base-2 logarithm of
+// the documents, at every size of costSizes.
+var logCost = map[string][]cost.Counter{
+	"insert task": {cost.FilesCompared}, "insert note": {cost.FilesCompared},
+	"update task": {cost.FilesCompared}, "update note": {cost.FilesCompared},
+	"delete task": {cost.FilesCompared}, "delete note": {cost.FilesCompared},
+	"external edit": {cost.FilesCompared},
+}
+
+// logFactor bounds a logarithmic count: a comparison walks at most the depth of the map, which the treap of pmap keeps
+// within three times the base-2 logarithm of its keys with high probability, along the paths of at most two changed
+// documents and their neighbours.
+const logFactor = 8
+
+// costDocuments is the number of documents of a corpus of costDBS of rows rows: a project file per sibling group of
+// tasks and a notes document per group of notes.
+func costDocuments(rows int) int { return rows / costGroup }
 
 // TestCost measures what each point operation touches at each size of costSizes (plan, Ruling: an operation costs what
-// it touches): the counts are the engine's own, so two corpora of the same rows count the same, every operation reads
-// the corpus it answers from, and each count equalCost names is equal at every size.
+// it touches): the counts are the engine's own, so two corpora of the same rows count the same; an operation counts
+// nothing only when nothing changed before it; each count equalCost names is equal at every size; and each count
+// logCost names stays within its logarithmic bound.
 func TestCost(t *testing.T) {
 	t.Run("two corpora of the same rows count the same", func(t *testing.T) {
 		first, second := measure(t, costSizes[0]), measure(t, costSizes[0])
@@ -239,8 +265,13 @@ func TestCost(t *testing.T) {
 		for _, rows := range costSizes {
 			c := counts[rows][op.name]
 			t.Logf("%s at %d rows: %s", op.name, rows, describe(c))
-			if c == (cost.Snapshot{}) {
-				t.Errorf("%s at %d rows counts nothing", op.name, rows)
+			if quiet := c == (cost.Snapshot{}); quiet != quietCost[op.name] {
+				t.Errorf("%s at %d rows counts %s, and it counts nothing only when nothing changed before it", op.name, rows, describe(c))
+			}
+			for _, k := range logCost[op.name] {
+				if bound := logFactor * math.Log2(float64(costDocuments(rows))); float64(c.Get(k)) > bound {
+					t.Errorf("%s at %d rows counts %d %s, more than %.0f, logFactor times the logarithm of its documents", op.name, rows, c.Get(k), k, bound)
+				}
 			}
 		}
 		for _, k := range equalCost[op.name] {

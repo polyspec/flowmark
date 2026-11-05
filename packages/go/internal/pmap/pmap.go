@@ -2,16 +2,21 @@
 // the old one, so a corpus read, a write's post-image and the next read cost the keys they change, not the keys they
 // hold (plan, Ruling: an operation costs what it touches).
 //
-// The map is a treap: a binary search tree on the keys that is a heap on random priorities, so its expected depth is
-// O(log n) whatever the order of the changes. A change copies the nodes on the paths it splits and joins; the old map
+// The map is a treap: a binary search tree on the keys that is a heap on priorities, so its expected depth is O(log n)
+// whatever the order of the changes. A key's priority is its hash under a seed the process draws at random, so the
+// shape of a map is a function of its keys alone: two maps of the same keys have the same shape, however they were
+// built, Diff compares them along the same paths, and no order of keys a caller chooses makes the tree deep. A change copies the nodes on the paths it splits and joins; the old map
 // is never changed, so maps are safe to share between goroutines that only read them.
 package pmap
 
 import (
 	"cmp"
+	"hash/maphash"
 	"iter"
-	"math/rand/v2"
 )
+
+// seed is the hash seed of the priorities, one for the process.
+var seed = maphash.MakeSeed()
 
 // Map is a persistent ordered map from K to V. The zero Map is empty and ready to use.
 type Map[K cmp.Ordered, V any] struct {
@@ -49,12 +54,10 @@ func (m Map[K, V]) Get(k K) (V, bool) {
 func (m Map[K, V]) Set(k K, v V) Map[K, V] {
 	l, e, r := split(m.root, k)
 	n := m.n
-	prio := rand.Uint64()
-	if e != nil {
-		prio = e.prio
-	} else {
+	if e == nil {
 		n++
 	}
+	prio := maphash.Comparable(seed, k)
 	return Map[K, V]{root: join(join(l, &node[K, V]{key: k, val: v, prio: prio}), r), n: n}
 }
 
@@ -165,4 +168,35 @@ func descendAll[K cmp.Ordered, V any](t *node[K, V], yield func(K, V) bool) bool
 		t = t.left
 	}
 	return true
+}
+
+// Diff calls f with each key that a and b do not hold alike, in ascending order: a key one of them holds and the
+// other does not, or a key whose values same reports unequal. A subtree the two maps share is skipped whole, so maps
+// that one was changed from the other differ in the keys of the changes, and Diff costs those keys, not the keys the
+// maps hold. It returns the number of keys it compared.
+func Diff[K cmp.Ordered, V any](a, b Map[K, V], same func(x, y V) bool, f func(k K)) int {
+	return diff(a.root, b.root, same, f)
+}
+
+func diff[K cmp.Ordered, V any](a, b *node[K, V], same func(x, y V) bool, f func(k K)) int {
+	switch {
+	case a == b:
+		return 0
+	case a == nil:
+		n := 0
+		ascend(b, nil, func(k K, _ V) bool { n++; f(k); return true })
+		return n
+	case b == nil:
+		n := 0
+		ascend(a, nil, func(k K, _ V) bool { n++; f(k); return true })
+		return n
+	}
+	// Splitting b at a's key keeps every subtree of b off the path to the key, so what b shares with a's subtrees
+	// stays shared.
+	l, e, r := split(b, a.key)
+	n := diff(a.left, l, same, f) + 1
+	if e == nil || !same(a.val, e.val) {
+		f(a.key)
+	}
+	return n + diff(a.right, r, same, f)
 }

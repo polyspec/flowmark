@@ -1,5 +1,5 @@
 <!-- doc-id: plans-design-plan -->
-<!-- source-sha256: 18bcc01e4ebaa0b9dbd79f6a4981f72e3bc8d2de5269ce03c606d6bbaf6dc543 -->
+<!-- source-sha256: 536336af6b751d2b9365b855b6904de49d09188ba29035f48e760d7478d45a85 -->
 # flowmark 설계 계획
 
 Revision 2 — 3개 lane의 적대 감사 결과(engine core, orm 통합, 운영)와 multi-platform 지시를 아래 판정에 접는다. 감사의 blocker는 전부 판정이 되었고, 부수지 못한 주장은 문서 끝에 남긴다.
@@ -157,14 +157,18 @@ flowmark = the markdown database engine (one Go binary)
    recovery도 그렇게 한다. corpus는 자신을 읽은 세대를 지닌다. 외부 편집은 commit을 거치지 않으므로 세대가 없고, tree의 알림으로
    알려진다.
 3. **증분 corpus 읽기(T38).** 읽기는 지난 읽기 이후 tree의 알림이 이름 댄 경로와, 자신의 세대 이후 commit들의 경로를 받으며, 후자는
-   먼저 tree에서 잊는다. 명시된 수보다 오래된 세대와 overflow는 tree를 다시 읽는다. `validate`와 `irexec.Open`은 그 파일을 읽고,
-   파일을 넘는 규칙(중복 key, 부모 순환, availability, 위치, 그리고 참조: 다른 파일의 key를 이름 대는 foreign key)을 그 파일에 대해
-   갱신하는 index로 유지한다. 바뀐 key는 그것을 참조하는 파일을 다시 읽으며, 참조의 역 index가 그 파일을 이름 댄다. 증분으로 읽은
-   corpus는 처음부터 읽은 corpus와 같고, 이는 표 형식이며 fuzz된다.
-4. **copy-on-write post-image(T39).** 쓰기는 자신이 바꾸는 파일만 복사하고 나머지는 공유한다. commit은 알림이 무엇을 말했든 자신의
-   target을 disk에서 읽고, 그것과 알림이 이름 댄 경로를 비교한다. `Differs`는 그 경로만의 conflict 검사에 남는다.
+   먼저 tree에서 잊는다. 명시된 수보다 오래된 세대와 overflow는 tree를 다시 읽는다. `validate.Live`는 그 folder와 문서만 다시 읽고,
+   한 읽기를 다른 읽기에 기대게 하는 것을 그것들에 대해 갱신하는 index로 유지한다: 각 key의 link target과 그 key를 물은 link가 있는
+   문서(target이 바뀌면 정확히 그 문서만 다시 parse한다), 그리고 표를 쓸 수 없게 하는 중복 key와 읽을 수 없는 entry다.
+   `irexec.FromSnapshot`은 바뀌지 않은 문서를 모두 이전 corpus와 공유한다. 증분 읽기는 처음부터 읽은 결과와 같고, 이는 표 형식이며
+   fuzz된다. 읽기의 결과가 아닌 파일을 넘는 규칙 — 부모 순환, 위치, 참조 — 은 commit의 검사이며, T40이 key로 읽는다.
+4. **copy-on-write post-image(T39).** 쓰기의 post-image는 읽은 corpus의 문서를 공유하고, 어떤 문서의 행을 처음 바꿀 때 복사한다.
+   commit은 알림이 무엇을 말했든 자신의 target을 disk에서 읽는다. 서로에게서 읽거나 쓴 두 corpus는 모양이 key의 함수인, 문서의
+   순서 있는 map의 경로를 따라 다른 곳에서만 비교하므로, `Differs`는 문서 수의 로그만큼 걷는다.
 5. **key로 행 접근(T40).** 표의 저장된 행은 표를 읽지 않고 key로 읽는다. `placeBack`은 쓰기가 옮긴 형제 묶음을 배치하고,
-   `allocate`는 corpus가 유지하는 index에서 prefix의 가장 큰 key를 가져온다.
+   `allocate`는 corpus가 유지하는 index에서 prefix의 가장 큰 key를 가져온다. 그리고 commit이 대상 행의 key, 참조, 부모 순환, 위치,
+   limit, unique column을 검사할 때는 표의 모든 행이 아니라, corpus가 문서별로 유지하고 corpus 사이에 공유하는 index로 필요한 행을
+   읽는다.
 6. **문장의 차이는 알려진다(T41).** database의 writer 연결은 수명 동안 쥐는 `*sql.Conn` 하나이고, 그 위에서 SQLite의 preupdate
    hook은 문장, 그 trigger, foreign key action이 건드린 행을 기록한다: 표, 연산, 예전과 새 rowid, 그리고 예전과 새 key. hook이 알리는
    key는 그 길이로 읽는다(`sqlite3_value_bytes`, NUL에서 text 읽기를 멈추는 driver의 polyspec fork를 통해). text가 온전하지 않거나

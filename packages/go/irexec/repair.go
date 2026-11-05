@@ -59,7 +59,7 @@ func (e *Executor) repair(c *Corpus, table, key, from string, now time.Time) (*R
 	if x == nil {
 		return nil, errf(codeNoRows, "no %s row has the key %s", table, key)
 	}
-	w := &writer{r: &reader{e: e, c: c, cl: &call{now: now}}, c: c, next: c.clone(), tb: tb, touched: map[string]bool{}, answer: &Answer{Kind: "insert"}}
+	w := &writer{r: &reader{e: e, c: c, cl: &call{now: now}}, c: c, next: c.fork(), tb: tb, touched: map[string]bool{}, answer: &Answer{Kind: "insert"}}
 	x = w.nextOf(x)
 	refuse := func(column, msg string) *Error {
 		return faultError([]store.Refusal{{Table: table, Key: key, Index: -1, Column: column, Rule: codeConstraint, Message: msg}})

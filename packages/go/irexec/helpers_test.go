@@ -6,6 +6,8 @@ import (
 	"github.com/polyspec/flowmark/packages/go/internal/corpustest"
 	"os"
 	"path/filepath"
+	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -120,7 +122,9 @@ func (f *fixture) msgAt(now, kind, entity string, body map[string]any, params ..
 
 // run executes a message against the fixture's corpus.
 func (f *fixture) run(m []byte) (*Result, *Error) {
+	before := imageOf(f.c)
 	res, err := f.e.Execute(f.c, m)
+	wantImage(f.t, f.c, before)
 	if err != nil {
 		var e *Error
 		if !errors.As(err, &e) {
@@ -289,4 +293,40 @@ func rowIDs(t testing.TB, res *Result) []string {
 		ids = append(ids, s)
 	}
 	return ids
+}
+
+// fileImage is a deep copy of a corpus document: its table, bytes, rows and diagnostics.
+type fileImage struct {
+	table string
+	data  []byte
+	rows  []*store.Row
+	diags []catalog.Diagnostic
+}
+
+// imageOf returns a deep copy of every document of c, which a request must leave as it was: a write computes its next
+// corpus beside c and shares c's documents, so a change of a shared row would change the corpus it read.
+func imageOf(c *Corpus) map[string]fileImage {
+	out := map[string]fileImage{}
+	for p, f := range c.files.All() {
+		rows := make([]*store.Row, len(f.rows))
+		for i, r := range f.rows {
+			rows[i] = cloneRow(r)
+		}
+		out[p] = fileImage{f.table, slices.Clone(f.data), rows, slices.Clone(f.diags)}
+	}
+	return out
+}
+
+// wantImage requires every document of c to equal its image before the request.
+func wantImage(t testing.TB, c *Corpus, before map[string]fileImage) {
+	t.Helper()
+	after := imageOf(c)
+	if len(after) != len(before) {
+		t.Fatalf("the request changed the documents of the corpus it read: %d before, %d after", len(before), len(after))
+	}
+	for p, b := range before {
+		if !reflect.DeepEqual(after[p], b) {
+			t.Fatalf("the request changed %s of the corpus it read", p)
+		}
+	}
 }

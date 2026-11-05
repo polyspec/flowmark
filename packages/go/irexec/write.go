@@ -31,9 +31,9 @@ type writer struct {
 	// dupFaulted holds the rows that have their one duplicate fault.
 	dupFaulted map[*given]bool
 	answer     *Answer
-	// copies maps each corpus row to its copy in the next corpus, before the
-	// write changes the copy.
-	copies map[*rec]*rec
+	// copies maps each row of the corpus the write read to its copy in the next corpus, for the documents the write made
+	// its own (ownFile).
+	copies map[*store.Row]*store.Row
 }
 
 // fault is a fault of a refused write with the position of its row in request
@@ -81,7 +81,7 @@ func (e *Executor) write(c *Corpus, cl *call) (*Result, *Error) {
 		plain.Audit = nil
 		tb = &plain
 	}
-	w := &writer{r: r, c: c, next: c.clone(), tb: tb, ent: ent, touched: map[string]bool{}, answer: &Answer{Kind: req.Kind}}
+	w := &writer{r: r, c: c, next: c.fork(), tb: tb, ent: ent, touched: map[string]bool{}, answer: &Answer{Kind: req.Kind}}
 	var err *Error
 	switch {
 	case cl.stated && req.Kind == "update" && len(cl.updates) > 0:
@@ -173,7 +173,7 @@ func (w *writer) statedDelete() *Error {
 			w.touched[x.file] = true
 		}
 		for path := range w.touched {
-			f := w.next.file(path)
+			f := w.ownFile(path)
 			f.rows = slices.DeleteFunc(slices.Clone(f.rows), func(r *store.Row) bool { return gone[r] })
 			if len(f.rows) == 0 && w.tb.Storage.Shard != nil {
 				w.next.dropFile(path)
@@ -204,19 +204,71 @@ func (w *writer) statedUpdate() *Error {
 	return nil
 }
 
-// clone returns a deep copy of the corpus's rows, which a write changes.
-func (c *Corpus) clone() *Corpus {
-	n := &Corpus{cat: c.cat, unavailable: c.unavailable, walk: c.walk, cost: c.cost}
-	for p, f := range c.files.All() {
-		c.cost.Add(cost.RowsCopied, len(f.rows))
-		rows := make([]*store.Row, len(f.rows))
-		for i, r := range f.rows {
-			rows[i] = cloneRow(r)
-		}
-		n.setFile(p, &file{table: f.table, data: f.data, rows: rows, diags: f.diags})
-	}
+// fork returns the corpus a write computes from c: it shares every document of c, and the write makes its own copy of
+// a document before it changes one (ownFile), so the write copies the documents it changes, not the corpus (plan,
+// Ruling: an operation costs what it touches).
+func (c *Corpus) fork() *Corpus {
+	n := &Corpus{cat: c.cat, files: c.files, unavailable: c.unavailable, walk: c.walk, cost: c.cost}
 	n.index()
 	return n
+}
+
+// ownFile returns the document at path of the next corpus as the write's own copy, which it may change, nil when the
+// next corpus holds none. A document the next corpus still shares with the corpus the write read is copied with its
+// rows, and the records of the next corpus that hold them take the copies, so a record the write holds stays the
+// record of its row.
+func (w *writer) ownFile(path string) *file {
+	f := w.next.file(path)
+	if f == nil || f != w.c.file(path) {
+		return f
+	}
+	cp := &file{table: f.table, data: f.data, diags: f.diags, rows: make([]*store.Row, len(f.rows))}
+	copies := map[*store.Row]*store.Row{}
+	for i, r := range f.rows {
+		cp.rows[i] = cloneRowInto(r, copies)
+	}
+	w.c.cost.Add(cost.RowsCopied, len(copies))
+	w.next.setFile(path, cp)
+	if w.copies == nil {
+		w.copies = map[*store.Row]*store.Row{}
+	}
+	for old, row := range copies {
+		w.copies[old] = row
+		if x := w.next.byRow[old]; x != nil {
+			x.row = row
+			delete(w.next.byRow, old)
+			w.next.byRow[row] = x
+		}
+	}
+	return cp
+}
+
+// own returns the record x of the next corpus after the write made its document its own (ownFile), so x.row may be
+// changed.
+func (w *writer) own(x *rec) *rec {
+	w.next.ensureIndex()
+	if w.next.byRow[x.row] != x {
+		panic("irexec: a write changes a record that is not of its next corpus")
+	}
+	w.ownFile(x.file)
+	return x
+}
+
+// cloneRowInto copies the row r and its block rows as cloneRow does, recording each copy by the row it copies.
+func cloneRowInto(r *store.Row, copies map[*store.Row]*store.Row) *store.Row {
+	cp := cloneRow(r)
+	copies[r] = cp
+	var walk func(a, b *store.Row)
+	walk = func(a, b *store.Row) {
+		for name, rows := range a.Blocks {
+			for i, child := range rows {
+				copies[child] = b.Blocks[name][i]
+				walk(child, b.Blocks[name][i])
+			}
+		}
+	}
+	walk(r, cp)
+	return cp
 }
 
 // cloneRow copies a row and its block rows.
@@ -240,19 +292,18 @@ func cloneRow(r *store.Row) *store.Row {
 	return &cp
 }
 
-// nextOf returns the row of the next corpus that is the corpus row x. The copy is
-// indexed in the corpus's order, so a row and its copy share their position; the
-// write asks for it before it changes the copy.
+// nextOf returns the record of the next corpus that is the corpus row x, its document made the write's own (ownFile),
+// since the write asks for it before it changes it.
 func (w *writer) nextOf(x *rec) *rec {
-	if w.copies == nil {
-		w.copies = map[*rec]*rec{}
-		for t, xs := range w.c.allRecs() {
-			for i, y := range xs {
-				w.copies[y] = w.next.tableRecs(t)[i]
-			}
-		}
+	row := x.row
+	if cp, ok := w.copies[row]; ok {
+		row = cp
 	}
-	return w.copies[x]
+	y := w.next.recOf(row)
+	if y == nil {
+		return nil
+	}
+	return w.own(y)
 }
 
 // fault records a fault of the row g at column.
@@ -640,7 +691,7 @@ func (w *writer) insertRow(i int, ps []*int) *Error {
 		if path == "" {
 			return nil
 		}
-		f := w.next.file(path)
+		f := w.ownFile(path)
 		if f == nil {
 			f = &file{table: tb.Name}
 			w.next.setFile(path, f)
@@ -658,6 +709,7 @@ func (w *writer) insertRow(i int, ps []*int) *Error {
 			w.fault(g, tb.Name, tb.Placement(), codeForeignKey, fmt.Sprintf("the foreign key %s names no %s row with the key %s", tb.Placement(), tb.Storage.Parent, pv.text))
 			return nil
 		}
+		p = w.own(p)
 		if p.row.Blocks == nil {
 			p.row.Blocks = map[string][]*store.Row{}
 		}
@@ -904,7 +956,7 @@ func (w *writer) updateRows(rows []*rec, set []ir.Assign, stamp bool) *Error {
 		return errf(codeConstraint, "an update that assigns the order column %s matches %d rows; it must match exactly one", tb.Order, len(rows))
 	}
 	for i, x := range rows {
-		x = w.next.recOf(x.row) // an earlier row's move may have re-indexed the corpus
+		x = w.own(w.next.recOf(x.row)) // an earlier row's move may have re-indexed the corpus
 		g := &given{row: x.row, index: i, assigned: map[string]bool{}, before: map[string]cell{}}
 		w.take(g)
 		for _, c := range tb.Columns {
@@ -1017,12 +1069,12 @@ func (w *writer) moveShard(g *given, x *rec, v cell) *Error {
 		x.row.Path = to
 		w.next.setFile(to, &file{table: tb.Name, rows: []*store.Row{x.row}})
 	} else {
-		from := w.next.file(x.file)
+		from := w.ownFile(x.file)
 		from.rows = slices.DeleteFunc(slices.Clone(from.rows), func(r *store.Row) bool { return r == x.row })
 		if len(from.rows) == 0 {
 			w.next.dropFile(x.file)
 		}
-		dest := w.next.file(to)
+		dest := w.ownFile(to)
 		if dest == nil {
 			dest = &file{table: tb.Name}
 			w.next.setFile(to, dest)
@@ -1047,11 +1099,12 @@ func (w *writer) movePlacement(g *given, x *rec, v cell) *Error {
 		w.fault(g, tb.Name, tb.Placement(), codeForeignKey, fmt.Sprintf("the foreign key %s names no %s row with the key %s", tb.Placement(), tb.Storage.Parent, v.text))
 		return nil
 	}
-	old := x.parent.row
+	old := w.own(x.parent).row
 	old.Blocks[tb.Name] = slices.DeleteFunc(slices.Clone(old.Blocks[tb.Name]), func(r *store.Row) bool { return r == x.row })
 	if len(old.Blocks[tb.Name]) == 0 {
 		delete(old.Blocks, tb.Name)
 	}
+	p = w.own(p)
 	if p.row.Blocks == nil {
 		p.row.Blocks = map[string][]*store.Row{}
 	}
@@ -1252,6 +1305,7 @@ func (w *writer) restrict(x *rec, seq int, gone []*rec) *Error {
 			return nil
 		case dbspec.ActionSetNull:
 			if !taken {
+				y = w.own(y)
 				for _, col := range fk.Columns {
 					setValue(t, y.row, col, cell{null: true})
 				}
@@ -1284,13 +1338,13 @@ func (w *writer) removeRow(x *rec) *Error {
 	case catalog.StorageFiles:
 		w.next.dropFile(x.file)
 	case catalog.StorageDocument:
-		f := w.next.file(x.file)
+		f := w.ownFile(x.file)
 		f.rows = slices.DeleteFunc(slices.Clone(f.rows), func(r *store.Row) bool { return r == x.row })
 		if len(f.rows) == 0 && tb.Storage.Shard != nil {
 			w.next.dropFile(x.file)
 		}
 	case catalog.StorageBlock:
-		p := x.parent.row
+		p := w.own(x.parent).row
 		p.Blocks[tb.Name] = slices.DeleteFunc(slices.Clone(p.Blocks[tb.Name]), func(r *store.Row) bool { return r == x.row })
 		if len(p.Blocks[tb.Name]) == 0 {
 			delete(p.Blocks, tb.Name)

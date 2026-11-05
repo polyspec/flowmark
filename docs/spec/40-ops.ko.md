@@ -1,5 +1,5 @@
 <!-- doc-id: spec-ops -->
-<!-- source-sha256: 215bd3246803cfd9a458f09fdaf4824756a3ade316c625cecca8ac2651498c27 -->
+<!-- source-sha256: 26d44e8eba64caca43d2575a709a68609637ec72640bc65e151a25d8f9fe9ba8 -->
 # Operations
 
 [English](40-ops.md)
@@ -535,9 +535,17 @@ MySQL과 PostgreSQL은 `datetime(p)` column을 `NOW(6)`와 여섯 자리로 비�
   예산은 문서마다 행 하나일 때 — 행이 가장 많이 드는 경우 — 행마다 heap 8 KB이며,
   `TestKeptHeapBudget`이 지킨다(macOS에서 4.5 KB). 행이 많은 문서도 통째로 가진다. 그것을 parse할 때
   할당하는 것은 아래 codec의 비용이다.
-- 쓰기는 여전히 바뀐 대상마다 통째로 parse하고 render하며, executor의 post-image는 corpus의 행을
-  복사하므로 쓰기 비용은 대상 file과 행에 따라 커진다. 대상 file의 크기를 묶는 것은 [규모 한계](#규모-한계)이며,
-  대상의 byte당 비용은 codec의 비용이다.
+- 쓰기는 바뀐 대상마다 통째로 parse하고 render한다. executor의 post-image는 읽은 corpus의 문서를 모두
+  공유하고, 쓰기가 어떤 문서를 처음 바꿀 때에만 그 문서의 행을 복사한다. 그래서 쓰기는 corpus가 아니라 대상
+  file을 복사한다. 대상 file의 크기를 묶는 것은 [규모 한계](#규모-한계)이며, 대상의 byte당 비용은 codec의
+  비용이다. `irexec`의 `TestPostImage`가 공유를 확인하고, executor 시험의 모든 요청은 읽은 corpus가 그대로인지
+  확인한다.
+- 서로에게서 읽거나 쓴 두 corpus는 다른 곳에서만 비교한다: 문서는 바뀌지 않은 부분 tree를 둘이 공유하는 순서
+  있는 map이므로, 비교 — 예를 들어 commit이 lock 아래에서 다시 읽은 corpus를 transaction이 읽은 corpus와
+  비교하는 것 — 는 다른 문서까지의 경로만 걷는다. 그 길이는 B-tree의 조회가 그 깊이를 걷듯 문서 수의 로그의
+  상수배 이하다. map의 모양은 process가 뽑은 seed 아래의 hash를 거쳐 key의 함수가 되므로, 같은 문서의 두
+  map은 같은 경로를 따라 비교된다. `TestCost`가 둘을 확인한다: 쓰기는 1,000행과 100,000행에서 같은 행을
+  복사하고, 문서 수의 밑 2 로그의 여덟 배 이하를 비교한다.
 - **codec의 비용**은 file의 byte에 선형이다: 상세 섹션을 가진 행들의 document file에서, file의 parse와
   render는 각각 그 megabyte당 CPU 0.1초 이하가 들고 그 byte당 64 byte 이하를 할당한다. 어떤 pass도 각
   heading을 각 상세 anchor와, 또는 각 행을 각 행과 비교하지 않는다: heading의 slug는 자기가 가져가는

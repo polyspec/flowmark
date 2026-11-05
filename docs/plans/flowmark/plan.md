@@ -160,15 +160,20 @@ Each layer is a row, in this order, and each row's Red is a count of the cost co
    read at. An external edit goes through no commit and has no generation; it is learned from the tree's notifications.
 3. **An incremental corpus read (T38).** A read takes the paths the tree's notifications name since the last read and the
    paths of the commits since its generation, which it forgets in the tree first; a generation older than the stated
-   number, and an overflow, read the tree again. `validate` and `irexec.Open` read those files and keep the cross-file
-   rules (duplicate keys, parent cycles, availability, positions, and references: a foreign key that names a key of another
-   file) in indexes they update for those files; a changed key reads again the files that reference it, which a reverse
-   index of references names. The corpus read incrementally equals the corpus read from nothing, table-driven and fuzzed.
-4. **A copy-on-write post-image (T39).** A write copies the files it changes and shares the others. The commit reads its
-   targets from disk, whatever the notifications said, and compares them and the paths the notifications name; `Differs`
-   stays for the conflict check of those paths alone.
+   number, and an overflow, read the tree again. `validate.Live` reads again only those folders and documents and keeps
+   what makes one read depend on another in indexes it updates for them: the link targets of every key with the
+   documents whose links asked for each (a changed target parses again exactly those documents), and the duplicate keys
+   and unreadable entries that make a table unavailable. `irexec.FromSnapshot` shares every unchanged document with the
+   corpus before. The incremental read equals the read from nothing, table-driven and fuzzed. The cross-file rules that
+   are no read result — parent cycles, positions, references — are the commit's checks, which T40 reads by key.
+4. **A copy-on-write post-image (T39).** A write's post-image shares the documents of the corpus it read and copies a
+   document's rows when it first changes them. The commit reads its targets from disk, whatever the notifications said;
+   two corpora read or written one from the other are compared where they differ, along the paths of the ordered map of
+   their documents, whose shape is a function of its keys, so `Differs` walks the logarithm of the documents.
 5. **Keyed row access (T40).** A stored row of a table is read by its key without reading the table; `placeBack` places
-   the sibling group a write moved; `allocate` takes the largest key of a prefix from an index that the corpus keeps.
+   the sibling group a write moved; `allocate` takes the largest key of a prefix from an index that the corpus keeps; and
+   the commit's checks of the keys, references, parent cycles, positions, limits and unique columns of its target rows read
+   the rows they need through indexes the corpus keeps per document and shares between corpora, not every row of a table.
 6. **The difference of a statement is published (T41).** The database's writer connection is one `*sql.Conn` held for its life,
    on which SQLite's preupdate hook records which rows a statement, its triggers and its foreign key actions touched: table,
    operation, old and new rowid, and the old and new key. A key the hook reports is read with its length

@@ -74,7 +74,7 @@ func joinedKey(tb *catalog.Table, values map[string]string) string {
 // appendRow adds a row the write originates to its table, stored as a document.
 func (w *writer) appendRow(tb *catalog.Table, row *store.Row) {
 	path := tb.Name + docSuffix
-	f := w.next.file(path)
+	f := w.ownFile(path)
 	if f == nil {
 		f = &file{table: tb.Name}
 		w.next.setFile(path, f)

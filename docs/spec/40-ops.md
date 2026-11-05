@@ -619,9 +619,20 @@ and MySQL and PostgreSQL compare a `datetime(p)` column with `NOW(6)` at six dig
   executor and the document's watch: its budget is 8 KB of heap per row at one row a document, the
   most a row costs, and `TestKeptHeapBudget` holds it (4.5 KB measured on macOS). A document of many
   rows is held whole; what parsing it allocates is the codec's cost below.
-- A write still parses and renders each changed target whole, and the executor's post-image copies
-  the rows of the corpus, so a write's cost grows with its target files and with the rows; bounding
-  the size of a target file is [the scale envelope](#the-scale-envelope), and the cost per byte of a target is the codec's cost.
+- A write parses and renders each changed target whole. The executor's post-image shares every
+  document of the corpus it read and copies the rows of a document only when the write first changes
+  it, so a write copies its target files, not the corpus; bounding the size of a target file is
+  [the scale envelope](#the-scale-envelope), and the cost per byte of a target is the codec's cost.
+  `TestPostImage` of `irexec` holds the sharing, and every request of the executor's tests checks
+  that the corpus it read is unchanged.
+- Two corpora read or written one from the other are compared where they differ: the documents are
+  an ordered map whose unchanged subtrees the two share, so a comparison, such as the commit's of the
+  corpus re-read under the lock with the corpus its transaction read, walks the paths to the
+  documents that differ, at most a constant times the logarithm of the documents, as a lookup in a
+  B-tree walks its depth. The shape of the map is a function of its keys, through a hash under a seed
+  the process draws, so two maps of the same documents compare along the same paths. `TestCost`
+  holds both: a write copies the same rows at 1,000 and at 100,000 rows, and compares at most eight
+  times the base-2 logarithm of the documents.
 - **The codec's cost** is linear in the bytes of a file: the parse and the render of a file each take
   at most 0.1 s of CPU per megabyte of it and allocate at most 64 bytes per byte of it, for a document
   file of rows with detail sections. No pass compares each heading with each detail anchor, or each
