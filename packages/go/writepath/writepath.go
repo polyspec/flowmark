@@ -14,6 +14,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/polyspec/flowmark/packages/go/internal/cost"
 	"io"
 	"io/fs"
 	"sync"
@@ -109,11 +110,13 @@ func lockError(err error) *Error {
 // Corpus is a corpus opened through the write path: its catalog and executor, its journal corpus, and the lock wait
 // of its operations.
 type Corpus struct {
-	cat   *catalog.Catalog
-	exec  *irexec.Executor
-	j     *journal.Corpus
-	tree  *journal.Tree
-	memo  *validate.Memo
+	cat  *catalog.Catalog
+	exec *irexec.Executor
+	j    *journal.Corpus
+	tree *journal.Tree
+	memo *validate.Memo
+	// cost counts the work of the corpus's operations (plan, Ruling: an operation costs what it touches).
+	cost  *cost.Counts
 	root  string
 	wait  time.Duration
 	clock func() time.Time
@@ -140,11 +143,12 @@ func Open(ctx context.Context, cat *catalog.Catalog, j *journal.Corpus, wait tim
 	if err != nil {
 		return nil, err
 	}
-	tree, err := j.Tree()
+	k := &cost.Counts{}
+	tree, err := j.Tree(k)
 	if err != nil {
 		return nil, driverError("watching the corpus", err)
 	}
-	c := &Corpus{cat: cat, exec: e, j: j, tree: tree, memo: validate.NewMemo(), root: j.Root(), wait: wait, clock: engineClock}
+	c := &Corpus{cat: cat, exec: e, j: j, tree: tree, memo: validate.NewMemo(k), cost: k, root: j.Root(), wait: wait, clock: engineClock}
 	l, err := c.acquire(ctx, "open")
 	if err != nil {
 		return nil, errors.Join(err, c.Close())
@@ -215,6 +219,9 @@ func releaseAfter(l *journal.Lock, written bool, err error) error {
 	}
 	return errors.Join(err, driverError("releasing the corpus lock", rerr))
 }
+
+// Cost returns the counts of the work of the corpus's operations.
+func (c *Corpus) Cost() *cost.Counts { return c.cost }
 
 // read reads the corpus as a request reads it.
 func (c *Corpus) read() (*irexec.Corpus, error) {

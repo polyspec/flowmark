@@ -3,6 +3,7 @@ package irexec
 import (
 	"bytes"
 	"fmt"
+	"github.com/polyspec/flowmark/packages/go/internal/cost"
 	"slices"
 	"sort"
 	"strconv"
@@ -38,6 +39,8 @@ type Corpus struct {
 	positions map[string]map[*rec]int64
 	// byRow finds the record of a row.
 	byRow map[*store.Row]*rec
+	// cost counts the work of the corpus's operations; nil counts nothing.
+	cost *cost.Counts
 }
 
 // file is a corpus document at the place of a files or document table.
@@ -67,7 +70,7 @@ func Open(cat *catalog.Catalog, fsys store.FS, m *validate.Memo) (*Corpus, error
 	if err != nil {
 		return nil, err
 	}
-	c := &Corpus{cat: cat, files: map[string]*file{}, unavailable: map[string]catalog.Diagnostic{}, walk: map[string]catalog.Diagnostic{}}
+	c := &Corpus{cat: cat, files: map[string]*file{}, unavailable: map[string]catalog.Diagnostic{}, walk: map[string]catalog.Diagnostic{}, cost: m.Cost()}
 	for path, f := range s.Files {
 		c.files[path] = &file{table: f.Table, data: f.Data, rows: f.Rows}
 	}
@@ -88,6 +91,9 @@ func Open(cat *catalog.Catalog, fsys store.FS, m *validate.Memo) (*Corpus, error
 	c.index()
 	return c, nil
 }
+
+// Cost returns the counts of the work of the corpus's operations, nil when it counts none.
+func (c *Corpus) Cost() *cost.Counts { return c.cost }
 
 // FilesOf returns the paths of the files that hold rows of table.
 func (c *Corpus) FilesOf(table string) ([]string, error) {
@@ -140,6 +146,7 @@ func (c *Corpus) reorder() {
 
 // place records row r, held by the file path, and its block rows.
 func (c *Corpus) place(r *store.Row, path string, parent *rec) {
+	c.cost.Add(cost.RowsIndexed, 1)
 	tb, _ := c.cat.Table(r.Table)
 	x := &rec{row: r, file: path, parent: parent, tb: tb}
 	c.recs[r.Table] = append(c.recs[r.Table], x)
@@ -213,6 +220,7 @@ func (c *Corpus) tableRows(table string, of func(*rec, dbspec.Column) (any, erro
 		return nil, err
 	}
 	out := make([][]any, 0, len(recs))
+	c.cost.Add(cost.RowsStored, len(recs))
 	for _, x := range recs {
 		row := make([]any, len(x.tb.Columns))
 		for i, col := range x.tb.Columns {
@@ -263,6 +271,7 @@ func (c *Corpus) Data(path string) []byte {
 // the one a transaction read, and to name a change that landed.
 func (c *Corpus) Differs(o *Corpus) []string {
 	set := map[string]bool{}
+	c.cost.Add(cost.FilesCompared, len(c.files))
 	for p, f := range c.files {
 		if g := o.files[p]; g == nil || !bytes.Equal(f.data, g.data) || (f.data == nil) != (g.data == nil) {
 			set[p] = true

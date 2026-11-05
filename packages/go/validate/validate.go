@@ -10,6 +10,7 @@ package validate
 
 import (
 	"fmt"
+	"github.com/polyspec/flowmark/packages/go/internal/cost"
 	"sort"
 
 	"github.com/polyspec/flowmark/packages/go/catalog"
@@ -42,7 +43,7 @@ func load(cat *catalog.Catalog, fsys store.FS, m *Memo) (*corpus, error) {
 		first, second = m.first, m.second
 	}
 	first.Begin(cat)
-	c, err := read(cat, fsys, noTargets{}, first)
+	c, err := read(cat, fsys, noTargets{}, first, m.Cost())
 	if err != nil {
 		return nil, err
 	}
@@ -52,7 +53,7 @@ func load(cat *catalog.Catalog, fsys store.FS, m *Memo) (*corpus, error) {
 		return nil, err
 	}
 	second.Begin(cat)
-	c, err = read(cat, fsys, idx, second)
+	c, err = read(cat, fsys, idx, second, m.Cost())
 	if err != nil {
 		return nil, err
 	}
@@ -65,10 +66,22 @@ func load(cat *catalog.Catalog, fsys store.FS, m *Memo) (*corpus, error) {
 // can differ from the last read's.
 type Memo struct {
 	first, second *store.Memo
+	// cost counts the work of the reads; nil counts nothing.
+	cost *cost.Counts
 }
 
-// NewMemo returns an empty memo.
-func NewMemo() *Memo { return &Memo{first: store.NewMemo(), second: store.NewMemo()} }
+// NewMemo returns an empty memo whose reads count their work in k.
+func NewMemo(k *cost.Counts) *Memo {
+	return &Memo{first: store.NewCountedMemo(k), second: store.NewCountedMemo(k), cost: k}
+}
+
+// Cost returns the counts of the reads through m, nil for a nil memo.
+func (m *Memo) Cost() *cost.Counts {
+	if m == nil {
+		return nil
+	}
+	return m.cost
+}
 
 // sortDiags sorts diagnostics by file, line, column, rule and message.
 func sortDiags(diags []catalog.Diagnostic) {

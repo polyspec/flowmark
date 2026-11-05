@@ -2,6 +2,7 @@ package validate
 
 import (
 	"fmt"
+	"github.com/polyspec/flowmark/packages/go/internal/cost"
 	"io/fs"
 	"strings"
 
@@ -21,7 +22,9 @@ type placed struct {
 
 // corpus is the corpus read under one link target function.
 type corpus struct {
-	cat   *catalog.Catalog
+	cat *catalog.Catalog
+	// cost counts the rows the read places.
+	cost  *cost.Counts
 	diags []catalog.Diagnostic
 	// rows holds the rows of each table in appearance order, the block rows of
 	// a table included under the table's name.
@@ -57,12 +60,12 @@ func (noTargets) Target(fromFile, table, key string) (string, error) {
 
 // read reads the corpus fsys by storage, and reports the walk and the format
 // diagnostics of its files. A row of a block table is read with its placement row.
-func read(cat *catalog.Catalog, fsys store.FS, lk store.Linker, memo *store.Memo) (*corpus, error) {
+func read(cat *catalog.Catalog, fsys store.FS, lk store.Linker, memo *store.Memo, k *cost.Counts) (*corpus, error) {
 	entries, err := fsys.ReadDir(".")
 	if err != nil {
 		return nil, fmt.Errorf("cannot read the corpus root: %w", err)
 	}
-	c := &corpus{cat: cat, rows: map[string][]placed{}, blocked: map[string]bool{}, files: map[string]*File{}}
+	c := &corpus{cat: cat, rows: map[string][]placed{}, blocked: map[string]bool{}, files: map[string]*File{}, cost: k}
 	c.diags = append(c.diags, walkRoot(cat, fsys, entries)...)
 	for _, tb := range cat.Tables {
 		switch tb.Storage.Kind {
@@ -147,6 +150,7 @@ func regularListed(entries []fs.DirEntry, name string) bool {
 // place records row r, whose placement parent row is parent (nil for none), and
 // its block rows, held by file, in their tables.
 func (c *corpus) place(r *store.Row, file string, parent *store.Row) {
+	c.cost.Add(cost.RowsPlaced, 1)
 	c.rows[r.Table] = append(c.rows[r.Table], placed{row: r, file: file, parent: parent})
 	for _, name := range r.BlockNames() {
 		for _, child := range r.Blocks[name] {

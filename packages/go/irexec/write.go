@@ -3,6 +3,7 @@ package irexec
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/polyspec/flowmark/packages/go/internal/cost"
 	"maps"
 	"math/big"
 	"slices"
@@ -205,8 +206,9 @@ func (w *writer) statedUpdate() *Error {
 
 // clone returns a deep copy of the corpus's rows, which a write changes.
 func (c *Corpus) clone() *Corpus {
-	n := &Corpus{cat: c.cat, files: map[string]*file{}, unavailable: c.unavailable, walk: c.walk}
+	n := &Corpus{cat: c.cat, files: map[string]*file{}, unavailable: c.unavailable, walk: c.walk, cost: c.cost}
 	for p, f := range c.files {
+		c.cost.Add(cost.RowsCopied, len(f.rows))
 		rows := make([]*store.Row, len(f.rows))
 		for i, r := range f.rows {
 			rows[i] = cloneRow(r)

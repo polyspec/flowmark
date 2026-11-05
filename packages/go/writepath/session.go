@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"github.com/polyspec/flowmark/packages/go/internal/cost"
 	"io"
 	"io/fs"
 	"slices"
@@ -283,6 +284,9 @@ func (s *Session) ReadCommitted(ctx context.Context, read func(c *irexec.Corpus,
 	return true, s.ReadSnapshot(func(slot *io.Closer, unlock func()) (bool, error) { return read(c, slot, unlock) })
 }
 
+// Cost returns the counts of the work of the session's corpus.
+func (s *Session) Cost() *cost.Counts { return s.c.cost }
+
 // Life is the context that the session's Close ends.
 func (s *Session) Life() context.Context { return s.life }
 
@@ -378,7 +382,7 @@ func (s *Session) Reschema(ctx context.Context, compute func(*irexec.Corpus) (*c
 	if err != nil {
 		return err
 	}
-	s.c.cat, s.c.exec, s.c.memo = cat, e, validate.NewMemo()
+	s.c.cat, s.c.exec, s.c.memo = cat, e, validate.NewMemo(s.c.cost)
 	return nil
 }
 

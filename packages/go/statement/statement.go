@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/polyspec/flowmark/packages/go/internal/cost"
 	"io"
 	"math"
 	"regexp"
@@ -1020,6 +1021,7 @@ func fillTable(ctx context.Context, tx *sql.Tx, c *irexec.Corpus, tb *catalog.Ta
 		if _, err := insert.ExecContext(ctx, args...); err != nil {
 			return &Error{codeInternal, fmt.Sprintf("a row of %s: %v", tb.Name, err)}
 		}
+		c.Cost().Add(cost.DatabaseRowsWritten, 1)
 	}
 	return nil
 }
@@ -1339,7 +1341,7 @@ type tableRows struct {
 func allRows(ctx context.Context, db *sql.DB, c *irexec.Corpus) (map[string]tableRows, error) {
 	out := map[string]tableRows{}
 	for _, tb := range c.Catalog().Tables {
-		rows, err := rowsOf(ctx, db, tb)
+		rows, err := rowsOf(ctx, db, tb, c.Cost())
 		if err != nil {
 			return nil, err
 		}
@@ -1355,7 +1357,7 @@ func allRows(ctx context.Context, db *sql.DB, c *irexec.Corpus) (map[string]tabl
 }
 
 // rowsOf reads the rows of tb from db.
-func rowsOf(ctx context.Context, db *sql.DB, tb *catalog.Table) (_ [][]any, err error) {
+func rowsOf(ctx context.Context, db *sql.DB, tb *catalog.Table, k *cost.Counts) (_ [][]any, err error) {
 	names := columnNames(tb)
 	for i := range names {
 		// Without its declared type the driver reads the stored value itself, not a time of a DATE or DATETIME column.
@@ -1377,6 +1379,7 @@ func rowsOf(ctx context.Context, db *sql.DB, tb *catalog.Table) (_ [][]any, err 
 		if err != nil {
 			return nil, &Error{codeInternal, err.Error()}
 		}
+		k.Add(cost.DatabaseRowsRead, 1)
 		out = append(out, row)
 	}
 	if err := rows.Err(); err != nil {
@@ -1785,14 +1788,14 @@ func allocate(ctx context.Context, db *sql.DB, c *irexec.Corpus, answer *Answer)
 				continue
 			}
 			table, name := quote(t.Name), t.PrimaryKey.Columns[0]
-			open, err := column[int64](ctx, db, "SELECT rowid FROM "+table+" WHERE "+quote(name)+" IS NULL ORDER BY rowid")
+			open, err := column[int64](ctx, db, "SELECT rowid FROM "+table+" WHERE "+quote(name)+" IS NULL ORDER BY rowid", c.Cost())
 			if err != nil {
 				return err
 			}
 			if len(open) == 0 {
 				continue
 			}
-			keys, err := column[string](ctx, db, "SELECT "+quote(name)+" FROM "+table+" WHERE "+quote(name)+" IS NOT NULL")
+			keys, err := column[string](ctx, db, "SELECT "+quote(name)+" FROM "+table+" WHERE "+quote(name)+" IS NOT NULL", c.Cost())
 			if err != nil {
 				return err
 			}
@@ -1818,7 +1821,7 @@ func allocate(ctx context.Context, db *sql.DB, c *irexec.Corpus, answer *Answer)
 }
 
 // column reads the one column of the rows of text.
-func column[T any](ctx context.Context, db *sql.DB, text string) (_ []T, err error) {
+func column[T any](ctx context.Context, db *sql.DB, text string, k *cost.Counts) (_ []T, err error) {
 	rows, err := db.QueryContext(ctx, text)
 	if err != nil {
 		return nil, &Error{codeInternal, err.Error()}
@@ -1830,6 +1833,7 @@ func column[T any](ctx context.Context, db *sql.DB, text string) (_ []T, err err
 		if err := rows.Scan(&v); err != nil {
 			return nil, &Error{codeInternal, err.Error()}
 		}
+		k.Add(cost.DatabaseRowsRead, 1)
 		out = append(out, v)
 	}
 	if err := rows.Err(); err != nil {

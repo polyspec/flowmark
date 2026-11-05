@@ -183,7 +183,7 @@ func apply(ctx context.Context, s *writepath.Session, db *sql.DB, c *irexec.Corp
 		if !slices.Contains(rewrite, tb) {
 			continue
 		}
-		rows, err := rowsOf(ctx, db, tb)
+		rows, err := rowsOf(ctx, db, tb, c.Cost())
 		if err != nil {
 			return nil, nil, err
 		}

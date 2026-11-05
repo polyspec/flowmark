@@ -3,6 +3,7 @@ package journal
 import (
 	"errors"
 	"fmt"
+	"github.com/polyspec/flowmark/packages/go/internal/cost"
 	"io/fs"
 	"path"
 	"strings"
@@ -42,6 +43,8 @@ type Tree struct {
 	fault error
 	// notices is the test seam that rewrites the notifications each Refresh takes; nil outside the tests.
 	notices func(Notices) Notices
+	// cost counts the folders and files read from the disk.
+	cost *cost.Counts
 }
 
 // Notices are the notifications one Refresh takes: Changed names each path whose bytes or entries changed, Moved each
@@ -65,12 +68,12 @@ type treeWatch interface {
 }
 
 // Tree returns the corpus tree of c, its watch armed.
-func (c *Corpus) Tree() (*Tree, error) {
+func (c *Corpus) Tree(k *cost.Counts) (*Tree, error) {
 	w, err := newTreeWatch(c)
 	if err != nil {
 		return nil, fmt.Errorf("watching the corpus %s: %w", c.root, err)
 	}
-	return &Tree{c: c, disk: store.DirFS(c.root), w: w, dirs: map[string][]fs.DirEntry{}, files: map[string][]byte{}}, nil
+	return &Tree{c: c, disk: store.DirFS(c.root), w: w, dirs: map[string][]fs.DirEntry{}, files: map[string][]byte{}, cost: k}, nil
 }
 
 // SetNotices installs the test seam that rewrites the notifications each Refresh takes — to hold one back, as a
@@ -207,6 +210,7 @@ func (t *Tree) ReadDir(name string) ([]fs.DirEntry, error) {
 		return nil, err
 	}
 	t.c.obs.Observe(Event{Kind: CorpusRead, Path: t.c.abs(name)})
+	t.cost.Add(cost.FilesRead, 1)
 	es, err := t.disk.ReadDir(name)
 	if err != nil {
 		return nil, err
@@ -226,6 +230,7 @@ func (t *Tree) ReadFile(name string) ([]byte, error) {
 		return nil, err
 	}
 	t.c.obs.Observe(Event{Kind: CorpusRead, Path: t.c.abs(name)})
+	t.cost.Add(cost.FilesRead, 1)
 	b, err := t.disk.ReadFile(name)
 	if err != nil {
 		return nil, err

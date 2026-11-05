@@ -3,6 +3,7 @@ package store
 import (
 	"bytes"
 	"errors"
+	"github.com/polyspec/flowmark/packages/go/internal/cost"
 	"sync"
 
 	"github.com/polyspec/flowmark/packages/go/catalog"
@@ -22,6 +23,8 @@ type Memo struct {
 	cat  *catalog.Catalog
 	gen  uint64
 	docs map[string]*memoDoc
+	// cost counts the documents the parses visit and parse; nil counts nothing.
+	cost *cost.Counts
 }
 
 // memoDoc is the parse of one document: its inputs, the answers its Linker gave, and its results.
@@ -46,7 +49,10 @@ type linkAnswer struct {
 }
 
 // NewMemo returns an empty memo.
-func NewMemo() *Memo { return &Memo{docs: map[string]*memoDoc{}} }
+func NewMemo() *Memo { return NewCountedMemo(nil) }
+
+// NewCountedMemo returns an empty memo that counts in k the documents its parses visit and parse.
+func NewCountedMemo(k *cost.Counts) *Memo { return &Memo{docs: map[string]*memoDoc{}, cost: k} }
 
 // Begin starts the generation of a read with the catalog cat; a catalog other than the last one drops every parse.
 func (m *Memo) Begin(cat *catalog.Catalog) {
@@ -113,6 +119,17 @@ func (m *Memo) reusable(table, rel string, data []byte, lk Linker) *memoDoc {
 	return d
 }
 
+// visit counts a visit of the document rel and returns its parse when it is reusable, counting a parse when it is not;
+// m.mu is held.
+func (m *Memo) visit(table, rel string, data []byte, lk Linker) *memoDoc {
+	m.cost.Add(cost.FilesVisited, 1)
+	d := m.reusable(table, rel, data, lk)
+	if d == nil {
+		m.cost.Add(cost.FilesParsed, 1)
+	}
+	return d
+}
+
 // ParseFile is ParseFile through the memo.
 func (m *Memo) ParseFile(cat *catalog.Catalog, table, rel string, data []byte, lk Linker) (*Row, []Diagnostic) {
 	if m == nil {
@@ -120,7 +137,7 @@ func (m *Memo) ParseFile(cat *catalog.Catalog, table, rel string, data []byte, l
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if d := m.reusable(table, rel, data, lk); d != nil {
+	if d := m.visit(table, rel, data, lk); d != nil {
 		return d.row, d.diags
 	}
 	r := &recorder{lk: lk}
@@ -136,7 +153,7 @@ func (m *Memo) ParseDocument(cat *catalog.Catalog, table, rel string, data []byt
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if d := m.reusable(table, rel, data, lk); d != nil {
+	if d := m.visit(table, rel, data, lk); d != nil {
 		return d.rows, d.diags, d.err
 	}
 	r := &recorder{lk: lk}

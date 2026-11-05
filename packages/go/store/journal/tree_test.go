@@ -48,7 +48,7 @@ func liveTree(t *testing.T, root string, rec *recorder) *Tree {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tr, err := c.Tree()
+	tr, err := c.Tree(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,7 +70,7 @@ func scriptedTree(t *testing.T, files map[string]string) (*Tree, *scriptedWatch,
 	if err != nil {
 		t.Fatal(err)
 	}
-	tr, err := c.Tree()
+	tr, err := c.Tree(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
