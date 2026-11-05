@@ -18,6 +18,8 @@ type reader struct {
 	e  *Executor
 	c  *Corpus
 	cl *call
+	// inSets holds the parameters of each in predicate of the request, read once.
+	inSets map[inKey]*inSet
 }
 
 // read answers a read request: one, all, count, group_count, sum, avg or paginate.

@@ -230,6 +230,39 @@ func TestWhere(t *testing.T) {
 // the ASCII letters without regard to case and every other character by code point,
 // contains_binary every character by code point; a NULL column or parameter is
 // unknown, and %, _ and \ in the parameter are literal.
+// TestInList pins the three values of in and not_in, read from a set of the parameters so that a long list costs
+// its length once and not once for each row.
+func TestInList(t *testing.T) {
+	f := baseFixture(t)
+	in := func(op string, params ...any) []string {
+		ps := make([]int, len(params))
+		for i := range params {
+			ps[i] = i
+		}
+		return rowIDs(t, f.ok(f.msg("all", "items", map[string]any{"columns": none, "where": where(pred("owner", op, map[string]any{"ps": ps}))}, params...)))
+	}
+	for _, c := range []struct {
+		name   string
+		op     string
+		params []any
+		want   []string
+	}{
+		{"in holds the row that equals a parameter", "in", []any{"P1", "P9"}, []string{"T1"}},
+		{"a repeated parameter holds its row once", "in", []any{"P1", "P1"}, []string{"T1"}},
+		{"a NULL parameter does not hold a NULL cell", "in", []any{nil}, []string{}},
+		{"a NULL parameter leaves the match of another", "in", []any{"P1", nil}, []string{"T1"}},
+		{"not_in holds no row with a NULL cell", "not_in", []any{"P9"}, []string{"T1"}},
+		{"not_in with a NULL parameter holds nothing", "not_in", []any{"P9", nil}, []string{}},
+		{"not_in excludes the row that equals a parameter", "not_in", []any{"P1"}, []string{}},
+	} {
+		f.sub(t, "60#surfaces: "+c.name, func(f *fixture) {
+			if got := in(c.op, c.params...); !slices.Equal(got, c.want) {
+				f.t.Fatalf("%s %v answered %v, want %v", c.op, c.params, got, c.want)
+			}
+		})
+	}
+}
+
 func TestContains(t *testing.T) {
 	docs := baseDocs()
 	docs["people.flowmark.md"] = lines(

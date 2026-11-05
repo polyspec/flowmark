@@ -218,6 +218,19 @@ func scalarOf(t dbspec.Type, text string) (scalar, bool) {
 	return scalar{kind: kindText, text: text}, true
 }
 
+// canonicalOf is the text that two scalars of one kind share exactly when compare holds them equal.
+func canonicalOf(s scalar) string {
+	switch s.kind {
+	case kindNumber:
+		return s.num.RatString()
+	case kindTime:
+		return strconv.FormatInt(s.tm.Unix(), 10) + "." + strconv.Itoa(s.tm.Nanosecond())
+	case kindTimeOfDay:
+		return strconv.FormatInt(s.nanos, 10)
+	}
+	return s.text
+}
+
 // compare orders two scalars of one kind: numbers by value, times by instant, bools
 // false before true, and texts by code point, which is byte order in UTF-8 — the one
 // collation of orm (docs/dialects.md, "Collation": binary code point order).

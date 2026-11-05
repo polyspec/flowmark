@@ -335,17 +335,9 @@ func (r *reader) contains(s *scope, ev *env, p *ir.Pred) (tri, *Error) {
 func (r *reader) compareParams(p *ir.Pred, t dbspec.Type, v cell) (tri, *Error) {
 	switch p.Op {
 	case "in", "not_in":
-		res := tFalse
-		for _, i := range p.Ps {
-			pv, err := r.param(i, t)
-			if err != nil {
-				return tFalse, err
-			}
-			e, err := cmp3("eq", t, v, t, pv)
-			if err != nil {
-				return tFalse, err
-			}
-			res = or3(res, e)
+		res, err := r.inList(p, t, v)
+		if err != nil {
+			return tFalse, err
 		}
 		if p.Op == "not_in" {
 			res = not3(res)
@@ -377,6 +369,65 @@ func (r *reader) compareParams(p *ir.Pred, t dbspec.Type, v cell) (tri, *Error) 
 		return cmp3(p.Op, t, v, t, pv)
 	}
 	return tFalse, errf(codeIRInvalid, "operator %q", p.Op)
+}
+
+// inKey identifies the value set of an in predicate read as a type.
+type inKey struct {
+	pred *ir.Pred
+	typ  string
+}
+
+// inSet holds the parameters of an in predicate by their canonical text, so a read of n rows against m parameters costs
+// n+m and not n*m. hasNull is true when a parameter is NULL, which makes a comparison that matches nothing unknown.
+type inSet struct {
+	values  map[string]struct{}
+	hasNull bool
+}
+
+// inList is the value of v IN the parameters of p: true when a parameter equals v, unknown when none does and v or a
+// parameter is NULL, and false otherwise. An empty list holds nothing, even for a NULL.
+func (r *reader) inList(p *ir.Pred, t dbspec.Type, v cell) (tri, *Error) {
+	key := inKey{p, t.String()}
+	set, ok := r.inSets[key]
+	if !ok {
+		set = &inSet{values: make(map[string]struct{}, len(p.Ps))}
+		for _, i := range p.Ps {
+			pv, err := r.param(i, t)
+			if err != nil {
+				return tFalse, err
+			}
+			if pv.null {
+				set.hasNull = true
+				continue
+			}
+			sv, readable := scalarOf(t, pv.text)
+			if !readable {
+				return tFalse, errf(codeInternal, "%q is not a readable %s", pv.text, t.String())
+			}
+			set.values[canonicalOf(sv)] = struct{}{}
+		}
+		if r.inSets == nil {
+			r.inSets = map[inKey]*inSet{}
+		}
+		r.inSets[key] = set
+	}
+	if len(p.Ps) == 0 {
+		return tFalse, nil
+	}
+	if v.null {
+		return tUnknown, nil
+	}
+	sv, readable := scalarOf(t, v.text)
+	if !readable {
+		return tFalse, errf(codeInternal, "%q is not a readable %s", v.text, t.String())
+	}
+	if _, found := set.values[canonicalOf(sv)]; found {
+		return tTrue, nil
+	}
+	if set.hasNull {
+		return tUnknown, nil
+	}
+	return tFalse, nil
 }
 
 // tupleIn evaluates tuple_in and tuple_not_in: the columns as one tuple compared

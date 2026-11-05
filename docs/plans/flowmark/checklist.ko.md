@@ -1,5 +1,5 @@
 <!-- doc-id: execution-checklist -->
-<!-- source-sha256: ae9f3b5385ca1ca794bb2dad50835f9c0cfcac5384afe7d3af933ccbd1a1f7d9 -->
+<!-- source-sha256: 1746a713ebbd859b76ee04ad7f25f8abf562e7a164d5f90190f645b78ef9a118 -->
 # 실행 체크리스트
 
 | ID | Task | Deliverables | Verification | State |
@@ -97,3 +97,4 @@
 | T24-13 | 검사 internal-paths-check는 의존성의 source나 build output을 경로로 쓴 tracked 줄에서 실패하고(kit K1002), CHECK_TARGETS에 들어가며, config/rebuild.json에 분류가, config/owner-checks.json에 소유 검사가 있다. Red: 이 항목 이전 tree에서 검사는 T24-12 항목의 두 줄을 보고한다. 그 글이 파일을 package 경로로 쓰므로, 항목은 package 안의 파일로 쓴다. 경로를 쓰던 기록은 경로 없이도 읽힌다. | scripts/check-internal-paths.mts, tests/check-internal-paths.test.mts, Makefile, config/rebuild.json, config/owner-checks.json, CHANGELOG.md, CHANGELOG.ko.md, docs/plans/flowmark/checklist.md, docs/plans/flowmark/checklist.ko.md | `make internal-paths-check` `make rebuild-check` `make owner-validate` `make test-infrastructure` | [v] |
 | T25 | corpus의 fulltext 조건은 행을 읽기 전에 OPERATOR_NOT_ALLOWED로 거부한다(60-dialect surfaces): 조건이 행마다만 평가되어 빈 표가 오류 없이 0을 돌려주었다. | packages/go/irexec/read.go, packages/go/irexec/read_test.go | `cd packages/go && go test ./irexec -run TestReadRejects -count=1` | [v] |
 | T26 | join의 order 항목은 문장이 만드는 순서대로 부모의 항목 다음에, join 순서로 행을 정렬한다(60-dialect surfaces): 읽기가 이를 무시하고 저장 순서로 답했다. | packages/go/irexec/read.go, packages/go/irexec/read_test.go | `cd packages/go && go test ./irexec -run TestJoins -count=1` | [v] |
+| T27 | in과 not_in 조건은 파라미터를 집합으로 한 번 읽어, 행 n개와 파라미터 m개의 읽기 비용이 n+m이다: 행 70000개와 파라미터 70300개가 n*m번 비교되어 2분 안에 끝나지 않았다. 세 가지 결과 값은 그대로다. | packages/go/irexec/where.go, packages/go/irexec/value.go, packages/go/irexec/read.go, packages/go/irexec/read_test.go | `cd packages/go && go test ./irexec -run TestInList -count=1` | [v] |
