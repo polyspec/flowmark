@@ -81,7 +81,7 @@ Go client implements it first and every other client is its own orm item.
 | codec columns | Applied by the client on an orm request; a write the engine originates (CLI, MCP, sidecar, history) applies the codec through orm's Go codec package, and validation decodes with the same package; the stored value is the encoded one, a byte-producing stage as base64 |
 | indexes | Accepted; derived in memory |
 | `select explicit`, `entity`, `navigation` | Client-side; no storage effect |
-| `aes`, `aes_version`, `blind_index` | Schema error on a corpus — the key never leaves the client |
+| `aes`, `aes_version`, `blind_index` | Supported; the client encrypts and hashes on an orm request, and the engine takes its keys by injection ([schema](30-schema.md#keys)) |
 | `audit`, `immutable` settings | Schema error on a corpus; `state_machine … history` instead |
 | transactions | `begin` to `commit`/`rollback` over the session; `readOnly` honoured and takes the lock |
 | savepoints | Nested stages |

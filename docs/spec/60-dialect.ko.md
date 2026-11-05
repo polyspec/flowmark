@@ -76,7 +76,7 @@ surface는 `CAPABILITY_UNSUPPORTED`, 그리고 orm의 규칙이 모든 backend�
 | codec columns | orm 요청에서는 client가 적용한다. 엔진이 시작하는 쓰기(CLI, MCP, sidecar, 이력)는 orm의 Go codec package로 codec을 적용하며, 검증은 같은 package로 decode한다. 저장 값은 encode된 값이며, byte를 만드는 단계는 base64다 |
 | indexes | 허용되며 메모리에서 파생된다 |
 | `select explicit`, `entity`, `navigation` | client 쪽이며 저장에 효과가 없다 |
-| `aes`, `aes_version`, `blind_index` | corpus에서 schema 오류 — key는 client를 떠나지 않는다 |
+| `aes`, `aes_version`, `blind_index` | 지원. orm 요청에서는 client가 암호화·hash하고, 엔진은 주입으로 key를 받는다([schema](30-schema.md#keys)) |
 | `audit`, `immutable` setting | corpus에서 schema 오류. 대신 `state_machine … history` |
 | transaction | session 위의 `begin`부터 `commit`/`rollback`까지. `readOnly`는 지키며 lock을 잡는다 |
 | savepoint | 중첩 stage |

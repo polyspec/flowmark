@@ -103,6 +103,7 @@ var memberSchemas = map[string]map[string]any{
 	"table":    {"type": "string", "description": "the table, as the catalog declares it"},
 	"key":      {"description": "the primary key value of the row, in the runtime value model JSON"},
 	"values":   {"type": "object", "description": "the column values to assign, each in the runtime value model JSON"},
+	"rows":     {"type": "array", "items": map[string]any{"type": "object"}, "description": "the rows to load, each an object of column values in their stored form, keys included"},
 	"position": {"type": "integer", "description": "the 1-based position among the row's siblings"},
 	"parent":   {"description": "the key of the new parent row, or null for the top"},
 	"state":    {"type": "string", "description": "the state to enter"},
@@ -112,6 +113,7 @@ var memberSchemas = map[string]map[string]any{
 var descriptions = map[string]string{
 	"schema":     "Answer the catalog of the corpus: its tables with their storage, keys, settings, columns and state machines",
 	"rows":       "Answer every row of a table in storage order",
+	"rows.load":  "Load rows into a table in their stored form, keys included, and answer how many it wrote",
 	"row.get":    "Answer the row of a table whose primary key is key",
 	"row.insert": "Insert a row into a table, and answer its key and the table's rows",
 	"row.update": "Assign column values to the row whose key is key, and answer the table's rows",

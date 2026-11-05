@@ -78,7 +78,7 @@ message를 실어 `codec`을 보고한다. 그런 값을 할당하는 쓰기 —
 column에서 `CONSTRAINT`이고 message가 `codec`을 밝히며, commit은 validator의 decode로 그것을 판정한다.
 쓰기가 그대로 두는 값은 판정하지 않는다. 그대로 두는 `type` 결함이 check가 그것을 읽을 때에만 쓰기를
 실패시키는 것과 같다. column의 type이 아닌 값은
-`type`만이다. host stage `hex`나 `ip`를 포함하는 column은 orm이 host decode를 공개할 때까지(orm `T74`)
+`type`만이다. stage `aes`가 있는 column은 행이 기록한 version의 key로 orm의 `HostDecode`가 decode한다([schema](30-schema.md#keys)). keyring이 선언하지 않은 version은 `codec`이고, keyring이 없는 process에서는 그 column을 판정하지 않는다. 그 밖에 host stage `hex`나 `ip`를 포함하는 column은 orm이 host decode를 공개할 때까지(orm `T74`)
 판정하지 않는다: `orm.Decode`는 host stage를 담은 모든 목록을 거절하므로, 판정하면 모든 값을 보고하게
 된다. 그때 목록 전체를 거꾸로 decode하며, host stage는 orm의 `HostDecode`로, 나머지는 `orm.Decode`로
 한다. 근거: 자기 stage가 decode할 수 없는 값은 그것을 읽는 어떤 client에게도 답이 없으므로, validator가
@@ -120,7 +120,7 @@ param을 모든 쓰임에 대해 판정한다. `ir.Validate`가 검사하는 것
 request이므로 request를 판정하는 규칙이 현재 catalog에 대해 그것을 판정한다 — view는 데이터이고 catalog
 변경이 그것을 보이지 않게 고아로 만들면 안 되므로 manifest hash를 저장하지 않는다. 어떤 index도 쓰지 않는
 param은 보이지 않는 데이터다. grouping은 같은 값을 가진 행을 모으므로, 같음이 없는 field — codec이
-정확히 `ip`가 아닌 codec field이며, `aes`는 corpus에서 거절된다 — 에는 group이 없다.
+정확히 `ip`가 아닌 codec field — 에는 group이 없다.
 
 ## 계층과 순서
 

@@ -167,6 +167,7 @@ The order of the commit protocol is normative.
 | --- | --- | --- |
 | `schema` | — | `{"manifest_hash", "tables"}`: the catalog — each table with its storage, key, `title`, `body`, `order`, hierarchy column, `markdown` columns, columns, foreign keys, unique keys and state machine |
 | `rows` | `table` | `{"rows"}`: every row of the table in storage order, as an `all` request without `columns` answers it |
+| `rows.load` | `table`, `rows` | `{"affected"}` |
 | `row.get` | `table`, `key` | `{"row"}`: the row whose key is `key` |
 | `row.insert` | `table`, `values` | `{"affected", "keys", "rows"}` |
 | `row.update` | `table`, `key`, `values` | `{"affected", "keys", "rows"}` |
@@ -175,6 +176,10 @@ The order of the commit protocol is normative.
 | `transition` | `table`, `key`, `state`, optional `values` | `{"affected", "keys", "rows"}` |
 | `views` | optional `key` | `{"rows"}` of the view table, or `{"view", "rows"}` of the view `key` |
 
+- `rows.load` writes rows in their stored form, keys included, as a database's bulk load does: a run of rows that assign the
+  same columns is one `insert`, with orm's `load` (orm `PRT-26`) when it assigns the identity column, so a row keeps its key and
+  a later insert allocates after the largest. It applies no codec or key, and each insert is checked and committed as any
+  request of its kind.
 - `row.insert` is an `insert` assigning `values`; `row.update` an `update` of the row whose key is
   `key` assigning `values`; `row.delete` a `delete` of that row. `row.move` is an `update` of that row
   assigning `position` to the table's `order` column and, when `parent` is given, `parent` to its
@@ -207,7 +212,7 @@ The order of the commit protocol is normative.
 - A failure is answered `{"code", "error"}`: the face name of the [failure vocabulary](#failure-vocabulary),
   which is the orm code for every code the vocabulary does not list, and the message.
 - **The CLI.** Each operation is a command: `flowmark schema <corpus>`, `rows <corpus> <table>`,
-  `row.get <corpus> <table> <key>`, `row.insert <corpus> <table> [assignment…]`,
+  `rows.load <corpus> <table>` with the rows as one JSON array on standard input, `row.get <corpus> <table> <key>`, `row.insert <corpus> <table> [assignment…]`,
   `row.update <corpus> <table> <key> [assignment…]`, `row.move <corpus> <table> <key> <position> [<parent>]`,
   `row.delete <corpus> <table> <key>`, `transition <corpus> <table> <key> <state> [assignment…]` and
   `views <corpus> [<key>]`.

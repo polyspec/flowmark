@@ -142,6 +142,7 @@
 | `schema` | — | `{"manifest_hash", "tables"}`: catalog — 각 table과 그 저장 방식, key, `title`, `body`, `order`, 계층 column, `markdown` column, column, foreign key, unique key, 상태기계 |
 | `rows` | `table` | `{"rows"}`: table의 모든 행을 저장 순서로, `columns` 없는 `all` 요청이 답하는 대로 |
 | `row.get` | `table`, `key` | `{"row"}`: key가 `key`인 행 |
+| `rows.load` | `table`, `rows` | `{"affected"}` |
 | `row.insert` | `table`, `values` | `{"affected", "keys", "rows"}` |
 | `row.update` | `table`, `key`, `values` | `{"affected", "keys", "rows"}` |
 | `row.move` | `table`, `key`, `position`, 선택 `parent` | `{"affected", "keys", "rows"}` |
@@ -149,6 +150,9 @@
 | `transition` | `table`, `key`, `state`, 선택 `values` | `{"affected", "keys", "rows"}` |
 | `views` | 선택 `key` | view table의 `{"rows"}`, 또는 view `key`의 `{"view", "rows"}` |
 
+- `rows.load`는 데이터베이스의 bulk load처럼 행을 저장 형태 그대로, key까지 포함해 쓴다: 같은 column을 대입하는 연속된 행은 하나의
+  `insert`이고, identity column을 대입하면 orm의 `load`(orm `PRT-26`)를 쓰므로 행은 자기 key를 유지하고 이후 insert는 최댓값 다음을
+  할당한다. codec이나 key를 적용하지 않으며, 각 insert는 그 종류의 요청과 같이 검사되고 commit된다.
 - `row.insert`는 `values`를 대입하는 `insert`이고, `row.update`는 key가 `key`인 행의 `update`로
   `values`를 대입하며, `row.delete`는 그 행의 `delete`다. `row.move`는 그 행의 `update`로 `position`을
   table의 `order` column에, `parent`가 주어지면 `parent`를 계층 column `parent`에 대입한다
@@ -178,7 +182,7 @@
 - 실패는 `{"code", "error"}`로 답한다: [실패 어휘](#실패-어휘)의 face 이름 — 어휘가 나열하지 않는
   code는 orm code — 와 메시지다.
 - **CLI.** 각 operation은 명령이다: `flowmark schema <corpus>`, `rows <corpus> <table>`,
-  `row.get <corpus> <table> <key>`, `row.insert <corpus> <table> [assignment…]`,
+  표준 입력의 JSON 배열 하나로 행을 받는 `rows.load <corpus> <table>`, `row.get <corpus> <table> <key>`, `row.insert <corpus> <table> [assignment…]`,
   `row.update <corpus> <table> <key> [assignment…]`, `row.move <corpus> <table> <key> <position> [<parent>]`,
   `row.delete <corpus> <table> <key>`, `transition <corpus> <table> <key> <state> [assignment…]`,
   `views <corpus> [<key>]`.

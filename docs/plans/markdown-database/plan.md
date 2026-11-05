@@ -490,7 +490,7 @@ reimplements them.
 | `identity` | allowed on an `i64` primary key only; `max+1` under the lock |
 | foreign key | restrict-only; `cascade`, `set_null` rejected |
 | `codec` | applied by the client on an orm request; a write the engine originates (CLI, MCP, sidecar, history) applies it through orm's Go codec package, and validation decodes with the same package; the stored value is the encoded one (a byte-producing stage as base64) |
-| `aes`, `aes_version`, `blind_index` | schema error — the key never leaves the client |
+| `aes`, `aes_version`, `blind_index` | supported; the client encrypts on an orm request, and the engine takes its keys by injection (spec 30 Keys) |
 | `soft_delete`, `updated`, `default now` | assigned by the engine: the request's `now` for an orm request, otherwise the engine's UTC clock truncated to microseconds |
 | `select explicit`, `entity`, `navigation` | client-side; no storage effect |
 | `audit`, `immutable` | schema error; `state_machine … history` instead |

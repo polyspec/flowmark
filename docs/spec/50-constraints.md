@@ -90,7 +90,9 @@ value of its type with orm's Go codec package — `orm.Decode`, which holds the 
 the value's element when the stages refuse it, carrying orm's message; a write that assigns such a
 value — an insert assigns every value — is `CONSTRAINT` at its column, its message naming `codec`, and
 the commit judges it with the validator's decode. A value the write leaves is not judged, as a `type`
-fault it leaves fails it only when a check reads it. A value not of its column type is `type` alone. A column whose stages include
+fault it leaves fails it only when a check reads it. A value not of its column type is `type` alone. A column with the stage `aes` is decoded by orm's `HostDecode` with the key of the
+version its row records ([schema](30-schema.md#keys)); a version the keyring does not declare is `codec`, and in a process
+without a keyring the column is not judged. Any other column whose stages include
 the host stage `hex` or `ip` is not judged until orm exports its host decode (orm `T74`):
 `orm.Decode` refuses every list that holds a host stage, so judging it would report every value;
 the whole list is then decoded in reverse, the host stages by orm's `HostDecode` and the others by
@@ -137,8 +139,7 @@ column-to-column `ref` it does not resolve and a `conn` on a group's first item 
 in orm. Grounding: a view is a stored request, so the rules that judge a request judge it, against
 the current catalog — no manifest hash is stored, since a view is data and a catalog change must not
 orphan it unseen; a param no index uses is invisible data; and grouping gathers rows with equal
-values, so a field without equality — a codec field whose codec is not exactly `ip`, `aes` being
-refused on a corpus — has no groups.
+values, so a field without equality — a codec field whose codec is not exactly `ip` — has no groups.
 
 ## Hierarchy and order
 

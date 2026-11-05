@@ -325,9 +325,12 @@ func (w *writer) insert() *Error {
 	req := w.r.cl.req
 	for _, a := range req.Set {
 		f := w.ent.Field(a.Column)
-		if f.Identity {
+		if f.Identity && !req.Load {
 			return errf(codeIRInvalid, "cannot set identity column %s", a.Column)
 		}
+	}
+	if req.Load && w.ent.Identity != "" && !slices.ContainsFunc(req.Set, func(a ir.Assign) bool { return a.Column == w.ent.Identity && a.P != nil }) {
+		return errf(codeIRInvalid, "load of %s needs a value for the identity column %s", w.ent.Name, w.ent.Identity)
 	}
 	if err := w.requireAssigned(req.Set); err != nil {
 		return err

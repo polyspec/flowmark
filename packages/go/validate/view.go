@@ -24,10 +24,10 @@ const (
 	RuleView  = "view"
 )
 
-// HostStages are the codec stages that orm decodes on the host and does not
-// export for a decode of its own (orm T74): orm.Decode refuses every stage list
-// that holds one.
-var HostStages = []string{"hex", "ip"}
+// HostStages are the codec stages that orm applies on the host and does not export
+// for a decode of its own (orm T74): orm.Decode refuses every stage list that holds
+// one. aes needs a key (spec 30 Keys).
+var HostStages = []string{"aes", "hex", "ip"}
 
 // RowFault is a fault of the codec or view rule in one row: the column whose
 // element it is at, the rule and the message.
@@ -41,7 +41,7 @@ type RowFault struct {
 // row it writes with them, so the two judge a row one way. m is orm's runtime
 // model of cat, needed only when tb is the view table.
 func JudgeRow(cat *catalog.Catalog, m *runtimemodel.Model, tb *catalog.Table, r *store.Row) []RowFault {
-	out := codecFaults(tb, r)
+	out := codecFaults(cat.Keys, tb, r)
 	faulty := map[string]bool{}
 	for _, f := range out {
 		faulty[f.Column] = true
@@ -67,12 +67,17 @@ func (c *corpus) judgeRow(tb *catalog.Table, p placed) error {
 // codecFaults returns a fault for each non-NULL value of its type in a codec
 // column of r that orm's codec package cannot decode, at the value's element. A
 // column whose stages hold a host stage is not judged until orm exports its host
-// decode.
-func codecFaults(tb *catalog.Table, r *store.Row) []RowFault {
+// decode. A column with aes is decoded with the key of the version its row records,
+// and is not judged in a process without a keyring (spec 30 Keys).
+func codecFaults(keys *catalog.Keys, tb *catalog.Table, r *store.Row) []RowFault {
 	var out []RowFault
 	for _, col := range sortedKeys(tb.Codecs) {
 		stages := tb.Codecs[col]
-		if slices.ContainsFunc(stages, func(s string) bool { return slices.Contains(HostStages, s) }) {
+		sealed := slices.Index(stages, "aes")
+		if sealed < 0 && slices.ContainsFunc(stages, func(s string) bool { return slices.Contains(HostStages, s) }) {
+			continue
+		}
+		if sealed >= 0 && keys == nil {
 			continue
 		}
 		if _, raw := r.Raw[col]; raw {
@@ -93,11 +98,51 @@ func codecFaults(tb *catalog.Table, r *store.Row) []RowFault {
 			}
 			cell = b
 		}
-		if _, err := orm.Decode(stages, cell); err != nil {
+		var err error
+		if sealed >= 0 {
+			err = decodeSealed(keys, tb, r, stages, sealed, cell)
+		} else {
+			_, err = orm.Decode(stages, cell)
+		}
+		if err != nil {
 			out = append(out, RowFault{col, RuleCodec, fmt.Sprintf("%s holds a value its codec %v cannot decode: %v", col, stages, err)})
 		}
 	}
 	return out
+}
+
+// decodeSealed decodes the cell of a column whose stages from sealed on are host
+// stages, with the key of the version the row records, and then its client stages.
+func decodeSealed(keys *catalog.Keys, tb *catalog.Table, r *store.Row, stages []string, sealed int, cell []byte) error {
+	version := keys.Current
+	if tb.AESVersion != "" {
+		text := r.Scalars[tb.AESVersion]
+		if text == nil {
+			return fmt.Errorf("the row records no key version in %s", tb.AESVersion)
+		}
+		v, err := strconv.ParseInt(*text, 10, 32)
+		if err != nil { // a version not of its type is the rule type's
+			return nil
+		}
+		version = int32(v)
+	}
+	key, ok := keys.Key(version)
+	if !ok {
+		return fmt.Errorf("the keyring declares no key version %d", version)
+	}
+	plain, err := orm.HostDecode(cell, stages[sealed:], key)
+	if err != nil {
+		return err
+	}
+	if sealed == 0 {
+		return nil
+	}
+	text, ok := plain.(string)
+	if !ok {
+		return fmt.Errorf("orm decodes the host stages to a %T, not text", plain)
+	}
+	_, err = orm.Decode(stages[:sealed], []byte(text))
+	return err
 }
 
 // sortedKeys returns the keys of m in byte order.

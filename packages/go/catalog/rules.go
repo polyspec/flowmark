@@ -38,18 +38,9 @@ func (l *loader) checkTable(d *document, t *dbspec.Table) (Storage, bool) {
 		s = &dbspec.Settings{}
 	}
 	for _, c := range s.Codecs {
-		if slices.Contains(c.Stages, "aes") {
-			report("column " + c.Column + " uses aes")
-		}
 		if len(c.Stages) > 0 && c.Stages[len(c.Stages)-1] == "yaml" {
 			report("column " + c.Column + " ends its codec with the stage yaml, whose encoder ends every value with a line feed")
 		}
-	}
-	if s.AESVersion != nil {
-		report("table " + t.Name + " has an aes_version setting")
-	}
-	if len(s.BlindIndexes) > 0 {
-		report("table " + t.Name + " has a blind_index setting")
 	}
 	if s.Audit != nil {
 		report("table " + t.Name + " has an audit setting")

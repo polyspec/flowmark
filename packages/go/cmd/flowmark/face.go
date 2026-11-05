@@ -22,6 +22,7 @@ type faceCommand struct {
 var faceCommands = map[string]faceCommand{
 	"schema":     {usage: "<corpus>"},
 	"rows":       {usage: "<corpus> <table>", fixed: []string{"table"}},
+	"rows.load":  {usage: "<corpus> <table>, the rows as one JSON array on standard input", fixed: []string{"table"}},
 	"row.get":    {usage: "<corpus> <table> <key>", fixed: []string{"table", "key"}},
 	"row.insert": {usage: "<corpus> <table> [assignment…]", fixed: []string{"table"}, assigns: true},
 	"row.update": {usage: "<corpus> <table> <key> [assignment…]", fixed: []string{"table", "key"}, assigns: true},
@@ -48,8 +49,8 @@ func valueArg(s string) (arg, bool) {
 	return arg{text: s}, true
 }
 
-// face runs the command of the operation name.
-func face(out, errOut io.Writer, name string, args []string) (code int) {
+// face runs the command of the operation name. rows.load reads its rows, one JSON array, from in.
+func face(in io.Reader, out, errOut io.Writer, name string, args []string) (code int) {
 	spec := faceCommands[name]
 	cmd := newCommand(name, errOut, true)
 	pos, ok := cmd.parse(args)
@@ -172,6 +173,13 @@ func face(out, errOut io.Writer, name string, args []string) (code int) {
 		members["values"] = b
 	} else if name == "row.insert" || name == "row.update" {
 		members["values"] = json.RawMessage("{}")
+	}
+	if name == "rows.load" {
+		rows, err := io.ReadAll(in)
+		if err != nil {
+			return fail(errOut, name, err)
+		}
+		members["rows"] = rows
 	}
 	b, err := c.RunJSON(ctx, "cli", name, members)
 	if err != nil {

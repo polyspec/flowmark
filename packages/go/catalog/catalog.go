@@ -29,6 +29,7 @@ type Catalog struct {
 	Files        []string // the corpus path of each document, in the order of Documents
 	ManifestHash string
 	Tables       []*Table
+	Keys         *Keys // the keys injected into this process (spec 30 Keys), nil when none is
 }
 
 // Table is one table of the catalog with its markdown settings.
@@ -48,6 +49,8 @@ type Table struct {
 	Markdown     []string
 	StateMachine *StateMachine
 	Codecs       map[string][]string // the codec stages of each column with a codec setting, in write order
+	AESVersion   string              // the column that records the key version of the row, "" when none does
+	BlindIndexes map[string]string   // the blind index column of each aes column that has one
 	View         *View               // the view columns when the table is the view table, else nil
 }
 

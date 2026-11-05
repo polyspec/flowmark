@@ -51,7 +51,11 @@ func Load(root string) (*Catalog, []Diagnostic) {
 	if len(l.diags) > 0 {
 		return nil, l.diags
 	}
-	cat := &Catalog{ManifestHash: hash}
+	keys, err := readKeys(root)
+	if err != nil {
+		return nil, []Diagnostic{fileDiagnostic(KeyringVariable, err.Error())}
+	}
+	cat := &Catalog{ManifestHash: hash, Keys: keys}
 	for _, d := range docs {
 		cat.Documents = append(cat.Documents, d.parsed)
 		cat.Files = append(cat.Files, d.file)
@@ -388,6 +392,15 @@ func buildTable(r *tableRef) *Table {
 			out.Codecs = map[string][]string{}
 		}
 		out.Codecs[c.Column] = slices.Clone(c.Stages)
+	}
+	if s.AESVersion != nil {
+		out.AESVersion = s.AESVersion.Column
+	}
+	for _, b := range s.BlindIndexes {
+		if out.BlindIndexes == nil {
+			out.BlindIndexes = map[string]string{}
+		}
+		out.BlindIndexes[b.AESColumn] = b.IndexColumn
 	}
 	if isViewTable(r) {
 		v := viewColumns

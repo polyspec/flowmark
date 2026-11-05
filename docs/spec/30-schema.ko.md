@@ -51,8 +51,7 @@ column을 이름 붙인다 — column 이름이 동작을 고르지 않는다.
 
 ## dbspec 구성에 대한 corpus 규칙
 
-- **거절**: corpus에서 각각 schema 오류다 — composite primary key, `aes`·`aes_version`·`blind_index`
-  (key는 client를 떠나지 않는다), `audit`와 `immutable`(markdown에는 trigger가 없고 대신
+- **거절**: corpus에서 각각 schema 오류다 — composite primary key, `audit`와 `immutable`(markdown에는 trigger가 없고 대신
   `state_machine … history`가 전이를 기록한다), `cascade`와 `set_null` action, 외부 `use` 문서, `store`
   setting 없는 table, 마지막 stage가 `yaml`인 `codec` — orm의 encoder(go-yaml의 `Marshal`)는 모든 값을
   line feed로 끝내며 형식의 어떤 자리도 그것을 담지 못한다. 그 뒤의 stage는 그것을 encode해 없앤다.
@@ -74,6 +73,28 @@ column을 이름 붙인다 — column 이름이 동작을 고르지 않는다.
   참조하지 않으므로, 그 자리에 NULL을 가진 행은 쓰일 자리가 없다. SQL 행은 자리가 필요 없으므로 dbspec은 nullable
   외래 key column을 받아들인다. 이 catalog 규칙은 여기서 정한다. 이 규칙은 이력 table을 포함한 모든 block
   table에 성립한다([이력 table](#이력-table)).
+
+## Key
+
+corpus는 `aes`, `aes_version`, `blind_index`를 선언하고 orm이 저장하는 것을 저장한다: 암호문, 행의 key version, blind index.
+
+- **client는 자기 key를 쥔다.** orm 요청에서는 SQL과 같이 client가 암호화하고 hash한다: 연결 설정이 key를 준다(orm
+  `COD-8`). executor는 저장값만 받으므로 key가 필요 없다.
+- **엔진은 주입으로 key를 받는다.** 환경 변수 `FLOWMARK_KEYRING`이 keyring 파일을 가리킨다. 파일은 orm 설정과 같은 모양의 JSON
+  객체 `{"current": <version>, "versions": {"<version>": "<key>"}, "blind_index": "<key>"}`이고 `blind_index`는 선택이다.
+  모든 명령이 catalog를 읽을 때 이 파일을 읽는다. 이 객체로 읽히지 않는 파일, 선언되지 않은 current version, 빈 key는 그
+  변수를 지목하며 catalog load를 실패시킨다. corpus 안의 keyring(corpus가 공개한다)과 symbolic link도 마찬가지다.
+- **엔진이 시작하는 쓰기**(CLI, MCP, sidecar)는 aes column의 평문을 받아 orm 규칙을 따른다: 현재 key로 암호화하고, 그 version을
+  기록하고, blind index를 쓴다. version column 대입은 `IR_INVALID`이고, 암호화 데이터의 update는 모든 aes column을 대입한다.
+  한 version이 행 전체를 설명하기 때문이다. keyring이 없으면 그런 쓰기는 평문을 저장하게 되므로 `CONFIG`다. `rows.load`
+  ([operations](40-ops.md#the-faces))는 저장값을 받으므로 그런 쓰기가 아니다.
+- **validator와 commit**은 aes column을 행이 기록한 version의 key로 decode한다([constraints](50-constraints.md#codec-values)).
+  keyring이 없는 process에서는 그 column을 판정하지 않고 corpus의 나머지를 판정한다.
+- **export**([sync](70-sync.md))는 저장된 암호문, version, blind index를 그대로 두므로 key가 필요 없다.
+
+근거: 암호문은 executor의 모든 읽기와 쓰기에 불투명하므로 corpus는 SQL처럼 이 설정을 받는다. corpus에 든 key는 corpus와 함께
+공개되므로 밖에서 주입한다. 엔진이 쓴 값은 같은 key를 가진 client가 읽을 수 있어야 하므로 엔진은 orm 규칙을 지키고 stage를
+재구현하지 않는다.
 
 ## 이름 규칙
 

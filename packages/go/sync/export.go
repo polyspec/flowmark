@@ -100,8 +100,9 @@ const (
 // stored values of the table of e. A codec column's stored value is the encoded cell:
 // the stages orm applies in the client (gz, base64, serialize, yaml, ordered_json) are
 // done in it, so orm's insert binds it as it is; the stages orm applies on the host
-// while it binds (hex, ip) must end the list, so that the export can undo them (see
-// hostSplit) and orm applies them again.
+// while it binds (aes, hex, ip) must end the list, so that the export can undo hex and
+// ip (see hostSplit) and orm applies them again. An aes column and its blind index keep
+// their stored cells, so the export needs no key (see keepSealed).
 func supported(e *runtimemodel.Entity) error {
 	for _, f := range e.Fields {
 		if _, _, ok := hostSplit(f.Codec); !ok {
@@ -132,7 +133,7 @@ func hostSplit(stages []string) (client, host []string, ok bool) {
 // without them, which orm's bind applies again (hex and ip need no key).
 func storedParam(kind dbspec.TypeKind, stages []string, v any) (any, error) {
 	_, host, _ := hostSplit(stages)
-	if len(host) == 0 {
+	if len(host) == 0 || slices.Contains(host, "aes") {
 		return v, nil
 	}
 	text, ok := v.(string)
@@ -209,7 +210,12 @@ func fillOrder(cat *catalog.Catalog, schema []dbspec.RenderedStatement) []*catal
 func insert(p *planner.Planner, e *runtimemodel.Entity, tb *catalog.Table, row []any) (Statement, error) {
 	req := &ir.Request{IRVersion: ir.Version, ManifestHash: p.M.ManifestHash, Kind: "insert", Load: e.Identity != "", Query: ir.Query{Entity: e.Name}}
 	var params []any
+	var version any
 	for i, col := range tb.Columns {
+		if col.Name == tb.AESVersion {
+			version = row[i]
+			continue
+		}
 		if row[i] == nil {
 			req.Set = append(req.Set, ir.Assign{Column: col.Name, Null: true})
 			continue
@@ -231,7 +237,44 @@ func insert(p *planner.Planner, e *runtimemodel.Entity, tb *catalog.Table, row [
 		return Statement{}, &irexec.Error{Code: codeInternal, Msg: fmt.Sprintf("orm compiles the insert of a row of %s in %d steps", tb.Name, len(pl.Steps))}
 	}
 	st := pl.Steps[0]
-	return Statement{Table: tb.Name, SQL: st.SQL, Slots: st.BindSlots, Params: params}, nil
+	slots := keepSealed(tb, req, st.BindSlots)
+	for i := range slots {
+		// The planner writes the version of its writer; the row keeps the version its ciphertext was written with.
+		if slots[i].From == "config" && slots[i].Name == "aes_version" {
+			slots[i].From = "param"
+			slots[i].Name = ""
+			slots[i].Param = len(params)
+			params = append(params, version)
+		}
+	}
+	return Statement{Table: tb.Name, SQL: st.SQL, Slots: slots, Params: params}, nil
+}
+
+// keepSealed returns slots with no host stage on the parameter of an aes column or of
+// its blind index: the stored cell is the ciphertext of the version its row records, and
+// orm's bind would encrypt or hash it again.
+func keepSealed(tb *catalog.Table, req *ir.Request, slots []plan.BindSlot) []plan.BindSlot {
+	sealed := map[int]bool{}
+	for _, a := range req.Set {
+		if a.P == nil {
+			continue
+		}
+		if slices.Contains(tb.Codecs[a.Column], "aes") {
+			sealed[*a.P] = true
+		}
+		for _, index := range tb.BlindIndexes {
+			if index == a.Column {
+				sealed[*a.P] = true
+			}
+		}
+	}
+	out := slices.Clone(slots)
+	for i := range out {
+		if sealed[out[i].Param] {
+			out[i].HostStyles = nil
+		}
+	}
+	return out
 }
 
 // restartIdentity compiles, through orm's planner, the statement that restarts the

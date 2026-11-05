@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -405,32 +406,79 @@ func TestLoadRejectsCompositePrimaryKey(t *testing.T) {
 	expectTableDiag(t, diags, text, "item_links", "composite primary key")
 }
 
-// aesColumns adds a bytes column encrypted with aes and its key version.
-var aesColumns = [2]string{"  name varchar(255)\n", "  name varchar(255)\n  secret bytes null\n  secret_version i32\n"}
-
-func TestLoadRejectsAESCodec(t *testing.T) {
-	root, text := editedCorpus(t, aesColumns,
-		[2]string{"    title name\n", "    title name\n    codec secret aes\n    aes_version secret_version\n"})
-	cat, diags := catalog.Load(root)
-	expectRejected(t, cat, diags)
-	expectTableDiag(t, diags, text, "people", "uses aes")
-}
-
-func TestLoadRejectsAESVersionSetting(t *testing.T) {
-	root, text := editedCorpus(t, aesColumns,
-		[2]string{"    title name\n", "    title name\n    codec secret aes\n    aes_version secret_version\n"})
-	cat, diags := catalog.Load(root)
-	expectRejected(t, cat, diags)
-	expectTableDiag(t, diags, text, "people", "aes_version setting")
-}
-
-func TestLoadRejectsBlindIndexSetting(t *testing.T) {
-	root, text := editedCorpus(t,
+// TestLoadAcceptsAES pins that a corpus declares aes, aes_version and blind_index, and that the table holds them
+// (spec 30 Keys).
+func TestLoadAcceptsAES(t *testing.T) {
+	root, _ := editedCorpus(t,
 		[2]string{"  name varchar(255)\n", "  name varchar(255)\n  secret bytes null\n  secret_index varchar(64) null\n  secret_version i32\n  index ix_people_secret (secret_index)\n"},
 		[2]string{"    title name\n", "    title name\n    codec secret aes\n    aes_version secret_version\n    blind_index secret secret_index\n"})
 	cat, diags := catalog.Load(root)
-	expectRejected(t, cat, diags)
-	expectTableDiag(t, diags, text, "people", "blind_index setting")
+	if len(diags) > 0 {
+		t.Fatalf("diagnostics: %+v", diags)
+	}
+	for _, tb := range cat.Tables {
+		if tb.Name == "people" && (tb.AESVersion != "secret_version" || tb.BlindIndexes["secret"] != "secret_index") {
+			t.Fatalf("people holds version %q and blind indexes %v", tb.AESVersion, tb.BlindIndexes)
+		}
+	}
+	if cat.Keys != nil {
+		t.Fatalf("a process without a keyring holds keys %+v", cat.Keys)
+	}
+}
+
+// TestLoadKeyring holds the accepting and rejecting cases of the keyring file (spec 30 Keys).
+func TestLoadKeyring(t *testing.T) {
+	root, _ := editedCorpus(t)
+	outside := t.TempDir()
+	write := func(dir, name, text string) string {
+		path := filepath.Join(dir, name)
+		if err := os.WriteFile(path, []byte(text), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+	good := `{"current":2,"versions":{"1":"one","2":"two"},"blind_index":"index"}`
+	t.Run("a keyring outside the corpus is read", func(t *testing.T) {
+		t.Setenv(catalog.KeyringVariable, write(outside, "good.json", good))
+		cat, diags := catalog.Load(root)
+		if len(diags) > 0 {
+			t.Fatalf("diagnostics: %+v", diags)
+		}
+		key, ok := cat.Keys.Key(1)
+		if cat.Keys.Current != 2 || !ok || key != "one" || cat.Keys.BlindIndex != "index" {
+			t.Fatalf("keys %+v", cat.Keys)
+		}
+	})
+	for _, c := range []struct{ name, path, want string }{
+		{"a keyring inside the corpus", write(root, "keys.json", good), "inside the corpus"},
+		{"a missing keyring", filepath.Join(outside, "absent.json"), "absent.json"},
+		{"text that is no JSON", write(outside, "text.json", "{"), "text.json"},
+		{"an unknown member", write(outside, "unknown.json", `{"current":1,"versions":{"1":"a"},"extra":1}`), "extra"},
+		{"two values", write(outside, "two.json", `{"current":1,"versions":{"1":"a"}} {}`), "more than one"},
+		{"a version that is no integer", write(outside, "name.json", `{"current":1,"versions":{"one":"a"}}`), "not an integer"},
+		{"an undeclared current version", write(outside, "current.json", `{"current":2,"versions":{"1":"a"}}`), "not declared"},
+		{"an empty key", write(outside, "empty.json", `{"current":1,"versions":{"1":""}}`), "empty key"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			t.Setenv(catalog.KeyringVariable, c.path)
+			cat, diags := catalog.Load(root)
+			if cat != nil || len(diags) != 1 || !strings.Contains(diags[0].Message, c.want) {
+				t.Fatalf("catalog %v, diagnostics %+v, want one naming %q", cat, diags, c.want)
+			}
+		})
+	}
+	if runtime.GOOS != "windows" {
+		t.Run("a symbolic link", func(t *testing.T) {
+			link := filepath.Join(outside, "link.json")
+			if err := os.Symlink(write(outside, "target.json", good), link); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv(catalog.KeyringVariable, link)
+			if cat, diags := catalog.Load(root); cat != nil || len(diags) != 1 || !strings.Contains(diags[0].Message, "not a regular file") {
+				t.Fatalf("catalog %v, diagnostics %+v", cat, diags)
+			}
+		})
+	}
 }
 
 func TestLoadRejectsAuditSetting(t *testing.T) {
