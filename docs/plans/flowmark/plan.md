@@ -205,9 +205,10 @@ Each layer is a row, in this order, and each row's Red is a count of the cost co
    process can commit, so a read then answers from the database's generation, as stated. The database is a file private to
    the process at `.flowmark/sql/<process>.db`, named by host, pid and start time, with its `-wal` and `-shm`, in WAL mode
    with SQLite's automatic checkpoint (`wal_autocheckpoint` stated), one writer connection and a pool of reader connections
-   of a stated size, a read that finds the pool full waiting on a release. The engine creates `.flowmark/sql` and checks it
-   and the database's path with lstat; the database opens with `SQLITE_OPEN_NOFOLLOW`, set through polyspec's fork of the
-   driver if its DSN lacks it; on Windows a reparse point at those paths is refused before open. The recovery at open
+   of a stated size, a read that finds the pool full waiting on a release. The engine creates `.flowmark/sql` with access for its
+   owner alone and checks it, the database's path and its `-wal` and `-shm` with lstat before the open, refusing a link and,
+   on Windows, a reparse point; the driver opens with fixed flags and has no `SQLITE_OPEN_NOFOLLOW`, and a link planted
+   between the check and the open needs the owner's own access to the folder, as stated. The recovery at open
    removes the files of processes of this host that have ended, as it removes their pending lock records; the files of
    another host's process are never removed, as stated. The writer connection holds a `BEGIN IMMEDIATE` transaction from a
    statement to the corpus commit, commits after the corpus commit is written and rolls back on every refusal; a SQLite

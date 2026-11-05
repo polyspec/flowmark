@@ -1,5 +1,5 @@
 <!-- doc-id: plans-design-plan -->
-<!-- source-sha256: 77482f09e9f922a771fde20938773273166a62c2e9e17cd7debfb98e624264df -->
+<!-- source-sha256: 18bcc01e4ebaa0b9dbd79f6a4981f72e3bc8d2de5269ce03c606d6bbaf6dc543 -->
 # flowmark 설계 계획
 
 Revision 2 — 3개 lane의 적대 감사 결과(engine core, orm 통합, 운영)와 multi-platform 지시를 아래 판정에 접는다. 감사의 blocker는 전부 판정이 되었고, 부수지 못한 주장은 문서 끝에 남긴다.
@@ -193,8 +193,9 @@ flowmark = the markdown database engine (one Go binary)
    읽기는 명시된 대로 database의 세대로 답한다. database는 `.flowmark/sql/<process>.db`에 있는 process 전용 파일이고, host, pid,
    시작 시각으로 이름이 붙으며, `-wal`과 `-shm`을 가지고, SQLite의 자동 checkpoint(`wal_autocheckpoint` 명시)와 함께 WAL mode이며,
    writer 연결 하나와 명시된 크기의 reader 연결 pool을 가진다. pool이 찬 것을 본 읽기는 반환을 기다린다. 엔진은 `.flowmark/sql`을
-   만들고 그것과 database 경로를 lstat으로 검사한다. database는 `SQLITE_OPEN_NOFOLLOW`로 열리고, driver의 DSN에 그것이 없으면
-   polyspec의 driver fork로 설정한다. Windows에서는 그 경로의 reparse point를 열기 전에 거부한다. 시작할 때의 recovery는 끝난 holder의
+   소유자만 접근하도록 만들고, 그것과 database 경로와 그 `-wal`, `-shm`을 열기 전에 lstat으로 검사해 link와, Windows에서는 reparse
+   point를 거부한다. driver는 고정된 flag로 열며 `SQLITE_OPEN_NOFOLLOW`가 없고, 검사와 열기 사이에 link를 심으려면 그 folder에 대한
+   소유자 자신의 접근이 필요하며, 이를 명시한다. 시작할 때의 recovery는 끝난 holder의
    pending lock 기록을 지우듯이 이 host에서 끝난 process의 파일을 지운다. 다른 host의 process 파일은 명시된 대로 절대 지우지 않는다.
    writer 연결은 문장부터 corpus commit까지 `BEGIN IMMEDIATE` transaction을 쥐고, corpus commit이 쓰인 뒤 commit하며, 모든 거부에서
    되돌린다. corpus commit이 쓰인 뒤 실패한 SQLite commit은 database를 다시 만들도록 표시한다. 지연 transaction은 첫 읽기부터 reader
