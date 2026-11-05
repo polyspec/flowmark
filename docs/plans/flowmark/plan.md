@@ -208,7 +208,8 @@ Each layer is a row, in this order, and each row's Red is a count of the cost co
    spec states this one write of a read. A database behind the generation a read found is refreshed once, by the read that
    finds it first, when the writer connection is free; a local transaction holding the writer connection means no other
    process can commit, so a read then answers from the database's generation, as stated. The database is a file private to
-   the process at `.flowmark/sql/<process>.db`, named by host, pid and start time, with its `-wal` and `-shm`, in WAL mode
+   the opening at `.flowmark/sql/<token>.db`, beside `<token>.holder`, the holder record of its process (host, pid and start
+   time), so two openings of one process have two databases, with its `-wal` and `-shm`, in WAL mode
    with SQLite's automatic checkpoint (`wal_autocheckpoint` stated), one writer connection and a pool of reader connections
    of a stated size, a read that finds the pool full waiting on a release. The engine creates `.flowmark/sql` with access for its
    owner alone and checks it, the database's path and its `-wal` and `-shm` with lstat before the open, refusing a link and,

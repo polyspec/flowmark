@@ -1,5 +1,5 @@
 <!-- doc-id: spec-ops -->
-<!-- source-sha256: 062cc63d7c7cbb1205dd44aeeb33f63d52bd99cf4fc4a3e55500cfd366e763cc -->
+<!-- source-sha256: bd7e6b657ce70a8a6ba04e3c8e8e02250558ee4801d982ca5d72db3377af7340 -->
 # Operations
 
 [English](40-ops.md)
@@ -9,8 +9,8 @@
 
 ## Corpus 열기
 
-- 열기는 lock 아래에서 **복구를 먼저** 실행한다. 끝난 holder의 pending lock record를 지우고
-  ([lock](#lock)), `*.clearing` claim은 건드리지 않는다. `.flowmark/tx/`는 stage를 많아야 하나 가지며,
+- 열기는 lock 아래에서 **복구를 먼저** 실행한다. 끝난 holder의 pending lock record와
+  ([lock](#lock)) 끝난 열기의 database를 지우고 ([SQL statements](#sql-statements)), `*.clearing` claim은 건드리지 않는다. `.flowmark/tx/`는 stage를 많아야 하나 가지며,
   그 이름은 OS random source의 128 random bit를 나타내는 소문자 hex 32자리다. 다른 이름이나 형태의
   항목, 또는 두 번째 stage는 열기를 거절하며 그 이름을 밝힌다. stage는 commit record가 있으면 거두고,
   prepare record가 있으면 완료하며, 둘 다 없으면 버린다. 복구는 idempotent다: 어느 단계에서 중단된
@@ -275,6 +275,17 @@ client가 구현할 것은 이 driver뿐이다.
   읽기가 읽을 corpus를 정하고, 첫 쓰기가 lock을 잡는다. 대기가 끝나면 `(SQLITE_BUSY)`로 끝나는 `CANCELED`이고, 첫 읽기보다
   새로운 commit 뒤의 쓰기는 `(SQLITE_BUSY_SNAPSHOT)`으로 끝나는 `CANCELED`이며, 둘 다 `ROLLBACK`을 위해 transaction을 열어
   둔다. 지연된 foreign key 실패는 SQLite처럼 `COMMIT`에서 실패하고 transaction을 열어 둔다.
+- **열기의 database.** 열기의 문장이 쓰는 database는 `.flowmark/sql/`의 file이며, 이 folder는 engine이 소유자만 접근하도록
+  만든다: Windows에서는 process의 사용자에게만 허용하는 보호된 access list, 그 밖에서는 mode `0700`이다. 그보다 넓게 허용하는
+  기존 folder, link, reparse point, folder 대신 있는 file은 거절한다. database마다 `<token>.db`와 SQLite가 그 옆에 만드는
+  file(`-wal`, `-shm`, `-journal`), 그리고 그것을 만든 process의 holder record인 `<token>.holder`([holder record](#holder-record))가
+  있으며, record는 database가 생기기 전에 쓰고 sync한다. token은 128 random bit를 나타내는 소문자 hex 32자리이므로 한 process의
+  두 열기는 database 둘을 가진다. 새 token의 file이 이미 있으면 link를 포함해 거절한다. driver는 고정된 flag로 file을 열고
+  `SQLITE_OPEN_NOFOLLOW`가 없으므로, 검사와 열기 사이에 심은 link는 그 folder에 대한 소유자 자신의 접근이 필요하다. 복구는
+  끝난 이 host의 holder가 가진 database를 지우며 record를 마지막에 지운다. 실행 중인 holder의 database, 이곳에서 process를
+  판정할 수 없는 다른 host의 holder의 database, 그리고 쓰는 쪽이 아직 쓰고 있을 수 있으므로 parse되지 않는 record의 database는
+  남고, holder record가 아닌 이름은 건드리지 않는다. `store/journal`의 `TestNewDatabase`, `TestNewDatabaseRefuses`,
+  `TestRecoverRemovesEndedDatabases`, `TestRecoverRefusesLinkedDatabases`가 이를 보장한다.
 - **읽기.** 다른 session이 lock을 쥔 것을 본 읽기는 자기 database에서 commit된 것을 읽고 writer를 기다리지 않는다. WAL
   mode의 SQLite와 같은 동작이다.
 - **Session 설정.** `foreign_keys`, `query_only`, `busy_timeout`, `locking_mode`는 session의 것이다. `locking_mode =

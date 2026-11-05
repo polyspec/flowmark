@@ -565,7 +565,7 @@ func (c *Corpus) remove(stage string, kind Kind) error {
 }
 
 // Recover runs the recovery of spec 40, opening a corpus, under l. It removes the pending records of ended lock
-// holders; then the one stage of `.flowmark/tx/` is collected when it holds a commit record, completed when it holds a
+// holders and the databases of ended openings (removeEndedDatabases); then the one stage of `.flowmark/tx/` is collected when it holds a commit record, completed when it holds a
 // prepare record, and discarded otherwise. A target whose current hash matches neither recorded hash refuses with
 // *RecoveryRefusal and leaves the stage. A second stage, or an entry that is no stage, refuses opening. Recover is
 // idempotent.
@@ -574,6 +574,9 @@ func (c *Corpus) Recover(l *Lock) error {
 		return err
 	}
 	if err := c.removeEndedPendings(); err != nil {
+		return err
+	}
+	if err := c.removeEndedDatabases(); err != nil {
 		return err
 	}
 	info, err := c.lstat(txRel)

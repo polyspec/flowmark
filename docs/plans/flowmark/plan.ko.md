@@ -1,5 +1,5 @@
 <!-- doc-id: plans-design-plan -->
-<!-- source-sha256: e7de413f6c4ee24584996aa581765a8929e8c60b169b6a0b016c5a7790ffdd14 -->
+<!-- source-sha256: 7155d83c8aa35db420ae0a3f5e9a6317ab6de5d4ff6e65765ca416c8968a2669 -->
 # flowmark 설계 계획
 
 Revision 2 — 3개 lane의 적대 감사 결과(engine core, orm 통합, 운영)와 multi-platform 지시를 아래 판정에 접는다. 감사의 blocker는 전부 판정이 되었고, 부수지 못한 주장은 문서 끝에 남긴다.
@@ -194,8 +194,8 @@ flowmark = the markdown database engine (one Go binary)
    읽으며 timer로는 절대 읽지 않는다. 끝난 holder의 prepare된 stage는 읽기가 lock을 잡아 recover하며, 이는 SQLite reader가 hot
    journal을 되돌리는 것과 같고, spec은 읽기의 이 쓰기 하나를 명시한다. 읽기가 찾은 세대보다 뒤처진 database는 writer 연결이 비어
    있을 때 그것을 처음 찾은 읽기가 한 번 refresh한다. 지역 transaction이 writer 연결을 쥐고 있으면 다른 process는 commit할 수 없으므로
-   읽기는 명시된 대로 database의 세대로 답한다. database는 `.flowmark/sql/<process>.db`에 있는 process 전용 파일이고, host, pid,
-   시작 시각으로 이름이 붙으며, `-wal`과 `-shm`을 가지고, SQLite의 자동 checkpoint(`wal_autocheckpoint` 명시)와 함께 WAL mode이며,
+   읽기는 명시된 대로 database의 세대로 답한다. database는 `.flowmark/sql/<token>.db`에 있는 열기 전용 파일이고, 그 process의
+   holder record(host, pid, 시작 시각)인 `<token>.holder` 옆에 있으므로 한 process의 두 열기는 database 둘을 가지며, `-wal`과 `-shm`을 가지고, SQLite의 자동 checkpoint(`wal_autocheckpoint` 명시)와 함께 WAL mode이며,
    writer 연결 하나와 명시된 크기의 reader 연결 pool을 가진다. pool이 찬 것을 본 읽기는 반환을 기다린다. 엔진은 `.flowmark/sql`을
    소유자만 접근하도록 만들고, 그것과 database 경로와 그 `-wal`, `-shm`을 열기 전에 lstat으로 검사해 link와, Windows에서는 reparse
    point를 거부한다. driver는 고정된 flag로 열며 `SQLITE_OPEN_NOFOLLOW`가 없고, 검사와 열기 사이에 link를 심으려면 그 folder에 대한

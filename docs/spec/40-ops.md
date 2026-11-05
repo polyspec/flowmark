@@ -10,7 +10,8 @@ The order of the commit protocol is normative.
 ## Opening a corpus
 
 - Opening runs **recovery first**, under the lock. It removes the pending lock records of ended
-  holders ([the lock](#the-lock)) and leaves every `*.clearing` claim alone. `.flowmark/tx/` holds
+  holders ([the lock](#the-lock)) and the databases of ended openings ([SQL statements](#sql-statements)),
+  and leaves every `*.clearing` claim alone. `.flowmark/tx/` holds
   at most one stage, named by 32 lowercase hex digits of 128 random bits from the OS random source;
   an entry of another name or form, or a second stage, refuses opening and is named. The stage is
   collected when it holds a commit record, completed when it holds a prepare record, and discarded
@@ -323,6 +324,19 @@ utility of orm's SQLite dialect holds on a corpus, and a client has only this dr
   `(SQLITE_BUSY)`, and a write after a commit newer than its first read is `CANCELED` ending in `(SQLITE_BUSY_SNAPSHOT)`;
   both leave the transaction open for its `ROLLBACK`. A deferred failure of a foreign key fails at `COMMIT` and leaves the
   transaction open, as on SQLite.
+- **The database of an opening.** The database of an opening's statements is a file of `.flowmark/sql/`, a folder
+  the engine makes with access for its owner alone: a protected access list that grants the process's user alone on
+  Windows, mode `0700` elsewhere; an existing folder that grants more, a link, a reparse point and a file in its place
+  are refused. Each database is `<token>.db`, with the files SQLite keeps beside it (`-wal`, `-shm`, `-journal`), and
+  `<token>.holder`, the holder record of the process that made it ([the holder record](#the-holder-record)), written
+  and synced before the database exists; the token is 32 lowercase hex digits of 128 random bits, so two openings of
+  one process have two databases. A file of a new token that exists already, a link included, is refused; the driver
+  opens a file with fixed flags and has no `SQLITE_OPEN_NOFOLLOW`, so a link planted between the check and the open
+  needs the owner's own access to the folder. The recovery removes the database of a holder of this host that has
+  ended, its record last; a database of a running holder, of a holder of another host, whose processes cannot be judged
+  from here, and of a record that does not parse, since its writer may still be writing it, stays, and a name that is
+  no holder record is never touched. `TestNewDatabase`, `TestNewDatabaseRefuses`, `TestRecoverRemovesEndedDatabases`
+  and `TestRecoverRefusesLinkedDatabases` of `store/journal` hold it.
 - **Reads.** A read that finds the lock held by another session reads what is committed, on a database of its own, and never
   waits for a writer: the behaviour of SQLite in WAL mode.
 - **Session settings.** `foreign_keys`, `query_only`, `busy_timeout` and `locking_mode` are the session's. Under
