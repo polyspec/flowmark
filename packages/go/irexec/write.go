@@ -120,10 +120,6 @@ func (w *writer) request() *Error {
 // statedRows returns a function that finds the row of the next corpus that a key of a difference names. SQLite judged the
 // statement, so a row the corpus does not hold is a fault of the engine.
 func (w *writer) statedRows() func(ps []int) (*rec, *Error) {
-	byKey := make(map[string]*rec, len(scan(w.c, w.tb.Name)))
-	for _, x := range scan(w.c, w.tb.Name) {
-		byKey[x.row.Key] = x
-	}
 	names := w.tb.KeyParts
 	if len(names) == 0 {
 		names = []string{w.tb.Key}
@@ -142,7 +138,11 @@ func (w *writer) statedRows() func(ps []int) (*rec, *Error) {
 		if len(w.tb.KeyParts) > 0 {
 			key = catalog.JoinKey(values)
 		}
-		x := byKey[key]
+		// The last row of the key in corpus order, as a map of the table's rows by key holds it.
+		var x *rec
+		if xs := w.c.lookup(keyIndex(w.tb.Name, key)); len(xs) > 0 {
+			x = xs[len(xs)-1]
+		}
 		if x == nil {
 			return nil, errf(codeInternal, "the difference of a statement names the row %s of %s, which the corpus does not hold", key, w.tb.Name)
 		}
@@ -210,7 +210,9 @@ func (c *Corpus) fork() *Corpus {
 	c.docsMu.Lock()
 	defer c.docsMu.Unlock()
 	c.freshLocked()
-	return &Corpus{cat: c.cat, files: c.files, unavailable: c.unavailable, walk: c.walk, idx: c.idx, keys: c.keys, cost: c.cost}
+	n := &Corpus{cat: c.cat, files: c.files, unavailable: c.unavailable, walk: c.walk, cost: c.cost}
+	n.idx, n.keys = c.shareKeysLocked()
+	return n
 }
 
 // ownFile returns the document at path of the next corpus as the write's own copy, which it may change, nil when the
@@ -218,11 +220,18 @@ func (c *Corpus) fork() *Corpus {
 // rows, and the records of the next corpus that hold them take the copies, so a record the write holds stays the
 // record of its row.
 func (w *writer) ownFile(path string) *file {
+	f := w.ownDoc(path)
+	if f != nil {
+		w.next.changed(path)
+	}
+	return f
+}
+
+// ownDoc returns the document at path of the next corpus as ownFile does, for a change of the values of its rows: the
+// document is marked only when it is copied, and the change marks each row it changes (own).
+func (w *writer) ownDoc(path string) *file {
 	f := w.next.file(path)
 	if f == nil || f != w.c.file(path) {
-		if f != nil {
-			w.next.changed(path)
-		}
 		return f
 	}
 	cp := &file{table: f.table, data: f.data, diags: f.diags, rows: make([]*store.Row, len(f.rows))}
@@ -246,7 +255,7 @@ func (w *writer) own(x *rec) *rec {
 	if w.next.recOf(x.row) != x {
 		panic("irexec: a write changes a record that is not of its next corpus")
 	}
-	w.ownFile(x.file)
+	w.ownDoc(x.file)
 	w.next.changedRow(x.file, x.row)
 	return x
 }
@@ -614,7 +623,7 @@ func (w *writer) insertRow(i int, ps []*int) *Error {
 		case f.Identity:
 			vals[c.Name] = w.nextIdentity(tb, c.Name)
 		case c.Name == tb.Key && w.keyPrefix() != "":
-			vals[c.Name] = w.nextPrefixed(tb, w.keyPrefix())
+			vals[c.Name] = w.nextPrefixed(tb)
 		case c.Name == tb.Order:
 			// assigned once the row is placed
 		default:
@@ -698,6 +707,7 @@ func (w *writer) insertRow(i int, ps []*int) *Error {
 			p.row.Blocks = map[string][]*store.Row{}
 		}
 		p.row.Blocks[tb.Name] = append(p.row.Blocks[tb.Name], g.row)
+		w.next.changed(p.file)
 		w.touched[p.file] = true
 	}
 	if tb.Order != "" {
@@ -738,35 +748,34 @@ func (w *writer) placementRow(tb *catalog.Table, v cell) (*rec, *Error) {
 	if v.null {
 		return nil, nil
 	}
-	for _, x := range scan(w.next, tb.Storage.Parent) {
-		if x.row.Key == v.text {
-			return x, nil
-		}
-	}
-	return nil, nil
+	return w.next.lookupOne(keyIndex(tb.Storage.Parent, v.text)), nil
 }
 
-// nextIdentity allocates max+1 over the identity column of the table's rows.
+// nextIdentity allocates max+1 over the identity column of the table's rows: the largest positive integer of the column,
+// which the number index holds (numberColumns).
 func (w *writer) nextIdentity(tb *catalog.Table, col string) cell {
+	if !slices.Contains(numberColumns(tb), col) {
+		panic("irexec: an identity is allocated over the column " + col + " of " + tb.Name + ", whose numbers the index does not hold")
+	}
 	max := int64(0)
-	for _, x := range scan(w.next, tb.Name) {
-		v, err := w.next.value(x, col)
-		if err != nil || v.null {
-			continue
+	if n := w.next.maxNumber(tb.Name, col); n != "" {
+		// The index holds the canonical digits of a positive int64 (indexKeys).
+		m, err := strconv.ParseInt(n, 10, 64)
+		if err != nil {
+			panic("irexec: the number index holds " + n + ", which is no int64")
 		}
-		if n, perr := strconv.ParseInt(v.text, 10, 64); perr == nil && n > max {
-			max = n
-		}
+		max = m
 	}
 	return cell{text: strconv.FormatInt(max+1, 10)}
 }
 
-// nextPrefixed allocates <p><n + 1>, n the largest decimal suffix without a leading
-// zero among the keys of the form <p><n> (spec 20 Keys).
-func (w *writer) nextPrefixed(tb *catalog.Table, p string) cell {
-	keys := make([]string, 0, len(scan(w.next, tb.Name)))
-	for _, x := range scan(w.next, tb.Name) {
-		keys = append(keys, x.row.Key)
+// nextPrefixed allocates <p><n + 1> under the key_prefix p of tb, n the largest decimal suffix without a leading zero
+// among the keys of the form <p><n> (spec 20 Keys): the last number of the prefix the index holds.
+func (w *writer) nextPrefixed(tb *catalog.Table) cell {
+	p := w.next.keyPrefix(tb.Name)
+	var keys []string
+	if n := w.next.maxNumber(tb.Name, ""); n != "" {
+		keys = []string{p + n}
 	}
 	return cell{text: NextPrefixed(p, keys)}
 }
@@ -815,7 +824,7 @@ func (w *writer) onDuplicate(ps []*int) (bool, *Error) {
 	var met *rec
 	joinKey(w.tb, vals)
 	if k, ok := vals[w.tb.Key]; ok && !k.null {
-		for _, x := range scan(w.next, w.tb.Name) {
+		for _, x := range w.next.lookup(foldIndex(w.tb.Name, k.text)) {
 			switch {
 			case x.row.Key == k.text:
 				met = x
@@ -825,7 +834,7 @@ func (w *writer) onDuplicate(ps []*int) (bool, *Error) {
 			}
 		}
 	}
-	for _, x := range scan(w.next, w.tb.Name) {
+	for _, x := range w.uniqueCandidates(vals) {
 		for _, k := range w.tb.Uniques {
 			equal := true
 			for _, col := range k {
@@ -1075,6 +1084,7 @@ func (w *writer) movePlacement(g *given, x *rec, v cell) *Error {
 	}
 	old := w.own(x.parent).row
 	old.Blocks[tb.Name] = slices.DeleteFunc(slices.Clone(old.Blocks[tb.Name]), func(r *store.Row) bool { return r == x.row })
+	w.next.changed(x.file)
 	if len(old.Blocks[tb.Name]) == 0 {
 		delete(old.Blocks, tb.Name)
 	}
@@ -1083,6 +1093,7 @@ func (w *writer) movePlacement(g *given, x *rec, v cell) *Error {
 		p.row.Blocks = map[string][]*store.Row{}
 	}
 	p.row.Blocks[tb.Name] = append(p.row.Blocks[tb.Name], x.row)
+	w.next.changed(p.file)
 	w.touched[x.file] = true
 	w.touched[p.file] = true
 	return nil
@@ -1216,14 +1227,14 @@ func (c *Corpus) referencedKey(y *rec, fk dbspec.ForeignKey, target *catalog.Tab
 // referencing calls visit for each row whose foreign key names the row x, the rows of every table that may reference it.
 func (w *writer) referencing(x *rec, visit func(y *rec, t *catalog.Table, fk dbspec.ForeignKey) *Error) *Error {
 	for _, t := range w.c.cat.Tables {
-		for _, fk := range t.ForeignKeys {
+		for i, fk := range t.ForeignKeys {
 			if fk.Table != x.tb.Name {
 				continue
 			}
 			if err := w.next.need(t.Name); err != nil {
 				return err
 			}
-			for _, y := range scan(w.next, t.Name) {
+			for _, y := range w.next.candidates(refIndex(t.Name, i, x.row.Key), refFault(t.Name, i)) {
 				key, named, err := w.next.referencedKey(y, fk, x.tb)
 				if err != nil {
 					return err
@@ -1320,6 +1331,7 @@ func (w *writer) removeRow(x *rec) *Error {
 	case catalog.StorageBlock:
 		p := w.own(x.parent).row
 		p.Blocks[tb.Name] = slices.DeleteFunc(slices.Clone(p.Blocks[tb.Name]), func(r *store.Row) bool { return r == x.row })
+		w.next.changed(x.file)
 		if len(p.Blocks[tb.Name]) == 0 {
 			delete(p.Blocks, tb.Name)
 		}
@@ -1380,4 +1392,31 @@ func (w *writer) rowPath(tb *catalog.Table, g *given, vals map[string]cell) (str
 		return "", errf(codeInternal, "%v", err)
 	}
 	return path, nil
+}
+
+// uniqueCandidates returns the rows of the table the on_duplicate judgement of the inserted values vals may meet or fail
+// on, in corpus order: for each unique key, the rows that hold its values and the rows whose values of it fail their
+// evaluation; every row of the table when the index does not hold one of its unique keys (indexedUnique).
+func (w *writer) uniqueCandidates(vals map[string]cell) []*rec {
+	var keys []string
+	for _, u := range w.tb.Uniques {
+		if !indexedUnique(w.tb, u) {
+			return scan(w.next, w.tb.Name)
+		}
+		keys = append(keys, uniqueFault(w.tb.Name, u))
+		parts := make([]string, len(u))
+		complete := true
+		for i, col := range u {
+			v, ok := vals[col]
+			if !ok || v.null {
+				complete = false
+				break
+			}
+			parts[i] = v.text
+		}
+		if complete {
+			keys = append(keys, uniqueIndex(w.tb.Name, u, strings.Join(parts, "\x00")))
+		}
+	}
+	return w.next.candidates(keys...)
 }

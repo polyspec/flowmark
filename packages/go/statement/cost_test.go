@@ -224,8 +224,10 @@ var quietCost = map[string]bool{"read task": true, "read note": true}
 var editReadCost = []cost.Counter{cost.FilesVisited, cost.FilesParsed, cost.RowsPlaced, cost.RowsIndexed}
 
 // writeReadCost are the counts of the reads of a write, at its start and under the lock at its commit, the rows its
-// post-image copies (T39), and the rows the corpus enters in its index (T40-1).
-var writeReadCost = []cost.Counter{cost.FilesVisited, cost.FilesParsed, cost.RowsPlaced, cost.RowsCopied, cost.RowsIndexed}
+// post-image copies (T39), the rows the corpus enters in its index (T40-1), and the rows the write and its checks read
+// (T40-2).
+var writeReadCost = []cost.Counter{cost.FilesVisited, cost.FilesParsed, cost.RowsPlaced, cost.RowsCopied, cost.RowsIndexed,
+	cost.RowsScanned}
 
 // logCost names, for each operation, the counters whose count grows at most with the logarithm of the documents of
 // the corpus: a comparison of two corpora walks the paths of the ordered map of their documents to the documents that

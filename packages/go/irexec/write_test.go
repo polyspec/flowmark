@@ -68,6 +68,15 @@ func TestInsert(t *testing.T) {
 			t.Fatalf("items:\n%s", f.file("items.flowmark.md"))
 		}
 	})
+	t.Run("20#storage: a multi-row insert into one block places each row in its scope", func(t *testing.T) {
+		f := fresh(t)
+		res := f.want(f.msg("insert", "steps", map[string]any{"set": sets("id", "note", "title", "done"), "rows": [][]int{{4, 5, 6, 7}}}, "S3", "N1", "Third", false, "S4", "N1", "Fourth", true),
+			`{"affected":2,"keys":["S3","S4"]}`)
+		f.commit(res)
+		if !strings.Contains(f.file("notes/N1.flowmark.md"), "- S2 Review done:true\n- S3 Third done:false\n- S4 Fourth done:true\n") {
+			t.Fatalf("N1:\n%s", f.file("notes/N1.flowmark.md"))
+		}
+	})
 	t.Run("20#order: an insert with k places the row at k and the siblings follow", func(t *testing.T) {
 		f := fresh(t)
 		res := f.want(f.msg("insert", "items", map[string]any{"set": sets("title", "body", "parent", "position")}, "First child", "", "T1", 1), `{"affected":1,"keys":["T5"]}`)

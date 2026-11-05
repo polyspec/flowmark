@@ -174,6 +174,7 @@ func (w *writer) historyRow(x *rec, sm *catalog.StateMachine, from, to string, r
 			x.row.Blocks = map[string][]*store.Row{}
 		}
 		x.row.Blocks[ht.Name] = append(x.row.Blocks[ht.Name], row)
+		w.next.changed(x.file)
 		w.touched[x.file] = true
 	case catalog.StorageDocument:
 		path := ht.Name + docSuffix
@@ -214,7 +215,7 @@ func (w *writer) limits() *Error {
 			continue
 		}
 		n := int64(0)
-		for _, x := range scan(w.next, w.tb.Name) {
+		for _, x := range w.next.candidates(stateIndex(w.tb.Name, l.State), stateFault(w.tb.Name)) {
 			v, err := w.next.value(x, sm.Column)
 			if err != nil {
 				return err

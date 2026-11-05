@@ -644,6 +644,18 @@ and MySQL and PostgreSQL compare a `datetime(p)` column with `NOW(6)` at six dig
   opened builds the index, once, as the first read reads every document. `TestCost` holds that a
   write and an external edit enter the same rows at 1,000 and at 100,000 rows, and every access of
   the index in the executor's tests compares it with the index built from nothing.
+- A write and its checks read the rows they need through the index, not by walking a table: a
+  stated, placement, parent or referenced row by its key, the largest `key_prefix` number and
+  identity by the number index, a sibling group by its group, the rows that reference a row by the
+  key their foreign key names, a state's rows by its value and a unique key's rows by its values.
+  The index also holds, for each of these values that is not a value of its column type, the row
+  whose evaluation fails; a check reads the rows of the keys it needs with those rows and judges each
+  in corpus order as it judged each row of the table, so it fails on the same row as the walk did.
+  The link targets a write may move are derived from the rows of the documents it changed, and a
+  link target is derived from the rows of its key when a link or the write asks for it.
+  `TestCost` holds that every write reads the same rows at 1,000 and at 100,000 rows, and
+  `TestIndexMarks` that each change of a write's corpus, marked, leaves the index equal to the index
+  built from nothing and, unmarked, does not.
 - **The codec's cost** is linear in the bytes of a file: the parse and the render of a file each take
   at most 0.1 s of CPU per megabyte of it and allocate at most 64 bytes per byte of it, for a document
   file of rows with detail sections. No pass compares each heading with each detail anchor, or each

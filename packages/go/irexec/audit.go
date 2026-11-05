@@ -54,7 +54,7 @@ func (w *writer) auditRow(row *store.Row, action string, previous cell) *Error {
 		return err
 	}
 	key := joinedKey(tt, map[string]string{a.TablesRecord: record.text, a.TablesName: w.tb.Name})
-	if firstByKey(scan(w.next, tt.Name), func(k string) bool { return k == key }) != nil {
+	if w.next.lookupOne(keyIndex(tt.Name, key)) != nil {
 		return nil
 	}
 	named := &store.Row{Table: tt.Name, Key: key, Scalars: map[string]*string{}, Sections: map[string]*string{}}

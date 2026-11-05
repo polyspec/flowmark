@@ -1,5 +1,5 @@
 <!-- doc-id: spec-ops -->
-<!-- source-sha256: f642243398c6bcac62f47f82d181b53e8a8e8ef2e3e9c6c96a52c3e5745fd93b -->
+<!-- source-sha256: 49e599efda9a6338fb95d03fdbadf3141d180a2ca54fa761a60658c799dc7746 -->
 # Operations
 
 [English](40-ops.md)
@@ -554,6 +554,15 @@ MySQL과 PostgreSQL은 `datetime(p)` column을 `NOW(6)`와 여섯 자리로 비�
   빠졌다가 지금 모습으로 다시 들어간다. 그래서 index의 비용은 바뀐 문서의 행이다. corpus를 연 뒤 첫 쓰기가
   첫 읽기가 모든 문서를 읽듯 index를 한 번 만든다. `TestCost`가 쓰기와 외부 편집이 1,000행과 100,000행에서
   같은 행을 넣음을 확인하고, executor 시험에서 index에 접근할 때마다 처음부터 만든 index와 비교한다.
+- 쓰기와 그 검사는 필요한 행을 table을 걷지 않고 index로 읽는다: 진술된 행, placement 행, parent 행,
+  참조되는 행은 key로, 가장 큰 `key_prefix` 수와 identity는 수 index로, 형제 group은 group으로, 한 행을
+  참조하는 행은 그 foreign key가 가리키는 key로, state의 행은 그 값으로, unique key의 행은 그 값으로 읽는다.
+  index는 이 값들 가운데 column type의 값이 아닌 것에 대해, 평가가 실패하는 행도 가진다. 검사는 필요한
+  key의 행을 그 행들과 함께 읽고, table의 각 행을 판정하던 대로 corpus 순서로 하나씩 판정한다. 그래서 table을
+  걷던 때와 같은 행에서 실패한다. 쓰기가 옮길 수 있는 link target은 쓰기가 바꾼 문서의 행에서 구하고, link
+  target 하나는 link나 쓰기가 요구할 때 그 key의 행에서 구한다. `TestCost`가 모든 쓰기가 1,000행과
+  100,000행에서 같은 행을 읽음을 확인하고, `TestIndexMarks`가 쓰기의 corpus를 바꾸는 각 변경이 표시되면
+  index가 처음부터 만든 index와 같고, 표시되지 않으면 다름을 확인한다.
 - **codec의 비용**은 file의 byte에 선형이다: 상세 섹션을 가진 행들의 document file에서, file의 parse와
   render는 각각 그 megabyte당 CPU 0.1초 이하가 들고 그 byte당 64 byte 이하를 할당한다. 어떤 pass도 각
   heading을 각 상세 anchor와, 또는 각 행을 각 행과 비교하지 않는다: heading의 slug는 자기가 가져가는

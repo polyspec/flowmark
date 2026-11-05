@@ -9,6 +9,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/polyspec/flowmark/packages/go/catalog"
+	"github.com/polyspec/flowmark/packages/go/internal/pmap"
 	"github.com/polyspec/flowmark/packages/go/store"
 )
 
@@ -188,17 +189,9 @@ func (w *writer) keyChecks() []fault {
 	if len(ins) == 0 {
 		return nil
 	}
-	// The table's rows before the write: the rows the request does not give.
-	others := scan(w.c, w.tb.Name)
-	firstOther := make(map[string]*rec, len(others))
-	othersOfFold := make(map[string][]*rec, len(others))
-	for _, x := range others {
-		if _, held := firstOther[x.row.Key]; !held {
-			firstOther[x.row.Key] = x
-		}
-		fold := store.FoldKey(x.row.Key)
-		othersOfFold[fold] = append(othersOfFold[fold], x)
-	}
+	// The table's rows before the write, the rows the request does not give: the first of a key, and those of its fold.
+	firstOther := func(k string) *rec { return w.c.lookupOne(keyIndex(w.tb.Name, k)) }
+	othersOfFold := func(k string) []*rec { return w.c.lookup(foldIndex(w.tb.Name, k)) }
 	firstGiven := make(map[string]int, len(ins))
 	timesGiven := make(map[string]int, len(ins))
 	givenOfFold := make(map[string][]*given, len(ins))
@@ -226,7 +219,7 @@ func (w *writer) keyChecks() []fault {
 			refuse(fmt.Sprintf("the key %s equals the key of the row at index %d of the rows given", k, ins[j].index))
 			continue
 		}
-		if x := firstOther[k]; x != nil {
+		if x := firstOther(k); x != nil {
 			refuse(fmt.Sprintf("the key %s equals the key of the %s row in %s", k, w.tb.Name, x.file))
 			continue
 		}
@@ -244,7 +237,7 @@ func (w *writer) keyChecks() []fault {
 				least, leastGiven, leastRow = o.row.Key, o, nil
 			}
 		}
-		for _, x := range othersOfFold[fold] {
+		for _, x := range othersOfFold(k) {
 			if consider(x.row.Key) {
 				least, leastGiven, leastRow = x.row.Key, nil, x
 			}
@@ -257,16 +250,6 @@ func (w *writer) keyChecks() []fault {
 		}
 	}
 	return faults
-}
-
-// firstByKey returns the first row whose key match accepts, in file order.
-func firstByKey(rows []*rec, match func(string) bool) *rec {
-	for _, x := range rows {
-		if match(x.row.Key) {
-			return x
-		}
-	}
-	return nil
 }
 
 // uniques refuses a written row whose unique key equals another row's, byte for
@@ -305,7 +288,13 @@ func (w *writer) uniques() *Error {
 				continue
 			}
 			seen[k] = g
-			for _, x := range scan(w.next, w.tb.Name) {
+			others := scan
+			if indexedUnique(w.tb, u) {
+				others = func(c *Corpus, _ string) []*rec {
+					return c.candidates(uniqueIndex(w.tb.Name, u, k), uniqueFault(w.tb.Name, u))
+				}
+			}
+			for _, x := range others(w.next, w.tb.Name) {
 				if x.row == g.row || isGiven(w.given, x.row) {
 					continue
 				}
@@ -323,24 +312,9 @@ func (w *writer) uniques() *Error {
 	return nil
 }
 
-// uniqueText returns the values of the unique key u of row x joined, false when one
-// is NULL.
+// uniqueText returns the values of the unique key u of row x of the next corpus joined, false when one is NULL.
 func (w *writer) uniqueText(x *rec, u []string) (string, bool, *Error) {
-	parts := make([]string, len(u))
-	for i, col := range u {
-		if x.parent == nil && w.tb.Storage.Kind == catalog.StorageBlock && col == w.tb.Placement() {
-			return "", false, nil // a block row placed nowhere: its placement key names no row
-		}
-		v, err := w.next.value(x, col)
-		if err != nil {
-			return "", false, err
-		}
-		if v.null {
-			return "", false, nil
-		}
-		parts[i] = v.text
-	}
-	return strings.Join(parts, "\x00"), true, nil
+	return w.next.uniqueText(x, u)
 }
 
 func assignsAny(g *given, cols []string) bool {
@@ -391,7 +365,7 @@ func (w *writer) references() *Error {
 			if err := w.next.need(fk.Table); err != nil {
 				return err
 			}
-			if firstByKey(scan(w.next, fk.Table), func(k string) bool { return k == key }) == nil {
+			if w.next.lookupOne(keyIndex(fk.Table, key)) == nil {
 				w.fault(g, w.tb.Name, col, codeForeignKey, fmt.Sprintf("the foreign key %s names no %s row with the key %s", col, fk.Table, key))
 			}
 		}
@@ -419,7 +393,7 @@ func (w *writer) parents() *Error {
 		if v.null {
 			continue
 		}
-		p := firstByKey(scan(w.next, w.tb.Name), func(k string) bool { return k == v.text })
+		p := w.next.lookupOne(keyIndex(w.tb.Name, v.text))
 		if p == nil {
 			continue // the reference check reports it
 		}
@@ -444,14 +418,15 @@ func (w *writer) parents() *Error {
 			if cv.null {
 				break
 			}
-			cur = firstByKey(scan(w.next, w.tb.Name), func(k string) bool { return k == cv.text })
+			cur = w.next.lookupOne(keyIndex(w.tb.Name, cv.text))
 		}
 	}
 	return nil
 }
 
-// linker derives link targets over a corpus, as the validator's index does: the
-// file that holds a row and the anchor of its detail section.
+// linker derives link targets over a corpus, as the validator's index does: the file that holds the first row of a key in
+// corpus order and the anchor of its detail section, and whether other rows share the key. A target is derived when a
+// link or the write asks for it, from the rows of its key, and kept.
 type linker struct {
 	c       *Corpus
 	targets map[string]linkTarget
@@ -459,37 +434,41 @@ type linker struct {
 
 type linkTarget struct {
 	file, anchor string
-	shared       bool
+	shared, held bool
 }
 
 func newLinker(c *Corpus) (*linker, error) {
-	lk := &linker{c: c, targets: map[string]linkTarget{}}
-	for _, tb := range c.cat.Tables {
-		for _, x := range scan(c, tb.Name) {
-			k := tb.Name + "\x00" + x.row.Key
-			if t, ok := lk.targets[k]; ok {
-				t.shared = true
-				lk.targets[k] = t
-				continue
-			}
-			has, err := store.HasDetail(c.cat, tb.Name, x.row)
-			if err != nil {
-				return nil, err
-			}
-			t := linkTarget{file: x.file}
-			if has {
-				t.anchor = store.DetailAnchor(tb.Name, x.row.Key)
-			}
-			lk.targets[k] = t
+	return &linker{c: c, targets: map[string]linkTarget{}}, nil
+}
+
+// target returns the link target of the row of table with the key key; held is false when no row has the key.
+func (lk *linker) target(table, key string) (linkTarget, error) {
+	k := table + "\x00" + key
+	if t, ok := lk.targets[k]; ok {
+		return t, nil
+	}
+	var t linkTarget
+	if xs := lk.c.lookup(keyIndex(table, key)); len(xs) > 0 {
+		has, err := store.HasDetail(lk.c.cat, table, xs[0].row)
+		if err != nil {
+			return linkTarget{}, err
+		}
+		t = linkTarget{file: xs[0].file, shared: len(xs) > 1, held: true}
+		if has {
+			t.anchor = store.DetailAnchor(table, key)
 		}
 	}
-	return lk, nil
+	lk.targets[k] = t
+	return t, nil
 }
 
 // Target implements store.Linker.
 func (lk *linker) Target(fromFile, table, key string) (string, error) {
-	t, ok := lk.targets[table+"\x00"+key]
-	if !ok {
+	t, err := lk.target(table, key)
+	if err != nil {
+		return "", err
+	}
+	if !t.held {
 		return "", fmt.Errorf("no %s row has the key %s", table, key)
 	}
 	if t.shared {
@@ -606,36 +585,61 @@ func (w *writer) readBack(path string, f *file, out []byte, lk store.Linker) *Er
 // disappears, and a row the write inserts, which a dangling link may name (spec 10
 // Foreign keys as links). Every table that may hold such a link is needed.
 func (w *writer) linkTargets(before, after *linker) *Error {
+	// A target is derived from the rows of its key, so only a key of a row of a document the write changed may move.
 	moved := map[string]bool{}
-	for k, a := range after.targets {
-		if b, ok := before.targets[k]; !ok || b.anchor != a.anchor || b.file != a.file {
-			moved[k] = true
+	var faultErr error
+	pmap.Diff(w.c.files, w.next.files, func(a, b *file) bool { return a == b }, func(path string) {
+		for _, c := range []*Corpus{w.c, w.next} {
+			d := c.recsOf(path)
+			if d == nil {
+				continue
+			}
+			for _, x := range d.walk {
+				k := x.row.Table + "\x00" + x.row.Key
+				if moved[k] || faultErr != nil {
+					continue
+				}
+				a, err := after.target(x.row.Table, x.row.Key)
+				if err != nil {
+					faultErr = err
+					continue
+				}
+				b, err := before.target(x.row.Table, x.row.Key)
+				if err != nil {
+					faultErr = err
+					continue
+				}
+				if a.held && (!b.held || b.anchor != a.anchor || b.file != a.file) {
+					moved[k] = true
+				}
+			}
 		}
+	})
+	if faultErr != nil {
+		return errf(codeInternal, "%v", faultErr)
 	}
 	if len(moved) == 0 {
 		return nil
 	}
 	for _, tb := range w.c.cat.Tables {
-		for _, fk := range tb.Links() {
-			col := fk.Columns[0]
-			links := false
+		for i, fk := range tb.ForeignKeys {
+			if len(fk.Columns) != 1 || fk.Columns[0] == tb.Placement() {
+				continue // not a link (catalog.Table.Links)
+			}
+			var keys []string
 			for k := range moved {
-				if strings.HasPrefix(k, fk.Table+"\x00") {
-					links = true
+				if key, ok := strings.CutPrefix(k, fk.Table+"\x00"); ok {
+					keys = append(keys, key)
 				}
 			}
-			if !links {
+			if len(keys) == 0 {
 				continue
 			}
 			if err := w.next.need(tb.Name); err != nil {
 				return err
 			}
-			for _, x := range scan(w.next, tb.Name) {
-				v, err := w.next.value(x, col)
-				if err != nil || v.null {
-					continue
-				}
-				if moved[fk.Table+"\x00"+v.text] {
+			for _, key := range keys {
+				for _, x := range w.next.lookup(refIndex(tb.Name, i, key)) {
 					w.touched[x.file] = true
 				}
 			}

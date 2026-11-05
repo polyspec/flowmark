@@ -1,10 +1,12 @@
 package irexec
 
 import (
+	"cmp"
 	"maps"
 	"slices"
 
 	"github.com/polyspec/flowmark/packages/go/internal/cost"
+	"github.com/polyspec/flowmark/packages/go/internal/pmap"
 	"github.com/polyspec/flowmark/packages/go/store"
 )
 
@@ -28,29 +30,41 @@ type docRecs struct {
 // documents in, so a test can compare its index with the index built from nothing.
 var checkFresh func(*Corpus)
 
-// changed marks the document path of c: its rows changed since they entered the index.
-func (c *Corpus) changed(path string) { c.changedRow(path, nil) }
+// mark is what changed in a document since its rows entered the index: the rows whose values changed, and whether rows
+// joined, left or moved within it (walk).
+type mark struct {
+	rows map[*store.Row]bool
+	walk bool
+}
 
-// changedRow marks the document path of c and, when r is not nil, its row r, whose values changed: a document's rows
-// enter the index again when they are new to it, marked, under another parent, or under a parent that entered again.
+// changed marks the document path of c: rows joined it, left it or moved within it.
+func (c *Corpus) changed(path string) {
+	c.docsMu.Lock()
+	defer c.docsMu.Unlock()
+	c.markLocked(path).walk = true
+}
+
+// changedRow marks the row r of the document path of c, whose values changed.
 func (c *Corpus) changedRow(path string, r *store.Row) {
 	c.docsMu.Lock()
 	defer c.docsMu.Unlock()
-	c.changedLocked(path, r)
+	m := c.markLocked(path)
+	if m.rows == nil {
+		m.rows = map[*store.Row]bool{}
+	}
+	m.rows[r] = true
 }
 
-func (c *Corpus) changedLocked(path string, r *store.Row) {
+func (c *Corpus) markLocked(path string) *mark {
 	if c.dirty == nil {
-		c.dirty = map[string]map[*store.Row]bool{}
+		c.dirty = map[string]*mark{}
 	}
 	m := c.dirty[path]
 	if m == nil {
-		m = map[*store.Row]bool{}
+		m = &mark{}
 		c.dirty[path] = m
 	}
-	if r != nil {
-		m[r] = true
-	}
+	return m
 }
 
 // freshLocked brings the marked documents of c in: their records follow their rows, and the index holds their rows as
@@ -75,8 +89,17 @@ func (c *Corpus) freshLocked() {
 	c.reorder()
 }
 
-// freshDoc brings the document path of c in, re-entering the rows of marked.
-func (c *Corpus) freshDoc(path string, marked map[*store.Row]bool) {
+// shareKeysLocked returns the index and the index keys of c for a corpus read or written from it, which shares them: c
+// copies the index keys of a document again before it changes them.
+func (c *Corpus) shareKeysLocked() (pmap.Map[string, []locator], pmap.Map[string, docKeys]) {
+	c.ownKeys = nil
+	return c.idx, c.keys
+}
+
+// freshDoc brings the document path of c in. A document whose rows joined, left or moved is walked again, and its rows
+// enter the index again when they are new to it, marked, under another parent, or under a parent that entered again;
+// in a document whose rows only changed their values, the marked rows and their block rows enter it again.
+func (c *Corpus) freshDoc(path string, m *mark) {
 	old, _ := c.keys.Get(path)
 	f := c.file(path)
 	if f == nil {
@@ -85,36 +108,65 @@ func (c *Corpus) freshDoc(path string, marked map[*store.Row]bool) {
 		}
 		c.keys = c.keys.Delete(path)
 		delete(c.docs, path)
+		delete(c.ownKeys, path)
 		return
 	}
-	d := c.docs[path]
-	if d == nil {
-		d = &docRecs{byRow: map[*store.Row]*rec{}}
-		c.docs[path] = d
-	}
-	parents := make(map[*rec]*rec, len(d.byRow))
-	for _, x := range d.byRow {
-		parents[x] = x.parent
-	}
-	c.rewalk(path, f, d)
-	dk := make(docKeys, len(d.walk))
-	again := map[*rec]bool{}
-	for _, x := range d.walk {
-		prev, had := parents[x]
-		ks, keyed := old[x.row]
-		if !keyed || !had || marked[x.row] || prev != x.parent || (x.parent != nil && again[x.parent]) {
-			if keyed {
-				c.unindexRow(path, x.row, ks)
-			}
-			again[x] = true
-			c.indexRow(path, x, dk)
-			continue
+	dk := old
+	if !c.ownKeys[path] {
+		dk = make(docKeys, len(old))
+		maps.Copy(dk, old)
+		if c.ownKeys == nil {
+			c.ownKeys = map[string]bool{}
 		}
-		dk[x.row] = ks
+		c.ownKeys[path] = true
 	}
-	for r, ks := range old {
-		if _, live := dk[r]; !live {
-			c.unindexRow(path, r, ks)
+	again := func(x *rec) {
+		if ks, ok := dk[x.row]; ok {
+			c.unindexRow(path, x.row, ks)
+		}
+		c.indexRow(path, x, dk)
+	}
+	d := c.docs[path]
+	if d == nil || m.walk {
+		if d == nil {
+			d = &docRecs{byRow: map[*store.Row]*rec{}}
+			c.docs[path] = d
+		}
+		c.rewalk(path, f, d)
+		for _, x := range d.walk {
+			_, keyed := dk[x.row]
+			if !keyed || x.moved == d.gen || m.rows[x.row] || (x.parent != nil && x.parent.again == d.gen) {
+				x.again = d.gen
+				again(x)
+			}
+		}
+		for r, ks := range dk {
+			if x := d.byRow[r]; x == nil || x.gen != d.gen {
+				c.unindexRow(path, r, ks)
+				delete(dk, r)
+			}
+		}
+	} else {
+		var down func(x *rec)
+		down = func(x *rec) {
+			again(x)
+			for _, name := range x.row.BlockNames() {
+				for _, child := range x.row.Blocks[name] {
+					if y := d.byRow[child]; y != nil {
+						down(y)
+					}
+				}
+			}
+		}
+		var xs []*rec
+		for r := range m.rows {
+			if x := d.byRow[r]; x != nil {
+				xs = append(xs, x)
+			}
+		}
+		slices.SortFunc(xs, func(a, b *rec) int { return cmp.Compare(a.at, b.at) })
+		for _, x := range xs {
+			down(x)
 		}
 	}
 	c.keys = c.keys.Set(path, dk)
@@ -140,19 +192,29 @@ func (c *Corpus) docLocked(path string) *docRecs {
 	return d
 }
 
+// recsOf returns the records of the document path of c, nil when c holds no such document.
+func (c *Corpus) recsOf(path string) *docRecs {
+	c.docsMu.Lock()
+	defer c.docsMu.Unlock()
+	c.freshLocked()
+	return c.docLocked(path)
+}
+
 // rewalk builds the walk of the document path from its rows, keeping the record of each row that has one.
 func (c *Corpus) rewalk(path string, f *file, d *docRecs) {
 	d.walk = d.walk[:0]
-	d.gen++
 	var place func(r *store.Row, parent *rec)
 	place = func(r *store.Row, parent *rec) {
 		x := d.byRow[r]
 		if x == nil {
 			tb, _ := c.cat.Table(r.Table)
-			x = &rec{row: r, tb: tb}
+			x = &rec{row: r, tb: tb, parent: parent, moved: d.gen + 1}
 			d.byRow[r] = x
 		}
-		x.file, x.parent, x.at, x.gen = path, parent, len(d.walk), d.gen
+		if x.parent != parent {
+			x.moved = d.gen + 1
+		}
+		x.file, x.parent, x.at, x.gen = path, parent, len(d.walk), d.gen+1
 		d.walk = append(d.walk, x)
 		for _, name := range r.BlockNames() {
 			for _, child := range r.Blocks[name] {
@@ -163,6 +225,7 @@ func (c *Corpus) rewalk(path string, f *file, d *docRecs) {
 	for _, r := range f.rows {
 		place(r, nil)
 	}
+	d.gen++
 	if len(d.byRow) != len(d.walk) {
 		for r, x := range d.byRow {
 			if x.gen != d.gen {
@@ -186,7 +249,85 @@ func (c *Corpus) repoint(path string, copies map[*store.Row]*store.Row) {
 			}
 		}
 	}
-	c.changedLocked(path, nil)
+	c.markLocked(path).walk = true
+}
+
+// lookup returns the records of c that hold the index key k, in corpus order: by document path, then in the walk of
+// their document.
+func (c *Corpus) lookup(k string) []*rec {
+	c.docsMu.Lock()
+	defer c.docsMu.Unlock()
+	c.freshLocked()
+	locs, _ := c.idx.Get(k)
+	if len(locs) == 0 {
+		return nil
+	}
+	out := make([]*rec, 0, len(locs))
+	for _, l := range locs {
+		if d := c.docLocked(l.path); d != nil {
+			if x := d.byRow[l.row]; x != nil {
+				out = append(out, x)
+			}
+		}
+	}
+	c.cost.Add(cost.RowsScanned, len(out))
+	sortCorpusOrder(out)
+	return out
+}
+
+// candidates returns the records of c that hold any of the index keys keys, once each, in corpus order: the rows a check
+// judges in the order of the walk of their table.
+func (c *Corpus) candidates(keys ...string) []*rec {
+	if len(keys) == 1 {
+		return c.lookup(keys[0])
+	}
+	var out []*rec
+	seen := map[*rec]bool{}
+	for _, k := range keys {
+		for _, x := range c.lookup(k) {
+			if !seen[x] {
+				seen[x] = true
+				out = append(out, x)
+			}
+		}
+	}
+	sortCorpusOrder(out)
+	return out
+}
+
+// maxNumber returns the largest number of column col of table that the index holds (numberIndex), "" when it holds
+// none.
+func (c *Corpus) maxNumber(table, col string) string {
+	c.docsMu.Lock()
+	defer c.docsMu.Unlock()
+	c.freshLocked()
+	first, end := numberRange(table, col)
+	for k := range c.idx.Before(end) {
+		if k < first {
+			return ""
+		}
+		c.cost.Add(cost.RowsScanned, 1)
+		return k[len(first)+10:]
+	}
+	return ""
+}
+
+// sortCorpusOrder sorts records in corpus order: by document path, then in the walk of their document.
+func sortCorpusOrder(xs []*rec) {
+	slices.SortFunc(xs, func(a, b *rec) int {
+		if a.file != b.file {
+			return cmp.Compare(a.file, b.file)
+		}
+		return cmp.Compare(a.at, b.at)
+	})
+}
+
+// lookupOne returns the first record of c, in corpus order, that holds the index key k, nil when none does.
+func (c *Corpus) lookupOne(k string) *rec {
+	if xs := c.lookup(k); len(xs) > 0 {
+		return xs[0]
+	}
+	return nil
 }
 
 // recOf returns the record of row r of c, nil when no document of c holds r.

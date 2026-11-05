@@ -11,18 +11,22 @@ import (
 	"github.com/polyspec/flowmark/packages/go/store"
 )
 
-// The index of a corpus finds the rows a request needs without walking a table (plan, Ruling: an operation costs what it
-// touches). It maps an index key to the rows that hold it, and it is persistent: a corpus read or written from another
-// shares its index and changes it for the documents it changes, so keeping it costs the rows of those documents. An
-// index key names what a row holds:
+// The index of a corpus finds the rows a write and its checks read without walking a table (plan, Ruling: an operation
+// costs what it touches). It maps an index key to the rows that hold it, and it is persistent: a corpus read or written
+// from another shares its index and changes it for the documents it changes, so keeping it costs the rows of those
+// documents. An index key names what a row holds:
 //
 //   - its key, byte for byte (keyIndex), and without regard to case (foldIndex);
-//   - the value of a column that a lookup reads by value (valueIndex): a foreign key, a placement or parent key, a
-//     unique key's columns, a state machine's column, and the group of an ordered row;
-//   - the number of an identity column and the decimal suffix of a key of the table's key prefix (numberIndex), in
-//     numeric order, so the largest is the last of its range.
+//   - the key each of its foreign keys names (refIndex), the value of its state machine's column (stateIndex), the
+//     values of each of its unique keys (uniqueIndex) and its sibling group when its table has an order column
+//     (groupIndex);
+//   - the number of its key and of each identity column, and the decimal suffix of its key after the table's
+//     key_prefix (numberIndex), in numeric order, so the largest is the last of its range;
+//   - for each of the values above that is not a value of its column type, the fault of that value (faultIndex), so a
+//     check that evaluates the values of a table finds the rows whose evaluation fails as the walk of the table did.
 //
-// A row is found by its document and its row; the records of a document are built for each corpus that asks for them.
+// A check reads the rows of the keys it needs (candidates) and judges each as it judged each row of the table: the rows
+// the index leaves out are those the judgement passes over.
 
 // locator is a row of the index: the document that holds it and the row.
 type locator struct {
@@ -34,7 +38,35 @@ func keyIndex(table, key string) string { return "k\x00" + table + "\x00" + key 
 
 func foldIndex(table, key string) string { return "f\x00" + table + "\x00" + store.FoldKey(key) }
 
-func valueIndex(table, col, v string) string { return "v\x00" + table + "\x00" + col + "\x00" + v }
+// refIndex is the index key of the rows of table whose i-th foreign key names the key key.
+func refIndex(table string, i int, key string) string {
+	return "r\x00" + table + "\x00" + strconv.Itoa(i) + "\x00" + key
+}
+
+// stateIndex is the index key of the rows of table whose state machine's column holds state.
+func stateIndex(table, state string) string { return "s\x00" + table + "\x00" + state }
+
+// uniqueIndex is the index key of the rows of table whose unique key u holds the joined values text (uniqueText).
+func uniqueIndex(table string, u []string, text string) string {
+	return "u\x00" + table + "\x00" + strings.Join(u, ",") + "\x00" + text
+}
+
+// groupIndex is the index key of the rows of a table with an order column whose sibling group is group (groupKey).
+func groupIndex(table, group string) string { return "g\x00" + table + "\x00" + group }
+
+// faultIndex is the index key of the rows of table whose value of what fails its evaluation: "ref <i>", "state",
+// "unique <columns>" or "group".
+func faultIndex(table, what string) string { return "e\x00" + table + "\x00" + what }
+
+func refFault(table string, i int) string { return faultIndex(table, "ref "+strconv.Itoa(i)) }
+
+func stateFault(table string) string { return faultIndex(table, "state") }
+
+func uniqueFault(table string, u []string) string {
+	return faultIndex(table, "unique "+strings.Join(u, ","))
+}
+
+func groupFault(table string) string { return faultIndex(table, "group") }
 
 // numberIndex is the index key of the non-negative decimal digits n of column col of table: the length of the digits
 // before them, so the keys of a column sort in numeric order. col "" is the key's suffix after the key prefix.
@@ -42,59 +74,69 @@ func numberIndex(table, col, n string) string {
 	return fmt.Sprintf("n\x00%s\x00%s\x00%010d%s", table, col, len(n), n)
 }
 
-// groupIndex is the value index of the sibling group of a row of an ordered table.
-func groupIndex(table, group string) string { return valueIndex(table, "\x00group", group) }
+// numberRange is the first index key of the numbers of column col of table and the first after them.
+func numberRange(table, col string) (string, string) {
+	p := "n\x00" + table + "\x00" + col + "\x00"
+	return p, p[:len(p)-1] + "\x01"
+}
 
-// valueColumns returns the columns of tb whose values the index holds: every foreign key column, the placement key, the
-// parent column, the columns of every unique key and the state machine's column.
-func valueColumns(cat *catalog.Catalog, tb *catalog.Table) []string {
-	var cols []string
-	add := func(c string) {
-		if c != "" && c != tb.Key && !slices.Contains(cols, c) && (tb.Storage.Kind != catalog.StorageFiles || c != tb.Order) {
-			cols = append(cols, c)
-		}
-	}
-	for _, fk := range tb.ForeignKeys {
-		for _, c := range fk.Columns {
-			add(c)
-		}
-	}
-	if tb.Storage.Kind == catalog.StorageBlock {
-		add(tb.Placement())
-	}
-	add(parentColumn(tb))
-	if sm := tb.StateMachine; sm != nil {
-		add(sm.Column)
-	}
-	return cols
+// indexedUnique reports whether the index holds the unique key u of tb: a unique key of a files table that holds its
+// order column is read by its table, since a position is no stored value.
+func indexedUnique(tb *catalog.Table, u []string) bool {
+	return tb.Storage.Kind != catalog.StorageFiles || !slices.Contains(u, tb.Order)
 }
 
 // indexKeys returns the index keys of the record x of c.
 func (c *Corpus) indexKeys(x *rec) []string {
 	tb := x.tb
 	keys := []string{keyIndex(tb.Name, x.row.Key), foldIndex(tb.Name, x.row.Key)}
-	for _, col := range valueColumns(c.cat, tb) {
-		if v, err := c.value(x, col); err == nil && !v.null {
-			keys = append(keys, valueIndex(tb.Name, col, v.text))
+	for i, fk := range tb.ForeignKeys {
+		target, ok := c.cat.Table(fk.Table)
+		if !ok {
+			continue
+		}
+		key, named, err := c.referencedKey(x, fk, target)
+		switch {
+		case err != nil:
+			keys = append(keys, refFault(tb.Name, i))
+		case named:
+			keys = append(keys, refIndex(tb.Name, i, key))
+		}
+	}
+	if sm := tb.StateMachine; sm != nil {
+		v, err := c.value(x, sm.Column)
+		switch {
+		case err != nil:
+			keys = append(keys, stateFault(tb.Name))
+		case !v.null:
+			keys = append(keys, stateIndex(tb.Name, v.text))
 		}
 	}
 	for _, u := range tb.Uniques {
-		if tb.Storage.Kind == catalog.StorageFiles && slices.Contains(u, tb.Order) {
-			continue // a position is no stored value: such a unique key is read by its table
+		if !indexedUnique(tb, u) {
+			continue
 		}
-		if k, ok := c.uniqueKey(x, u); ok {
-			keys = append(keys, valueIndex(tb.Name, "\x00unique "+strings.Join(u, ","), k))
+		text, ok, err := c.uniqueText(x, u)
+		switch {
+		case err != nil:
+			keys = append(keys, uniqueFault(tb.Name, u))
+		case ok:
+			keys = append(keys, uniqueIndex(tb.Name, u, text))
 		}
 	}
-	if g, ok := c.groupOf(x); ok {
-		keys = append(keys, groupIndex(tb.Name, g))
+	if tb.Order != "" {
+		if g, err := c.groupKey(x); err != nil {
+			keys = append(keys, groupFault(tb.Name))
+		} else {
+			keys = append(keys, groupIndex(tb.Name, g))
+		}
 	}
 	if p := c.keyPrefix(tb.Name); p != "" && strings.HasPrefix(x.row.Key, p) {
 		if s := x.row.Key[len(p):]; decimal(s) {
 			keys = append(keys, numberIndex(tb.Name, "", s))
 		}
 	}
-	for _, col := range identityColumns(tb) {
+	for _, col := range numberColumns(tb) {
 		if v, err := c.value(x, col); err == nil && !v.null {
 			if n, perr := strconv.ParseInt(v.text, 10, 64); perr == nil && n > 0 {
 				keys = append(keys, numberIndex(tb.Name, col, strconv.FormatInt(n, 10)))
@@ -121,9 +163,10 @@ func (c *Corpus) keyPrefix(table string) string {
 	return ""
 }
 
-// identityColumns returns the identity columns of tb other than its key.
-func identityColumns(tb *catalog.Table) []string {
-	var out []string
+// numberColumns returns the columns of tb whose numbers the index holds: its key and its identity columns, the columns a
+// write allocates max + 1 over.
+func numberColumns(tb *catalog.Table) []string {
+	out := []string{tb.Key}
 	for _, col := range tb.Columns {
 		if col.Identity && col.Name != tb.Key {
 			out = append(out, col.Name)
@@ -132,43 +175,44 @@ func identityColumns(tb *catalog.Table) []string {
 	return out
 }
 
-// groupOf names the sibling group of row x of a table with an order column: its placement parent and its parent; the
-// group "\x00fault" holds the rows whose parent is not a value of its type. It is false for a table without an order
-// column.
-func (c *Corpus) groupOf(x *rec) (string, bool) {
-	if x.tb.Order == "" {
-		return "", false
-	}
+// groupKey names the sibling group of row x of a table with an order column: its placement parent and its parent.
+func (c *Corpus) groupKey(x *rec) (string, *Error) {
 	k := ""
 	if x.parent != nil {
 		k = fmt.Sprintf("%p", x.parent.row)
 	}
 	if pc := parentColumn(x.tb); pc != "" {
 		v, err := c.value(x, pc)
-		switch {
-		case err != nil:
-			return "\x00fault", true
-		case v.null:
+		if err != nil {
+			return "", err
+		}
+		if v.null {
 			k += "\x00null"
-		default:
+		} else {
 			k += "\x00=" + v.text
 		}
 	}
-	return k, true
+	return k, nil
 }
 
-// uniqueKey returns the canonical values of the unique key u of x, joined, and false when one of them is NULL or not of
-// its type.
-func (c *Corpus) uniqueKey(x *rec, u []string) (string, bool) {
+// uniqueText returns the values of the unique key u of row x joined, false when one is NULL. A block row placed nowhere
+// — its placement key names no row — holds no unique key that takes its placement key.
+func (c *Corpus) uniqueText(x *rec, u []string) (string, bool, *Error) {
 	parts := make([]string, len(u))
 	for i, col := range u {
+		if x.parent == nil && x.tb.Storage.Kind == catalog.StorageBlock && col == x.tb.Placement() {
+			return "", false, nil
+		}
 		v, err := c.value(x, col)
-		if err != nil || v.null {
-			return "", false
+		if err != nil {
+			return "", false, err
+		}
+		if v.null {
+			return "", false, nil
 		}
 		parts[i] = v.text
 	}
-	return catalog.JoinKey(parts), true
+	return strings.Join(parts, "\x00"), true, nil
 }
 
 // docKeys holds the index keys of each row of one document, as the index holds them. A corpus never changes the docKeys

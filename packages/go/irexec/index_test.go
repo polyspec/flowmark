@@ -100,7 +100,7 @@ func TestIndexFault(t *testing.T) {
 	}
 	c.docsMu.Lock()
 	defer c.docsMu.Unlock()
-	c.changedLocked(path, nil)
+	c.markLocked(path).walk = true
 	c.freshLocked()
 	if fault := indexFault(c); fault != "" {
 		t.Fatalf("the corpus as read: %s", fault)
@@ -133,5 +133,106 @@ func TestIndexFault(t *testing.T) {
 				t.Fatal("indexFault finds no fault")
 			}
 		})
+	}
+}
+
+// TestIndexMarks pins each mark a change of a write's corpus makes (docs.go): after the change and its mark, the index
+// and the records of the next corpus equal those built from nothing, and without its mark they differ. Each change is
+// made after the write owned the document and the corpus brought it in, so it takes the path of a document already the
+// write's own.
+func TestIndexMarks(t *testing.T) {
+	check := checkFresh
+	checkFresh = nil
+	defer func() { checkFresh = check }()
+	rowOf := func(w *writer, table, key string) *rec {
+		x := w.next.lookupOne(keyIndex(table, key))
+		if x == nil {
+			t.Fatalf("no %s row %s", table, key)
+		}
+		return x
+	}
+	// ownedDoc makes the document of the row of table and key the write's own and brings the corpus in.
+	ownedDoc := func(w *writer, table, key string) *rec {
+		x := w.own(rowOf(w, table, key))
+		w.next.recsOf(x.file)
+		return rowOf(w, table, key)
+	}
+	cases := []struct {
+		name string
+		// change changes the next corpus of w; marked tells it to mark what it changed.
+		change func(w *writer, marked bool)
+	}{
+		{"the value of a row of a document", func(w *writer, marked bool) {
+			x := ownedDoc(w, "items", "T3")
+			if marked {
+				x = w.own(x)
+			}
+			setValue(x.tb, x.row, "state", cell{text: "doing"})
+		}},
+		{"the key of a placement row, which its block rows name", func(w *writer, marked bool) {
+			x := ownedDoc(w, "notes", "N1")
+			if marked {
+				x = w.own(x)
+			}
+			x.row.Key = "N9"
+		}},
+		{"a row added to a block", func(w *writer, marked bool) {
+			x := w.own(ownedDoc(w, "notes", "N1"))
+			x.row.Blocks["steps"] = append(slices.Clip(x.row.Blocks["steps"]), &store.Row{Table: "steps", Key: "S9", Title: "Added", Scalars: map[string]*string{}})
+			if marked {
+				w.next.changed(x.file)
+			}
+		}},
+		{"a row removed from a document", func(w *writer, marked bool) {
+			x := ownedDoc(w, "items", "T3")
+			f := w.next.file(x.file)
+			if marked {
+				f = w.ownFile(x.file)
+			}
+			f.rows = slices.DeleteFunc(slices.Clone(f.rows), func(r *store.Row) bool { return r == x.row })
+		}},
+		{"a block row moved to another placement row", func(w *writer, marked bool) {
+			from := w.own(ownedDoc(w, "notes", "N1"))
+			to := w.own(ownedDoc(w, "notes", "N3"))
+			s := from.row.Blocks["steps"][0]
+			from.row.Blocks["steps"] = slices.Clone(from.row.Blocks["steps"][1:])
+			if to.row.Blocks == nil {
+				to.row.Blocks = map[string][]*store.Row{}
+			}
+			to.row.Blocks["steps"] = append(slices.Clip(to.row.Blocks["steps"]), s)
+			w.next.changed(from.file)
+			if marked {
+				w.next.changed(to.file)
+			}
+		}},
+		{"a document dropped", func(w *writer, marked bool) {
+			x := ownedDoc(w, "notes", "N3")
+			if marked {
+				w.next.dropFile(x.file)
+			} else {
+				w.next.files = w.next.files.Delete(x.file)
+			}
+		}},
+	}
+	for _, tc := range cases {
+		for _, marked := range []bool{true, false} {
+			t.Run(fmt.Sprintf("%s, marked %v", tc.name, marked), func(t *testing.T) {
+				c := baseFixture(t).c
+				w := &writer{c: c, next: c.fork(), touched: map[string]bool{}}
+				before := imageOf(c)
+				tc.change(w, marked)
+				w.next.docsMu.Lock()
+				w.next.freshLocked()
+				fault := indexFault(w.next)
+				w.next.docsMu.Unlock()
+				if marked && fault != "" {
+					t.Fatalf("the index after the marked change: %s", fault)
+				}
+				if !marked && fault == "" {
+					t.Fatal("the index after the change without its mark equals the index built from nothing")
+				}
+				wantImage(t, c, before)
+			})
+		}
 	}
 }

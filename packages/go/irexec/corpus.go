@@ -40,8 +40,10 @@ type Corpus struct {
 	// committed corpus may run at once.
 	docs map[string]*docRecs
 	// dirty marks the documents whose rows changed since they entered the index (docs.go).
-	dirty  map[string]map[*store.Row]bool
-	docsMu sync.Mutex
+	dirty map[string]*mark
+	// ownKeys holds the documents whose index keys this corpus made and shares with no other corpus.
+	ownKeys map[string]bool
+	docsMu  sync.Mutex
 	// ordered caches the storage order of each table.
 	ordered map[string][]*rec
 	// positions caches the 1-based sibling position of each row of a files table
@@ -67,8 +69,9 @@ type rec struct {
 	file   string
 	parent *rec
 	tb     *catalog.Table
-	// at is the place of the record in the walk of its document, and gen the walk that placed it (docs.go).
-	at, gen int
+	// at is the place of the record in the walk of its document, gen the walk that placed it, moved the walk that found it
+	// new or under another parent, and again the walk that entered it in the index again (docs.go).
+	at, gen, moved, again int
 }
 
 // Open reads the corpus fsys as a request reads it, from nothing: the corpus folder itself (store.DirFS), or the
@@ -97,12 +100,9 @@ func FromSnapshot(cat *catalog.Catalog, s *validate.Snapshot, prev *Corpus, k *c
 	} else {
 		c.files, c.walk = prev.files, prev.walk
 		prev.docsMu.Lock()
-		c.idx, c.keys = prev.idx, prev.keys
-		for p, m := range prev.dirty {
-			for r := range m {
-				c.changedLocked(p, r)
-			}
-			c.changedLocked(p, nil)
+		c.idx, c.keys = prev.shareKeysLocked()
+		for p := range prev.dirty {
+			c.markLocked(p).walk = true
 		}
 		prev.docsMu.Unlock()
 		for _, path := range changed {
