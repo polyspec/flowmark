@@ -25,8 +25,12 @@ The failure codes are those of [operations](40-ops.md).
   (orm's rule on every database), so a link target never moves under a link; a key changes by
   inserting the row under the new key, pointing the referencing rows at it and deleting the old row,
   in one transaction.
-- **Referential actions are restrict-only.** `cascade` and `set_null` are rejected at catalog load:
-  they are unimplementable for a writer that bypasses the engine. Deleting a referenced row —
+- **Referential actions.** `on delete cascade` and `on delete set_null` are applied by the engine in
+  the write that deletes the row: a cascade takes each referencing row with it, level by level, and
+  set_null clears the referencing column, all in the one commit; the affected count is the rows the
+  request matched, as in SQL. A human deleting a parent file applies no action, and validate reports
+  the dangling references.
+  A foreign key with `restrict` refuses: Deleting a referenced row —
   including a row that has history rows — is `FOREIGN_KEY`. Restrict holds against the rows before
   the write: a delete is `FOREIGN_KEY` when a row it removes is referenced, also by a row the same
   request removes; the referencing rows are deleted by an earlier request. Grounding: orm renders
@@ -226,9 +230,12 @@ values, so a field without equality — a codec field whose codec is not exactly
 
 A database enforces a writer monopoly; a corpus does not have one. Per feature:
 
-- **Foreign-key actions**: restrict-only, as above; a human deleting a parent file leaves dangling
-  references, which validate reports.
-- **`audit` and `immutable`** are schema errors on a corpus — markdown has no triggers. The history
+- **Foreign-key actions**: the engine applies them to the writes it runs, as above; a human deleting a
+  parent file leaves dangling references, which validate reports.
+- **`immutable`**: an update or a delete through the engine of a row of the table is `CONSTRAINT`
+  (`table <name> is immutable`), an insert is accepted, and a human edit of the file is what a file
+  system lets through.
+- **`audit`** is a schema error on a corpus. The history
   of a state machine is the recorded trail, and its gap, chain, transition and required rules report
   what a human edit bypassed.
 - **Defaults** are written explicitly by the engine on insert; a human-authored row missing a

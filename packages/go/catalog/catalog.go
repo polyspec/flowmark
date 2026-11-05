@@ -49,6 +49,7 @@ type Table struct {
 	Markdown     []string
 	StateMachine *StateMachine
 	Codecs       map[string][]string // the codec stages of each column with a codec setting, in write order
+	Immutable    bool                // a write refuses to change or remove a row of the table (spec 50)
 	AESVersion   string              // the column that records the key version of the row, "" when none does
 	BlindIndexes map[string]string   // the blind index column of each aes column that has one
 	View         *View               // the view columns when the table is the view table, else nil

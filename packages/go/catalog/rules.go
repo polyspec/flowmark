@@ -26,13 +26,6 @@ func (l *loader) checkTable(d *document, t *dbspec.Table) (Storage, bool) {
 			report("primary key column " + c.Name + " of table " + t.Name + " has type " + c.Type.String() + ", which is not a key type (an integer, bool, varchar, uuid or date)")
 		}
 	}
-	for _, fk := range t.ForeignKeys {
-		for _, action := range []dbspec.Action{fk.OnDelete, fk.OnUpdate} {
-			if action == dbspec.ActionCascade || action == dbspec.ActionSetNull {
-				report("foreign key " + fk.Name + " uses " + string(action))
-			}
-		}
-	}
 	s := t.Settings
 	if s == nil {
 		s = &dbspec.Settings{}
@@ -45,9 +38,6 @@ func (l *loader) checkTable(d *document, t *dbspec.Table) (Storage, bool) {
 	if s.Audit != nil {
 		report("table " + t.Name + " has an audit setting")
 	}
-	if s.Immutable != nil {
-		report("table " + t.Name + " has an immutable setting")
-	}
 	if sm := s.StateMachine; sm != nil {
 		if sm.History == nil {
 			report("state machine on column " + sm.Column + " has no history")
@@ -57,8 +47,8 @@ func (l *loader) checkTable(d *document, t *dbspec.Table) (Storage, bool) {
 		}
 	}
 	if s.Store == nil {
-		report("table " + t.Name + " has no store setting")
-		return Storage{}, false
+		// A table that declares no storage is a table in one document of its own (spec 30).
+		return Storage{Kind: StorageDocument, Shape: ShapeTable}, true
 	}
 	var storage Storage
 	switch s.Store.Kind {

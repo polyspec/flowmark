@@ -77,7 +77,8 @@ surface는 `CAPABILITY_UNSUPPORTED`, 그리고 orm의 규칙이 모든 backend�
 | indexes | 허용되며 메모리에서 파생된다 |
 | `select explicit`, `entity`, `navigation` | client 쪽이며 저장에 효과가 없다 |
 | `aes`, `aes_version`, `blind_index` | 지원. orm 요청에서는 client가 암호화·hash하고, 엔진은 주입으로 key를 받는다([schema](30-schema.md#keys)) |
-| `audit`, `immutable` setting | corpus에서 schema 오류. 대신 `state_machine … history` |
+| `immutable` setting | 행의 update와 delete는 `CONSTRAINT`([constraints](50-constraints.ko.md#사람이-쓴-편집에-대한-판정)) |
+| `audit` setting | corpus에서 schema 오류. 대신 `state_machine … history` |
 | transaction | session 위의 `begin`부터 `commit`/`rollback`까지. `readOnly`는 지키며 lock을 잡는다 |
 | savepoint | 중첩 stage |
 | `orderByRandom` | 지원. 순서에 seed를 쓰지 않는다 |

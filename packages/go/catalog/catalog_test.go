@@ -390,10 +390,15 @@ func TestLoadSetFile(t *testing.T) {
 	}
 }
 
-func TestLoadRejectsTableWithoutStore(t *testing.T) {
-	cat, diags, text := loadEdited(t, [2]string{"    store files\n", ""})
-	expectRejected(t, cat, diags)
-	expectTableDiag(t, diags, text, "items", "no store setting")
+func TestLoadDefaultsTableWithoutStore(t *testing.T) {
+	cat, diags, _ := loadEdited(t, [2]string{"    store files\n", ""})
+	if cat == nil || len(diags) != 0 {
+		t.Fatalf("no store: %v", diags)
+	}
+	tb, _ := cat.Table("items")
+	if tb.Storage.Kind != catalog.StorageDocument || tb.Storage.Shape != catalog.ShapeTable {
+		t.Fatalf("storage %+v, want a document table", tb.Storage)
+	}
 }
 
 func TestLoadRejectsCompositePrimaryKey(t *testing.T) {
@@ -524,30 +529,37 @@ table views {`
 	expectTableDiag(t, diags, text, "service", "audit setting")
 }
 
-func TestLoadRejectsImmutableSetting(t *testing.T) {
-	cat, diags, text := loadEdited(t, [2]string{"    title name\n", "    title name\n    immutable\n"})
-	expectRejected(t, cat, diags)
-	expectTableDiag(t, diags, text, "people", "immutable setting")
+func TestLoadAcceptsImmutableSetting(t *testing.T) {
+	cat, diags, _ := loadEdited(t, [2]string{"    title name\n", "    title name\n    immutable\n"})
+	if cat == nil || len(diags) != 0 {
+		t.Fatalf("immutable: %v", diags)
+	}
+	tb, _ := cat.Table("people")
+	if !tb.Immutable {
+		t.Fatal("people is not immutable")
+	}
 }
 
-func TestLoadRejectsCascadeAction(t *testing.T) {
+func TestLoadAcceptsCascadeAction(t *testing.T) {
 	root, text := editedCorpus(t, [2]string{
 		"foreign key fk_item_links_from (from_item) references items (id) on delete restrict",
 		"foreign key fk_item_links_from (from_item) references items (id) on delete cascade",
 	})
 	cat, diags := catalog.Load(root)
-	expectRejected(t, cat, diags)
-	expectTableDiag(t, diags, text, "item_links", "cascade")
+	if cat == nil || len(diags) != 0 {
+		t.Fatalf("cascade: %v\n%s", diags, text)
+	}
 }
 
-func TestLoadRejectsSetNullAction(t *testing.T) {
+func TestLoadAcceptsSetNullAction(t *testing.T) {
 	root, text := editedCorpus(t, [2]string{
 		"foreign key fk_items_parent (parent) references items (id) on delete restrict",
 		"foreign key fk_items_parent (parent) references items (id) on delete set_null",
 	})
 	cat, diags := catalog.Load(root)
-	expectRejected(t, cat, diags)
-	expectTableDiag(t, diags, text, "items", "set_null")
+	if cat == nil || len(diags) != 0 {
+		t.Fatalf("set_null: %v\n%s", diags, text)
+	}
 }
 
 func TestLoadRejectsExternalUse(t *testing.T) {

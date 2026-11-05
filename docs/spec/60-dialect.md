@@ -82,7 +82,8 @@ Go client implements it first and every other client is its own orm item.
 | indexes | Accepted; derived in memory |
 | `select explicit`, `entity`, `navigation` | Client-side; no storage effect |
 | `aes`, `aes_version`, `blind_index` | Supported; the client encrypts and hashes on an orm request, and the engine takes its keys by injection ([schema](30-schema.md#keys)) |
-| `audit`, `immutable` settings | Schema error on a corpus; `state_machine … history` instead |
+| `immutable` setting | An update or a delete of a row is `CONSTRAINT` ([constraints](50-constraints.md#human-write-rulings)) |
+| `audit` setting | Schema error on a corpus; `state_machine … history` instead |
 | transactions | `begin` to `commit`/`rollback` over the session; `readOnly` honoured and takes the lock |
 | savepoints | Nested stages |
 | `orderByRandom` | Supported; the order is not seeded |

@@ -23,8 +23,11 @@
 - **key는 결코 갱신되지 않는다.** primary key를 배정하는 update, 그리고 primary key에 새 값을 쓰는 restore(restore가 고른 key 밖의 key column 값)는 `IR_INVALID`(모든
   database에서 orm의 규칙)이므로 link의 target은 link 아래에서 움직이지 않는다. key는 새 key로 행을
   insert하고, 참조하는 행이 그것을 가리키게 하고, 옛 행을 지우는 것으로 한 transaction에서 바뀐다.
-- **참조 action은 restrict-only다.** `cascade`와 `set_null`은 catalog를 읽을 때 거절한다: 엔진을
-  우회하는 작성자에게는 구현할 수 없다. 참조되는 행 — 이력 행을 가진 행 포함 — 의 삭제는
+- **참조 action.** `on delete cascade`와 `on delete set_null`은 행을 지우는 쓰기 안에서 엔진이 적용한다:
+  cascade는 참조하는 행을 단계마다 함께 지우고, set_null은 참조하는 column을 비우며, 모두 한 commit이다.
+  affected 수는 SQL처럼 요청이 맞춘 행의 수다. 사람이 부모 파일을 지우면 action은 적용되지 않고 validate가
+  끊어진 참조를 보고한다.
+  `restrict` foreign key는 거절한다: 참조되는 행 — 이력 행을 가진 행 포함 — 의 삭제는
   `FOREIGN_KEY`다. restrict는 쓰기 전의 행에 대해 성립한다: delete가 지우는 행이 참조되면, 같은 요청이
   지우는 행이 참조하더라도 `FOREIGN_KEY`이며, 참조하는 행은 앞선 요청이 지운다. 근거: orm은 즉시
   검사하는 `RESTRICT`를 render한다. 그러면 MySQL과 SQLite는 그런 delete를 자기 행 순서에 따라 거절하거나
@@ -193,9 +196,11 @@ param은 보이지 않는 데이터다. grouping은 같은 값을 가진 행을 
 
 database는 작성자 독점을 강제하지만 corpus에는 그것이 없다. 기능별로:
 
-- **foreign key action**: 위와 같이 restrict-only다. 사람이 부모 file을 지우면 dangling 참조가 남고
+- **foreign key action**: 위와 같이 엔진이 실행하는 쓰기에 적용한다. 사람이 부모 file을 지우면 dangling 참조가 남고
   validate가 보고한다.
-- **`audit`와 `immutable`**은 corpus에서 schema 오류다 — markdown에는 trigger가 없다. 상태기계의 이력이
+- **`immutable`**: 엔진을 통한 그 table 행의 update와 delete는 `CONSTRAINT`(`table <name> is immutable`)이고,
+  insert는 받아들이며, 사람이 파일을 고치는 것은 파일 시스템이 허용하는 일이다.
+- **`audit`**는 corpus에서 schema 오류다. 상태기계의 이력이
   기록된 흔적이고, 그 빈틈, 사슬, 전이, 필수 규칙이 사람의 편집이 우회한 것을 보고한다.
 - **Default**는 엔진이 insert에서 명시적으로 쓴다. non-null column이 빠진 사람이 쓴 행은 format 진단이다.
 

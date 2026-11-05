@@ -701,6 +701,9 @@ func (w *writer) update() *Error {
 	if err != nil {
 		return err
 	}
+	if err := w.refuseImmutable(rows); err != nil {
+		return err
+	}
 	if req.Optimistic != nil && len(rows) == 0 {
 		return errf(codeOptimistic, "the optimistic update of %s matched no row", w.ent.Name)
 	}
@@ -872,6 +875,9 @@ func (w *writer) delete() *Error {
 	if err != nil {
 		return err
 	}
+	if err := w.refuseImmutable(rows); err != nil {
+		return err
+	}
 	w.answer.Affected = int64(len(rows))
 	if sd := w.ent.SoftDelete; sd != "" {
 		for i, x := range rows {
@@ -882,16 +888,24 @@ func (w *writer) delete() *Error {
 		}
 		return nil
 	}
-	for i, x := range rows {
-		if err := w.restrict(x, i); err != nil {
+	gone, err := w.cascaded(rows)
+	if err != nil {
+		return err
+	}
+	for i, x := range gone {
+		if err := w.restrict(x, i, gone); err != nil {
 			return err
 		}
 	}
 	if len(w.faults) > 0 {
 		return nil
 	}
-	for _, x := range rows {
+	// A referencing row goes before the row it references, so that a block row still has its parent.
+	for _, x := range slices.Backward(gone) {
 		x = w.next.byRow[x.row]
+		if x == nil {
+			continue // it stood in a block or a file that an earlier removal took
+		}
 		if err := w.removeRow(x); err != nil {
 			return err
 		}
@@ -900,13 +914,16 @@ func (w *writer) delete() *Error {
 	return nil
 }
 
-// restrict refuses the delete of row x while a row references it: through a foreign
-// key, its parent, the placement key of a block row in its scope, or a history row
-// (spec 50 Keys and references, restrict-only). Restrict holds against the rows
-// before the write, so a referencing row the same delete removes still refuses it.
-// Every table that may reference the row is needed. seq is the place of x among
-// the rows the delete takes.
-func (w *writer) restrict(x *rec, seq int) *Error {
+// refuseImmutable refuses a change of the matched rows of an immutable table (spec 50 Immutable).
+func (w *writer) refuseImmutable(rows []*rec) *Error {
+	if w.tb.Immutable && len(rows) > 0 {
+		return errf(codeConstraint, "table %s is immutable", w.tb.Name)
+	}
+	return nil
+}
+
+// referencing calls visit for each row whose foreign key names the row x, the rows of every table that may reference it.
+func (w *writer) referencing(x *rec, visit func(y *rec, t *catalog.Table, fk dbspec.ForeignKey) *Error) *Error {
 	for _, t := range w.c.cat.Tables {
 		for _, fk := range t.ForeignKeys {
 			if fk.Table != x.tb.Name || len(fk.Columns) != 1 {
@@ -923,13 +940,65 @@ func (w *writer) restrict(x *rec, seq int) *Error {
 				if v.null || v.text != x.row.Key {
 					continue
 				}
-				w.faults = append(w.faults, fault{store.Refusal{Table: x.tb.Name, Key: x.row.Key, Index: -1, Rule: codeForeignKey,
-					Message: fmt.Sprintf("the row is referenced by %s %s through %s in %s", t.Name, y.row.Key, fk.Columns[0], y.file)}, seq})
-				return nil
+				if err := visit(y, t, fk); err != nil {
+					return err
+				}
 			}
 		}
 	}
 	return nil
+}
+
+// cascaded is the rows a delete of rows removes: those rows, then each row that an `on delete cascade` foreign key takes
+// with them, level by level (spec 50 Referential actions).
+func (w *writer) cascaded(rows []*rec) ([]*rec, *Error) {
+	gone := slices.Clone(rows)
+	seen := map[*store.Row]bool{}
+	for _, x := range gone {
+		seen[x.row] = true
+	}
+	for i := 0; i < len(gone); i++ {
+		err := w.referencing(gone[i], func(y *rec, _ *catalog.Table, fk dbspec.ForeignKey) *Error {
+			if fk.OnDelete == dbspec.ActionCascade && !seen[y.row] {
+				seen[y.row] = true
+				gone = append(gone, y)
+			}
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+	return gone, nil
+}
+
+// restrict refuses the delete of row x while a row outside an action references it: through a restrict foreign key, its
+// parent, the placement key of a block row in its scope, or a history row (spec 50 Keys and references). An `on delete
+// set_null` foreign key instead clears its column in the referencing row, unless that row goes too. Restrict holds against
+// the rows before the write, so a referencing row the same delete removes still refuses it, unless a cascade takes it.
+// seq is the place of x among the rows the delete takes.
+func (w *writer) restrict(x *rec, seq int, gone []*rec) *Error {
+	return w.referencing(x, func(y *rec, t *catalog.Table, fk dbspec.ForeignKey) *Error {
+		taken := slices.ContainsFunc(gone, func(g *rec) bool { return g.row == y.row })
+		switch fk.OnDelete {
+		case dbspec.ActionCascade:
+			return nil
+		case dbspec.ActionSetNull:
+			if !taken {
+				setValue(t, y.row, fk.Columns[0], cell{null: true})
+				w.touched[y.file] = true
+			}
+			return nil
+		}
+		for _, f := range w.faults {
+			if f.Key == x.row.Key && f.Table == x.tb.Name {
+				return nil // the first referencing row names the refusal
+			}
+		}
+		w.faults = append(w.faults, fault{store.Refusal{Table: x.tb.Name, Key: x.row.Key, Index: -1, Rule: codeForeignKey,
+			Message: fmt.Sprintf("the row is referenced by %s %s through %s in %s", t.Name, y.row.Key, fk.Columns[0], y.file)}, seq})
+		return nil
+	})
 }
 
 // removeRow removes row x from its file, or the file of a files row; the siblings

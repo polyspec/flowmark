@@ -55,9 +55,10 @@ behaviour.
 
 ## Corpus rules on dbspec constructs
 
-- **Rejected** on a corpus, each a schema error: a composite primary key; `audit` and `immutable` (markdown has no
-  triggers; `state_machine … history` records transitions instead); `cascade` and `set_null`
-  actions; an external `use` document; a table without a `store` setting; a `codec` whose last stage
+- **Default storage**: a table without a `store` setting is stored `document table`, in one document of
+  its own, so a dbspec document written for a SQL database installs on a corpus as it is.
+- **Rejected** on a corpus, each a schema error: a composite primary key; `audit` (`state_machine … history` records
+  transitions instead); an external `use` document; a `codec` whose last stage
   is `yaml` — orm's encoder (go-yaml's `Marshal`) ends every value with a line feed, which no place of
   the format holds, while a later stage encodes it away. A view table is declared by the
   [application schema](100-checklist.md#views), not by a setting.

@@ -393,6 +393,7 @@ func buildTable(r *tableRef) *Table {
 		}
 		out.Codecs[c.Column] = slices.Clone(c.Stages)
 	}
+	out.Immutable = s.Immutable != nil
 	if s.AESVersion != nil {
 		out.AESVersion = s.AESVersion.Column
 	}
