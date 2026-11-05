@@ -33,7 +33,7 @@ func (c *Corpus) view(ctx context.Context, s *writepath.Session, tb *catalog.Tab
 			}
 		}
 	}()
-	m := message{hash: c.cat.ManifestHash, table: tb.Name}
+	m := message{hash: c.Catalog().ManifestHash, table: tb.Name}
 	row, err := c.one(ctx, s, &m, tb, key)
 	if err != nil {
 		return nil, err
@@ -47,11 +47,11 @@ func (c *Corpus) view(ctx context.Context, s *writepath.Session, tb *catalog.Tab
 			}
 		}
 	}
-	model, diags := runtimemodel.Build(c.cat.Documents)
+	model, diags := runtimemodel.Build(c.Catalog().Documents)
 	if len(diags) > 0 {
 		return nil, errf(codeSchemaInvalid, "%s", runtimemodel.DiagnosticsError(diags))
 	}
-	if faults := validate.JudgeView(c.cat, model, v, vals); len(faults) > 0 {
+	if faults := validate.JudgeView(c.Catalog(), model, v, vals); len(faults) > 0 {
 		msgs := make([]string, len(faults))
 		for i, f := range faults {
 			msgs[i] = f.Column + ": " + f.Message
@@ -73,7 +73,7 @@ func (c *Corpus) view(ctx context.Context, s *writepath.Session, tb *catalog.Tab
 	if sort := vals[v.Sort]; sort != "" && sort != "[]" {
 		body["order"] = json.RawMessage(sort)
 	}
-	rm := message{hash: c.cat.ManifestHash, table: entity, params: filter.Params}
+	rm := message{hash: c.Catalog().ManifestHash, table: entity, params: filter.Params}
 	rows, err := c.exec(ctx, s, rm.request("all", body))
 	if err != nil {
 		return nil, err

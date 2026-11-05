@@ -68,7 +68,7 @@ func TestAuditRows(t *testing.T) {
 	}()
 	send := func(kind string, body map[string]any, params ...json.RawMessage) {
 		t.Helper()
-		m := message{hash: c.cat.ManifestHash, table: "item", params: params}
+		m := message{hash: c.Catalog().ManifestHash, table: "item", params: params}
 		b := m.request(kind, body)
 		var wire map[string]any
 		if err := json.Unmarshal(b, &wire); err != nil {

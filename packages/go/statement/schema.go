@@ -205,6 +205,9 @@ func apply(ctx context.Context, s *writepath.Session, db *sql.DB, c *irexec.Corp
 		return nil, nil, err
 	}
 	for _, p := range next.Differs(c) {
+		if p == catalog.StatementsFile {
+			continue // written above, as the statements stand
+		}
 		if data := next.Data(p); data != nil {
 			changes = append(changes, journal.Change{Path: p, Data: data})
 		} else {

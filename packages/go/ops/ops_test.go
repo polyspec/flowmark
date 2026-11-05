@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/polyspec/flowmark/packages/go/statement"
 	"github.com/polyspec/flowmark/packages/go/writepath"
 )
 
@@ -202,5 +203,51 @@ func TestTextValue(t *testing.T) {
 		if got := string(c.TextValue(v.table, v.column, v.text)); got != v.want {
 			t.Errorf("TextValue(%s.%s, %q) = %s, want %s", v.table, v.column, v.text, got, v.want)
 		}
+	}
+}
+
+// TestCatalogOfSchemaStatements pins that a face reads the catalog a schema statement of SQL left, in the process that
+// ran it and in another process that holds the corpus open (spec 40 SQL statements): the table it created answers rows
+// and stands in the schema, while an orm request, whose manifest names the set's tables, does not reach it.
+func TestCatalogOfSchemaStatements(t *testing.T) {
+	root := t.TempDir()
+	corpustest.WriteTree(t, root, map[string]string{"dbspec/board.dbs": corpustest.BoardDBS})
+	c, other := openCorpus(t, root), openCorpus(t, root)
+	ok(t, other, "rows", `{"table": "people"}`)
+	s, err := c.Session("sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, text := range []string{"CREATE TABLE made (id INTEGER PRIMARY KEY, title TEXT)", "INSERT INTO made (title) VALUES ('a')"} {
+		if _, err := statement.Run(s, text, nil); err != nil {
+			t.Fatalf("%s: %v", text, err)
+		}
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	for name, corpus := range map[string]*Corpus{"the process of the statement": c, "another process": other} {
+		t.Run(name, func(t *testing.T) {
+			if got := ok(t, corpus, "rows", `{"table": "made"}`); !strings.Contains(got, `"a"`) {
+				t.Fatalf("the rows of the made table: %s", got)
+			}
+			if got := ok(t, corpus, "schema", `{}`); !strings.Contains(got, `"made"`) {
+				t.Fatalf("the schema holds no made table: %s", got)
+			}
+			// An orm request reads the tables of the set its manifest names, which SQL did not add to.
+			s, err := corpus.Session("orm")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() {
+				if err := s.Close(); err != nil {
+					t.Error(err)
+				}
+			}()
+			_, err = s.Exec(context.Background(), corpustest.Message(t, corpus.Catalog().ManifestHash, corpustest.TestNow, "all", "made", nil))
+			if code, _ := Failure(err); code != "ENTITY_UNKNOWN" {
+				t.Fatalf("an orm request of the made table: %v, want ENTITY_UNKNOWN", err)
+			}
+		})
 	}
 }

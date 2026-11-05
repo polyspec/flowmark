@@ -652,3 +652,43 @@ func TestSequences(t *testing.T) {
 		})
 	}
 }
+
+// TestSchemaOfAnotherProcess pins that a process takes the schema statements another process committed, as a SQLite
+// connection takes the schema another connection changed (spec 40 SQL statements): after a rename by one process, the
+// other refuses a statement on the old name as SQLite does, reads the rows under the new name, and writes none of its
+// rows to a document of a table the corpus no longer holds.
+func TestSchemaOfAnotherProcess(t *testing.T) {
+	s, root := open(t)
+	run(t, s, "CREATE TABLE counted (id INTEGER PRIMARY KEY, title TEXT)")
+	run(t, s, "INSERT INTO counted (title) VALUES ('a')")
+	c, err := ops.Open(context.Background(), root, 0)
+	corpustest.Opened(t, c, err)
+	other, err := c.Session("other")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer closeSession(t, other)
+	run(t, other, "SELECT COUNT(*) FROM counted")
+	run(t, s, "ALTER TABLE counted RENAME TO renamed")
+	refused(t, other, "INSERT INTO counted (title) VALUES ('b')", "no such table: counted")
+	if got := cells(run(t, other, "SELECT title FROM renamed")); got != `[["a"]]` {
+		t.Fatalf("the other process reads the renamed table as %s", got)
+	}
+	run(t, other, "INSERT INTO renamed (title) VALUES ('b')")
+	if _, err := os.Stat(filepath.Join(root, "counted.flowmark.md")); err == nil {
+		t.Fatal("a write of the other process made a document of the table the rename took away")
+	}
+	if got := cells(run(t, s, "SELECT title FROM renamed ORDER BY id")); got != `[["a"],["b"]]` {
+		t.Fatalf("the first process reads the renamed table as %s", got)
+	}
+	// A deferred transaction whose snapshot is older than a schema statement that changed no document cannot write.
+	run(t, other, "BEGIN")
+	run(t, other, "SELECT COUNT(*) FROM renamed")
+	run(t, s, "CREATE TABLE extra (id INTEGER PRIMARY KEY)")
+	fails(t, other, "INSERT INTO renamed (title) VALUES ('stale')", "CANCELED", "(SQLITE_BUSY_SNAPSHOT)")
+	run(t, other, "ROLLBACK")
+	run(t, other, "INSERT INTO extra (id) VALUES (1)")
+	if got := cells(run(t, s, "SELECT id FROM extra")); got != `[[1]]` {
+		t.Fatalf("the first process reads the table the other filled as %s", got)
+	}
+}

@@ -1093,14 +1093,5 @@ func (r *reader) subScalar(sub *ir.Sub, fr *frame) (cell, dbspec.Type, *Error) {
 	return vals[0], t, nil
 }
 
-// model is the runtime model the request reads: a face's load and the difference of a SQL statement read the tables a set
-// does not own too.
-func (r *reader) model() *runtimemodel.Model {
-	if r.cl.stated {
-		return r.e.stated
-	}
-	if r.cl.seed {
-		return r.e.loading
-	}
-	return r.e.model
-}
+// model is the runtime model the request reads (Executor.modelOf).
+func (r *reader) model() *runtimemodel.Model { return r.e.modelOf(r.cl) }

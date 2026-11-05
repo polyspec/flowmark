@@ -16,7 +16,6 @@ import (
 	"github.com/polyspec/flowmark/packages/go/catalog"
 	"github.com/polyspec/flowmark/packages/go/irexec"
 	"github.com/polyspec/flowmark/packages/go/store/journal"
-	"github.com/polyspec/flowmark/packages/go/validate"
 )
 
 // Session is one session of a corpus: a server connection, or one command of the CLI, MCP or sidecar. Its requests
@@ -386,12 +385,7 @@ func (s *Session) Reschema(ctx context.Context, compute func(*irexec.Corpus) (*c
 	if written, err = s.c.journalCommit(l, changes); err != nil {
 		return err
 	}
-	e, err := irexec.New(cat)
-	if err != nil {
-		return err
-	}
-	s.c.cat, s.c.exec, s.c.live = cat, e, validate.NewLive(cat, s.c.cost)
-	return nil
+	return s.c.useCatalog(cat)
 }
 
 // Executor returns the executor of the corpus's catalog. Under the lock, as Held.

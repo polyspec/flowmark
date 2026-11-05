@@ -1,5 +1,5 @@
 <!-- doc-id: spec-ops -->
-<!-- source-sha256: 3d23d9916502e34e5f819a494f22a5926416a386908190e0fd979aa53788da38 -->
+<!-- source-sha256: 062cc63d7c7cbb1205dd44aeeb33f63d52bd99cf4fc4a3e55500cfd366e763cc -->
 # Operations
 
 [English](40-ops.md)
@@ -248,6 +248,12 @@ client가 구현할 것은 이 driver뿐이다.
 - **Schema 문장.** schema 문장은 자기만의 transaction이다: 열린 transaction은 먼저 commit하고 그 뒤에 새 transaction이
   이어진다. schema를 바꾼 문장은 `dbspec/statements.json`에 덧붙고, 바뀐 표는 새 column으로 다시 쓰이며, document의 글은
   그대로다. 이미 그 상태인 `CREATE ... IF NOT EXISTS`와 `DROP ... IF EXISTS`는 아무것도 바꾸지 않고 lock을 잡지 않는다.
+  schema 문장은 corpus를 처음부터 읽을 때와, 어느 process든 그것을 쓴 commit 뒤에 commit generation이 그 경로를 알릴 때
+  corpus와 함께 읽히고, process는 SQLite connection이 다른 connection이 바꾼 schema를 받듯 그 문장이 주는 catalog를 받는다.
+  다른 process가 이름을 바꾸거나 지운 표에 대한 문장은 SQLite처럼 거절되고, snapshot이 그 schema보다 오래된 deferred
+  transaction은 쓰지 못한다(`SQLITE_BUSY_SNAPSHOT`). face의 operation은 schema 문장이 더한 표도 읽고, face의 `schema`는 지금의
+  catalog를 답한다. orm 요청은 manifest가 가리키는 set의 표를 읽는다. `statement`의 `TestSchemaOfAnotherProcess`와 `ops`의
+  `TestCatalogOfSchemaStatements`가 이를 확인한다.
 - **표.** 표는 column, 선언 타입, key를 자기 문장에서 받는다. SQLite가 NULL을 허용하는 primary key는 행을 가리키지
   못하므로 그런 표는 primary key가 없는 표처럼 rowid를 key로 쓴다.
 - **AUTOINCREMENT counter.** 문장이 key를 `AUTOINCREMENT`로 선언한 표와, set이 그렇게 render하는 `identity` key의 표는

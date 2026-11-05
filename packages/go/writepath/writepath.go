@@ -20,6 +20,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -130,6 +131,8 @@ type Corpus struct {
 	readHook func(attempt int)
 	// held is what package statement keeps between statements, which only a holder of the lock reads or sets.
 	held io.Closer
+	// published is the catalog the corpus last took, which a face reads without the lock.
+	published atomic.Pointer[catalog.Catalog]
 	// committed is the corpus last read under the lock, which a read answers from while another session holds it.
 	committed atomic.Pointer[irexec.Corpus]
 	// readAt is the commit generation the corpus was last read at under the lock.
@@ -156,6 +159,7 @@ func Open(ctx context.Context, cat *catalog.Catalog, j *journal.Corpus, wait tim
 		return nil, driverError("watching the corpus", err)
 	}
 	c := &Corpus{cat: cat, exec: e, j: j, tree: tree, live: validate.NewLive(cat, k), cost: k, root: j.Root(), wait: wait, clock: engineClock}
+	c.published.Store(cat)
 	l, err := c.acquire(ctx, "open")
 	if err != nil {
 		return nil, errors.Join(err, c.Close())
@@ -240,6 +244,13 @@ func (c *Corpus) read() (*irexec.Corpus, error) {
 		return nil, driverError("reading the commit generation of the corpus", err)
 	}
 	paths, kept := g.Since(c.readAt.Load())
+	// The schema statements are read when the corpus is read from nothing and after each commit that wrote them, of any
+	// process, as the generation names it: a process takes the schema another committed, as a SQLite connection does.
+	if c.committed.Load() == nil || !kept || slices.Contains(paths, catalog.StatementsFile) {
+		if err := c.takeStatements(); err != nil {
+			return nil, err
+		}
+	}
 	c.tree.Forget(paths...)
 	if err := c.tree.Refresh(); err != nil {
 		c.live.Reset()
@@ -277,6 +288,43 @@ func (c *Corpus) read() (*irexec.Corpus, error) {
 	c.committed.Store(cur)
 	return cur, nil
 }
+
+// takeStatements reads the schema statements of the corpus from the disk, under the lock, and takes the catalog they
+// give when they are not those of its catalog.
+func (c *Corpus) takeStatements() error {
+	added, err := catalog.ReadStatements(c.root)
+	if err != nil {
+		return driverError("reading the schema statements of the corpus", err)
+	}
+	if slices.Equal(added, c.cat.Statements) {
+		return nil
+	}
+	cat, diags := catalog.LoadStatements(c.root, added)
+	if len(diags) > 0 {
+		lines := make([]string, len(diags))
+		for i, d := range diags {
+			lines[i] = d.String()
+		}
+		return newError(codeConfig, "the schema statements another process committed leave a catalog that does not load: %s", strings.Join(lines, "; "))
+	}
+	return c.useCatalog(cat)
+}
+
+// useCatalog makes cat the catalog of the corpus, under the lock: its executor and its read, which reads the corpus
+// from nothing next.
+func (c *Corpus) useCatalog(cat *catalog.Catalog) error {
+	e, err := irexec.New(cat)
+	if err != nil {
+		return err
+	}
+	c.cat, c.exec, c.live = cat, e, validate.NewLive(cat, c.cost)
+	c.published.Store(cat)
+	return nil
+}
+
+// Catalog returns the catalog the corpus last took: the catalog of its opening, or of the schema statements committed
+// since.
+func (c *Corpus) Catalog() *catalog.Catalog { return c.published.Load() }
 
 // Generation returns the commit generation the corpus was last read at under the lock.
 func (c *Corpus) Generation() uint64 { return c.readAt.Load() }

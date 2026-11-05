@@ -36,7 +36,7 @@ func (c *Corpus) sealed(tb *catalog.Table, insert bool, values map[string]json.R
 	if len(assigned) == 0 && (!insert || tb.AESVersion == "") {
 		return values, nil
 	}
-	keys := c.cat.Keys
+	keys := c.Catalog().Keys
 	if keys == nil {
 		if len(assigned) == 0 {
 			return nil, errf(codeConfig, "the table %s records a key version and this process has no keyring: set %s", tb.Name, catalog.KeyringVariable)

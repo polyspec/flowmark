@@ -323,7 +323,8 @@ func (c *Corpus) Data(path string) []byte {
 // document that one holds and the other does not or that the two hold with other
 // bytes, and the file named by the diagnostic of each table whose unavailability
 // differs — a walk entry has no bytes in the corpus, so its table's diagnostic stands
-// for it. The write path reads it to know whether a corpus re-read under the lock is
+// for it —, the file of the AUTOINCREMENT counters when theirs differ, and the file of
+// the schema statements when their catalogs differ. The write path reads it to know whether a corpus re-read under the lock is
 // the one a transaction read, and to name a change that landed. The documents the two
 // corpora share are not compared, so corpora read or written one from the other cost
 // the paths they changed (plan, Ruling: an operation costs what it touches).
@@ -335,6 +336,10 @@ func (c *Corpus) Differs(o *Corpus) []string {
 	c.cost.Add(cost.FilesCompared, pmap.Diff(c.files, o.files, same, func(p string) { set[p] = true }))
 	if a, b := c.sequenceData(), o.sequenceData(); !bytes.Equal(a, b) || (a == nil) != (b == nil) {
 		set[catalog.SequencesFile] = true
+	}
+	// Corpora under two catalogs differ at the schema statements, which give a corpus its catalog.
+	if c.cat != o.cat {
+		set[catalog.StatementsFile] = true
 	}
 	for _, tb := range c.cat.Tables {
 		a, aok := c.unavailable[tb.Name]

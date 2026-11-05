@@ -67,13 +67,7 @@ func (e *Executor) write(c *Corpus, cl *call) (*Result, *Error) {
 	if err := r.prepare(&req.Query); err != nil {
 		return nil, err
 	}
-	ent := e.model.Entities[req.Entity]
-	if cl.seed {
-		ent = e.loading.Entities[req.Entity]
-		if cl.stated {
-			ent = e.stated.Entities[req.Entity]
-		}
-	}
+	ent := e.modelOf(cl).Entities[req.Entity]
 	tb, _ := c.cat.Table(ent.Table)
 	if cl.stated && tb.Audit != nil {
 		// The triggers of the corpus's database wrote the audit: its rows are in the same difference.

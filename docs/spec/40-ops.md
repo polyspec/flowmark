@@ -289,7 +289,14 @@ utility of orm's SQLite dialect holds on a corpus, and a client has only this dr
 - **Schema statements.** A schema statement is its own transaction: an open transaction commits first and a new one goes
   on after it. A statement that changes the schema is appended to `dbspec/statements.json`, and the tables it changed
   are written again under their new columns; a document keeps its text. `CREATE ... IF NOT EXISTS` and `DROP ... IF
-  EXISTS` that find what they state change nothing and take no lock.
+  EXISTS` that find what they state change nothing and take no lock. The schema statements are read with the corpus
+  when it is read from nothing and after each commit that wrote them, of any process, as the commit generation names
+  it, and the process takes the catalog they give, as a SQLite connection takes the schema another connection changed:
+  a statement on a table another process renamed or dropped is refused as SQLite refuses it, and a deferred transaction
+  whose snapshot is older than the schema cannot write (`SQLITE_BUSY_SNAPSHOT`). A face's operation reads the tables
+  that schema statements added, and the face's `schema` the catalog as it stands; an orm request reads the set's tables,
+  which its manifest names. `TestSchemaOfAnotherProcess` of `statement` and `TestCatalogOfSchemaStatements` of `ops`
+  hold it.
 - **Tables.** A table takes its columns, its declared types and its key from its statement. A primary key that SQLite lets
   hold NULL names no row, so such a table keys by its rowid, as does a table with no primary key.
 - **AUTOINCREMENT counters.** A table whose statement declares its key `AUTOINCREMENT`, and a table of an `identity`
