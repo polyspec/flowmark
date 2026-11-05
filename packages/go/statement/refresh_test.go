@@ -90,7 +90,7 @@ func (r *refreshCorpus) write(t testing.TB, p string, text *string) {
 	corpustest.WriteFiles(t, r.root, map[string]string{p: *text})
 }
 
-// dump returns the rows of every table of cat in db, by key, and the counters of sqlite_sequence.
+// dump returns the rows of every table of cat in db, by key, and the sequence SQLite keeps of each AUTOINCREMENT table.
 func dump(t testing.TB, db *sql.DB, cat *catalog.Catalog) map[string][]string {
 	t.Helper()
 	out := map[string][]string{}
@@ -117,6 +117,14 @@ func dump(t testing.TB, db *sql.DB, cat *catalog.Catalog) map[string][]string {
 		slices.Sort(lines)
 		out[tb.Name] = lines
 	}
+	seqs, err := sequencesOf(context.Background(), db, cat)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for table, n := range seqs {
+		out["sqlite_sequence"] = append(out["sqlite_sequence"], fmt.Sprintf("%s %d", table, n))
+	}
+	slices.Sort(out["sqlite_sequence"])
 	return out
 }
 
@@ -159,13 +167,21 @@ func refreshStep(t testing.TB, r *refreshCorpus, step string, prev *irexec.Corpu
 		return next, nil
 	}
 	if g, w := dump(t, db, r.cat), dump(t, want, r.cat); !reflect.DeepEqual(g, w) {
-		for _, tb := range r.cat.Tables {
-			if !reflect.DeepEqual(g[tb.Name], w[tb.Name]) {
-				t.Fatalf("%s: the refreshed %s holds\n%s\nthe fill from nothing\n%s", step, tb.Name, strings.Join(g[tb.Name], "\n"), strings.Join(w[tb.Name], "\n"))
+		for _, name := range append(tableNames(r.cat), "sqlite_sequence") {
+			if !reflect.DeepEqual(g[name], w[name]) {
+				t.Fatalf("%s: the refreshed %s holds\n%s\nthe fill from nothing\n%s", step, name, strings.Join(g[name], "\n"), strings.Join(w[name], "\n"))
 			}
 		}
 	}
 	return next, db
+}
+
+func tableNames(cat *catalog.Catalog) []string {
+	out := make([]string, len(cat.Tables))
+	for i, tb := range cat.Tables {
+		out[i] = tb.Name
+	}
+	return out
 }
 
 func closeDB(t testing.TB, db *sql.DB) {
@@ -176,8 +192,9 @@ func closeDB(t testing.TB, db *sql.DB) {
 
 // TestRefresh pins that a database refreshed from the corpus it held to the next one holds what a fill of the next one
 // from nothing holds, and fails exactly when that fill fails (plan, Ruling: an operation costs what it touches): each
-// document of each source is cut, restored, removed and restored, a document is added outside every place and within
-// one, and two documents change at once.
+// document of each source is cut, restored, removed and restored, two documents are exchanged, a document is added
+// outside every place, and the AUTOINCREMENT counters are set past every key and removed; the sequences SQLite keeps are
+// compared too.
 func TestRefresh(t *testing.T) {
 	for name, src := range refreshSources(t) {
 		t.Run(name, func(t *testing.T) {
@@ -224,6 +241,16 @@ func TestRefresh(t *testing.T) {
 			}
 			step("a document outside every place", map[string]*string{"stray.flowmark.md": text("# Stray\n")})
 			step("its removal", map[string]*string{"stray.flowmark.md": nil})
+			counters := map[string]int64{}
+			for i, tb := range r.cat.Tables {
+				if tb.Autoincrement {
+					counters[tb.Name] = int64(1000 + i)
+				}
+			}
+			if data := catalog.RenderSequences(counters); data != nil {
+				step("counters past every key", map[string]*string{catalog.SequencesFile: text(string(data))})
+				step("the removal of the counters", map[string]*string{catalog.SequencesFile: nil})
+			}
 		})
 	}
 }

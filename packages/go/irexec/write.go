@@ -210,7 +210,7 @@ func (c *Corpus) fork() *Corpus {
 	c.docsMu.Lock()
 	defer c.docsMu.Unlock()
 	c.freshLocked()
-	n := &Corpus{cat: c.cat, files: c.files, unavailable: c.unavailable, walk: c.walk, cost: c.cost}
+	n := &Corpus{cat: c.cat, files: c.files, unavailable: c.unavailable, walk: c.walk, cost: c.cost, seq: c.seq}
 	n.idx, n.keys = c.shareKeysLocked()
 	return n
 }
@@ -758,6 +758,9 @@ func (w *writer) nextIdentity(tb *catalog.Table, col string) cell {
 		panic("irexec: an identity is allocated over the column " + col + " of " + tb.Name + ", whose numbers the index does not hold")
 	}
 	max := int64(0)
+	if col == tb.Key && tb.Autoincrement {
+		return cell{text: strconv.FormatInt(w.next.Sequence(tb.Name)+1, 10)}
+	}
 	if n := w.next.maxNumber(tb.Name, col); n != "" {
 		// The index holds the canonical digits of a positive int64 (indexKeys).
 		m, err := strconv.ParseInt(n, 10, 64)

@@ -86,7 +86,13 @@ func LoadStatements(root string, added []string) (*Catalog, []Diagnostic) {
 		}
 	}
 	for _, r := range l.order {
-		cat.Tables = append(cat.Tables, buildTable(r))
+		tb := buildTable(r)
+		if l.autoincrement != nil {
+			tb.Autoincrement = l.autoincrement[tb.Name]
+		} else {
+			tb.Autoincrement = tb.Key != "" && slices.ContainsFunc(tb.Columns, func(c dbspec.Column) bool { return c.Name == tb.Key && c.Identity })
+		}
+		cat.Tables = append(cat.Tables, tb)
 	}
 	return cat, nil
 }
@@ -125,6 +131,9 @@ type loader struct {
 	diags []Diagnostic
 	refs  map[string]*tableRef
 	order []*tableRef
+	// autoincrement holds the tables whose schema statement declares AUTOINCREMENT, as the statements left them; nil
+	// when the corpus took no statement, and each identity key is AUTOINCREMENT as the set renders it.
+	autoincrement map[string]bool
 }
 
 func (l *loader) add(d Diagnostic) {
@@ -183,7 +192,7 @@ func (l *loader) readDocuments(root string, entries []fs.DirEntry) []*document {
 		name := e.Name()
 		file := dbspecDir + "/" + name
 		switch {
-		case strings.HasPrefix(name, "."), name == dbspec.SetFileName, dbspecDir+"/"+name == StatementsFile:
+		case strings.HasPrefix(name, "."), name == dbspec.SetFileName, file == StatementsFile, file == SequencesFile:
 		case e.IsDir():
 			l.add(fileDiagnostic(file, "unexpected directory in dbspec/"))
 		case strings.HasSuffix(name, dbsExt):

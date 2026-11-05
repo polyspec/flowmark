@@ -245,6 +245,9 @@ func (f *fixture) commit(res *Result) {
 			f.t.Fatalf("the next corpus differs from the committed corpus at %s", p)
 		}
 	}
+	if g, w := next.Data(catalog.SequencesFile), f.c.Data(catalog.SequencesFile); string(g) != string(w) || (g == nil) != (w == nil) {
+		f.t.Fatalf("the next corpus holds the counters %q; the committed corpus %q", g, w)
+	}
 }
 
 // file returns the text of a corpus file of the fixture.

@@ -126,9 +126,10 @@ or one folder without end (`files`).
 - A `files` key is at most 243 bytes, so its file name stays within 255 bytes.
 - A file name that is not the canonical text of its key's type is `format.block`: for the integer
   key 7 the canonical file name is `7.flowmark.md`, and `007.flowmark.md` is not.
-- `identity` is allowed only on an `i64` primary key column ([schema](30-schema.md)): an insert that omits the key gets `max+1`,
-  allocated under the lock. Reuse after a git rewind is accepted — git history, not a sequence, is
-  the allocator of record.
+- `identity` is allowed only on an `i64` primary key column ([schema](30-schema.md)): an insert that omits the key gets one
+  more than the larger of the largest key and the table's counter
+  ([AUTOINCREMENT counters](40-ops.md#sql-statements)), allocated under the lock, so no key is given twice. A git rewind
+  rewinds the counter with the rows, and reuse after it is accepted — git history is the allocator of record.
 - A key with `key_prefix <p>` is allocated `<p><n + 1>`, where n is the largest decimal suffix
   without a leading zero among the keys of the form `<p><n>`. orm treats such a column as
   executor-assigned, as with `identity`, so an insert may omit it. A text key without `key_prefix`

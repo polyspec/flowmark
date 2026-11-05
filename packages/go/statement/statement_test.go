@@ -548,3 +548,107 @@ func closeSession(t *testing.T, s io.Closer) {
 		t.Error(err)
 	}
 }
+
+// TestSequences pins that an AUTOINCREMENT key is never given twice, as SQLite's AUTOINCREMENT gives none (plan, A
+// refresh of the changed rows): the counter of each AUTOINCREMENT table is part of the corpus, in dbspec/sequences.json,
+// so a database filled after a new opening, a database another process refreshes to the commit, and the database of the
+// session itself give the next key after the largest key the table gave or held, the deleted ones included. A table
+// whose key is a plain INTEGER PRIMARY KEY reuses the largest key a delete freed, as SQLite does; a renamed table keeps
+// its counter, and a dropped table takes its counter with it.
+func TestSequences(t *testing.T) {
+	counted := "CREATE TABLE counted (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT)"
+	cases := []struct {
+		name string
+		// create creates the tables of the case that the set does not declare.
+		create []string
+		// steps run in the first session; table is the table the inserts after them insert into.
+		steps []string
+		table string
+		// opened is the number of the steps after which the other process opens the corpus: a process takes the schema
+		// statements its opening found (spec 40 Opening a corpus).
+		opened int
+		// want is the key the first insert after the steps gives.
+		want int
+	}{
+		{"a declared identity key after a delete of the largest", nil, []string{
+			"INSERT INTO notes (title) VALUES ('a'), ('b'), ('c')",
+			"DELETE FROM notes WHERE id = 3",
+		}, "notes", 0, 4},
+		{"an AUTOINCREMENT key of SQL after a delete of the largest", []string{counted}, []string{
+			"INSERT INTO counted (title) VALUES ('a'), ('b')",
+			"DELETE FROM counted WHERE id = 2",
+		}, "counted", 0, 3},
+		{"a key inserted and deleted in one transaction", nil, []string{
+			"INSERT INTO notes (title) VALUES ('a')",
+			"BEGIN IMMEDIATE",
+			"INSERT INTO notes (title) VALUES ('b')",
+			"DELETE FROM notes WHERE id = 2",
+			"COMMIT",
+		}, "notes", 0, 3},
+		{"a key inserted and deleted by one statement", []string{counted,
+			"CREATE TRIGGER counted_gone AFTER INSERT ON counted BEGIN DELETE FROM counted WHERE id = NEW.id; END"}, []string{
+			"INSERT INTO counted (title) VALUES ('a'), ('b')",
+		}, "counted", 0, 3},
+		{"a key written by hand and deleted", nil, []string{
+			"INSERT INTO notes (id, title) VALUES (10, 'a')",
+			"DELETE FROM notes WHERE id = 10",
+		}, "notes", 0, 11},
+		{"every row deleted", []string{counted}, []string{
+			"INSERT INTO counted (title) VALUES ('a'), ('b'), ('c')",
+			"DELETE FROM counted",
+		}, "counted", 0, 4},
+		{"a renamed table", []string{counted}, []string{
+			"INSERT INTO counted (title) VALUES ('a'), ('b')",
+			"DELETE FROM counted WHERE id = 2",
+			"ALTER TABLE counted RENAME TO renamed",
+		}, "renamed", 3, 3},
+		{"a dropped table made again", []string{counted}, []string{
+			"INSERT INTO counted (title) VALUES ('a'), ('b')",
+			"DELETE FROM counted WHERE id = 2",
+			"DROP TABLE counted",
+			counted,
+		}, "counted", 4, 1},
+		{"a plain INTEGER PRIMARY KEY reuses a freed key", []string{"CREATE TABLE plain (id INTEGER PRIMARY KEY, title TEXT)"}, []string{
+			"INSERT INTO plain (title) VALUES ('a'), ('b')",
+			"DELETE FROM plain WHERE id = 2",
+		}, "plain", 0, 2},
+	}
+	session := func(t *testing.T, root, name string) *writepath.Session {
+		t.Helper()
+		c, err := ops.Open(context.Background(), root, 0)
+		corpustest.Opened(t, c, err)
+		s, err := c.Session(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { closeSession(t, s) })
+		return s
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s, root := open(t)
+			for _, text := range tc.create {
+				run(t, s, text)
+			}
+			// Another process holds a database of the corpus from before the steps that write rows.
+			var other *writepath.Session
+			for i, step := range tc.steps {
+				if i == tc.opened {
+					other = session(t, root, "other")
+					run(t, other, "SELECT COUNT(*) FROM notes")
+				}
+				run(t, s, step)
+			}
+			if other == nil {
+				other = session(t, root, "other")
+				run(t, other, "SELECT COUNT(*) FROM notes")
+			}
+			insert := "INSERT INTO " + tc.table + " (title) VALUES ('next') RETURNING id"
+			for i, sess := range []*writepath.Session{other, session(t, root, "new"), s} {
+				if got, want := cells(run(t, sess, insert)), fmt.Sprintf("[[%d]]", tc.want+i); got != want {
+					t.Fatalf("insert %d, of %s, gives %s, want %s", i+1, []string{"the other process", "a new opening", "the first session"}[i], got, want)
+				}
+			}
+		})
+	}
+}

@@ -292,6 +292,19 @@ utility of orm's SQLite dialect holds on a corpus, and a client has only this dr
   EXISTS` that find what they state change nothing and take no lock.
 - **Tables.** A table takes its columns, its declared types and its key from its statement. A primary key that SQLite lets
   hold NULL names no row, so such a table keys by its rowid, as does a table with no primary key.
+- **AUTOINCREMENT counters.** A table whose statement declares its key `AUTOINCREMENT`, and a table of an `identity`
+  key, which the set renders so, never gives a key twice, as SQLite's `AUTOINCREMENT` gives none; a plain `INTEGER PRIMARY
+  KEY` gives one more than its largest key, as SQLite does. The counter of such a table is part of the corpus, in
+  `dbspec/sequences.json`, a JSON object of a positive counter by table. The sequence of the table is the larger of its
+  counter and its largest key, and the key it gives next is one more, so a key written by hand counts too. A write that
+  lowers the sequence, a delete or a key change of the row of the largest key, raises the counter to it, and a key the
+  database gave past the sequence, as a key a statement inserted and deleted again, raises it after the statement; the
+  commit writes the file with the rows. A fill and a refresh give the database the sequence of the corpus. A renamed
+  table keeps its counter, and a dropped table takes it away, as SQLite's `sqlite_sequence` does. The file is read with
+  the corpus when it is read from nothing and after each commit that wrote it, of any process, as the commit generation
+  names it; a hand edit of the file is read at the next of these, as a hand edit of `dbspec/` is. A git rewind rewinds
+  the counters with the rows. `TestSequences` of `statement`, `TestSequenceRaise` and `TestRaiseSequences` of `irexec`,
+  and `TestAutoincrement` and `TestSequencesFile` of `catalog` hold it.
 - **Assigned columns.** A `key_prefix` key and an `order` position are the corpus's to assign, so the schema of the
   statements lets each hold NULL, as SQLite's `INTEGER PRIMARY KEY` does. An insert that leaves one out, or gives it NULL,
   is given the next key of the prefix ([document model](20-document-model.md#keys)) or the next position under its parent,

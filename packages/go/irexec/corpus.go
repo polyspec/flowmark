@@ -2,7 +2,9 @@ package irexec
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
+	"io/fs"
 	"slices"
 	"sort"
 	"strconv"
@@ -51,6 +53,8 @@ type Corpus struct {
 	positions map[string]map[*rec]int64
 	// cost counts the work of the corpus's operations; nil counts nothing.
 	cost *cost.Counts
+	// seq holds the AUTOINCREMENT counters of the corpus (sequences.go), nil when it holds none.
+	seq *sequences
 }
 
 // file is a corpus document at the place of a files or document table.
@@ -81,7 +85,18 @@ func Open(cat *catalog.Catalog, fsys store.FS) (*Corpus, error) {
 	if err != nil {
 		return nil, err
 	}
-	return FromSnapshot(cat, s, nil, nil), nil
+	data, err := fsys.ReadFile(catalog.SequencesFile)
+	if errors.Is(err, fs.ErrNotExist) {
+		data, err = nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	c := FromSnapshot(cat, s, nil, nil)
+	if err := c.SetSequences(data); err != nil {
+		return nil, err
+	}
+	return c, nil
 }
 
 // FromSnapshot returns the corpus of the read s of the catalog cat, counting its work in k. When prev is the corpus of
@@ -89,6 +104,10 @@ func Open(cat *catalog.Catalog, fsys store.FS) (*Corpus, error) {
 // the read did not change, and sets only the paths it did (plan, Ruling: an operation costs what it touches).
 func FromSnapshot(cat *catalog.Catalog, s *validate.Snapshot, prev *Corpus, k *cost.Counts) *Corpus {
 	c := &Corpus{cat: cat, unavailable: map[string]catalog.Diagnostic{}, cost: k}
+	if prev != nil && prev.cat == cat {
+		// The counters are no document of the read: the reader sets them again when their file changed (SetSequences).
+		c.seq = prev.seq
+	}
 	changed, full := s.Changed()
 	if prev == nil || prev.cat != cat || full {
 		for path := range s.Files() {
@@ -153,7 +172,7 @@ func (c *Corpus) FilesOf(table string) ([]string, error) {
 // Rebased returns the corpus under the catalog cat of the schema statements that stand next, without the files of drop:
 // the tables a schema statement changed, whose rows come again from the statement's database.
 func (c *Corpus) Rebased(cat *catalog.Catalog, drop []string) *Corpus {
-	n := &Corpus{cat: cat, files: c.files, walk: c.walk, unavailable: map[string]catalog.Diagnostic{}, cost: c.cost}
+	n := &Corpus{cat: cat, files: c.files, walk: c.walk, unavailable: map[string]catalog.Diagnostic{}, cost: c.cost, seq: c.seq}
 	for _, p := range drop {
 		n.dropFile(p)
 	}
@@ -291,6 +310,9 @@ func (c *Corpus) Diagnostics(path string) []catalog.Diagnostic {
 // the corpus holds no document there: the write path checks a target against them
 // and reads a file it rewrites outside the executor from them.
 func (c *Corpus) Data(path string) []byte {
+	if path == catalog.SequencesFile {
+		return slices.Clone(c.sequenceData())
+	}
 	if f := c.file(path); f != nil && f.data != nil {
 		return slices.Clone(f.data)
 	}
@@ -311,6 +333,9 @@ func (c *Corpus) Differs(o *Corpus) []string {
 		return f == g || bytes.Equal(f.data, g.data) && (f.data == nil) == (g.data == nil)
 	}
 	c.cost.Add(cost.FilesCompared, pmap.Diff(c.files, o.files, same, func(p string) { set[p] = true }))
+	if a, b := c.sequenceData(), o.sequenceData(); !bytes.Equal(a, b) || (a == nil) != (b == nil) {
+		set[catalog.SequencesFile] = true
+	}
 	for _, tb := range c.cat.Tables {
 		a, aok := c.unavailable[tb.Name]
 		b, bok := o.unavailable[tb.Name]

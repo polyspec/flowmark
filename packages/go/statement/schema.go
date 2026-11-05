@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"regexp"
 	"slices"
 	"strings"
@@ -200,6 +201,9 @@ func apply(ctx context.Context, s *writepath.Session, db *sql.DB, c *irexec.Corp
 		}
 		next = res.Post.Next
 	}
+	if next, err = sequencedUnder(ctx, db, c, next, cat); err != nil {
+		return nil, nil, err
+	}
 	for _, p := range next.Differs(c) {
 		if data := next.Data(p); data != nil {
 			changes = append(changes, journal.Change{Path: p, Data: data})
@@ -208,6 +212,43 @@ func apply(ctx context.Context, s *writepath.Session, db *sql.DB, c *irexec.Corp
 		}
 	}
 	return cat, changes, nil
+}
+
+// sequencedUnder gives next, the corpus of the schema statement under the catalog cat, the AUTOINCREMENT counters the
+// statement left in db: a counter of c whose table is still an AUTOINCREMENT table stays, and a sequence SQLite keeps
+// past the table's sequence in next, as the counter of a table the statement renamed, is its counter. A dropped table
+// leaves no counter, as SQLite drops its row of sqlite_sequence.
+func sequencedUnder(ctx context.Context, db *sql.DB, c, next *irexec.Corpus, cat *catalog.Catalog) (*irexec.Corpus, error) {
+	counters, err := catalog.ParseSequences(c.Data(catalog.SequencesFile))
+	if err != nil {
+		return nil, &Error{codeInternal, err.Error()}
+	}
+	maps.DeleteFunc(counters, func(table string, _ int64) bool {
+		tb, ok := cat.Table(table)
+		return !ok || !tb.Autoincrement
+	})
+	if err := next.SetSequences(catalog.RenderSequences(counters)); err != nil {
+		return nil, &Error{codeInternal, err.Error()}
+	}
+	given, err := sequencesOf(ctx, db, cat)
+	if err != nil {
+		return nil, err
+	}
+	risen := false
+	for table, n := range given {
+		if n > next.Sequence(table) {
+			if counters == nil {
+				counters = map[string]int64{}
+			}
+			counters[table], risen = n, true
+		}
+	}
+	if risen {
+		if err := next.SetSequences(catalog.RenderSequences(counters)); err != nil {
+			return nil, &Error{codeInternal, err.Error()}
+		}
+	}
+	return next, nil
 }
 
 // schemaText is the text of the schema of db.

@@ -17,6 +17,9 @@ import (
 	"github.com/polyspec/flowmark/packages/go/internal/cost"
 	"io"
 	"io/fs"
+	"os"
+	"path/filepath"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -253,7 +256,23 @@ func (c *Corpus) read() (*irexec.Corpus, error) {
 		c.live.Reset()
 		return nil, driverError("reading the corpus", err)
 	}
-	cur := irexec.FromSnapshot(c.cat, s, c.committed.Load(), c.cost)
+	prev := c.committed.Load()
+	cur := irexec.FromSnapshot(c.cat, s, prev, c.cost)
+	// The counters' file is read with the corpus from nothing and after a commit that wrote it, whatever process made
+	// that commit: the generation names it (spec 40 SQL statements).
+	if prev == nil || prev.Catalog() != c.cat || all || !kept || slices.Contains(paths, catalog.SequencesFile) {
+		data, err := os.ReadFile(filepath.Join(c.root, filepath.FromSlash(catalog.SequencesFile)))
+		if errors.Is(err, fs.ErrNotExist) {
+			data, err = nil, nil
+		}
+		if err == nil {
+			err = cur.SetSequences(data)
+		}
+		if err != nil {
+			c.live.Reset()
+			return nil, driverError("reading the AUTOINCREMENT counters of the corpus", err)
+		}
+	}
 	c.readAt.Store(g.N)
 	c.committed.Store(cur)
 	return cur, nil
