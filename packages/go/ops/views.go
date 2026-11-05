@@ -34,14 +34,10 @@ func (c *Corpus) view(ctx context.Context, s *writepath.Session, tb *catalog.Tab
 		}
 	}()
 	m := message{hash: c.cat.ManifestHash, table: tb.Name}
-	a, err := c.exec(ctx, s, m.request("one", m.byKey(tb, key)))
+	row, err := c.one(ctx, s, &m, tb, key)
 	if err != nil {
 		return nil, err
 	}
-	if len(a.Rows) == 0 {
-		return nil, noRow(tb, key)
-	}
-	row := a.Rows[0]
 	v := tb.View
 	vals := map[string]string{}
 	for _, col := range []string{v.Kind, v.Entity, v.Filter, v.Sort, v.Group} {

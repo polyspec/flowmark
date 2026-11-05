@@ -33,7 +33,7 @@ func (c *Corpus) sealed(tb *catalog.Table, insert bool, values map[string]json.R
 			missing = append(missing, col.Name)
 		}
 	}
-	if len(assigned) == 0 && !(insert && tb.AESVersion != "") {
+	if len(assigned) == 0 && (!insert || tb.AESVersion == "") {
 		return values, nil
 	}
 	keys := c.cat.Keys

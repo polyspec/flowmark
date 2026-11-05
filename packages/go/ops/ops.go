@@ -306,14 +306,11 @@ func (c *Corpus) run(ctx context.Context, s *writepath.Session, tb *catalog.Tabl
 	case "rows.load":
 		return c.load(ctx, s, tb, r.Rows)
 	case "row.get":
-		a, err := c.exec(ctx, s, m.request("one", m.byKey(tb, r.Key)))
+		row, err := c.one(ctx, s, &m, tb, r.Key)
 		if err != nil {
 			return nil, err
 		}
-		if len(a.Rows) == 0 {
-			return nil, noRow(tb, r.Key)
-		}
-		return rowAnswer{Row: a.Rows[0]}, nil
+		return rowAnswer{Row: row}, nil
 	case "row.insert":
 		values, err := c.sealed(tb, true, r.Values)
 		if err != nil {
@@ -325,9 +322,13 @@ func (c *Corpus) run(ctx context.Context, s *writepath.Session, tb *catalog.Tabl
 		if err != nil {
 			return nil, err
 		}
-		return c.write(ctx, s, tb, r.Key, m.request("update", m.update(tb, r.Key, m.sets(tb, values))))
+		return c.update(ctx, s, &m, tb, r.Key, m.sets(tb, values))
 	case "row.delete":
-		return c.write(ctx, s, tb, r.Key, m.request("delete", m.byKey(tb, r.Key)))
+		where, err := m.byKey(tb, r.Key)
+		if err != nil {
+			return nil, err
+		}
+		return c.write(ctx, s, tb, r.Key, m.request("delete", where))
 	case "row.move":
 		if tb.Order == "" {
 			return nil, errf(codeConfig, "row.move: the table %s declares no order column", tb.Name)
@@ -340,7 +341,7 @@ func (c *Corpus) run(ctx context.Context, s *writepath.Session, tb *catalog.Tabl
 			}
 			set = append(set, m.assign(h, r.Parent))
 		}
-		return c.write(ctx, s, tb, r.Key, m.request("update", m.update(tb, r.Key, set)))
+		return c.update(ctx, s, &m, tb, r.Key, set)
 	case "transition":
 		if tb.StateMachine == nil {
 			return nil, errf(codeConfig, "transition: the table %s declares no state machine", tb.Name)
@@ -361,7 +362,7 @@ func (c *Corpus) run(ctx context.Context, s *writepath.Session, tb *catalog.Tabl
 		if err != nil {
 			return nil, err
 		}
-		return c.write(ctx, s, tb, r.Key, m.request("update", m.update(tb, r.Key, m.sets(tb, values))))
+		return c.update(ctx, s, &m, tb, r.Key, m.sets(tb, values))
 	}
 	return nil, errf(codeInternal, "the operation %s has no runner", r.Operation)
 }
@@ -380,11 +381,12 @@ func (c *Corpus) load(ctx context.Context, s *writepath.Session, tb *catalog.Tab
 			return nil, errf(codeConfig, "rows.load: row %d of %s assigns no column", start, tb.Name)
 		}
 		set := m.sets(tb, rows[start])
+		names := columnOrder(tb, rows[start])
 		more := make([][]int, 0, end-start-1)
 		for _, row := range rows[start+1 : end] {
-			ps := make([]int, len(set))
-			for i, a := range set {
-				ps[i] = m.param(row[a["column"].(string)])
+			ps := make([]int, len(names))
+			for i, name := range names {
+				ps[i] = m.param(row[name])
 			}
 			more = append(more, ps)
 		}
@@ -482,6 +484,16 @@ func (m *message) assign(column string, v json.RawMessage) map[string]any {
 // sets returns the assignments of values in the table's column order; a name the table does not declare follows, in
 // name order, and the request names it as the executor reads it.
 func (m *message) sets(tb *catalog.Table, values map[string]json.RawMessage) []map[string]any {
+	names := columnOrder(tb, values)
+	out := make([]map[string]any, len(names))
+	for i, n := range names {
+		out[i] = m.assign(n, values[n])
+	}
+	return out
+}
+
+// columnOrder is the names of values in the order of the columns of the table, then by name.
+func columnOrder(tb *catalog.Table, values map[string]json.RawMessage) []string {
 	names := make([]string, 0, len(values))
 	for n := range values {
 		names = append(names, n)
@@ -501,15 +513,11 @@ func (m *message) sets(tb *catalog.Table, values map[string]json.RawMessage) []m
 		}
 		return names[i] < names[j]
 	})
-	out := make([]map[string]any, len(names))
-	for i, n := range names {
-		out[i] = m.assign(n, values[n])
-	}
-	return out
+	return names
 }
 
 // byKey is the where of the row whose primary key is key.
-func (m *message) byKey(tb *catalog.Table, key json.RawMessage) map[string]any {
+func (m *message) byKey(tb *catalog.Table, key json.RawMessage) (map[string]any, error) {
 	if len(tb.KeyParts) > 0 {
 		var text string
 		if err := json.Unmarshal(key, &text); err == nil {
@@ -517,32 +525,57 @@ func (m *message) byKey(tb *catalog.Table, key json.RawMessage) map[string]any {
 			if len(values) == len(tb.KeyParts) {
 				items := make([]any, len(values))
 				for i, name := range tb.KeyParts {
-					items[i] = map[string]any{"pred": map[string]any{"column": name, "op": "eq", "p": m.param(partValue(tb, name, values[i]))}}
+					part, err := partValue(tb, name, values[i])
+					if err != nil {
+						return nil, err
+					}
+					items[i] = map[string]any{"pred": map[string]any{"column": name, "op": "eq", "p": m.param(part)}}
 				}
-				return map[string]any{"where": map[string]any{"items": items}}
+				return map[string]any{"where": map[string]any{"items": items}}, nil
 			}
 		}
 	}
 	pred := map[string]any{"column": tb.Key, "op": "eq", "p": m.param(key)}
-	return map[string]any{"where": map[string]any{"items": []any{map[string]any{"pred": pred}}}}
+	return map[string]any{"where": map[string]any{"items": []any{map[string]any{"pred": pred}}}}, nil
 }
 
 // partValue is the JSON value of one value of a composite key, by the type of its column.
-func partValue(tb *catalog.Table, column, text string) json.RawMessage {
-	c, _ := tb.ColumnNamed(column)
+func partValue(tb *catalog.Table, column, text string) (json.RawMessage, error) {
+	c, ok := tb.ColumnNamed(column)
+	if !ok {
+		return nil, errf(codeInternal, "the key part %s is not a column of the table %s", column, tb.Name)
+	}
 	switch c.Type.Kind {
 	case dbspec.TypeI16, dbspec.TypeI32, dbspec.TypeI64, dbspec.TypeBool:
-		return json.RawMessage(text)
+		return json.RawMessage(text), nil
 	}
-	quoted, _ := json.Marshal(text)
-	return quoted
+	return json.Marshal(text)
 }
 
-// update is the body of an update of the row whose key is key, assigning set.
-func (m *message) update(tb *catalog.Table, key json.RawMessage, set []map[string]any) map[string]any {
-	body := m.byKey(tb, key)
+// one reads the row whose key is key; no such row is NO_ROWS.
+func (c *Corpus) one(ctx context.Context, s *writepath.Session, m *message, tb *catalog.Table, key json.RawMessage) (*irexec.Row, error) {
+	where, err := m.byKey(tb, key)
+	if err != nil {
+		return nil, err
+	}
+	a, err := c.exec(ctx, s, m.request("one", where))
+	if err != nil {
+		return nil, err
+	}
+	if len(a.Rows) == 0 {
+		return nil, noRow(tb, key)
+	}
+	return a.Rows[0], nil
+}
+
+// update writes the update of the row whose key is key, assigning set.
+func (c *Corpus) update(ctx context.Context, s *writepath.Session, m *message, tb *catalog.Table, key json.RawMessage, set []map[string]any) (any, error) {
+	body, err := m.byKey(tb, key)
+	if err != nil {
+		return nil, err
+	}
 	body["set"] = set
-	return body
+	return c.write(ctx, s, tb, key, m.request("update", body))
 }
 
 // request returns the message of the request of kind on the table with body, at the engine clock (spec 40 The clock).

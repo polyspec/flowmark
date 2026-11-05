@@ -63,7 +63,7 @@ func SchemaStatements(documents []*dbspec.Document, added []string) ([]string, e
 
 // applyStatements reads the tables of the corpus's schema statements. It returns the document of the tables they added
 // and sets the columns of an owned table they changed; a table they dropped leaves the set's tables.
-func (l *loader) applyStatements(docs []*document, added []string) (*dbspec.Document, error) {
+func (l *loader) applyStatements(docs []*document, added []string) (_ *dbspec.Document, err error) {
 	var parsed []*dbspec.Document
 	for _, d := range docs {
 		if d.parsed != nil {
@@ -79,7 +79,7 @@ func (l *loader) applyStatements(docs []*document, added []string) (*dbspec.Docu
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = db.Close() }()
+	defer func() { err = errors.Join(err, db.Close()) }()
 	db.SetMaxOpenConns(1)
 	// What the documents declare, before the statements: a column they re-declare takes the type they give it.
 	declared := map[string]map[string]string{}
@@ -160,12 +160,12 @@ func sameColumnNames(a, b []dbspec.Column) bool {
 	return slices.EqualFunc(a, b, func(x, y dbspec.Column) bool { return x.Name == y.Name })
 }
 
-func liveTables(ctx context.Context, db *sql.DB) ([]string, error) {
+func liveTables(ctx context.Context, db *sql.DB) (_ []string, err error) {
 	rows, err := db.QueryContext(ctx, "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY rowid")
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer func() { err = errors.Join(err, rows.Close()) }()
 	var out []string
 	for rows.Next() {
 		var n string
@@ -181,12 +181,12 @@ func liveTables(ctx context.Context, db *sql.DB) ([]string, error) {
 const RowIDColumn = "rowid"
 
 // liveDeclarations reads the declared type of each column of a table.
-func liveDeclarations(ctx context.Context, db *sql.DB, name string) (map[string]string, error) {
+func liveDeclarations(ctx context.Context, db *sql.DB, name string) (_ map[string]string, err error) {
 	rows, err := db.QueryContext(ctx, "SELECT name, type FROM pragma_table_info(?)", name)
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer func() { err = errors.Join(err, rows.Close()) }()
 	out := map[string]string{}
 	for rows.Next() {
 		var col, decl string
@@ -199,12 +199,12 @@ func liveDeclarations(ctx context.Context, db *sql.DB, name string) (map[string]
 }
 
 // liveTable reads a table of a SQLite database as a dbspec table.
-func liveTable(ctx context.Context, db *sql.DB, name string) (*dbspec.Table, error) {
+func liveTable(ctx context.Context, db *sql.DB, name string) (_ *dbspec.Table, err error) {
 	rows, err := db.QueryContext(ctx, "SELECT name, type, \"notnull\", pk FROM pragma_table_info(?) ORDER BY cid", name)
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer func() { err = errors.Join(err, rows.Close()) }()
 	t := &dbspec.Table{Name: name}
 	key := map[int]string{}
 	nullable := map[string]bool{}
@@ -215,7 +215,11 @@ func liveTable(ctx context.Context, db *sql.DB, name string) (*dbspec.Table, err
 		if err := rows.Scan(&col, &decl, &notNull, &pk); err != nil {
 			return nil, err
 		}
-		c := dbspec.Column{Name: col, Type: liveType(decl), Null: notNull == 0 && pk == 0}
+		typ, err := liveType(decl)
+		if err != nil {
+			return nil, err
+		}
+		c := dbspec.Column{Name: col, Type: typ, Null: notNull == 0 && pk == 0}
 		t.Columns = append(t.Columns, c)
 		if pk > 0 {
 			key[pk] = col
@@ -228,7 +232,7 @@ func liveTable(ctx context.Context, db *sql.DB, name string) (*dbspec.Table, err
 	}
 	// SQLite keeps NULL in a primary key column it does not require to be NOT NULL, unless that column is the rowid. Such a
 	// key names no row, and the rowid does.
-	if !(len(key) == 1 && rowAlias) {
+	if len(key) != 1 || !rowAlias {
 		for i := range t.Columns {
 			if nullable[t.Columns[i].Name] {
 				t.Columns[i].Null = true
@@ -257,22 +261,28 @@ var decimalInt = regexp.MustCompile(`^DECIMALINT\((\d+),\s*(\d+)\)$`)
 
 // liveType is the dbspec type of a declared SQLite type, by its affinity (the rules of SQLite's datatype page). SQLite has
 // no date or time storage, so such a column holds the text it was given, byte for byte.
-func liveType(decl string) dbspec.Type {
+func liveType(decl string) (dbspec.Type, error) {
 	upper := strings.ToUpper(strings.TrimSpace(decl))
 	if m := decimalInt.FindStringSubmatch(upper); m != nil {
-		p, _ := strconv.Atoi(m[1])
-		s, _ := strconv.Atoi(m[2])
-		return dbspec.Type{Kind: dbspec.TypeDecimal, Precision: p, Scale: s}
+		p, err := strconv.Atoi(m[1])
+		if err != nil {
+			return dbspec.Type{}, fmt.Errorf("the declared type %s: its precision: %w", decl, err)
+		}
+		s, err := strconv.Atoi(m[2])
+		if err != nil {
+			return dbspec.Type{}, fmt.Errorf("the declared type %s: its scale: %w", decl, err)
+		}
+		return dbspec.Type{Kind: dbspec.TypeDecimal, Precision: p, Scale: s}, nil
 	}
 	switch {
 	case upper == "BOOLEAN":
-		return dbspec.Type{Kind: dbspec.TypeBool}
+		return dbspec.Type{Kind: dbspec.TypeBool}, nil
 	case strings.Contains(upper, "INT"):
-		return dbspec.Type{Kind: dbspec.TypeI64}
+		return dbspec.Type{Kind: dbspec.TypeI64}, nil
 	case strings.Contains(upper, "BLOB"):
-		return dbspec.Type{Kind: dbspec.TypeBytes}
+		return dbspec.Type{Kind: dbspec.TypeBytes}, nil
 	case strings.Contains(upper, "REAL"), strings.Contains(upper, "FLOA"), strings.Contains(upper, "DOUB"):
-		return dbspec.Type{Kind: dbspec.TypeF64}
+		return dbspec.Type{Kind: dbspec.TypeF64}, nil
 	}
-	return dbspec.Type{Kind: dbspec.TypeText}
+	return dbspec.Type{Kind: dbspec.TypeText}, nil
 }

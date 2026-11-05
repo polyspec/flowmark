@@ -120,11 +120,11 @@ func decodeSealed(keys *catalog.Keys, tb *catalog.Table, r *store.Row, stages []
 		if text == nil {
 			return fmt.Errorf("the row records no key version in %s", tb.AESVersion)
 		}
-		v, err := strconv.ParseInt(*text, 10, 32)
-		if err != nil { // a version not of its type is the rule type's
+		v, ok := keyVersion(*text)
+		if !ok { // a version not of its type is the rule type's
 			return nil
 		}
-		version = int32(v)
+		version = v
 	}
 	key, ok := keys.Key(version)
 	if !ok {
@@ -430,4 +430,10 @@ func usesOfFunc(f *ir.Func, used map[int]bool) {
 	for _, i := range f.Ps {
 		used[i] = true
 	}
+}
+
+// keyVersion is the key version that the text of a version column names, false when the text is not a 32-bit integer.
+func keyVersion(text string) (int32, bool) {
+	v, err := strconv.ParseInt(text, 10, 32)
+	return int32(v), err == nil
 }
