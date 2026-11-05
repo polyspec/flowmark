@@ -4,8 +4,8 @@
 
 [English](60-dialect.md)
 
-orm은 DSN scheme `markdown://`으로 corpus에 접속하며, 이 scheme은 SQL dialect가 아니라 **IR executor**를
-고른다(server와 DSN은 [operations](40-ops.md)에 있다). 이 spec은 통합 계약이다: wire, 그리고 각 orm
+orm은 DSN scheme `markdown://`으로 corpus에 접속하며, 이 연결은 server가 문장에 답하는 SQLite 연결이다([SQL statements](40-ops.md#sql-statements)).
+orm client에서 모든 surface는 SQLite와 같이 동작한다. 아래 표는 엔진 자신의 face(CLI, MCP, sidecar)가 실행하는 **IR executor**를 말한다. 이 spec은 통합 계약이다: wire, 그리고 각 orm
 surface가 corpus에서 무엇을 하는지, 또는 어떤 orm 오류 code로 답하는지 — executor가 실행하지 않는
 surface는 `CAPABILITY_UNSUPPORTED`, 그리고 orm의 규칙이 모든 backend에 주는 대로 `OPERATOR_NOT_ALLOWED`,
 `IR_INVALID`, `CODEC_ENCODE`. 계약의 orm 쪽 — protocol 절, 오류 code `WRITE_CONFLICT`, executor가
@@ -63,8 +63,7 @@ surface는 `CAPABILITY_UNSUPPORTED`, 그리고 orm의 규칙이 모든 backend�
 | `optimistic` | 지원. 일치가 없으면 `OPTIMISTIC_LOCK` |
 | `on_duplicate` | insert된 행과 만날 수 있는 key — insert가 `identity`나 `key_prefix`에 맡기지 않는 한 primary key, 그리고 각 unique key — 가 정확히 하나이고 insert가 그 모든 column을 배정할 때 지원한다. 그 key가 충돌 대상이며, 그 밖의 `on_duplicate`는 `IR_INVALID`다(MySQL의 아무 key 규칙과 PostgreSQL과 SQLite의 충돌 대상을 같은 key로 만드는 orm의 규칙). primary key는 아래 비교가 정하는 대로 행과 만난다. 근거: MySQL은 자신의 key 순서로 아무 unique key에서나 행과 만나는 반면, PostgreSQL과 SQLite는 충돌 대상 하나를 지정하고 다른 key에서의 만남은 `DUPLICATE_KEY`다. 행과 만날 수 있는 key가 하나이면 셋은 구성상 같다 |
 | primary key 비교 | A–Z의 대소문자를 가리지 않는다. SQL에서 orm의 binary collation과 다른데, key는 file 이름이자 anchor이기 때문이다([document model](20-document-model.ko.md#key)): key가 다른 key와 대소문자를 무시하고 같은 insert는 `DUPLICATE_KEY`이며, 충돌 key가 primary key인 `on_duplicate` insert는 그 행 — 바이트 단위로 같은 key가 먼저, 아니면 byte 순서에서 가장 작은 것 — 과 만나고, 그 행은 자기 key를 유지한다. 근거: `ON DUPLICATE KEY UPDATE`와 `ON CONFLICT`는 충돌 key의 index가 그 index의 비교로 보고하는 중복에서 작동한다 |
-| `lock` `update`, `share` | 문서화된 no-op으로 받는다: server transaction이 이미 corpus lock을 잡고 있다 |
-| `lock` `update_nowait`, `share_nowait` | `CAPABILITY_UNSUPPORTED` |
+| `lock` `update`, `share`, `update_nowait`, `share_nowait` | 문서화된 no-op으로 받아들인다: server transaction이 이미 corpus lock을 쥐고 있어 어떤 행도 기다리지 않는다 |
 | relation(`limit_per_parent`, `if_parent`, `flatten`, `key_by`, `no_cascade_delete`) | 지원. executor가 조립하며, `flatten` relation은 `one` relation으로 답하고 client model이 그것을 부모의 array와 JSON 형태에 병합한다(orm의 규칙). `key_by`는 non-null column이어야 한다(아니면 `IR_INVALID`). 근거: orm은 병합을 client model의 array와 JSON 형태에 두며, 부모가 가진 이름은 부모의 값을 유지한다. 병합된 답은 client에게 부모 자신의 column과 구별할 수 없는 행을 넘긴다. NULL collection key는 client 언어마다 다르게 답하므로, nullable `key_by`는 형태로 거절한다 |
 | subquery(`tuple_in`, `tuple_not_in`, scalar `Sub` aggregate) | 지원 |
 | scalar column subquery(`agg` 없는 `columns.sub`) | `limit` count 1과, 그 entity의 모든 primary key column을 담고 `random`이 없는 `order`가 있을 때 유효하며, 아니면 `IR_INVALID`다(orm의 규칙). 값은 그 행의 column이며, 일치하는 행이 없으면 NULL이다. 근거: 여러 행의 scalar subquery는 MySQL 1242, PostgreSQL 21000, SQLite에서는 첫 행이므로, 한 행을 내는 형태만이 하나의 결과를 가진다 |
@@ -76,13 +75,15 @@ surface는 `CAPABILITY_UNSUPPORTED`, 그리고 orm의 규칙이 모든 backend�
 | codec columns | orm 요청에서는 client가 적용한다. 엔진이 시작하는 쓰기(CLI, MCP, sidecar, 이력)는 orm의 Go codec package로 codec을 적용하며, 검증은 같은 package로 decode한다. 저장 값은 encode된 값이며, byte를 만드는 단계는 base64다 |
 | indexes | 허용되며 메모리에서 파생된다 |
 | `select explicit`, `entity`, `navigation` | client 쪽이며 저장에 효과가 없다 |
-| `aes`, `aes_version`, `blind_index` | corpus에서 schema 오류 — key는 client를 떠나지 않는다 |
-| `audit`, `immutable` setting | corpus에서 schema 오류. 대신 `state_machine … history` |
+| `aes`, `aes_version`, `blind_index` | 지원. orm 요청에서는 client가 암호화·hash하고, 엔진은 주입으로 key를 받는다([schema](30-schema.md#keys)) |
+| `immutable` setting | 행의 update와 delete는 `CONSTRAINT`([constraints](50-constraints.ko.md#사람이-쓴-편집에-대한-판정)) |
+| `audit` setting | corpus에서 schema 오류. 대신 `state_machine … history` |
 | transaction | session 위의 `begin`부터 `commit`/`rollback`까지. `readOnly`는 지키며 lock을 잡는다 |
 | savepoint | 중첩 stage |
 | `orderByRandom` | 지원. 순서에 seed를 쓰지 않는다 |
 | audit 값을 가진 transaction | `CAPABILITY_UNSUPPORTED` |
-| `isolation`, `timeoutMs` option | `CAPABILITY_UNSUPPORTED` |
+| `isolation` option | 모든 level을 받아들인다: transaction은 `begin`부터 끝까지 corpus lock을 쥐고 행의 사본 위에서 실행되므로 혼자 실행되는 것과 같고, 이는 어떤 option이 요구하는 level 이상이다 |
+| `timeoutMs` option | `CAPABILITY_UNSUPPORTED`, PostgreSQL 외 모든 데이터베이스에 대한 orm의 규칙 |
 | `getQuery()`, statement event, `subscribe()` | `CAPABILITY_UNSUPPORTED` — SQL 텍스트가 없다 |
 | `force_index` | `CAPABILITY_UNSUPPORTED` — index는 이름을 지정하지 않고 파생된다 |
 | `fulltext` | `OPERATOR_NOT_ALLOWED`: SQLite는 table에 full-text index가 없다(orm dialects.md) |

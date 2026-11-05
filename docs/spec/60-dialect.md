@@ -3,8 +3,9 @@
 
 [한국어](60-dialect.ko.md)
 
-orm reaches a corpus through the DSN scheme `markdown://`, which selects an **IR executor** rather
-than a SQL dialect ([operations](40-ops.md) holds the server and the DSN). This specification is
+orm reaches a corpus through the DSN scheme `markdown://`, whose connection is a SQLite connection whose statements the
+server answers ([SQL statements](40-ops.md#sql-statements)): on an orm client every surface behaves as on SQLite. The tables
+below state the **IR executor**, which the engine's own faces (CLI, MCP, sidecar) run. This specification is
 the integration contract: the wire, and what each orm surface does on a corpus, or the orm error code it answers —
 `CAPABILITY_UNSUPPORTED` for a surface the executor does not run, `OPERATOR_NOT_ALLOWED`,
 `IR_INVALID` and `CODEC_ENCODE` as orm's rules give them for every backend. The orm side of the
@@ -68,8 +69,7 @@ Go client implements it first and every other client is its own orm item.
 | `optimistic` | Supported; no match is `OPTIMISTIC_LOCK` |
 | `on_duplicate` | Supported when exactly one key — the primary key, unless the insert leaves it to `identity` or `key_prefix`, and each unique key — can meet the inserted row and the insert assigns all its columns; that key is the conflict target, and any other `on_duplicate` is `IR_INVALID` (orm's rule, which makes MySQL's any-key rule and the PostgreSQL and SQLite conflict target the same key); the primary key meets a row as its comparison below states. Grounding: MySQL meets a row on any unique key, in its own key order, while PostgreSQL and SQLite name one conflict target and answer another key's meeting `DUPLICATE_KEY`; with one key that can meet the row the three are the same by construction |
 | primary key comparison | Without regard to the case of A–Z, unlike orm's binary collation on SQL, because a key is a file name and an anchor ([document model](20-document-model.md#keys)): an insert whose key equals another without regard to case is `DUPLICATE_KEY`, and an `on_duplicate` insert whose conflict key is the primary key meets that row — the byte-equal key first, else the least in byte order — which keeps its key. Grounding: `ON DUPLICATE KEY UPDATE` and `ON CONFLICT` fire on the duplicate the conflict key's index reports, by that index's comparison |
-| `lock` `update`, `share` | Accepted as documented no-ops: a server transaction already holds the corpus lock |
-| `lock` `update_nowait`, `share_nowait` | `CAPABILITY_UNSUPPORTED` |
+| `lock` `update`, `share`, `update_nowait`, `share_nowait` | Accepted as documented no-ops: a server transaction already holds the corpus lock, so it waits for no row |
 | relations (`limit_per_parent`, `if_parent`, `flatten`, `key_by`, `no_cascade_delete`) | Supported; assembled by the executor, a `flatten` relation answered as a `one` relation, which the client model merges into the parent's array and JSON forms (orm's rule); `key_by` names a non-null column (`IR_INVALID` otherwise). Grounding: orm places the merge in the client model's array and JSON forms, where a name the parent holds keeps the parent's value; a merged answer would hand the client a row it cannot tell from the parent's own columns. A NULL collection key answers differently by client language, so a nullable `key_by` is refused by its shape |
 | subqueries (`tuple_in`, `tuple_not_in`, scalar `Sub` aggregates) | Supported |
 | a scalar column subquery (`columns.sub` without `agg`) | Valid with `limit` count 1 and an `order` that includes every primary key column of its entity and no `random`, otherwise `IR_INVALID` (orm's rule); its value is the column of that row, NULL when none matches. Grounding: a scalar subquery of several rows is MySQL 1242, PostgreSQL 21000 and the first row on SQLite, so only a shape that yields one row has one result |
@@ -81,13 +81,15 @@ Go client implements it first and every other client is its own orm item.
 | codec columns | Applied by the client on an orm request; a write the engine originates (CLI, MCP, sidecar, history) applies the codec through orm's Go codec package, and validation decodes with the same package; the stored value is the encoded one, a byte-producing stage as base64 |
 | indexes | Accepted; derived in memory |
 | `select explicit`, `entity`, `navigation` | Client-side; no storage effect |
-| `aes`, `aes_version`, `blind_index` | Schema error on a corpus — the key never leaves the client |
-| `audit`, `immutable` settings | Schema error on a corpus; `state_machine … history` instead |
+| `aes`, `aes_version`, `blind_index` | Supported; the client encrypts and hashes on an orm request, and the engine takes its keys by injection ([schema](30-schema.md#keys)) |
+| `immutable` setting | An update or a delete of a row is `CONSTRAINT` ([constraints](50-constraints.md#human-write-rulings)) |
+| `audit` setting | Schema error on a corpus; `state_machine … history` instead |
 | transactions | `begin` to `commit`/`rollback` over the session; `readOnly` honoured and takes the lock |
 | savepoints | Nested stages |
 | `orderByRandom` | Supported; the order is not seeded |
 | a transaction with audit values | `CAPABILITY_UNSUPPORTED` |
-| `isolation`, `timeoutMs` options | `CAPABILITY_UNSUPPORTED` |
+| `isolation` option | Every level is accepted: a transaction holds the corpus lock from `begin` to its end and runs on its own copy of the rows, so it runs as if alone, which is at least the level any option asks for |
+| `timeoutMs` option | `CAPABILITY_UNSUPPORTED`, orm's rule for every database but PostgreSQL |
 | `getQuery()`, statement events, `subscribe()` | `CAPABILITY_UNSUPPORTED` — there is no SQL text |
 | `force_index` | `CAPABILITY_UNSUPPORTED` — indexes are derived, not named |
 | `fulltext` | `OPERATOR_NOT_ALLOWED`: SQLite has no full-text index on a table (orm dialects.md) |

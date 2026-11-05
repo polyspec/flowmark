@@ -2,13 +2,17 @@
 include node_modules/@polyspec/kit/scripts/kit/kit-bootstrap.mk
 
 # The suite of the repository: the gates of kit and its own checks and tests.
-CHECK_TARGETS := kit-check layout-check docs-check rules-check owner-validate rebuild-check language-check test-markers-check duplication-check parity-declarations-check parity-check link-check bypass-check suppression-check divergence-check lint-ts lint-php lint-go refs-check test-go test-infrastructure
+CHECK_TARGETS := kit-check layout-check docs-check rules-check owner-validate rebuild-check language-check test-markers-check duplication-check parity-declarations-check parity-check link-check bypass-check suppression-check divergence-check lint-ts lint-php lint-go refs-check internal-paths-check test-go test-infrastructure
 
 # The Composer of mise.toml, by its shim, which installs the PHP packages of the board example.
 COMPOSER := $(KIT_TOOLS)/mise/shims/composer
 
 # The Go of the checkout, by its absolute path (kit-check: a recipe starts a tool by its absolute path, as NODE and ALINT of kit.mk do).
 GO := $(firstword $(wildcard $(KIT_TOOLS)/mise/shims/go.exe $(KIT_TOOLS)/mise/shims/go.cmd $(KIT_TOOLS)/mise/shims/go))
+
+.PHONY: internal-paths-check
+internal-paths-check: ## Check that no tracked file names a dependency's source or build output by its path (K1002); offline
+	$(NODE) scripts/check-internal-paths.mts
 
 .PHONY: refs-check
 refs-check: ## Check that every task ID a document names resolves to a checklist item; offline

@@ -3,6 +3,10 @@
 
 ## Unreleased
 
+- T19: Run 41317062220 shows the layout metrics on Windows: the cost of sharded events=20000 is the setup and the teardown of the fixture, not the insert; the row waits for more runs.
+- T15-2: flowmark has one implementation and no config/parity.json, so make parity-declarations-check holds with no unit to declare, on kit 0.0.92.
+- T15-42: The link declaration .links of the checkout names the orm and kit checkouts, as the T15-48 line says, and make link-check holds on it; the file stays local and untracked.
+- T24-13: The check internal-paths-check fails on a tracked line that names the source or the build output of a dependency by its path (K1002), and CHECK_TARGETS runs it; the T24-12 row names the file by its place inside the package.
 - T15-54: flowmark adopts Kit 0.0.92 (T15-54).
 - T19: The layout benchmarks report setup-ms, the time newFixture-equivalent setup takes outside the timed loop, and teardown-ms, the corpus close and the folder removal, so a Windows run shows the time that the per-op metrics do not (T19).
 - T15-1: The target flowmark-test aggregates flowmark-node-check and flowmark-go-check, and ci.yml runs them in its typescript and go jobs; the composer packages stay vcs forks until the batch release, so T15-1 stays held on that cause (T15-1).

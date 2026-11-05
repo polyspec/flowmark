@@ -18,19 +18,12 @@ func (l *loader) checkTable(d *document, t *dbspec.Table) (Storage, bool) {
 	if reservedName(t.Name) {
 		report("table " + t.Name + " is a reserved file name on Windows")
 	}
-	if len(t.PrimaryKey.Columns) > 1 {
-		report("table " + t.Name + " has a composite primary key (" + strings.Join(t.PrimaryKey.Columns, ", ") + ")")
-	}
-	if len(t.PrimaryKey.Columns) == 1 {
-		if c := columnOf(t, t.PrimaryKey.Columns[0]); c != nil && !isKeyType(c.Type.Kind) {
+	for _, name := range t.PrimaryKey.Columns {
+		// A table in table shape holds its key in a cell, so every type a cell reads may key it; a file name, a heading
+		// and an anchor hold only the key types.
+		inCell := (t.Settings == nil || t.Settings.Store == nil) || t.Settings.Store.Shape == string(ShapeTable)
+		if c := columnOf(t, name); c != nil && !inCell && !isKeyType(c.Type.Kind) {
 			report("primary key column " + c.Name + " of table " + t.Name + " has type " + c.Type.String() + ", which is not a key type (an integer, bool, varchar, uuid or date)")
-		}
-	}
-	for _, fk := range t.ForeignKeys {
-		for _, action := range []dbspec.Action{fk.OnDelete, fk.OnUpdate} {
-			if action == dbspec.ActionCascade || action == dbspec.ActionSetNull {
-				report("foreign key " + fk.Name + " uses " + string(action))
-			}
 		}
 	}
 	s := t.Settings
@@ -38,24 +31,9 @@ func (l *loader) checkTable(d *document, t *dbspec.Table) (Storage, bool) {
 		s = &dbspec.Settings{}
 	}
 	for _, c := range s.Codecs {
-		if slices.Contains(c.Stages, "aes") {
-			report("column " + c.Column + " uses aes")
-		}
 		if len(c.Stages) > 0 && c.Stages[len(c.Stages)-1] == "yaml" {
 			report("column " + c.Column + " ends its codec with the stage yaml, whose encoder ends every value with a line feed")
 		}
-	}
-	if s.AESVersion != nil {
-		report("table " + t.Name + " has an aes_version setting")
-	}
-	if len(s.BlindIndexes) > 0 {
-		report("table " + t.Name + " has a blind_index setting")
-	}
-	if s.Audit != nil {
-		report("table " + t.Name + " has an audit setting")
-	}
-	if s.Immutable != nil {
-		report("table " + t.Name + " has an immutable setting")
 	}
 	if sm := s.StateMachine; sm != nil {
 		if sm.History == nil {
@@ -65,9 +43,12 @@ func (l *loader) checkTable(d *document, t *dbspec.Table) (Storage, bool) {
 			report("state machine on column " + sm.Column + " has no initial state")
 		}
 	}
+	if len(t.PrimaryKey.Columns) > 1 && s.Store != nil && s.Store.Kind == "files" {
+		report("table " + t.Name + ": files storage names a file by one key column, and the primary key is composite (" + strings.Join(t.PrimaryKey.Columns, ", ") + ")")
+	}
 	if s.Store == nil {
-		report("table " + t.Name + " has no store setting")
-		return Storage{}, false
+		// A table that declares no storage is a table in one document of its own (spec 30).
+		return Storage{Kind: StorageDocument, Shape: ShapeTable}, true
 	}
 	var storage Storage
 	switch s.Store.Kind {
@@ -159,17 +140,19 @@ func (d *document) position(kind string, path ...string) (int, int) {
 // registered set is not checked here: the parse of the set reports it.
 func (l *loader) checkForeignKeys() {
 	for _, r := range l.order {
+		if r.doc.external {
+			continue
+		}
 		for _, fk := range r.table.ForeignKeys {
 			target, ok := l.refs[fk.Table]
 			if !ok {
 				continue
 			}
 			pk := target.table.PrimaryKey.Columns
+			references := slices.Sorted(slices.Values(fk.References))
 			switch {
-			case len(fk.Columns) != 1 || len(fk.References) != 1:
-				l.add(l.fkDiag(r.doc, r.table.Name, fk.Name, "foreign key "+fk.Name+" is composite ("+strings.Join(fk.Columns, ", ")+"); a link needs one column"))
-			case len(pk) != 1 || pk[0] != fk.References[0]:
-				l.add(l.fkDiag(r.doc, r.table.Name, fk.Name, "foreign key "+fk.Name+" references "+fk.Table+" ("+strings.Join(fk.References, ", ")+"), which is not the one-column primary key of "+fk.Table))
+			case !slices.Equal(references, slices.Sorted(slices.Values(pk))):
+				l.add(l.fkDiag(r.doc, r.table.Name, fk.Name, "foreign key "+fk.Name+" references "+fk.Table+" ("+strings.Join(fk.References, ", ")+"), which is not the primary key of "+fk.Table))
 			}
 		}
 	}

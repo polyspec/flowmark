@@ -170,7 +170,7 @@ func documentParseCases() []docCase {
 		docReject("10#list-rows: a bare value with an invisible character", RuleBlock, 2, itemsOf("- [ ] T1 Plan done:false note:a b")),
 		docReject("10#list-rows: a bare value that is empty", RuleBlock, 2, itemsOf("- [ ] T1 Plan done:false note:")),
 		docReject("10#list-rows: a quoted value with a bad escape", RuleBlock, 2, itemsOf(`- [ ] T1 Plan done:false note:"a\x"`)),
-		docReject("10#list-rows: a quoted value that begins with an invisible character", RuleBlock, 2, itemsOf(`- [ ] T1 Plan done:false note:" a"`)),
+		docAccept("10#list-rows: a quoted value that begins with an invisible character", itemsOf(`- [ ] T1 Plan done:false note:" a"`)),
 		docReject("10#foreign-keys-as-links: a foreign key written as plain text", RuleBlock, 2, itemsOf("- [ ] T1 Plan owner:P1 done:false")),
 		docReject("10#list-rows: an empty title", RuleBlock, 2, itemsOf("- [ ] T1 done:false")),
 		docReject("10#list-rows: a key with a dash before an underscore", RuleBlock, 2, itemsOf("- [ ] T-_1 Plan done:false")),
@@ -1073,8 +1073,9 @@ func writeCases() []writeCase {
 		{name: "10#foreign-keys-as-links: a foreign key that names no row", rows: []*Row{
 			item("T1", "Plan", "waiting", "1", map[string]string{"done": "false", "owner": "P9"})},
 			rule: RuleForeignKey},
-		{name: "10#list-rows: a field with a trailing space", rows: []*Row{
-			item("T1", "Plan", "waiting", "1", withNote("a "))}, rule: RuleConstraint},
+		{name: "10#list-rows: a field with a trailing space is quoted", rows: []*Row{
+			item("T1", "Plan", "waiting", "1", withNote("a "))},
+			out: "# items\n- [ ] T1 Plan done:false note:\"a \"\n"},
 		{name: "10#list-rows: a field with a line feed", rows: []*Row{
 			item("T1", "Plan", "waiting", "1", withNote("a\nb"))}, rule: RuleConstraint},
 		{name: "10#readable-values: a temporal field assigned now is not of its type", rows: []*Row{

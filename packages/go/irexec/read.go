@@ -2,6 +2,7 @@ package irexec
 
 import (
 	"encoding/json"
+	"github.com/polyspec/orm/packages/go/engine/runtimemodel"
 	"math/big"
 	"math/rand/v2"
 	"slices"
@@ -18,6 +19,8 @@ type reader struct {
 	e  *Executor
 	c  *Corpus
 	cl *call
+	// inSets holds the parameters of each in predicate of the request, read once.
+	inSets map[inKey]*inSet
 }
 
 // read answers a read request: one, all, count, group_count, sum, avg or paginate.
@@ -83,10 +86,10 @@ func (r *reader) prepare(q *ir.Query) *Error {
 		switch {
 		case x.ForceIdx != "":
 			err = errf(codeCapability, "force_index: indexes are derived, not named, on a corpus")
-		case x.Lock == "update_nowait" || x.Lock == "share_nowait":
-			err = errf(codeCapability, "lock %s is not supported on a corpus", x.Lock)
+		case usesFulltext(x.Where) || usesFulltext(x.On):
+			err = errf(codeOpNotAllowed, "fulltext: a corpus has no full-text index")
 		}
-		tables[r.e.model.Entities[x.Entity].Table] = true
+		tables[r.model().Entities[x.Entity].Table] = true
 	})
 	if err != nil {
 		return err
@@ -102,6 +105,23 @@ func (r *reader) prepare(q *ir.Query) *Error {
 		}
 	}
 	return nil
+}
+
+// usesFulltext reports whether g or a group in it holds a fulltext predicate, whose
+// refusal cannot wait for a row to evaluate it on.
+func usesFulltext(g *ir.Group) bool {
+	if g == nil {
+		return false
+	}
+	for _, it := range g.Items {
+		if it.Group != nil && usesFulltext(it.Group) {
+			return true
+		}
+		if it.Pred != nil && (it.Pred.Op == "fulltext" || it.Pred.Op == "fulltext_boolean") {
+			return true
+		}
+	}
+	return false
 }
 
 // walkQueries calls f on q and on every query in it: joins, relations, and the
@@ -154,7 +174,7 @@ func (r *reader) statement(q *ir.Query, outer *frame, deleted bool, keep func(*r
 	}
 	var envs []*env
 	for _, x := range base {
-		if s.ent.SoftDelete != "" {
+		if s.ent.SoftDelete != "" && !r.cl.seed {
 			v, err := r.c.value(x, s.ent.SoftDelete)
 			if err != nil {
 				return nil, nil, err
@@ -319,24 +339,43 @@ func compareKeys(a, b sortKey) int {
 	return compare(a.v, b.v)
 }
 
-// order sorts envs by the order items of s, stably: rows that every item ties
+// scopedOrder is an order item with the scope whose row it reads.
+type scopedOrder struct {
+	scope *scope
+	order ir.Order
+}
+
+// orderItems returns the order items of s and then those of its joins in their order, as a statement renders them.
+func orderItems(s *scope) []scopedOrder {
+	items := make([]scopedOrder, 0, len(s.q.Order))
+	for _, o := range s.q.Order {
+		items = append(items, scopedOrder{s, o})
+	}
+	for _, j := range s.joins {
+		items = append(items, orderItems(j.sc)...)
+	}
+	return items
+}
+
+// order sorts envs by the order items of s and of its joins, stably: rows that every item ties
 // stay in storage order. A column sorts by its type, a column function by its
 // result, and random by a random number that is not seeded. NULL sorts before every
 // value ascending and after every value descending.
 func (r *reader) order(s *scope, envs []*env) ([]*env, *Error) {
-	items := s.q.Order
+	items := orderItems(s)
 	if len(items) == 0 {
 		return envs, nil
 	}
 	keys := make(map[*env][]sortKey, len(envs))
 	for _, ev := range envs {
 		ks := make([]sortKey, len(items))
-		for i, o := range items {
+		for i, item := range items {
+			o := item.order
 			if o.Random {
 				ks[i] = sortKey{random: rand.Float64()}
 				continue
 			}
-			v, t, err := r.col(s, ev, o.Column)
+			v, t, err := r.col(item.scope, ev, o.Column)
 			if err != nil {
 				return nil, err
 			}
@@ -360,7 +399,8 @@ func (r *reader) order(s *scope, envs []*env) ([]*env, *Error) {
 	out := slices.Clone(envs)
 	sort.SliceStable(out, func(a, b int) bool {
 		ka, kb := keys[out[a]], keys[out[b]]
-		for i, o := range items {
+		for i, item := range items {
+			o := item.order
 			var c int
 			if o.Random {
 				switch {
@@ -1051,4 +1091,16 @@ func (r *reader) subScalar(sub *ir.Sub, fr *frame) (cell, dbspec.Type, *Error) {
 		return cell{null: true}, t, nil
 	}
 	return vals[0], t, nil
+}
+
+// model is the runtime model the request reads: a face's load and the difference of a SQL statement read the tables a set
+// does not own too.
+func (r *reader) model() *runtimemodel.Model {
+	if r.cl.stated {
+		return r.e.stated
+	}
+	if r.cl.seed {
+		return r.e.loading
+	}
+	return r.e.model
 }

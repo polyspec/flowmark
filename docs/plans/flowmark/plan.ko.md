@@ -96,10 +96,10 @@ flowmark = the markdown database engine (one Go binary)
 
 ### 6. Constraints와 capability table (`50-constraints.md`, `60-dialect.md`)
 
-- Strict parse, type/PK/UNIQUE/FK(exact byte match; 대소문자 무시 시 key 유일), CHECK. soft-delete된 row는 unique key를 계속 차지하고 FK를 계속 만족한다(SQL 동등성 — soft delete가 가짜 판정을 일으키지 않게 명시). `aes`, `aes_version`, `blind_index`는 corpus에서 schema 오류다: key는 orm client를 떠나지 않는다(Revision 3).
+- Strict parse, type/PK/UNIQUE/FK(exact byte match; 대소문자 무시 시 key 유일), CHECK. soft-delete된 row는 unique key를 계속 차지하고 FK를 계속 만족한다(SQL 동등성 — soft delete가 가짜 판정을 일으키지 않게 명시). `aes`, `aes_version`, `blind_index`는 corpus에 선언한다: client가 SQL과 같이 암호화하고, 엔진은 주입으로 key를 받는다(spec 30 Key).
 - **state machine은 dbspec-level manifest setting**(전이, terminal, 필수 column, 그리고 — Revision 3 — `initial`, `history`, `limit`)이다. 모든 엔진 전이는 이력 행을 쓰고, 엔진 밖에서 바뀐 상태는 이력 빈틈이나 끊긴 사슬로 보고하며 repair command가 있다. 응용 schema는 완료된 항목을 `supersedes` link로 대체한다. 엔진은 WIP 규칙을 강제하지 않는다 — 상대 gate는 제거하고 사용자의 규칙은 작업 규칙으로 남는다.
 - **사람의 write는 DB의 writer 독점 전제를 무효화한다; 각 기능은 그에 대한 판정을 갖는다**: FK action은 **restrict만 허용**(`cascade`/`set_null`은 catalog를 읽을 때 거부 — 엔진을 우회하는 writer에게 구현 불가능하므로); `audit`와 `immutable`은 corpus에서 schema 오류이며 상태 이력이 대신한다(Revision 3); 모든 non-null column은 쓰며 엔진이 insert에서 기본값을 쓴다.
-- **Capability table**(`60-dialect.md`)은 IR executor wire 아래의 통합 계약이다: `update|share` lock은 문서화된 no-op, `*_nowait`는 거부; `isolation`/`timeoutMs`는 `CAPABILITY_UNSUPPORTED`, `fulltext`는 `OPERATOR_NOT_ALLOWED`; `on_duplicate` insert는 충돌 key를 정확히 하나 가진다(orm의 규칙); 바뀐 대상은 `WRITE_CONFLICT`로 실패; `getQuery`, statement event, `subscribe`, `force_index`는 `CAPABILITY_UNSUPPORTED`; savepoint는 중첩 stage.
+- **Capability table**(`60-dialect.md`)은 IR executor wire 아래의 통합 계약이다: `update|share` lock과 `*_nowait`는 문서화된 no-op; `isolation`은 모든 level을 받아들이고(transaction이 corpus lock을 쥔다); `timeoutMs`는 `CAPABILITY_UNSUPPORTED`, `fulltext`는 `OPERATOR_NOT_ALLOWED`; `on_duplicate` insert는 충돌 key를 정확히 하나 가진다(orm의 규칙); 바뀐 대상은 `WRITE_CONFLICT`로 실패; `getQuery`, statement event, `subscribe`, `force_index`는 `CAPABILITY_UNSUPPORTED`; savepoint는 중첩 stage.
 - markdown plan lifecycle(orm의 dbplan/apply/recover 장치)은 **v1 범위 밖**: v1은 corpus 생성과 additive column 추가를 지원하고, markdown corpus의 dbplan chain은 거부한다(80-migration이 범위와 이유를 서술).
 
 ### 7. Sync와 adapter (옵션, `70-sync.md`)
@@ -130,6 +130,8 @@ flowmark = the markdown database engine (one Go binary)
 5. 이 설계 계획(revision 2)과 Korean twin — 감사를 접은 상태로 commit.
 
 **T1b — spec 문서** (다음 session; EN/KO 쌍, 문서당 commit 1개, twin stamp): `00-overview`, `10-canonical-format`(§2), `20-document-model`(§3), `30-schema`(§4), `40-ops`(§5), `50-constraints`(§6), 그리고 skeleton `60-dialect`(capability table을 전체 내용으로), `70-sync`, `80-migration`, `90-conformance`, 전체 내용 `100-checklist`, `110-open-questions`. 문서별 완료 기준: 모든 판정이 근거를 동반한 명제로 나타난다 (prose 분량이 아니라 결정 수).
+
+**판정: orm은 SQL로 corpus에 닿는다.** orm의 markdown 연결은 server가 문장에 답하는 SQLite 연결이므로([SQL statements](../../spec/40-ops.md#sql-statements)) orm의 recipe는 다른 database처럼 flowmark에서 실행되고 runtime은 driver 하나만 이식한다. 이 판정은 요청에 SQL text가 없다는 이전 판정을 대체한다. 이전 판정은 runtime마다 두 번째 executor client를 이식하게 했고 대부분의 recipe를 빠뜨렸다. IR은 엔진 자신의 face와 문장의 차이를 쓰는 writer로 남는다. 성능은 database 수준이 아니어도 되지만 동작은 database 수준이어야 한다.
 
 **T9 conformance 계약 (지금 확정)**: markdown vector는 corpus-before + IR request + 기대 corpus-after / 기대 rows이며 Go executor에 대해 실행한다. SQL/binds 비교는 적용되지 않는다(SQL이 없으므로). 다른 client가 executor를 port할 때 교차 비교가 시작된다. (Revision 3: vector는 flowmark 엔진에 대해 실행하고, orm의 executor conformance는 flowmark build를 고정한다.)
 

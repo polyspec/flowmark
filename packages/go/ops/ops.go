@@ -25,6 +25,7 @@ import (
 // The codes this package answers with itself (orm errors.yaml).
 const (
 	codeConfig        = "CONFIG"
+	codeIRInvalid     = "IR_INVALID"
 	codeNoRows        = "NO_ROWS"
 	codeEntityUnknown = "ENTITY_UNKNOWN"
 	codeSchemaInvalid = "SCHEMA_INVALID"
@@ -65,6 +66,7 @@ func Failure(err error) (code, msg string) {
 var operations = map[string]struct{ required, optional []string }{
 	"schema":     {},
 	"rows":       {required: []string{"table"}},
+	"rows.load":  {required: []string{"table", "rows"}},
 	"row.get":    {required: []string{"table", "key"}},
 	"row.insert": {required: []string{"table", "values"}},
 	"row.update": {required: []string{"table", "key", "values"}},
@@ -96,6 +98,7 @@ type Request struct {
 	Table     string
 	Key       json.RawMessage
 	Values    map[string]json.RawMessage
+	Rows      []map[string]json.RawMessage
 	Position  json.RawMessage
 	// Parent is the value given for the hierarchy column, nil when the member is absent; JSON null moves the row to
 	// the top.
@@ -139,6 +142,11 @@ func Parse(op string, members map[string]json.RawMessage) (*Request, error) {
 	if raw, ok := members["values"]; ok {
 		if json.Unmarshal(raw, &r.Values) != nil || r.Values == nil {
 			return nil, errf(codeConfig, "the member values of %s is not an object of column values: %s", op, raw)
+		}
+	}
+	if raw, ok := members["rows"]; ok {
+		if json.Unmarshal(raw, &r.Rows) != nil || r.Rows == nil {
+			return nil, errf(codeConfig, "the member rows of %s is not an array of objects of column values: %s", op, raw)
 		}
 	}
 	return r, nil
@@ -273,6 +281,11 @@ type rowAnswer struct {
 	Row *irexec.Row `json:"row"`
 }
 
+// loadAnswer is the answer of rows.load.
+type loadAnswer struct {
+	Affected int64 `json:"affected"`
+}
+
 type writeAnswer struct {
 	Affected int64         `json:"affected"`
 	Keys     []any         `json:"keys"`
@@ -290,6 +303,8 @@ func (c *Corpus) run(ctx context.Context, s *writepath.Session, tb *catalog.Tabl
 			return c.exec(ctx, s, m.request("all", nil))
 		}
 		return c.view(ctx, s, tb, r.Key)
+	case "rows.load":
+		return c.load(ctx, s, tb, r.Rows)
 	case "row.get":
 		a, err := c.exec(ctx, s, m.request("one", m.byKey(tb, r.Key)))
 		if err != nil {
@@ -300,9 +315,17 @@ func (c *Corpus) run(ctx context.Context, s *writepath.Session, tb *catalog.Tabl
 		}
 		return rowAnswer{Row: a.Rows[0]}, nil
 	case "row.insert":
-		return c.write(ctx, s, tb, nil, m.request("insert", map[string]any{"set": m.sets(tb, r.Values)}))
+		values, err := c.sealed(tb, true, r.Values)
+		if err != nil {
+			return nil, err
+		}
+		return c.write(ctx, s, tb, nil, m.request("insert", map[string]any{"set": m.sets(tb, values)}))
 	case "row.update":
-		return c.write(ctx, s, tb, r.Key, m.request("update", m.update(tb, r.Key, m.sets(tb, r.Values))))
+		values, err := c.sealed(tb, false, r.Values)
+		if err != nil {
+			return nil, err
+		}
+		return c.write(ctx, s, tb, r.Key, m.request("update", m.update(tb, r.Key, m.sets(tb, values))))
 	case "row.delete":
 		return c.write(ctx, s, tb, r.Key, m.request("delete", m.byKey(tb, r.Key)))
 	case "row.move":
@@ -334,9 +357,69 @@ func (c *Corpus) run(ctx context.Context, s *writepath.Session, tb *catalog.Tabl
 			return nil, errf(codeConfig, "transition: values assigns the state column %s, which the member state gives", tb.StateMachine.Column)
 		}
 		values[tb.StateMachine.Column] = state
+		values, err = c.sealed(tb, false, values)
+		if err != nil {
+			return nil, err
+		}
 		return c.write(ctx, s, tb, r.Key, m.request("update", m.update(tb, r.Key, m.sets(tb, values))))
 	}
 	return nil, errf(codeInternal, "the operation %s has no runner", r.Operation)
+}
+
+// load inserts rows in their stored form, keys included, as one insert for each run of rows that assign the same
+// columns, with load when it assigns the identity column (orm PRT-26, spec 40 The faces), and answers how many it wrote.
+func (c *Corpus) load(ctx context.Context, s *writepath.Session, tb *catalog.Table, rows []map[string]json.RawMessage) (any, error) {
+	var total int64
+	for start := 0; start < len(rows); {
+		m := message{hash: c.cat.ManifestHash, table: tb.Name, seed: true}
+		end := start + 1
+		for end < len(rows) && sameColumns(rows[start], rows[end]) {
+			end++
+		}
+		if len(rows[start]) == 0 {
+			return nil, errf(codeConfig, "rows.load: row %d of %s assigns no column", start, tb.Name)
+		}
+		set := m.sets(tb, rows[start])
+		more := make([][]int, 0, end-start-1)
+		for _, row := range rows[start+1 : end] {
+			ps := make([]int, len(set))
+			for i, a := range set {
+				ps[i] = m.param(row[a["column"].(string)])
+			}
+			more = append(more, ps)
+		}
+		body := map[string]any{"set": set}
+		// A load takes the identity column; a row that omits it is an insert, which allocates its key.
+		if slices.ContainsFunc(tb.Columns, func(col dbspec.Column) bool {
+			_, assigned := rows[start][col.Name]
+			return col.Identity && assigned
+		}) {
+			body["load"] = true
+		}
+		if len(more) > 0 {
+			body["rows"] = more
+		}
+		a, err := c.exec(ctx, s, m.request("insert", body))
+		if err != nil {
+			return nil, err
+		}
+		total += a.Affected
+		start = end
+	}
+	return loadAnswer{Affected: total}, nil
+}
+
+// sameColumns reports whether two rows assign the same columns.
+func sameColumns(a, b map[string]json.RawMessage) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for name := range a {
+		if _, ok := b[name]; !ok {
+			return false
+		}
+	}
+	return true
 }
 
 // write runs the write msg and answers it with the table's rows read after its commit. A write of the row named by key
@@ -381,6 +464,8 @@ type message struct {
 	hash   string
 	table  string
 	params []json.RawMessage
+	// seed marks the insert of rows.load, which also takes the rows of an external table (spec 30 External documents).
+	seed bool
 }
 
 // param adds a parameter and returns its index.
@@ -425,8 +510,32 @@ func (m *message) sets(tb *catalog.Table, values map[string]json.RawMessage) []m
 
 // byKey is the where of the row whose primary key is key.
 func (m *message) byKey(tb *catalog.Table, key json.RawMessage) map[string]any {
+	if len(tb.KeyParts) > 0 {
+		var text string
+		if err := json.Unmarshal(key, &text); err == nil {
+			values := catalog.SplitKey(text)
+			if len(values) == len(tb.KeyParts) {
+				items := make([]any, len(values))
+				for i, name := range tb.KeyParts {
+					items[i] = map[string]any{"pred": map[string]any{"column": name, "op": "eq", "p": m.param(partValue(tb, name, values[i]))}}
+				}
+				return map[string]any{"where": map[string]any{"items": items}}
+			}
+		}
+	}
 	pred := map[string]any{"column": tb.Key, "op": "eq", "p": m.param(key)}
 	return map[string]any{"where": map[string]any{"items": []any{map[string]any{"pred": pred}}}}
+}
+
+// partValue is the JSON value of one value of a composite key, by the type of its column.
+func partValue(tb *catalog.Table, column, text string) json.RawMessage {
+	c, _ := tb.ColumnNamed(column)
+	switch c.Type.Kind {
+	case dbspec.TypeI16, dbspec.TypeI32, dbspec.TypeI64, dbspec.TypeBool:
+		return json.RawMessage(text)
+	}
+	quoted, _ := json.Marshal(text)
+	return quoted
 }
 
 // update is the body of an update of the row whose key is key, assigning set.
@@ -452,7 +561,11 @@ func (m *message) request(kind string, body map[string]any) []byte {
 	req["entity"] = m.table
 	req["n_params"] = len(params)
 	now := time.Now().UTC().Truncate(time.Microsecond).Format("2006-01-02 15:04:05.000000")
-	b, err := json.Marshal(map[string]any{"ir_version": ir.Version, "manifest_hash": m.hash, "request": req, "params": params, "now": now})
+	wire := map[string]any{"ir_version": ir.Version, "manifest_hash": m.hash, "request": req, "params": params, "now": now}
+	if m.seed {
+		wire["seed"] = true
+	}
+	b, err := json.Marshal(wire)
 	if err != nil {
 		// Every part is a map, a string, a number or a parameter that a face decoded as JSON.
 		panic("ops: the request message does not marshal: " + err.Error())

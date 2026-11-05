@@ -167,6 +167,7 @@ The order of the commit protocol is normative.
 | --- | --- | --- |
 | `schema` | — | `{"manifest_hash", "tables"}`: the catalog — each table with its storage, key, `title`, `body`, `order`, hierarchy column, `markdown` columns, columns, foreign keys, unique keys and state machine |
 | `rows` | `table` | `{"rows"}`: every row of the table in storage order, as an `all` request without `columns` answers it |
+| `rows.load` | `table`, `rows` | `{"affected"}` |
 | `row.get` | `table`, `key` | `{"row"}`: the row whose key is `key` |
 | `row.insert` | `table`, `values` | `{"affected", "keys", "rows"}` |
 | `row.update` | `table`, `key`, `values` | `{"affected", "keys", "rows"}` |
@@ -175,6 +176,10 @@ The order of the commit protocol is normative.
 | `transition` | `table`, `key`, `state`, optional `values` | `{"affected", "keys", "rows"}` |
 | `views` | optional `key` | `{"rows"}` of the view table, or `{"view", "rows"}` of the view `key` |
 
+- `rows.load` writes rows in their stored form, keys included, as a database's bulk load does: a run of rows that assign the
+  same columns is one `insert`, with orm's `load` (orm `PRT-26`) when it assigns the identity column, so a row keeps its key and
+  a later insert allocates after the largest. It applies no codec or key, and each insert is checked and committed as any
+  request of its kind.
 - `row.insert` is an `insert` assigning `values`; `row.update` an `update` of the row whose key is
   `key` assigning `values`; `row.delete` a `delete` of that row. `row.move` is an `update` of that row
   assigning `position` to the table's `order` column and, when `parent` is given, `parent` to its
@@ -207,7 +212,7 @@ The order of the commit protocol is normative.
 - A failure is answered `{"code", "error"}`: the face name of the [failure vocabulary](#failure-vocabulary),
   which is the orm code for every code the vocabulary does not list, and the message.
 - **The CLI.** Each operation is a command: `flowmark schema <corpus>`, `rows <corpus> <table>`,
-  `row.get <corpus> <table> <key>`, `row.insert <corpus> <table> [assignment…]`,
+  `rows.load <corpus> <table>` with the rows as one JSON array on standard input, `row.get <corpus> <table> <key>`, `row.insert <corpus> <table> [assignment…]`,
   `row.update <corpus> <table> <key> [assignment…]`, `row.move <corpus> <table> <key> <position> [<parent>]`,
   `row.delete <corpus> <table> <key>`, `transition <corpus> <table> <key> <state> [assignment…]` and
   `views <corpus> [<key>]`.
@@ -252,6 +257,56 @@ The order of the commit protocol is normative.
   error, which the host logs. The sidecar pushes no change event: a watch of the corpus driven by
   the operating system's notification belongs to the long-lived corpus of `T12.5-2`, and a polling
   watch is not a substitute.
+
+## SQL statements
+
+The control message `{"op": "statement", "sql", "params"}` runs one statement of SQLite's dialect on the corpus, and its
+answer is that of a SQLite connection: `columns`, `rows`, `affected`, `last_insert_id` and `more`. This is how orm reaches a
+corpus: an orm markdown connection is a SQLite connection whose statements this server answers, so every plan, codec and
+utility of orm's SQLite dialect holds on a corpus, and a client has only this driver to implement.
+
+- **What runs them.** The corpus is materialized into an in-memory SQLite database: the schema of its documents and of
+  `dbspec/statements.json`, then its rows. The statement runs there. The difference of its rows goes back through the
+  executor as one write per table, so the corpus's rules still judge it and the commit protocol writes it; SQLite has
+  already judged NOT NULL and the foreign keys, its triggers wrote their rows, and a codec does not judge what a statement
+  stores. The database stands between statements under the lock while the corpus does not differ from it.
+- **Schema statements.** A schema statement is its own transaction: an open transaction commits first and a new one goes
+  on after it. A statement that changes the schema is appended to `dbspec/statements.json`, and the tables it changed
+  are written again under their new columns; a document keeps its text. `CREATE ... IF NOT EXISTS` and `DROP ... IF
+  EXISTS` that find what they state change nothing and take no lock.
+- **Tables.** A table takes its columns, its declared types and its key from its statement. A primary key that SQLite lets
+  hold NULL names no row, so such a table keys by its rowid, as does a table with no primary key.
+- **Assigned columns.** A `key_prefix` key and an `order` position are the corpus's to assign, so the schema of the
+  statements lets each hold NULL, as SQLite's `INTEGER PRIMARY KEY` does. An insert that leaves one out, or gives it NULL,
+  is given the next key of the prefix ([document model](20-document-model.md#keys)) or the next position under its parent,
+  in the order its rows were inserted, and a `RETURNING` of the key reads the key the row was given. An `ON CONFLICT` meets
+  a key byte for byte, as SQLite's does, and a key equal to another only without regard to case is `DUPLICATE_KEY`: the
+  rule of keys judges every write.
+- **Transactions.** `BEGIN IMMEDIATE` and `BEGIN EXCLUSIVE` take the lock at once. A plain `BEGIN` takes no lock: its first
+  read fixes the corpus it reads, and its first write takes the lock. A wait that ends is `CANCELED` ending in
+  `(SQLITE_BUSY)`, and a write after a commit newer than its first read is `CANCELED` ending in `(SQLITE_BUSY_SNAPSHOT)`;
+  both leave the transaction open for its `ROLLBACK`. A deferred failure of a foreign key fails at `COMMIT` and leaves the
+  transaction open, as on SQLite.
+- **Reads.** A read that finds the lock held by another session reads what is committed, on a database of its own, and never
+  waits for a writer: the behaviour of SQLite in WAL mode.
+- **Session settings.** `foreign_keys`, `query_only`, `busy_timeout` and `locking_mode` are the session's. Under
+  `locking_mode = EXCLUSIVE` the lock its next transaction takes stays after that transaction, until the mode is `NORMAL`
+  again. Any other `PRAGMA` setting holds for the session's own statements.
+- **A corpus the process may only read.** The lock cannot be written, so a write is `READ_ONLY` and a read needs no lock.
+- **Rows.** An answer holds at most 1000 rows or 1 MiB; with `more` true, `{"op": "fetch"}` answers the next batch and
+  `{"op": "close"}` ends them. A closed connection interrupts its statement, so a result takes the memory of what its client
+  reads.
+- **Values.** A value of a row is a JSON number, string or null. `{"bytes": base64}` is a blob, `{"text": base64}` a text that
+  is not UTF-8, and `{"float": "+Inf"}` or `{"float": "-Inf"}` an infinity, which JSON cannot hold. A parameter takes the same
+  forms, so a value read from a row binds back unchanged; any other object, and an array, is `DRIVER`. A failure carries
+  `result_code`, SQLite's result code, when it has one.
+
+`flowmark serve --synchronous off` commits without waiting for the disk, for a corpus that is disposable, as a test
+database is; `on`, the default, waits. Grounding: `F_FULLFSYNC` takes tens of milliseconds, and a test seeds thousands of rows.
+
+Grounding: SQLite's dialect is a language every orm runtime already speaks; a second query path on a corpus would make each
+runtime port a second executor, and each would drift. The engine keeps its IR for its own faces (CLI, MCP, sidecar) and as
+the writer of the difference.
 
 ## The lock
 

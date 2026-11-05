@@ -123,8 +123,9 @@ func TestReadRejects(t *testing.T) {
 		{"60#surfaces: avg of an unknown column", f.msg("avg", "people", map[string]any{"agg": "nope"}), "COLUMN_UNKNOWN"},
 		{"60#surfaces: group_count needs group_by", f.msg("group_count", "items", nil), "IR_INVALID"},
 		{"60#surfaces: paginate with a limit of no row is invalid", f.msg("paginate", "items", map[string]any{"limit": map[string]any{"offset": 0, "count": 0}}), "IR_INVALID"},
-		{"60#surfaces: lock update_nowait is unsupported", f.msg("one", "items", map[string]any{"lock": "update_nowait"}), "CAPABILITY_UNSUPPORTED"},
-		{"60#surfaces: lock share_nowait is unsupported", f.msg("all", "items", map[string]any{"lock": "share_nowait"}), "CAPABILITY_UNSUPPORTED"},
+		{"60#surfaces: fulltext is not allowed", f.msg("all", "items", map[string]any{"where": where(map[string]any{"pred": map[string]any{"cols": []string{"title"}, "op": "fulltext", "p": 0}})}, "x"), "OPERATOR_NOT_ALLOWED"},
+		{"60#surfaces: fulltext_boolean is not allowed", f.msg("all", "items", map[string]any{"where": where(map[string]any{"pred": map[string]any{"cols": []string{"title"}, "op": "fulltext_boolean", "p": 0}})}, "x"), "OPERATOR_NOT_ALLOWED"},
+		{"60#surfaces: fulltext in a nested group is not allowed", f.msg("count", "items", map[string]any{"where": where(map[string]any{"group": where(map[string]any{"pred": map[string]any{"cols": []string{"title"}, "op": "fulltext", "p": 0}})})}, "x"), "OPERATOR_NOT_ALLOWED"},
 		{"60#surfaces: force_index is unsupported", f.msg("all", "items", map[string]any{"force_index": "ix_items_owner"}), "CAPABILITY_UNSUPPORTED"},
 		{"60#surfaces: force_index of an undeclared index is unknown", f.msg("all", "items", map[string]any{"force_index": "ix_nope"}), "INDEX_UNKNOWN"},
 		{"60#surfaces: an unknown entity", f.msg("all", "nope", nil), "ENTITY_UNKNOWN"},
@@ -137,6 +138,15 @@ func TestReadRejects(t *testing.T) {
 	}
 	for _, c := range cases {
 		f.sub(t, c.name, func(f *fixture) { f.fails(c.msg, c.code) })
+	}
+}
+
+// TestNowaitLocks pins that a nowait lock is a no-op as the other locks are: a transaction already holds the corpus lock,
+// so it waits for no row (spec 60 Surfaces).
+func TestNowaitLocks(t *testing.T) {
+	f := baseFixture(t)
+	for _, lock := range []string{"update_nowait", "share_nowait"} {
+		f.ok(f.msg("all", "items", map[string]any{"lock": lock}))
 	}
 }
 
@@ -227,6 +237,39 @@ func TestWhere(t *testing.T) {
 // the ASCII letters without regard to case and every other character by code point,
 // contains_binary every character by code point; a NULL column or parameter is
 // unknown, and %, _ and \ in the parameter are literal.
+// TestInList pins the three values of in and not_in, read from a set of the parameters so that a long list costs
+// its length once and not once for each row.
+func TestInList(t *testing.T) {
+	f := baseFixture(t)
+	in := func(op string, params ...any) []string {
+		ps := make([]int, len(params))
+		for i := range params {
+			ps[i] = i
+		}
+		return rowIDs(t, f.ok(f.msg("all", "items", map[string]any{"columns": none, "where": where(pred("owner", op, map[string]any{"ps": ps}))}, params...)))
+	}
+	for _, c := range []struct {
+		name   string
+		op     string
+		params []any
+		want   []string
+	}{
+		{"in holds the row that equals a parameter", "in", []any{"P1", "P9"}, []string{"T1"}},
+		{"a repeated parameter holds its row once", "in", []any{"P1", "P1"}, []string{"T1"}},
+		{"a NULL parameter does not hold a NULL cell", "in", []any{nil}, []string{}},
+		{"a NULL parameter leaves the match of another", "in", []any{"P1", nil}, []string{"T1"}},
+		{"not_in holds no row with a NULL cell", "not_in", []any{"P9"}, []string{"T1"}},
+		{"not_in with a NULL parameter holds nothing", "not_in", []any{"P9", nil}, []string{}},
+		{"not_in excludes the row that equals a parameter", "not_in", []any{"P1"}, []string{}},
+	} {
+		f.sub(t, "60#surfaces: "+c.name, func(f *fixture) {
+			if got := in(c.op, c.params...); !slices.Equal(got, c.want) {
+				f.t.Fatalf("%s %v answered %v, want %v", c.op, c.params, got, c.want)
+			}
+		})
+	}
+}
+
 func TestContains(t *testing.T) {
 	docs := baseDocs()
 	docs["people.flowmark.md"] = lines(
@@ -313,6 +356,32 @@ func TestJoins(t *testing.T) {
 		ids := rowIDs(t, res)
 		if !slices.Equal(ids, []string{"N1", "N3"}) {
 			f.t.Fatalf("ids %v", ids)
+		}
+	})
+	f.sub(t, "60#surfaces: a join's order items follow the order items of its parent", func(f *fixture) {
+		ordered := func(joined map[string]any, root ...map[string]any) []string {
+			q := map[string]any{"columns": none, "joins": []any{map[string]any{"rel": "own", "kind": "left", "left": "owner", "right": "id",
+				"query": map[string]any{"entity": "people", "columns": none, "order": []any{joined}}}}}
+			if len(root) > 0 {
+				q["order"] = root
+			}
+			return rowIDs(t, f.ok(f.msg("all", "items", q)))
+		}
+		stored := f.ids("items", nil)
+		if len(stored) < 2 || stored[0] != "T1" {
+			f.t.Fatalf("the fixture must hold T1 and a row with no owner first: %v", stored)
+		}
+		desc := ordered(map[string]any{"column": "id", "desc": true})
+		if desc[0] != "T1" {
+			f.t.Fatalf("descending, the row with an owner comes first: %v", desc)
+		}
+		asc := ordered(map[string]any{"column": "id"})
+		if asc[len(asc)-1] != "T1" {
+			f.t.Fatalf("ascending, NULL sorts before every value: %v", asc)
+		}
+		root := ordered(map[string]any{"column": "id"}, map[string]any{"column": "id"})
+		if !slices.Equal(root, stored) {
+			f.t.Fatalf("the order of the parent comes first: %v", root)
 		}
 	})
 	f.sub(t, "60#surfaces: a join kind other than inner or left is invalid", func(f *fixture) {

@@ -1,6 +1,7 @@
 package irexec
 
 import (
+	"encoding/json"
 	"fmt"
 	"maps"
 	"math/big"
@@ -66,18 +67,28 @@ func (e *Executor) write(c *Corpus, cl *call) (*Result, *Error) {
 		return nil, err
 	}
 	ent := e.model.Entities[req.Entity]
+	if cl.seed {
+		ent = e.loading.Entities[req.Entity]
+		if cl.stated {
+			ent = e.stated.Entities[req.Entity]
+		}
+	}
 	tb, _ := c.cat.Table(ent.Table)
+	if cl.stated && tb.Audit != nil {
+		// The triggers of the corpus's database wrote the audit: its rows are in the same difference.
+		plain := *tb
+		plain.Audit = nil
+		tb = &plain
+	}
 	w := &writer{r: r, c: c, next: c.clone(), tb: tb, ent: ent, touched: map[string]bool{}, answer: &Answer{Kind: req.Kind}}
 	var err *Error
-	switch req.Kind {
-	case "insert":
-		err = w.insert()
-	case "update":
-		err = w.update()
-	case "delete":
-		err = w.delete()
-	case "restore":
-		err = w.restore()
+	switch {
+	case cl.stated && req.Kind == "update" && len(cl.updates) > 0:
+		err = w.statedUpdate()
+	case cl.stated && req.Kind == "delete" && len(cl.keys) > 0:
+		err = w.statedDelete()
+	default:
+		err = w.request()
 	}
 	if err != nil {
 		return nil, err
@@ -87,6 +98,119 @@ func (e *Executor) write(c *Corpus, cl *call) (*Result, *Error) {
 		return nil, err
 	}
 	return &Result{Answer: w.answer, Post: post}, nil
+}
+
+// request runs the write its request states.
+func (w *writer) request() *Error {
+	var err *Error
+	switch w.r.cl.req.Kind {
+	case "insert":
+		err = w.insert()
+	case "update":
+		err = w.update()
+	case "delete":
+		err = w.delete()
+	case "restore":
+		err = w.restore()
+	}
+	return err
+}
+
+// statedRows returns a function that finds the row of the next corpus that a key of a difference names. SQLite judged the
+// statement, so a row the corpus does not hold is a fault of the engine.
+func (w *writer) statedRows() func(ps []int) (*rec, *Error) {
+	byKey := make(map[string]*rec, len(w.c.recs[w.tb.Name]))
+	for _, x := range w.c.recs[w.tb.Name] {
+		byKey[x.row.Key] = x
+	}
+	names := w.tb.KeyParts
+	if len(names) == 0 {
+		names = []string{w.tb.Key}
+	}
+	return func(ps []int) (*rec, *Error) {
+		values := make([]string, len(ps))
+		for i, p := range ps {
+			col, _ := w.tb.ColumnNamed(names[i])
+			if v, ok := decodeParam(w.r.cl.params[p], col.Type); ok {
+				values[i] = v.text
+			} else {
+				values[i] = rawParam(w.r.cl.params[p])
+			}
+		}
+		key := values[0]
+		if len(w.tb.KeyParts) > 0 {
+			key = catalog.JoinKey(values)
+		}
+		x := byKey[key]
+		if x == nil {
+			return nil, errf(codeInternal, "the difference of a statement names the row %s of %s, which the corpus does not hold", key, w.tb.Name)
+		}
+		return w.nextOf(x), nil
+	}
+}
+
+// statedDelete deletes the rows of a difference, all at once: SQLite judged their foreign keys, and the rows a cascade
+// took are in the same difference.
+func (w *writer) statedDelete() *Error {
+	find := w.statedRows()
+	rows := make([]*rec, len(w.r.cl.keys))
+	for i, ps := range w.r.cl.keys {
+		x, err := find(ps)
+		if err != nil {
+			return err
+		}
+		rows[i] = x
+	}
+	if err := w.refuseImmutable(rows); err != nil {
+		return err
+	}
+	w.answer.Affected = int64(len(rows))
+	if w.tb.Storage.Kind == catalog.StorageDocument && w.tb.Order == "" {
+		gone := make(map[*store.Row]bool, len(rows))
+		for _, x := range rows {
+			gone[x.row] = true
+			w.touched[x.file] = true
+		}
+		for path := range w.touched {
+			f := w.next.files[path]
+			f.rows = slices.DeleteFunc(slices.Clone(f.rows), func(r *store.Row) bool { return gone[r] })
+			if len(f.rows) == 0 && w.tb.Storage.Shard != nil {
+				delete(w.next.files, path)
+			}
+		}
+		w.next.index()
+		return nil
+	}
+	for _, x := range slices.Backward(rows) {
+		x = w.next.byRow[x.row]
+		if x == nil {
+			continue // it stood in a block or a file that an earlier removal took
+		}
+		if err := w.removeRow(x); err != nil {
+			return err
+		}
+		w.next.index()
+	}
+	return nil
+}
+
+// statedUpdate gives each row of a difference its own values.
+func (w *writer) statedUpdate() *Error {
+	find := w.statedRows()
+	for _, u := range w.r.cl.updates {
+		x, err := find(u.Key)
+		if err != nil {
+			return err
+		}
+		if err := w.refuseImmutable([]*rec{x}); err != nil {
+			return err
+		}
+		if err := w.updateRows([]*rec{x}, u.Set, false); err != nil {
+			return err
+		}
+	}
+	w.answer.Affected = int64(len(w.r.cl.updates))
+	return nil
 }
 
 // clone returns a deep copy of the corpus's rows, which a write changes.
@@ -201,6 +325,9 @@ func (w *writer) assignValue(a *ir.Assign, f *runtimemodel.Field, old cell, p *i
 	}
 	if idx != nil {
 		v, ok := decodeParam(w.r.cl.params[*idx], t)
+		if !ok && w.r.cl.stated {
+			return cell{text: rawParam(w.r.cl.params[*idx]), raw: true}, ""
+		}
 		if !ok {
 			return cell{}, fmt.Sprintf("the value of parameter %d is not a value of %s %s", *idx, f.Name, t.String())
 		}
@@ -265,6 +392,15 @@ func setValue(tb *catalog.Table, row *store.Row, col string, v cell) {
 		}
 		return s + "\n"
 	}
+	if i := tb.KeyPart(col); i >= 0 {
+		values := catalog.SplitKey(row.Key)
+		for len(values) < len(tb.KeyParts) {
+			values = append(values, "")
+		}
+		values[i] = v.text
+		row.Key = catalog.JoinKey(values)
+		return
+	}
 	switch {
 	case col == tb.Key:
 		row.Key = v.text
@@ -295,7 +431,28 @@ func setValue(tb *catalog.Table, row *store.Row, col string, v cell) {
 		delete(row.Raw, col)
 		delete(row.Dangling, col)
 		delete(row.Shared, col)
+		if v.raw {
+			if row.Raw == nil {
+				row.Raw = map[string]string{}
+			}
+			row.Raw[col] = v.text
+		}
 	}
+}
+
+// rawParam is the text of a parameter: a JSON string's own text, or the JSON of a number.
+func rawParam(raw json.RawMessage) string {
+	var literal struct {
+		Literal string `json:"literal"`
+	}
+	if json.Unmarshal(raw, &literal) == nil && literal.Literal != "" {
+		return literal.Literal
+	}
+	var text string
+	if json.Unmarshal(raw, &text) == nil {
+		return text
+	}
+	return string(raw)
 }
 
 // defaultOf returns the value a column takes when an insert omits it: its declared
@@ -325,9 +482,12 @@ func (w *writer) insert() *Error {
 	req := w.r.cl.req
 	for _, a := range req.Set {
 		f := w.ent.Field(a.Column)
-		if f.Identity {
+		if f.Identity && !req.Load {
 			return errf(codeIRInvalid, "cannot set identity column %s", a.Column)
 		}
+	}
+	if req.Load && w.ent.Identity != "" && !slices.ContainsFunc(req.Set, func(a ir.Assign) bool { return a.Column == w.ent.Identity && a.P != nil }) {
+		return errf(codeIRInvalid, "load of %s needs a value for the identity column %s", w.ent.Name, w.ent.Identity)
 	}
 	if err := w.requireAssigned(req.Set); err != nil {
 		return err
@@ -363,7 +523,7 @@ func (w *writer) insert() *Error {
 // order columns are executor-assigned.
 func (w *writer) requireAssigned(set []ir.Assign) *Error {
 	for _, f := range w.ent.Fields {
-		if f.Null || f.Default || f.Identity || f.Name == w.tb.Order || (f.Name == w.tb.Key && w.keyPrefix() != "") {
+		if f.Null || f.Default || f.Identity || f.Name == w.tb.Order || (f.Name == w.tb.Key && w.keyPrefix() != "") || (w.tb.Audit != nil && f.Name == w.tb.Audit.Column) {
 			continue
 		}
 		if !slices.ContainsFunc(set, func(a ir.Assign) bool { return a.Column == f.Name }) {
@@ -414,6 +574,12 @@ func (w *writer) insertRow(i int, ps []*int) *Error {
 		}
 		f := w.ent.Field(c.Name)
 		switch {
+		case tb.Audit != nil && c.Name == tb.Audit.Column:
+			v, err := w.auditKey()
+			if err != nil {
+				return err
+			}
+			vals[c.Name] = v
 		case f.Identity:
 			vals[c.Name] = w.nextIdentity(tb, c.Name)
 		case c.Name == tb.Key && w.keyPrefix() != "":
@@ -428,6 +594,7 @@ func (w *writer) insertRow(i int, ps []*int) *Error {
 			}
 		}
 	}
+	joinKey(tb, vals)
 	key, keyGiven := vals[tb.Key]
 	g.row.Key = key.text
 	w.take(g)
@@ -453,6 +620,8 @@ func (w *writer) insertRow(i int, ps []*int) *Error {
 	}
 	// Place the row: a files row in its own file, a document row in the table's
 	// document, a block row in the scope of the row its placement key names.
+	var placedIn string
+	var placedUnder *rec
 	switch tb.Storage.Kind {
 	case catalog.StorageFiles:
 		path, perr := w.rowPath(tb, g, vals)
@@ -470,6 +639,7 @@ func (w *writer) insertRow(i int, ps []*int) *Error {
 		}
 		w.next.files[path] = &file{table: tb.Name, rows: []*store.Row{g.row}}
 		w.touched[path] = true
+		placedIn, placedUnder = path, nil
 	case catalog.StorageDocument:
 		path, perr := w.rowPath(tb, g, vals)
 		if perr != nil {
@@ -485,6 +655,7 @@ func (w *writer) insertRow(i int, ps []*int) *Error {
 		}
 		f.rows = append(f.rows, g.row)
 		w.touched[path] = true
+		placedIn, placedUnder = path, nil
 	case catalog.StorageBlock:
 		pv := vals[tb.Placement()]
 		p, err := w.placementRow(tb, pv)
@@ -500,8 +671,16 @@ func (w *writer) insertRow(i int, ps []*int) *Error {
 		}
 		p.row.Blocks[tb.Name] = append(p.row.Blocks[tb.Name], g.row)
 		w.touched[p.file] = true
+		placedIn, placedUnder = p.file, p
 	}
-	w.next.index()
+	if tb.Order != "" {
+		w.next.index()
+	} else {
+		// The new row joins the index, so that a request of many rows takes time in their number; the render indexes the
+		// corpus in its storage order.
+		w.next.reorder()
+		w.next.place(g.row, placedIn, placedUnder)
+	}
 	if tb.Order != "" {
 		var k *cell
 		if v, ok := vals[tb.Order]; ok && !v.null {
@@ -510,6 +689,9 @@ func (w *writer) insertRow(i int, ps []*int) *Error {
 		if err := w.placeInOrder(g, k); err != nil {
 			return err
 		}
+	}
+	if err := w.auditRow(g.row, "insert", cell{null: true}); err != nil {
+		return err
 	}
 	key0, err := w.valueOf(g.row, tb.Key)
 	if err != nil {
@@ -520,7 +702,7 @@ func (w *writer) insertRow(i int, ps []*int) *Error {
 
 // answerKey appends the key k of a written row to the answer's keys.
 func (w *writer) answerKey(k cell) *Error {
-	o, err := output(columnOf(w.tb, w.tb.Key).Type, k)
+	o, err := output(w.tb.KeyColumn().Type, k)
 	if err != nil {
 		return err
 	}
@@ -563,9 +745,18 @@ func (w *writer) nextIdentity(tb *catalog.Table, col string) cell {
 // nextPrefixed allocates <p><n + 1>, n the largest decimal suffix without a leading
 // zero among the keys of the form <p><n> (spec 20 Keys).
 func (w *writer) nextPrefixed(tb *catalog.Table, p string) cell {
-	max := new(big.Int)
+	keys := make([]string, 0, len(w.next.recs[tb.Name]))
 	for _, x := range w.next.recs[tb.Name] {
-		k := x.row.Key
+		keys = append(keys, x.row.Key)
+	}
+	return cell{text: NextPrefixed(p, keys)}
+}
+
+// NextPrefixed is the key that key_prefix p allocates after keys: <p><n + 1>, where n is the largest decimal suffix
+// without a leading zero among the keys of the form <p><n> (spec 20 "Keys").
+func NextPrefixed(p string, keys []string) string {
+	max := new(big.Int)
+	for _, k := range keys {
 		if !strings.HasPrefix(k, p) {
 			continue
 		}
@@ -578,7 +769,7 @@ func (w *writer) nextPrefixed(tb *catalog.Table, p string) cell {
 			max = n
 		}
 	}
-	return cell{text: p + new(big.Int).Add(max, big.NewInt(1)).String()}
+	return p + new(big.Int).Add(max, big.NewInt(1)).String()
 }
 
 // onDuplicate applies the on_duplicate assignments to the row that the inserted row
@@ -603,6 +794,7 @@ func (w *writer) onDuplicate(ps []*int) (bool, *Error) {
 	// least in byte order (spec 60 Surfaces, primary key comparison). The met row keeps
 	// its key, since a key is never updated.
 	var met *rec
+	joinKey(w.tb, vals)
 	if k, ok := vals[w.tb.Key]; ok && !k.null {
 		for _, x := range w.next.recs[w.tb.Name] {
 			switch {
@@ -698,6 +890,9 @@ func (w *writer) update() *Error {
 	if err != nil {
 		return err
 	}
+	if err := w.refuseImmutable(rows); err != nil {
+		return err
+	}
 	if req.Optimistic != nil && len(rows) == 0 {
 		return errf(codeOptimistic, "the optimistic update of %s matched no row", w.ent.Name)
 	}
@@ -739,6 +934,14 @@ func (w *writer) updateRows(rows []*rec, set []ir.Assign, stamp bool) *Error {
 			}
 			vals[a.Column] = v
 			g.assigned[a.Column] = true
+		}
+		if tb.Audit != nil {
+			v, err := w.auditKey()
+			if err != nil {
+				return err
+			}
+			vals[tb.Audit.Column] = v
+			g.assigned[tb.Audit.Column] = true
 		}
 		if stamp && w.ent.Updated != "" && !g.assigned[w.ent.Updated] {
 			vals[w.ent.Updated] = w.clock(fieldType(w.ent.Field(w.ent.Updated)))
@@ -787,6 +990,11 @@ func (w *writer) updateRows(rows []*rec, set []ir.Assign, stamp bool) *Error {
 			}
 		}
 		w.next.index()
+		if tb.Audit != nil {
+			if err := w.auditRow(x.row, "update", g.before[tb.Audit.Column]); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }
@@ -869,26 +1077,55 @@ func (w *writer) delete() *Error {
 	if err != nil {
 		return err
 	}
+	if err := w.refuseImmutable(rows); err != nil {
+		return err
+	}
 	w.answer.Affected = int64(len(rows))
-	if sd := w.ent.SoftDelete; sd != "" {
+	if sd := w.ent.SoftDelete; sd != "" && !w.r.cl.seed {
 		for i, x := range rows {
 			g := &given{row: x.row, index: i, assigned: map[string]bool{sd: true}}
 			w.take(g)
 			setValue(w.tb, x.row, sd, w.clock(fieldType(w.ent.Field(sd))))
 			w.touched[x.file] = true
+			if a := w.tb.Audit; a != nil {
+				key, err := w.auditKey()
+				if err != nil {
+					return err
+				}
+				previous, err := w.next.value(x, a.Column)
+				if err != nil {
+					return err
+				}
+				g.assigned[a.Column] = true
+				setValue(w.tb, x.row, a.Column, key)
+				if err := w.auditRow(x.row, "update", previous); err != nil {
+					return err
+				}
+			}
 		}
 		return nil
 	}
-	for i, x := range rows {
-		if err := w.restrict(x, i); err != nil {
+	if w.tb.Audit != nil && len(rows) > 0 && !w.r.cl.seed {
+		return errf(codeConstraint, "table %s is audited: a row is deleted through its soft delete column", w.tb.Name)
+	}
+	gone, err := w.cascaded(rows)
+	if err != nil {
+		return err
+	}
+	for i, x := range gone {
+		if err := w.restrict(x, i, gone); err != nil {
 			return err
 		}
 	}
 	if len(w.faults) > 0 {
 		return nil
 	}
-	for _, x := range rows {
+	// A referencing row goes before the row it references, so that a block row still has its parent.
+	for _, x := range slices.Backward(gone) {
 		x = w.next.byRow[x.row]
+		if x == nil {
+			continue // it stood in a block or a file that an earlier removal took
+		}
 		if err := w.removeRow(x); err != nil {
 			return err
 		}
@@ -897,36 +1134,142 @@ func (w *writer) delete() *Error {
 	return nil
 }
 
-// restrict refuses the delete of row x while a row references it: through a foreign
-// key, its parent, the placement key of a block row in its scope, or a history row
-// (spec 50 Keys and references, restrict-only). Restrict holds against the rows
-// before the write, so a referencing row the same delete removes still refuses it.
-// Every table that may reference the row is needed. seq is the place of x among
-// the rows the delete takes.
-func (w *writer) restrict(x *rec, seq int) *Error {
+// refuseImmutable refuses a change of the matched rows of an immutable table (spec 50 Immutable).
+func (w *writer) refuseImmutable(rows []*rec) *Error {
+	if w.tb.Immutable && len(rows) > 0 {
+		return errf(codeConstraint, "table %s is immutable", w.tb.Name)
+	}
+	return nil
+}
+
+// joinKey sets the value of the key cell of a composite key from the values of its columns: absent when one has no value
+// yet, NULL when one is NULL.
+func joinKey(tb *catalog.Table, vals map[string]cell) {
+	if len(tb.KeyParts) == 0 {
+		return
+	}
+	values := make([]string, len(tb.KeyParts))
+	for i, name := range tb.KeyParts {
+		v, ok := vals[name]
+		if !ok {
+			return
+		}
+		if v.null {
+			vals[tb.Key] = cell{null: true}
+			return
+		}
+		values[i] = v.text
+	}
+	vals[tb.Key] = cell{text: catalog.JoinKey(values)}
+}
+
+// referencedKey is the key of the row the foreign key fk of row y names in the table target, false when one of its
+// columns is NULL, since a NULL names no row.
+func (c *Corpus) referencedKey(y *rec, fk dbspec.ForeignKey, target *catalog.Table) (string, bool, *Error) {
+	if len(fk.Columns) == 1 {
+		v, err := c.value(y, fk.Columns[0])
+		if err != nil || v.null {
+			return "", false, err
+		}
+		return v.text, true, nil
+	}
+	values := make([]string, len(target.KeyParts))
+	for i, name := range target.KeyParts {
+		at := slices.Index(fk.References, name)
+		if at < 0 {
+			return "", false, errf(codeInternal, "foreign key %s does not reference %s", fk.Name, name)
+		}
+		v, err := c.value(y, fk.Columns[at])
+		if err != nil || v.null {
+			return "", false, err
+		}
+		values[i] = v.text
+	}
+	return catalog.JoinKey(values), true, nil
+}
+
+// referencing calls visit for each row whose foreign key names the row x, the rows of every table that may reference it.
+func (w *writer) referencing(x *rec, visit func(y *rec, t *catalog.Table, fk dbspec.ForeignKey) *Error) *Error {
 	for _, t := range w.c.cat.Tables {
 		for _, fk := range t.ForeignKeys {
-			if fk.Table != x.tb.Name || len(fk.Columns) != 1 {
+			if fk.Table != x.tb.Name {
 				continue
 			}
 			if err := w.next.need(t.Name); err != nil {
 				return err
 			}
 			for _, y := range w.next.recs[t.Name] {
-				v, err := w.next.value(y, fk.Columns[0])
+				key, named, err := w.next.referencedKey(y, fk, x.tb)
 				if err != nil {
 					return err
 				}
-				if v.null || v.text != x.row.Key {
+				if !named || key != x.row.Key {
 					continue
 				}
-				w.faults = append(w.faults, fault{store.Refusal{Table: x.tb.Name, Key: x.row.Key, Index: -1, Rule: codeForeignKey,
-					Message: fmt.Sprintf("the row is referenced by %s %s through %s in %s", t.Name, y.row.Key, fk.Columns[0], y.file)}, seq})
-				return nil
+				if err := visit(y, t, fk); err != nil {
+					return err
+				}
 			}
 		}
 	}
 	return nil
+}
+
+// cascaded is the rows a delete of rows removes: those rows, then each row that an `on delete cascade` foreign key takes
+// with them, level by level (spec 50 Referential actions).
+func (w *writer) cascaded(rows []*rec) ([]*rec, *Error) {
+	gone := slices.Clone(rows)
+	seen := map[*store.Row]bool{}
+	for _, x := range gone {
+		seen[x.row] = true
+	}
+	for i := 0; i < len(gone); i++ {
+		err := w.referencing(gone[i], func(y *rec, _ *catalog.Table, fk dbspec.ForeignKey) *Error {
+			if fk.OnDelete == dbspec.ActionCascade && !seen[y.row] {
+				seen[y.row] = true
+				gone = append(gone, y)
+			}
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+	return gone, nil
+}
+
+// restrict refuses the delete of row x while a row outside an action references it: through a restrict foreign key, its
+// parent, the placement key of a block row in its scope, or a history row (spec 50 Keys and references). An `on delete
+// set_null` foreign key instead clears its column in the referencing row, unless that row goes too. Restrict holds against
+// the rows before the write, so a referencing row the same delete removes still refuses it, unless a cascade takes it.
+// seq is the place of x among the rows the delete takes.
+func (w *writer) restrict(x *rec, seq int, gone []*rec) *Error {
+	if w.r.cl.noForeignKeys {
+		return nil
+	}
+	return w.referencing(x, func(y *rec, t *catalog.Table, fk dbspec.ForeignKey) *Error {
+		taken := slices.ContainsFunc(gone, func(g *rec) bool { return g.row == y.row })
+		switch fk.OnDelete {
+		case dbspec.ActionCascade:
+			return nil
+		case dbspec.ActionSetNull:
+			if !taken {
+				for _, col := range fk.Columns {
+					setValue(t, y.row, col, cell{null: true})
+				}
+				w.touched[y.file] = true
+			}
+			return nil
+		}
+		for _, f := range w.faults {
+			if f.Key == x.row.Key && f.Table == x.tb.Name {
+				return nil // the first referencing row names the refusal
+			}
+		}
+		w.faults = append(w.faults, fault{store.Refusal{Table: x.tb.Name, Key: x.row.Key, Index: -1, Rule: codeForeignKey,
+			Message: fmt.Sprintf("the row is referenced by %s %s through %s in %s", t.Name, y.row.Key, fk.Columns[0], y.file)}, seq})
+		return nil
+	})
 }
 
 // removeRow removes row x from its file, or the file of a files row; the siblings

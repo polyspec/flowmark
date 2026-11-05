@@ -102,11 +102,14 @@ or one folder without end (`files`).
 
 ## Keys
 
-- A markdown table has a single-column primary key; a composite primary key is a schema error. A
+- A table in `files` storage has a single-column primary key; a table in `document` or `block` storage may have a composite one ([schema](30-schema.md)). A
   negative integer key is refused: its `-` begins the key, against the shape below. On write it is
   `CONSTRAINT`; on read it is `format.block` in every storage, as any key that breaks the shape.
 - A `files` row's key is its file name without `.flowmark.md`.
-- Every key is a file name, a URL path segment and part of a heading anchor at once. A key consists
+- A key of a table row is any single-line text of its type, quoted where its cell needs it ([canonical format](10-canonical-format.md#single-line-places)), and a
+  negative integer is a key there: a cell holds it, and its row has an anchor of its own only through the rules below. The shape below binds the key of a
+  `files` row and of a list row, which have no quoted form.
+- Every key of that shape is a file name, a URL path segment and part of a heading anchor at once. A key consists
   of `A`–`Z`, `a`–`z`, `0`–`9`, `_` and `-`, and begins with a letter or a digit: a leading `_`
   would render as emphasis and alter both the shown key and its anchor. The shape is ASCII: these
   characters are the whole alphabet of a key, and no other character is a key character, because
@@ -240,8 +243,8 @@ or one folder without end (`files`).
 
 ## Relations
 
-- Every foreign key is restrict-only ([constraints](50-constraints.md)): `cascade` and `set_null`
-  are rejected at catalog load ([schema](30-schema.md)).
+- A foreign key takes the actions `restrict`, `cascade` and `set_null` on delete, which the engine
+  applies in the write ([constraints](50-constraints.md)).
 - A foreign key value is a link. Its text is the referenced key and its target is derived from the
   referenced row, as the [canonical format](10-canonical-format.md) states. A link from a block row to the `files` row whose file holds it is that file's name, derived from the file's own key ([canonical format](10-canonical-format.md#foreign-keys-as-links)). A dangling foreign key is the validator's `reference.dangling`; a write that introduces one is
   `FOREIGN_KEY`, and it never makes a file unreadable, except a `parent` of a block or document row that names no row of its block, which is `format.block` ([canonical format](10-canonical-format.md#foreign-keys-as-links)). Every relation is a link whose `#<anchor>` is the anchor that GitHub, GitLab and VS Code generate for the heading it names, as the [canonical format](10-canonical-format.md#detail-headings-and-anchors) states. Pandoc is not a viewer the claim is made for: its default does not rewrite relative link targets, so a link between corpus files is not claimed to be followed in its output.

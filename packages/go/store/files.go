@@ -61,8 +61,12 @@ func layoutColumns(tb *catalog.Table, skip func(name string) bool) (key dbspec.C
 		markdown[m] = true
 	}
 	keyFound := false
+	if len(tb.KeyParts) > 0 {
+		key, keyFound = tb.KeyColumn(), true
+	}
 	for _, c := range tb.Columns {
 		switch {
+		case tb.KeyPart(c.Name) >= 0:
 		case c.Name == tb.Key:
 			key, keyFound = c, true
 		case skip(c.Name):
@@ -361,7 +365,7 @@ func (p *parser) fieldValue(lineNo int, c dbspec.Column, raw string, valueCol in
 		return
 	}
 	canon, ok := readable(c.Type, v)
-	if !ok {
+	if !ok || IsLiteral(v) {
 		row.Raw[c.Name] = v
 		row.Scalars[c.Name] = &v
 		return
@@ -678,6 +682,11 @@ func (w *writer) fieldText(lay *filesLayout, row *Row, c dbspec.Column, v string
 		canon, ok := readable(c.Type, v)
 		if !ok {
 			w.refuse(c.Name, "the value is not a "+c.Type.String()+" value")
+			return "", false
+		}
+		if IsLiteral(canon) {
+			// A field has no quoted form, and a stored literal takes this text.
+			w.refuse(c.Name, "the text "+canon+" reads as a stored literal, and a field has no quoted form")
 			return "", false
 		}
 		text = canon

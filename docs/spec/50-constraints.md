@@ -25,8 +25,12 @@ The failure codes are those of [operations](40-ops.md).
   (orm's rule on every database), so a link target never moves under a link; a key changes by
   inserting the row under the new key, pointing the referencing rows at it and deleting the old row,
   in one transaction.
-- **Referential actions are restrict-only.** `cascade` and `set_null` are rejected at catalog load:
-  they are unimplementable for a writer that bypasses the engine. Deleting a referenced row —
+- **Referential actions.** `on delete cascade` and `on delete set_null` are applied by the engine in
+  the write that deletes the row: a cascade takes each referencing row with it, level by level, and
+  set_null clears the referencing column, all in the one commit; the affected count is the rows the
+  request matched, as in SQL. A human deleting a parent file applies no action, and validate reports
+  the dangling references.
+  A foreign key with `restrict` refuses: Deleting a referenced row —
   including a row that has history rows — is `FOREIGN_KEY`. Restrict holds against the rows before
   the write: a delete is `FOREIGN_KEY` when a row it removes is referenced, also by a row the same
   request removes; the referencing rows are deleted by an earlier request. Grounding: orm renders
@@ -90,7 +94,9 @@ value of its type with orm's Go codec package — `orm.Decode`, which holds the 
 the value's element when the stages refuse it, carrying orm's message; a write that assigns such a
 value — an insert assigns every value — is `CONSTRAINT` at its column, its message naming `codec`, and
 the commit judges it with the validator's decode. A value the write leaves is not judged, as a `type`
-fault it leaves fails it only when a check reads it. A value not of its column type is `type` alone. A column whose stages include
+fault it leaves fails it only when a check reads it. A value not of its column type is `type` alone. A column with the stage `aes` is decoded by orm's `HostDecode` with the key of the
+version its row records ([schema](30-schema.md#keys)); a version the keyring does not declare is `codec`, and in a process
+without a keyring the column is not judged. Any other column whose stages include
 the host stage `hex` or `ip` is not judged until orm exports its host decode (orm `T74`):
 `orm.Decode` refuses every list that holds a host stage, so judging it would report every value;
 the whole list is then decoded in reverse, the host stages by orm's `HostDecode` and the others by
@@ -137,8 +143,7 @@ column-to-column `ref` it does not resolve and a `conn` on a group's first item 
 in orm. Grounding: a view is a stored request, so the rules that judge a request judge it, against
 the current catalog — no manifest hash is stored, since a view is data and a catalog change must not
 orphan it unseen; a param no index uses is invisible data; and grouping gathers rows with equal
-values, so a field without equality — a codec field whose codec is not exactly `ip`, `aes` being
-refused on a corpus — has no groups.
+values, so a field without equality — a codec field whose codec is not exactly `ip` — has no groups.
 
 ## Hierarchy and order
 
@@ -225,9 +230,12 @@ refused on a corpus — has no groups.
 
 A database enforces a writer monopoly; a corpus does not have one. Per feature:
 
-- **Foreign-key actions**: restrict-only, as above; a human deleting a parent file leaves dangling
-  references, which validate reports.
-- **`audit` and `immutable`** are schema errors on a corpus — markdown has no triggers. The history
+- **Foreign-key actions**: the engine applies them to the writes it runs, as above; a human deleting a
+  parent file leaves dangling references, which validate reports.
+- **`immutable`**: an update or a delete through the engine of a row of the table is `CONSTRAINT`
+  (`table <name> is immutable`), an insert is accepted, and a human edit of the file is what a file
+  system lets through.
+- **`audit`** is a schema error on a corpus. The history
   of a state machine is the recorded trail, and its gap, chain, transition and required rules report
   what a human edit bypassed.
 - **Defaults** are written explicitly by the engine on insert; a human-authored row missing a

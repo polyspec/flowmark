@@ -92,10 +92,12 @@ aggregate냐 split이냐는 저장 선언이다. 논리 관계는 모든 저장�
 
 ## Key
 
-- markdown table은 단일 column primary key를 갖는다. composite primary key는 schema 오류다. 음수 integer key는
+- `files` 저장 table은 단일 column primary key를 갖고, `document`나 `block` 저장 table은 composite primary key를 가질 수 있다([schema](30-schema.md)). 음수 integer key는
   거절된다: 그 `-`가 key를 시작하여 아래 모양에 어긋난다. 쓰기에서는 `CONSTRAINT`이고 읽기에서는 `format.block`이다.
   모든 저장에서 모양을 깨는 key가 그렇듯이 말이다.
 - `files` 행의 key는 file 이름에서 `.flowmark.md`를 뺀 것이다.
+- table 행의 key는 그 타입의 어떤 한 줄 text든 되며, cell에 필요하면 따옴표로 쓴다([canonical format](10-canonical-format.md)). 음수 정수도 그곳에서는 key다. 아래의
+  형식은 따옴표 형식이 없는 `files` 행과 list 행의 key를 묶는다.
 - 모든 key는 동시에 file 이름, URL path 조각, heading anchor의 일부다. key는 `A`–`Z`, `a`–`z`, `0`–`9`,
   `_`, `-`로 이루어지며 문자나 숫자로 시작한다: 선행 `_`는 강조로 렌더되어 보이는 key와 그 anchor를
   모두 바꾸기 때문이다. key의 모양은 ASCII다: 이 문자들이 key의 알파벳 전부이며 다른 문자는 key 문자가 아니다. 대소문자 비교와
@@ -204,8 +206,8 @@ aggregate냐 split이냐는 저장 선언이다. 논리 관계는 모든 저장�
 
 ## 관계
 
-- 모든 foreign key는 restrict-only다([constraints](50-constraints.md)). `cascade`와 `set_null`은 catalog를
-  읽을 때 거절한다([schema](30-schema.md)).
+- foreign key는 delete에서 `restrict`, `cascade`, `set_null` action을 가지며, 엔진이 쓰기 안에서
+  적용한다([constraints](50-constraints.md)).
 - 외래 key 값은 link다. link의 텍스트는 참조된 key이고, target은 참조된 행에서 유도된다. 정식 형식은
   [canonical format](10-canonical-format.md)이 정한다. block 행에서 그 행을 담은 `files` 행으로 가는 link는 그 file의 이름이며, 그 file 자신의 key에서 유도된다([canonical format](10-canonical-format.md#foreign-keys-as-links)). 참조된 key가 없는 dangling 외래 key는 validator의 `reference.dangling`이며, 그것을 새로 만드는 쓰기는 `FOREIGN_KEY`다. file을 읽을 수 없게 하지 않는다. 다만 block이나 document 행의 `parent`가 그 block의 어떤 행도 가리키지 않으면 `format.block`이다([canonical format](10-canonical-format.md#foreign-keys-as-links)). 모든 관계는 `#<anchor>`가 GitHub, GitLab, VS Code가 그 heading에 대해 만드는 anchor인 link다([canonical format](10-canonical-format.md#detail-headings-and-anchors)가 정한다). Pandoc은 주장 대상이 아니다: 기본 설정은 상대 경로 link target을 다시 쓰지 않으므로, corpus file 사이의 link가 그 출력에서 따라가진다고 주장하지 않는다.
 - file 간 one-to-many는 자식 table을 `store files`로 두고 foreign key를 그 field list에 쓴다. file 안의

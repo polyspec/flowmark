@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -341,7 +342,7 @@ func TestLoadSetFile(t *testing.T) {
 		file  string
 		want  string
 	}{
-		{"no set file", map[string]string{"notes.md": "# notes\n"}, "dbspec/dbspec-set.json", "no dbspec/dbspec-set.json"},
+		{"no set file and another file", map[string]string{"notes.md": "# notes\n"}, "dbspec/notes.md", "unexpected file"},
 		{"a document the set does not list", map[string]string{"a.dbs": doc("a"), "b.dbs": doc("b"), "dbspec-set.json": `{"schema":1,"documents":["a.dbs"]}`}, "dbspec/b.dbs", "dbspec/b.dbs is not listed in dbspec/dbspec-set.json"},
 		{"a listed document outside dbspec", map[string]string{"a.dbs": doc("a"), "dbspec-set.json": `{"schema":1,"documents":["a.dbs","../outside.dbs"]}`}, "dbspec/dbspec-set.json", "set.path"},
 		{"a listed document in a folder", map[string]string{"a.dbs": doc("a"), "sub/": "", "sub/c.dbs": doc("c"), "dbspec-set.json": `{"schema":1,"documents":["a.dbs","sub/c.dbs"]}`}, "dbspec/dbspec-set.json", "listed document dbspec/sub/c.dbs is not directly in dbspec/"},
@@ -358,7 +359,7 @@ func TestLoadSetFile(t *testing.T) {
 				if err := os.WriteFile(filepath.Join(root, "ext", "e.dbs"), []byte(doc("e")), 0o644); err != nil {
 					t.Fatal(err)
 				}
-				c.want = "external document ext/e.dbs: the catalog uses no document outside its set"
+				c.want = "listed document ext/e.dbs is not directly in dbspec/"
 			}
 			cat, diags := catalog.Load(root)
 			expectRejected(t, cat, diags)
@@ -389,51 +390,130 @@ func TestLoadSetFile(t *testing.T) {
 	}
 }
 
-func TestLoadRejectsTableWithoutStore(t *testing.T) {
-	cat, diags, text := loadEdited(t, [2]string{"    store files\n", ""})
-	expectRejected(t, cat, diags)
-	expectTableDiag(t, diags, text, "items", "no store setting")
+func TestLoadDefaultsTableWithoutStore(t *testing.T) {
+	cat, diags, _ := loadEdited(t, [2]string{"    store files\n", ""})
+	if cat == nil || len(diags) != 0 {
+		t.Fatalf("no store: %v", diags)
+	}
+	tb, _ := cat.Table("items")
+	if tb.Storage.Kind != catalog.StorageDocument || tb.Storage.Shape != catalog.ShapeTable {
+		t.Fatalf("storage %+v, want a document table", tb.Storage)
+	}
 }
 
-func TestLoadRejectsCompositePrimaryKey(t *testing.T) {
+func TestLoadAcceptsCompositePrimaryKey(t *testing.T) {
 	// identity must be the only key column, so the composite key drops it.
 	root, text := editedCorpus(t,
 		[2]string{"  id i64 identity\n  from_item", "  id i64\n  from_item"},
 		[2]string{"  kind varchar(16)\n  primary key (id)", "  kind varchar(16)\n  primary key (id, kind)"})
 	cat, diags := catalog.Load(root)
-	expectRejected(t, cat, diags)
-	expectTableDiag(t, diags, text, "item_links", "composite primary key")
+	if cat == nil || len(diags) != 0 {
+		t.Fatalf("composite: %v\n%s", diags, text)
+	}
+	tb, _ := cat.Table("item_links")
+	if tb.Key != "id/kind" || !slices.Equal(tb.KeyParts, []string{"id", "kind"}) {
+		t.Fatalf("key %q parts %v", tb.Key, tb.KeyParts)
+	}
 }
 
-// aesColumns adds a bytes column encrypted with aes and its key version.
-var aesColumns = [2]string{"  name varchar(255)\n", "  name varchar(255)\n  secret bytes null\n  secret_version i32\n"}
+func TestLoadRejectsCompositeKeyInFiles(t *testing.T) {
+	root := t.TempDir()
+	corpustest.WriteTree(t, root, map[string]string{"dbspec/flowmark.dbs": `dbspec 1 flowmark
 
-func TestLoadRejectsAESCodec(t *testing.T) {
-	root, text := editedCorpus(t, aesColumns,
-		[2]string{"    title name\n", "    title name\n    codec secret aes\n    aes_version secret_version\n"})
+table pages {
+  a varchar(8)
+  b varchar(8)
+  name varchar(8)
+  primary key (a, b)
+  settings {
+    store files
+    title name
+  }
+}
+`})
 	cat, diags := catalog.Load(root)
 	expectRejected(t, cat, diags)
-	expectTableDiag(t, diags, text, "people", "uses aes")
+	if !strings.Contains(fmt.Sprint(diags), "files storage names a file by one key column") {
+		t.Fatalf("diagnostics %v", diags)
+	}
 }
 
-func TestLoadRejectsAESVersionSetting(t *testing.T) {
-	root, text := editedCorpus(t, aesColumns,
-		[2]string{"    title name\n", "    title name\n    codec secret aes\n    aes_version secret_version\n"})
-	cat, diags := catalog.Load(root)
-	expectRejected(t, cat, diags)
-	expectTableDiag(t, diags, text, "people", "aes_version setting")
-}
-
-func TestLoadRejectsBlindIndexSetting(t *testing.T) {
-	root, text := editedCorpus(t,
+// TestLoadAcceptsAES pins that a corpus declares aes, aes_version and blind_index, and that the table holds them
+// (spec 30 Keys).
+func TestLoadAcceptsAES(t *testing.T) {
+	root, _ := editedCorpus(t,
 		[2]string{"  name varchar(255)\n", "  name varchar(255)\n  secret bytes null\n  secret_index varchar(64) null\n  secret_version i32\n  index ix_people_secret (secret_index)\n"},
 		[2]string{"    title name\n", "    title name\n    codec secret aes\n    aes_version secret_version\n    blind_index secret secret_index\n"})
 	cat, diags := catalog.Load(root)
-	expectRejected(t, cat, diags)
-	expectTableDiag(t, diags, text, "people", "blind_index setting")
+	if len(diags) > 0 {
+		t.Fatalf("diagnostics: %+v", diags)
+	}
+	for _, tb := range cat.Tables {
+		if tb.Name == "people" && (tb.AESVersion != "secret_version" || tb.BlindIndexes["secret"] != "secret_index") {
+			t.Fatalf("people holds version %q and blind indexes %v", tb.AESVersion, tb.BlindIndexes)
+		}
+	}
+	if cat.Keys != nil {
+		t.Fatalf("a process without a keyring holds keys %+v", cat.Keys)
+	}
 }
 
-func TestLoadRejectsAuditSetting(t *testing.T) {
+// TestLoadKeyring holds the accepting and rejecting cases of the keyring file (spec 30 Keys).
+func TestLoadKeyring(t *testing.T) {
+	root, _ := editedCorpus(t)
+	outside := t.TempDir()
+	write := func(dir, name, text string) string {
+		path := filepath.Join(dir, name)
+		if err := os.WriteFile(path, []byte(text), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+	good := `{"current":2,"versions":{"1":"one","2":"two"},"blind_index":"index"}`
+	t.Run("a keyring outside the corpus is read", func(t *testing.T) {
+		t.Setenv(catalog.KeyringVariable, write(outside, "good.json", good))
+		cat, diags := catalog.Load(root)
+		if len(diags) > 0 {
+			t.Fatalf("diagnostics: %+v", diags)
+		}
+		key, ok := cat.Keys.Key(1)
+		if cat.Keys.Current != 2 || !ok || key != "one" || cat.Keys.BlindIndex != "index" {
+			t.Fatalf("keys %+v", cat.Keys)
+		}
+	})
+	for _, c := range []struct{ name, path, want string }{
+		{"a keyring inside the corpus", write(root, "keys.json", good), "inside the corpus"},
+		{"a missing keyring", filepath.Join(outside, "absent.json"), "absent.json"},
+		{"text that is no JSON", write(outside, "text.json", "{"), "text.json"},
+		{"an unknown member", write(outside, "unknown.json", `{"current":1,"versions":{"1":"a"},"extra":1}`), "extra"},
+		{"two values", write(outside, "two.json", `{"current":1,"versions":{"1":"a"}} {}`), "more than one"},
+		{"a version that is no integer", write(outside, "name.json", `{"current":1,"versions":{"one":"a"}}`), "not an integer"},
+		{"an undeclared current version", write(outside, "current.json", `{"current":2,"versions":{"1":"a"}}`), "not declared"},
+		{"an empty key", write(outside, "empty.json", `{"current":1,"versions":{"1":""}}`), "empty key"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			t.Setenv(catalog.KeyringVariable, c.path)
+			cat, diags := catalog.Load(root)
+			if cat != nil || len(diags) != 1 || !strings.Contains(diags[0].Message, c.want) {
+				t.Fatalf("catalog %v, diagnostics %+v, want one naming %q", cat, diags, c.want)
+			}
+		})
+	}
+	if runtime.GOOS != "windows" {
+		t.Run("a symbolic link", func(t *testing.T) {
+			link := filepath.Join(outside, "link.json")
+			if err := os.Symlink(write(outside, "target.json", good), link); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv(catalog.KeyringVariable, link)
+			if cat, diags := catalog.Load(root); cat != nil || len(diags) != 1 || !strings.Contains(diags[0].Message, "not a regular file") {
+				t.Fatalf("catalog %v, diagnostics %+v", cat, diags)
+			}
+		})
+	}
+}
+
+func TestLoadTakesAuditSetting(t *testing.T) {
 	audited := `table audit_record {
   seq i64 identity
   request_id varchar(64)
@@ -471,35 +551,47 @@ table service_history {
 }
 
 table views {`
-	cat, diags, text := loadEdited(t, [2]string{"table views {", audited})
-	expectRejected(t, cat, diags)
-	expectTableDiag(t, diags, text, "service", "audit setting")
+	cat, diags, _ := loadEdited(t, [2]string{"table views {", audited})
+	if len(diags) > 0 || cat == nil {
+		t.Fatalf("diagnostics: %v", diags)
+	}
+	tb, ok := cat.Table("service")
+	if !ok || tb.Audit == nil {
+		t.Fatalf("service has no audit: %+v", tb)
+	}
 }
 
-func TestLoadRejectsImmutableSetting(t *testing.T) {
-	cat, diags, text := loadEdited(t, [2]string{"    title name\n", "    title name\n    immutable\n"})
-	expectRejected(t, cat, diags)
-	expectTableDiag(t, diags, text, "people", "immutable setting")
+func TestLoadAcceptsImmutableSetting(t *testing.T) {
+	cat, diags, _ := loadEdited(t, [2]string{"    title name\n", "    title name\n    immutable\n"})
+	if cat == nil || len(diags) != 0 {
+		t.Fatalf("immutable: %v", diags)
+	}
+	tb, _ := cat.Table("people")
+	if !tb.Immutable {
+		t.Fatal("people is not immutable")
+	}
 }
 
-func TestLoadRejectsCascadeAction(t *testing.T) {
+func TestLoadAcceptsCascadeAction(t *testing.T) {
 	root, text := editedCorpus(t, [2]string{
 		"foreign key fk_item_links_from (from_item) references items (id) on delete restrict",
 		"foreign key fk_item_links_from (from_item) references items (id) on delete cascade",
 	})
 	cat, diags := catalog.Load(root)
-	expectRejected(t, cat, diags)
-	expectTableDiag(t, diags, text, "item_links", "cascade")
+	if cat == nil || len(diags) != 0 {
+		t.Fatalf("cascade: %v\n%s", diags, text)
+	}
 }
 
-func TestLoadRejectsSetNullAction(t *testing.T) {
+func TestLoadAcceptsSetNullAction(t *testing.T) {
 	root, text := editedCorpus(t, [2]string{
 		"foreign key fk_items_parent (parent) references items (id) on delete restrict",
 		"foreign key fk_items_parent (parent) references items (id) on delete set_null",
 	})
 	cat, diags := catalog.Load(root)
-	expectRejected(t, cat, diags)
-	expectTableDiag(t, diags, text, "items", "set_null")
+	if cat == nil || len(diags) != 0 {
+		t.Fatalf("set_null: %v\n%s", diags, text)
+	}
 }
 
 func TestLoadRejectsExternalUse(t *testing.T) {
@@ -1358,13 +1450,13 @@ func TestLoadRejectsForeignKeyNotToPrimaryKey(t *testing.T) {
 			name:  "composite foreign key",
 			edits: [][2]string{{"table views {", gridTables}},
 			fk:    "fk_slot_grid",
-			msg:   "is composite",
+			msg:   "not the primary key",
 		},
 		{
 			name:  "foreign key to a unique non-key column",
 			edits: [][2]string{{"table views {", tagTables("code")}},
 			fk:    "fk_tag_use_tag",
-			msg:   "not the one-column primary key",
+			msg:   "not the primary key",
 		},
 	}
 	for _, c := range cases {
@@ -1395,7 +1487,7 @@ table views {`, key)
 // integer, bool, varchar, uuid or date column: a key of any other type is a
 // located catalog diagnostic, since the key shape cannot carry its text.
 func TestLoadKeyColumnTypes(t *testing.T) {
-	accepted := []string{"i16", "i32", "i64", "bool", "varchar(32)", "uuid", "date"}
+	accepted := []string{"i16", "i32", "i64", "bool", "varchar(32)", "uuid", "date", "time(0)", "datetime(0)", "decimal(4,2)", "f64"}
 	for _, key := range accepted {
 		t.Run("accepts "+key, func(t *testing.T) {
 			cat, diags, _ := loadEdited(t, [2]string{"table views {", keyedTable(key)})
@@ -1407,7 +1499,8 @@ func TestLoadKeyColumnTypes(t *testing.T) {
 	rejected := []string{"time(0)", "datetime(0)", "decimal(4,2)", "f64"}
 	for _, key := range rejected {
 		t.Run("rejects "+key, func(t *testing.T) {
-			cat, diags, text := loadEdited(t, [2]string{"table views {", keyedTable(key)})
+			listed := strings.Replace(keyedTable(key), "store document table", "store document list", 1)
+			cat, diags, text := loadEdited(t, [2]string{"table views {", listed})
 			expectRejected(t, cat, diags)
 			expectTableDiag(t, diags, text, "keyed", "is not a key type")
 		})

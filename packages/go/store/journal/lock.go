@@ -59,6 +59,15 @@ type Lock struct {
 	rec    []byte
 	mu     sync.Mutex
 	held   bool
+	kept   bool
+}
+
+// Keep makes Release keep the lock, or lets it release the lock again: the locking_mode of a SQL connection, whose
+// lock outlives its transactions.
+func (l *Lock) Keep(kept bool) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.kept = kept
 }
 
 // Holder returns the record this lock wrote.
@@ -89,7 +98,9 @@ func writeSynced(p string, data []byte, flag int) error {
 	}
 	_, werr := f.Write(data)
 	if werr == nil {
-		werr = f.Sync()
+		if !asynchronous.Load() {
+			werr = f.Sync()
+		}
 	}
 	return errors.Join(werr, f.Close())
 }
@@ -323,7 +334,7 @@ func (a *acquirer) block(ctx context.Context, w lockWatch, r tried) (bool, error
 func (l *Lock) Release() error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if !l.held {
+	if !l.held || l.kept {
 		return nil
 	}
 	if _, err := l.c.lstat(LockPath); err != nil {

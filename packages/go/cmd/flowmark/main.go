@@ -47,7 +47,7 @@ func run(args []string, in io.Reader, out, errOut io.Writer) int {
 		return sidecarFace(in, out, errOut, rest)
 	}
 	if _, ok := faceCommands[name]; ok {
-		return face(out, errOut, name, rest)
+		return face(in, out, errOut, name, rest)
 	}
 	return usage(errOut, fmt.Sprintf("the command %q is unknown", name))
 }

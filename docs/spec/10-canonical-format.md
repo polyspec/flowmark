@@ -647,6 +647,15 @@ and of an ATX heading's content, so these two are part of the set.
 - An item that is not `- <stored scalar column>: <value>` in column order is `format.block`; a space or a tab other than the canonical separator is `format.noncanonical`, as [Single-line places](#single-line-places) states. An absent
   item of a non-null column is `format.block`; the engine writes a default explicitly on insert.
 
+## Stored literals
+
+A cell of a statement-written value that its column's type or a cell's text cannot hold is a stored literal, unquoted:
+`x'6162'` is a blob, `t'ff'` a text of those bytes, and `n'1.5'` a number. SQLite binds no value to the type of its column,
+and a text can hold line feeds, raw HTML and bytes that are not UTF-8, so a corpus keeps what a statement stored and reads the
+same value back. A text that reads like a literal is written quoted, and a quoted cell is never a literal; a field of a
+files row has no quoted form, so such a text is `CONSTRAINT` there. A write of a model or a face never makes a literal: the
+rules of [Single-line places](#single-line-places) hold for it. A primary key has no literal form.
+
 ## Foreign keys as links
 
 - A foreign key value is a link `[<key>](<target>)` in every place a scalar is written: a field of

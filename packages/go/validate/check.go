@@ -44,6 +44,11 @@ type Operand struct {
 func RowOperands(tb *catalog.Table, r *store.Row, parent *store.Row) func(column string) Operand {
 	placement := tb.Placement()
 	return func(col string) Operand {
+		if i := tb.KeyPart(col); i >= 0 {
+			if values := catalog.SplitKey(r.Key); i < len(values) {
+				return Operand{Text: values[i]}
+			}
+		}
 		switch {
 		case col == tb.Key:
 			return Operand{Text: r.Key}

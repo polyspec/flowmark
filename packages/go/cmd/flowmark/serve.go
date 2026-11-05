@@ -36,6 +36,7 @@ func serve(args []string, stdout, stderr io.Writer, stop <-chan os.Signal) (code
 	newToken := fs.Bool("new-token", false, "")
 	waitMS := fs.Int("lock-wait-ms", 5000, "")
 	idleMS := fs.Int("tx-idle-ms", 5000, "")
+	syncMode := fs.String("synchronous", "on", "")
 	if err := fs.Parse(args[1:]); err != nil {
 		return usage("%v", err)
 	}
@@ -65,6 +66,13 @@ func serve(args []string, stdout, stderr io.Writer, stop <-chan os.Signal) (code
 			report(stderr, "flowmark serve: %s: line %d: %s: %s\n", d.File, d.Line, d.Rule, d.Message)
 		}
 		return fail("the catalog has %d diagnostics; fix them to serve the corpus", len(diags))
+	}
+	switch *syncMode {
+	case "on":
+	case "off":
+		journal.SetSynchronous(false)
+	default:
+		return usage("--synchronous %s is neither on nor off", *syncMode)
 	}
 	log := &lineLog{w: stderr}
 	j, err := journal.New(root, log)

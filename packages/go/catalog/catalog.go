@@ -3,6 +3,8 @@ package catalog
 
 import (
 	"fmt"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/polyspec/orm/packages/go/engine/dbspec"
@@ -25,10 +27,17 @@ func (d Diagnostic) String() string {
 
 // Catalog is a loaded, valid catalog.
 type Catalog struct {
-	Documents    []*dbspec.Document
-	Files        []string // the corpus path of each document, in the order of Documents
+	Documents []*dbspec.Document
+	Files     []string // the corpus path of each document, in the order of Documents
+	// Stated holds the documents as the corpus's schema statements leave them: their tables, and those the statements added.
+	Stated []*dbspec.Document
+	// Added is the document of the tables that the schema statements added, and Statements are those statements, in order
+	// (spec 40 SQL statements). The manifest holds neither: it is the set the documents declare.
+	Added        *dbspec.Document
+	Statements   []string
 	ManifestHash string
 	Tables       []*Table
+	Keys         *Keys // the keys injected into this process (spec 30 Keys), nil when none is
 }
 
 // Table is one table of the catalog with its markdown settings.
@@ -42,13 +51,79 @@ type Table struct {
 	Storage      Storage
 	RowScope     int
 	Key          string
+	KeyParts     []string // the columns of a composite primary key, in its declared order; Key is them joined by KeySeparator
 	Title        string
 	Body         string
 	Order        string
 	Markdown     []string
 	StateMachine *StateMachine
-	Codecs       map[string][]string // the codec stages of each column with a codec setting, in write order
-	View         *View               // the view columns when the table is the view table, else nil
+	Codecs       map[string][]string  // the codec stages of each column with a codec setting, in write order
+	Audit        *dbspec.AuditSetting // the history the engine writes with every write of the table (spec 50 Audit), nil when none
+	Immutable    bool                 // a write refuses to change or remove a row of the table (spec 50)
+	AESVersion   string               // the column that records the key version of the row, "" when none does
+	BlindIndexes map[string]string    // the blind index column of each aes column that has one
+	View         *View                // the view columns when the table is the view table, else nil
+}
+
+// KeySeparator joins the values of a composite key in its key cell, and the names of its columns in its heading. No value
+// of a key type holds it (spec 30 Composite keys).
+const KeySeparator = "/"
+
+// JoinKey writes the values of a composite key as its key cell: a separator or a backslash inside a value is
+// written after a backslash, so that any text is a value of a part and SplitKey reads the same values back.
+func JoinKey(values []string) string {
+	escaped := make([]string, len(values))
+	for i, v := range values {
+		escaped[i] = strings.NewReplacer(`\`, `\\`, KeySeparator, `\`+KeySeparator).Replace(v)
+	}
+	return strings.Join(escaped, KeySeparator)
+}
+
+// SplitKey reads the values of the key cell of a composite key, as JoinKey writes them.
+func SplitKey(key string) []string {
+	var values []string
+	var b strings.Builder
+	for i := 0; i < len(key); i++ {
+		switch c := key[i]; {
+		case c == '\\' && i+1 < len(key):
+			i++
+			b.WriteByte(key[i])
+		case string(c) == KeySeparator:
+			values = append(values, b.String())
+			b.Reset()
+		default:
+			b.WriteByte(c)
+		}
+	}
+	return append(values, b.String())
+}
+
+// KeyPart returns the place of column col in the composite primary key of the table, or -1.
+func (t *Table) KeyPart(col string) int {
+	return slices.Index(t.KeyParts, col)
+}
+
+// KeyColumn returns the column of the key cell: the declared key column, or a text column named by a composite key.
+func (t *Table) KeyColumn() dbspec.Column {
+	if len(t.KeyParts) > 0 {
+		return dbspec.Column{Name: t.Key, Type: dbspec.Type{Kind: dbspec.TypeVarchar, Length: 243}}
+	}
+	for _, c := range t.Columns {
+		if c.Name == t.Key {
+			return c
+		}
+	}
+	return dbspec.Column{}
+}
+
+// ColumnNamed returns the column of the table with the name.
+func (t *Table) ColumnNamed(name string) (dbspec.Column, bool) {
+	for _, c := range t.Columns {
+		if c.Name == name {
+			return c, true
+		}
+	}
+	return dbspec.Column{}, false
 }
 
 // Placement returns the placement foreign key column of a block table, the column that names its parent row, and ""

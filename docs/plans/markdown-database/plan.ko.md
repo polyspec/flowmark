@@ -398,7 +398,7 @@ markdown 전용 선언은 모두 dbspec **manifest setting**이며 `markdown <co
 | `identity` | `i64` primary key에만 허용. lock 아래 `max+1` |
 | foreign key | restrict-only. `cascade`, `set_null` 거절 |
 | `codec` | orm 요청에서는 client가 적용. 엔진이 시작한 쓰기(CLI, MCP, sidecar, 이력)는 orm의 Go codec package로 적용하고 검증은 같은 package로 decode. 저장 값은 encode된 값(byte를 내는 단계는 base64) |
-| `aes`, `aes_version`, `blind_index` | schema 오류 — key는 client를 떠나지 않는다 |
+| `aes`, `aes_version`, `blind_index` | 지원. orm 요청에서는 client가 암호화하고, 엔진은 주입으로 key를 받는다(spec 30 Key) |
 | `soft_delete`, `updated`, `default now` | 엔진이 할당: orm 요청이면 요청의 `now`, 아니면 microsecond로 자른 엔진의 UTC 시계 |
 | `select explicit`, `entity`, `navigation` | client 쪽. 저장에 영향 없음 |
 | `audit`, `immutable` | schema 오류. 대신 `state_machine … history` |

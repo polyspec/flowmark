@@ -14,6 +14,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"io/fs"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/polyspec/flowmark/packages/go/catalog"
@@ -68,6 +72,14 @@ func (e *Error) Unwrap() error { return e.Err }
 // Failure is the orm code and the message of the error, as a server answer names them.
 func (e *Error) Failure() (code, msg string) { return e.Code, e.Msg }
 
+// ResultCode is the SQLite result code of a lock wait that ended, SQLITE_BUSY, for the answer of a SQL statement.
+func (e *Error) ResultCode() int {
+	if e.Face == faceLockTimeout {
+		return 5
+	}
+	return 0
+}
+
 func newError(code, format string, a ...any) *Error {
 	return &Error{Code: code, Face: code, Msg: fmt.Sprintf(format, a...)}
 }
@@ -85,6 +97,9 @@ func lockError(err error) *Error {
 	switch {
 	case errors.As(err, &timeout):
 		return &Error{Code: codeCanceled, Face: faceLockTimeout, Msg: err.Error(), Err: err}
+	case errors.Is(err, fs.ErrPermission):
+		// The process may not write the corpus: nothing can write it, as a read-only database file.
+		return &Error{Code: codeReadOnly, Face: codeReadOnly, Msg: "attempt to write a readonly database: " + err.Error(), Err: err}
 	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
 		return &Error{Code: codeCanceled, Face: codeCanceled, Msg: err.Error(), Err: err}
 	}
@@ -105,6 +120,13 @@ type Corpus struct {
 	// readHook is the seam of the tests that lands a change between the read and the commit of an operation outside a
 	// transaction; it is called after each read with the attempt's index. It is nil outside the tests.
 	readHook func(attempt int)
+	// held is what package statement keeps between statements, which only a holder of the lock reads or sets.
+	held io.Closer
+	// committed is the corpus last read under the lock, which a read answers from while another session holds it.
+	committed atomic.Pointer[irexec.Corpus]
+	// readHeld is the database of those reads, under readMu.
+	readHeld io.Closer
+	readMu   sync.Mutex
 }
 
 // Open opens the corpus of the journal corpus j with the catalog cat: it runs recovery first, under the lock (spec 40
@@ -149,8 +171,13 @@ func engineClock() time.Time { return time.Now().UTC().Truncate(time.Microsecond
 // acquire takes the corpus lock for session and recovers an interrupted commit before anything reads the corpus
 // (spec 40 Opening a corpus): a stage found under the lock is a commit of a holder that ended.
 // A recovery that fails, or panics, releases the lock.
-func (c *Corpus) acquire(ctx context.Context, session string) (_ *journal.Lock, err error) {
-	l, err := c.j.Acquire(ctx, session, c.wait)
+func (c *Corpus) acquire(ctx context.Context, session string) (*journal.Lock, error) {
+	return c.acquireWait(ctx, session, c.wait)
+}
+
+// acquireWait is acquire with its wait.
+func (c *Corpus) acquireWait(ctx context.Context, session string, wait time.Duration) (_ *journal.Lock, err error) {
+	l, err := c.j.Acquire(ctx, session, wait)
 	if err != nil {
 		e := lockError(err)
 		if errors.Is(context.Cause(ctx), errSessionClosed) {
@@ -202,13 +229,34 @@ func (c *Corpus) read() (*irexec.Corpus, error) {
 	if err != nil {
 		return nil, driverError("reading the corpus", err)
 	}
+	c.committed.Store(cur)
 	return cur, nil
+}
+
+// dropHeld closes what package statement keeps, which a new catalog does not describe.
+func (c *Corpus) dropHeld() {
+	if c.held != nil {
+		_ = c.held.Close()
+		c.held = nil
+	}
 }
 
 // Close closes the corpus: the watch of its tree. An operation of a closed corpus fails.
 func (c *Corpus) Close() error {
+	var heldErr error
+	if c.readHeld != nil {
+		heldErr = c.readHeld.Close()
+		c.readHeld = nil
+	}
+	if c.held != nil {
+		heldErr = c.held.Close()
+		c.held = nil
+	}
 	if err := c.tree.Close(); err != nil {
 		return driverError("closing the watch of the corpus", err)
+	}
+	if heldErr != nil {
+		return driverError("closing the statement database of the corpus", heldErr)
 	}
 	return nil
 }

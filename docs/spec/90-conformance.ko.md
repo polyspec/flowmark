@@ -8,6 +8,7 @@
 
 ## 계약
 
+- orm의 recipe는 corpus를 네 번째 database로 삼아 [SQL statements](40-ops.md#sql-statements)로 실행된다. 여기의 vector는 엔진 자신의 face와 executor를 시험한다.
 - vector는 **corpus 전 — 그 catalog와 문서 — 과 요청, 그리고 기대하는 corpus 후, 행, 또는 오류**다.
   비교할 SQL 텍스트나 bind 목록은 없다. SQL conformance harness는 적용되지 않으며 이 계약이 그것을
   대신한다.

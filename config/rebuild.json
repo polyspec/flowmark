@@ -46,6 +46,10 @@
       "kind": "ecosystem",
       "tool": "polyspec/orm reaches the flowmark corpus of the board example through markdown://"
     },
+    "scripts/check-internal-paths.mts": {
+      "kind": "policy",
+      "reason": "flowmark's rule (K1002) that no tracked file names a dependency's source or build output by its path; no ecosystem tool judges the paths that a repository writes in its own text"
+    },
     "scripts/check-refs.mts": {
       "kind": "policy",
       "reason": "flowmark's rule that every task ID a document names resolves to an item of a checklist; no ecosystem tool reads the IDs of these checklists"

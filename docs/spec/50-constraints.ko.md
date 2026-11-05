@@ -23,8 +23,11 @@
 - **key는 결코 갱신되지 않는다.** primary key를 배정하는 update, 그리고 primary key에 새 값을 쓰는 restore(restore가 고른 key 밖의 key column 값)는 `IR_INVALID`(모든
   database에서 orm의 규칙)이므로 link의 target은 link 아래에서 움직이지 않는다. key는 새 key로 행을
   insert하고, 참조하는 행이 그것을 가리키게 하고, 옛 행을 지우는 것으로 한 transaction에서 바뀐다.
-- **참조 action은 restrict-only다.** `cascade`와 `set_null`은 catalog를 읽을 때 거절한다: 엔진을
-  우회하는 작성자에게는 구현할 수 없다. 참조되는 행 — 이력 행을 가진 행 포함 — 의 삭제는
+- **참조 action.** `on delete cascade`와 `on delete set_null`은 행을 지우는 쓰기 안에서 엔진이 적용한다:
+  cascade는 참조하는 행을 단계마다 함께 지우고, set_null은 참조하는 column을 비우며, 모두 한 commit이다.
+  affected 수는 SQL처럼 요청이 맞춘 행의 수다. 사람이 부모 파일을 지우면 action은 적용되지 않고 validate가
+  끊어진 참조를 보고한다.
+  `restrict` foreign key는 거절한다: 참조되는 행 — 이력 행을 가진 행 포함 — 의 삭제는
   `FOREIGN_KEY`다. restrict는 쓰기 전의 행에 대해 성립한다: delete가 지우는 행이 참조되면, 같은 요청이
   지우는 행이 참조하더라도 `FOREIGN_KEY`이며, 참조하는 행은 앞선 요청이 지운다. 근거: orm은 즉시
   검사하는 `RESTRICT`를 render한다. 그러면 MySQL과 SQLite는 그런 delete를 자기 행 순서에 따라 거절하거나
@@ -78,7 +81,7 @@ message를 실어 `codec`을 보고한다. 그런 값을 할당하는 쓰기 —
 column에서 `CONSTRAINT`이고 message가 `codec`을 밝히며, commit은 validator의 decode로 그것을 판정한다.
 쓰기가 그대로 두는 값은 판정하지 않는다. 그대로 두는 `type` 결함이 check가 그것을 읽을 때에만 쓰기를
 실패시키는 것과 같다. column의 type이 아닌 값은
-`type`만이다. host stage `hex`나 `ip`를 포함하는 column은 orm이 host decode를 공개할 때까지(orm `T74`)
+`type`만이다. stage `aes`가 있는 column은 행이 기록한 version의 key로 orm의 `HostDecode`가 decode한다([schema](30-schema.md#keys)). keyring이 선언하지 않은 version은 `codec`이고, keyring이 없는 process에서는 그 column을 판정하지 않는다. 그 밖에 host stage `hex`나 `ip`를 포함하는 column은 orm이 host decode를 공개할 때까지(orm `T74`)
 판정하지 않는다: `orm.Decode`는 host stage를 담은 모든 목록을 거절하므로, 판정하면 모든 값을 보고하게
 된다. 그때 목록 전체를 거꾸로 decode하며, host stage는 orm의 `HostDecode`로, 나머지는 `orm.Decode`로
 한다. 근거: 자기 stage가 decode할 수 없는 값은 그것을 읽는 어떤 client에게도 답이 없으므로, validator가
@@ -120,7 +123,7 @@ param을 모든 쓰임에 대해 판정한다. `ir.Validate`가 검사하는 것
 request이므로 request를 판정하는 규칙이 현재 catalog에 대해 그것을 판정한다 — view는 데이터이고 catalog
 변경이 그것을 보이지 않게 고아로 만들면 안 되므로 manifest hash를 저장하지 않는다. 어떤 index도 쓰지 않는
 param은 보이지 않는 데이터다. grouping은 같은 값을 가진 행을 모으므로, 같음이 없는 field — codec이
-정확히 `ip`가 아닌 codec field이며, `aes`는 corpus에서 거절된다 — 에는 group이 없다.
+정확히 `ip`가 아닌 codec field — 에는 group이 없다.
 
 ## 계층과 순서
 
@@ -193,9 +196,11 @@ param은 보이지 않는 데이터다. grouping은 같은 값을 가진 행을 
 
 database는 작성자 독점을 강제하지만 corpus에는 그것이 없다. 기능별로:
 
-- **foreign key action**: 위와 같이 restrict-only다. 사람이 부모 file을 지우면 dangling 참조가 남고
+- **foreign key action**: 위와 같이 엔진이 실행하는 쓰기에 적용한다. 사람이 부모 file을 지우면 dangling 참조가 남고
   validate가 보고한다.
-- **`audit`와 `immutable`**은 corpus에서 schema 오류다 — markdown에는 trigger가 없다. 상태기계의 이력이
+- **`immutable`**: 엔진을 통한 그 table 행의 update와 delete는 `CONSTRAINT`(`table <name> is immutable`)이고,
+  insert는 받아들이며, 사람이 파일을 고치는 것은 파일 시스템이 허용하는 일이다.
+- **`audit`**는 corpus에서 schema 오류다. 상태기계의 이력이
   기록된 흔적이고, 그 빈틈, 사슬, 전이, 필수 규칙이 사람의 편집이 우회한 것을 보고한다.
 - **Default**는 엔진이 insert에서 명시적으로 쓴다. non-null column이 빠진 사람이 쓴 행은 format 진단이다.
 

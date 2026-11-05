@@ -21,6 +21,7 @@ import (
 // It holds the key, the title, body and order, the state and parent, the scalar
 // columns, sections and foreign keys, the row scope level, and the child blocks.
 type docLayout struct {
+	parts     []dbspec.Column // the columns of a composite key, nil for one key column
 	table     string
 	list      bool
 	scope     int // the level of the row scope: the level of its sections
@@ -71,6 +72,10 @@ func layoutOfTable(cat *catalog.Catalog, tb *catalog.Table, placement string, in
 		glyphs: map[string]string{}, states: map[string]string{},
 	}
 	var err error
+	for _, name := range tb.KeyParts {
+		part, _ := tb.ColumnNamed(name)
+		lay.parts = append(lay.parts, part)
+	}
 	lay.key, lay.sections, lay.scalars, lay.fks, err = layoutColumns(tb, func(name string) bool {
 		return name == tb.Order || name == tb.Body || name == placement
 	})
@@ -539,7 +544,7 @@ func (p *docParser) listRow(lineNo int, line string, indent int) *docRec {
 		}
 		last = idx
 		rec.row.setAt(tok.name, lineNo, colAt(line, tok.start))
-		p.scalarValue(lineNo, colAt(line, tok.start), rec, lay.fields[idx], tok.value)
+		p.scalarValue(lineNo, colAt(line, tok.start), rec, lay.fields[idx], tok.value, tok.quoted)
 	}
 	return rec
 }
@@ -786,7 +791,10 @@ func newRow(table, key, title string) *Row {
 
 // docKeyFault names the key rule that key breaks, or "" when it is canonical.
 func docKeyFault(lay *docLayout, key string) string {
-	if msg := keyFault(key); msg != "" {
+	if len(lay.parts) > 0 {
+		return compositeKeyFault(lay.parts, key)
+	}
+	if msg := docShapeFault(lay, key); msg != "" {
 		return msg
 	}
 	if canon, ok := readable(lay.key.Type, key); !ok || canon != key {
@@ -798,7 +806,7 @@ func docKeyFault(lay *docLayout, key string) string {
 // scalarValue reads the value v of column c of rec, found at line and col: a
 // foreign key is a link, to be resolved with the other links of the file; any
 // other value is checked against its single-line rules and its column type.
-func (p *docParser) scalarValue(line, col int, rec *docRec, c dbspec.Column, v string) {
+func (p *docParser) scalarValue(line, col int, rec *docRec, c dbspec.Column, v string, quoted bool) {
 	if table, isFK := p.lay.fks[c.Name]; isFK {
 		key, target, ok := splitLink(v)
 		if !ok {
@@ -812,12 +820,17 @@ func (p *docParser) scalarValue(line, col int, rec *docRec, c dbspec.Column, v s
 		}
 		return
 	}
-	if msg := singleLineFault(v); msg != "" {
+	msg := singleLineFault(v)
+	if quoted {
+		// The quotes show an invisible character at an end of the value.
+		msg = quotedFault(v)
+	}
+	if msg != "" {
 		p.fail(line, col, RuleBlock, "the value has "+msg)
 		return
 	}
 	canon, ok := readable(c.Type, v)
-	if !ok {
+	if !ok || (!quoted && IsLiteral(v)) {
 		rec.row.Raw[c.Name] = v
 		rec.row.Scalars[c.Name] = sp(v)
 		return
@@ -1019,6 +1032,10 @@ func (p *docParser) tableRow(lineNo int, text string) *docRec {
 		p.fail(lineNo, colAt(text, cells[0].at+1), RuleBlock, "the key is missing")
 		return nil
 	}
+	if invisibleAtEnd(key) && !strings.HasPrefix(trimWhite(cells[0].raw), `"`) {
+		p.fail(lineNo, colAt(text, cells[0].at+1), RuleBlock, "the key has an invisible character at an end")
+		return nil
+	}
 	if msg := docKeyFault(lay, key); msg != "" {
 		p.fail(lineNo, colAt(text, cells[0].at+1), RuleBlock, msg)
 		return nil
@@ -1045,7 +1062,7 @@ func (p *docParser) tableRow(lineNo int, text string) *docRec {
 			rec.row.Title = v
 			continue
 		}
-		p.scalarValue(lineNo, col, rec, c, v)
+		p.scalarValue(lineNo, col, rec, c, v, strings.HasPrefix(trimWhite(cell.raw), `"`))
 	}
 	return rec
 }
@@ -1574,6 +1591,18 @@ func storageOrder(lay *docLayout, rows []*Row) (order, depth, unreached []int) {
 func siblingLess(lay *docLayout, a, b *Row) bool {
 	if lay.order != "" {
 		return orderValue(a, lay.order) < orderValue(b, lay.order)
+	}
+	if len(lay.parts) > 0 {
+		x, y := catalog.SplitKey(a.Key), catalog.SplitKey(b.Key)
+		for i, part := range lay.parts {
+			if i >= len(x) || i >= len(y) {
+				return len(x) < len(y)
+			}
+			if x[i] != y[i] {
+				return keyLess(part.Type, x[i], y[i])
+			}
+		}
+		return false
 	}
 	return keyLess(lay.key.Type, a.Key, b.Key)
 }

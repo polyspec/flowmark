@@ -7,6 +7,8 @@ This document states the conformance contract of the engine and the format of it
 
 ## The contract
 
+- orm's recipes run on a corpus as its fourth database, through [SQL statements](40-ops.md#sql-statements); the vectors here
+  test the engine's own faces and executor.
 - A vector is **a corpus before — its catalog and documents — plus a request, plus the expected
   corpus after, rows or error**. There is no SQL text and no bind list to compare; the SQL
   conformance harness does not apply, and this contract replaces it.

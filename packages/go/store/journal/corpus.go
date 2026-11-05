@@ -16,6 +16,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 )
 
 // Corpus is the declared root of one corpus and the observer of its lock and journal events.
@@ -31,6 +32,14 @@ type Corpus struct {
 	// Windows, which has no folder flush. The tests set it to run that path on every platform.
 	stageFolders bool
 }
+
+// asynchronous is whether this process does not wait for its writes to reach the disk: false, unless a server of disposable corpora
+// sets it off with `flowmark serve --synchronous off`. Off gives up the durability of a commit against a crash of the
+// machine, as a test database server does; the atomicity of a commit and its replay stay as they are.
+var asynchronous atomic.Bool
+
+// SetSynchronous sets whether this process waits for its writes to reach the disk.
+func SetSynchronous(on bool) { asynchronous.Store(!on) }
 
 // New declares the corpus at root, an absolute and clean path of a folder that is no symbolic link. obs receives
 // every event.

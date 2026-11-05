@@ -2,10 +2,13 @@ package store
 
 import (
 	"encoding/base64"
+	"regexp"
 	"strings"
 	"unicode"
 	"unicode/utf8"
 
+	"fmt"
+	"github.com/polyspec/flowmark/packages/go/catalog"
 	"github.com/polyspec/flowmark/packages/go/internal/unicodedcp"
 	"github.com/polyspec/orm/packages/go/engine/dbspec"
 )
@@ -23,9 +26,90 @@ func Readable(t dbspec.Type, v string) (string, bool) { return readable(t, v) }
 // the rule a writer checks of a value before it renders a file.
 func SingleLineFault(v string) string { return singleLineFault(v) }
 
+// ValueFault names the rule that a value of a column of the table breaks, or "" when none: a list field and a
+// table cell have a quoted form, and the field list of a file has none.
+func ValueFault(tb *catalog.Table, v string) string {
+	if tb.Storage.Kind == catalog.StorageFiles {
+		return singleLineFault(v)
+	}
+	return quotedFault(v)
+}
+
 // KeyFault names the key shape rule that key breaks, or "" when none (see the
 // document model, "Keys"): the rule a writer checks of a key before it renders a file.
 func KeyFault(key string) string { return keyFault(key) }
+
+// Literal is a stored value that its column's type does not describe, in the form its cell holds it (spec 10 Stored
+// literals): x'HEX' is a blob, t'HEX' a text of those bytes, and n'NUMBER' a number. SQLite binds no value to the type of
+// its column, and a cell holds what a statement stored.
+type Literal string
+
+var literalForm = regexp.MustCompile(`^(?:[xt]'(?:[0-9a-f]{2})*'|n'[-+0-9.eEInf]+')$`)
+
+// IsLiteral reports whether a cell's unquoted text is a stored literal.
+func IsLiteral(v string) bool { return literalForm.MatchString(v) }
+
+// TableKeyFault names the key shape rule that a key of the table breaks, or "" when none.
+func TableKeyFault(tb *catalog.Table, key string) string {
+	if tb.Storage.Kind == catalog.StorageFiles {
+		return keyFault(key)
+	}
+	if len(tb.KeyParts) == 0 {
+		if tb.Storage.Shape == catalog.ShapeList {
+			return listKeyFault(tb.KeyColumn().Type, key)
+		}
+		return shapedKeyFault(tb.KeyColumn().Type, key)
+	}
+	parts := make([]dbspec.Column, len(tb.KeyParts))
+	for i, name := range tb.KeyParts {
+		parts[i], _ = tb.ColumnNamed(name)
+	}
+	return compositeKeyFault(parts, key)
+}
+
+// shapedKeyFault names the rule a key of a document's cell breaks. A cell holds its value quoted when it must be, so a text
+// key is any single-line text and any other key follows its type alone; only a file name has the shape of keyFault (spec
+// 30 Keys).
+func shapedKeyFault(t dbspec.Type, key string) string {
+	if isTextKind(t) {
+		return quotedFault(key)
+	}
+	if key == "" {
+		return "the key is empty"
+	}
+	return ""
+}
+
+// listKeyFault names the rule a key of a list row breaks. A list row has no quoted key, so a text key has the shape of a
+// file name; a datetime, a time, a decimal and a float have their own form and follow their type alone (spec 30 Keys).
+func listKeyFault(t dbspec.Type, key string) string {
+	switch t.Kind {
+	case dbspec.TypeDatetime, dbspec.TypeTime, dbspec.TypeDecimal, dbspec.TypeF64:
+		if key == "" {
+			return "the key is empty"
+		}
+		return ""
+	}
+	return keyFault(key)
+}
+
+// compositeKeyFault names the rule that the key cell of a composite key breaks: it holds one canonical value of each
+// key column, joined by the separator (spec 30 Composite keys).
+func compositeKeyFault(parts []dbspec.Column, key string) string {
+	values := catalog.SplitKey(key)
+	if len(values) != len(parts) {
+		return fmt.Sprintf("the key holds %d values, and the primary key has %d columns", len(values), len(parts))
+	}
+	for i, part := range parts {
+		if msg := shapedKeyFault(part.Type, values[i]); msg != "" {
+			return part.Name + ": the key has " + msg
+		}
+		if canon, ok := readable(part.Type, values[i]); !ok || canon != values[i] {
+			return part.Name + ": the key is not the canonical text of a " + part.Type.String() + " key"
+		}
+	}
+	return ""
+}
 
 // FoldKey returns key with A-Z lower-cased and every other byte kept: the fold under
 // which two keys are equal without regard to case. The key shape holds A-Z and a-z
@@ -113,13 +197,29 @@ func invisibleAtEnd(v string) bool {
 // line break, a U+0000, an invisible character at either end, or raw HTML, which
 // a viewer would hide or alter.
 func singleLineFault(v string) string {
+	if msg := quotedFault(v); msg != "" {
+		return msg
+	}
+	if invisibleAtEnd(v) {
+		return "an invisible character at an end"
+	}
+	return ""
+}
+
+// isTextKind reports whether a value of t is a text.
+func isTextKind(t dbspec.Type) bool { return t.Kind == dbspec.TypeText || t.Kind == dbspec.TypeVarchar }
+
+// QuotedFault names the single-line rule that a value breaks even in a quoted cell, or "" when none.
+func QuotedFault(v string) string { return quotedFault(v) }
+
+// quotedFault names the single-line rule that a value breaks even in the quoted form of a list field or a table
+// cell, whose quotes show an invisible character at its end; a title and a field-list value have no quoted form.
+func quotedFault(v string) string {
 	switch {
 	case strings.ContainsAny(v, "\r\n"):
 		return "a line break"
 	case strings.ContainsRune(v, 0):
 		return "a U+0000"
-	case invisibleAtEnd(v):
-		return "an invisible character at an end"
 	case strings.Contains(v, "<!") || strings.Contains(v, "</"):
 		return "raw HTML"
 	}

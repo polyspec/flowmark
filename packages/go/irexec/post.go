@@ -122,7 +122,7 @@ func (w *writer) values() *Error {
 		// A key is written only by an insert, since a key is never updated; its shape
 		// is a value of the row, so its fault precedes the row's key fault.
 		if g.inserted && g.row.Key != "" {
-			if msg := store.KeyFault(g.row.Key); msg != "" {
+			if msg := store.TableKeyFault(tb, g.row.Key); msg != "" {
 				w.fault(g, tb.Name, tb.Key, codeConstraint, "the key: "+msg)
 			}
 		}
@@ -131,7 +131,7 @@ func (w *writer) values() *Error {
 			if !g.inserted && !g.assigned[col] {
 				continue
 			}
-			if col == tb.Key || col == placement || col == tb.Order {
+			if col == tb.Key || tb.KeyPart(col) >= 0 || col == placement || col == tb.Order {
 				continue
 			}
 			switch {
@@ -158,8 +158,8 @@ func (w *writer) values() *Error {
 					}
 				case !utf8.ValidString(*v):
 					w.fault(g, tb.Name, col, codeConstraint, col+" is not UTF-8")
-				case store.SingleLineFault(*v) != "":
-					w.fault(g, tb.Name, col, codeConstraint, col+" has "+store.SingleLineFault(*v))
+				case store.ValueFault(tb, *v) != "":
+					w.fault(g, tb.Name, col, codeConstraint, col+" has "+store.ValueFault(tb, *v))
 				}
 			}
 		}
@@ -190,31 +190,43 @@ func (w *writer) keyChecks() []fault {
 	}
 	// The table's rows before the write: the rows the request does not give.
 	others := w.c.recs[w.tb.Name]
+	firstOther := make(map[string]*rec, len(others))
+	othersOfFold := make(map[string][]*rec, len(others))
+	for _, x := range others {
+		if _, held := firstOther[x.row.Key]; !held {
+			firstOther[x.row.Key] = x
+		}
+		fold := store.FoldKey(x.row.Key)
+		othersOfFold[fold] = append(othersOfFold[fold], x)
+	}
+	firstGiven := make(map[string]int, len(ins))
+	timesGiven := make(map[string]int, len(ins))
+	givenOfFold := make(map[string][]*given, len(ins))
+	for i, g := range ins {
+		k := g.row.Key
+		if timesGiven[k] == 0 {
+			firstGiven[k] = i
+		}
+		timesGiven[k]++
+		fold := store.FoldKey(k)
+		givenOfFold[fold] = append(givenOfFold[fold], g)
+	}
 	var faults []fault
 	for i, g := range ins {
 		k := g.row.Key
 		idx := -1
-		for j, o := range ins {
-			if j != i && o.row.Key == k {
-				idx = g.index
-			}
+		if timesGiven[k] > 1 {
+			idx = g.index
 		}
 		refuse := func(msg string) {
 			faults = append(faults, fault{store.Refusal{Table: w.tb.Name, Key: k, Index: idx, Column: w.tb.Key, Rule: codeDuplicateKey, Message: msg}, g.seq})
 			w.duplicated(g)
 		}
-		byteGiven := -1
-		for j := 0; j < i; j++ {
-			if ins[j].row.Key == k {
-				byteGiven = j
-				break
-			}
-		}
-		if byteGiven >= 0 {
-			refuse(fmt.Sprintf("the key %s equals the key of the row at index %d of the rows given", k, ins[byteGiven].index))
+		if j := firstGiven[k]; j < i {
+			refuse(fmt.Sprintf("the key %s equals the key of the row at index %d of the rows given", k, ins[j].index))
 			continue
 		}
-		if x := firstByKey(others, func(o string) bool { return o == k }); x != nil {
+		if x := firstOther[k]; x != nil {
 			refuse(fmt.Sprintf("the key %s equals the key of the %s row in %s", k, w.tb.Name, x.file))
 			continue
 		}
@@ -224,14 +236,15 @@ func (w *writer) keyChecks() []fault {
 		var leastGiven *given
 		var leastRow *rec
 		consider := func(o string) bool {
-			return o != k && store.FoldKey(o) == store.FoldKey(k) && (least == "" || o < least)
+			return o != k && (least == "" || o < least)
 		}
-		for _, o := range ins {
+		fold := store.FoldKey(k)
+		for _, o := range givenOfFold[fold] {
 			if o.row.Key < k && consider(o.row.Key) {
 				least, leastGiven, leastRow = o.row.Key, o, nil
 			}
 		}
-		for _, x := range others {
+		for _, x := range othersOfFold[fold] {
 			if consider(x.row.Key) {
 				least, leastGiven, leastRow = x.row.Key, nil, x
 			}
@@ -353,6 +366,9 @@ func isGiven(gs []*given, r *store.Row) bool {
 // table is needed. The placement key of a block row was checked as the row was
 // placed.
 func (w *writer) references() *Error {
+	if w.r.cl.noForeignKeys {
+		return nil
+	}
 	placement := w.tb.Placement()
 	for _, g := range w.given {
 		x := w.next.byRow[g.row]
@@ -361,21 +377,22 @@ func (w *writer) references() *Error {
 		}
 		for _, fk := range w.tb.ForeignKeys {
 			col := fk.Columns[0]
-			if col == placement || (!g.inserted && !g.assigned[col]) {
+			if col == placement || (!g.inserted && !slices.ContainsFunc(fk.Columns, func(c string) bool { return g.assigned[c] })) {
 				continue
 			}
-			v, err := w.next.value(x, col)
+			target, _ := w.c.cat.Table(fk.Table)
+			key, named, err := w.next.referencedKey(x, fk, target)
 			if err != nil {
 				return err
 			}
-			if v.null {
+			if !named {
 				continue
 			}
 			if err := w.next.need(fk.Table); err != nil {
 				return err
 			}
-			if firstByKey(w.next.recs[fk.Table], func(k string) bool { return k == v.text }) == nil {
-				w.fault(g, w.tb.Name, col, codeForeignKey, fmt.Sprintf("the foreign key %s names no %s row with the key %s", col, fk.Table, v.text))
+			if firstByKey(w.next.recs[fk.Table], func(k string) bool { return k == key }) == nil {
+				w.fault(g, w.tb.Name, col, codeForeignKey, fmt.Sprintf("the foreign key %s names no %s row with the key %s", col, fk.Table, key))
 			}
 		}
 	}
@@ -603,6 +620,9 @@ func (w *writer) linkTargets(before, after *linker) *Error {
 	for _, tb := range w.c.cat.Tables {
 		placement := tb.Placement()
 		for _, fk := range tb.ForeignKeys {
+			if len(fk.Columns) != 1 {
+				continue // a composite foreign key holds plain values, not a link
+			}
 			col := fk.Columns[0]
 			if col == placement {
 				continue
@@ -642,6 +662,9 @@ func (w *writer) needLinks(f *file) *Error {
 		tb, _ := w.c.cat.Table(r.Table)
 		placement := tb.Placement()
 		for _, fk := range tb.ForeignKeys {
+			if len(fk.Columns) != 1 {
+				continue // a composite foreign key holds plain values, not a link
+			}
 			col := fk.Columns[0]
 			if col == placement {
 				continue

@@ -51,10 +51,15 @@ column을 이름 붙인다 — column 이름이 동작을 고르지 않는다.
 
 ## dbspec 구성에 대한 corpus 규칙
 
-- **거절**: corpus에서 각각 schema 오류다 — composite primary key, `aes`·`aes_version`·`blind_index`
-  (key는 client를 떠나지 않는다), `audit`와 `immutable`(markdown에는 trigger가 없고 대신
-  `state_machine … history`가 전이를 기록한다), `cascade`와 `set_null` action, 외부 `use` 문서, `store`
-  setting 없는 table, 마지막 stage가 `yaml`인 `codec` — orm의 encoder(go-yaml의 `Marshal`)는 모든 값을
+- **기본 저장**: `store` setting이 없는 table은 자기 문서 하나에 `document table`로 저장한다. 그래서 SQL
+  데이터베이스용으로 쓴 dbspec 문서를 그대로 corpus에 설치할 수 있다.
+- **composite key**: `document`나 `block` 저장 table은 여러 column의 primary key를 가질 수 있다. key cell은 값을
+  `/`로 이어 담고 heading은 column 이름을 `/`로 잇는다. 예: `| tenant/account | name |`, `| 900/1 | a |`. key type의 어떤
+  값도 `/`를 담지 않으므로 cell의 읽기는 하나다. 각 값은 그 column type의 key 규칙을 따르고, 읽기와 쓰기는 그 column을
+  column으로 본다. composite 외래 key는 link가 아니라 평범한 값을 담고 그 table의 key 전체를 가리키며, validator의
+  `reference.dangling`이 적용된다.
+- **거절**: corpus에서 각각 schema 오류다 — `files` 저장 table의 composite primary key(파일 이름은 key column 하나로 정한다), `audit`(대신 `state_machine … history`가 전이를 기록한다), 외부 `use` 문서,
+  마지막 stage가 `yaml`인 `codec` — orm의 encoder(go-yaml의 `Marshal`)는 모든 값을
   line feed로 끝내며 형식의 어떤 자리도 그것을 담지 못한다. 그 뒤의 stage는 그것을 encode해 없앤다.
   view table은 setting이 아니라 [응용 schema](100-checklist.ko.md#view)가 선언한다.
 - **허용**: markdown table의 `i64` primary key column에만 `identity`를 쓴다. lock 아래 `max+1`로 할당한다. dbspec은 그 밖의 type에 대한 `identity`를 거절하므로(`an identity column has type i64`), `i16`이나 `i32` key도 쓸 수 없다. 근거: `max+1`은 정수 순열이며, `bool`, `varchar`, `uuid`, `date` key에는 더할 최댓값이 없다.
@@ -65,15 +70,37 @@ column을 이름 붙인다 — column 이름이 동작을 고르지 않는다.
   그 텍스트는 key 모양의 문자만 가져야 한다([document model](20-document-model.md#keys)). `date`는 연도가 0001부터
   9999까지인 `YYYY-MM-DD`로 쓰며(orm의 date literal 규칙이 받는 범위), 그래서 네 자리 숫자이고 부호가 없으며 `-`는 구분자일 뿐이다. `time`과 `datetime`의 보통 값은 `:`를 담는다. scale이 0보다 큰 `decimal`과 `f64`의 정수가 아닌 값은 `.`을 담으며, 이 type들의 음수 값은 `-`로 시작하므로 이들은 모양을 결코 만족할 수 없다. scale이 0인 `decimal`은 정수만 담으며 정수 key는 integer type이 맡으므로, 다른 decimal과 함께 거절한다. `f64`의 정수 값도 integer type이 맡는 정수이므로, `f64` key는 모양이 거절하는 값만 더한다. `text`와 `bytes`는 dbspec 자신의 key 규칙이 거절한다. 음수 integer key는 type이 아니라
   값마다 거절된다([document model](20-document-model.md#keys)).
-- **외래 key.** table의 모든 외래 key는 하나의 column이며 어떤 table의 단일 column primary key를 가리킨다.
-  composite 외래 key, 또는 unique이지만 key가 아닌 column을 가리키는 외래 key는 그 외래 key의 위치에 놓인
-  schema 오류다. 근거: 외래 key는 가리키는 행으로의 link로 쓰이며, 행은 단일 column key를 통해서만 link를 가진다.
+- **외래 key.** table의 모든 외래 key는 어떤 table의 primary key를 가리킨다. unique이지만 key가 아닌 column을
+  가리키는 외래 key는 그 외래 key의 위치에 놓인 schema 오류다. 근거: 단일 column 외래 key는 가리키는 행으로의
+  link로 쓰이며, 행은 자기 key를 통해 link를 가진다.
 - **block 배치.** block table의 배치 외래 key — 그 `store block <fk>` setting이 이름 붙이는 외래 key — 의
   column은 non-null이다. nullable이면 block table 이름에 위치한 schema 오류다. 근거: block 행은 그 배치
   외래 key가 참조하는 행의 scope 안에 서며([document model](20-document-model.md#storage)) NULL은 어떤 행도
   참조하지 않으므로, 그 자리에 NULL을 가진 행은 쓰일 자리가 없다. SQL 행은 자리가 필요 없으므로 dbspec은 nullable
   외래 key column을 받아들인다. 이 catalog 규칙은 여기서 정한다. 이 규칙은 이력 table을 포함한 모든 block
   table에 성립한다([이력 table](#이력-table)).
+
+## Key
+
+corpus는 `aes`, `aes_version`, `blind_index`를 선언하고 orm이 저장하는 것을 저장한다: 암호문, 행의 key version, blind index.
+
+- **client는 자기 key를 쥔다.** orm 요청에서는 SQL과 같이 client가 암호화하고 hash한다: 연결 설정이 key를 준다(orm
+  `COD-8`). executor는 저장값만 받으므로 key가 필요 없다.
+- **엔진은 주입으로 key를 받는다.** 환경 변수 `FLOWMARK_KEYRING`이 keyring 파일을 가리킨다. 파일은 orm 설정과 같은 모양의 JSON
+  객체 `{"current": <version>, "versions": {"<version>": "<key>"}, "blind_index": "<key>"}`이고 `blind_index`는 선택이다.
+  모든 명령이 catalog를 읽을 때 이 파일을 읽는다. 이 객체로 읽히지 않는 파일, 선언되지 않은 current version, 빈 key는 그
+  변수를 지목하며 catalog load를 실패시킨다. corpus 안의 keyring(corpus가 공개한다)과 symbolic link도 마찬가지다.
+- **엔진이 시작하는 쓰기**(CLI, MCP, sidecar)는 aes column의 평문을 받아 orm 규칙을 따른다: 현재 key로 암호화하고, 그 version을
+  기록하고, blind index를 쓴다. version column 대입은 `IR_INVALID`이고, 암호화 데이터의 update는 모든 aes column을 대입한다.
+  한 version이 행 전체를 설명하기 때문이다. keyring이 없으면 그런 쓰기는 평문을 저장하게 되므로 `CONFIG`다. `rows.load`
+  ([operations](40-ops.md#the-faces))는 저장값을 받으므로 그런 쓰기가 아니다.
+- **validator와 commit**은 aes column을 행이 기록한 version의 key로 decode한다([constraints](50-constraints.md#codec-values)).
+  keyring이 없는 process에서는 그 column을 판정하지 않고 corpus의 나머지를 판정한다.
+- **export**([sync](70-sync.md))는 저장된 암호문, version, blind index를 그대로 두므로 key가 필요 없다.
+
+근거: 암호문은 executor의 모든 읽기와 쓰기에 불투명하므로 corpus는 SQL처럼 이 설정을 받는다. corpus에 든 key는 corpus와 함께
+공개되므로 밖에서 주입한다. 엔진이 쓴 값은 같은 key를 가진 client가 읽을 수 있어야 하므로 엔진은 orm 규칙을 지키고 stage를
+재구현하지 않는다.
 
 ## 이름 규칙
 
