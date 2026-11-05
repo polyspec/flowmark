@@ -125,20 +125,20 @@ func (c *Corpus) canonLeaves(p string) (CanonReport, bool) {
 // alone and needs no table, and the placement foreign key of a block row is never written (spec 10 Foreign keys as
 // links).
 func (c *Corpus) linkTables(f *file) []string {
+	return slices.DeleteFunc(linkedTables(c.cat, f), func(name string) bool {
+		ref, _ := c.cat.Table(name)
+		return ref.Storage.Kind == catalog.StorageFiles
+	})
+}
+
+// linkedTables returns, sorted, the tables that a written foreign key of a row of file f names, its block rows included.
+func linkedTables(cat *catalog.Catalog, f *file) []string {
 	tables := map[string]bool{}
 	var visit func(r *store.Row)
 	visit = func(r *store.Row) {
-		tb, _ := c.cat.Table(r.Table)
-		placement := tb.Placement()
-		for _, fk := range tb.ForeignKeys {
-			if len(fk.Columns) != 1 {
-				continue // a composite foreign key holds plain values, not a link
-			}
-			col := fk.Columns[0]
-			if col == placement || r.Scalars[col] == nil {
-				continue
-			}
-			if ref, _ := c.cat.Table(fk.Table); ref.Storage.Kind != catalog.StorageFiles {
+		tb, _ := cat.Table(r.Table)
+		for _, fk := range tb.Links() {
+			if r.Scalars[fk.Columns[0]] != nil {
 				tables[fk.Table] = true
 			}
 		}

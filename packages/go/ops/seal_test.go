@@ -132,11 +132,7 @@ func TestSealedWrites(t *testing.T) {
 	} {
 		t.Run(f.name, func(t *testing.T) {
 			c, _ := sealedCorpus(t, f.keyring)
-			_, err := runOp(t, c, f.op, f.members)
-			code, msg := Failure(err)
-			if code != f.code || !strings.Contains(msg, f.text) {
-				t.Fatalf("got %s: %s, want %s naming %q", code, msg, f.code, f.text)
-			}
+			fails(t, c, f.op, f.members, f.code, f.text)
 		})
 	}
 	t.Run("an update that assigns no aes column needs no keyring", func(t *testing.T) {

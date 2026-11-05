@@ -126,6 +126,19 @@ func (t *Table) ColumnNamed(name string) (dbspec.Column, bool) {
 	return dbspec.Column{}, false
 }
 
+// Links returns the foreign keys of t that a document writes as links: each of one column, other than the placement
+// column; a composite foreign key holds plain values.
+func (t *Table) Links() []dbspec.ForeignKey {
+	placement := t.Placement()
+	var out []dbspec.ForeignKey
+	for _, fk := range t.ForeignKeys {
+		if len(fk.Columns) == 1 && fk.Columns[0] != placement {
+			out = append(out, fk)
+		}
+	}
+	return out
+}
+
 // Placement returns the placement foreign key column of a block table, the column that names its parent row, and ""
 // for a table of any other storage.
 func (t *Table) Placement() string {

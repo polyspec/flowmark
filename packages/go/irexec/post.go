@@ -618,15 +618,8 @@ func (w *writer) linkTargets(before, after *linker) *Error {
 		return nil
 	}
 	for _, tb := range w.c.cat.Tables {
-		placement := tb.Placement()
-		for _, fk := range tb.ForeignKeys {
-			if len(fk.Columns) != 1 {
-				continue // a composite foreign key holds plain values, not a link
-			}
+		for _, fk := range tb.Links() {
 			col := fk.Columns[0]
-			if col == placement {
-				continue
-			}
 			links := false
 			for k := range moved {
 				if strings.HasPrefix(k, fk.Table+"\x00") {
@@ -656,38 +649,7 @@ func (w *writer) linkTargets(before, after *linker) *Error {
 // needLinks needs every table that a link of file f names: a link's target is
 // derived from the rows of the table it names.
 func (w *writer) needLinks(f *file) *Error {
-	tables := map[string]bool{}
-	var visit func(r *store.Row)
-	visit = func(r *store.Row) {
-		tb, _ := w.c.cat.Table(r.Table)
-		placement := tb.Placement()
-		for _, fk := range tb.ForeignKeys {
-			if len(fk.Columns) != 1 {
-				continue // a composite foreign key holds plain values, not a link
-			}
-			col := fk.Columns[0]
-			if col == placement {
-				continue
-			}
-			if v := r.Scalars[col]; v != nil {
-				tables[fk.Table] = true
-			}
-		}
-		names := make([]string, 0, len(r.Blocks))
-		for n := range r.Blocks {
-			names = append(names, n)
-		}
-		sort.Strings(names)
-		for _, n := range names {
-			for _, b := range r.Blocks[n] {
-				visit(b)
-			}
-		}
-	}
-	for _, r := range f.rows {
-		visit(r)
-	}
-	for _, t := range sortedTables(tables) {
+	for _, t := range linkedTables(w.c.cat, f) {
 		if err := w.next.need(t); err != nil {
 			return err
 		}

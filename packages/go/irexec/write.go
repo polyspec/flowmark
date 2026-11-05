@@ -181,17 +181,7 @@ func (w *writer) statedDelete() *Error {
 		w.next.index()
 		return nil
 	}
-	for _, x := range slices.Backward(rows) {
-		x = w.next.byRow[x.row]
-		if x == nil {
-			continue // it stood in a block or a file that an earlier removal took
-		}
-		if err := w.removeRow(x); err != nil {
-			return err
-		}
-		w.next.index()
-	}
-	return nil
+	return w.removeBackward(rows)
 }
 
 // statedUpdate gives each row of a difference its own values.
@@ -1121,7 +1111,13 @@ func (w *writer) delete() *Error {
 		return nil
 	}
 	// A referencing row goes before the row it references, so that a block row still has its parent.
-	for _, x := range slices.Backward(gone) {
+	return w.removeBackward(gone)
+}
+
+// removeBackward removes rows from the last to the first, each as the next tree holds it: a row that an earlier removal
+// took with its block or its file is gone already.
+func (w *writer) removeBackward(rows []*rec) *Error {
+	for _, x := range slices.Backward(rows) {
 		x = w.next.byRow[x.row]
 		if x == nil {
 			continue // it stood in a block or a file that an earlier removal took

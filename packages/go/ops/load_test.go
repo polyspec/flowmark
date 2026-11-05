@@ -68,12 +68,6 @@ func TestRowsLoad(t *testing.T) {
 		{"a key that exists", `{"table":"tags","rows":[{"id":1,"label":"a"},{"id":1,"label":"b"}]}`, "DUPLICATE_KEY", "1"},
 		{"a value not of its type", `{"table":"tags","rows":[{"id":"x","label":"a"}]}`, "CONSTRAINT", "not a value of id"},
 	} {
-		t.Run(f.name, func(t *testing.T) {
-			_, err := run(t, loadCorpus(t), "rows.load", f.members)
-			code, msg := Failure(err)
-			if code != f.code || !strings.Contains(msg, f.text) {
-				t.Fatalf("got %s: %s, want %s naming %q", code, msg, f.code, f.text)
-			}
-		})
+		t.Run(f.name, func(t *testing.T) { fails(t, loadCorpus(t), "rows.load", f.members, f.code, f.text) })
 	}
 }
