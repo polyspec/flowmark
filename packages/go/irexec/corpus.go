@@ -212,24 +212,25 @@ func (c *Corpus) Rows(table string) ([][]any, error) {
 
 // StoredRows returns every row of table as Rows does, each value that is not of its column's type as the file holds it: a
 // store.Literal, or the text. The database of a SQL statement holds them as a statement stored them (spec 40 SQL statements).
-func (c *Corpus) StoredRows(table string) ([][]any, error) {
-	return c.tableRows(table, func(x *rec, col dbspec.Column) (any, error) {
-		if raw, ok := x.row.Raw[col.Name]; ok {
-			if store.IsLiteral(raw) {
-				return store.Literal(raw), nil
-			}
-			return raw, nil
+func (c *Corpus) StoredRows(table string) ([][]any, error) { return c.tableRows(table, c.storedValue) }
+
+// storedValue is the stored value of column col of x, as a database of the corpus holds it.
+func (c *Corpus) storedValue(x *rec, col dbspec.Column) (any, error) {
+	if raw, ok := x.row.Raw[col.Name]; ok {
+		if store.IsLiteral(raw) {
+			return store.Literal(raw), nil
 		}
-		v, err := c.value(x, col.Name)
-		if err != nil {
-			return nil, err
-		}
-		if !v.null && (col.Type.Kind == dbspec.TypeDatetime || col.Type.Kind == dbspec.TypeTime || col.Type.Kind == dbspec.TypeDate) {
-			// SQLite holds these as text, at the precision of the type, which is how the file holds them.
-			return v.text, nil
-		}
-		return cellOutput(col, v)
-	})
+		return raw, nil
+	}
+	v, err := c.value(x, col.Name)
+	if err != nil {
+		return nil, err
+	}
+	if !v.null && (col.Type.Kind == dbspec.TypeDatetime || col.Type.Kind == dbspec.TypeTime || col.Type.Kind == dbspec.TypeDate) {
+		// SQLite holds these as text, at the precision of the type, which is how the file holds them.
+		return v.text, nil
+	}
+	return cellOutput(col, v)
 }
 
 // cellOutput is the wire value of v in column col, its failure an error only when there is one: output answers a typed
@@ -587,32 +588,27 @@ func (c *Corpus) position(x *rec) (cell, *Error) {
 	if _, raw := x.row.Raw[tb.Order]; raw {
 		return cell{}, c.typeFault(x, tb.Order)
 	}
-	if _, ok := filesGroup(x); !ok {
+	g, ok := filesGroup(x)
+	if !ok {
 		return cell{}, c.typeFault(x, parentColumn(tb))
 	}
-	at, ok := c.positions[tb.Name]
-	if !ok {
-		groups := map[string][]*rec{}
-		var keys []string
-		for _, y := range c.tableRecs(tb.Name) {
-			g, ok := filesGroup(y)
-			if !ok {
-				continue
-			}
-			if _, seen := groups[g]; !seen {
-				keys = append(keys, g)
-			}
-			groups[g] = append(groups[g], y)
-		}
+	at := c.positions[tb.Name]
+	if at == nil {
 		at = map[*rec]int64{}
-		for _, g := range keys {
-			members := groups[g]
-			c.sortSiblings(tb, members)
-			for i, y := range members {
-				at[y] = int64(i + 1)
-			}
-		}
 		c.positions[tb.Name] = at
+	}
+	if _, placed := at[x]; !placed {
+		// The siblings of a files row are the rows of its group in the index (groupKey: a files row has no placement
+		// parent), in corpus order.
+		key := g
+		if g != "" {
+			key = "\x00" + g
+		}
+		members := c.lookup(groupIndex(tb.Name, key))
+		c.sortSiblings(tb, members)
+		for i, y := range members {
+			at[y] = int64(i + 1)
+		}
 	}
 	return cell{text: strconv.FormatInt(at[x], 10)}, nil
 }

@@ -181,14 +181,16 @@ func applyWrites(ctx context.Context, s *writepath.Session, writes [][]byte) err
 		if !ok {
 			return &Error{codeInternal, "the session holds no database of its corpus"}
 		}
+		before := h.corpus
 		h.corpus = c
-		return placeBack(ctx, h.db, c, writes)
+		return placeBack(ctx, h.db, before, c, writes)
 	})
 }
 
-// placeBack gives the database the positions that the corpus gave the rows of the order tables that writes wrote: a row it
-// placed, and the rows that a placed row moved.
-func placeBack(ctx context.Context, db *sql.DB, c *irexec.Corpus, writes [][]byte) error {
+// placeBack gives the database the positions that the corpus c gave the rows of the order tables that writes wrote: a row
+// it placed, and the rows that a placed row moved, which are the rows that differ from the corpus before the writes
+// (irexec.Corpus.Changed).
+func placeBack(ctx context.Context, db *sql.DB, before, c *irexec.Corpus, writes [][]byte) error {
 	written := map[string]bool{}
 	for _, msg := range writes {
 		var w struct {
@@ -201,7 +203,12 @@ func placeBack(ctx context.Context, db *sql.DB, c *irexec.Corpus, writes [][]byt
 		}
 		written[w.Request.Entity] = true
 	}
-	for _, tb := range c.Catalog().Tables {
+	changes, err := c.Changed(before)
+	if err != nil {
+		return err
+	}
+	for _, ch := range changes {
+		tb, _ := c.Catalog().Table(ch.Table)
 		if tb.Order == "" || !written[tb.Name] {
 			continue
 		}
@@ -212,9 +219,11 @@ func placeBack(ctx context.Context, db *sql.DB, c *irexec.Corpus, writes [][]byt
 		}
 		at := slices.IndexFunc(tb.Columns, func(col dbspec.Column) bool { return col.Name == tb.Order })
 		text := "UPDATE " + quote(tb.Name) + " SET " + quote(tb.Order) + " = ? WHERE " + strings.Join(where, " AND ") + " AND " + quote(tb.Order) + " IS NOT ?"
-		rows, err := c.StoredRows(tb.Name)
-		if err != nil {
-			return err
+		rows := ch.Rows
+		if ch.Whole {
+			if rows, err = c.StoredRows(tb.Name); err != nil {
+				return err
+			}
 		}
 		for _, row := range rows {
 			position, err := stored(tb.Columns[at].Type, row[at])
@@ -328,6 +337,13 @@ func (staleSnapshot) ResultCode() int { return sqlite3.SQLITE_BUSY_SNAPSHOT }
 // readInto answers a read from the corpus c on the database of the reads without the lock.
 func readInto(ctx context.Context, s *writepath.Session, c *irexec.Corpus, slot *io.Closer, unlock func(), text string, args []any) (*Answer, bool, error) {
 	h, ok := (*slot).(*held)
+	if ok && h.corpus.Catalog() == c.Catalog() && len(h.corpus.Differs(c)) > 0 {
+		if err := refresh(ctx, h.db, h.corpus, c); err != nil {
+			*slot = nil
+			return nil, false, errors.Join(err, closeError(h))
+		}
+		h.corpus = c
+	}
 	if !ok || h.corpus.Catalog() != c.Catalog() || len(h.corpus.Differs(c)) > 0 {
 		if ok {
 			if err := h.Close(); err != nil {
@@ -565,9 +581,15 @@ func (h *held) Close() error { return h.db.Close() }
 func heldFor(ctx context.Context, s *writepath.Session, c *irexec.Corpus) (*held, error) {
 	h, ok := s.Held().(*held)
 	// A transaction whose session ended without a word to the database, as an idle one does, went with it.
-	if ok && (h.owner == nil || h.owner == s) && len(h.corpus.Differs(c)) == 0 {
+	switch {
+	case ok && (h.owner == nil || h.owner == s) && len(h.corpus.Differs(c)) == 0:
 		h.corpus = c
-	} else {
+	case ok && h.owner == nil && h.corpus.Catalog() == c.Catalog():
+		if err := refresh(ctx, h.db, h.corpus, c); err != nil {
+			return nil, errors.Join(err, drop(s))
+		}
+		h.corpus = c
+	default:
 		if err := drop(s); err != nil {
 			return nil, err
 		}
@@ -947,10 +969,50 @@ func materialize(ctx context.Context, c *irexec.Corpus) (*sql.DB, error) {
 	return db, nil
 }
 
-func fill(ctx context.Context, db *sql.DB, c *irexec.Corpus) (err error) {
+// fill creates the schema of the corpus c in the empty database db and inserts its stored rows.
+func fill(ctx context.Context, db *sql.DB, c *irexec.Corpus) error {
 	cat := c.Catalog()
 	schema, err := catalog.SchemaStatements(assignable(cat.Documents), cat.Statements)
 	if err != nil {
+		return &Error{codeInternal, err.Error()}
+	}
+	return asFill(ctx, db, schema, func(tx *sql.Tx) error {
+		for _, tb := range cat.Tables {
+			if err := fillTable(ctx, tx, c, tb); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// refresh brings the database db of the corpus before to the corpus c, a corpus under the same catalog: the rows of the
+// tables that differ (irexec.Corpus.Changed) leave it by their keys and enter it as c stores them, and a table whose
+// availability differs is filled again, as a fill writes them (asFill), so the database holds what a fill from c would
+// (plan, Ruling: an operation costs what it touches). A row keyed by rowid keeps its stored rowid; the rowid of another
+// row is the database's own.
+func refresh(ctx context.Context, db *sql.DB, before, c *irexec.Corpus) error {
+	changes, err := c.Changed(before)
+	if err != nil || len(changes) == 0 {
+		return err
+	}
+	return asFill(ctx, db, nil, func(tx *sql.Tx) error {
+		for _, ch := range changes {
+			tb, _ := c.Catalog().Table(ch.Table)
+			if err := refreshTable(ctx, tx, c, tb, ch); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// asFill runs the statements schema and then rows in one transaction of db under the conditions of a fill: the foreign
+// keys off, the triggers that stand dropped and the checks ignored, since a stored row has had its audit and its checks
+// and a statement can have stored it past them, as ignore_check_constraints lets it. The triggers stand again and the
+// foreign keys are on when it commits, so a statement meets them as a SQLite connection of orm does.
+func asFill(ctx context.Context, db *sql.DB, schema []string, rows func(*sql.Tx) error) (err error) {
+	if _, err := db.ExecContext(ctx, "PRAGMA foreign_keys = OFF"); err != nil {
 		return &Error{codeInternal, err.Error()}
 	}
 	tx, err := db.BeginTx(ctx, nil)
@@ -968,19 +1030,15 @@ func fill(ctx context.Context, db *sql.DB, c *irexec.Corpus) (err error) {
 			return &Error{codeInternal, fmt.Sprintf("the schema statement %s: %v", text, err)}
 		}
 	}
-	// The triggers that stand wait for the rows: a stored row has had its audit and its checks.
 	triggers, err := standingTriggers(ctx, tx)
 	if err != nil {
 		return err
 	}
-	// A stored row has had its checks too; a statement can have stored it past them, as ignore_check_constraints lets it.
 	if _, err := tx.ExecContext(ctx, "PRAGMA ignore_check_constraints = ON"); err != nil {
 		return &Error{codeInternal, err.Error()}
 	}
-	for _, tb := range cat.Tables {
-		if err := fillTable(ctx, tx, c, tb); err != nil {
-			return err
-		}
+	if err := rows(tx); err != nil {
+		return err
 	}
 	if _, err := tx.ExecContext(ctx, "PRAGMA ignore_check_constraints = OFF"); err != nil {
 		return &Error{codeInternal, err.Error()}
@@ -993,18 +1051,59 @@ func fill(ctx context.Context, db *sql.DB, c *irexec.Corpus) (err error) {
 	if err := tx.Commit(); err != nil {
 		return &Error{codeInternal, err.Error()}
 	}
-	// The rows are in; a statement meets the foreign keys as a SQLite connection of orm does.
 	if _, err := db.ExecContext(ctx, "PRAGMA foreign_keys = ON"); err != nil {
 		return &Error{codeInternal, err.Error()}
 	}
 	return nil
 }
 
+// refreshTable takes the change ch of the table tb into the database of tx.
+func refreshTable(ctx context.Context, tx *sql.Tx, c *irexec.Corpus, tb *catalog.Table, ch irexec.TableChange) (err error) {
+	if ch.Whole {
+		if _, err := tx.ExecContext(ctx, "DELETE FROM "+quote(tb.Name)); err != nil {
+			return &Error{codeInternal, err.Error()}
+		}
+		return fillTable(ctx, tx, c, tb)
+	}
+	keys := keyColumns(tb)
+	where := make([]string, len(keys))
+	at := make([]int, len(keys))
+	for i, k := range keys {
+		where[i] = quote(k) + " = ?"
+		at[i] = slices.IndexFunc(tb.Columns, func(col dbspec.Column) bool { return col.Name == k })
+	}
+	del, err := tx.PrepareContext(ctx, "DELETE FROM "+quote(tb.Name)+" WHERE "+strings.Join(where, " AND "))
+	if err != nil {
+		return &Error{codeInternal, err.Error()}
+	}
+	defer closed(&err, del)
+	for _, row := range ch.Gone {
+		args := make([]any, len(keys))
+		for i, j := range at {
+			if args[i], err = stored(tb.Columns[j].Type, row[j]); err != nil {
+				return err
+			}
+		}
+		if _, err := del.ExecContext(ctx, args...); err != nil {
+			return &Error{codeInternal, fmt.Sprintf("a row of %s: %v", tb.Name, err)}
+		}
+	}
+	return insertRows(ctx, tx, c, tb, ch.Rows)
+}
+
 // fillTable inserts the stored rows of the table tb.
 func fillTable(ctx context.Context, tx *sql.Tx, c *irexec.Corpus, tb *catalog.Table) (err error) {
 	rows, err := c.StoredRows(tb.Name)
-	if err != nil || len(rows) == 0 {
+	if err != nil {
 		return err
+	}
+	return insertRows(ctx, tx, c, tb, rows)
+}
+
+// insertRows inserts the stored rows rows of the table tb.
+func insertRows(ctx context.Context, tx *sql.Tx, c *irexec.Corpus, tb *catalog.Table, rows [][]any) (err error) {
+	if len(rows) == 0 {
+		return nil
 	}
 	insert, err := tx.PrepareContext(ctx, insertText(tb))
 	if err != nil {

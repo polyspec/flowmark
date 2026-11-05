@@ -283,7 +283,9 @@ utility of orm's SQLite dialect holds on a corpus, and a client has only this dr
   `dbspec/statements.json`, then its rows. The statement runs there. The difference of its rows goes back through the
   executor as one write per table, so the corpus's rules still judge it and the commit protocol writes it; SQLite has
   already judged NOT NULL and the foreign keys, its triggers wrote their rows, and a codec does not judge what a statement
-  stores. The database stands between statements under the lock while the corpus does not differ from it.
+  stores. The database stands between statements under the lock while the corpus does not differ from it; when the
+  corpus differs under the same catalog, a database no transaction holds is refreshed to it
+  ([cost model](#cost-model)), and otherwise it is filled again.
 - **Schema statements.** A schema statement is its own transaction: an open transaction commits first and a new one goes
   on after it. A statement that changes the schema is appended to `dbspec/statements.json`, and the tables it changed
   are written again under their new columns; a document keeps its text. `CREATE ... IF NOT EXISTS` and `DROP ... IF
@@ -656,6 +658,17 @@ and MySQL and PostgreSQL compare a `datetime(p)` column with `NOW(6)` at six dig
   `TestCost` holds that every write reads the same rows at 1,000 and at 100,000 rows, and
   `TestIndexMarks` that each change of a write's corpus, marked, leaves the index equal to the index
   built from nothing and, unmarked, does not.
+- A database whose corpus differs is refreshed, not filled again: the rows of the documents that
+  differ leave it by their keys and enter it as the corpus stores them, with the rows of each sibling
+  group of a files table with an order column that a changed row joins or leaves, since a position
+  is derived from its group; a table whose availability differs is filled again. The refresh runs
+  under the conditions of a fill, with foreign keys off, the standing triggers dropped and checks
+  ignored, so the database holds what a fill of the corpus from nothing holds. A write gives the
+  database back the positions of the rows it changed from the same difference. `TestCost` holds that
+  an external edit and a write take and write the same rows at 1,000 and at 100,000 rows, and
+  `TestRefresh` and `FuzzRefresh` of `statement` that a database refreshed through a cut, a removal, a
+  restoration and an exchange of documents of each golden corpus equals the database filled from
+  nothing, and fails exactly when that fill fails.
 - **The codec's cost** is linear in the bytes of a file: the parse and the render of a file each take
   at most 0.1 s of CPU per megabyte of it and allocate at most 64 bytes per byte of it, for a document
   file of rows with detail sections. No pass compares each heading with each detail anchor, or each

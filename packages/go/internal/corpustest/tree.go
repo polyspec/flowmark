@@ -72,6 +72,33 @@ func CopyTree(src, dst string) error {
 	})
 }
 
+// Documents returns the text of each document under root, by its slash-separated corpus path: every regular file
+// outside dbspec/.
+func Documents(t testing.TB, root string) map[string]string {
+	t.Helper()
+	docs := map[string]string{}
+	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		rel, err := filepath.Rel(root, p)
+		if err != nil {
+			return err
+		}
+		rel = filepath.ToSlash(rel)
+		if strings.HasPrefix(rel, "dbspec/") {
+			return nil
+		}
+		b, err := os.ReadFile(p)
+		docs[rel] = string(b)
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return docs
+}
+
 // WriteFiles writes files (slash-separated corpus path to text) under root, creating their folders.
 func WriteFiles(t testing.TB, root string, files map[string]string) {
 	t.Helper()

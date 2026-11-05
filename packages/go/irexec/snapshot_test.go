@@ -1,7 +1,6 @@
 package irexec
 
 import (
-	"io/fs"
 	"maps"
 	"os"
 	"path"
@@ -75,26 +74,7 @@ func TestFromSnapshot(t *testing.T) {
 	}
 	for _, src := range srcs {
 		t.Run(filepath.ToSlash(src), func(t *testing.T) {
-			docs := map[string]string{}
-			err := filepath.WalkDir(src, func(p string, d fs.DirEntry, err error) error {
-				if err != nil || d.IsDir() {
-					return err
-				}
-				rel, err := filepath.Rel(src, p)
-				if err != nil {
-					return err
-				}
-				rel = filepath.ToSlash(rel)
-				if strings.HasPrefix(rel, "dbspec/") {
-					return nil
-				}
-				b, err := os.ReadFile(p)
-				docs[rel] = string(b)
-				return err
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			docs := corpustest.Documents(t, src)
 			root := t.TempDir()
 			if err := corpustest.CopyTree(filepath.Join(src, "dbspec"), filepath.Join(root, "dbspec")); err != nil {
 				t.Fatal(err)

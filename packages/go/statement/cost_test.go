@@ -220,14 +220,16 @@ var readCost = []cost.Counter{cost.FilesVisited, cost.FilesParsed, cost.RowsPlac
 // quietCost names the operations that count nothing: a read of a corpus nothing changed since the statement before it.
 var quietCost = map[string]bool{"read task": true, "read note": true}
 
-// editReadCost are the counts of the read after an external edit, and the rows the corpus enters in its index (T40-1).
-var editReadCost = []cost.Counter{cost.FilesVisited, cost.FilesParsed, cost.RowsPlaced, cost.RowsIndexed}
+// editReadCost are the counts of the read after an external edit, the rows the corpus enters in its index (T40-1), and the
+// rows its database refresh takes from the corpus and writes (T42-1).
+var editReadCost = []cost.Counter{cost.FilesVisited, cost.FilesParsed, cost.RowsPlaced, cost.RowsIndexed, cost.RowsStored,
+	cost.DatabaseRowsWritten}
 
 // writeReadCost are the counts of the reads of a write, at its start and under the lock at its commit, the rows its
 // post-image copies (T39), the rows the corpus enters in its index (T40-1), and the rows the write and its checks read
-// (T40-2).
+// (T40-2), and the rows whose positions it gives the database back (T42-1).
 var writeReadCost = []cost.Counter{cost.FilesVisited, cost.FilesParsed, cost.RowsPlaced, cost.RowsCopied, cost.RowsIndexed,
-	cost.RowsScanned}
+	cost.RowsScanned, cost.RowsStored}
 
 // logCost names, for each operation, the counters whose count grows at most with the logarithm of the documents of
 // the corpus: a comparison of two corpora walks the paths of the ordered map of their documents to the documents that

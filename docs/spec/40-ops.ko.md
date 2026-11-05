@@ -1,5 +1,5 @@
 <!-- doc-id: spec-ops -->
-<!-- source-sha256: 49e599efda9a6338fb95d03fdbadf3141d180a2ca54fa761a60658c799dc7746 -->
+<!-- source-sha256: 0e9b75e5f6ba370a499034c8f0afdb2593cf91cf4eb8665a6197a04e046d3166 -->
 # Operations
 
 [English](40-ops.md)
@@ -242,7 +242,9 @@ client가 구현할 것은 이 driver뿐이다.
 - **실행하는 곳.** corpus를 in-memory SQLite database로 옮긴다: document와 `dbspec/statements.json`의 schema, 그다음 행.
   문장은 거기서 실행된다. 행의 차이는 표마다 쓰기 하나로 executor를 거쳐 돌아가므로 corpus의 규칙이 판정하고 commit
   protocol이 기록한다. NOT NULL과 foreign key는 SQLite가 이미 판정했고, trigger는 자기 행을 썼으며, codec은 문장이 저장한
-  값을 판정하지 않는다. database는 corpus와 다르지 않은 동안 lock 아래에서 문장 사이에 유지된다.
+  값을 판정하지 않는다. database는 corpus와 다르지 않은 동안 lock 아래에서 문장 사이에 유지된다. 같은 catalog
+  아래에서 corpus가 다르면, 어떤 transaction도 잡지 않은 database는 그 corpus로 갱신되고([비용 모델](#비용-모델)),
+  그렇지 않으면 다시 채워진다.
 - **Schema 문장.** schema 문장은 자기만의 transaction이다: 열린 transaction은 먼저 commit하고 그 뒤에 새 transaction이
   이어진다. schema를 바꾼 문장은 `dbspec/statements.json`에 덧붙고, 바뀐 표는 새 column으로 다시 쓰이며, document의 글은
   그대로다. 이미 그 상태인 `CREATE ... IF NOT EXISTS`와 `DROP ... IF EXISTS`는 아무것도 바꾸지 않고 lock을 잡지 않는다.
@@ -563,6 +565,14 @@ MySQL과 PostgreSQL은 `datetime(p)` column을 `NOW(6)`와 여섯 자리로 비�
   target 하나는 link나 쓰기가 요구할 때 그 key의 행에서 구한다. `TestCost`가 모든 쓰기가 1,000행과
   100,000행에서 같은 행을 읽음을 확인하고, `TestIndexMarks`가 쓰기의 corpus를 바꾸는 각 변경이 표시되면
   index가 처음부터 만든 index와 같고, 표시되지 않으면 다름을 확인한다.
+- corpus가 달라진 database는 다시 채우지 않고 갱신한다: 달라진 문서의 행은 key로 database에서 빠지고 corpus가
+  저장하는 대로 다시 들어간다. order column을 가진 files table에서는 바뀐 행이 들어가거나 떠나는 형제 group의
+  행도 함께 그렇게 한다. 위치는 group에서 구하기 때문이다. 가용성이 달라진 table은 다시 채운다. 갱신은 채우기와
+  같은 조건, 곧 foreign key를 끄고 상시 trigger를 내리고 check를 무시한 채 실행되므로, database는 corpus를
+  처음부터 채운 database와 같은 것을 가진다. 쓰기는 같은 차이에서 자기가 바꾼 행의 위치를 database에 돌려준다.
+  `TestCost`가 외부 편집과 쓰기가 1,000행과 100,000행에서 같은 행을 가져와 씀을 확인하고, `statement`의
+  `TestRefresh`와 `FuzzRefresh`가 각 golden corpus의 문서를 자르고, 지우고, 되돌리고, 맞바꾸며 갱신한 database가
+  처음부터 채운 database와 같고, 그 채우기가 실패할 때에만 실패함을 확인한다.
 - **codec의 비용**은 file의 byte에 선형이다: 상세 섹션을 가진 행들의 document file에서, file의 parse와
   render는 각각 그 megabyte당 CPU 0.1초 이하가 들고 그 byte당 64 byte 이하를 할당한다. 어떤 pass도 각
   heading을 각 상세 anchor와, 또는 각 행을 각 행과 비교하지 않는다: heading의 slug는 자기가 가져가는
