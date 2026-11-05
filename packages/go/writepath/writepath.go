@@ -233,14 +233,6 @@ func (c *Corpus) read() (*irexec.Corpus, error) {
 	return cur, nil
 }
 
-// dropHeld closes what package statement keeps, which a new catalog does not describe.
-func (c *Corpus) dropHeld() {
-	if c.held != nil {
-		_ = c.held.Close()
-		c.held = nil
-	}
-}
-
 // Close closes the corpus: the watch of its tree. An operation of a closed corpus fails.
 func (c *Corpus) Close() error {
 	var heldErr error

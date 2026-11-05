@@ -311,7 +311,7 @@ func (s *Server) message(sess *writepath.Session, line []byte) []byte {
 		return errorLine(codeIRInvalid, fmt.Sprintf("the control message %s: %v", op, err))
 	}
 	if op == "statement" {
-		return answerLine(statement.Run(context.Background(), sess, c.SQL, c.Params))
+		return answerLine(statement.Run(sess, c.SQL, c.Params))
 	}
 	if op == "fetch" {
 		return answerLine(statement.Fetch(sess))

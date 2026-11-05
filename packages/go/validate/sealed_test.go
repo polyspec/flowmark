@@ -35,7 +35,11 @@ func TestSealedValues(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		return v.(string)
+		text, ok := v.(string)
+		if !ok {
+			t.Fatalf("the sealed value is %T, not a text", v)
+		}
+		return text
 	}
 	const keyring = `{"current":2,"versions":{"1":"one","2":"two"}}`
 	for _, c := range []struct{ name, keyring, mail, version, want string }{

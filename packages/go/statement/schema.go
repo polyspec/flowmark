@@ -83,8 +83,7 @@ func runSchema(ctx context.Context, s *writepath.Session, text string, args []an
 		return cat, changes, nil
 	})
 	if err != nil {
-		drop(s)
-		return nil, err
+		return nil, errors.Join(err, drop(s))
 	}
 	// The database already holds what the corpus now holds, its AUTOINCREMENT counters included.
 	err = s.View(ctx, func(c *irexec.Corpus) error {
@@ -94,8 +93,7 @@ func runSchema(ctx context.Context, s *writepath.Session, text string, args []an
 		return nil
 	})
 	if err != nil {
-		drop(s)
-		return nil, err
+		return nil, errors.Join(err, drop(s))
 	}
 	return answer, nil
 }
@@ -223,12 +221,12 @@ func schemaText(ctx context.Context, db *sql.DB) (string, error) {
 }
 
 // columnsOf is the columns of each table of db, in order.
-func columnsOf(ctx context.Context, db *sql.DB) (map[string][]string, error) {
+func columnsOf(ctx context.Context, db *sql.DB) (_ map[string][]string, err error) {
 	rows, err := db.QueryContext(ctx, `SELECT m.name, p.name FROM sqlite_master m, pragma_table_info(m.name) p WHERE m.type = 'table' AND m.name NOT LIKE 'sqlite_%' ORDER BY m.name, p.cid`)
 	if err != nil {
 		return nil, &Error{codeInternal, err.Error()}
 	}
-	defer func() { _ = rows.Close() }()
+	defer closed(&err, rows)
 	out := map[string][]string{}
 	for rows.Next() {
 		var table, column string

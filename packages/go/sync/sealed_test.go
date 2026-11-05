@@ -12,9 +12,13 @@ import (
 // TestExportKeepsSealedCells pins that the export of an aes column needs no key and keeps the ciphertext, the version and
 // the blind index as they are stored (spec 30 Keys).
 func TestExportKeepsSealedCells(t *testing.T) {
-	cipher, err := orm.HostEncode("ann@example.com", []string{"aes", "hex"}, "old")
+	sealed, err := orm.HostEncode("ann@example.com", []string{"aes", "hex"}, "old")
 	if err != nil {
 		t.Fatal(err)
+	}
+	cipher, ok := sealed.(string)
+	if !ok {
+		t.Fatalf("the sealed value is %T, not a text", sealed)
 	}
 	root := t.TempDir()
 	corpustest.WriteTree(t, root, map[string]string{
@@ -37,7 +41,7 @@ table people {
   }
 }
 `,
-		"people.flowmark.md": "# people\n| id | name | mail | mail_index | mail_version |\n| --- | --- | --- | --- | --- |\n| 1 | Ann | " + cipher.(string) + " | abc | 1 |\n",
+		"people.flowmark.md": "# people\n| id | name | mail | mail_index | mail_version |\n| --- | --- | --- | --- | --- |\n| 1 | Ann | " + cipher + " | abc | 1 |\n",
 	})
 	c := open(t, root)
 	stmts, err := Export(c, dbspec.DialectSQLite)

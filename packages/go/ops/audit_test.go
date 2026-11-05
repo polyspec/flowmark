@@ -61,7 +61,11 @@ func TestAuditRows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s.Close()
+	defer func() {
+		if err := s.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
 	send := func(kind string, body map[string]any, params ...json.RawMessage) {
 		t.Helper()
 		m := message{hash: c.cat.ManifestHash, table: "item", params: params}

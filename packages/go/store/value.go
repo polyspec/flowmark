@@ -35,10 +35,6 @@ func ValueFault(tb *catalog.Table, v string) string {
 	return quotedFault(v)
 }
 
-// KeyFault names the key shape rule that key breaks, or "" when none (see the
-// document model, "Keys"): the rule a writer checks of a key before it renders a file.
-func KeyFault(key string) string { return keyFault(key) }
-
 // Literal is a stored value that its column's type does not describe, in the form its cell holds it (spec 10 Stored
 // literals): x'HEX' is a blob, t'HEX' a text of those bytes, and n'NUMBER' a number. SQLite binds no value to the type of
 // its column, and a cell holds what a statement stored.

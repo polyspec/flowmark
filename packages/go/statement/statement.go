@@ -73,8 +73,9 @@ const (
 // leaves the transaction as it was.
 const savepoint = "flowmark_statement"
 
-// Run runs text with params in the session s: in its transaction, or as one transaction of its own.
-func Run(ctx context.Context, s *writepath.Session, text string, params []json.RawMessage) (_ *Answer, err error) {
+// Run runs text with params in the session s: in its transaction, or as one transaction of its own. A closed connection
+// ends what its statement is doing, as SQLite's interrupt does, so the statement runs in the session's life.
+func Run(s *writepath.Session, text string, params []json.RawMessage) (_ *Answer, err error) {
 	defer func() {
 		// A lock wait that ended is SQLite's SQLITE_BUSY, whose name ends the message of a statement as its other results do.
 		var locked *writepath.Error
@@ -82,8 +83,7 @@ func Run(ctx context.Context, s *writepath.Session, text string, params []json.R
 			locked.Msg += resultCodeSuffix(sqlite3.SQLITE_BUSY)
 		}
 	}()
-	// A closed connection ends what its statement is doing, as SQLite's interrupt does.
-	ctx = s.Life()
+	ctx := s.Life()
 	if err := closeCursor(s); err != nil {
 		return nil, err
 	}
@@ -156,12 +156,10 @@ func runAlone(ctx context.Context, s *writepath.Session, text string, args []any
 		return err
 	})
 	if err != nil {
-		drop(s)
-		return nil, err
+		return nil, errors.Join(err, drop(s))
 	}
 	if err := applyWrites(ctx, s, writes); err != nil {
-		drop(s)
-		return nil, err
+		return nil, errors.Join(err, drop(s))
 	}
 	return answer, nil
 }
@@ -178,7 +176,10 @@ func applyWrites(ctx context.Context, s *writepath.Session, writes [][]byte) err
 		return nil
 	}
 	return s.View(ctx, func(c *irexec.Corpus) error {
-		h := s.Held().(*held)
+		h, ok := s.Held().(*held)
+		if !ok {
+			return &Error{codeInternal, "the session holds no database of its corpus"}
+		}
 		h.corpus = c
 		return placeBack(ctx, h.db, c, writes)
 	})
@@ -277,8 +278,7 @@ func runInTransaction(ctx context.Context, s *writepath.Session, text string, ar
 	}
 	if err == nil {
 		if _, err := h.db.ExecContext(ctx, "RELEASE "+savepoint); err != nil {
-			drop(s)
-			return nil, errors.Join(driverError(err), s.Rollback())
+			return nil, errors.Join(driverError(err), drop(s), s.Rollback())
 		}
 		return answer, s.Release(savepoint)
 	}
@@ -286,13 +286,12 @@ func runInTransaction(ctx context.Context, s *writepath.Session, text string, ar
 		return nil, errors.Join(err, s.RollbackTo(savepoint), s.Release(savepoint))
 	}
 	if _, undo := h.db.ExecContext(ctx, "ROLLBACK TO "+savepoint); undo != nil {
-		drop(s)
+		dropped := drop(s)
 		s.SetEnded(true)
-		return nil, errors.Join(err, s.Rollback())
+		return nil, errors.Join(err, dropped, s.Rollback())
 	}
 	if _, undo := h.db.ExecContext(ctx, "RELEASE "+savepoint); undo != nil {
-		drop(s)
-		return nil, errors.Join(err, driverError(undo), s.Rollback())
+		return nil, errors.Join(err, driverError(undo), drop(s), s.Rollback())
 	}
 	err = errors.Join(err, s.RollbackTo(savepoint), s.Release(savepoint))
 	return nil, errors.Join(err, s.View(ctx, func(c *irexec.Corpus) error {
@@ -330,7 +329,9 @@ func readInto(ctx context.Context, s *writepath.Session, c *irexec.Corpus, slot 
 	h, ok := (*slot).(*held)
 	if !ok || h.corpus.Catalog() != c.Catalog() || len(h.corpus.Differs(c)) > 0 {
 		if ok {
-			_ = h.Close()
+			if err := h.Close(); err != nil {
+				return nil, false, &Error{codeInternal, err.Error()}
+			}
 		}
 		*slot = nil
 		db, err := materialize(ctx, c)
@@ -384,8 +385,7 @@ func upgrade(ctx context.Context, s *writepath.Session) error {
 		return err
 	}
 	abandon := func(err error) error {
-		drop(s)
-		return errors.Join(err, s.Rollback())
+		return errors.Join(err, drop(s), s.Rollback())
 	}
 	var stale bool
 	err := s.View(ctx, func(c *irexec.Corpus) error {
@@ -567,7 +567,9 @@ func heldFor(ctx context.Context, s *writepath.Session, c *irexec.Corpus) (*held
 	if ok && (h.owner == nil || h.owner == s) && len(h.corpus.Differs(c)) == 0 {
 		h.corpus = c
 	} else {
-		drop(s)
+		if err := drop(s); err != nil {
+			return nil, err
+		}
 		db, err := materialize(ctx, c)
 		if err != nil {
 			return nil, err
@@ -629,11 +631,16 @@ func (h *held) settle(ctx context.Context, s *writepath.Session) error {
 }
 
 // drop closes the database of the corpus: it may hold what the corpus does not.
-func drop(s *writepath.Session) {
-	if h := s.Held(); h != nil {
-		_ = h.Close()
-		s.SetHeld(nil)
+func drop(s *writepath.Session) error {
+	h := s.Held()
+	if h == nil {
+		return nil
 	}
+	s.SetHeld(nil)
+	if err := h.Close(); err != nil {
+		return &Error{codeInternal, err.Error()}
+	}
+	return nil
 }
 
 // temporalWire writes a text SQLite holds for a datetime or a time in its wire form, six fraction digits: a
@@ -677,8 +684,7 @@ func begin(ctx context.Context, s *writepath.Session) error {
 	s.SetEnded(false)
 	err := s.View(ctx, func(c *irexec.Corpus) error { return beginHeld(ctx, s, c) })
 	if err != nil {
-		drop(s)
-		return errors.Join(err, s.Rollback())
+		return errors.Join(err, drop(s), s.Rollback())
 	}
 	return nil
 }
@@ -703,8 +709,7 @@ func commit(s *writepath.Session) error {
 		h.owner, h.base = nil, nil
 	}
 	if err := s.Commit(); err != nil {
-		drop(s)
-		return err
+		return errors.Join(err, drop(s))
 	}
 	return nil
 }
@@ -713,8 +718,7 @@ func commit(s *writepath.Session) error {
 func rollback(s *writepath.Session) error {
 	if h := owned(s); h != nil {
 		if _, err := h.db.Exec("ROLLBACK"); err != nil {
-			drop(s)
-			return errors.Join(driverError(err), s.Rollback())
+			return errors.Join(driverError(err), drop(s), s.Rollback())
 		}
 		h.corpus, h.owner, h.base = h.base, nil, nil
 	}
@@ -730,8 +734,8 @@ func rollbackTo(ctx context.Context, s *writepath.Session, text, name string) er
 		return err
 	}
 	return s.View(ctx, func(c *irexec.Corpus) error {
-		if h := s.Held(); h != nil {
-			h.(*held).corpus = c
+		if h, ok := s.Held().(*held); ok {
+			h.corpus = c
 		}
 		return nil
 	})
@@ -741,8 +745,7 @@ func rollbackTo(ctx context.Context, s *writepath.Session, text, name string) er
 func mirror(ctx context.Context, s *writepath.Session, text string) error {
 	if h := owned(s); h != nil {
 		if _, err := h.db.ExecContext(ctx, text); err != nil {
-			drop(s)
-			return errors.Join(driverError(err), s.Rollback())
+			return errors.Join(driverError(err), drop(s), s.Rollback())
 		}
 	}
 	return nil
@@ -935,13 +938,15 @@ func materialize(ctx context.Context, c *irexec.Corpus) (*sql.DB, error) {
 	}
 	db.SetMaxOpenConns(1)
 	if err := fill(ctx, db, c); err != nil {
-		_ = db.Close()
+		if cerr := db.Close(); cerr != nil {
+			return nil, errors.Join(err, &Error{codeInternal, cerr.Error()})
+		}
 		return nil, err
 	}
 	return db, nil
 }
 
-func fill(ctx context.Context, db *sql.DB, c *irexec.Corpus) error {
+func fill(ctx context.Context, db *sql.DB, c *irexec.Corpus) (err error) {
 	cat := c.Catalog()
 	schema, err := catalog.SchemaStatements(assignable(cat.Documents), cat.Statements)
 	if err != nil {
@@ -951,7 +956,12 @@ func fill(ctx context.Context, db *sql.DB, c *irexec.Corpus) error {
 	if err != nil {
 		return &Error{codeInternal, err.Error()}
 	}
-	defer func() { _ = tx.Rollback() }()
+	defer func() {
+		// The rollback after the commit finds the transaction done.
+		if rerr := tx.Rollback(); rerr != nil && !errors.Is(rerr, sql.ErrTxDone) {
+			err = errors.Join(err, &Error{codeInternal, rerr.Error()})
+		}
+	}()
 	for _, text := range schema {
 		if _, err := tx.ExecContext(ctx, text); err != nil {
 			return &Error{codeInternal, fmt.Sprintf("the schema statement %s: %v", text, err)}
@@ -967,28 +977,8 @@ func fill(ctx context.Context, db *sql.DB, c *irexec.Corpus) error {
 		return &Error{codeInternal, err.Error()}
 	}
 	for _, tb := range cat.Tables {
-		rows, err := c.StoredRows(tb.Name)
-		if err != nil {
+		if err := fillTable(ctx, tx, c, tb); err != nil {
 			return err
-		}
-		if len(rows) == 0 {
-			continue
-		}
-		insert, err := tx.PrepareContext(ctx, insertText(tb))
-		if err != nil {
-			return &Error{codeInternal, err.Error()}
-		}
-		defer func() { _ = insert.Close() }()
-		for _, row := range rows {
-			args := make([]any, len(row))
-			for i, v := range row {
-				if args[i], err = stored(tb.Columns[i].Type, v); err != nil {
-					return err
-				}
-			}
-			if _, err := insert.ExecContext(ctx, args...); err != nil {
-				return &Error{codeInternal, fmt.Sprintf("a row of %s: %v", tb.Name, err)}
-			}
 		}
 	}
 	if _, err := tx.ExecContext(ctx, "PRAGMA ignore_check_constraints = OFF"); err != nil {
@@ -1009,6 +999,44 @@ func fill(ctx context.Context, db *sql.DB, c *irexec.Corpus) error {
 	return nil
 }
 
+// fillTable inserts the stored rows of the table tb.
+func fillTable(ctx context.Context, tx *sql.Tx, c *irexec.Corpus, tb *catalog.Table) (err error) {
+	rows, err := c.StoredRows(tb.Name)
+	if err != nil || len(rows) == 0 {
+		return err
+	}
+	insert, err := tx.PrepareContext(ctx, insertText(tb))
+	if err != nil {
+		return &Error{codeInternal, err.Error()}
+	}
+	defer closed(&err, insert)
+	for _, row := range rows {
+		args := make([]any, len(row))
+		for i, v := range row {
+			if args[i], err = stored(tb.Columns[i].Type, v); err != nil {
+				return err
+			}
+		}
+		if _, err := insert.ExecContext(ctx, args...); err != nil {
+			return &Error{codeInternal, fmt.Sprintf("a row of %s: %v", tb.Name, err)}
+		}
+	}
+	return nil
+}
+
+// closed closes c when its function returns and adds the failure of the close to that function's error *err.
+func closed(err *error, c io.Closer) {
+	*err = errors.Join(*err, closeError(c))
+}
+
+// closeError closes c and returns the failure of the close as an internal error, nil when it closed.
+func closeError(c io.Closer) error {
+	if err := c.Close(); err != nil {
+		return &Error{codeInternal, err.Error()}
+	}
+	return nil
+}
+
 // standingTriggers drops the triggers of the schema and returns the statements that create them.
 func standingTriggers(ctx context.Context, tx *sql.Tx) (map[string]string, error) {
 	rows, err := tx.QueryContext(ctx, "SELECT name, sql FROM sqlite_master WHERE type = 'trigger'")
@@ -1019,8 +1047,7 @@ func standingTriggers(ctx context.Context, tx *sql.Tx) (map[string]string, error
 	for rows.Next() {
 		var name, text string
 		if err := rows.Scan(&name, &text); err != nil {
-			_ = rows.Close()
-			return nil, &Error{codeInternal, err.Error()}
+			return nil, errors.Join(&Error{codeInternal, err.Error()}, closeError(rows))
 		}
 		out[name] = text
 	}
@@ -1208,12 +1235,12 @@ func afterCommonTables(text string) string {
 }
 
 // query runs the statement and reads its result.
-func query(ctx context.Context, db *sql.DB, text string, args []any) (*Answer, error) {
+func query(ctx context.Context, db *sql.DB, text string, args []any) (_ *Answer, err error) {
 	rows, err := db.QueryContext(ctx, text, args...)
 	if err != nil {
 		return nil, driverError(err)
 	}
-	defer func() { _ = rows.Close() }()
+	defer closed(&err, rows)
 	a, n, err := emptyAnswer(rows)
 	if err != nil {
 		return nil, err
@@ -1328,7 +1355,7 @@ func allRows(ctx context.Context, db *sql.DB, c *irexec.Corpus) (map[string]tabl
 }
 
 // rowsOf reads the rows of tb from db.
-func rowsOf(ctx context.Context, db *sql.DB, tb *catalog.Table) ([][]any, error) {
+func rowsOf(ctx context.Context, db *sql.DB, tb *catalog.Table) (_ [][]any, err error) {
 	names := columnNames(tb)
 	for i := range names {
 		// Without its declared type the driver reads the stored value itself, not a time of a DATE or DATETIME column.
@@ -1343,7 +1370,7 @@ func rowsOf(ctx context.Context, db *sql.DB, tb *catalog.Table) ([][]any, error)
 	if err != nil {
 		return nil, &Error{codeInternal, err.Error()}
 	}
-	defer func() { _ = rows.Close() }()
+	defer closed(&err, rows)
 	var out [][]any
 	for rows.Next() {
 		row, err := scan(rows, len(names))
@@ -1457,12 +1484,21 @@ type message struct {
 }
 
 func (m *message) param(t dbspec.Type, v any) (map[string]any, error) {
-	raw, err := wire(t, v)
+	i, err := m.index(t, v)
 	if err != nil {
 		return nil, err
 	}
+	return map[string]any{"p": i}, nil
+}
+
+// index adds the value v of a column of type t to the parameters of m and returns its index.
+func (m *message) index(t dbspec.Type, v any) (int, error) {
+	raw, err := wire(t, v)
+	if err != nil {
+		return 0, err
+	}
 	m.params = append(m.params, raw)
-	return map[string]any{"p": len(m.params) - 1}, nil
+	return len(m.params) - 1, nil
 }
 
 func (m *message) assign(col dbspec.Column, v any) (map[string]any, error) {
@@ -1525,17 +1561,16 @@ func insertMessage(cat *catalog.Catalog, tb *catalog.Table, rows [][]any, foreig
 				// The corpus places the row: a position left out is the next one under its parent.
 				continue
 			}
-			a, err := m.param(col.Type, row[i])
+			p, err := m.index(col.Type, row[i])
 			if err != nil {
 				return nil, err
 			}
 			if r == 0 {
-				a["column"] = col.Name
-				set[i] = a
+				set[i] = map[string]any{"p": p, "column": col.Name}
 				load = load || col.Identity
 				continue
 			}
-			params = append(params, a["p"].(int))
+			params = append(params, p)
 		}
 		if r > 0 {
 			more = append(more, params)
@@ -1557,11 +1592,11 @@ func (m *message) keyParams(tb *catalog.Table, row []any) ([]int, error) {
 	var out []int
 	for _, name := range keyColumns(tb) {
 		i := slices.IndexFunc(tb.Columns, func(col dbspec.Column) bool { return col.Name == name })
-		a, err := m.param(tb.Columns[i].Type, row[i])
+		p, err := m.index(tb.Columns[i].Type, row[i])
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, a["p"].(int))
+		out = append(out, p)
 	}
 	return out, nil
 }
@@ -1667,7 +1702,7 @@ func literalValue(text string) (any, error) {
 // column's type or a cell cannot hold is a stored literal; a text that is not of the type stays as SQLite holds it, for
 // the column's rule to refuse.
 func wire(typ dbspec.Type, v any) (json.RawMessage, error) {
-	var out any = v
+	out := v
 	switch x := v.(type) {
 	case int64:
 		switch typ.Kind {
@@ -1783,12 +1818,12 @@ func allocate(ctx context.Context, db *sql.DB, c *irexec.Corpus, answer *Answer)
 }
 
 // column reads the one column of the rows of text.
-func column[T any](ctx context.Context, db *sql.DB, text string) ([]T, error) {
+func column[T any](ctx context.Context, db *sql.DB, text string) (_ []T, err error) {
 	rows, err := db.QueryContext(ctx, text)
 	if err != nil {
 		return nil, &Error{codeInternal, err.Error()}
 	}
-	defer func() { _ = rows.Close() }()
+	defer closed(&err, rows)
 	var out []T
 	for rows.Next() {
 		var v T

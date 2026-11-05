@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -57,7 +58,7 @@ func open(t *testing.T) (*writepath.Session, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = s.Close() })
+	t.Cleanup(func() { closeSession(t, s) })
 	return s, root
 }
 
@@ -67,7 +68,7 @@ func run(t *testing.T, s *writepath.Session, text string, params ...string) *sta
 	for i, p := range params {
 		raw[i] = json.RawMessage(p)
 	}
-	a, err := statement.Run(context.Background(), s, text, raw)
+	a, err := statement.Run(s, text, raw)
 	if err != nil {
 		t.Fatalf("%s: %v", text, err)
 	}
@@ -76,7 +77,7 @@ func run(t *testing.T, s *writepath.Session, text string, params ...string) *sta
 
 func refused(t *testing.T, s *writepath.Session, text, code string) {
 	t.Helper()
-	_, err := statement.Run(context.Background(), s, text, nil)
+	_, err := statement.Run(s, text, nil)
 	if err == nil || !strings.Contains(err.Error(), code) {
 		t.Fatalf("%s: %v, want %s", text, err, code)
 	}
@@ -181,7 +182,7 @@ func TestSchemaStatements(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer again.Close()
+	defer closeSession(t, again)
 	if got := cells(run(t, again, "SELECT COUNT(*) FROM inside")); got != `[[1]]` {
 		t.Fatalf("after a new opening: %s", got)
 	}
@@ -191,6 +192,10 @@ func TestSchemaStatements(t *testing.T) {
 	}
 	refused(t, again, "NOT SQL", "DRIVER")
 	refused(t, again, "CREATE TABLE notes (id INTEGER)", "DRIVER")
+	run(t, again, "CREATE TABLE money (id INTEGER PRIMARY KEY, amount DECIMALINT(10,2))")
+	run(t, again, "INSERT INTO money (id, amount) VALUES (1, 1.25)")
+	refused(t, again, "CREATE TABLE huge (amount DECIMALINT(99999999999999999999,2))", "its precision")
+	refused(t, again, "CREATE TABLE wide (amount DECIMALINT(10,99999999999999999999))", "its scale")
 }
 
 // A result larger than a batch goes in batches, and ending it early frees the corpus for the next statement.
@@ -253,15 +258,15 @@ func openTwo(t *testing.T) (*writepath.Session, *writepath.Session, string) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		_ = a.Close()
-		_ = b.Close()
+		closeSession(t, a)
+		closeSession(t, b)
 	})
 	return a, b, root
 }
 
 func fails(t *testing.T, s *writepath.Session, text, code, part string) {
 	t.Helper()
-	_, err := statement.Run(context.Background(), s, text, nil)
+	_, err := statement.Run(s, text, nil)
 	if err == nil {
 		t.Fatalf("%s: no error; want %s", text, code)
 	}
@@ -367,7 +372,7 @@ func TestStoredLiterals(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = fresh.Close() })
+	t.Cleanup(func() { closeSession(t, fresh) })
 	for i, v := range values {
 		a := run(t, fresh, fmt.Sprintf("SELECT note, data, wide FROM mix WHERE id = %d", i+1))
 		got := fmt.Sprint(a.Rows[0][0]) + "|" + fmt.Sprint(a.Rows[0][1]) + "|" + fmt.Sprint(a.Rows[0][2])
@@ -408,7 +413,7 @@ func TestParameterForms(t *testing.T) {
 		{"an array", `[1]`},
 	}
 	for _, v := range refusedForms {
-		_, err := statement.Run(context.Background(), s, "SELECT ?", []json.RawMessage{json.RawMessage(v.param)})
+		_, err := statement.Run(s, "SELECT ?", []json.RawMessage{json.RawMessage(v.param)})
 		if err == nil || !strings.Contains(err.Error(), "parameter 0") {
 			t.Errorf("%s: %v, want a refusal of parameter 0", v.name, err)
 		}
@@ -480,7 +485,7 @@ func openBoard(t *testing.T) (*writepath.Session, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = s.Close() })
+	t.Cleanup(func() { closeSession(t, s) })
 	return s, root
 }
 
@@ -525,7 +530,7 @@ func TestAssignedColumns(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = fresh.Close() })
+	t.Cleanup(func() { closeSession(t, fresh) })
 	const positions = "SELECT id, position, title FROM items ORDER BY position"
 	want := "[[T1 1 a] [T2 2 b] [T3 3 c] [T10 4 d2] [T011 5 e] [Tx 6 f] [T11 7 g] [T20 8 h] [T21 9 i] [T22 10 j]]"
 	if got := fmt.Sprint(run(t, fresh, positions).Rows); got != want {
@@ -533,5 +538,13 @@ func TestAssignedColumns(t *testing.T) {
 	}
 	if got := fmt.Sprint(run(t, s, positions).Rows); got != want {
 		t.Fatalf("the session reads %s, want %s", got, want)
+	}
+}
+
+// closeSession closes the session s and fails the test when the close fails.
+func closeSession(t *testing.T, s io.Closer) {
+	t.Helper()
+	if err := s.Close(); err != nil {
+		t.Error(err)
 	}
 }

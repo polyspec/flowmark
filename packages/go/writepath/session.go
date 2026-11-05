@@ -204,11 +204,14 @@ func (s *Session) Snapshot(ctx context.Context) (*irexec.Corpus, error) {
 	}
 	l, err := s.c.j.Acquire(ctx, s.name, 0)
 	if err == nil {
-		defer func() { _ = l.Release() }()
 		if err := s.c.j.Recover(l); err != nil {
-			return nil, driverError("recovering the corpus", err)
+			return nil, release(l, driverError("recovering the corpus", err))
 		}
-		return s.c.read()
+		cur, err := s.c.read()
+		if err := release(l, err); err != nil {
+			return nil, err
+		}
+		return cur, nil
 	}
 	if errors.Is(err, fs.ErrPermission) {
 		return s.c.read()
@@ -655,13 +658,13 @@ func (s *Session) Close() error {
 		return nil
 	}
 	s.closed = true
-	if c := s.TakeCursor(); c != nil {
-		_ = c.Close()
-	}
 	var err error
+	if c := s.TakeCursor(); c != nil {
+		err = c.Close()
+	}
 	if t := s.tx; t != nil {
 		s.tx = nil
-		err = release(t.lock, nil)
+		err = release(t.lock, err)
 	}
 	if l := s.kept.Swap(nil); l != nil {
 		l.Keep(false)
