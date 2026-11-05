@@ -633,6 +633,17 @@ and MySQL and PostgreSQL compare a `datetime(p)` column with `NOW(6)` at six dig
   the process draws, so two maps of the same documents compare along the same paths. `TestCost`
   holds both: a write copies the same rows at 1,000 and at 100,000 rows, and compares at most eight
   times the base-2 logarithm of the documents.
+- The corpus keeps an index of its rows: by key, by key without regard to case, by the value of each
+  column a write reads by value (a foreign key, a placement or parent key, a unique key, a state
+  machine's column and the sibling group of an ordered row) and by the number of each identity column
+  and `key_prefix` key. The index is persistent like the documents and shared between the corpora
+  read or written one from the other. A read or a write marks each document whose rows it changes,
+  and before the next access of the index the rows of the marked documents leave it and enter it again
+  as they stand: a row that is new, changed, under another parent or under a parent that entered
+  again, so the index costs the rows of the documents that changed. The first write after a corpus is
+  opened builds the index, once, as the first read reads every document. `TestCost` holds that a
+  write and an external edit enter the same rows at 1,000 and at 100,000 rows, and every access of
+  the index in the executor's tests compares it with the index built from nothing.
 - **The codec's cost** is linear in the bytes of a file: the parse and the render of a file each take
   at most 0.1 s of CPU per megabyte of it and allocate at most 64 bytes per byte of it, for a document
   file of rows with detail sections. No pass compares each heading with each detail anchor, or each

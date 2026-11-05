@@ -3,8 +3,6 @@ package irexec
 import (
 	"bytes"
 	"fmt"
-	"github.com/polyspec/flowmark/packages/go/internal/cost"
-	"github.com/polyspec/flowmark/packages/go/internal/pmap"
 	"slices"
 	"sort"
 	"strconv"
@@ -12,6 +10,8 @@ import (
 	"sync"
 
 	"github.com/polyspec/flowmark/packages/go/catalog"
+	"github.com/polyspec/flowmark/packages/go/internal/cost"
+	"github.com/polyspec/flowmark/packages/go/internal/pmap"
 	"github.com/polyspec/flowmark/packages/go/store"
 	"github.com/polyspec/flowmark/packages/go/validate"
 	"github.com/polyspec/orm/packages/go/engine/dbspec"
@@ -32,21 +32,21 @@ type Corpus struct {
 	// walk holds the first corpus.walk diagnostic of each entry at a table's place
 	// that is no corpus document, by its corpus path.
 	walk pmap.Map[string, catalog.Diagnostic]
-	// recs holds the rows of each table, by file path order and then the order
-	// the store returns them in; a block row follows its placement row.
-	recs map[string][]*rec
+	// idx is the index of the rows (index.go), and keys the index keys of each document's rows, both shared with the
+	// corpora read or written from this one.
+	idx  pmap.Map[string, []locator]
+	keys pmap.Map[string, docKeys]
+	// docs holds the records of each document this corpus built, guarded by docsMu, since the requests that read a
+	// committed corpus may run at once.
+	docs map[string]*docRecs
+	// dirty marks the documents whose rows changed since they entered the index (docs.go).
+	dirty  map[string]map[*store.Row]bool
+	docsMu sync.Mutex
 	// ordered caches the storage order of each table.
 	ordered map[string][]*rec
 	// positions caches the 1-based sibling position of each row of a files table
 	// with an order column, which its stored rank gives (spec 20 Order).
 	positions map[string]map[*rec]int64
-	// byRow finds the record of a row.
-	byRow map[*store.Row]*rec
-	// indexed is whether recs and byRow are built: a corpus read builds them at the first request that reads its rows,
-	// so a read that answers from the database reads no row of the corpus (plan, Ruling: an operation costs what it
-	// touches). indexMu guards the build, since the requests that read a committed corpus may run at once.
-	indexed bool
-	indexMu sync.Mutex
 	// cost counts the work of the corpus's operations; nil counts nothing.
 	cost *cost.Counts
 }
@@ -67,6 +67,8 @@ type rec struct {
 	file   string
 	parent *rec
 	tb     *catalog.Table
+	// at is the place of the record in the walk of its document, and gen the walk that placed it (docs.go).
+	at, gen int
 }
 
 // Open reads the corpus fsys as a request reads it, from nothing: the corpus folder itself (store.DirFS), or the
@@ -94,6 +96,15 @@ func FromSnapshot(cat *catalog.Catalog, s *validate.Snapshot, prev *Corpus, k *c
 		}
 	} else {
 		c.files, c.walk = prev.files, prev.walk
+		prev.docsMu.Lock()
+		c.idx, c.keys = prev.idx, prev.keys
+		for p, m := range prev.dirty {
+			for r := range m {
+				c.changedLocked(p, r)
+			}
+			c.changedLocked(p, nil)
+		}
+		prev.docsMu.Unlock()
 		for _, path := range changed {
 			c.readPath(s, path)
 		}
@@ -146,41 +157,11 @@ func (c *Corpus) Rebased(cat *catalog.Catalog, drop []string) *Corpus {
 	for _, p := range drop {
 		n.dropFile(p)
 	}
+	// The index keys of a row follow its table's declaration, so the index under cat is built from nothing.
+	for p := range n.files.All() {
+		n.changed(p)
+	}
 	return n
-}
-
-// tableRecs returns the records of table, building the index of the corpus at the first call.
-func (c *Corpus) tableRecs(table string) []*rec {
-	c.ensureIndex()
-	return c.recs[table]
-}
-
-// recOf returns the record of row r, building the index of the corpus at the first call.
-func (c *Corpus) recOf(r *store.Row) *rec {
-	c.ensureIndex()
-	return c.byRow[r]
-}
-
-// ensureIndex builds the index of the corpus when it is not built.
-func (c *Corpus) ensureIndex() {
-	c.indexMu.Lock()
-	defer c.indexMu.Unlock()
-	if !c.indexed {
-		c.index()
-	}
-}
-
-// index builds the rows of each table from the files.
-func (c *Corpus) index() {
-	c.indexed = true
-	c.recs = map[string][]*rec{}
-	c.reorder()
-	c.byRow = map[*store.Row]*rec{}
-	for p, f := range c.files.All() {
-		for _, r := range f.rows {
-			c.place(r, p, nil)
-		}
-	}
 }
 
 // reorder drops the cached storage orders and positions, which a changed rank or
@@ -190,31 +171,25 @@ func (c *Corpus) reorder() {
 	c.positions = map[string]map[*rec]int64{}
 }
 
-// place records row r, held by the file path, and its block rows.
-func (c *Corpus) place(r *store.Row, path string, parent *rec) {
-	c.cost.Add(cost.RowsIndexed, 1)
-	tb, _ := c.cat.Table(r.Table)
-	x := &rec{row: r, file: path, parent: parent, tb: tb}
-	c.recs[r.Table] = append(c.recs[r.Table], x)
-	c.byRow[r] = x
-	for _, name := range r.BlockNames() {
-		for _, child := range r.Blocks[name] {
-			c.place(child, path, x)
-		}
-	}
-}
-
 // file returns the corpus document at path, nil when the corpus holds none.
 func (c *Corpus) file(path string) *file {
 	f, _ := c.files.Get(path)
 	return f
 }
 
-// setFile makes f the document at path of c, a corpus that a write is computing and no other reads.
-func (c *Corpus) setFile(path string, f *file) { c.files = c.files.Set(path, f) }
+// setFile makes f the document at path of c, a corpus that a read or a write is computing and no other reads, and
+// marks it.
+func (c *Corpus) setFile(path string, f *file) {
+	c.files = c.files.Set(path, f)
+	c.changed(path)
+}
 
-// dropFile removes the document at path from c, a corpus that a write is computing and no other reads.
-func (c *Corpus) dropFile(path string) { c.files = c.files.Delete(path) }
+// dropFile removes the document at path from c, a corpus that a read or a write is computing and no other reads, and
+// marks it.
+func (c *Corpus) dropFile(path string) {
+	c.files = c.files.Delete(path)
+	c.changed(path)
+}
 
 // Catalog returns the catalog the corpus was read with.
 func (c *Corpus) Catalog() *catalog.Catalog { return c.cat }
@@ -331,7 +306,9 @@ func (c *Corpus) Data(path string) []byte {
 // the paths they changed (plan, Ruling: an operation costs what it touches).
 func (c *Corpus) Differs(o *Corpus) []string {
 	set := map[string]bool{}
-	same := func(f, g *file) bool { return f == g || bytes.Equal(f.data, g.data) && (f.data == nil) == (g.data == nil) }
+	same := func(f, g *file) bool {
+		return f == g || bytes.Equal(f.data, g.data) && (f.data == nil) == (g.data == nil)
+	}
 	c.cost.Add(cost.FilesCompared, pmap.Diff(c.files, o.files, same, func(p string) { set[p] = true }))
 	for _, tb := range c.cat.Tables {
 		a, aok := c.unavailable[tb.Name]

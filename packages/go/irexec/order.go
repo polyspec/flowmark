@@ -48,7 +48,7 @@ func (w *writer) siblings(x *rec) ([]*rec, *Error) {
 		return nil, err
 	}
 	var out []*rec
-	for _, y := range w.next.tableRecs(x.tb.Name) {
+	for _, y := range scan(w.next, x.tb.Name) {
 		if y == x {
 			continue
 		}
@@ -267,7 +267,7 @@ func (w *writer) move(g *given, k *cell, oldParent *store.Row) *Error {
 			oldKey += "\x00=" + v.text
 		}
 	}
-	for _, y := range w.next.tableRecs(x.tb.Name) {
+	for _, y := range scan(w.next, x.tb.Name) {
 		if y == x {
 			continue
 		}

@@ -132,7 +132,7 @@ func (e *Executor) repair(c *Corpus, table, key, from string, now time.Time) (*R
 			continue
 		}
 		n := int64(0)
-		for _, y := range w.next.tableRecs(table) {
+		for _, y := range scan(w.next, table) {
 			v, err := w.next.value(y, sm.Column)
 			if err != nil {
 				return nil, err

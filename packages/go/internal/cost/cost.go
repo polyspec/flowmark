@@ -19,10 +19,14 @@ const (
 	FilesParsed
 	// RowsPlaced is a row a pass of the corpus read placed in its table.
 	RowsPlaced
-	// RowsIndexed is a row the executor's corpus indexed.
+	// RowsIndexed is a row the executor's corpus entered in its index.
 	RowsIndexed
 	// RowsCopied is a row a write copied into its post-image.
 	RowsCopied
+	// RowsScanned is a record of the executor's corpus that a write or its checks read: each record a lookup of the index
+	// returned, and each record of a table a write walked. The walks of a table's storage order that fill a database are
+	// its rows-stored.
+	RowsScanned
 	// FilesCompared is a file a comparison of two corpora compared.
 	FilesCompared
 	// RowsStored is a stored row a request formed from the corpus.
@@ -41,6 +45,7 @@ var names = [counters]string{
 	RowsPlaced:          "rows-placed",
 	RowsIndexed:         "rows-indexed",
 	RowsCopied:          "rows-copied",
+	RowsScanned:         "rows-scanned",
 	FilesCompared:       "files-compared",
 	RowsStored:          "rows-stored",
 	DatabaseRowsRead:    "database-rows-read",

@@ -187,7 +187,6 @@ func (w *writer) historyRow(x *rec, sm *catalog.StateMachine, from, to string, r
 	default:
 		return cell{}, errf(codeInternal, "the catalog admitted the history storage %s of %s", ht.Storage.Kind, ht.Name)
 	}
-	w.next.index()
 	return id, nil
 }
 
@@ -215,7 +214,7 @@ func (w *writer) limits() *Error {
 			continue
 		}
 		n := int64(0)
-		for _, x := range w.next.tableRecs(w.tb.Name) {
+		for _, x := range scan(w.next, w.tb.Name) {
 			v, err := w.next.value(x, sm.Column)
 			if err != nil {
 				return err

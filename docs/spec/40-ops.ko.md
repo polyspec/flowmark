@@ -1,5 +1,5 @@
 <!-- doc-id: spec-ops -->
-<!-- source-sha256: 26d44e8eba64caca43d2575a709a68609637ec72640bc65e151a25d8f9fe9ba8 -->
+<!-- source-sha256: f642243398c6bcac62f47f82d181b53e8a8e8ef2e3e9c6c96a52c3e5745fd93b -->
 # Operations
 
 [English](40-ops.md)
@@ -546,6 +546,14 @@ MySQL과 PostgreSQL은 `datetime(p)` column을 `NOW(6)`와 여섯 자리로 비�
   상수배 이하다. map의 모양은 process가 뽑은 seed 아래의 hash를 거쳐 key의 함수가 되므로, 같은 문서의 두
   map은 같은 경로를 따라 비교된다. `TestCost`가 둘을 확인한다: 쓰기는 1,000행과 100,000행에서 같은 행을
   복사하고, 문서 수의 밑 2 로그의 여덟 배 이하를 비교한다.
+- corpus는 행의 index를 유지한다: key로, 대소문자를 가리지 않는 key로, 쓰기가 값으로 읽는 각 column의 값 —
+  foreign key, placement 또는 parent key, unique key, state machine의 column, 순서 있는 행의 형제 group —
+  으로, 각 identity column과 `key_prefix` key의 수로 찾는다. index는 문서처럼 persistent하며, 서로에게서
+  읽거나 쓴 corpus 사이에 공유된다. 읽기나 쓰기는 행을 바꾸는 문서마다 표시하고, 다음에 index에 접근하기 전에
+  표시된 문서의 행 가운데 새 행, 바뀐 행, 다른 부모 아래로 간 행, 다시 들어간 부모 아래의 행이 index에서
+  빠졌다가 지금 모습으로 다시 들어간다. 그래서 index의 비용은 바뀐 문서의 행이다. corpus를 연 뒤 첫 쓰기가
+  첫 읽기가 모든 문서를 읽듯 index를 한 번 만든다. `TestCost`가 쓰기와 외부 편집이 1,000행과 100,000행에서
+  같은 행을 넣음을 확인하고, executor 시험에서 index에 접근할 때마다 처음부터 만든 index와 비교한다.
 - **codec의 비용**은 file의 byte에 선형이다: 상세 섹션을 가진 행들의 document file에서, file의 parse와
   render는 각각 그 megabyte당 CPU 0.1초 이하가 들고 그 byte당 64 byte 이하를 할당한다. 어떤 pass도 각
   heading을 각 상세 anchor와, 또는 각 행을 각 행과 비교하지 않는다: heading의 slug는 자기가 가져가는

@@ -54,7 +54,7 @@ func (w *writer) auditRow(row *store.Row, action string, previous cell) *Error {
 		return err
 	}
 	key := joinedKey(tt, map[string]string{a.TablesRecord: record.text, a.TablesName: w.tb.Name})
-	if firstByKey(w.next.tableRecs(tt.Name), func(k string) bool { return k == key }) != nil {
+	if firstByKey(scan(w.next, tt.Name), func(k string) bool { return k == key }) != nil {
 		return nil
 	}
 	named := &store.Row{Table: tt.Name, Key: key, Scalars: map[string]*string{}, Sections: map[string]*string{}}
@@ -81,5 +81,4 @@ func (w *writer) appendRow(tb *catalog.Table, row *store.Row) {
 	}
 	f.rows = append(f.rows, row)
 	w.touched[path] = true
-	w.next.index()
 }

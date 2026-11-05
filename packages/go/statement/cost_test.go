@@ -185,7 +185,10 @@ var costOps = []costOp{
 func measure(t *testing.T, rows int) map[string]cost.Snapshot {
 	t.Helper()
 	s, root := openCost(t, rows)
-	// The first statement fills the database of the session from the corpus, once; the operations are measured after it.
+	// The first statement fills the database of the session from the corpus, and the first write builds the index of the
+	// corpus, once; the operations are measured after them.
+	run(t, s, "SELECT COUNT(*) FROM tasks")
+	run(t, s, "UPDATE notes SET title = 'warm' WHERE id = 'N1'")
 	run(t, s, "SELECT COUNT(*) FROM tasks")
 	out := map[string]cost.Snapshot{}
 	for _, op := range costOps {
@@ -217,12 +220,12 @@ var readCost = []cost.Counter{cost.FilesVisited, cost.FilesParsed, cost.RowsPlac
 // quietCost names the operations that count nothing: a read of a corpus nothing changed since the statement before it.
 var quietCost = map[string]bool{"read task": true, "read note": true}
 
-// editReadCost are the counts of the read after an external edit; the rows the edit's database refresh indexes are T42's.
-var editReadCost = []cost.Counter{cost.FilesVisited, cost.FilesParsed, cost.RowsPlaced}
+// editReadCost are the counts of the read after an external edit, and the rows the corpus enters in its index (T40-1).
+var editReadCost = []cost.Counter{cost.FilesVisited, cost.FilesParsed, cost.RowsPlaced, cost.RowsIndexed}
 
-// writeReadCost are the counts of the reads of a write, at its start and under the lock at its commit, and the rows its
-// post-image copies (T39); the rows the post-image indexes are T40's.
-var writeReadCost = []cost.Counter{cost.FilesVisited, cost.FilesParsed, cost.RowsPlaced, cost.RowsCopied}
+// writeReadCost are the counts of the reads of a write, at its start and under the lock at its commit, the rows its
+// post-image copies (T39), and the rows the corpus enters in its index (T40-1).
+var writeReadCost = []cost.Counter{cost.FilesVisited, cost.FilesParsed, cost.RowsPlaced, cost.RowsCopied, cost.RowsIndexed}
 
 // logCost names, for each operation, the counters whose count grows at most with the logarithm of the documents of
 // the corpus: a comparison of two corpora walks the paths of the ordered map of their documents to the documents that

@@ -189,7 +189,7 @@ func (w *writer) keyChecks() []fault {
 		return nil
 	}
 	// The table's rows before the write: the rows the request does not give.
-	others := w.c.tableRecs(w.tb.Name)
+	others := scan(w.c, w.tb.Name)
 	firstOther := make(map[string]*rec, len(others))
 	othersOfFold := make(map[string][]*rec, len(others))
 	for _, x := range others {
@@ -305,7 +305,7 @@ func (w *writer) uniques() *Error {
 				continue
 			}
 			seen[k] = g
-			for _, x := range w.next.tableRecs(w.tb.Name) {
+			for _, x := range scan(w.next, w.tb.Name) {
 				if x.row == g.row || isGiven(w.given, x.row) {
 					continue
 				}
@@ -391,7 +391,7 @@ func (w *writer) references() *Error {
 			if err := w.next.need(fk.Table); err != nil {
 				return err
 			}
-			if firstByKey(w.next.tableRecs(fk.Table), func(k string) bool { return k == key }) == nil {
+			if firstByKey(scan(w.next, fk.Table), func(k string) bool { return k == key }) == nil {
 				w.fault(g, w.tb.Name, col, codeForeignKey, fmt.Sprintf("the foreign key %s names no %s row with the key %s", col, fk.Table, key))
 			}
 		}
@@ -419,7 +419,7 @@ func (w *writer) parents() *Error {
 		if v.null {
 			continue
 		}
-		p := firstByKey(w.next.tableRecs(w.tb.Name), func(k string) bool { return k == v.text })
+		p := firstByKey(scan(w.next, w.tb.Name), func(k string) bool { return k == v.text })
 		if p == nil {
 			continue // the reference check reports it
 		}
@@ -444,7 +444,7 @@ func (w *writer) parents() *Error {
 			if cv.null {
 				break
 			}
-			cur = firstByKey(w.next.tableRecs(w.tb.Name), func(k string) bool { return k == cv.text })
+			cur = firstByKey(scan(w.next, w.tb.Name), func(k string) bool { return k == cv.text })
 		}
 	}
 	return nil
@@ -465,7 +465,7 @@ type linkTarget struct {
 func newLinker(c *Corpus) (*linker, error) {
 	lk := &linker{c: c, targets: map[string]linkTarget{}}
 	for _, tb := range c.cat.Tables {
-		for _, x := range c.tableRecs(tb.Name) {
+		for _, x := range scan(c, tb.Name) {
 			k := tb.Name + "\x00" + x.row.Key
 			if t, ok := lk.targets[k]; ok {
 				t.shared = true
@@ -509,7 +509,6 @@ func (w *writer) render() (*PostImage, []store.Refusal, *Error) {
 	if err != nil {
 		return nil, nil, errf(codeInternal, "%v", err)
 	}
-	w.next.index()
 	after, err := newLinker(w.next)
 	if err != nil {
 		return nil, nil, errf(codeInternal, "%v", err)
@@ -571,7 +570,6 @@ func (w *writer) render() (*PostImage, []store.Refusal, *Error) {
 	if len(faults) > 0 {
 		return nil, faults, nil
 	}
-	w.next.index()
 	return post, nil, nil
 }
 
@@ -632,7 +630,7 @@ func (w *writer) linkTargets(before, after *linker) *Error {
 			if err := w.next.need(tb.Name); err != nil {
 				return err
 			}
-			for _, x := range w.next.tableRecs(tb.Name) {
+			for _, x := range scan(w.next, tb.Name) {
 				v, err := w.next.value(x, col)
 				if err != nil || v.null {
 					continue

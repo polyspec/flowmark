@@ -3,7 +3,6 @@ package irexec
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/polyspec/flowmark/packages/go/internal/cost"
 	"maps"
 	"math/big"
 	"slices"
@@ -12,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/polyspec/flowmark/packages/go/catalog"
+	"github.com/polyspec/flowmark/packages/go/internal/cost"
 	"github.com/polyspec/flowmark/packages/go/store"
 	"github.com/polyspec/orm/packages/go/engine/dbspec"
 	"github.com/polyspec/orm/packages/go/engine/ir"
@@ -120,8 +120,8 @@ func (w *writer) request() *Error {
 // statedRows returns a function that finds the row of the next corpus that a key of a difference names. SQLite judged the
 // statement, so a row the corpus does not hold is a fault of the engine.
 func (w *writer) statedRows() func(ps []int) (*rec, *Error) {
-	byKey := make(map[string]*rec, len(w.c.tableRecs(w.tb.Name)))
-	for _, x := range w.c.tableRecs(w.tb.Name) {
+	byKey := make(map[string]*rec, len(scan(w.c, w.tb.Name)))
+	for _, x := range scan(w.c, w.tb.Name) {
 		byKey[x.row.Key] = x
 	}
 	names := w.tb.KeyParts
@@ -179,7 +179,6 @@ func (w *writer) statedDelete() *Error {
 				w.next.dropFile(path)
 			}
 		}
-		w.next.index()
 		return nil
 	}
 	return w.removeBackward(rows)
@@ -208,9 +207,10 @@ func (w *writer) statedUpdate() *Error {
 // a document before it changes one (ownFile), so the write copies the documents it changes, not the corpus (plan,
 // Ruling: an operation costs what it touches).
 func (c *Corpus) fork() *Corpus {
-	n := &Corpus{cat: c.cat, files: c.files, unavailable: c.unavailable, walk: c.walk, cost: c.cost}
-	n.index()
-	return n
+	c.docsMu.Lock()
+	defer c.docsMu.Unlock()
+	c.freshLocked()
+	return &Corpus{cat: c.cat, files: c.files, unavailable: c.unavailable, walk: c.walk, idx: c.idx, keys: c.keys, cost: c.cost}
 }
 
 // ownFile returns the document at path of the next corpus as the write's own copy, which it may change, nil when the
@@ -220,6 +220,9 @@ func (c *Corpus) fork() *Corpus {
 func (w *writer) ownFile(path string) *file {
 	f := w.next.file(path)
 	if f == nil || f != w.c.file(path) {
+		if f != nil {
+			w.next.changed(path)
+		}
 		return f
 	}
 	cp := &file{table: f.table, data: f.data, diags: f.diags, rows: make([]*store.Row, len(f.rows))}
@@ -232,25 +235,19 @@ func (w *writer) ownFile(path string) *file {
 	if w.copies == nil {
 		w.copies = map[*store.Row]*store.Row{}
 	}
-	for old, row := range copies {
-		w.copies[old] = row
-		if x := w.next.byRow[old]; x != nil {
-			x.row = row
-			delete(w.next.byRow, old)
-			w.next.byRow[row] = x
-		}
-	}
+	maps.Copy(w.copies, copies)
+	w.next.repoint(path, copies)
 	return cp
 }
 
 // own returns the record x of the next corpus after the write made its document its own (ownFile), so x.row may be
 // changed.
 func (w *writer) own(x *rec) *rec {
-	w.next.ensureIndex()
-	if w.next.byRow[x.row] != x {
+	if w.next.recOf(x.row) != x {
 		panic("irexec: a write changes a record that is not of its next corpus")
 	}
 	w.ownFile(x.file)
+	w.next.changedRow(x.file, x.row)
 	return x
 }
 
@@ -577,16 +574,7 @@ func (w *writer) requireAssigned(set []ir.Assign) *Error {
 }
 
 // keyPrefix returns the key_prefix of the table, "" when it has none.
-func (w *writer) keyPrefix() string {
-	for _, d := range w.c.cat.Documents {
-		for _, t := range d.Tables {
-			if t.Name == w.tb.Name && t.Settings != nil && t.Settings.KeyPrefix != nil {
-				return t.Settings.KeyPrefix.Prefix
-			}
-		}
-	}
-	return ""
-}
+func (w *writer) keyPrefix() string { return w.c.keyPrefix(w.tb.Name) }
 
 // insertRow inserts the i-th row of the request, whose set parameters are ps (nil
 // for the set row itself).
@@ -663,8 +651,6 @@ func (w *writer) insertRow(i int, ps []*int) *Error {
 	}
 	// Place the row: a files row in its own file, a document row in the table's
 	// document, a block row in the scope of the row its placement key names.
-	var placedIn string
-	var placedUnder *rec
 	switch tb.Storage.Kind {
 	case catalog.StorageFiles:
 		path, perr := w.rowPath(tb, g, vals)
@@ -682,7 +668,6 @@ func (w *writer) insertRow(i int, ps []*int) *Error {
 		}
 		w.next.setFile(path, &file{table: tb.Name, rows: []*store.Row{g.row}})
 		w.touched[path] = true
-		placedIn, placedUnder = path, nil
 	case catalog.StorageDocument:
 		path, perr := w.rowPath(tb, g, vals)
 		if perr != nil {
@@ -698,7 +683,6 @@ func (w *writer) insertRow(i int, ps []*int) *Error {
 		}
 		f.rows = append(f.rows, g.row)
 		w.touched[path] = true
-		placedIn, placedUnder = path, nil
 	case catalog.StorageBlock:
 		pv := vals[tb.Placement()]
 		p, err := w.placementRow(tb, pv)
@@ -715,15 +699,6 @@ func (w *writer) insertRow(i int, ps []*int) *Error {
 		}
 		p.row.Blocks[tb.Name] = append(p.row.Blocks[tb.Name], g.row)
 		w.touched[p.file] = true
-		placedIn, placedUnder = p.file, p
-	}
-	if tb.Order != "" {
-		w.next.index()
-	} else {
-		// The new row joins the index, so that a request of many rows takes time in their number; the render indexes the
-		// corpus in its storage order.
-		w.next.reorder()
-		w.next.place(g.row, placedIn, placedUnder)
 	}
 	if tb.Order != "" {
 		var k *cell
@@ -763,7 +738,7 @@ func (w *writer) placementRow(tb *catalog.Table, v cell) (*rec, *Error) {
 	if v.null {
 		return nil, nil
 	}
-	for _, x := range w.next.tableRecs(tb.Storage.Parent) {
+	for _, x := range scan(w.next, tb.Storage.Parent) {
 		if x.row.Key == v.text {
 			return x, nil
 		}
@@ -774,7 +749,7 @@ func (w *writer) placementRow(tb *catalog.Table, v cell) (*rec, *Error) {
 // nextIdentity allocates max+1 over the identity column of the table's rows.
 func (w *writer) nextIdentity(tb *catalog.Table, col string) cell {
 	max := int64(0)
-	for _, x := range w.next.tableRecs(tb.Name) {
+	for _, x := range scan(w.next, tb.Name) {
 		v, err := w.next.value(x, col)
 		if err != nil || v.null {
 			continue
@@ -789,8 +764,8 @@ func (w *writer) nextIdentity(tb *catalog.Table, col string) cell {
 // nextPrefixed allocates <p><n + 1>, n the largest decimal suffix without a leading
 // zero among the keys of the form <p><n> (spec 20 Keys).
 func (w *writer) nextPrefixed(tb *catalog.Table, p string) cell {
-	keys := make([]string, 0, len(w.next.tableRecs(tb.Name)))
-	for _, x := range w.next.tableRecs(tb.Name) {
+	keys := make([]string, 0, len(scan(w.next, tb.Name)))
+	for _, x := range scan(w.next, tb.Name) {
 		keys = append(keys, x.row.Key)
 	}
 	return cell{text: NextPrefixed(p, keys)}
@@ -840,7 +815,7 @@ func (w *writer) onDuplicate(ps []*int) (bool, *Error) {
 	var met *rec
 	joinKey(w.tb, vals)
 	if k, ok := vals[w.tb.Key]; ok && !k.null {
-		for _, x := range w.next.tableRecs(w.tb.Name) {
+		for _, x := range scan(w.next, w.tb.Name) {
 			switch {
 			case x.row.Key == k.text:
 				met = x
@@ -850,7 +825,7 @@ func (w *writer) onDuplicate(ps []*int) (bool, *Error) {
 			}
 		}
 	}
-	for _, x := range w.next.tableRecs(w.tb.Name) {
+	for _, x := range scan(w.next, w.tb.Name) {
 		for _, k := range w.tb.Uniques {
 			equal := true
 			for _, col := range k {
@@ -993,6 +968,7 @@ func (w *writer) updateRows(rows []*rec, set []ir.Assign, stamp bool) *Error {
 		if err := w.transition(g, x, vals); err != nil {
 			return err
 		}
+		x = w.own(x)
 		setColumns(tb, x.row, vals)
 		x = w.next.recOf(x.row)
 		w.touched[x.file] = true
@@ -1033,7 +1009,6 @@ func (w *writer) updateRows(rows []*rec, set []ir.Assign, stamp bool) *Error {
 				}
 			}
 		}
-		w.next.index()
 		if tb.Audit != nil {
 			if err := w.auditRow(x.row, "update", g.before[tb.Audit.Column]); err != nil {
 				return err
@@ -1083,7 +1058,6 @@ func (w *writer) moveShard(g *given, x *rec, v cell) *Error {
 	}
 	w.touched[x.file] = true
 	w.touched[to] = true
-	w.next.index()
 	return nil
 }
 
@@ -1111,7 +1085,6 @@ func (w *writer) movePlacement(g *given, x *rec, v cell) *Error {
 	p.row.Blocks[tb.Name] = append(p.row.Blocks[tb.Name], x.row)
 	w.touched[x.file] = true
 	w.touched[p.file] = true
-	w.next.index()
 	return nil
 }
 
@@ -1130,6 +1103,7 @@ func (w *writer) delete() *Error {
 		for i, x := range rows {
 			g := &given{row: x.row, index: i, assigned: map[string]bool{sd: true}}
 			w.take(g)
+			x = w.own(x)
 			setValue(w.tb, x.row, sd, w.clock(fieldType(w.ent.Field(sd))))
 			w.touched[x.file] = true
 			if a := w.tb.Audit; a != nil {
@@ -1142,6 +1116,7 @@ func (w *writer) delete() *Error {
 					return err
 				}
 				g.assigned[a.Column] = true
+				x = w.own(x)
 				setValue(w.tb, x.row, a.Column, key)
 				if err := w.auditRow(x.row, "update", previous); err != nil {
 					return err
@@ -1180,7 +1155,6 @@ func (w *writer) removeBackward(rows []*rec) *Error {
 		if err := w.removeRow(x); err != nil {
 			return err
 		}
-		w.next.index()
 	}
 	return nil
 }
@@ -1249,7 +1223,7 @@ func (w *writer) referencing(x *rec, visit func(y *rec, t *catalog.Table, fk dbs
 			if err := w.next.need(t.Name); err != nil {
 				return err
 			}
-			for _, y := range w.next.tableRecs(t.Name) {
+			for _, y := range scan(w.next, t.Name) {
 				key, named, err := w.next.referencedKey(y, fk, x.tb)
 				if err != nil {
 					return err
