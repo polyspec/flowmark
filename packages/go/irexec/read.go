@@ -85,6 +85,8 @@ func (r *reader) prepare(q *ir.Query) *Error {
 			err = errf(codeCapability, "force_index: indexes are derived, not named, on a corpus")
 		case x.Lock == "update_nowait" || x.Lock == "share_nowait":
 			err = errf(codeCapability, "lock %s is not supported on a corpus", x.Lock)
+		case usesFulltext(x.Where) || usesFulltext(x.On):
+			err = errf(codeOpNotAllowed, "fulltext: a corpus has no full-text index")
 		}
 		tables[r.e.model.Entities[x.Entity].Table] = true
 	})
@@ -102,6 +104,23 @@ func (r *reader) prepare(q *ir.Query) *Error {
 		}
 	}
 	return nil
+}
+
+// usesFulltext reports whether g or a group in it holds a fulltext predicate, whose
+// refusal cannot wait for a row to evaluate it on.
+func usesFulltext(g *ir.Group) bool {
+	if g == nil {
+		return false
+	}
+	for _, it := range g.Items {
+		if it.Group != nil && usesFulltext(it.Group) {
+			return true
+		}
+		if it.Pred != nil && (it.Pred.Op == "fulltext" || it.Pred.Op == "fulltext_boolean") {
+			return true
+		}
+	}
+	return false
 }
 
 // walkQueries calls f on q and on every query in it: joins, relations, and the
