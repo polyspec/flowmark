@@ -3,6 +3,7 @@
 
 ## Unreleased
 
+- T64: flowmark takes Kit 0.0.93: package.json and its lock pin its release asset, and ci-pipeline.yml installs the PHP symbol extractor through ci-setup (K1018).
 - T19: Run 41317062220 shows the layout metrics on Windows: the cost of sharded events=20000 is the setup and the teardown of the fixture, not the insert; the row waits for more runs.
 - T15-2: flowmark has one implementation and no config/parity.json, so make parity-declarations-check holds with no unit to declare, on kit 0.0.92.
 - T15-42: The link declaration .links of the checkout names the orm and kit checkouts, as the T15-48 line says, and make link-check holds on it; the file stays local and untracked.
