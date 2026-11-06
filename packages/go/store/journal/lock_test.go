@@ -135,22 +135,7 @@ func TestAcquireStaleLockReported(t *testing.T) {
 	gone.PID = endedPID(t)
 	plantRecord(t, root, LockPath, gone)
 	_, err := c.Acquire(context.Background(), "s1", 0)
-	var timeout *LockTimeout
-	if !errors.As(err, &timeout) || timeout.State != HolderEnded || timeout.Holder != gone {
-		t.Fatalf("Acquire = %v, want the ended holder %v", err, gone)
-	}
-	for _, part := range []string{"ended", gone.String(), "flowmark unlock " + root} {
-		if !strings.Contains(err.Error(), part) {
-			t.Fatalf("message %q does not name %q", err, part)
-		}
-	}
-	data, readErr := os.ReadFile(lockFile(root))
-	if readErr != nil {
-		t.Fatal(readErr)
-	}
-	if string(data) != string(gone.record()) {
-		t.Fatalf("stale lock changed to %q", data)
-	}
+	wantEnded(t, err, root, gone, string(gone.record()), "ended", gone.String())
 	wantKinds(t, rec)
 }
 
@@ -190,6 +175,28 @@ func TestAcquireMalformedRecord(t *testing.T) {
 	}
 }
 
+// wantEnded checks that err refuses the lock at root as held by holder, which has ended, naming each of parts and
+// `flowmark unlock`, and that the lock still holds record.
+func wantEnded(t *testing.T, err error, root string, holder Holder, record string, parts ...string) {
+	t.Helper()
+	var timeout *LockTimeout
+	if !errors.As(err, &timeout) || timeout.State != HolderEnded || timeout.Holder != holder {
+		t.Fatalf("Acquire = %v, want the ended holder %v", err, holder)
+	}
+	for _, part := range append(parts, "flowmark unlock "+root) {
+		if !strings.Contains(err.Error(), part) {
+			t.Fatalf("message %q does not name %q", err, part)
+		}
+	}
+	data, readErr := os.ReadFile(lockFile(root))
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	if string(data) != record {
+		t.Fatalf("the lock changed to %q", data)
+	}
+}
+
 // lostRecords are the lock records a power loss leaves when the record never reached the disk: no byte, or zero bytes
 // alone.
 var lostRecords = []string{"", "\x00", strings.Repeat("\x00", 4096)}
@@ -203,22 +210,7 @@ func TestAcquireLostRecord(t *testing.T) {
 			writeFile(t, root, LockPath, text)
 			c, rec := newCorpus(t, root)
 			_, err := c.Acquire(context.Background(), "s1", time.Minute)
-			var timeout *LockTimeout
-			if !errors.As(err, &timeout) || timeout.State != HolderEnded || timeout.Holder != (Holder{}) {
-				t.Fatalf("Acquire = %v, want a holder a power loss ended", err)
-			}
-			for _, part := range []string{"power loss", "flowmark unlock " + root} {
-				if !strings.Contains(err.Error(), part) {
-					t.Fatalf("message %q does not name %q", err, part)
-				}
-			}
-			data, readErr := os.ReadFile(lockFile(root))
-			if readErr != nil {
-				t.Fatal(readErr)
-			}
-			if string(data) != text {
-				t.Fatalf("lock file changed to %q", data)
-			}
+			wantEnded(t, err, root, Holder{}, text, "power loss")
 			wantKinds(t, rec)
 		})
 	}

@@ -3,7 +3,6 @@ package journal
 import (
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
 
 	"github.com/polyspec/flowmark/packages/go/internal/cost"
@@ -11,21 +10,19 @@ import (
 
 // flushCase is one operation whose flushes TestFlushes pins: what it writes on a corpus that holds a.flowmark.md,
 // b.flowmark.md and the folder notes/, once the lock has been taken and released (so `.flowmark/` and `.flowmark/tx/`
-// exist).
+// exist). Its flushes on each platform are those of flushWant, by name.
 type flushCase struct {
 	name    string
 	changes []Change
-	// unix and windows are the flushes of the acquisition, the commit and the release, on Linux and macOS and on Windows.
-	unix, windows int64
 }
 
 var flushCases = []flushCase{
-	{"the lock alone", nil, 0, 0},
-	{"an update of one file", []Change{{Path: "a.flowmark.md", Data: []byte("a2\n")}}, 17, 14},
-	{"a create in a folder that exists", []Change{{Path: "notes/c.flowmark.md", Data: []byte("c\n")}}, 15, 12},
-	{"a delete of one file", []Change{{Path: "b.flowmark.md", Delete: true}}, 13, 10},
-	{"a create in a folder that does not exist", []Change{{Path: "new/d.flowmark.md", Data: []byte("d\n")}}, 16, 13},
-	{"an update of two files", []Change{{Path: "a.flowmark.md", Data: []byte("a2\n")}, {Path: "b.flowmark.md", Data: []byte("b2\n")}}, 25, 21},
+	{"the lock alone", nil},
+	{"an update of one file", []Change{{Path: "a.flowmark.md", Data: []byte("a2\n")}}},
+	{"a create in a folder that exists", []Change{{Path: "notes/c.flowmark.md", Data: []byte("c\n")}}},
+	{"a delete of one file", []Change{{Path: "b.flowmark.md", Delete: true}}},
+	{"a create in a folder that does not exist", []Change{{Path: "new/d.flowmark.md", Data: []byte("d\n")}}},
+	{"an update of two files", []Change{{Path: "a.flowmark.md", Data: []byte("a2\n")}, {Path: "b.flowmark.md", Data: []byte("b2\n")}}},
 }
 
 // TestFlushes pins the flushes of each operation of the journal, which its corpus counts (T55; plan, Ruling: a commit
@@ -36,10 +33,7 @@ func TestFlushes(t *testing.T) {
 	for _, synchronous := range []bool{true, false} {
 		SetSynchronous(synchronous)
 		for _, tc := range flushCases {
-			want := tc.unix
-			if runtime.GOOS == "windows" {
-				want = tc.windows
-			}
+			want := flushWant[tc.name]
 			if !synchronous {
 				want = 0
 			}
