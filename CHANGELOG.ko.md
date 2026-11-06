@@ -1,8 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 3c637ada68bdfe1a0579785348460d9d0c8c185bbef3200163524553001a432c -->
+<!-- source-sha256: 8aeb7c9c0afbfd551ca4e36db373b8448a8caf5b7c1dc38ff3d4f2889c782d15 -->
 # Changelog
 
 ## Unreleased
+
+## 0.0.5
 
 - T65: board 예제는 hyper 0.0.31, template 0.0.20, crudui 0.0.13을 한 변경으로 쓰고, hyper-server 0.0.31이 require하는 @polyspec/php-serialize 0.0.1을 그 release tarball로 고정한다. ordered-json은 orm 0.0.21이 require하는 0.0.18에 머문다.
 - T64: flowmark은 Kit 0.0.93을 쓴다: package.json과 그 lock은 그 release asset을 고정하고, ci-pipeline.yml은 ci-setup으로 PHP symbol extractor를 설치한다(K1018).
