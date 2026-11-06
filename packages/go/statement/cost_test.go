@@ -14,6 +14,7 @@ import (
 	"github.com/polyspec/flowmark/packages/go/internal/corpustest"
 	"github.com/polyspec/flowmark/packages/go/internal/cost"
 	"github.com/polyspec/flowmark/packages/go/ops"
+	"github.com/polyspec/flowmark/packages/go/statement"
 	"github.com/polyspec/flowmark/packages/go/store"
 	"github.com/polyspec/flowmark/packages/go/writepath"
 )
@@ -162,6 +163,15 @@ var costOps = []costOp{
 	}},
 	{"delete task", func(t *testing.T, s *writepath.Session, _ string) { run(t, s, "DELETE FROM tasks WHERE id = 'T151'") }},
 	{"delete note", func(t *testing.T, s *writepath.Session, _ string) { run(t, s, "DELETE FROM notes WHERE id = 'N151'") }},
+	{"refused write", func(t *testing.T, s *writepath.Session, _ string) {
+		// SQLite takes the key; the rule of keys refuses it, as equal to T7 without regard to case.
+		if _, err := statement.Run(s, "INSERT INTO tasks (id, project, title) VALUES ('t7', 'P2', 'folded')", nil); err == nil {
+			t.Fatal("a key equal to another without regard to case is taken")
+		}
+		if got := cells(run(t, s, "SELECT title FROM tasks WHERE id = 'T7'")); got != `[["Task 7"]]` {
+			t.Fatalf("the read after the refused write answers %s", got)
+		}
+	}},
 	{"external edit", func(t *testing.T, s *writepath.Session, root string) {
 		p := filepath.Join(root, "notes", "2020-01-03.flowmark.md")
 		b, err := os.ReadFile(p)
@@ -212,7 +222,12 @@ var equalCost = map[string][]cost.Counter{
 	"update note":   writeReadCost,
 	"delete task":   writeReadCost,
 	"delete note":   writeReadCost,
+	// T43-2: a refused write rolls the database back, and fills nothing again.
+	"refused write": refusedCost,
 }
+
+// refusedCost are the counts of a write the corpus refuses and the read after it: the rows the database takes again.
+var refusedCost = []cost.Counter{cost.RowsStored, cost.DatabaseRowsWritten}
 
 // readCost are the counts of a corpus read: the documents it visits and parses, and the rows it places and indexes.
 var readCost = []cost.Counter{cost.FilesVisited, cost.FilesParsed, cost.RowsPlaced, cost.RowsIndexed}

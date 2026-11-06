@@ -2,11 +2,9 @@ package statement
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"maps"
 	"regexp"
 	"slices"
@@ -44,12 +42,15 @@ func alreadySo(ctx context.Context, s *writepath.Session, text string) (bool, er
 	if err != nil {
 		return false, err
 	}
-	var found *Answer
-	err = s.ReadSnapshot(func(slot *io.Closer, unlock func()) (bool, error) {
-		found, _, err = readInto(ctx, s, c, slot, unlock, "SELECT 1 FROM sqlite_master WHERE name = ?", []any{m[3] + m[4]})
-		return false, err
-	})
+	r, err := readerFor(ctx, s, c)
 	if err != nil {
+		return false, err
+	}
+	found, open, err := readBatch(ctx, r.q, "SELECT 1 FROM sqlite_master WHERE name = ?", []any{m[3] + m[4]})
+	if open != nil {
+		err = errors.Join(err, open.Close())
+	}
+	if err = errors.Join(err, r.release()); err != nil {
 		return false, err
 	}
 	return (len(found.Rows) > 0) == (m[2] != ""), nil
@@ -61,7 +62,7 @@ func alreadySo(ctx context.Context, s *writepath.Session, text string) (bool, er
 // corpus's schema statements, with the rows of the tables it changed written again under the new columns.
 func runSchema(ctx context.Context, s *writepath.Session, text string, args []any) (_ *Answer, err error) {
 	if s.InTransaction() {
-		if err := commit(s); err != nil {
+		if err := s.Commit(); err != nil {
 			return nil, err
 		}
 		defer func() {
@@ -73,67 +74,64 @@ func runSchema(ctx context.Context, s *writepath.Session, text string, args []an
 	}
 	var answer *Answer
 	err = s.Reschema(ctx, func(c *irexec.Corpus) (*catalog.Catalog, []journal.Change, error) {
-		h, err := heldFor(ctx, s, c)
+		d, release, err := writerFor(ctx, s, c)
 		if err != nil {
 			return nil, nil, err
 		}
-		cat, changes, err := apply(ctx, s, h.db, c, text, args, &answer)
+		// The writer's transaction ends with the schema statement's commit: it commits after the corpus commit is written.
+		if err := follow(ctx, s, d, release); err != nil {
+			return nil, nil, err
+		}
+		cat, next, changes, err := apply(ctx, s, d.w, c, text, args, &answer)
 		if err != nil {
 			return nil, nil, err
 		}
+		// The database holds what the corpus then holds, its AUTOINCREMENT counters included.
+		d.corpus = next
 		return cat, changes, nil
 	})
 	if err != nil {
-		return nil, errors.Join(err, drop(s))
-	}
-	// The database already holds what the corpus now holds, its AUTOINCREMENT counters included.
-	err = s.View(ctx, func(c *irexec.Corpus) error {
-		if h, ok := s.Held().(*held); ok {
-			h.corpus = c
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, errors.Join(err, drop(s))
+		return nil, err
 	}
 	return answer, nil
 }
 
-// apply runs the schema statement on db and returns the catalog and the changes that make it stand.
-func apply(ctx context.Context, s *writepath.Session, db *sql.DB, c *irexec.Corpus, text string, args []any, answer **Answer) (*catalog.Catalog, []journal.Change, error) {
+// apply runs the schema statement on db and returns the catalog, the corpus under it that the database then holds, and
+// the changes that make it stand.
+func apply(ctx context.Context, s *writepath.Session, db runner, c *irexec.Corpus, text string, args []any, answer **Answer) (*catalog.Catalog, *irexec.Corpus, []journal.Change, error) {
 	before, err := columnsOf(ctx, db)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	schemaBefore, err := schemaText(ctx, db)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	a, err := query(ctx, db, text, args)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	*answer = a
 	schemaAfter, err := schemaText(ctx, db)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	// CREATE ... IF NOT EXISTS of what exists changes nothing, so it does not stand in the corpus.
 	if schemaBefore == schemaAfter {
-		return c.Catalog(), nil, nil
+		return c.Catalog(), c, nil, nil
 	}
 	after, err := columnsOf(ctx, db)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	added := append(slices.Clone(c.Catalog().Statements), text)
 	cat, diags := catalog.LoadStatements(s.Root(), added)
 	if len(diags) > 0 {
-		return nil, nil, &Error{codeConstraint, fmt.Sprintf("the schema statement leaves a corpus that does not load: %v", diags)}
+		return nil, nil, nil, &Error{codeConstraint, fmt.Sprintf("the schema statement leaves a corpus that does not load: %v", diags)}
 	}
 	file, err := json.MarshalIndent(added, "", "  ")
 	if err != nil {
-		return nil, nil, &Error{codeInternal, err.Error()}
+		return nil, nil, nil, &Error{codeInternal, err.Error()}
 	}
 	changes := []journal.Change{{Path: catalog.StatementsFile, Data: append(file, '\n')}}
 	var rewrite []*catalog.Table
@@ -159,9 +157,6 @@ func apply(ctx context.Context, s *writepath.Session, db *sql.DB, c *irexec.Corp
 			}
 		}
 	}
-	if len(gone) == 0 && len(rewrite) == 0 {
-		return cat, changes, nil
-	}
 	old := c.Catalog()
 	var drop []string
 	for _, name := range gone {
@@ -171,14 +166,14 @@ func apply(ctx context.Context, s *writepath.Session, db *sql.DB, c *irexec.Corp
 		}
 		paths, err := c.FilesOf(tb.Name)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		drop = append(drop, paths...)
 	}
 	next := c.Rebased(cat, drop)
 	exec, err := irexec.New(cat)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	for _, tb := range fillOrder(cat) {
 		if !slices.Contains(rewrite, tb) {
@@ -186,23 +181,23 @@ func apply(ctx context.Context, s *writepath.Session, db *sql.DB, c *irexec.Corp
 		}
 		rows, err := rowsOf(ctx, db, tb, c.Cost())
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		if len(rows) == 0 {
 			continue
 		}
 		msg, err := insertMessage(cat, tb, rows, true)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		res, err := exec.ExecuteFace(next, msg)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		next = res.Post.Next
 	}
 	if next, err = sequencedUnder(ctx, db, c, next, cat); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	for _, p := range next.Differs(c) {
 		if p == catalog.StatementsFile {
@@ -214,14 +209,14 @@ func apply(ctx context.Context, s *writepath.Session, db *sql.DB, c *irexec.Corp
 			changes = append(changes, journal.Change{Path: p, Delete: true})
 		}
 	}
-	return cat, changes, nil
+	return cat, next, changes, nil
 }
 
 // sequencedUnder gives next, the corpus of the schema statement under the catalog cat, the AUTOINCREMENT counters the
 // statement left in db: a counter of c whose table is still an AUTOINCREMENT table stays, and a sequence SQLite keeps
 // past the table's sequence in next, as the counter of a table the statement renamed, is its counter. A dropped table
 // leaves no counter, as SQLite drops its row of sqlite_sequence.
-func sequencedUnder(ctx context.Context, db *sql.DB, c, next *irexec.Corpus, cat *catalog.Catalog) (*irexec.Corpus, error) {
+func sequencedUnder(ctx context.Context, db runner, c, next *irexec.Corpus, cat *catalog.Catalog) (*irexec.Corpus, error) {
 	counters, err := catalog.ParseSequences(c.Data(catalog.SequencesFile))
 	if err != nil {
 		return nil, &Error{codeInternal, err.Error()}
@@ -255,7 +250,7 @@ func sequencedUnder(ctx context.Context, db *sql.DB, c, next *irexec.Corpus, cat
 }
 
 // schemaText is the text of the schema of db.
-func schemaText(ctx context.Context, db *sql.DB) (string, error) {
+func schemaText(ctx context.Context, db runner) (string, error) {
 	var text string
 	row := db.QueryRowContext(ctx, "SELECT COALESCE(group_concat(type || name || COALESCE(sql, ''), char(10)), '') FROM sqlite_master")
 	if err := row.Scan(&text); err != nil {
@@ -265,7 +260,7 @@ func schemaText(ctx context.Context, db *sql.DB) (string, error) {
 }
 
 // columnsOf is the columns of each table of db, in order.
-func columnsOf(ctx context.Context, db *sql.DB) (_ map[string][]string, err error) {
+func columnsOf(ctx context.Context, db runner) (_ map[string][]string, err error) {
 	rows, err := db.QueryContext(ctx, `SELECT m.name, p.name FROM sqlite_master m, pragma_table_info(m.name) p WHERE m.type = 'table' AND m.name NOT LIKE 'sqlite_%' ORDER BY m.name, p.cid`)
 	if err != nil {
 		return nil, &Error{codeInternal, err.Error()}

@@ -45,6 +45,8 @@ type Session struct {
 	exclusive atomic.Bool
 	// deferred is the transaction of a plain BEGIN, which holds no lock until its first write.
 	deferred *Deferred
+	// follower follows the session's transaction: package statement's SQLite transaction.
+	follower Follower
 	// life ends when Close is called, before Close waits for a request in progress: it ends that request's lock
 	// wait, as a closed connection does.
 	life context.Context
@@ -192,10 +194,60 @@ func (s *Session) SetExclusive(on bool) error {
 }
 
 // Deferred is the transaction of a plain BEGIN of a SQL connection before its first write: it holds no lock, and what it
-// reads is the corpus Pinned, which its first read fixes. Savepoints are those it has set.
+// reads is the corpus Pinned, which its first read fixes, on the connection Reader, which the session's end closes.
+// Savepoints are those it has set.
 type Deferred struct {
 	Pinned     *irexec.Corpus
+	Reader     io.Closer
 	Savepoints []string
+}
+
+// Follower follows the transaction of a session, as package statement's SQLite transaction follows it: it sets, releases
+// and rolls back to each savepoint before the transaction does, Ready refuses a commit before the corpus commit as
+// SQLite refuses a COMMIT, leaving the transaction open, and End ends it after the transaction ended, written telling
+// whether the corpus commit is written.
+type Follower interface {
+	Savepoint(name string) error
+	Release(name string) error
+	RollbackTo(name string, cur *irexec.Corpus) error
+	Ready() error
+	End(written bool) error
+}
+
+// Follow makes f the follower of the session's open transaction, or of the schema statement Reschema commits, until it
+// ends.
+func (s *Session) Follow(f Follower) { s.follower = f }
+
+// Following returns the follower of the session's transaction, nil when it has none.
+func (s *Session) Following() Follower { return s.follower }
+
+// Mark is a savepoint of a transaction: its name and the post-image it holds.
+type Mark struct {
+	Name string
+	Cur  *irexec.Corpus
+}
+
+// Begun returns the corpus the session's open transaction read at its begin and its savepoints, in the order they were
+// set, for a follower that begins after them.
+func (s *Session) Begun() (*irexec.Corpus, []Mark) {
+	if s.tx == nil {
+		return nil, nil
+	}
+	marks := make([]Mark, len(s.tx.marks))
+	for i, m := range s.tx.marks {
+		marks[i] = Mark{Name: m.name, Cur: m.cur}
+	}
+	return s.tx.base, marks
+}
+
+// endFollower ends the follower of the session's transaction, if it has one.
+func (s *Session) endFollower(written bool) error {
+	f := s.follower
+	if f == nil {
+		return nil
+	}
+	s.follower = nil
+	return f.End(written)
 }
 
 // Deferred returns the session's deferred transaction, nil when it has none.
@@ -231,17 +283,6 @@ func (s *Session) Snapshot(ctx context.Context) (*irexec.Corpus, error) {
 	return nil, lockError(err)
 }
 
-// ReadSnapshot calls read with the slot of the database of the reads without the lock, and with what releases it. A read
-// that returns true keeps the database, and calls the release when it ends.
-func (s *Session) ReadSnapshot(read func(slot *io.Closer, unlock func()) (bool, error)) error {
-	s.c.readMu.Lock()
-	keep, err := read(&s.c.readHeld, s.c.readMu.Unlock)
-	if !keep {
-		s.c.readMu.Unlock()
-	}
-	return err
-}
-
 // SetBusyTimeout sets the wait of the session's lock.
 func (s *Session) SetBusyTimeout(ms int64) { s.busyMS.Store(ms + 1) }
 
@@ -265,10 +306,9 @@ func (s *Session) Ended() bool { return s.ended.Load() }
 // Transaction reports whether a transaction is open in the session, for the holder of its lock.
 func (s *Session) Transaction() bool { return s.tx != nil }
 
-// ReadCommitted calls read with the corpus last committed, the slot of the database of such reads and what releases that
-// database, and reports true, when another session holds the lock; a free lock, or a corpus not read yet, is false and
-// read is not called. A read that returns true keeps the database, and calls the release when it ends.
-func (s *Session) ReadCommitted(ctx context.Context, read func(c *irexec.Corpus, slot *io.Closer, unlock func()) (bool, error)) (bool, error) {
+// ReadCommitted calls read with the corpus last committed and reports true, when another session holds the lock; a free
+// lock, or a corpus not read yet, is false and read is not called.
+func (s *Session) ReadCommitted(ctx context.Context, read func(c *irexec.Corpus) error) (bool, error) {
 	if s.kept.Load() != nil {
 		return false, nil
 	}
@@ -288,7 +328,7 @@ func (s *Session) ReadCommitted(ctx context.Context, read func(c *irexec.Corpus,
 	case !errors.As(err, &timeout), c == nil:
 		return false, nil
 	}
-	return true, s.ReadSnapshot(func(slot *io.Closer, unlock func()) (bool, error) { return read(c, slot, unlock) })
+	return true, read(c)
 }
 
 // Cost returns the counts of the work of the session's corpus.
@@ -328,12 +368,38 @@ func (s *Session) QueryOnly() bool { return s.queryOnly.Load() }
 // SetQueryOnly sets the query_only of the session's statements.
 func (s *Session) SetQueryOnly(on bool) { s.queryOnly.Store(on) }
 
-// Held returns what package statement keeps between statements of the corpus. The caller holds the lock: it is in a
-// transaction of the session.
-func (s *Session) Held() io.Closer { return s.c.held }
+// SQL returns what package statement keeps of the SQL database of the corpus, nil before its first statement. It is read
+// without the lock.
+func (s *Session) SQL() io.Closer {
+	s.c.sqlMu.Lock()
+	defer s.c.sqlMu.Unlock()
+	return s.c.sql
+}
 
-// SetHeld sets what package statement keeps between statements of the corpus, under the lock as Held.
-func (s *Session) SetHeld(h io.Closer) { s.c.held = h }
+// SwapSQL makes h what package statement keeps of the SQL database of the corpus when it is old, and reports whether it
+// did.
+func (s *Session) SwapSQL(old, h io.Closer) bool {
+	s.c.sqlMu.Lock()
+	defer s.c.sqlMu.Unlock()
+	if s.c.sql != old {
+		return false
+	}
+	s.c.sql = h
+	return true
+}
+
+// NewSQLFile makes the place of a new SQL database of the corpus (journal Corpus.NewDatabase); it is nil for a corpus the
+// process may only read, whose database is in memory.
+func (s *Session) NewSQLFile() (*journal.Database, error) {
+	d, err := s.c.j.NewDatabase()
+	if errors.Is(err, fs.ErrPermission) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, driverError("making the SQL database of the corpus", err)
+	}
+	return d, nil
+}
 
 // View calls read with the corpus the session reads: its transaction's post-image, or the corpus read now under the
 // lock. A statement of SQL reads through it and writes what it changed as requests (package statement).
@@ -349,7 +415,7 @@ func (s *Session) View(ctx context.Context, read func(*irexec.Corpus) error) err
 
 // Reschema commits the files and the schema statements that compute derives from the corpus, as its own transaction under
 // the lock, and takes the catalog it returns: the corpus has the tables of a schema statement from here on (spec 40 SQL
-// statements).
+// statements). A follower that compute sets ends with it.
 func (s *Session) Reschema(ctx context.Context, compute func(*irexec.Corpus) (*catalog.Catalog, []journal.Change, error)) (err error) {
 	ctx, leave, err := s.enter(ctx)
 	if err != nil {
@@ -364,7 +430,7 @@ func (s *Session) Reschema(ctx context.Context, compute func(*irexec.Corpus) (*c
 		return err
 	}
 	written := false
-	defer func() { err = releaseAfter(l, written, err) }()
+	defer func() { err = releaseAfter(l, written, errors.Join(err, s.endFollower(written))) }()
 	base, err := s.c.read()
 	if err != nil {
 		return err
@@ -388,7 +454,7 @@ func (s *Session) Reschema(ctx context.Context, compute func(*irexec.Corpus) (*c
 	return s.c.useCatalog(cat)
 }
 
-// Executor returns the executor of the corpus's catalog. Under the lock, as Held.
+// Executor returns the executor of the corpus's catalog. Under the lock.
 func (s *Session) Executor() *irexec.Executor { return s.c.exec }
 
 // Root returns the root of the corpus.
@@ -578,9 +644,14 @@ func (s *Session) Commit() (err error) {
 	if t == nil {
 		return s.noTx("commit")
 	}
+	if f := s.follower; f != nil {
+		if err := f.Ready(); err != nil {
+			return err
+		}
+	}
 	s.tx = nil
 	written := false
-	defer func() { err = releaseAfter(t.lock, written, err) }()
+	defer func() { err = releaseAfter(t.lock, written, errors.Join(err, s.endFollower(written))) }()
 	written, err = s.c.commit(t)
 	return err
 }
@@ -594,7 +665,7 @@ func (s *Session) Rollback() error {
 		return s.noTx("rollback")
 	}
 	s.tx = nil
-	return release(t.lock, nil)
+	return release(t.lock, s.endFollower(false))
 }
 
 // Savepoint sets a savepoint named name at the transaction's present state: a nested level. A savepoint of the same
@@ -608,6 +679,11 @@ func (s *Session) Savepoint(name string) error {
 		return s.noTx("savepoint")
 	case name == "":
 		return newError(codeConfig, "a savepoint needs a name")
+	}
+	if f := s.follower; f != nil {
+		if err := f.Savepoint(name); err != nil {
+			return err
+		}
 	}
 	t.marks = slices.DeleteFunc(t.marks, func(m mark) bool { return m.name == name })
 	t.marks = append(t.marks, mark{name: name, cur: t.cur, n: len(t.writes)})
@@ -635,6 +711,11 @@ func (s *Session) Release(name string) error {
 	if err != nil {
 		return err
 	}
+	if f := s.follower; f != nil {
+		if err := f.Release(name); err != nil {
+			return err
+		}
+	}
 	s.tx.marks = s.tx.marks[:i]
 	return nil
 }
@@ -646,6 +727,11 @@ func (s *Session) RollbackTo(name string) error {
 	i, err := s.find("rollback_to", name)
 	if err != nil {
 		return err
+	}
+	if f := s.follower; f != nil {
+		if err := f.RollbackTo(name, s.tx.marks[i].cur); err != nil {
+			return err
+		}
 	}
 	m := s.tx.marks[i]
 	s.tx.cur = m.cur
@@ -670,7 +756,13 @@ func (s *Session) Close() error {
 	}
 	if t := s.tx; t != nil {
 		s.tx = nil
-		err = release(t.lock, err)
+		err = release(t.lock, errors.Join(err, s.endFollower(false)))
+	}
+	if d := s.deferred; d != nil {
+		s.deferred = nil
+		if d.Reader != nil {
+			err = errors.Join(err, d.Reader.Close())
+		}
 	}
 	if l := s.kept.Swap(nil); l != nil {
 		l.Keep(false)

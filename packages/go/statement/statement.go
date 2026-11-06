@@ -1,7 +1,9 @@
-// Package statement runs one SQL statement on a corpus (spec 40 SQL statements). The corpus is read into an in-memory
-// SQLite database of the schema orm renders for its document set, the statement runs there in SQLite's dialect, and
-// the rows it changed come back as writes of the executor, which holds every rule of the corpus. The SQLite database
-// serves no one else and is rebuilt whenever the corpus differs from it: the corpus stays the only store.
+// Package statement runs one SQL statement on a corpus (spec 40 SQL statements). The corpus is read into a SQLite
+// database of the schema orm renders for its document set, the statement runs there in SQLite's dialect, and the rows it
+// changed come back as writes of the executor, which holds every rule of the corpus. The database is the opening's own
+// (database.go): its writer connection follows the session's transaction and commits after the corpus commit, its
+// reader connections read what its last commit holds, and it is brought to the corpus whenever the corpus differs from
+// it: the corpus stays the only store.
 package statement
 
 import (
@@ -149,18 +151,18 @@ func runAlone(ctx context.Context, s *writepath.Session, text string, args []any
 	var writes written
 	var answer *Answer
 	err = s.View(ctx, func(c *irexec.Corpus) error {
-		h, err := heldFor(ctx, s, c)
+		d, _, err := writerFor(ctx, s, c)
 		if err != nil {
 			return err
 		}
-		answer, open, writes, err = execute(ctx, h.db, c, text, args, s.ForeignKeysOff())
+		answer, open, writes, err = execute(ctx, d.w, c, text, args, s.ForeignKeysOff())
 		return err
 	})
 	if err != nil {
-		return nil, errors.Join(err, drop(s))
+		return nil, err
 	}
 	if err := applyWrites(ctx, s, writes); err != nil {
-		return nil, errors.Join(err, drop(s))
+		return nil, err
 	}
 	return answer, nil
 }
@@ -172,10 +174,16 @@ type written struct {
 	given  map[string]int64
 }
 
-// applyWrites writes the difference of a statement to the session's transaction: the database holds what the corpus
-// then holds. A key the database gave past the sequence of its table in the corpus, as a key the statement inserted and
-// deleted again, raises the counter of the table, so the corpus never gives it again (spec 40 SQL statements).
+// applyWrites writes the difference of a statement to the session's transaction, which the writer connection follows:
+// the database holds what the corpus then holds. A key the database gave past the sequence of its table in the corpus,
+// as a key the statement inserted and deleted again, raises the counter of the table, so the corpus never gives it again
+// (spec 40 SQL statements).
 func applyWrites(ctx context.Context, s *writepath.Session, w written) error {
+	t := following(s)
+	if t == nil {
+		return &Error{codeInternal, "no transaction of the writer connection follows the session"}
+	}
+	before := t.d.corpus
 	for _, msg := range w.writes {
 		if _, err := s.ExecFace(ctx, msg); err != nil {
 			return err
@@ -208,20 +216,15 @@ func applyWrites(ctx context.Context, s *writepath.Session, w written) error {
 	}
 	writes := w.writes
 	return s.View(ctx, func(c *irexec.Corpus) error {
-		h, ok := s.Held().(*held)
-		if !ok {
-			return &Error{codeInternal, "the session holds no database of its corpus"}
-		}
-		before := h.corpus
-		h.corpus = c
-		return placeBack(ctx, h.db, before, c, writes)
+		t.d.corpus = c
+		return placeBack(ctx, t.d.w, before, c, writes)
 	})
 }
 
 // placeBack gives the database the positions that the corpus c gave the rows of the order tables that writes wrote: a row
 // it placed, and the rows that a placed row moved, which are the rows that differ from the corpus before the writes
 // (irexec.Corpus.Changed).
-func placeBack(ctx context.Context, db *sql.DB, before, c *irexec.Corpus, writes [][]byte) error {
+func placeBack(ctx context.Context, db runner, before, c *irexec.Corpus, writes [][]byte) error {
 	written := map[string]bool{}
 	for _, msg := range writes {
 		var w struct {
@@ -278,78 +281,90 @@ func placeBack(ctx context.Context, db *sql.DB, before, c *irexec.Corpus, writes
 	return nil
 }
 
-// runInTransaction runs a statement in the open transaction of the session, under a savepoint on both sides: a statement
-// that fails, or whose difference a corpus rule refuses, leaves the transaction as it was. When the statement ended the
-// SQLite transaction itself, as RAISE(ROLLBACK) does, the session's transaction ends with it.
+// runInTransaction runs a statement in the open transaction of the session, under a savepoint that the writer
+// connection follows: a statement that fails, or whose difference a corpus rule refuses, leaves the transaction as it
+// was. When the statement ended the SQLite transaction itself, as RAISE(ROLLBACK) does, the session's transaction ends
+// with it.
 func runInTransaction(ctx context.Context, s *writepath.Session, text string, args []any) (_ *Answer, err error) {
 	if readsOnly(text) {
 		var answer *Answer
 		err := s.View(ctx, func(c *irexec.Corpus) error {
-			h, err := heldFor(ctx, s, c)
+			d, _, err := writerFor(ctx, s, c)
 			if err != nil {
 				return err
 			}
 			var open *sql.Rows
-			if answer, open, err = readBatch(ctx, h.db, text, args); err == nil && open != nil {
+			if answer, open, err = readBatch(ctx, d.w, text, args); err == nil && open != nil {
 				s.SetCursor(&cursor{rows: open})
 			}
 			return err
 		})
 		return answer, err
 	}
+	// The writer follows the transaction before the savepoint, so it takes the savepoint too.
+	var d *database
+	if err := s.View(ctx, func(c *irexec.Corpus) (err error) {
+		d, _, err = writerFor(ctx, s, c)
+		return err
+	}); err != nil {
+		return nil, err
+	}
 	if err := s.Savepoint(savepoint); err != nil {
 		return nil, err
 	}
 	var writes written
 	var answer *Answer
-	var h *held
 	err = s.View(ctx, func(c *irexec.Corpus) error {
 		var err error
-		if h, err = heldFor(ctx, s, c); err != nil {
-			return err
-		}
-		if _, err := h.db.ExecContext(ctx, "SAVEPOINT "+savepoint); err != nil {
-			return driverError(err)
-		}
-		answer, _, writes, err = execute(ctx, h.db, c, text, args, s.ForeignKeysOff())
+		answer, _, writes, err = execute(ctx, d.w, c, text, args, s.ForeignKeysOff())
 		return err
 	})
 	if err == nil {
 		err = applyWrites(ctx, s, writes)
 	}
 	if err == nil {
-		if _, err := h.db.ExecContext(ctx, "RELEASE "+savepoint); err != nil {
-			return nil, errors.Join(driverError(err), drop(s), s.Rollback())
+		if err := s.Release(savepoint); err != nil {
+			return nil, errors.Join(err, s.Rollback())
 		}
-		return answer, s.Release(savepoint)
+		return answer, nil
 	}
-	if h == nil {
-		return nil, errors.Join(err, s.RollbackTo(savepoint), s.Release(savepoint))
-	}
-	if _, undo := h.db.ExecContext(ctx, "ROLLBACK TO "+savepoint); undo != nil {
-		dropped := drop(s)
+	if undo := s.RollbackTo(savepoint); undo != nil {
+		// The statement ended the SQLite transaction, and the session's goes with it.
 		s.SetEnded(true)
-		return nil, errors.Join(err, dropped, s.Rollback())
+		return nil, errors.Join(err, s.Rollback())
 	}
-	if _, undo := h.db.ExecContext(ctx, "RELEASE "+savepoint); undo != nil {
-		return nil, errors.Join(err, driverError(undo), drop(s), s.Rollback())
+	if undo := s.Release(savepoint); undo != nil {
+		return nil, errors.Join(err, undo, s.Rollback())
 	}
-	err = errors.Join(err, s.RollbackTo(savepoint), s.Release(savepoint))
-	return nil, errors.Join(err, s.View(ctx, func(c *irexec.Corpus) error {
-		h.corpus = c
-		return nil
-	}))
+	return nil, err
 }
 
-// readCommitted answers a read from what is committed when another session holds the lock, on a database of its own, and
+// readCommitted answers a read from what is committed when another session holds the lock, on a reader connection, and
 // reports whether it did. It is not a read when the lock is free, since the session then reads under it.
 func readCommitted(ctx context.Context, s *writepath.Session, text string, args []any) (*Answer, bool, error) {
 	var answer *Answer
-	read, err := s.ReadCommitted(ctx, func(c *irexec.Corpus, slot *io.Closer, unlock func()) (keep bool, err error) {
-		answer, keep, err = readInto(ctx, s, c, slot, unlock, text, args)
-		return keep, err
+	read, err := s.ReadCommitted(ctx, func(c *irexec.Corpus) error {
+		r, err := readerFor(ctx, s, c)
+		if err != nil {
+			return err
+		}
+		answer, err = readOn(ctx, s, r, text, args)
+		return err
 	})
 	return answer, read, err
+}
+
+// readOn answers a read on the connection r; rows that go on keep it until they end.
+func readOn(ctx context.Context, s *writepath.Session, r *reader, text string, args []any) (*Answer, error) {
+	answer, open, err := readBatch(ctx, r.q, text, args)
+	if err != nil {
+		return nil, errors.Join(err, r.release())
+	}
+	if open == nil {
+		return answer, r.release()
+	}
+	s.SetCursor(&cursor{rows: open, release: r.release})
+	return answer, nil
 }
 
 // staleSnapshot is the refusal of the first write of a transaction that read a corpus committed over since.
@@ -365,48 +380,8 @@ func (e staleSnapshot) Failure() (code, msg string) { return codeCanceled, e.Err
 // ResultCode is SQLITE_BUSY_SNAPSHOT, for the answer of the statement.
 func (staleSnapshot) ResultCode() int { return sqlite3.SQLITE_BUSY_SNAPSHOT }
 
-// readInto answers a read from the corpus c on the database of the reads without the lock.
-func readInto(ctx context.Context, s *writepath.Session, c *irexec.Corpus, slot *io.Closer, unlock func(), text string, args []any) (*Answer, bool, error) {
-	h, ok := (*slot).(*held)
-	if ok && h.corpus.Catalog() == c.Catalog() && len(h.corpus.Differs(c)) > 0 {
-		if err := refresh(ctx, h.db, h.corpus, c); err != nil {
-			*slot = nil
-			return nil, false, errors.Join(err, closeError(h))
-		}
-		h.corpus = c
-	}
-	if !ok || h.corpus.Catalog() != c.Catalog() || len(h.corpus.Differs(c)) > 0 {
-		if ok {
-			if err := h.Close(); err != nil {
-				return nil, false, &Error{codeInternal, err.Error()}
-			}
-		}
-		*slot = nil
-		db, err := materialize(ctx, c)
-		if err != nil {
-			return nil, false, err
-		}
-		h = &held{db: db, corpus: c}
-		*slot = h
-	}
-	if err := h.settle(ctx, s); err != nil {
-		return nil, false, err
-	}
-	if _, err := h.db.ExecContext(ctx, "PRAGMA query_only = ON"); err != nil {
-		return nil, false, driverError(err)
-	}
-	answer, open, err := readBatch(ctx, h.db, text, args)
-	if err != nil {
-		return nil, false, err
-	}
-	if open == nil {
-		return answer, false, nil
-	}
-	s.SetCursor(&cursor{rows: open, unlock: unlock})
-	return answer, true, nil
-}
-
-// readDeferred answers a read of a deferred transaction from the corpus its first read fixes.
+// readDeferred answers a read of a deferred transaction on the reader connection its first read pinned, which reads the
+// corpus of the database's commit it began at.
 func readDeferred(ctx context.Context, s *writepath.Session, text string, args []any) (*Answer, error) {
 	d := s.Deferred()
 	if d.Pinned == nil {
@@ -414,14 +389,34 @@ func readDeferred(ctx context.Context, s *writepath.Session, text string, args [
 		if err != nil {
 			return nil, err
 		}
-		d.Pinned = c
+		p, at, err := pin(ctx, s, c)
+		if err != nil {
+			return nil, err
+		}
+		d.Pinned, d.Reader = at, p
 	}
-	var answer *Answer
-	err := s.ReadSnapshot(func(slot *io.Closer, unlock func()) (keep bool, err error) {
-		answer, keep, err = readInto(ctx, s, d.Pinned, slot, unlock, text, args)
-		return keep, err
-	})
-	return answer, err
+	if p, ok := d.Reader.(*pinned); ok && p.r != nil {
+		answer, open, err := readBatch(ctx, p.r.q, text, args)
+		if err == nil && open != nil {
+			s.SetCursor(&cursor{rows: open})
+		}
+		return answer, err
+	}
+	r, err := readerFor(ctx, s, d.Pinned)
+	if err != nil {
+		return nil, err
+	}
+	return readOn(ctx, s, r, text, args)
+}
+
+// endDeferred ends the deferred transaction of the session and gives its reader connection back.
+func endDeferred(s *writepath.Session) error {
+	d := s.Deferred()
+	s.SetDeferred(nil)
+	if d == nil || d.Reader == nil {
+		return nil
+	}
+	return d.Reader.Close()
 }
 
 // upgrade turns a deferred transaction into one that holds the lock, at its first write. A wait that ends leaves it
@@ -432,33 +427,27 @@ func upgrade(ctx context.Context, s *writepath.Session) error {
 	if err := s.Begin(ctx, s.QueryOnly()); err != nil {
 		return err
 	}
-	abandon := func(err error) error {
-		return errors.Join(err, drop(s), s.Rollback())
-	}
 	var stale bool
 	err := s.View(ctx, func(c *irexec.Corpus) error {
 		if d.Pinned != nil && len(d.Pinned.Differs(c)) > 0 {
 			stale = true
 			return nil
 		}
-		return beginHeld(ctx, s, c)
+		_, _, err := writerFor(ctx, s, c)
+		return err
 	})
 	if err != nil {
-		return abandon(err)
+		return errors.Join(err, s.Rollback())
 	}
 	if stale {
 		return errors.Join(staleSnapshot{}, s.Rollback())
 	}
 	for _, name := range d.Savepoints {
 		if err := s.Savepoint(name); err != nil {
-			return abandon(err)
-		}
-		if err := mirror(ctx, s, "SAVEPOINT "+quote(name)); err != nil {
-			return err
+			return errors.Join(err, s.Rollback())
 		}
 	}
-	s.SetDeferred(nil)
-	return nil
+	return endDeferred(s)
 }
 
 // A statement's rows go in batches, so a result takes the memory of what its client reads, as on a SQLite connection.
@@ -468,19 +457,19 @@ const (
 )
 
 // cursor is the rows of a statement that go on. Close frees what they hold, and after is what the statement still owes
-// its session once they end.
+// its session once they end; release gives back the connection they read on.
 type cursor struct {
-	rows   *sql.Rows
-	after  func() error
-	unlock func()
+	rows    *sql.Rows
+	after   func() error
+	release func() error
 }
 
 // Close closes the rows, and it is also what the end of a session calls.
 func (c *cursor) Close() error {
 	err := c.rows.Close()
-	if c.unlock != nil {
-		c.unlock()
-		c.unlock = nil
+	if c.release != nil {
+		err = errors.Join(err, c.release())
+		c.release = nil
 	}
 	return err
 }
@@ -571,7 +560,7 @@ func emptyAnswer(rows *sql.Rows) (*Answer, int, error) {
 }
 
 // readBatch runs a read and answers its first batch, with the rows when they go on.
-func readBatch(ctx context.Context, db *sql.DB, text string, args []any) (*Answer, *sql.Rows, error) {
+func readBatch(ctx context.Context, db runner, text string, args []any) (*Answer, *sql.Rows, error) {
 	rows, err := db.QueryContext(ctx, text, args...)
 	if err != nil {
 		return nil, nil, driverError(err)
@@ -594,109 +583,6 @@ func readBatch(ctx context.Context, db *sql.DB, text string, args []any) (*Answe
 	return a, nil, nil
 }
 
-// held is the SQLite database of a corpus, kept between statements while the corpus stays the one it was filled from:
-// a statement costs its own run, not a read of every table. It lives under the corpus lock, which a statement holds.
-type held struct {
-	db     *sql.DB
-	corpus *irexec.Corpus
-	// replaced is the value each PRAGMA setting of a session replaced.
-	replaced map[string]string
-	// owner is the session whose transaction the database's own transaction is, and base the corpus it began from.
-	owner *writepath.Session
-	base  *irexec.Corpus
-}
-
-func (h *held) Close() error { return h.db.Close() }
-
-// heldFor returns the database that holds the corpus c, filling a new one when the corpus has changed since.
-func heldFor(ctx context.Context, s *writepath.Session, c *irexec.Corpus) (*held, error) {
-	h, ok := s.Held().(*held)
-	// A transaction whose session ended without a word to the database, as an idle one does, went with it.
-	switch {
-	case ok && (h.owner == nil || h.owner == s) && len(h.corpus.Differs(c)) == 0:
-		h.corpus = c
-	case ok && h.owner == nil && h.corpus.Catalog() == c.Catalog():
-		if err := refresh(ctx, h.db, h.corpus, c); err != nil {
-			return nil, errors.Join(err, drop(s))
-		}
-		h.corpus = c
-	default:
-		if err := drop(s); err != nil {
-			return nil, err
-		}
-		db, err := materialize(ctx, c)
-		if err != nil {
-			return nil, err
-		}
-		h = &held{db: db, corpus: c}
-		s.SetHeld(h)
-	}
-	if err := h.settle(ctx, s); err != nil {
-		return nil, err
-	}
-	return h, nil
-}
-
-// settle gives the database the settings of the session: it is shared by the sessions of the corpus, and a PRAGMA is
-// the setting of one connection, so a setting of another session goes back to the value it replaced.
-func (h *held) settle(ctx context.Context, s *writepath.Session) error {
-	queryOnly := "OFF"
-	if s.QueryOnly() {
-		queryOnly = "ON"
-	}
-	if _, err := h.db.ExecContext(ctx, "PRAGMA query_only = "+queryOnly); err != nil {
-		return &Error{codeInternal, err.Error()}
-	}
-	foreignKeys := "ON"
-	if s.ForeignKeysOff() {
-		foreignKeys = "OFF"
-	}
-	if _, err := h.db.ExecContext(ctx, "PRAGMA foreign_keys = "+foreignKeys); err != nil {
-		return &Error{codeInternal, err.Error()}
-	}
-	want := s.Settings()
-	for name, value := range h.replaced {
-		if _, kept := want[name]; kept {
-			continue
-		}
-		if _, err := h.db.ExecContext(ctx, "PRAGMA "+name+" = "+value); err != nil {
-			return driverError(err)
-		}
-		delete(h.replaced, name)
-	}
-	for name, value := range want {
-		if _, kept := h.replaced[name]; !kept {
-			var old string
-			switch err := h.db.QueryRowContext(ctx, "PRAGMA "+name).Scan(&old); {
-			case err == nil:
-				if h.replaced == nil {
-					h.replaced = map[string]string{}
-				}
-				h.replaced[name] = old
-			case !errors.Is(err, sql.ErrNoRows):
-				return driverError(err)
-			}
-		}
-		if _, err := h.db.ExecContext(ctx, "PRAGMA "+name+" = "+value); err != nil {
-			return driverError(err)
-		}
-	}
-	return nil
-}
-
-// drop closes the database of the corpus: it may hold what the corpus does not.
-func drop(s *writepath.Session) error {
-	h := s.Held()
-	if h == nil {
-		return nil
-	}
-	s.SetHeld(nil)
-	if err := h.Close(); err != nil {
-		return &Error{codeInternal, err.Error()}
-	}
-	return nil
-}
-
 // temporalWire writes a text SQLite holds for a datetime or a time in its wire form, six fraction digits: a
 // statement may store any fraction and a date with no time, as a SQLite column of those types does.
 func temporalWire(typ dbspec.Type, text string) string {
@@ -717,90 +603,19 @@ func temporalWire(typ dbspec.Type, text string) string {
 // setting reads a PRAGMA that sets a value.
 var setting = regexp.MustCompile(`(?i)^PRAGMA\s+([a-z_]+)\s*=\s*"?([a-z0-9_-]+)"?$`)
 
-// beginHeld opens the transaction of the database that the session holds for corpus c.
-func beginHeld(ctx context.Context, s *writepath.Session, c *irexec.Corpus) error {
-	h, err := heldFor(ctx, s, c)
-	if err != nil {
-		return err
-	}
-	if _, err := h.db.ExecContext(ctx, "BEGIN"); err != nil {
-		return driverError(err)
-	}
-	h.owner, h.base = s, c
-	return nil
-}
-
-// begin opens the session's transaction and the database's own, so that SQLite judges at COMMIT what it defers to it.
+// begin opens the session's transaction, which the writer connection follows from here on, so that SQLite judges at
+// COMMIT what it defers to it.
 func begin(ctx context.Context, s *writepath.Session) error {
 	if err := s.Begin(ctx, s.QueryOnly()); err != nil {
 		return err
 	}
 	s.SetEnded(false)
-	err := s.View(ctx, func(c *irexec.Corpus) error { return beginHeld(ctx, s, c) })
-	if err != nil {
-		return errors.Join(err, drop(s), s.Rollback())
-	}
-	return nil
-}
-
-// owned is the database whose transaction is that of the session, nil when it has none.
-func owned(s *writepath.Session) *held {
-	if s.Transaction() {
-		if h, ok := s.Held().(*held); ok && h.owner == s {
-			return h
-		}
-	}
-	return nil
-}
-
-// commit commits the database's transaction and then the session's. What SQLite refuses at COMMIT leaves both open, as
-// on a SQLite connection, for the ROLLBACK that follows.
-func commit(s *writepath.Session) error {
-	if h := owned(s); h != nil {
-		if _, err := h.db.Exec("COMMIT"); err != nil {
-			return driverError(err)
-		}
-		h.owner, h.base = nil, nil
-	}
-	if err := s.Commit(); err != nil {
-		return errors.Join(err, drop(s))
-	}
-	return nil
-}
-
-// rollback rolls back both transactions.
-func rollback(s *writepath.Session) error {
-	if h := owned(s); h != nil {
-		if _, err := h.db.Exec("ROLLBACK"); err != nil {
-			return errors.Join(driverError(err), drop(s), s.Rollback())
-		}
-		h.corpus, h.owner, h.base = h.base, nil, nil
-	}
-	return s.Rollback()
-}
-
-// rollbackTo rolls back to a savepoint on both sides.
-func rollbackTo(ctx context.Context, s *writepath.Session, text, name string) error {
-	if err := s.RollbackTo(name); err != nil {
+	err := s.View(ctx, func(c *irexec.Corpus) error {
+		_, _, err := writerFor(ctx, s, c)
 		return err
-	}
-	if err := mirror(ctx, s, text); err != nil {
-		return err
-	}
-	return s.View(ctx, func(c *irexec.Corpus) error {
-		if h, ok := s.Held().(*held); ok {
-			h.corpus = c
-		}
-		return nil
 	})
-}
-
-// mirror runs a savepoint statement on the database's transaction.
-func mirror(ctx context.Context, s *writepath.Session, text string) error {
-	if h := owned(s); h != nil {
-		if _, err := h.db.ExecContext(ctx, text); err != nil {
-			return errors.Join(driverError(err), drop(s), s.Rollback())
-		}
+	if err != nil {
+		return errors.Join(err, s.Rollback())
 	}
 	return nil
 }
@@ -830,10 +645,9 @@ func control(ctx context.Context, s *writepath.Session, text string) (bool, erro
 		return true, begin(ctx, s)
 	case "COMMIT", "END":
 		if s.Deferred() != nil {
-			s.SetDeferred(nil)
-			return true, nil
+			return true, endDeferred(s)
 		}
-		return true, commit(s)
+		return true, s.Commit()
 	case "ROLLBACK":
 		if s.Ended() {
 			return true, nil
@@ -841,8 +655,7 @@ func control(ctx context.Context, s *writepath.Session, text string) (bool, erro
 		whole := len(fields) == 1 || (len(fields) == 2 && fields[1] == "TRANSACTION")
 		if d := s.Deferred(); d != nil {
 			if whole {
-				s.SetDeferred(nil)
-				return true, nil
+				return true, endDeferred(s)
 			}
 			i := slices.Index(d.Savepoints, name(len(fields)-1))
 			if i < 0 {
@@ -852,18 +665,15 @@ func control(ctx context.Context, s *writepath.Session, text string) (bool, erro
 			return true, nil
 		}
 		if whole {
-			return true, rollback(s)
+			return true, s.Rollback()
 		}
-		return true, rollbackTo(ctx, s, text, name(len(fields)-1))
+		return true, s.RollbackTo(name(len(fields) - 1))
 	case "SAVEPOINT":
 		if d := s.Deferred(); d != nil {
 			d.Savepoints = append(d.Savepoints, name(1))
 			return true, nil
 		}
-		if err := s.Savepoint(name(1)); err != nil {
-			return true, err
-		}
-		return true, mirror(ctx, s, text)
+		return true, s.Savepoint(name(1))
 	case "RELEASE":
 		if s.Ended() {
 			return true, nil
@@ -876,10 +686,7 @@ func control(ctx context.Context, s *writepath.Session, text string) (bool, erro
 			d.Savepoints = d.Savepoints[:i]
 			return true, nil
 		}
-		if err := s.Release(name(len(fields) - 1)); err != nil {
-			return true, err
-		}
-		return true, mirror(ctx, s, text)
+		return true, s.Release(name(len(fields) - 1))
 	case "PRAGMA":
 		switch strings.ReplaceAll(strings.Join(fields[1:], ""), " ", "") {
 		case "QUERY_ONLY=ON", "QUERY_ONLY=1":
@@ -1001,7 +808,10 @@ func materialize(ctx context.Context, c *irexec.Corpus) (*sql.DB, error) {
 }
 
 // fill creates the schema of the corpus c in the empty database db and inserts its stored rows.
-func fill(ctx context.Context, db *sql.DB, c *irexec.Corpus) error {
+func fill(ctx context.Context, db queryer, c *irexec.Corpus) error { return fillWith(ctx, db, c, nil) }
+
+// fillWith is fill whose commit publish runs, nil for a plain commit.
+func fillWith(ctx context.Context, db queryer, c *irexec.Corpus, publish func(commit func() error) error) error {
 	cat := c.Catalog()
 	schema, err := catalog.SchemaStatements(assignable(cat.Documents), cat.Statements)
 	if err != nil {
@@ -1019,13 +829,13 @@ func fill(ctx context.Context, db *sql.DB, c *irexec.Corpus) error {
 			}
 		}
 		return nil
-	})
+	}, publish)
 }
 
 // setSequence gives the AUTOINCREMENT table tb of the database of tx the sequence of the corpus c, which SQLite keeps in
 // sqlite_sequence: the next key it gives is one more (irexec.Corpus.Sequence). A table of no sequence has no row there,
 // as in a database that never gave it a key.
-func setSequence(ctx context.Context, tx *sql.Tx, c *irexec.Corpus, tb *catalog.Table) error {
+func setSequence(ctx context.Context, tx runner, c *irexec.Corpus, tb *catalog.Table) error {
 	if !tb.Autoincrement {
 		return nil
 	}
@@ -1054,7 +864,7 @@ func setSequence(ctx context.Context, tx *sql.Tx, c *irexec.Corpus, tb *catalog.
 }
 
 // sequencesOf returns the sequence SQLite keeps in db for each AUTOINCREMENT table of cat that has one.
-func sequencesOf(ctx context.Context, db *sql.DB, cat *catalog.Catalog) (_ map[string]int64, err error) {
+func sequencesOf(ctx context.Context, db runner, cat *catalog.Catalog) (_ map[string]int64, err error) {
 	if !slices.ContainsFunc(cat.Tables, func(tb *catalog.Table) bool { return tb.Autoincrement }) {
 		return nil, nil
 	}
@@ -1085,7 +895,12 @@ func sequencesOf(ctx context.Context, db *sql.DB, cat *catalog.Catalog) (_ map[s
 // availability differs is filled again, as a fill writes them (asFill), so the database holds what a fill from c would
 // (plan, Ruling: an operation costs what it touches). A row keyed by rowid keeps its stored rowid; the rowid of another
 // row is the database's own.
-func refresh(ctx context.Context, db *sql.DB, before, c *irexec.Corpus) error {
+func refresh(ctx context.Context, db queryer, before, c *irexec.Corpus) error {
+	return refreshWith(ctx, db, before, c, nil)
+}
+
+// refreshWith is refresh whose commit publish runs, nil for a plain commit.
+func refreshWith(ctx context.Context, db queryer, before, c *irexec.Corpus, publish func(commit func() error) error) error {
 	changes, err := c.Changed(before)
 	if err != nil {
 		return err
@@ -1114,14 +929,15 @@ func refresh(ctx context.Context, db *sql.DB, before, c *irexec.Corpus) error {
 			}
 		}
 		return nil
-	})
+	}, publish)
 }
 
 // asFill runs the statements schema and then rows in one transaction of db under the conditions of a fill: the foreign
 // keys off, the triggers that stand dropped and the checks ignored, since a stored row has had its audit and its checks
 // and a statement can have stored it past them, as ignore_check_constraints lets it. The triggers stand again and the
-// foreign keys are on when it commits, so a statement meets them as a SQLite connection of orm does.
-func asFill(ctx context.Context, db *sql.DB, schema []string, rows func(*sql.Tx) error) (err error) {
+// foreign keys are on when it commits, so a statement meets them as a SQLite connection of orm does. publish runs the
+// commit, nil for a plain one.
+func asFill(ctx context.Context, db queryer, schema []string, rows func(*sql.Tx) error, publish func(commit func() error) error) (err error) {
 	if _, err := db.ExecContext(ctx, "PRAGMA foreign_keys = OFF"); err != nil {
 		return &Error{codeInternal, err.Error()}
 	}
@@ -1158,7 +974,10 @@ func asFill(ctx context.Context, db *sql.DB, schema []string, rows func(*sql.Tx)
 			return &Error{codeInternal, fmt.Sprintf("the schema statement %s: %v", text, err)}
 		}
 	}
-	if err := tx.Commit(); err != nil {
+	if publish == nil {
+		publish = func(commit func() error) error { return commit() }
+	}
+	if err := publish(tx.Commit); err != nil {
 		return &Error{codeInternal, err.Error()}
 	}
 	if _, err := db.ExecContext(ctx, "PRAGMA foreign_keys = ON"); err != nil {
@@ -1168,7 +987,7 @@ func asFill(ctx context.Context, db *sql.DB, schema []string, rows func(*sql.Tx)
 }
 
 // refreshTable takes the change ch of the table tb into the database of tx.
-func refreshTable(ctx context.Context, tx *sql.Tx, c *irexec.Corpus, tb *catalog.Table, ch irexec.TableChange) (err error) {
+func refreshTable(ctx context.Context, tx runner, c *irexec.Corpus, tb *catalog.Table, ch irexec.TableChange) (err error) {
 	if ch.Whole {
 		if _, err := tx.ExecContext(ctx, "DELETE FROM "+quote(tb.Name)); err != nil {
 			return &Error{codeInternal, err.Error()}
@@ -1202,7 +1021,7 @@ func refreshTable(ctx context.Context, tx *sql.Tx, c *irexec.Corpus, tb *catalog
 }
 
 // fillTable inserts the stored rows of the table tb.
-func fillTable(ctx context.Context, tx *sql.Tx, c *irexec.Corpus, tb *catalog.Table) (err error) {
+func fillTable(ctx context.Context, tx runner, c *irexec.Corpus, tb *catalog.Table) (err error) {
 	rows, err := c.StoredRows(tb.Name)
 	if err != nil {
 		return err
@@ -1211,7 +1030,7 @@ func fillTable(ctx context.Context, tx *sql.Tx, c *irexec.Corpus, tb *catalog.Ta
 }
 
 // insertRows inserts the stored rows rows of the table tb.
-func insertRows(ctx context.Context, tx *sql.Tx, c *irexec.Corpus, tb *catalog.Table, rows [][]any) (err error) {
+func insertRows(ctx context.Context, tx runner, c *irexec.Corpus, tb *catalog.Table, rows [][]any) (err error) {
 	if len(rows) == 0 {
 		return nil
 	}
@@ -1249,7 +1068,7 @@ func closeError(c io.Closer) error {
 }
 
 // standingTriggers drops the triggers of the schema and returns the statements that create them.
-func standingTriggers(ctx context.Context, tx *sql.Tx) (map[string]string, error) {
+func standingTriggers(ctx context.Context, tx runner) (map[string]string, error) {
 	rows, err := tx.QueryContext(ctx, "SELECT name, sql FROM sqlite_master WHERE type = 'trigger'")
 	if err != nil {
 		return nil, &Error{codeInternal, err.Error()}
@@ -1368,7 +1187,7 @@ func decimalText(n int64, scale int) string {
 }
 
 // execute runs the statement on db, and returns its answer and the request messages of the rows it changed.
-func execute(ctx context.Context, db *sql.DB, c *irexec.Corpus, text string, args []any, foreignKeysOff bool) (*Answer, *sql.Rows, written, error) {
+func execute(ctx context.Context, db runner, c *irexec.Corpus, text string, args []any, foreignKeysOff bool) (*Answer, *sql.Rows, written, error) {
 	if readsOnly(text) {
 		answer, open, err := readBatch(ctx, db, text, args)
 		return answer, open, written{}, err
@@ -1450,7 +1269,7 @@ func afterCommonTables(text string) string {
 }
 
 // query runs the statement and reads its result.
-func query(ctx context.Context, db *sql.DB, text string, args []any) (_ *Answer, err error) {
+func query(ctx context.Context, db runner, text string, args []any) (_ *Answer, err error) {
 	rows, err := db.QueryContext(ctx, text, args...)
 	if err != nil {
 		return nil, driverError(err)
@@ -1551,7 +1370,7 @@ type tableRows struct {
 }
 
 // allRows reads the rows of every table.
-func allRows(ctx context.Context, db *sql.DB, c *irexec.Corpus) (map[string]tableRows, error) {
+func allRows(ctx context.Context, db runner, c *irexec.Corpus) (map[string]tableRows, error) {
 	out := map[string]tableRows{}
 	for _, tb := range c.Catalog().Tables {
 		rows, err := rowsOf(ctx, db, tb, c.Cost())
@@ -1570,7 +1389,7 @@ func allRows(ctx context.Context, db *sql.DB, c *irexec.Corpus) (map[string]tabl
 }
 
 // rowsOf reads the rows of tb from db.
-func rowsOf(ctx context.Context, db *sql.DB, tb *catalog.Table, k *cost.Counts) (_ [][]any, err error) {
+func rowsOf(ctx context.Context, db runner, tb *catalog.Table, k *cost.Counts) (_ [][]any, err error) {
 	names := columnNames(tb)
 	for i := range names {
 		// Without its declared type the driver reads the stored value itself, not a time of a DATE or DATETIME column.
@@ -1993,7 +1812,7 @@ func assignable(documents []*dbspec.Document) []*dbspec.Document {
 // allocate gives each row of a key_prefix table whose key is NULL the next key of the prefix, in the order the rows were
 // inserted. The rows that the statement returns read the keys it gave: a NULL in a column of the key's name is the next of
 // them, as a RETURNING of the key reads the value the row was given.
-func allocate(ctx context.Context, db *sql.DB, c *irexec.Corpus, answer *Answer) error {
+func allocate(ctx context.Context, db runner, c *irexec.Corpus, answer *Answer) error {
 	given := map[string][]string{}
 	for _, d := range c.Catalog().Documents {
 		for _, t := range d.Tables {
@@ -2034,7 +1853,7 @@ func allocate(ctx context.Context, db *sql.DB, c *irexec.Corpus, answer *Answer)
 }
 
 // column reads the one column of the rows of text.
-func column[T any](ctx context.Context, db *sql.DB, text string, k *cost.Counts) (_ []T, err error) {
+func column[T any](ctx context.Context, db runner, text string, k *cost.Counts) (_ []T, err error) {
 	rows, err := db.QueryContext(ctx, text)
 	if err != nil {
 		return nil, &Error{codeInternal, err.Error()}

@@ -337,8 +337,23 @@ utility of orm's SQLite dialect holds on a corpus, and a client has only this dr
   from here, and of a record that does not parse, since its writer may still be writing it, stays, and a name that is
   no holder record is never touched. `TestNewDatabase`, `TestNewDatabaseRefuses`, `TestRecoverRemovesEndedDatabases`
   and `TestRecoverRefusesLinkedDatabases` of `store/journal` hold it.
-- **Reads.** A read that finds the lock held by another session reads what is committed, on a database of its own, and never
-  waits for a writer: the behaviour of SQLite in WAL mode.
+- **Its connections.** The database is in WAL mode with SQLite's automatic checkpoint (`wal_autocheckpoint` 1000 pages,
+  SQLite's default) and `synchronous` off, since it is a cache of the corpus that a crash leaves for the recovery to
+  remove. One writer connection is held for the database's life. It follows the session's transaction: it begins
+  `BEGIN IMMEDIATE` at the transaction's first statement, at the corpus the transaction began from, takes each of its
+  savepoints and the rows it changed outside its statements, as an IR request of the session, sets, releases and rolls
+  back to each savepoint with it, commits after the corpus commit is written and rolls back on every other end. A
+  deferred foreign key SQLite has not resolved refuses the commit before the corpus commit, as SQLite refuses the
+  `COMMIT`, and leaves the transaction open; a `COMMIT` or a `ROLLBACK` of SQLite that fails builds the database again.
+  A statement that fails, or whose writes a corpus rule refuses, rolls back to its savepoint, and the database fills
+  nothing again. A pool of 8 reader connections (`Readers`), each with `query_only` on and the session's settings for
+  its read, reads what the database's last commit holds, never a transaction the writer holds open; a read that finds
+  every one in use waits for the release of one, and rows that go on keep theirs until they end. A database of another
+  catalog is built again, and the old one is closed when its last read ends. The opening's end removes its database.
+  A corpus the process may only read keeps its database in memory, whose one connection reads, one read at a time.
+  `TestConcurrentReads`, `TestWriterFollowsTransaction` and `TestCost` of `statement` hold it.
+- **Reads.** A read that finds the lock held by another session reads what is committed, on a reader connection, and never
+  waits for a writer nor for another read: the behaviour of SQLite in WAL mode.
 - **Session settings.** `foreign_keys`, `query_only`, `busy_timeout` and `locking_mode` are the session's. Under
   `locking_mode = EXCLUSIVE` the lock its next transaction takes stays after that transaction, until the mode is `NORMAL`
   again. Any other `PRAGMA` setting holds for the session's own statements.

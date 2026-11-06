@@ -129,17 +129,15 @@ type Corpus struct {
 	// readHook is the seam of the tests that lands a change between the read and the commit of an operation outside a
 	// transaction; it is called after each read with the attempt's index. It is nil outside the tests.
 	readHook func(attempt int)
-	// held is what package statement keeps between statements, which only a holder of the lock reads or sets.
-	held io.Closer
 	// published is the catalog the corpus last took, which a face reads without the lock.
 	published atomic.Pointer[catalog.Catalog]
 	// committed is the corpus last read under the lock, which a read answers from while another session holds it.
 	committed atomic.Pointer[irexec.Corpus]
 	// readAt is the commit generation the corpus was last read at under the lock.
 	readAt atomic.Uint64
-	// readHeld is the database of those reads, under readMu.
-	readHeld io.Closer
-	readMu   sync.Mutex
+	// sql is what package statement keeps of the SQL database of the corpus, under sqlMu: it is read without the lock.
+	sql   io.Closer
+	sqlMu sync.Mutex
 }
 
 // Open opens the corpus of the journal corpus j with the catalog cat: it runs recovery first, under the lock (spec 40
@@ -331,15 +329,13 @@ func (c *Corpus) Generation() uint64 { return c.readAt.Load() }
 
 // Close closes the corpus: the watch of its tree. An operation of a closed corpus fails.
 func (c *Corpus) Close() error {
+	c.sqlMu.Lock()
 	var heldErr error
-	if c.readHeld != nil {
-		heldErr = c.readHeld.Close()
-		c.readHeld = nil
+	if c.sql != nil {
+		heldErr = c.sql.Close()
+		c.sql = nil
 	}
-	if c.held != nil {
-		heldErr = c.held.Close()
-		c.held = nil
-	}
+	c.sqlMu.Unlock()
 	if err := c.tree.Close(); err != nil {
 		return driverError("closing the watch of the corpus", err)
 	}

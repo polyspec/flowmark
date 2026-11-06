@@ -1,5 +1,5 @@
 <!-- doc-id: spec-ops -->
-<!-- source-sha256: bd7e6b657ce70a8a6ba04e3c8e8e02250558ee4801d982ca5d72db3377af7340 -->
+<!-- source-sha256: 81979c15ea09c142b12c1a2ab7af13df4cdcc0504df8b56b4da04b31bc1e206a -->
 # Operations
 
 [English](40-ops.md)
@@ -286,8 +286,21 @@ client가 구현할 것은 이 driver뿐이다.
   판정할 수 없는 다른 host의 holder의 database, 그리고 쓰는 쪽이 아직 쓰고 있을 수 있으므로 parse되지 않는 record의 database는
   남고, holder record가 아닌 이름은 건드리지 않는다. `store/journal`의 `TestNewDatabase`, `TestNewDatabaseRefuses`,
   `TestRecoverRemovesEndedDatabases`, `TestRecoverRefusesLinkedDatabases`가 이를 보장한다.
-- **읽기.** 다른 session이 lock을 쥔 것을 본 읽기는 자기 database에서 commit된 것을 읽고 writer를 기다리지 않는다. WAL
-  mode의 SQLite와 같은 동작이다.
+- **연결.** database는 SQLite 자동 checkpoint(`wal_autocheckpoint` 1000 page, SQLite 기본값)와 `synchronous` off의 WAL
+  mode다. corpus의 cache이고 crash가 남긴 것은 복구가 지우기 때문이다. writer 연결 하나를 database가 사는 동안 쥔다. 이
+  연결은 session의 transaction을 따른다: transaction의 첫 문장에서 transaction이 시작한 corpus로 `BEGIN IMMEDIATE`를 시작하고,
+  그 savepoint와 문장 밖에서 바꾼 행(session의 IR 요청 같은)을 받으며, savepoint를 함께 설정·해제·rollback하고, corpus commit이
+  쓰인 뒤 commit하며 그 밖의 모든 끝에서 rollback한다. SQLite가 풀지 못한 지연된 foreign key는 SQLite가 `COMMIT`을 거절하듯
+  corpus commit 전에 commit을 거절하고 transaction을 열어 둔다. 실패한 SQLite의 `COMMIT`이나 `ROLLBACK`은 database를 다시
+  만든다. 실패한 문장과 corpus 규칙이 쓰기를 거절한 문장은 자기 savepoint로 rollback하고 database는 아무것도 다시 채우지
+  않는다. reader 연결 8개의 pool(`Readers`)은 각각 `query_only` on과 읽기 동안의 session 설정을 가지고 database의 마지막
+  commit이 가진 것을 읽으며, writer가 열어 둔 transaction은 결코 읽지 않는다. 모두 쓰이는 것을 본 읽기는 하나가 반환되기를
+  기다리고, 이어지는 행은 끝날 때까지 자기 연결을 쥔다. 다른 catalog의 database는 다시 만들고, 옛 database는 마지막 읽기가
+  끝날 때 닫는다. 열기가 끝나면 그 database를 지운다. process가 읽기만 할 수 있는 corpus는 database를 메모리에 유지하며, 그
+  연결 하나가 한 번에 하나씩 읽는다. `statement`의 `TestConcurrentReads`, `TestWriterFollowsTransaction`, `TestCost`가 이를
+  보장한다.
+- **읽기.** 다른 session이 lock을 쥔 것을 본 읽기는 reader 연결에서 commit된 것을 읽고 writer도 다른 읽기도 기다리지 않는다.
+  WAL mode의 SQLite와 같은 동작이다.
 - **Session 설정.** `foreign_keys`, `query_only`, `busy_timeout`, `locking_mode`는 session의 것이다. `locking_mode =
   EXCLUSIVE`에서는 다음 transaction이 잡은 lock이 그 transaction 뒤에도 남고, mode가 `NORMAL`로 돌아오면 놓는다. 다른
   `PRAGMA` 설정은 session 자신의 문장에만 적용된다.
