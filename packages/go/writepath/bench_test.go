@@ -132,11 +132,15 @@ func BenchmarkWrite(b *testing.B) {
 		f := newFixture(b, executorCatalog(b), benchDocs(n))
 		s := f.session("bench")
 		ctx := context.Background()
-		benchtest.Loop(b, func(i int) {
+		update := func(i int) {
 			m := f.msg("update", "notes", map[string]any{"set": sets(0, "weight"), "where": corpustest.WhereID(1)}, float64(i), "N3")
 			if _, err := s.Exec(ctx, m); err != nil {
 				b.Fatal(err)
 			}
-		})
+		}
+		// The first write after the corpus is opened builds its index, once (spec 40 Cost model); the loop measures the
+		// writes after it.
+		update(0)
+		benchtest.Loop(b, update)
 	})
 }

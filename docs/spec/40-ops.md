@@ -714,7 +714,12 @@ and MySQL and PostgreSQL compare a `datetime(p)` column with `NOW(6)` at six dig
   again, so the index costs the rows of the documents that changed. The first write after a corpus is
   opened builds the index, once, as the first read reads every document. `TestCost` holds that a
   write and an external edit enter the same rows at 1,000 and at 100,000 rows, and every access of
-  the index in the executor's tests compares it with the index built from nothing.
+  the index in the executor's tests compares it with the index built from nothing. The index holds the rows of each key
+  by the document that holds them, and a document entering it writes each key its rows change once, so a change costs
+  the rows of its document under that key, not every row that shares the key, such as the notes that reference one item
+  or share one sibling group. `TestIndexEntries` of `irexec` holds that the index is built with the same entries per row
+  at 200 and at 2,000 rows that share a key and that a write of one of them writes the same entries at both sizes, and
+  `TestCost` that every operation writes the same entries at 1,000 and at 100,000 rows.
 - A write and its checks read the rows they need through the index, not by walking a table: a
   stated, placement, parent or referenced row by its key, the largest `key_prefix` number and
   identity by the number index, a sibling group by its group, the rows that reference a row by the

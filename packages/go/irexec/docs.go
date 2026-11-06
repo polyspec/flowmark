@@ -93,7 +93,7 @@ func (c *Corpus) freshLocked() {
 
 // shareKeysLocked returns the index and the index keys of c for a corpus read or written from it, which shares them: c
 // copies the index keys of a document again before it changes them.
-func (c *Corpus) shareKeysLocked() (pmap.Map[string, []locator], pmap.Map[string, docKeys]) {
+func (c *Corpus) shareKeysLocked() (pmap.Map[string, byDoc], pmap.Map[string, docKeys]) {
 	c.ownKeys = nil
 	return c.idx, c.keys
 }
@@ -104,9 +104,11 @@ func (c *Corpus) shareKeysLocked() (pmap.Map[string, []locator], pmap.Map[string
 func (c *Corpus) freshDoc(path string, m *mark) {
 	old, _ := c.keys.Get(path)
 	f := c.file(path)
+	b := newDocIndex(path)
+	defer c.applyIndex(b)
 	if f == nil {
 		for r, ks := range old {
-			c.unindexRow(path, r, ks)
+			c.unindexRow(b, r, ks)
 		}
 		c.keys = c.keys.Delete(path)
 		delete(c.docs, path)
@@ -124,9 +126,9 @@ func (c *Corpus) freshDoc(path string, m *mark) {
 	}
 	again := func(x *rec) {
 		if ks, ok := dk[x.row]; ok {
-			c.unindexRow(path, x.row, ks)
+			c.unindexRow(b, x.row, ks)
 		}
-		c.indexRow(path, x, dk)
+		c.indexRow(b, x, dk)
 	}
 	d := c.docs[path]
 	if d == nil || m.walk {
@@ -144,7 +146,7 @@ func (c *Corpus) freshDoc(path string, m *mark) {
 		}
 		for r, ks := range dk {
 			if x := d.byRow[r]; x == nil || x.gen != d.gen {
-				c.unindexRow(path, r, ks)
+				c.unindexRow(b, r, ks)
 				delete(dk, r)
 			}
 		}
@@ -260,17 +262,19 @@ func (c *Corpus) lookup(k string) []*rec {
 	c.docsMu.Lock()
 	defer c.docsMu.Unlock()
 	c.freshLocked()
-	locs, _ := c.idx.Get(k)
-	if len(locs) == 0 {
-		return nil
-	}
-	out := make([]*rec, 0, len(locs))
-	for _, l := range locs {
-		if d := c.docLocked(l.path); d != nil {
-			if x := d.byRow[l.row]; x != nil {
-				out = append(out, x)
+	docs, _ := c.idx.Get(k)
+	var out []*rec
+	for _, locs := range docs.All() {
+		for _, l := range locs {
+			if d := c.docLocked(l.path); d != nil {
+				if x := d.byRow[l.row]; x != nil {
+					out = append(out, x)
+				}
 			}
 		}
+	}
+	if len(out) == 0 {
+		return nil
 	}
 	c.cost.Add(cost.RowsScanned, len(out))
 	sortCorpusOrder(out)
@@ -369,11 +373,13 @@ func (c *Corpus) recOf(r *store.Row) *rec {
 	c.docsMu.Lock()
 	defer c.docsMu.Unlock()
 	c.freshLocked()
-	locs, _ := c.idx.Get(keyIndex(r.Table, r.Key))
-	for _, l := range locs {
-		if l.row == r {
-			if d := c.docLocked(l.path); d != nil {
-				return d.byRow[r]
+	docs, _ := c.idx.Get(keyIndex(r.Table, r.Key))
+	for _, locs := range docs.All() {
+		for _, l := range locs {
+			if l.row == r {
+				if d := c.docLocked(l.path); d != nil {
+					return d.byRow[r]
+				}
 			}
 		}
 	}

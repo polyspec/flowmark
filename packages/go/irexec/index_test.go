@@ -29,9 +29,11 @@ func indexFault(c *Corpus) string {
 		n.rewalk(p, f, d)
 		n.docs[p] = d
 		dk := docKeys{}
+		b := newDocIndex(p)
 		for _, x := range d.walk {
-			n.indexRow(p, x, dk)
+			n.indexRow(b, x, dk)
 		}
+		n.applyIndex(b)
 		n.keys = n.keys.Set(p, dk)
 	}
 	if g, w := indexSet(c), indexSet(n); !maps.EqualFunc(g, w, maps.Equal) {
@@ -74,10 +76,12 @@ func indexFault(c *Corpus) string {
 // indexSet returns the index of c as a set of locators by index key.
 func indexSet(c *Corpus) map[string]map[locator]bool {
 	out := map[string]map[locator]bool{}
-	for k, locs := range c.idx.All() {
+	for k, docs := range c.idx.All() {
 		set := map[locator]bool{}
-		for _, l := range locs {
-			set[l] = true
+		for _, locs := range docs.All() {
+			for _, l := range locs {
+				set[l] = true
+			}
 		}
 		out[k] = set
 	}

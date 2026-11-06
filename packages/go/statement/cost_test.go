@@ -281,10 +281,10 @@ var equalCost = map[string][]cost.Counter{
 var refusedCost = []cost.Counter{cost.RowsStored, cost.DatabaseRowsWritten, cost.DatabaseRowsRead}
 
 // readCost are the counts of a corpus read: the documents it visits and parses, and the rows it places and indexes.
-var readCost = []cost.Counter{cost.FilesVisited, cost.FilesParsed, cost.RowsPlaced, cost.RowsIndexed}
+var readCost = []cost.Counter{cost.FilesVisited, cost.FilesParsed, cost.RowsPlaced, cost.RowsIndexed, cost.IndexEntries}
 
 // faceReadCost are the counts of a read of a face: a corpus read, and the rows the read reads (T46).
-var faceReadCost = []cost.Counter{cost.FilesVisited, cost.FilesParsed, cost.RowsPlaced, cost.RowsIndexed, cost.RowsScanned}
+var faceReadCost = []cost.Counter{cost.FilesVisited, cost.FilesParsed, cost.RowsPlaced, cost.RowsIndexed, cost.IndexEntries, cost.RowsScanned}
 
 // quietCost names the operations that count nothing: a read of a corpus nothing changed since the statement before it,
 // which takes no lock (T43-3).
@@ -292,14 +292,14 @@ var quietCost = map[string]bool{"read task": true, "read note": true}
 
 // editReadCost are the counts of the read after an external edit, the rows the corpus enters in its index (T40-1), and the
 // rows its database refresh takes from the corpus and writes (T42-1).
-var editReadCost = []cost.Counter{cost.FilesVisited, cost.FilesParsed, cost.RowsPlaced, cost.RowsIndexed, cost.RowsStored,
+var editReadCost = []cost.Counter{cost.FilesVisited, cost.FilesParsed, cost.RowsPlaced, cost.RowsIndexed, cost.IndexEntries, cost.RowsStored,
 	cost.DatabaseRowsWritten}
 
 // writeReadCost are the counts of the reads of a write, at its start and under the lock at its commit, the rows its
 // post-image copies (T39), the rows the corpus enters in its index (T40-1), and the rows the write and its checks read
 // (T40-2), the rows whose positions it gives the database back (T42-1), and the rows of the database it reads for its
 // difference, the rows it changed (T41).
-var writeReadCost = []cost.Counter{cost.FilesVisited, cost.FilesParsed, cost.RowsPlaced, cost.RowsCopied, cost.RowsIndexed,
+var writeReadCost = []cost.Counter{cost.FilesVisited, cost.FilesParsed, cost.RowsPlaced, cost.RowsCopied, cost.RowsIndexed, cost.IndexEntries,
 	cost.RowsScanned, cost.RowsStored, cost.DatabaseRowsRead}
 
 // logCost names, for each operation, the counters whose count grows at most with the logarithm of the documents of

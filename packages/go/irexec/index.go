@@ -2,12 +2,14 @@ package irexec
 
 import (
 	"fmt"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
 
 	"github.com/polyspec/flowmark/packages/go/catalog"
 	"github.com/polyspec/flowmark/packages/go/internal/cost"
+	"github.com/polyspec/flowmark/packages/go/internal/pmap"
 	"github.com/polyspec/flowmark/packages/go/store"
 )
 
@@ -33,6 +35,10 @@ type locator struct {
 	path string
 	row  *store.Row
 }
+
+// byDoc holds the locators of one index key by the document that holds their rows, so a change of the rows of one
+// document writes the locators of that document, not those of every row that shares the key.
+type byDoc = pmap.Map[string, []locator]
 
 func keyIndex(table, key string) string { return "k\x00" + table + "\x00" + key }
 
@@ -219,27 +225,75 @@ func (c *Corpus) uniqueText(x *rec, u []string) (string, bool, *Error) {
 // of a document it shares; a write changes those of the documents it made its own (ownFile).
 type docKeys map[*store.Row][]string
 
-// indexRow adds the record x, held by the document path, to the index of c, recording its keys in dk.
-func (c *Corpus) indexRow(path string, x *rec, dk docKeys) {
+// docIndex is the change of the index that bringing one document in makes: the rows that leave each key and the rows
+// that enter it, which applyIndex writes to the index at once, so a key the rows of the document share is written once.
+type docIndex struct {
+	path string
+	gone map[string]map[*store.Row]bool
+	add  map[string]map[*store.Row]bool
+}
+
+// newDocIndex returns the empty change of the index for the document path.
+func newDocIndex(path string) *docIndex {
+	return &docIndex{path: path, gone: map[string]map[*store.Row]bool{}, add: map[string]map[*store.Row]bool{}}
+}
+
+// indexRow enters the record x of the document of b in the change b, recording its keys in dk.
+func (c *Corpus) indexRow(b *docIndex, x *rec, dk docKeys) {
 	c.cost.Add(cost.RowsIndexed, 1)
 	keys := c.indexKeys(x)
 	dk[x.row] = keys
 	for _, k := range keys {
-		locs, _ := c.idx.Get(k)
-		c.idx = c.idx.Set(k, append(slices.Clip(locs), locator{path, x.row}))
+		if b.add[k] == nil {
+			b.add[k] = map[*store.Row]bool{}
+		}
+		b.add[k][x.row] = true
 	}
 }
 
-// unindexRow removes row r of the document path from the index of c, by the keys ks it entered the index with. The
-// docKeys that recorded them are left as they are: a corpus read or written from another may share them.
-func (c *Corpus) unindexRow(path string, r *store.Row, ks []string) {
+// unindexRow takes row r of the document of b out of the index in the change b, by the keys ks it entered the index
+// with. The docKeys that recorded them are left as they are: a corpus read or written from another may share them.
+func (c *Corpus) unindexRow(b *docIndex, r *store.Row, ks []string) {
 	for _, k := range ks {
-		locs, _ := c.idx.Get(k)
-		locs = slices.DeleteFunc(slices.Clone(locs), func(l locator) bool { return l.path == path && l.row == r })
+		if b.gone[k] == nil {
+			b.gone[k] = map[*store.Row]bool{}
+		}
+		b.gone[k][r] = true
+		delete(b.add[k], r)
+	}
+}
+
+// applyIndex writes the change b to the index of c: for each key it changes, the locators of the document of b are
+// those it held, without the rows that left, and the rows that entered.
+func (c *Corpus) applyIndex(b *docIndex) {
+	keys := slices.Collect(maps.Keys(b.add))
+	for k := range b.gone {
+		if b.add[k] == nil {
+			keys = append(keys, k)
+		}
+	}
+	for _, k := range keys {
+		docs, _ := c.idx.Get(k)
+		old, _ := docs.Get(b.path)
+		locs := make([]locator, 0, len(old)+len(b.add[k]))
+		for _, l := range old {
+			if !b.gone[k][l.row] {
+				locs = append(locs, l)
+			}
+		}
+		for r := range b.add[k] {
+			locs = append(locs, locator{b.path, r})
+		}
+		c.cost.Add(cost.IndexEntries, len(locs))
 		if len(locs) == 0 {
+			docs = docs.Delete(b.path)
+		} else {
+			docs = docs.Set(b.path, locs)
+		}
+		if docs.Len() == 0 {
 			c.idx = c.idx.Delete(k)
 		} else {
-			c.idx = c.idx.Set(k, locs)
+			c.idx = c.idx.Set(k, docs)
 		}
 	}
 }

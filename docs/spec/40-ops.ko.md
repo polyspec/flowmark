@@ -613,7 +613,12 @@ MySQL과 PostgreSQL은 `datetime(p)` column을 `NOW(6)`와 여섯 자리로 비�
   표시된 문서의 행 가운데 새 행, 바뀐 행, 다른 부모 아래로 간 행, 다시 들어간 부모 아래의 행이 index에서
   빠졌다가 지금 모습으로 다시 들어간다. 그래서 index의 비용은 바뀐 문서의 행이다. corpus를 연 뒤 첫 쓰기가
   첫 읽기가 모든 문서를 읽듯 index를 한 번 만든다. `TestCost`가 쓰기와 외부 편집이 1,000행과 100,000행에서
-  같은 행을 넣음을 확인하고, executor 시험에서 index에 접근할 때마다 처음부터 만든 index와 비교한다.
+  같은 행을 넣음을 확인하고, executor 시험에서 index에 접근할 때마다 처음부터 만든 index와 비교한다. index는 각 key의
+  행을 그 행을 지닌 문서별로 지니고, index에 들어오는 문서는 자기 행이 바꾸는 key를 각각 한 번 쓰므로, 변경은 key를
+  함께 가진 모든 행이 아니라 그 key 아래 자기 문서의 행만큼 비용이 든다. 한 item을 참조하거나 한 sibling group을 함께
+  가진 note가 그 예다. `irexec`의 `TestIndexEntries`가 key를 함께 가진 200행과 2,000행에서 index가 행마다 같은 항목으로
+  만들어지고 그중 한 행의 쓰기가 두 크기에서 같은 항목을 씀을 확인하고, `TestCost`가 모든 연산이 1,000행과 100,000행에서
+  같은 항목을 씀을 확인한다.
 - 쓰기와 그 검사는 필요한 행을 table을 걷지 않고 index로 읽는다: 진술된 행, placement 행, parent 행,
   참조되는 행은 key로, 가장 큰 `key_prefix` 수와 identity는 수 index로, 형제 group은 group으로, 한 행을
   참조하는 행은 그 foreign key가 가리키는 key로, state의 행은 그 값으로, unique key의 행은 그 값으로 읽는다.

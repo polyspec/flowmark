@@ -21,6 +21,9 @@ const (
 	RowsPlaced
 	// RowsIndexed is a row the executor's corpus entered in its index.
 	RowsIndexed
+	// IndexEntries is an entry the executor's corpus wrote to its index: each locator of a key and a document that a
+	// change of the index wrote, the locators it kept and those it added.
+	IndexEntries
 	// RowsCopied is a row a write copied into its post-image.
 	RowsCopied
 	// RowsScanned is a record of the executor's corpus that a write or its checks read: each record a lookup of the index
@@ -46,6 +49,7 @@ var names = [counters]string{
 	FilesParsed:         "files-parsed",
 	RowsPlaced:          "rows-placed",
 	RowsIndexed:         "rows-indexed",
+	IndexEntries:        "index-entries",
 	RowsCopied:          "rows-copied",
 	RowsScanned:         "rows-scanned",
 	FilesCompared:       "files-compared",

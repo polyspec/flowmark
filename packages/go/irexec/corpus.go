@@ -34,9 +34,9 @@ type Corpus struct {
 	// walk holds the first corpus.walk diagnostic of each entry at a table's place
 	// that is no corpus document, by its corpus path.
 	walk pmap.Map[string, catalog.Diagnostic]
-	// idx is the index of the rows (index.go), and keys the index keys of each document's rows, both shared with the
-	// corpora read or written from this one.
-	idx  pmap.Map[string, []locator]
+	// idx is the index of the rows (index.go), the locators of each key by the document that holds them, and keys the
+	// index keys of each document's rows, both shared with the corpora read or written from this one.
+	idx  pmap.Map[string, byDoc]
 	keys pmap.Map[string, docKeys]
 	// docs holds the records of each document this corpus built, guarded by docsMu, since the requests that read a
 	// committed corpus may run at once.
