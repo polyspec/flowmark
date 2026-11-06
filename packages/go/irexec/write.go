@@ -679,12 +679,15 @@ func (w *writer) insertRow(i int, ps []*int) *Error {
 		if path == "" {
 			return nil
 		}
-		f := w.ownFile(path)
+		// The row joins the end of the document, which ownDoc marks only when it copies it: the records of the
+		// document stay, and the row follows their walk (joinedRow).
+		f := w.ownDoc(path)
 		if f == nil {
-			f = &file{table: tb.Name}
-			w.next.setFile(path, f)
+			w.next.setFile(path, &file{table: tb.Name, rows: []*store.Row{g.row}})
+		} else {
+			f.rows = append(f.rows, g.row)
+			w.next.joinedRow(path, g.row)
 		}
-		f.rows = append(f.rows, g.row)
 		w.touched[path] = true
 	case catalog.StorageBlock:
 		pv := vals[tb.Placement()]
@@ -780,7 +783,14 @@ func (w *writer) nextPrefixed(tb *catalog.Table) cell {
 // NextPrefixed is the key that key_prefix p allocates after keys: <p><n + 1>, where n is the largest decimal suffix
 // without a leading zero among the keys of the form <p><n> (spec 20 "Keys").
 func NextPrefixed(p string, keys []string) string {
-	max := new(big.Int)
+	return NextPrefixedKeys(p, keys, 1)[0]
+}
+
+// NextPrefixedKeys are the count keys that key_prefix p allocates one after another after keys: <p><n + 1> to
+// <p><n + count>, with n as NextPrefixed reads it. The keys are read once, so the keys of a statement that inserts many
+// rows cost the keys it reads and the keys it allocates.
+func NextPrefixedKeys(p string, keys []string, count int) []string {
+	n := new(big.Int)
 	for _, k := range keys {
 		if !strings.HasPrefix(k, p) {
 			continue
@@ -789,12 +799,18 @@ func NextPrefixed(p string, keys []string) string {
 		if s == "" || (len(s) > 1 && s[0] == '0') || strings.Trim(s, "0123456789") != "" {
 			continue
 		}
-		n, _ := new(big.Int).SetString(s, 10)
-		if n.Cmp(max) > 0 {
-			max = n
+		v, _ := new(big.Int).SetString(s, 10)
+		if v.Cmp(n) > 0 {
+			n = v
 		}
 	}
-	return p + new(big.Int).Add(max, big.NewInt(1)).String()
+	out := make([]string, count)
+	one := big.NewInt(1)
+	for i := range out {
+		n = new(big.Int).Add(n, one)
+		out[i] = p + n.String()
+	}
+	return out
 }
 
 // onDuplicate applies the on_duplicate assignments to the row that the inserted row

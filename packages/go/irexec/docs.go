@@ -32,11 +32,12 @@ type docRecs struct {
 // documents in, so a test can compare its index with the index built from nothing.
 var checkFresh func(*Corpus)
 
-// mark is what changed in a document since its rows entered the index: the rows whose values changed, and whether rows
-// joined, left or moved within it (walk).
+// mark is what changed in a document since its rows entered the index: the rows whose values changed, the rows a write
+// appended to its end (joined), in order, and whether rows otherwise joined, left or moved within it (walk).
 type mark struct {
-	rows map[*store.Row]bool
-	walk bool
+	rows   map[*store.Row]bool
+	joined []*store.Row
+	walk   bool
 }
 
 // changed marks the document path of c: rows joined it, left it or moved within it.
@@ -44,6 +45,15 @@ func (c *Corpus) changed(path string) {
 	c.docsMu.Lock()
 	defer c.docsMu.Unlock()
 	c.markLocked(path).walk = true
+}
+
+// joinedRow marks the row r that a write appended to the end of the document path of c, after its last row: the row and
+// its block rows follow the walk of the document, which stays as it was.
+func (c *Corpus) joinedRow(path string, r *store.Row) {
+	c.docsMu.Lock()
+	defer c.docsMu.Unlock()
+	m := c.markLocked(path)
+	m.joined = append(m.joined, r)
 }
 
 // changedRow marks the row r of the document path of c, whose values changed.
@@ -100,7 +110,8 @@ func (c *Corpus) shareKeysLocked() (pmap.Map[string, byDoc], pmap.Map[string, do
 
 // freshDoc brings the document path of c in. A document whose rows joined, left or moved is walked again, and its rows
 // enter the index again when they are new to it, marked, under another parent, or under a parent that entered again;
-// in a document whose rows only changed their values, the marked rows and their block rows enter it again.
+// in a document whose rows were only appended or changed their values, the appended rows follow its walk and enter the
+// index, and the marked rows and their block rows enter it again.
 func (c *Corpus) freshDoc(path string, m *mark) {
 	old, _ := c.keys.Get(path)
 	f := c.file(path)
@@ -151,6 +162,10 @@ func (c *Corpus) freshDoc(path string, m *mark) {
 			}
 		}
 	} else {
+		for _, x := range c.extend(path, d, m.joined) {
+			x.again = d.gen
+			again(x)
+		}
 		var down func(x *rec)
 		down = func(x *rec) {
 			again(x)
@@ -229,6 +244,7 @@ func (c *Corpus) rewalk(path string, f *file, d *docRecs) {
 	for _, r := range f.rows {
 		place(r, nil)
 	}
+	c.cost.Add(cost.RowsWalked, len(d.walk))
 	d.gen++
 	if len(d.byRow) != len(d.walk) {
 		for r, x := range d.byRow {
@@ -237,6 +253,30 @@ func (c *Corpus) rewalk(path string, f *file, d *docRecs) {
 			}
 		}
 	}
+}
+
+// extend places the rows that a write appended to the end of the document path, and their block rows, after the last
+// record of its walk d, as rewalk would place them, and returns their records.
+func (c *Corpus) extend(path string, d *docRecs, rows []*store.Row) []*rec {
+	var added []*rec
+	var place func(r *store.Row, parent *rec)
+	place = func(r *store.Row, parent *rec) {
+		tb, _ := c.cat.Table(r.Table)
+		x := &rec{row: r, tb: tb, parent: parent, file: path, at: len(d.walk), gen: d.gen, moved: d.gen}
+		d.byRow[r] = x
+		d.walk = append(d.walk, x)
+		added = append(added, x)
+		for _, name := range r.BlockNames() {
+			for _, child := range r.Blocks[name] {
+				place(child, x)
+			}
+		}
+	}
+	for _, r := range rows {
+		place(r, nil)
+	}
+	c.cost.Add(cost.RowsWalked, len(added))
+	return added
 }
 
 // repoint makes the records of the document path of c hold the copies of their rows, so a record a write holds stays

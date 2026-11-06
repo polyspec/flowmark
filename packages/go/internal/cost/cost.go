@@ -1,5 +1,5 @@
 // Package cost counts the work of the engine's operations: the files a read reads from the disk, visits and parses,
-// the rows it places and indexes, the rows a write copies, the files a comparison compares, the stored rows a request
+// the rows it places, indexes and walks, the rows a write copies, the files a comparison compares, the stored rows a request
 // forms, the rows a statement reads and writes in its SQLite database, the acquisitions of the corpus lock, and the flushes that wait for the disk (plan,
 // Ruling: an operation costs what it touches). An operation that costs what it touches counts the same on a corpus of any size; the counts are how a test
 // says so. A nil *Counts counts nothing.
@@ -21,6 +21,9 @@ const (
 	RowsPlaced
 	// RowsIndexed is a row the executor's corpus entered in its index.
 	RowsIndexed
+	// RowsWalked is a record the executor's corpus placed in the walk of a document: each row of a document it walks
+	// again, and each row a write appended to a document.
+	RowsWalked
 	// IndexEntries is an entry the executor's corpus wrote to its index: each locator of a key and a document that a
 	// change of the index wrote, the locators it kept and those it added.
 	IndexEntries
@@ -52,6 +55,7 @@ var names = [counters]string{
 	FilesParsed:         "files-parsed",
 	RowsPlaced:          "rows-placed",
 	RowsIndexed:         "rows-indexed",
+	RowsWalked:          "rows-walked",
 	IndexEntries:        "index-entries",
 	RowsCopied:          "rows-copied",
 	RowsScanned:         "rows-scanned",

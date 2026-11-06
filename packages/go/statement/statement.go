@@ -1925,9 +1925,8 @@ func allocate(ctx context.Context, db runner, c *irexec.Corpus, answer *Answer, 
 					break
 				}
 			}
-			for _, rowid := range open {
-				key := irexec.NextPrefixed(p, keys)
-				keys = append(keys, key)
+			for i, key := range irexec.NextPrefixedKeys(p, keys, len(open)) {
+				rowid := open[i]
 				given[name] = append(given[name], key)
 				if _, err := db.ExecContext(ctx, "UPDATE "+table+" SET "+quote(name)+" = ? WHERE rowid = ?", key, rowid); err != nil {
 					return driverError(err)
