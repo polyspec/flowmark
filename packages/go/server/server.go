@@ -369,7 +369,10 @@ func errorLine(code, msg string) []byte {
 }
 
 // failure is a coded error of the write path or the executor: its orm code and message.
-type failure interface{ Failure() (code, msg string) }
+type failure interface {
+	error
+	Failure() (code, msg string)
+}
 
 // failureLine is the answer of a failure of the write path or the executor, with its orm code: the code of the first
 // coded error in the error's tree, INTERNAL when none has one. The message is the whole error's text with the coded
@@ -381,9 +384,7 @@ func failureLine(err error) []byte {
 		return errorLine(codeInternal, err.Error())
 	}
 	code, msg := f.Failure()
-	if any(f) != any(err) {
-		msg = strings.Replace(err.Error(), f.(error).Error(), msg, 1)
-	}
+	msg = strings.Replace(err.Error(), f.Error(), msg, 1)
 	var coded interface{ ResultCode() int }
 	if errors.As(err, &coded) && coded.ResultCode() != 0 {
 		b, err := json.Marshal(map[string]map[string]any{"error": {"code": code, "message": msg, "result_code": coded.ResultCode()}})
