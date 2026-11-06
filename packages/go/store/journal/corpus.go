@@ -31,7 +31,13 @@ type Corpus struct {
 	// stageFolders creates a missing corpus folder in the stage and moves it into place (spec 40, durability); true on
 	// Windows, which has no folder flush. The tests set it to run that path on every platform.
 	stageFolders bool
+	// holding counts the locks of this corpus that are held: a read of a corpus whose own session holds the lock knows
+	// that no other process can commit.
+	holding atomic.Int32
 }
+
+// Holding reports whether a lock of this corpus is held, by one of its own sessions.
+func (c *Corpus) Holding() bool { return c.holding.Load() > 0 }
 
 // asynchronous is whether this process does not wait for its writes to reach the disk: false, unless a server of disposable corpora
 // sets it off with `flowmark serve --synchronous off`. Off gives up the durability of a commit against a crash of the

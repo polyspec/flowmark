@@ -595,6 +595,42 @@ func (c *Corpus) Staged() (bool, error) {
 	return len(names) > 0, nil
 }
 
+// Prepared reports whether a stage holds a prepare record, a commit record or the record its collection left: a commit
+// that may be renaming its targets, so a read without the lock may find some of them written and others not (spec 40
+// Reads). A stage before its prepare record has written no target. An entry that is no stage, or a file in the folder's
+// place, is reported too: the recovery judges it under the lock.
+func (c *Corpus) Prepared() (bool, error) {
+	info, err := c.lstat(txRel)
+	if err != nil {
+		return false, fmt.Errorf("journal: %w", err)
+	}
+	if info == nil {
+		return false, nil
+	}
+	if !info.IsDir() {
+		return true, nil
+	}
+	entries, err := os.ReadDir(c.txDir())
+	if err != nil {
+		return false, fmt.Errorf("journal: %w", err)
+	}
+	for _, e := range entries {
+		if !e.IsDir() || !isHex(e.Name(), 32) {
+			return true, nil
+		}
+		for _, name := range []string{prepareName, commitName, collectedName} {
+			ok, err := regularExists(filepath.Join(c.txDir(), e.Name(), name))
+			if err != nil {
+				return false, err
+			}
+			if ok {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
 // ignoreEOF is err without the io.EOF of a folder read to its end.
 func ignoreEOF(err error) error {
 	if errors.Is(err, io.EOF) {

@@ -278,8 +278,8 @@ func (s *Session) Snapshot(ctx context.Context) (*irexec.Corpus, error) {
 		return s.c.read()
 	}
 	var timeout *journal.LockTimeout
-	if c := s.c.committed(); c != nil && errors.As(err, &timeout) {
-		return c, nil
+	if errors.As(err, &timeout) {
+		return s.c.readHeld(err)
 	}
 	return nil, lockError(err)
 }

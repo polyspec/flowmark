@@ -325,21 +325,21 @@ func TestStaged(t *testing.T) {
 		plant  func(t *testing.T, root string)
 		staged bool
 	}{
-		{"40#reads: no folder of the stages", func(*testing.T, string) {}, false},
-		{"40#reads: an empty folder of the stages", func(t *testing.T, root string) {
+		{"40#sql-statements: no folder of the stages", func(*testing.T, string) {}, false},
+		{"40#sql-statements: an empty folder of the stages", func(t *testing.T, root string) {
 			if err := os.MkdirAll(filepath.Join(root, filepath.FromSlash(txRel)), 0o755); err != nil {
 				t.Fatal(err)
 			}
 		}, false},
-		{"40#reads: a stage", func(t *testing.T, root string) {
+		{"40#sql-statements: a stage", func(t *testing.T, root string) {
 			if err := os.MkdirAll(filepath.Join(root, filepath.FromSlash(txRel), "00000000000000000000000000000001"), 0o755); err != nil {
 				t.Fatal(err)
 			}
 		}, true},
-		{"40#reads: an entry of another name", func(t *testing.T, root string) {
+		{"40#sql-statements: an entry of another name", func(t *testing.T, root string) {
 			writeFile(t, root, txRel+"/notes.txt", "x")
 		}, true},
-		{"40#reads: a file in the folder's place", func(t *testing.T, root string) {
+		{"40#sql-statements: a file in the folder's place", func(t *testing.T, root string) {
 			writeFile(t, root, txRel, "x")
 		}, true},
 	}
@@ -357,7 +357,7 @@ func TestStaged(t *testing.T) {
 			}
 		})
 	}
-	t.Run("40#reads: a commit leaves no stage", func(t *testing.T) {
+	t.Run("40#sql-statements: a commit leaves no stage", func(t *testing.T) {
 		root := t.TempDir()
 		c, _ := newCorpus(t, root)
 		l := acquire(t, c, "s1")
@@ -369,6 +369,53 @@ func TestStaged(t *testing.T) {
 		}
 		if got, err := c.Staged(); err != nil || got {
 			t.Fatalf("Staged after a commit = %v, %v; want false", got, err)
+		}
+	})
+}
+
+// TestPrepared pins what a read without the lock reads of a commit that may be renaming its targets (spec 40 Reads): a
+// stage holding its prepare record, its commit record or the record its collection left is prepared; a stage before its
+// prepare record, no folder and an empty one are not; an entry that is no stage and a file in the folder's place are
+// reported, for the recovery to judge.
+func TestPrepared(t *testing.T) {
+	stage := txRel + "/" + stageName
+	cases := []struct {
+		name     string
+		files    []string
+		prepared bool
+	}{
+		{"40#sql-statements: no folder of the stages", nil, false},
+		{"40#sql-statements: a stage before its prepare record", []string{stage + "/pre/0"}, false},
+		{"40#sql-statements: a stage holding its prepare record", []string{stage + "/" + prepareName}, true},
+		{"40#sql-statements: a stage holding its commit record", []string{stage + "/" + commitName}, true},
+		{"40#sql-statements: a stage holding the record of its collection", []string{stage + "/" + collectedName}, true},
+		{"40#sql-statements: an entry that is no stage", []string{txRel + "/notes.txt"}, true},
+		{"40#sql-statements: a file in the folder's place", []string{txRel}, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			for _, f := range tc.files {
+				writeFile(t, root, f, "{}\n")
+			}
+			c, _ := newCorpus(t, root)
+			got, err := c.Prepared()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != tc.prepared {
+				t.Fatalf("Prepared = %v, want %v", got, tc.prepared)
+			}
+		})
+	}
+	t.Run("40#sql-statements: an empty folder of the stages", func(t *testing.T) {
+		root := t.TempDir()
+		if err := os.MkdirAll(filepath.Join(root, filepath.FromSlash(txRel)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		c, _ := newCorpus(t, root)
+		if got, err := c.Prepared(); err != nil || got {
+			t.Fatalf("Prepared = %v, %v; want false", got, err)
 		}
 	})
 }

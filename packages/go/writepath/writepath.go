@@ -134,6 +134,11 @@ type Corpus struct {
 	// last is the corpus last read under the lock with the commit generation it was read at, which a read answers from
 	// while another session holds the lock, or without the lock when nothing changed since.
 	last atomic.Pointer[readState]
+	// readMu serializes the reads of the corpus: under the lock, and without it while another holds it.
+	readMu sync.Mutex
+	// freeHook is the seam of the tests that lands a change between a read without the lock and its second check; it is
+	// nil outside the tests.
+	freeHook func()
 	// sql is what package statement keeps of the SQL database of the corpus, under sqlMu: it is read without the lock.
 	sql   io.Closer
 	sqlMu sync.Mutex
@@ -180,6 +185,55 @@ func (c *Corpus) unchanged() (*irexec.Corpus, bool, error) {
 		return nil, false, nil
 	}
 	return st.cur, true, nil
+}
+
+// readHeld reads the corpus while another holds the lock, held the refusal of its acquisition (spec 40 Reads). A
+// session of this corpus holding it means no other process can commit, so the corpus last read is answered. Otherwise
+// the corpus is read without the lock, and the read is kept when the commit generation is the same before and after it
+// and no prepare record is present at either check: a commit renames its targets only between its prepare record and
+// its generation, so a commit that renamed any target during the read is seen at one of the checks. The generation is
+// read before the first check and after the second, so a prepare record that came and went between them is seen at its
+// generation. A read that is not kept answers the corpus last read, and what it made of the tree is dropped, so the next
+// read builds the corpus again from the tree, whose notifications and the generation's paths name what changed.
+func (c *Corpus) readHeld(held error) (*irexec.Corpus, error) {
+	c.readMu.Lock()
+	defer c.readMu.Unlock()
+	prev := c.last.Load()
+	if prev == nil {
+		return nil, lockError(held)
+	}
+	if c.j.Holding() {
+		return prev.cur, nil
+	}
+	g, err := c.j.Generation()
+	if err != nil {
+		return nil, driverError("reading the commit generation of the corpus", err)
+	}
+	prepared, err := c.j.Prepared()
+	if err != nil {
+		return nil, driverError("reading the stages of the corpus", err)
+	}
+	if prepared {
+		return prev.cur, nil
+	}
+	cur, rerr := c.readLocked()
+	if c.freeHook != nil {
+		c.freeHook()
+	}
+	prepared, err = c.j.Prepared()
+	if err != nil {
+		return nil, driverError("reading the stages of the corpus", err)
+	}
+	after, err := c.j.Generation()
+	if err != nil {
+		return nil, driverError("reading the commit generation of the corpus", err)
+	}
+	if !prepared && after.N == g.N {
+		return cur, rerr
+	}
+	c.live.Reset()
+	c.last.Store(&readState{cur: prev.cur, gen: prev.gen})
+	return prev.cur, nil
 }
 
 // Open opens the corpus of the journal corpus j with the catalog cat: it runs recovery first, under the lock (spec 40
@@ -281,6 +335,13 @@ func (c *Corpus) Cost() *cost.Counts { return c.cost }
 // the paths of the commits since its generation, which the tree forgets first, whatever their notifications said; a
 // generation no longer kept reads the whole corpus (spec 40 The commit generation).
 func (c *Corpus) read() (*irexec.Corpus, error) {
+	c.readMu.Lock()
+	defer c.readMu.Unlock()
+	return c.readLocked()
+}
+
+// readLocked is read, under readMu.
+func (c *Corpus) readLocked() (*irexec.Corpus, error) {
 	// The generation is read before the tree, under the lock, so no commit lands between the two.
 	g, err := c.j.Generation()
 	if err != nil {

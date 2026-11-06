@@ -453,12 +453,12 @@ func TestTreeQuiet(t *testing.T) {
 		// again is what the read after the next Refresh reads from the disk.
 		again []string
 	}{
-		{name: "40#reads: no notification is quiet", quiet: true, again: []string{}},
-		{name: "40#reads: a changed file is not quiet", n: Notices{Changed: []string{"t/x.flowmark.md"}}, again: []string{"t/x.flowmark.md"}},
-		{name: "40#reads: a moved file is not quiet", n: Notices{Moved: []string{"a.flowmark.md"}}, again: []string{".", "a.flowmark.md"}},
-		{name: "40#reads: a change of a path the tree does not hold is not quiet", n: Notices{Changed: []string{"t/q.flowmark.md"}}, again: []string{}},
-		{name: "40#reads: an overflow is not quiet", n: Notices{Overflow: true}, again: []string{".", "t", "a.flowmark.md", "t/x.flowmark.md"}},
-		{name: "40#reads: a failed drain is not quiet and fails the next Refresh", err: errors.New("the queue is gone"),
+		{name: "40#sql-statements: no notification is quiet", quiet: true, again: []string{}},
+		{name: "40#sql-statements: a changed file is not quiet", n: Notices{Changed: []string{"t/x.flowmark.md"}}, again: []string{"t/x.flowmark.md"}},
+		{name: "40#sql-statements: a moved file is not quiet", n: Notices{Moved: []string{"a.flowmark.md"}}, again: []string{".", "a.flowmark.md"}},
+		{name: "40#sql-statements: a change of a path the tree does not hold is not quiet", n: Notices{Changed: []string{"t/q.flowmark.md"}}, again: []string{}},
+		{name: "40#sql-statements: an overflow is not quiet", n: Notices{Overflow: true}, again: []string{".", "t", "a.flowmark.md", "t/x.flowmark.md"}},
+		{name: "40#sql-statements: a failed drain is not quiet and fails the next Refresh", err: errors.New("the queue is gone"),
 			again: []string{".", "t", "a.flowmark.md", "t/x.flowmark.md"}},
 	}
 	for _, c := range cases {
@@ -493,7 +493,7 @@ func TestTreeQuiet(t *testing.T) {
 			}
 		})
 	}
-	t.Run("40#reads: the notifications Quiet took come before those queued after it", func(t *testing.T) {
+	t.Run("40#sql-statements: the notifications Quiet took come before those queued after it", func(t *testing.T) {
 		tr, w, rec, root := scriptedTree(t, files)
 		readAll(t, tr, all...)
 		reads(t, rec, root)
@@ -512,7 +512,7 @@ func TestTreeQuiet(t *testing.T) {
 			t.Fatalf("read again %v, want %v", got, want)
 		}
 	})
-	t.Run("40#reads: a closed tree is not quiet", func(t *testing.T) {
+	t.Run("40#sql-statements: a closed tree is not quiet", func(t *testing.T) {
 		tr, _, _, _ := scriptedTree(t, files)
 		if err := tr.Close(); err != nil {
 			t.Fatal(err)

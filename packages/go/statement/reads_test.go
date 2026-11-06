@@ -1,9 +1,12 @@
 package statement_test
 
 import (
+	"context"
 	"testing"
 	"time"
 
+	"github.com/polyspec/flowmark/packages/go/internal/corpustest"
+	"github.com/polyspec/flowmark/packages/go/ops"
 	"github.com/polyspec/flowmark/packages/go/statement"
 	"github.com/polyspec/flowmark/packages/go/writepath"
 )
@@ -75,5 +78,46 @@ func TestConcurrentReads(t *testing.T) {
 		if err := statement.Close(first); err != nil {
 			t.Fatal(err)
 		}
+	})
+}
+
+// TestReadRecovery pins a read of a corpus another process holds (plan, Reads without the lock): while that process
+// holds the lock after its commit, a read answers the commit without the lock, and a read of a corpus whose own session
+// holds the lock answers what is committed.
+func TestReadRecovery(t *testing.T) {
+	c, root := openCorpus(t)
+	s, err := c.Session("reader")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { closeSession(t, s) })
+	run(t, s, "CREATE TABLE numbers (n INTEGER PRIMARY KEY)")
+	run(t, s, "INSERT INTO numbers (n) VALUES (1)")
+	oc, err := ops.Open(context.Background(), root, 0)
+	corpustest.Opened(t, oc, err)
+	other, err := oc.Session("other")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { closeSession(t, other) })
+	answers(t, s, "SELECT n FROM numbers ORDER BY n", `[[1]]`)
+	t.Run("a read while another process holds the lock after its commit answers that commit", func(t *testing.T) {
+		run(t, other, "INSERT INTO numbers (n) VALUES (2)")
+		run(t, other, "BEGIN IMMEDIATE")
+		defer run(t, other, "ROLLBACK")
+		run(t, other, "INSERT INTO numbers (n) VALUES (3)")
+		answers(t, s, "SELECT n FROM numbers ORDER BY n", `[[1],[2]]`)
+	})
+	t.Run("a read while a session of its own process holds the lock answers what is committed", func(t *testing.T) {
+		holder, err := c.Session("holder")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer closeSession(t, holder)
+		run(t, holder, "BEGIN IMMEDIATE")
+		run(t, holder, "INSERT INTO numbers (n) VALUES (4)")
+		answers(t, s, "SELECT n FROM numbers ORDER BY n", `[[1],[2]]`)
+		run(t, holder, "COMMIT")
+		answers(t, s, "SELECT n FROM numbers ORDER BY n", `[[1],[2],[4]]`)
 	})
 }

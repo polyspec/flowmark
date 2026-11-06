@@ -364,3 +364,36 @@ func TestOpenKeepsRunningPendingRecord(t *testing.T) {
 		}
 	}
 }
+
+// TestHolding pins what a read learns of its own corpus's lock (spec 40 Reads): a corpus holds no lock until one of its
+// acquisitions succeeds, holds it while that lock is held or kept, and none once it is released; another corpus of
+// the same folder never holds it.
+func TestHolding(t *testing.T) {
+	root := t.TempDir()
+	c, _ := newCorpus(t, root)
+	other, _ := newCorpus(t, root)
+	if c.Holding() {
+		t.Fatal("a corpus holds a lock before any acquisition")
+	}
+	l := acquire(t, c, "s1")
+	if !c.Holding() || other.Holding() {
+		t.Fatalf("while the lock is held: Holding = %v, the other corpus %v; want true, false", c.Holding(), other.Holding())
+	}
+	l.Keep(true)
+	if err := l.Release(); err != nil {
+		t.Fatal(err)
+	}
+	if !c.Holding() {
+		t.Fatal("a kept lock is not held after its release")
+	}
+	l.Keep(false)
+	if err := l.Release(); err != nil {
+		t.Fatal(err)
+	}
+	if c.Holding() {
+		t.Fatal("a released lock is still held")
+	}
+	if err := l.Release(); err != nil || c.Holding() {
+		t.Fatalf("a second release: %v, Holding %v", err, c.Holding())
+	}
+}

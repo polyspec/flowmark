@@ -194,6 +194,7 @@ func (a *acquirer) timeout(h Holder, state HolderState) error {
 
 func (a *acquirer) held() *Lock {
 	l := &Lock{c: a.c, path: a.lock, holder: a.self, rec: a.record, held: true}
+	a.c.holding.Add(1)
 	a.c.obs.Observe(Event{Kind: LockAcquired, Path: a.lock, Holder: a.self.String()})
 	return l
 }
@@ -351,6 +352,7 @@ func (l *Lock) Release() error {
 		return fmt.Errorf("journal: removing the lock: %w", err)
 	}
 	l.held = false
+	l.c.holding.Add(-1)
 	l.c.obs.Observe(Event{Kind: LockReleased, Path: l.path, Holder: l.holder.String()})
 	return nil
 }

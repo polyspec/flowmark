@@ -354,11 +354,17 @@ utility of orm's SQLite dialect holds on a corpus, and a client has only this dr
   `TestConcurrentReads`, `TestWriterFollowsTransaction` and `TestCost` of `statement` hold it.
 - **Reads.** A read outside a transaction takes no lock when nothing changed since the last read under it: no stage is
   present in `.flowmark/tx/`, the commit generation is the one that read was at, and no notification was queued since.
-  Otherwise it takes the lock only to recover and read the corpus again, and releases it before it reads; one that finds
-  the lock held by another session reads what is committed. It reads on a reader connection, so a lock record is written
+  Otherwise it takes the lock only to recover and read the corpus again, and releases it before it reads, so a stage a
+  crash left under a free lock is recovered by the read, its one write. A read that finds the lock held by a session of
+  its own corpus answers what that corpus last read, since no other process can commit. One that finds it held by
+  another process reads the corpus without the lock, and keeps that read when the commit generation is the same before
+  and after it and no prepare record is present at either check, since a commit renames its targets only between the
+  two; otherwise it answers what it last read, and the next read reads again what the notifications and the
+  generation name. It reads on a reader connection, so a lock record is written
   once for each change, not for each read, and a read and its rows that go on hold no lock and wait for no writer nor
   another read: the behaviour of SQLite in WAL mode. `TestConcurrentReads` and `TestCost` of `statement`, and
-  `TestTreeQuiet` and `TestStaged` of `store/journal` hold it.
+  `TestTreeQuiet` and `TestStaged` of `store/journal` hold it, with `TestReadRecovery` of `statement`, `TestReadHeld` and
+  `TestReadRecoversPrepared` of `writepath`, and `TestPrepared` and `TestHolding` of `store/journal`.
 - **Session settings.** `foreign_keys`, `query_only`, `busy_timeout` and `locking_mode` are the session's. Under
   `locking_mode = EXCLUSIVE` the lock its next transaction takes stays after that transaction, until the mode is `NORMAL`
   again. Any other `PRAGMA` setting holds for the session's own statements.
