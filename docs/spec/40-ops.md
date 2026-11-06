@@ -528,7 +528,9 @@ the writer of the difference.
 - A request that fails inside a transaction changes nothing, and the transaction stays open at its
   state before the request. Grounding: SQL statement atomicity — a failed statement has no effect, and
   MySQL and SQLite keep the transaction open; the orm client rolls the transaction or its savepoint back
-  when its callback fails.
+  when its callback fails. A statement that ends the SQLite transaction itself, as `RAISE(ROLLBACK)` does,
+  ends the transaction with it: its answer is its own error, and the `ROLLBACK` that follows has nothing to
+  end (`TestStatementEndsTheTransaction` of `statement`).
 - `savepoint <name>` sets a level at the transaction's present state; a savepoint of the same name is
   replaced, as the SQL standard destroys it. `release <name>` removes that savepoint and every one set
   after it, keeping their writes. `rollback_to <name>` discards the writes since that savepoint and every

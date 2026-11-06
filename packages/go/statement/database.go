@@ -475,16 +475,20 @@ func (t *txn) Ready() error {
 
 // End commits the transaction of the writer connection after a written corpus commit, publishing what the database then
 // holds, and rolls it back otherwise; a COMMIT or a ROLLBACK that fails leaves a database that may hold what the corpus
-// does not, so it is built again.
+// does not, so it is built again. A transaction that a statement ended, as RAISE(ROLLBACK) does, SQLite has already
+// rolled back, so no ROLLBACK is sent, and the database holds the corpus the transaction began on.
 func (t *txn) End(written bool) error {
 	d := t.d
 	var err error
-	if written {
+	switch {
+	case written:
 		err = d.commitAs(d.corpus, func() error {
 			_, err := d.w.ExecContext(context.Background(), "COMMIT")
 			return err
 		})
-	} else {
+	case t.s.Ended():
+		d.corpus = t.base
+	default:
 		_, err = d.w.ExecContext(context.Background(), "ROLLBACK")
 		d.corpus = t.base
 	}

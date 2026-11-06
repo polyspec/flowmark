@@ -1,5 +1,5 @@
 <!-- doc-id: spec-ops -->
-<!-- source-sha256: bdcff21b994b47dbacfec18e4f0c0bf3e25db47871ca8551738fffc4ffa6cbd3 -->
+<!-- source-sha256: a09e40aed9c8732ffe56a573cedf68268343dc392c9e18257aafa0c3fb9b2195 -->
 # Operations
 
 [English](40-ops.md)
@@ -454,7 +454,9 @@ client가 구현할 것은 이 driver뿐이다.
   읽으며, 쓰기는 lock을 풀기 전에 commit한다.
 - transaction 안에서 실패한 요청은 아무것도 바꾸지 않으며, transaction은 그 요청 전 상태로 열린 채
   남는다. 근거: SQL 문장 원자성 — 실패한 문장은 효과가 없고 MySQL과 SQLite는 transaction을 열어 둔다.
-  orm client는 callback이 실패하면 transaction이나 그 savepoint를 rollback한다.
+  orm client는 callback이 실패하면 transaction이나 그 savepoint를 rollback한다. `RAISE(ROLLBACK)`처럼
+  SQLite transaction을 스스로 끝내는 문장은 transaction도 함께 끝낸다. 그 답은 그 문장의 오류뿐이고, 뒤따르는
+  `ROLLBACK`은 끝낼 것이 없다(`statement`의 `TestStatementEndsTheTransaction`).
 - `savepoint <name>`은 transaction의 현재 상태에 단계를 둔다. 같은 이름의 savepoint는 SQL 표준이 그것을
   없애듯 대체된다. `release <name>`은 그 savepoint와 그 뒤에 둔 모든 savepoint를 지우고 그 쓰기는
   유지한다. `rollback_to <name>`은 그 savepoint 이후의 쓰기와 그 뒤에 둔 모든 savepoint를 버리고 그
