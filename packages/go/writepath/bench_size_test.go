@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/polyspec/flowmark/packages/go/catalog"
+	"github.com/polyspec/flowmark/packages/go/internal/benchtest"
 	"github.com/polyspec/flowmark/packages/go/store"
 )
 
@@ -60,7 +61,7 @@ func BenchmarkFileSizeWrite(b *testing.B) {
 			f := openFixture(b, root)
 			s := f.session("bench")
 			ctx := context.Background()
-			loop(b, func(i int) {
+			benchtest.Loop(b, func(i int) {
 				m := f.msg("update", "notes", map[string]any{"set": []any{map[string]any{"column": "title", "p": 0}}, "where": corpustest.WhereID(1)}, fmt.Sprintf("Renamed %d", i), "N1")
 				if _, err := s.Exec(ctx, m); err != nil {
 					b.Fatal(err)
@@ -114,7 +115,7 @@ func BenchmarkSessions(b *testing.B) {
 			}
 			ctx := context.Background()
 			var turn atomic.Int64
-			loop(b, func(i int) {
+			benchtest.Loop(b, func(i int) {
 				var wg sync.WaitGroup
 				for k := 0; k < sessions; k++ {
 					wg.Add(1)

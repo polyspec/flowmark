@@ -636,6 +636,15 @@ MySQL과 PostgreSQL은 `datetime(p)` column을 `NOW(6)`와 여섯 자리로 비�
   쓰기와 거부된 쓰기가 1,000행과 100,000행에서 database의 같은 행을 읽음을 확인하고, `statement`의 `TestCapture`,
   `TestCaptureKeys`, `FuzzCapture`가 그 행으로 만든 차이가 표의 모든 행의 차이와 같음을 REPLACE, foreign key action,
   trigger, rowid 변경, NUL을 품은 text에 걸쳐 확인한다.
+- 이 경로의 한계는 `TestCost`가 기록하는 비용과 `statement`의 `BenchmarkStatement`가 재는 시간이며, 작은 corpus 옆에
+  둔 표 하나의 1,000행, 10,000행, 100,000행에서 잰다. 비교한 문서를 뺀 모든 수치는 세 크기에서 같다: 한 행의 쓰기
+  statement는 lock 하나 아래에서 file을 많아야 6개 읽고, document를 많아야 2개 parse하고, 행을 많아야 204개 배치하고,
+  455개 index에 넣고, 102개 복사하고, 306개 훑고, 204개 저장하고, database의 행을 많아야 2개 읽는다; 거부된 쓰기는 행을
+  저장하기 전에 멈춘다; 100행의 외부 편집은 그 100행을 database에 쓴다. 비교한 문서는 문서 수의 로그로 늘어나, note
+  쓰기에서 세 크기마다 6, 11, 19개다. macOS(Apple M3 Pro, `T44`)의 한가한 기계에서 1,000행, 10,000행, 100,000행에
+  걸쳐: 한 행 읽기는 CPU 0.08~0.10 ms이고 wall time p95는 많아야 0.12 ms다; 한 행의 쓰기 statement는 CPU 12~40 ms이고
+  wall time p95는 62~88 ms다; 거부된 쓰기는 3.6~8.1 ms이고 p95는 많아야 11 ms다; 외부 편집은 4.5~6.3 ms이고 p95는
+  많아야 10 ms다.
 - **codec의 비용**은 file의 byte에 선형이다: 상세 섹션을 가진 행들의 document file에서, file의 parse와
   render는 각각 그 megabyte당 CPU 0.1초 이하가 들고 그 byte당 64 byte 이하를 할당한다. 어떤 pass도 각
   heading을 각 상세 anchor와, 또는 각 행을 각 행과 비교하지 않는다: heading의 slug는 자기가 가져가는

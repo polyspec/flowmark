@@ -5,11 +5,10 @@ import (
 	"fmt"
 	"github.com/polyspec/flowmark/packages/go/internal/corpustest"
 	"runtime"
-	"slices"
 	"testing"
-	"time"
 
 	"github.com/polyspec/flowmark/packages/go/catalog"
+	"github.com/polyspec/flowmark/packages/go/internal/benchtest"
 	"github.com/polyspec/flowmark/packages/go/store/journal"
 )
 
@@ -52,28 +51,11 @@ func benchCount(b *testing.B, f *fixture, table string) {
 	s := f.session("bench")
 	m := f.msg("count", table, nil)
 	ctx := context.Background()
-	loop(b, func(int) {
+	benchtest.Loop(b, func(int) {
 		if _, err := s.Exec(ctx, m); err != nil {
 			b.Fatal(err)
 		}
 	})
-}
-
-// loop runs op b.N times and reports the 95th percentile of its wall time and the CPU time per operation.
-func loop(b *testing.B, op func(i int)) {
-	b.Helper()
-	start := processCPU(b)
-	var walls []time.Duration
-	i := 0
-	for b.Loop() {
-		i++
-		t0 := time.Now()
-		op(i)
-		walls = append(walls, time.Since(t0))
-	}
-	b.ReportMetric(float64((processCPU(b)-start)/time.Microsecond)/1000/float64(b.N), "cpu-ms/op")
-	slices.Sort(walls)
-	b.ReportMetric(float64(walls[(len(walls)*95+99)/100-1]/time.Microsecond)/1000, "p95-ms")
 }
 
 // sizes runs bench for each size of benchSizes.
@@ -126,7 +108,7 @@ func BenchmarkOpen(b *testing.B) {
 	sizes(b, func(b *testing.B, n int) {
 		f := newFixture(b, executorCatalog(b), benchDocs(n))
 		docs := len(benchDocs(n))
-		loop(b, func(int) {
+		benchtest.Loop(b, func(int) {
 			if err := openCorpus(b, f.root).Close(); err != nil {
 				b.Fatal(err)
 			}
@@ -150,7 +132,7 @@ func BenchmarkWrite(b *testing.B) {
 		f := newFixture(b, executorCatalog(b), benchDocs(n))
 		s := f.session("bench")
 		ctx := context.Background()
-		loop(b, func(i int) {
+		benchtest.Loop(b, func(i int) {
 			m := f.msg("update", "notes", map[string]any{"set": sets(0, "weight"), "where": corpustest.WhereID(1)}, float64(i), "N3")
 			if _, err := s.Exec(ctx, m); err != nil {
 				b.Fatal(err)

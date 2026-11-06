@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/polyspec/flowmark/packages/go/internal/benchtest"
 	"github.com/polyspec/flowmark/packages/go/internal/corpustest"
 	"github.com/polyspec/flowmark/packages/go/store/journal"
 )
@@ -78,7 +79,7 @@ func shardLayouts(b *testing.B, bench func(b *testing.B, f *fixture)) {
 // BenchmarkShardOpen is the opening of the event corpus, flat and sharded, with the descriptors its watch holds.
 func BenchmarkShardOpen(b *testing.B) {
 	shardLayouts(b, func(b *testing.B, f *fixture) {
-		loop(b, func(int) {
+		benchtest.Loop(b, func(int) {
 			if err := openCorpus(b, f.root).Close(); err != nil {
 				b.Fatal(err)
 			}
@@ -102,7 +103,7 @@ func benchShardInsert(b *testing.B, f *fixture) {
 	s := f.session("bench")
 	ctx := context.Background()
 	f.rec.reset()
-	loop(b, func(i int) {
+	benchtest.Loop(b, func(i int) {
 		m := f.msg("insert", "events", map[string]any{"set": sets(0, "title", "at")}, fmt.Sprintf("Bench %d", i), "2026-10-20 10:00:00.000000")
 		if _, err := s.Exec(ctx, m); err != nil {
 			b.Fatal(err)

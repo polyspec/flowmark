@@ -69,12 +69,12 @@ table notes {
 const costGroup = 100
 
 // costSizes are the rows of the corpora the cost cases measure, half of them tasks and half notes.
-var costSizes = []int{1000, 100000}
+var costSizes = []int{1000, 10000, 100000}
 
 // openCost writes a corpus of costDBS of rows rows, half of them tasks in sibling groups of costGroup under as many
 // projects and half notes in documents of costGroup rows, and opens a session on it. The files are rendered by the store,
 // as a commit writes them, so the corpus is canonical whatever its size.
-func openCost(t *testing.T, rows int) (*writepath.Session, string) {
+func openCost(t testing.TB, rows int) (*writepath.Session, string) {
 	t.Helper()
 	root := t.TempDir()
 	corpustest.WriteTree(t, root, map[string]string{
@@ -135,35 +135,39 @@ func openCost(t *testing.T, rows int) (*writepath.Session, string) {
 // costOp is one operation the cost cases measure.
 type costOp struct {
 	name string
-	// do runs the operation on the session of a corpus at root; i tells the repetitions apart.
-	do func(t *testing.T, s *writepath.Session, root string)
+	// do runs the operation on the session of a corpus at root; i, from 0, tells the repetitions of a benchmark apart.
+	do func(t testing.TB, s *writepath.Session, root string, i int)
 }
 
 // costOps are the point operations of the cost cases: a read, an insert, an update and a delete on each table, and an
 // external edit of one file, answered by the read after it. The reads come first, on the corpus the warming statement
 // read, so nothing changed before them.
 var costOps = []costOp{
-	{"read task", func(t *testing.T, s *writepath.Session, _ string) {
+	{"read task", func(t testing.TB, s *writepath.Session, _ string, _ int) {
 		run(t, s, "SELECT title FROM tasks WHERE id = 'T7'")
 	}},
-	{"read note", func(t *testing.T, s *writepath.Session, _ string) {
+	{"read note", func(t testing.TB, s *writepath.Session, _ string, _ int) {
 		run(t, s, "SELECT title FROM notes WHERE id = 'N7'")
 	}},
-	{"insert task", func(t *testing.T, s *writepath.Session, _ string) {
+	{"insert task", func(t testing.TB, s *writepath.Session, _ string, _ int) {
 		run(t, s, "INSERT INTO tasks (project, title) VALUES ('P2', 'added')")
 	}},
-	{"insert note", func(t *testing.T, s *writepath.Session, _ string) {
+	{"insert note", func(t testing.TB, s *writepath.Session, _ string, _ int) {
 		run(t, s, "INSERT INTO notes (title, written) VALUES ('added', '2020-01-02')")
 	}},
-	{"update task", func(t *testing.T, s *writepath.Session, _ string) {
-		run(t, s, "UPDATE tasks SET title = 'renamed' WHERE id = 'T150'")
+	{"update task", func(t testing.TB, s *writepath.Session, _ string, i int) {
+		run(t, s, fmt.Sprintf("UPDATE tasks SET title = 'renamed %d' WHERE id = 'T150'", i))
 	}},
-	{"update note", func(t *testing.T, s *writepath.Session, _ string) {
-		run(t, s, "UPDATE notes SET title = 'renamed' WHERE id = 'N150'")
+	{"update note", func(t testing.TB, s *writepath.Session, _ string, i int) {
+		run(t, s, fmt.Sprintf("UPDATE notes SET title = 'renamed %d' WHERE id = 'N150'", i))
 	}},
-	{"delete task", func(t *testing.T, s *writepath.Session, _ string) { run(t, s, "DELETE FROM tasks WHERE id = 'T151'") }},
-	{"delete note", func(t *testing.T, s *writepath.Session, _ string) { run(t, s, "DELETE FROM notes WHERE id = 'N151'") }},
-	{"refused write", func(t *testing.T, s *writepath.Session, _ string) {
+	{"delete task", func(t testing.TB, s *writepath.Session, _ string, i int) {
+		run(t, s, fmt.Sprintf("DELETE FROM tasks WHERE id = 'T%d'", 151+i))
+	}},
+	{"delete note", func(t testing.TB, s *writepath.Session, _ string, i int) {
+		run(t, s, fmt.Sprintf("DELETE FROM notes WHERE id = 'N%d'", 151+i))
+	}},
+	{"refused write", func(t testing.TB, s *writepath.Session, _ string, _ int) {
 		// SQLite takes the key; the rule of keys refuses it, as equal to T7 without regard to case.
 		if _, err := statement.Run(s, "INSERT INTO tasks (id, project, title) VALUES ('t7', 'P2', 'folded')", nil); err == nil {
 			t.Fatal("a key equal to another without regard to case is taken")
@@ -172,38 +176,56 @@ var costOps = []costOp{
 			t.Fatalf("the read after the refused write answers %s", got)
 		}
 	}},
-	{"external edit", func(t *testing.T, s *writepath.Session, root string) {
+	{"external edit", func(t testing.TB, s *writepath.Session, root string, i int) {
 		p := filepath.Join(root, "notes", "2020-01-03.flowmark.md")
 		b, err := os.ReadFile(p)
 		if err != nil {
 			t.Fatal(err)
 		}
-		edited := strings.Replace(string(b), "Note 201", "Edited 201", 1)
+		before, after := editedTitle(i-1), editedTitle(i)
+		edited := strings.Replace(string(b), before, after, 1)
 		if edited == string(b) {
-			t.Fatalf("%s holds no Note 201", p)
+			t.Fatalf("%s holds no %s", p, before)
 		}
 		if err := os.WriteFile(p, []byte(edited), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		if got := cells(run(t, s, "SELECT title FROM notes WHERE id = 'N201'")); got != `[["Edited 201"]]` {
+		if got := cells(run(t, s, "SELECT title FROM notes WHERE id = 'N201'")); got != `[["`+after+`"]]` {
 			t.Fatalf("the read after the edit answers %s", got)
 		}
 	}},
+}
+
+// editedTitle is the title of N201 after the external edit of repetition i, and before the first, at -1, the one the
+// corpus is written with.
+func editedTitle(i int) string {
+	switch i {
+	case -1:
+		return "Note 201"
+	case 0:
+		return "Edited 201"
+	}
+	return fmt.Sprintf("Edited 201 %d", i)
+}
+
+// warm runs the statements after which the operations are measured: the first fills the database of the session from
+// the corpus, and the first write builds the index of the corpus, once.
+func warm(t testing.TB, s *writepath.Session) {
+	t.Helper()
+	run(t, s, "SELECT COUNT(*) FROM tasks")
+	run(t, s, "UPDATE notes SET title = 'warm' WHERE id = 'N1'")
+	run(t, s, "SELECT COUNT(*) FROM tasks")
 }
 
 // measure runs each operation of costOps on a new corpus of rows rows and returns the counts of each.
 func measure(t *testing.T, rows int) map[string]cost.Snapshot {
 	t.Helper()
 	s, root := openCost(t, rows)
-	// The first statement fills the database of the session from the corpus, and the first write builds the index of the
-	// corpus, once; the operations are measured after them.
-	run(t, s, "SELECT COUNT(*) FROM tasks")
-	run(t, s, "UPDATE notes SET title = 'warm' WHERE id = 'N1'")
-	run(t, s, "SELECT COUNT(*) FROM tasks")
+	warm(t, s)
 	out := map[string]cost.Snapshot{}
 	for _, op := range costOps {
 		before := s.Cost().Snapshot()
-		op.do(t, s, root)
+		op.do(t, s, root, 0)
 		out[op.name] = s.Cost().Snapshot().Since(before)
 	}
 	return out
