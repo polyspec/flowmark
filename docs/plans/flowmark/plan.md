@@ -229,6 +229,34 @@ cases, and each equality with the corpus or the database built from nothing is a
 fixtures. A row is done when its Red count of T36 is green, its tests pass, the lint and the gates of kit pass, and the spec
 says what it changed.
 
+**Ruling: a commit waits for the disk as few times as its atomicity needs.** A flush — the sync of a file or a folder, and
+on Windows a write-through move — waits for the disk, from about a millisecond on Linux to tens of milliseconds with
+`F_FULLFSYNC` on macOS and on a Windows runner, so the flushes of a commit, not its reads, bound its latency. The
+protocol of T31 flushes each stage file and each name separately: a one-row commit makes 18 flushes, and a read that
+takes the lock makes one, for its lock record. SQLite makes one or two for a commit with `synchronous=FULL`. Each row
+below is counted by the cost counter of flushes, in TestCost, and its Red is that count:
+
+1. **The flushes are counted (T55).** The journal adds each flush it asks of the disk to the counts of its corpus, which
+   the write path shares; a corpus that does not wait (`--synchronous off`) makes none. TestCost pins the flushes of
+   every operation at every size, so a flush added to a path is a failing count.
+2. **A move waits only while the process waits (T56).** On Windows `--synchronous off` gives up `MOVEFILE_WRITE_THROUGH`
+   as the other platforms give up their syncs.
+3. **The lock record is not flushed (T57).** The lock appears whole through its link, so another process never reads a
+   part of it; only a power loss leaves a lock whose record never reached the disk, and that power loss ended its
+   holder. A lock record that is empty or holds only zero bytes is read as such a lock, a holder that has ended: an
+   operation refuses at once, naming `flowmark unlock`, which removes it, as it removes the lock of a holder of an earlier
+   boot. A read that takes the lock makes no flush.
+4. **One record decides a commit (T58).** A commit writes and syncs a copy of each post-image, then one record that holds
+   every rename with its pre- and post-hashes, the generation it takes, and the bytes of every pre- and post-image, synced
+   with its folder: from the record on the commit is decided. The renames follow, a delete moving its target into the
+   journal, and each folder of a target is synced once; then the generation is written as now, and the record is removed
+   without a flush, since a record a power loss brings back names a generation that is written and is only collected. The
+   commit record of T31 is gone: the generation says the renames are done. A one-row commit makes six flushes: the copy,
+   the record and its folder, the target's folder, and the generation and its folder. A stage folder of an earlier engine
+   is refused, naming the engine that completes it.
+
+A row is done when its count in TestCost is the stated one and the crash tests at every step of the protocol pass.
+
 **T9 conformance contract (stated now)**: markdown vectors are corpus-before + IR request + expected corpus-after / expected rows, run against the Go executor; SQL/binds comparison does not apply (there is no SQL). Cross-client comparison begins when other clients port the executor. (Revision 3: vectors run against the flowmark engine; orm's executor conformance pins a flowmark build.)
 
 **Later phases (registered as `[ ]` checklist items only)**: T2 codec (Go), T3 validator, T4 executor, T5 orm markdown-executor integration (manifest settings, state-machine sub-grammar — orm-repo changes), T6 sync (the adapter contract and the database adapter; GitHub and Jira adapters register under it), T7 the three faces — CLI, MCP server and soksak sidecar (protocol v1: JSON lines over stdio, surface routing, host-owned lifecycle; the MCP tool list gets its mini-spec first, and the lock is held per operation or per server transaction (§5)), T8 checklist app (the local issue model), T9 conformance vectors, T10 the soksak plugin in its own repository — the local kanban board and issue tracker as one more thin consumer, with no view-specific write path.

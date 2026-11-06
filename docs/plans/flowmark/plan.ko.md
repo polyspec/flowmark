@@ -212,6 +212,30 @@ flowmark = the markdown database engine (one Go binary)
 처음부터 만든 corpus나 database와의 각 동등성은 golden fixture를 seed로 하는 fuzz 시험이다. 행은 T36의 Red 수치가 green이 되고, 그
 시험이 통과하고, kit의 lint와 gate가 통과하고, spec이 바뀐 것을 말할 때 끝난다.
 
+**판정: commit은 원자성이 요구하는 만큼만 disk를 기다린다.** flush, 곧 파일이나 폴더의 sync와 Windows의 write-through move는
+disk를 기다리며, Linux에서 약 1밀리초, macOS의 `F_FULLFSYNC`와 Windows runner에서 수십 밀리초가 걸리므로 commit의 지연은 읽기가
+아니라 flush가 정한다. T31의 protocol은 stage 파일 하나와 이름 하나마다 따로 flush한다: 한 행 commit이 flush 18번을 하고, lock을
+잡는 읽기가 lock record 때문에 한 번을 한다. SQLite는 `synchronous=FULL`에서 commit 하나에 한두 번을 한다. 아래 각 행은 TestCost의
+flush cost counter로 재며, 그 수가 Red이다:
+
+1. **flush를 기록한다 (T55).** journal은 disk에 요청한 flush를 자기 corpus의 counts에 더하고, write path가 그 counts를 함께 쓴다.
+   기다리지 않는 corpus(`--synchronous off`)는 flush를 하지 않는다. TestCost가 모든 연산의 flush 수를 모든 크기에서 고정하므로, 경로에
+   더해진 flush는 실패하는 수가 된다.
+2. **move는 process가 기다릴 때만 기다린다 (T56).** Windows에서 `--synchronous off`는 다른 platform이 sync를 포기하듯
+   `MOVEFILE_WRITE_THROUGH`를 포기한다.
+3. **lock record는 flush하지 않는다 (T57).** lock은 link를 통해 온전한 채로 나타나므로 다른 process가 그 일부를 읽는 일은 없다. record가
+   disk에 닿지 못한 lock은 정전만이 남기며, 그 정전이 holder를 끝냈다. 비었거나 0 byte만 담은 lock record는 그런 lock, 곧 끝난
+   holder로 읽는다: 연산은 `flowmark unlock`을 밝혀 즉시 거부하고, unlock은 이전 boot의 holder가 남긴 lock을 지우듯 그것을 지운다. lock을
+   잡는 읽기는 flush를 하지 않는다.
+4. **record 하나가 commit을 정한다 (T58).** commit은 각 post-image의 사본을 쓰고 sync한 뒤, 모든 rename과 그 pre-hash와 post-hash,
+   commit이 받는 generation, 모든 pre-image와 post-image의 byte를 담은 record 하나를 쓰고 그 폴더와 함께 sync한다: record부터 commit은
+   정해진다. 이어 rename을 하고(delete는 대상을 journal 안으로 옮긴다) 대상의 폴더를 한 번씩 sync한다. 그다음 generation을 지금처럼 쓰고,
+   record는 flush 없이 지운다: 정전이 되살린 record는 이미 쓰인 generation을 가리키므로 수거만 된다. T31의 commit record는 없어진다:
+   generation이 rename이 끝났음을 말한다. 한 행 commit은 flush 여섯 번을 한다: 사본, record와 그 폴더, 대상의 폴더, generation과 그
+   폴더. 이전 엔진의 stage 폴더는 그것을 완료할 엔진을 밝혀 거부한다.
+
+행은 TestCost의 수가 명시한 수가 되고 protocol의 모든 단계에서 crash 시험이 통과할 때 끝난다.
+
 **T9 conformance 계약 (지금 확정)**: markdown vector는 corpus-before + IR request + 기대 corpus-after / 기대 rows이며 Go executor에 대해 실행한다. SQL/binds 비교는 적용되지 않는다(SQL이 없으므로). 다른 client가 executor를 port할 때 교차 비교가 시작된다. (Revision 3: vector는 flowmark 엔진에 대해 실행하고, orm의 executor conformance는 flowmark build를 고정한다.)
 
 **이후 phase (checklist `[ ]` 항목으로만 등록)**: T2 codec(Go), T3 validator, T4 executor, T5 orm markdown-executor 통합(manifest setting, state-machine sub-grammar — orm 저장소 변경), T6 sync(adapter 계약과 database adapter; GitHub·Jira adapter는 그 아래에 등록), T7 세 개의 face — CLI·MCP server·soksak sidecar(protocol v1: stdio JSON lines, surface routing, host 소유 lifecycle; MCP tool 목록 mini-spec 먼저, lock은 작업마다 또는 server transaction마다 잡힌다(§5)), T8 checklist app(local issue model), T9 conformance vectors, T10 자기 repo의 soksak plugin — local 칸반 보드와 issue tracker, 또 하나의 thin consumer로서 view 전용 write path 없음.
