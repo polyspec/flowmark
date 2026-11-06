@@ -491,6 +491,13 @@ the writer of the difference.
 - On Windows every open of the lock file, a pending record or a stage file is `CreateFileW` with
   `FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE`, so a reader never blocks the holder's
   delete or an unlock.
+  A remover marks such a file deleted through its own handle and the name goes when that handle
+  closes; between the two Windows refuses every open and every link of the name with
+  `ERROR_ACCESS_DENIED`, and `STATUS_DELETE_PENDING` tells it from a refusal of access. The engine
+  reads such a name as removed: an open or a link of it finds no file, an exclusive create of it or
+  a link to it finds one, so an acquisition tries again at once, as it does for a lock that
+  disappears between its link and its read (`TestDeletePendingReadsRemoved` and
+  `TestAcquireAfterPendingRelease` of `journal`).
 - Acquiring, releasing, clearing and waiting are published as the events `lock.acquired`,
   `lock.released`, `lock.cleared` and `lock.waiting` (once per holder waited for, after the watch
   is armed).

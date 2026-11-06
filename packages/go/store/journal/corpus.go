@@ -116,7 +116,7 @@ func (c *Corpus) lstat(rel string) (fs.FileInfo, error) {
 	var info fs.FileInfo
 	for i, part := range parts {
 		cur = filepath.Join(cur, part)
-		fi, err := os.Lstat(cur)
+		fi, err := lstatFile(cur)
 		if errors.Is(err, fs.ErrNotExist) {
 			return nil, nil
 		}

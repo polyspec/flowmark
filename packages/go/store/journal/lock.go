@@ -200,14 +200,16 @@ func (a *acquirer) held() *Lock {
 }
 
 // try is one acquisition attempt. A lock that disappears between the failed link and its read is tried again at
-// once; a lock that holds this acquirer's own record was linked by this attempt although its reply was lost (REVIEW
-// 2-a: its acquisition token is unique, so no other acquisition writes the same record).
+// once, as is a lock whose release is still closing its handle on Windows, which the link finds present and the read
+// absent until that release's own call returns; a lock that holds this acquirer's own record was linked by this
+// attempt although its reply was lost (REVIEW 2-a: its acquisition token is unique, so no other acquisition writes the
+// same record).
 func (a *acquirer) try() (tried, error) {
 	for {
 		if err := a.c.step("lock-attempt", 0); err != nil {
 			return tried{}, err
 		}
-		err := os.Link(a.pending, a.lock)
+		err := linkFile(a.pending, a.lock)
 		if err == nil {
 			return tried{acquired: true}, nil
 		}
@@ -411,7 +413,7 @@ func (c *Corpus) Unlock(holder string) (Holder, error) {
 		return Holder{}, err
 	}
 	claim := c.abs(".flowmark/lock." + sum(data)[:32] + clearingSuffix)
-	if err := os.Link(lock, claim); err != nil {
+	if err := linkFile(lock, claim); err != nil {
 		switch {
 		case errors.Is(err, fs.ErrExist):
 			return Holder{}, fmt.Errorf("journal: %s exists: another unlock of %s runs or was interrupted; check that no unlock runs, then remove it", claim, h)

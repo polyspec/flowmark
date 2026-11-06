@@ -88,3 +88,9 @@ func deviceOf(p string) (uint64, error) {
 func linkUnsupported(err error) bool {
 	return errors.Is(err, unix.EPERM) || errors.Is(err, unix.ENOTSUP) || errors.Is(err, unix.EOPNOTSUPP)
 }
+
+// linkFile links new to old, the hard link that makes the lock and an unlock's claim appear atomically.
+func linkFile(old, new string) error { return os.Link(old, new) }
+
+// lstatFile reads the attributes of p without following a symbolic link at its name.
+func lstatFile(p string) (os.FileInfo, error) { return os.Lstat(p) }

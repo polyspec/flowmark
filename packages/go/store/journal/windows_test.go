@@ -3,11 +3,16 @@
 package journal
 
 import (
+	"context"
 	"encoding/binary"
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"unicode/utf16"
+	"unsafe"
 
 	"golang.org/x/sys/windows"
 )
@@ -96,5 +101,94 @@ func TestOpenSharedAllowsDelete(t *testing.T) {
 	defer f.Close()
 	if err := os.Remove(p); err != nil {
 		t.Fatalf("the delete was blocked by a shared open: %v", err)
+	}
+}
+
+// pendDelete marks p for deletion through a handle with DELETE access, as DeleteFileW does, and returns that handle:
+// until it is closed, the delete of p is pending and Windows refuses every open and every link of the name with
+// ERROR_ACCESS_DENIED (STATUS_DELETE_PENDING).
+func pendDelete(t *testing.T, p string) windows.Handle {
+	t.Helper()
+	name, err := windows.UTF16PtrFromString(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h, err := windows.CreateFile(name, windows.DELETE, shareAll, nil, windows.OPEN_EXISTING, windows.FILE_FLAG_OPEN_REPARSE_POINT, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	info := struct{ Flags uint32 }{windows.FILE_DISPOSITION_DELETE | windows.FILE_DISPOSITION_POSIX_SEMANTICS}
+	if err := windows.SetFileInformationByHandle(h, windows.FileDispositionInfoEx, (*byte)(unsafe.Pointer(&info)), uint32(unsafe.Sizeof(info))); err != nil {
+		windows.CloseHandle(h)
+		t.Fatal(err)
+	}
+	return h
+}
+
+// A name whose delete is pending is removed as far as its remover is concerned: reading it or its attributes finds no
+// file, an exclusive create of it finds one, and a link finds no file at it as a source and one as a target.
+func TestDeletePendingReadsRemoved(t *testing.T) {
+	dir := t.TempDir()
+	gone, other := filepath.Join(dir, "gone"), filepath.Join(dir, "other")
+	for _, p := range []string{gone, other} {
+		if err := os.WriteFile(p, []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	h := pendDelete(t, gone)
+	defer windows.CloseHandle(h)
+	if _, _, err := readShared(gone); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("readShared of a delete-pending name = %v, want fs.ErrNotExist", err)
+	}
+	if _, err := lstatFile(gone); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("lstatFile of a delete-pending name = %v, want fs.ErrNotExist", err)
+	}
+	if err := writeSynced(gone, []byte("y"), os.O_EXCL); !errors.Is(err, fs.ErrExist) {
+		t.Errorf("an exclusive create of a delete-pending name = %v, want fs.ErrExist", err)
+	}
+	if err := linkFile(other, gone); !errors.Is(err, fs.ErrExist) {
+		t.Errorf("a link to a delete-pending name = %v, want fs.ErrExist", err)
+	}
+	if err := linkFile(gone, filepath.Join(dir, "claim")); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("a link of a delete-pending name = %v, want fs.ErrNotExist", err)
+	}
+	if _, _, err := readShared(other); err != nil {
+		t.Errorf("readShared of a present name = %v", err)
+	}
+	if err := linkFile(other, filepath.Join(dir, "linked")); err != nil {
+		t.Errorf("a link of a present name = %v", err)
+	}
+}
+
+// An acquisition that meets a lock whose release is still closing its handle — the lock of a running holder, marked
+// deleted — tries again at once and takes the lock once the release ends, as it does for a lock that disappears between
+// its link and its read.
+func TestAcquireAfterPendingRelease(t *testing.T) {
+	root := t.TempDir()
+	c, _ := newCorpus(t, root)
+	plantRecord(t, root, LockPath, selfRecord(t, c, "s1"))
+	h := pendDelete(t, c.abs(LockPath))
+	closed := false
+	defer func() {
+		if !closed {
+			windows.CloseHandle(h)
+		}
+	}()
+	var attempts *atomic.Int64
+	attempts = countAttempts(c, map[string]func(){"lock-attempt": func() {
+		// The release ends while the acquisition tries again: its second attempt finds the name free.
+		if attempts.Load() == 2 && !closed {
+			closed = true
+			if err := windows.CloseHandle(h); err != nil {
+				t.Error(err)
+			}
+		}
+	}})
+	l, err := c.Acquire(context.Background(), "s2", patience)
+	if err != nil {
+		t.Fatalf("Acquire during a pending release = %v after %d attempts", err, attempts.Load())
+	}
+	if err := l.Release(); err != nil {
+		t.Fatal(err)
 	}
 }

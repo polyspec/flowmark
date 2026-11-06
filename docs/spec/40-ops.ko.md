@@ -1,5 +1,5 @@
 <!-- doc-id: spec-ops -->
-<!-- source-sha256: 411b0f5a88608e1187a5ca0a2e9a59481ebad81f714c07c03fd29162d6edc1d7 -->
+<!-- source-sha256: 74209576e3da0337884c68dfd9f3848bc0c0cbceaf9aab2b38d1ed6e8f9415ee -->
 # Operations
 
 [English](40-ops.md)
@@ -421,6 +421,11 @@ client가 구현할 것은 이 driver뿐이다.
   거절한다.
 - Windows에서 lock file, pending record, stage file을 여는 일은 모두 `FILE_SHARE_READ | FILE_SHARE_WRITE |
   FILE_SHARE_DELETE`를 준 `CreateFileW`이므로, 읽는 쪽이 holder의 delete나 unlock을 막지 않는다.
+  지우는 쪽은 그런 file을 자기 handle로 삭제 표시하고, 이름은 그 handle이 닫힐 때 사라진다. 그 사이 Windows는 그
+  이름의 모든 open과 link를 `ERROR_ACCESS_DENIED`로 거절하며, `STATUS_DELETE_PENDING`이 이것을 접근 거부와 구별한다.
+  엔진은 그런 이름을 지워진 것으로 읽는다: 그 이름의 open이나 link는 file을 찾지 못하고, 그 이름의 배타 생성이나 그
+  이름으로의 link는 file을 찾는다. 그래서 잡기는 link와 read 사이에 사라진 lock에서처럼 곧바로 다시 시도한다
+  (`journal`의 `TestDeletePendingReadsRemoved`와 `TestAcquireAfterPendingRelease`).
 - 잡기, 풀기, 치우기, 기다리기는 event `lock.acquired`, `lock.released`, `lock.cleared`,
   `lock.waiting`(기다리는 holder마다 한 번, watch를 arm한 뒤)으로 publish한다.
 
