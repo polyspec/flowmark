@@ -307,6 +307,11 @@ utility of orm's SQLite dialect holds on a corpus, and a client has only this dr
   that schema statements added, and the face's `schema` the catalog as it stands; an orm request reads the set's tables,
   which its manifest names. `TestSchemaOfAnotherProcess` of `statement` and `TestCatalogOfSchemaStatements` of `ops`
   hold it.
+- **Reading a statement.** The server knows a statement's kind — a read, a transaction statement, a `PRAGMA`, a schema
+  statement — by its words, read as SQLite's tokenizer reads them: a `--` or `/* */` comment is whitespace, and a word
+  inside a string or a quoted identifier is no word. A statement after a comment is the statement it would be without
+  it, so a read after a comment runs under `query_only` as any read does (`TestCommentsBeforeAStatement` and
+  `TestTokens` of `statement`).
 - **Tables.** A table takes its columns, its declared types and its key from its statement. A primary key that SQLite lets
   hold NULL names no row, so such a table keys by its rowid, as does a table with no primary key.
 - **Values.** A cell answers the value SQLite holds: the text of a column declared `DATE`, `DATETIME` or `TIMESTAMP`

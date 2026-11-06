@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"maps"
-	"regexp"
 	"slices"
 	"strings"
 
@@ -18,24 +17,65 @@ import (
 
 // schemaChange reports whether the statement changes the schema.
 func schemaChange(text string) bool {
-	fields := strings.Fields(text)
-	if len(fields) == 0 {
-		return false
-	}
-	switch strings.ToUpper(fields[0]) {
+	switch firstKeyword(statementTokens(text)) {
 	case "CREATE", "ALTER", "DROP":
 		return true
 	}
 	return false
 }
 
-var conditionalSchema = regexp.MustCompile(`(?i)^\s*(CREATE|DROP)\s+(?:(?:TEMP|TEMPORARY|UNIQUE|VIRTUAL)\s+)?(?:TABLE|INDEX|VIEW|TRIGGER)\s+IF\s+(NOT\s+)?EXISTS\s+(?:"([^"]+)"|([^\s(;]+))`)
+// conditional reads a CREATE IF NOT EXISTS or a DROP IF EXISTS of a table, an index, a view or a trigger of the main
+// schema from its tokens: the name it states and whether it states NOT. ok is false for any other statement.
+func conditional(toks []token) (name string, not, ok bool) {
+	at := func(i int) string {
+		if i < len(toks) {
+			return toks[i].keyword()
+		}
+		return ""
+	}
+	verb := at(0)
+	if verb != "CREATE" && verb != "DROP" {
+		return "", false, false
+	}
+	i := 1
+	switch at(i) {
+	case "TEMP", "TEMPORARY", "UNIQUE", "VIRTUAL":
+		i++
+	}
+	switch at(i) {
+	case "TABLE", "INDEX", "VIEW", "TRIGGER":
+	default:
+		return "", false, false
+	}
+	if at(i+1) != "IF" {
+		return "", false, false
+	}
+	i += 2
+	if at(i) == "NOT" {
+		not = true
+		i++
+	}
+	if at(i) != "EXISTS" || i+1 >= len(toks) {
+		return "", false, false
+	}
+	named := toks[i+1]
+	if i+3 < len(toks) && toks[i+2].is(".") {
+		if !strings.EqualFold(named.text, "main") {
+			return "", false, false
+		}
+		named = toks[i+3]
+	}
+	if named.kind != tokenWord && named.kind != tokenQuoted {
+		return "", false, false
+	}
+	return named.text, not, true
+}
 
 // alreadySo reports whether a CREATE IF NOT EXISTS or a DROP IF EXISTS finds what it states, and so changes nothing. Such
 // a statement asks SQLite for no write lock, so it does not wait for a writer.
 func alreadySo(ctx context.Context, s *writepath.Session, text string) (bool, error) {
-	m := conditionalSchema.FindStringSubmatch(text)
-	if m == nil {
+	name, not, ok := conditional(statementTokens(text))
+	if !ok {
 		return false, nil
 	}
 	c, err := s.Snapshot(ctx)
@@ -46,14 +86,14 @@ func alreadySo(ctx context.Context, s *writepath.Session, text string) (bool, er
 	if err != nil {
 		return false, err
 	}
-	found, open, err := readBatch(ctx, r.q, "SELECT 1 FROM sqlite_master WHERE name = ?", []any{m[3] + m[4]})
+	found, open, err := readBatch(ctx, r.q, "SELECT 1 FROM sqlite_master WHERE name = ?", []any{name})
 	if open != nil {
 		err = errors.Join(err, open.Close())
 	}
 	if err = errors.Join(err, r.release()); err != nil {
 		return false, err
 	}
-	return (len(found.Rows) > 0) == (m[2] != ""), nil
+	return (len(found.Rows) > 0) == not, nil
 }
 
 // runSchema runs a schema statement. It is its own transaction: an open transaction commits first and goes on after it,

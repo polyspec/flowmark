@@ -1,5 +1,5 @@
 <!-- doc-id: spec-ops -->
-<!-- source-sha256: a09e40aed9c8732ffe56a573cedf68268343dc392c9e18257aafa0c3fb9b2195 -->
+<!-- source-sha256: 411b0f5a88608e1187a5ca0a2e9a59481ebad81f714c07c03fd29162d6edc1d7 -->
 # Operations
 
 [English](40-ops.md)
@@ -261,6 +261,10 @@ client가 구현할 것은 이 driver뿐이다.
   transaction은 쓰지 못한다(`SQLITE_BUSY_SNAPSHOT`). face의 operation은 schema 문장이 더한 표도 읽고, face의 `schema`는 지금의
   catalog를 답한다. orm 요청은 manifest가 가리키는 set의 표를 읽는다. `statement`의 `TestSchemaOfAnotherProcess`와 `ops`의
   `TestCatalogOfSchemaStatements`가 이를 확인한다.
+- **문장 읽기.** server는 문장의 종류(읽기, transaction 문장, `PRAGMA`, schema 문장)를 SQLite의 tokenizer가 읽는 대로
+  읽은 단어로 안다: `--`나 `/* */` comment는 공백이고, string이나 quoted identifier 안의 단어는 단어가 아니다. comment 뒤의
+  문장은 comment가 없을 때의 문장과 같으므로, comment 뒤의 읽기도 다른 읽기처럼 `query_only` 아래에서 실행된다(`statement`의
+  `TestCommentsBeforeAStatement`와 `TestTokens`).
 - **표.** 표는 column, 선언 타입, key를 자기 문장에서 받는다. SQLite가 NULL을 허용하는 primary key는 행을 가리키지
   못하므로 그런 표는 primary key가 없는 표처럼 rowid를 key로 쓴다.
 - **값.** cell은 SQLite가 지닌 값을 답한다. `DATE`, `DATETIME`, `TIMESTAMP`로 선언된 column의 text는 SQLite 연결이

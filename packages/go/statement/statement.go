@@ -17,7 +17,6 @@ import (
 	"github.com/polyspec/flowmark/packages/go/internal/cost"
 	"io"
 	"math"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -596,8 +595,22 @@ func temporalWire(typ dbspec.Type, text string) string {
 	return whole + "." + fraction + strings.Repeat("0", 6-len(fraction))
 }
 
-// setting reads a PRAGMA that sets a value.
-var setting = regexp.MustCompile(`(?i)^PRAGMA\s+([a-z_]+)\s*=\s*"?([a-z0-9_-]+)"?$`)
+// pragmaSetting reads a PRAGMA that sets a value, PRAGMA name = value, from its tokens: the name in lower case and the
+// value as written, a negative number with its sign.
+func pragmaSetting(toks []token) (name, value string, ok bool) {
+	if len(toks) < 4 || toks[1].kind != tokenWord || !toks[2].is("=") {
+		return "", "", false
+	}
+	name, rest := strings.ToLower(toks[1].text), toks[3:]
+	sign := ""
+	if len(rest) == 2 && rest[0].is("-") {
+		sign, rest = "-", rest[1:]
+	}
+	if len(rest) != 1 || rest[0].kind == tokenOther && !digit(rest[0].text[0]) {
+		return "", "", false
+	}
+	return name, sign + rest[0].text, true
+}
 
 // begin opens the session's transaction, which the writer connection follows from here on, so that SQLite judges at
 // COMMIT what it defers to it.
@@ -619,14 +632,15 @@ func begin(ctx context.Context, s *writepath.Session) error {
 // control runs a statement that controls the session as the session's own operation, and reports whether text is one:
 // the transaction of a SQLite connection, and its query_only, which reads the corpus without writing it.
 func control(ctx context.Context, s *writepath.Session, text string) (bool, error) {
-	fields := strings.Fields(strings.ToUpper(strings.TrimRight(strings.TrimSpace(text), "; ")))
-	if len(fields) == 0 {
+	toks := statementTokens(text)
+	if len(toks) == 0 {
 		return false, nil
 	}
-	name := func(i int) string {
-		words := strings.Fields(strings.TrimRight(strings.TrimSpace(text), "; "))
-		return strings.Trim(words[i], `"`)
+	fields := make([]string, len(toks))
+	for i, t := range toks {
+		fields[i] = strings.ToUpper(t.text)
 	}
+	name := func(i int) string { return toks[i].text }
 	switch fields[0] {
 	case "BEGIN":
 		if s.Deferred() != nil {
@@ -698,8 +712,7 @@ func control(ctx context.Context, s *writepath.Session, text string) (bool, erro
 			s.SetForeignKeysOff(true)
 			return true, nil
 		}
-		if m := setting.FindStringSubmatch(strings.TrimRight(strings.TrimSpace(text), "; ")); m != nil {
-			name, value := strings.ToLower(m[1]), m[2]
+		if name, value, ok := pragmaSetting(toks); ok {
 			if name == "busy_timeout" {
 				ms, err := strconv.ParseInt(value, 10, 64)
 				if err != nil || ms < 0 {
@@ -1257,15 +1270,16 @@ func execute(ctx context.Context, d *database, c *irexec.Corpus, text string, ar
 }
 
 // readsOnly reports whether the statement cannot change a row, by its first word; a statement of WITH is known by the
-// word its common table expressions lead to.
+// word its common table expressions lead to. The words are read as SQLite's tokenizer reads them, so a comment before
+// them is whitespace.
 func readsOnly(text string) bool {
-	fields := strings.Fields(text)
-	if len(fields) == 0 {
+	toks := statementTokens(text)
+	if len(toks) == 0 {
 		return true
 	}
-	first := strings.ToUpper(fields[0])
+	first := firstKeyword(toks)
 	if first == "WITH" {
-		first = afterCommonTables(text)
+		first = afterCommonTables(toks[1:])
 	}
 	switch first {
 	case "SELECT", "VALUES", "EXPLAIN", "PRAGMA":
@@ -1274,33 +1288,20 @@ func readsOnly(text string) bool {
 	return false
 }
 
-// afterCommonTables is the first main verb of a WITH statement outside its parentheses and its quotes.
-func afterCommonTables(text string) string {
+// afterCommonTables is the first main verb of a WITH statement outside its parentheses.
+func afterCommonTables(toks []token) string {
 	depth := 0
-	var quote byte
-	for i := 0; i < len(text); i++ {
-		c := text[i]
+	for _, t := range toks {
 		switch {
-		case quote != 0:
-			if c == quote {
-				quote = 0
-			}
-		case c == '\'' || c == '"' || c == '`':
-			quote = c
-		case c == '(':
+		case t.is("("):
 			depth++
-		case c == ')':
+		case t.is(")"):
 			depth--
-		case depth == 0 && (c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z'):
-			j := i
-			for j < len(text) && (text[j] >= 'a' && text[j] <= 'z' || text[j] >= 'A' && text[j] <= 'Z' || text[j] == '_') {
-				j++
-			}
-			switch word := strings.ToUpper(text[i:j]); word {
+		case depth == 0:
+			switch word := t.keyword(); word {
 			case "SELECT", "VALUES", "INSERT", "UPDATE", "DELETE", "REPLACE":
 				return word
 			}
-			i = j - 1
 		}
 	}
 	return ""
