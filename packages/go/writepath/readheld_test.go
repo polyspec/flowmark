@@ -94,14 +94,14 @@ func TestReadHeld(t *testing.T) {
 		writer, reader, rs, before := heldReader(t)
 		update(t, writer.session("writer"), writer, "Committed under a stage")
 		holder := writer.begun(t, "holder")
-		stage := filepath.Join(writer.root, ".flowmark", "tx", "0123456789abcdef0123456789abcdef")
-		must(t, os.MkdirAll(stage, 0o755))
-		must(t, os.WriteFile(filepath.Join(stage, "prepare"), []byte("{}\n"), 0o644))
+		stage := filepath.Join(writer.root, ".flowmark", "tx", "0123456789abcdef0123456789abcdef.prepare")
+		must(t, os.MkdirAll(filepath.Dir(stage), 0o755))
+		must(t, os.WriteFile(stage, []byte("{}\n"), 0o644))
 		committedIs(t, rs, before, "the read while a prepare record is present")
 		if got := reader.c.Generation(); got != 0 {
 			t.Fatalf("the read that was not kept is at generation %d, want 0", got)
 		}
-		must(t, os.RemoveAll(stage))
+		must(t, os.Remove(stage))
 		committedIs(t, rs, reader.fromDisk(), "the read once the stage is gone")
 		must(t, holder.Rollback())
 	})

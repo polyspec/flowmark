@@ -63,8 +63,12 @@ func moveDurable(k *cost.Counts, src, dst string) error {
 	return nil
 }
 
-// moveFolderDurable moves a folder to a name that does not exist, as moveDurable does a file.
-func moveFolderDurable(k *cost.Counts, src, dst string) error { return moveDurable(k, src, dst) }
+// moveName renames src to dst; the commit syncs the folders that gained or lost a name once, after all its renames
+// (syncFolder).
+func moveName(_ *cost.Counts, src, dst string) error { return os.Rename(src, dst) }
+
+// moveFolderName moves a folder to a name that does not exist, as moveName does a file.
+func moveFolderName(_ *cost.Counts, src, dst string) error { return os.Rename(src, dst) }
 
 // mkdirDurable creates a folder and syncs its parent.
 func mkdirDurable(k *cost.Counts, p string) error {
@@ -74,8 +78,8 @@ func mkdirDurable(k *cost.Counts, p string) error {
 	return syncDir(k, filepath.Dir(p))
 }
 
-// syncRemoved makes the removal of a name in dir durable.
-func syncRemoved(k *cost.Counts, dir string) error { return syncDir(k, dir) }
+// syncFolder makes the names created, renamed or removed in dir durable.
+func syncFolder(k *cost.Counts, dir string) error { return syncDir(k, dir) }
 
 // deviceOf returns the device of a path, st_dev.
 func deviceOf(p string) (uint64, error) {

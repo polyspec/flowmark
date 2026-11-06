@@ -84,13 +84,11 @@ func eachCrashPoint(t *testing.T, check func(t *testing.T, cp crashPoint, f *fix
 // whole-file delete), people.flowmark.md and tags.flowmark.md.
 var crashPoints = []crashPoint{
 	{"post-images", 0, false, journal.Discarded},
-	{"pre-images", 0, false, journal.Discarded},
 	{"prepare", 0, true, journal.Replayed},
 	{"rename", 0, true, journal.Replayed},
 	{"rename", 1, true, journal.Replayed},
 	{"rename", 2, true, journal.Replayed},
 	{"renames", 0, true, journal.Replayed},
-	{"commit", 0, true, journal.Replayed},
 	{"collect", 0, true, journal.Replayed},
 }
 

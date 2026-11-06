@@ -10,9 +10,11 @@ import (
 	"testing"
 )
 
-const stageName = "0123456789abcdef0123456789abcdef"
+// testStage is the id of a stage a test plants.
+const testStage = "0123456789abcdef0123456789abcdef"
 
-// crashed commits the fixture under a fault at step#index and returns the corpus, its lock and the stage folder.
+// crashed commits the fixture under a fault at step#index and returns the corpus, its lock and the stage, the path
+// `.flowmark/tx/<id>` its files are named after.
 func crashed(t *testing.T, step string, index int) (c *Corpus, l *Lock, root, stage string, before, after map[string]string) {
 	t.Helper()
 	root, changes, before, after := fixture(t)
@@ -26,20 +28,40 @@ func crashed(t *testing.T, step string, index int) (c *Corpus, l *Lock, root, st
 	return c, l, root, filepath.Join(c.txDir(), stages(t, c)[0]), before, after
 }
 
-// `.flowmark/tx/` holds at most one stage: a second stage, or an entry of another name, refuses opening and is named.
+// `.flowmark/tx/` holds the files of at most one stage: a file of a second stage, an entry of another name, a folder
+// where a file must be and a stage folder of an earlier engine refuse opening and are named.
 func TestRecoverRefusesTwoStages(t *testing.T) {
-	for _, extra := range []string{stageName, "notastage", strings.ToUpper(stageName)} {
-		t.Run(extra, func(t *testing.T) {
+	for _, tc := range []struct {
+		name, extra string
+		folder      bool
+		names       string
+	}{
+		{"a second stage", testStage + ".prepare", false, testStage},
+		{"an entry of another name", "notastage", false, "no file of a stage"},
+		{"an id that is not lowercase", strings.ToUpper(testStage) + ".prepare", false, "no file of a stage"},
+		{"a folder in the place of a copy", testStage + ".0." + hashOf("x"), true, "no file of a stage"},
+		{"a stage folder of an earlier engine", testStage, true, "earlier engine"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
 			c, l, root, stage, _, _ := crashed(t, "prepare", 0)
 			atCrash := snapshot(t, root)
-			if err := os.Mkdir(filepath.Join(c.txDir(), extra), 0o755); err != nil {
+			p := filepath.Join(c.txDir(), tc.extra)
+			if tc.folder {
+				if err := os.Mkdir(p, 0o755); err != nil {
+					t.Fatal(err)
+				}
+			} else if err := os.WriteFile(p, []byte("{}\n"), 0o644); err != nil {
 				t.Fatal(err)
 			}
 			err := c.Recover(l)
-			if err == nil || !strings.Contains(err.Error(), extra) {
-				t.Fatalf("Recover = %v, want a refusal naming %s", err, extra)
+			named := tc.extra
+			if tc.names == testStage {
+				named = testStage
 			}
-			if extra == stageName && !strings.Contains(err.Error(), filepath.Base(stage)) {
+			if err == nil || !strings.Contains(err.Error(), named) || !strings.Contains(err.Error(), tc.names) {
+				t.Fatalf("Recover = %v, want a refusal naming %s and %q", err, tc.extra, tc.names)
+			}
+			if tc.names == testStage && !strings.Contains(err.Error(), filepath.Base(stage)) {
 				t.Fatalf("message %q does not name both stages", err)
 			}
 			if got := snapshot(t, root); !reflect.DeepEqual(got, atCrash) {
@@ -76,9 +98,8 @@ func TestCommitIdenticalTargetsAreDistinctFiles(t *testing.T) {
 
 // A target renamed from the stage shares no file with the stage that a replay could still rewrite.
 func TestTargetSharesNoFileWithStage(t *testing.T) {
-	c, _, root, stage, _, after := crashed(t, "renames", 0)
-	_ = c
-	entries, err := os.ReadDir(stage)
+	c, _, root, _, _, after := crashed(t, "renames", 0)
+	entries, err := os.ReadDir(c.txDir())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +109,7 @@ func TestTargetSharesNoFileWithStage(t *testing.T) {
 			t.Fatal(err)
 		}
 		for _, e := range entries {
-			info, err := os.Stat(filepath.Join(stage, e.Name()))
+			info, err := os.Stat(filepath.Join(c.txDir(), e.Name()))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -99,10 +120,10 @@ func TestTargetSharesNoFileWithStage(t *testing.T) {
 	}
 }
 
-// A delete renames the target into the stage as `<n>.deleted`; collecting the stage removes it.
+// A delete renames the target into the stage as `<id>.<n>.deleted`; collecting the stage removes it.
 func TestCommitDeleteMovesIntoStage(t *testing.T) {
 	c, l, root, stage, _, after := crashed(t, "renames", 0)
-	data, err := os.ReadFile(filepath.Join(stage, "3.deleted"))
+	data, err := os.ReadFile(stageFile(stage, "3.deleted"))
 	if err != nil || string(data) != "old c\n" {
 		t.Fatalf("3.deleted = %q, %v", data, err)
 	}
@@ -118,7 +139,7 @@ func TestCommitDeleteMovesIntoStage(t *testing.T) {
 // A replay after the delete's rename finds the target absent and leaves it; replaying again changes nothing.
 func TestDeleteReplayIdempotent(t *testing.T) {
 	c, l, root, stage, _, after := crashed(t, "rename", 3)
-	if _, err := os.Lstat(filepath.Join(stage, "3.deleted")); err != nil {
+	if _, err := os.Lstat(stageFile(stage, "3.deleted")); err != nil {
 		t.Fatalf("the deleted target is not in the stage: %v", err)
 	}
 	c.fault = crashAt("renames", 0)
@@ -170,11 +191,11 @@ func TestRefusalAfterPartialApplyResolvable(t *testing.T) {
 		t.Fatalf("refusal = %+v", refusal)
 	}
 	for _, name := range []string{hashOf("old a\n"), hashOf("new a\n")} {
-		if !strings.Contains(refusal.Error(), filepath.Join(stage, name)) {
+		if !strings.Contains(refusal.Error(), stageFile(stage, name)) {
 			t.Fatalf("message %q does not name the stage file %s", refusal, name)
 		}
 	}
-	copyFile(t, filepath.Join(stage, hashOf("new a\n")), filepath.Join(root, "a.md"))
+	copyFile(t, stageFile(stage, hashOf("new a\n")), filepath.Join(root, "a.md"))
 	wantRecovered(t, c, l, root, after)
 }
 
@@ -182,7 +203,7 @@ func TestRefusalResolvedByRestoringPre(t *testing.T) {
 	c, l, root, stage, _, after := crashed(t, "prepare", 0)
 	writeFile(t, root, "a.md", "human\n")
 	requireRefusal(t, c.Recover(l))
-	copyFile(t, filepath.Join(stage, hashOf("old a\n")), filepath.Join(root, "a.md"))
+	copyFile(t, stageFile(stage, hashOf("old a\n")), filepath.Join(root, "a.md"))
 	wantRecovered(t, c, l, root, after)
 }
 
@@ -190,7 +211,7 @@ func TestRefusalResolvedByRestoringPost(t *testing.T) {
 	c, l, root, stage, _, after := crashed(t, "prepare", 0)
 	writeFile(t, root, "a.md", "human\n")
 	requireRefusal(t, c.Recover(l))
-	copyFile(t, filepath.Join(stage, hashOf("new a\n")), filepath.Join(root, "a.md"))
+	copyFile(t, stageFile(stage, hashOf("new a\n")), filepath.Join(root, "a.md"))
 	wantRecovered(t, c, l, root, after)
 }
 
@@ -331,8 +352,11 @@ func TestStaged(t *testing.T) {
 				t.Fatal(err)
 			}
 		}, false},
-		{"40#sql-statements: a stage", func(t *testing.T, root string) {
-			if err := os.MkdirAll(filepath.Join(root, filepath.FromSlash(txRel), "00000000000000000000000000000001"), 0o755); err != nil {
+		{"40#sql-statements: a file of a stage", func(t *testing.T, root string) {
+			writeFile(t, root, txRel+"/"+testStage+".prepare.part", "x")
+		}, true},
+		{"40#sql-statements: a stage folder of an earlier engine", func(t *testing.T, root string) {
+			if err := os.MkdirAll(filepath.Join(root, filepath.FromSlash(txRel), testStage), 0o755); err != nil {
 				t.Fatal(err)
 			}
 		}, true},
@@ -372,21 +396,20 @@ func TestStaged(t *testing.T) {
 }
 
 // TestPrepared pins what a read without the lock reads of a commit that may be renaming its targets (spec 40 Reads): a
-// stage holding its prepare record, its commit record or the record its collection left is prepared; a stage before its
-// prepare record, no folder and an empty one are not; an entry that is no stage and a file in the folder's place are
+// stage holding its prepare record is prepared; a stage before its prepare record, no folder and an empty one are not;
+// an entry that is no file of a stage, a stage folder of an earlier engine and a file in the folder's place are
 // reported, for the recovery to judge.
 func TestPrepared(t *testing.T) {
-	stage := txRel + "/" + stageName
+	stage := txRel + "/" + testStage
 	cases := []struct {
 		name     string
 		files    []string
 		prepared bool
 	}{
 		{"40#sql-statements: no folder of the stages", nil, false},
-		{"40#sql-statements: a stage before its prepare record", []string{stage + "/pre/0"}, false},
-		{"40#sql-statements: a stage holding its prepare record", []string{stage + "/" + prepareName}, true},
-		{"40#sql-statements: a stage holding its commit record", []string{stage + "/" + commitName}, true},
-		{"40#sql-statements: a stage holding the record of its collection", []string{stage + "/" + collectedName}, true},
+		{"40#sql-statements: a stage before its prepare record", []string{stage + ".0." + hashOf("x"), stage + ".prepare.part"}, false},
+		{"40#sql-statements: a stage holding its prepare record", []string{stage + "." + prepareName}, true},
+		{"40#sql-statements: a stage folder of an earlier engine", []string{stage + "/" + prepareName}, true},
 		{"40#sql-statements: an entry that is no stage", []string{txRel + "/notes.txt"}, true},
 		{"40#sql-statements: a file in the folder's place", []string{txRel}, true},
 	}

@@ -3,6 +3,7 @@ package journal
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -168,14 +169,12 @@ var crashPoints = []struct {
 	event Kind
 }{
 	{"post-images", 0, false, Discarded},
-	{"pre-images", 0, false, Discarded},
 	{"prepare", 0, true, Replayed},
 	{"rename", 0, true, Replayed},
 	{"rename", 1, true, Replayed},
 	{"rename", 2, true, Replayed},
 	{"rename", 3, true, Replayed},
 	{"renames", 0, true, Replayed},
-	{"commit", 0, true, Replayed},
 	{"generation", 0, true, Replayed},
 	{"collect", 0, true, Replayed},
 }
@@ -211,7 +210,7 @@ func TestCrashAtEveryStep(t *testing.T) {
 			if s := stages(t, c2); len(s) != 0 {
 				t.Fatalf("stages left: %v", s)
 			}
-			// The commit record holds the generation, so a commit from it on is generation 1 once, with its paths.
+			// The prepare record holds the generation, so a commit from it on is generation 1 once, with its paths.
 			wantGeneration(t, c2, map[bool]Generation{false: {Commits: []GenerationCommit{}}, true: fixtureGeneration(1)}[p.new])
 			kinds := rec.kinds()
 			if kinds[len(kinds)-1] != p.event {
@@ -235,7 +234,7 @@ func TestCrashDuringReplay(t *testing.T) {
 	for _, p := range []struct {
 		step  string
 		index int
-	}{{"rename", 0}, {"rename", 2}, {"renames", 0}, {"commit", 0}, {"generation", 0}, {"collect", 0}} {
+	}{{"rename", 0}, {"rename", 2}, {"renames", 0}, {"generation", 0}, {"collect", 0}} {
 		t.Run(fmt.Sprintf("%s#%d", p.step, p.index), func(t *testing.T) {
 			c, l, root, _, _, after := crashed(t, "prepare", 0)
 			c.fault = crashAt(p.step, p.index)
@@ -277,7 +276,7 @@ func TestRecoverRefusesHumanEdit(t *testing.T) {
 				t.Fatalf("refusal = %+v", refusal)
 			}
 			stage := filepath.Join(c.txDir(), stages(t, c)[0])
-			for _, part := range []string{"d.md", hashOf("same\n"), "absent", filepath.Join(stage, hashOf("same\n"))} {
+			for _, part := range []string{"d.md", hashOf("same\n"), "absent", stageFile(stage, hashOf("same\n"))} {
 				if !strings.Contains(err.Error(), part) {
 					t.Fatalf("message %q does not name %q", err, part)
 				}
@@ -298,23 +297,32 @@ func TestRecoverRefusesHumanEdit(t *testing.T) {
 	}
 }
 
-// A rename source whose bytes do not match its hash is never renamed into the corpus, nor is a copy written again
-// from a blob that does not match.
+// A rename source whose bytes do not match its hash is never renamed into the corpus, nor is a record whose recorded
+// state does not match its hash applied.
 func TestRecoverRefusesCorruptBlob(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
 		damage func(t *testing.T, stage string)
 	}{
 		{"copy", func(t *testing.T, stage string) {
-			if err := os.WriteFile(filepath.Join(stage, "0."+hashOf("new a\n")), []byte("rot\n"), 0o644); err != nil {
+			if err := os.WriteFile(stageFile(stage, "0."+hashOf("new a\n")), []byte("rot\n"), 0o644); err != nil {
 				t.Fatal(err)
 			}
 		}},
-		{"blob behind a missing copy", func(t *testing.T, stage string) {
-			if err := os.Remove(filepath.Join(stage, "0."+hashOf("new a\n"))); err != nil {
+		{"recorded state behind a missing copy", func(t *testing.T, stage string) {
+			if err := os.Remove(stageFile(stage, "0."+hashOf("new a\n"))); err != nil {
 				t.Fatal(err)
 			}
-			if err := os.WriteFile(filepath.Join(stage, hashOf("new a\n")), []byte("rot\n"), 0o644); err != nil {
+			rec, err := readRecord(stage)
+			if err != nil {
+				t.Fatal(err)
+			}
+			rec.Blobs[hashOf("new a\n")] = []byte("rot\n")
+			data, err := json.Marshal(rec)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(stageFile(stage, prepareName), data, 0o644); err != nil {
 				t.Fatal(err)
 			}
 		}},
@@ -339,13 +347,13 @@ func TestRecoverDiscardsTornPrepare(t *testing.T) {
 	root, changes, before, _ := fixture(t)
 	c, rec := newCorpus(t, root)
 	l := acquire(t, c, "s1")
-	c.fault = crashAt("pre-images", 0)
+	c.fault = crashAt("post-images", 0)
 	if err := c.Commit(l, changes); !errors.Is(err, errCrash) {
 		t.Fatalf("Commit = %v", err)
 	}
 	c.fault = nil
 	s := stages(t, c)
-	if err := os.WriteFile(filepath.Join(c.txDir(), s[0], "prepare.part"), []byte(`{"renames":[{"pa`), 0o644); err != nil {
+	if err := os.WriteFile(stageFile(filepath.Join(c.txDir(), s[0]), "prepare.part"), []byte(`{"renames":[{"pa`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	rec.reset()
@@ -360,16 +368,23 @@ func TestRecoverDiscardsTornPrepare(t *testing.T) {
 
 // A prepare record that does not parse is an error and never an absent record.
 func TestRecoverRejectsMalformedPrepare(t *testing.T) {
-	for _, text := range []string{"garbage", `{"renames":[{"path":"../x","pre":"","post":""}]}`, `{"renames":[{"path":"a.md","pre":"zz","post":""}]}`, `{"renames":[],"extra":1}`} {
+	for _, text := range []string{
+		"garbage",
+		`{"generation":1,"renames":[{"path":"../x","pre":"","post":""}],"blobs":{}}`,
+		`{"generation":1,"renames":[{"path":"a.md","pre":"zz","post":""}],"blobs":{}}`,
+		`{"generation":1,"renames":[],"blobs":{},"extra":1}`,
+		`{"generation":0,"renames":[],"blobs":{}}`,
+		`{"generation":1,"renames":[{"path":"a.md","pre":"` + hashOf("old a\n") + `","post":""}],"blobs":{}}`,
+	} {
 		t.Run(text, func(t *testing.T) {
 			root, _, before, _ := fixture(t)
 			c, _ := newCorpus(t, root)
 			l := acquire(t, c, "s1")
-			stage := filepath.Join(c.txDir(), stageName)
-			if err := os.MkdirAll(stage, 0o755); err != nil {
+			stage := filepath.Join(c.txDir(), testStage)
+			if err := os.MkdirAll(c.txDir(), 0o755); err != nil {
 				t.Fatal(err)
 			}
-			if err := os.WriteFile(filepath.Join(stage, "prepare"), []byte(text), 0o644); err != nil {
+			if err := os.WriteFile(stageFile(stage, prepareName), []byte(text), 0o644); err != nil {
 				t.Fatal(err)
 			}
 			if err := c.Recover(l); err == nil {
@@ -385,7 +400,7 @@ func TestRecoverRejectsMalformedPrepare(t *testing.T) {
 	}
 }
 
-// Recovery reads only stage folders: any other entry, and a symlink where the journal must be, are refused.
+// Recovery reads only the files of a stage: any other entry, and a symlink where the journal must be, are refused.
 func TestRecoverRejectsForeignEntries(t *testing.T) {
 	t.Run("file in tx", func(t *testing.T) {
 		root := t.TempDir()
@@ -415,7 +430,7 @@ func TestRecoverRejectsForeignEntries(t *testing.T) {
 		if err := os.MkdirAll(filepath.Join(root, ".flowmark", "tx"), 0o755); err != nil {
 			t.Fatal(err)
 		}
-		symlink(t, elsewhere, filepath.Join(root, ".flowmark", "tx", stageName))
+		symlink(t, elsewhere, filepath.Join(root, ".flowmark", "tx", testStage+".prepare"))
 		refusesLinkedStage(t, root)
 	})
 }

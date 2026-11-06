@@ -10,10 +10,11 @@
 ## Corpus 열기
 
 - 열기는 lock 아래에서 **복구를 먼저** 실행한다. 끝난 holder의 pending lock record와
-  ([lock](#lock)) 끝난 열기의 database를 지우고 ([SQL statements](#sql-statements)), `*.clearing` claim은 건드리지 않는다. `.flowmark/tx/`는 stage를 많아야 하나 가지며,
-  그 이름은 OS random source의 128 random bit를 나타내는 소문자 hex 32자리다. 다른 이름이나 형태의
-  항목, 또는 두 번째 stage는 열기를 거절하며 그 이름을 밝힌다. stage는 commit record가 있으면 거두고,
-  prepare record가 있으면 완료하며, 둘 다 없으면 버린다. 복구는 idempotent다: 어느 단계에서 중단된
+  ([lock](#lock)) 끝난 열기의 database를 지우고 ([SQL statements](#sql-statements)), `*.clearing` claim은 건드리지 않는다. `.flowmark/tx/`는 많아야 한 stage의
+  file을 가지며, 그 file은 stage의 id, 곧 OS random source의 128 random bit를 나타내는 소문자 hex 32자리를 따라
+  `<id>.<name>`으로 이름 짓는다. 다른 이름이나 형태의 항목, 두 번째 stage, 또는 이전 엔진의 stage folder는
+  열기를 거절하며 그 이름을 밝힌다. stage는 prepare record가 corpus가 가진 generation을 밝히면 거두고,
+  prepare record가 있으면 완료하며, 없으면 버린다. 복구는 idempotent다: 어느 단계에서 중단된
   replay든 다음 replay가 완료한다.
   복구는 lock을 잡을 때마다, operation이 corpus를 읽기 전에 다시 실행한다: lock 아래에서 찾은 stage는
   holder가 끝난 commit이며, SQLite가 읽기 전에 hot journal을 rollback하는 것과 같다. 근거: 그렇지 않으면
@@ -518,34 +519,39 @@ client가 구현할 것은 이 driver뿐이다.
    보고한다(orm은 40001을 `DEADLOCK`으로 대응시킨다). 다시 읽은 corpus가 읽은 corpus와 같으면 쓰기는 실행될 때 이미 그 위에서 검사되었다.
    아래의 다시 쓰기 거절도 SQL이 deferred가 아닌 제약을 검사하듯 각 요청이 실행될 때 검사하므로, 그런
    file을 다시 써야 하는 요청은 곧바로 실패한다. 다른 행의 validator 진단(`type`, `key.duplicate`, `reference.dangling`, `check`, `codec`, `view`, `order`, `state.transition`, `state.required`, `state.limit`, `history.gap`, `history.chain`, 여러 `files` file에 걸친 `parent.cycle`)은 commit을 실패시키지 않되, `type` 진단은 commit의 제약 검사가 그 값을 평가해야 할 때 commit을 실패시키고, 바이트 단위로 같은 key를 가진 두 행은 그 table을 사용할 수 없게 한다([canonical format](10-canonical-format.ko.md#진단)); `format.*` 진단은 다시 쓰기 거절과 사용할 수 없는 table 상태([canonical format](10-canonical-format.ko.md#진단))가 정하는 경우에만 commit을 실패시킨다. file을 다시 써야 하는 commit — 행 자신의 file, 유도된 target이 바뀌는 행(상세 섹션이 생기거나 사라지거나, insert가 dangling link에 그 행을 주는 행)으로의 link를 가진 file, `order`의 형제 — 은 그 file이 `format.*` 진단을 가지면 거절한다: `CONSTRAINT`이며 file과 진단을 밝히고, `format.noncanonical`이면 `flowmark canon`을 밝힌다. 세 commit은 면제된다: 대상에 대한 `flowmark canon`([operations](#canon-연산)), 추가된 column이 일으킨 진단에 대한 add-column migration([migration](80-migration.ko.md)) — 그 진단은 그 migration에 대해 table을 사용할 수 없게 하지 않는다 —, `files` 행의 file 전체를 지우는 delete는 rewrite 거절에서만 면제되며, restrict 검사는 그 행을 참조할 수 있는 모든 table의 행을 여전히 필요로 하며(자신의 table을 `parent`로 하는 것, 자식 block과 이력 행, 그 행으로의 foreign key를 가진 모든 table), 그 중 하나라도 사용할 수 없으면 그 delete는 `CONSTRAINT`다.
-3. 각 post-image를 `.flowmark/tx/<id>/`에 `<hash>`로 content-addressed하여 한 번 쓰고, rename n의
-   source로 그 사본 `<n>.<hash>`를 쓴다. 둘 다 stage를 거둘 때까지 남는다. 이 단계 전에 모든 대상의
-   folder와 만들 모든 folder가 `.flowmark/tx/`의 device(`st_dev`, Windows에서는
+3. rename n의 source로 그 post-image의 사본 `.flowmark/tx/<id>.<n>.<hash>`를 쓰고 sync한다. stage
+   `<id>`(소문자 hex 32자리)의 모든 file은 `.flowmark/tx/` 안에서 `<id>.<name>`으로 이름 짓는다. 이 단계
+   전에 모든 대상의 folder와 만들 모든 folder가 `.flowmark/tx/`의 device(`st_dev`, Windows에서는
    `GetFileInformationByHandle`의 volume serial number)에 있는지 확인한다. 다르면 folder와 "a mount point
    inside the corpus is unsupported"를 밝히며 commit을 거절하고, 아무것도 stage하지 않는다.
-4. 모든 대상의 pre-image를 stage에 `<hash>`로 content-addressed하여 쓴다.
-5. **prepare record**를 쓴다: pre-hash와 post-hash를 가진 모든 rename. 없는 file은 빈 hash `""`다:
-   create는 빈 pre-hash를, delete는 빈 post-hash를 가진다.
-6. 모든 대상을 확인한 뒤 runtime의 atomic rename으로 rename을 실행한다: post-image를 가진 대상은 끝난
+4. **prepare record** `<id>.prepare`를 쓴다: commit이 받는 generation, pre-hash와 post-hash를 가진 모든
+   rename, 모든 pre-image와 post-image의 byte를 그 hash로. 없는 file은 빈 hash `""`다: create는 빈
+   pre-hash를, delete는 빈 post-hash를 가진다. record는 `<id>.prepare.part`에 쓰고 sync한 뒤 제자리로
+   rename하고 `.flowmark/tx/`를 sync한다. 이때부터 commit은 정해진다. 기록된 상태가 그 hash와 맞지 않는
+   record는 손상된 것이며 그 어떤 것도 적용하지 않는다.
+5. 모든 대상을 확인한 뒤 runtime의 atomic rename으로 rename을 실행한다: post-image를 가진 대상은 끝난
    것이고, pre-image를 가진 대상은 rename하며, 그 밖의 대상은 stage 전체를 거절한다. delete는 대상을
-   stage 안의 `<n>.deleted`로 rename한다. folder가 없는 create는 먼저 그 folder를 corpus root에서부터
-   symlink를 따르지 않고 만든다. Windows에서는 없는 folder마다 stage 안에 `<n>.dir.<k>`로 만들어 제자리로
-   옮긴다. replay도 똑같이 한다: 제자리에 있는 folder는 건너뛰고 stage에 있는 folder는 옮기며, 대상이
-   pre-hash에 있고 `<n>.<hash>`가 없으면 `<hash>`에서 사본을 다시 쓴다. 중단으로 남은 빈 table folder는
-   빈 table이다([문서 모델](20-document-model.ko.md#저장)).
-7. commit의 generation을 가진 commit record를 쓰고, 이어서 rename의 경로와 함께
-   [commit generation](#commit-generation)을 쓴다.
-8. stage를 거둔다: prepare record를 먼저 옆으로 rename하므로, 거두는 도중 중단된 stage는 commit
-   record만 가지며 다시 거두어진다. 거두기는 `<n>.deleted` file을 지운다.
+   journal 안의 `<id>.<n>.deleted`로 rename한다. folder가 없는 create는 먼저 그 folder를 corpus root에서부터
+   symlink를 따르지 않고 만든다. Windows에서는 없는 folder마다 `<id>.<n>.dir.<k>`로 만들어 제자리로 옮긴다.
+   그다음 이름을 얻거나 잃은 folder를 한 번씩 sync한다. replay도 똑같이 한다: 제자리에 있는 folder는
+   건너뛰고 stage에 있는 folder는 옮기며, 대상이 pre-hash에 있고 사본이 없으면 record에서 사본을 다시 쓴다.
+   중단으로 남은 빈 table folder는 빈 table이다([문서 모델](20-document-model.ko.md#저장)).
+6. rename의 경로와 함께 [commit generation](#commit-generation)을 쓴다: generation이 rename이 끝났음을
+   말한다.
+7. stage를 거둔다: 그 file들을 지우되 prepare record를 마지막에, sync 없이 지운다. 정전이 되살린 record는
+   이미 쓰인 generation을 가리키며 다시 거두어진다.
 
 근거: rename은 대상에게 source의 file을 준다. rename마다 별개의 사본은 같은 두 대상을 두 file로
-유지하고 대상이 stage와 file을 나누지 않게 하며, 기록된 두 상태가 복구 거절을 위해 stage에 남는다.
-journal은 hard link가 필요 없다.
+유지하고 대상이 stage와 file을 나누지 않게 한다. prepare record가 기록된 두 상태를 가지므로, 복구 거절은 그
+옆에 `<id>.<hash>`로 그것을 쓰고 밝힌다. journal은 hard link가 필요 없다. 한 행 commit은 disk를 여섯 번
+기다린다: 사본, record와 그 folder, 대상의 folder, generation과 그 folder(`journal`의 `TestFlushes`).
+`synchronous=FULL`의 SQLite는 한두 번 기다리며, 여러 file의 commit은 그보다 적게 기다리고 atomic할 수 없다.
 
 journal과 복구의 모든 hash는 file의 raw byte의 SHA-256이며 소문자 hex 64자리다(raw-file-bytes hashing,
-[design plan](../plans/flowmark/plan.ko.md)). 각 단계는 publish된다: 5단계 뒤 `journal.prepared`, 7단계의 commit
-record 뒤 `journal.applied`, 그 generation 뒤 `journal.generation`, 8단계 뒤 `journal.collected`, 열 때
-`journal.replayed`나 `journal.discarded`다.
+[design plan](../plans/flowmark/plan.ko.md)). 각 단계는 publish된다: 4단계 뒤 `journal.prepared`, 5단계의
+rename과 그 folder 뒤 `journal.applied`, 6단계 뒤 `journal.generation`, 7단계 뒤 `journal.collected`, 열 때
+`journal.replayed`나 `journal.discarded`다. 이전 엔진의 stage folder `.flowmark/tx/<id>/`는 열 때 그것을 쓴
+엔진을 밝혀 거절한다. 그 엔진이 stage를 완료하거나 버린다.
 
 ### Commit generation
 
@@ -554,17 +560,14 @@ record 뒤 `journal.applied`, 그 generation 뒤 `journal.generation`, 8단계 �
   어떤 commit도 쓰지 않은 corpus에서는 commit 없이 0이다. `commits`는 마지막 64개 commit을 오래된 것부터
   N까지 차례로 번호 매겨 가지며, 각각 그 commit이 쓰거나 지운 corpus 경로를 정렬해 가진다. 다른 형태의
   file, 그 장소의 folder나 link는 그것을 밝혀 거절한다.
-- commit은 쓰인 generation의 다음 번호를 받는다: commit record가 그 번호를 가지며, 이어서 file은 모든
-  stage file처럼 부분 이름과 rename으로 통째로 바뀐다. 그래서 lock을 잡지 않는 reader도 한 generation이나
-  그다음을 읽으며 일부를 읽지 않는다. commit은 무엇이든 stage하기 전에 generation을 읽으며, 읽을 수 없는
-  generation은 거기서 commit을 거절한다.
-- prepare된 stage를 완료하는 복구는 commit처럼 commit record와 generation을 쓴다. commit record가 file보다
-  뒤의 generation을 가진 stage를 거두는 복구는 stage의 prepare record의 경로로 먼저 그것을 쓴다. 그래서
-  commit record와 generation 사이의 crash도 commit을 잃지 않고, 다시 실행한 복구는 아무것도 쓰지 않는다.
-  이전 engine의 commit record는 generation이 없으며 다음 번호를 받는다. record가 file보다 뒤의 generation을
-  밝히고 prepare record가 없는 stage는 그 경로를 알 수 없으므로 거절한다. commit record가 더 뒤의 generation을
-  밝히는 동안 손으로 지우거나 바꾼 generation file은 그 commit만 가지므로, 그 전에 읽은 corpus는 경로를
-  얻지 못하고 tree 전체를 다시 읽는다.
+- commit은 쓰인 generation의 다음 번호를 받는다: prepare record가 그 번호를 가지며, 이어서 file은 부분
+  이름과 rename으로 통째로 바뀐다. 그래서 lock을 잡지 않는 reader도 한 generation이나 그다음을 읽으며 일부를
+  읽지 않는다. commit은 무엇이든 stage하기 전에 generation을 읽으며, 읽을 수 없는 generation은 거기서
+  commit을 거절한다.
+- prepare된 stage를 완료하는 복구는 commit처럼 generation을 쓴다. prepare record가 file이 이미 가진
+  generation을 밝히는 stage는 거두어지며 그 대상은 판정하지 않는다: rename이 끝났으므로 그 뒤의 편집은
+  corpus 자신의 것이다. prepare record가 더 뒤의 generation을 밝히는 동안 손으로 지우거나 바꾼 generation
+  file은 그 commit만 가지므로, 그 전에 읽은 corpus는 경로를 얻지 못하고 tree 전체를 다시 읽는다.
 - corpus는 자신을 읽은 generation을 가지며, 이는 lock 아래에서 tree보다 먼저 읽는다. 다른 process는 file만으로
   자신의 read 뒤의 commit들이 쓴 경로를 안다. 보관한 64개 commit보다 오래된 read는 경로를 얻지 못하고 tree
   전체를 다시 읽는다. 손 편집은 commit을 거치지 않아 generation이 없으며 tree의 알림으로 알게 된다.
@@ -573,11 +576,12 @@ record 뒤 `journal.applied`, 그 generation 뒤 `journal.generation`, 8단계 �
 
 전원 손실을 넘는 내구성은 각 단계의 file과 folder 항목이 다음 단계가 시작하기 전에 disk에 있기를
 요구한다. file은 runtime의 sync(`fsync`, macOS에서는 `F_FULLFSYNC`, Windows에서는 `FlushFileBuffers`)로
-sync한다. 만들거나 rename하거나 지운 이름은 Linux와 macOS에서 POSIX가 정하듯 그 folder를 sync하여
-지속되게 하고, folder flush가 없는 Windows에서는 move가 disk에 닿은 뒤 돌아오는 `MoveFileEx`와
-`MOVEFILE_WRITE_THROUGH`로 rename하여 지속되게 한다. 그래서 모든 stage file은 부분 이름에 쓴 뒤 제자리로
-rename하고, delete는 rename이다. 만든 folder는 Linux와 macOS에서 그 부모를 sync하여, Windows에서는 stage
-안에 만들어 `MOVEFILE_WRITE_THROUGH`로 제자리에 옮겨 지속되게 한다. lock은 record도 folder 항목도
+sync한다. 만들거나 rename하거나 지운 이름은 Linux와 macOS에서 POSIX가 정하듯 그 folder를 단계의 모든 이름에
+대해 한 번 sync하여 지속되게 하고, folder flush가 없는 Windows에서는 move가 disk에 닿은 뒤 돌아오는
+`MoveFileEx`와 `MOVEFILE_WRITE_THROUGH`로 rename하여 지속되게 한다. 그래서 prepare record는 부분 이름에 쓴 뒤
+제자리로 rename하고, delete는 rename이다. 사본의 이름은 따로 flush하지 않는다: Linux와 macOS에서는 record의
+folder sync가 그것을 덮고, 복구는 없는 사본을 record에서 다시 쓴다. 만든 folder는 Linux와 macOS에서 그 부모를
+sync하여, Windows에서는 stage 안에 만들어 `MOVEFILE_WRITE_THROUGH`로 제자리로 옮겨 지속되게 한다. lock은 record도 folder 항목도
 sync하지 않는다: 전원 손실은 그 holder를 끝낸다. Windows에서 holder의 생존은 그
 process handle에서 읽으며 결코 exit code에서 읽지 않는다.
 

@@ -7,14 +7,13 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"path/filepath"
 	"slices"
 	"strconv"
 )
 
 // GenerationPath is the declared place of the commit generation (spec 40 The commit generation): the number of the
-// commits of the corpus, and the paths of each of the last Generations commits. A commit writes it at its commit
-// record, under the lock, and it is replaced whole by a rename, so a reader never sees a part of it.
+// commits of the corpus, and the paths of each of the last Generations commits. A commit writes it after its renames,
+// under the lock, and it is replaced whole by a rename, so a reader never sees a part of it.
 const GenerationPath = ".flowmark/generation"
 
 // Generations is the number of commits whose paths the generation keeps; a corpus read at an older generation learns
@@ -32,12 +31,6 @@ type Generation struct {
 type GenerationCommit struct {
 	N     uint64   `json:"generation"`
 	Paths []string `json:"paths"`
-}
-
-// commitRecord is the content of a stage's commit record: the generation the commit takes. A record written before
-// the generation existed holds none, and the recovery that collects it gives it the next one.
-type commitRecord struct {
-	Generation uint64 `json:"generation,omitempty"`
 }
 
 // Since returns the paths the commits after generation n wrote, sorted and without repeats, and true; it returns false
@@ -125,48 +118,6 @@ func parseGeneration(p string, data []byte) (Generation, error) {
 	return g, nil
 }
 
-// commitGeneration returns the generation the commit of a stage takes: the one its commit record holds, or the next
-// after the corpus's when the stage has none yet or a record without one.
-func (c *Corpus) commitGeneration(stage string) (uint64, error) {
-	ok, err := regularExists(filepath.Join(stage, commitName))
-	if err != nil {
-		return 0, err
-	}
-	if ok {
-		rec, err := readCommit(stage)
-		if err != nil {
-			return 0, err
-		}
-		if rec.Generation != 0 {
-			return rec.Generation, nil
-		}
-	}
-	g, err := c.Generation()
-	if err != nil {
-		return 0, err
-	}
-	return g.N + 1, nil
-}
-
-// readCommit reads and checks the commit record of a stage.
-func readCommit(stage string) (commitRecord, error) {
-	p := filepath.Join(stage, commitName)
-	data, _, err := readShared(p)
-	if err != nil {
-		return commitRecord{}, fmt.Errorf("journal: %w", err)
-	}
-	var rec commitRecord
-	dec := json.NewDecoder(bytes.NewReader(data))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&rec); err != nil {
-		return commitRecord{}, fmt.Errorf("journal: %s holds no commit record: %w", p, err)
-	}
-	if _, err := dec.Token(); err != io.EOF {
-		return commitRecord{}, fmt.Errorf("journal: %s holds more than one commit record", p)
-	}
-	return rec, nil
-}
-
 // publishGeneration makes n, with the paths of its renames, the generation of the corpus when it is after the one
 // written; written again for the same commit it changes nothing, so a recovery that collects a stage after its
 // generation was written leaves it as it is.
@@ -179,7 +130,7 @@ func (c *Corpus) publishGeneration(n uint64, renames []rename) error {
 		return nil
 	}
 	if g.N+1 != n {
-		// The generation file was removed or replaced by hand after the commit record was written: the commits between
+		// The generation file was removed or replaced by hand after the prepare record was written: the commits between
 		// are not known, so the generation keeps this commit alone and a corpus read before it reads the whole tree.
 		g = Generation{N: n - 1}
 	}

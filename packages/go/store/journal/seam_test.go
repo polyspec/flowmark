@@ -26,7 +26,7 @@ func TestExportedFaultSeamAndRoot(t *testing.T) {
 	if err := c.Commit(l, changes); !errors.Is(err, errCrash) {
 		t.Fatalf("Commit = %v, want the crash at prepare", err)
 	}
-	if want := []string{"post-images", "pre-images", "prepare"}; !reflect.DeepEqual(steps, want) {
+	if want := []string{"post-images", "prepare"}; !reflect.DeepEqual(steps, want) {
 		t.Fatalf("steps = %v, want %v", steps, want)
 	}
 	if got := snapshot(t, root); !reflect.DeepEqual(got, before) {

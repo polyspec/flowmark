@@ -12,6 +12,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -19,23 +20,29 @@ import (
 	"github.com/polyspec/flowmark/packages/go/internal/cost"
 )
 
-// txRel is the journal folder of spec 40: a commit stages in `.flowmark/tx/<id>/`, and it holds at most one stage.
+// txRel is the journal folder of spec 40: a commit stages its files in `.flowmark/tx/`, each named after the stage, and
+// it holds the files of at most one stage.
 const txRel = ".flowmark/tx"
 
-// The files of a stage. A post-image or pre-image is a blob named by its hash, written once; the source of rename n
-// is `<n>.<hash>`, a copy of the blob, so two identical targets are two files and no target shares a file with the
-// stage; a delete moves its target to `<n>.deleted`; a folder created in the stage is `<n>.dir.<k>`. Every stage file
-// is written to `<name>.part` and renamed into place.
+// The files of a stage `<id>`, 32 lowercase hex digits, are `<id>.<name>`: the prepare record `<id>.prepare`, written to
+// `<id>.prepare.part` and renamed into place; the source of rename n, `<id>.<n>.<hash>`, a copy of its post-image, so
+// two identical targets are two files and no target shares a file with the stage; a delete moves its target to
+// `<id>.<n>.deleted`; a folder created in the stage is `<id>.<n>.dir.<k>`; and a recovery refusal writes each recorded
+// state as `<id>.<hash>`.
 const (
-	prepareName   = "prepare"
-	commitName    = "commit"
-	collectedName = "collected"
-	partSuffix    = ".part"
+	prepareName = "prepare"
+	partSuffix  = ".part"
 )
+
+// stageFileName matches the name of a file of a stage, its stage the first 32 hex digits.
+var stageFileName = regexp.MustCompile(`^[0-9a-f]{32}\.(prepare|prepare\.part|[0-9]+\.[0-9a-f]{64}|[0-9]+\.deleted|[0-9]+\.dir\.[0-9]+|[0-9a-f]{64})$`)
 
 func copyName(n int, hash string) string { return strconv.Itoa(n) + "." + hash }
 func deletedName(n int) string           { return strconv.Itoa(n) + ".deleted" }
 func folderName(n, k int) string         { return fmt.Sprintf("%d.dir.%d", n, k) }
+
+// stageFile is the file name of the stage at stage, `.flowmark/tx/<id>`.
+func stageFile(stage, name string) string { return stage + "." + name }
 
 // Change is one target write of a commit: the full bytes of Path, or its delete. A target that does not exist is
 // created, with any folder of it that does not exist.
@@ -53,13 +60,17 @@ type rename struct {
 	Post string `json:"post"`
 }
 
+// prepareRecord decides a commit: the generation it takes, its renames, and the bytes of every recorded state by its
+// hash, so the record alone completes the commit and resolves a refusal.
 type prepareRecord struct {
-	Renames []rename `json:"renames"`
+	Generation uint64            `json:"generation"`
+	Renames    []rename          `json:"renames"`
+	Blobs      map[string][]byte `json:"blobs"`
 }
 
 // RecoveryRefusal: a target's current hash matches neither recorded hash — a change landed while the commit was
-// interrupted. Nothing of the stage is applied and the stage stays; every open refuses the same way until the target
-// holds one of its recorded states.
+// interrupted. Nothing of the stage is applied and the stage stays, with both recorded states written beside its
+// record; every open refuses the same way until the target holds one of its recorded states.
 type RecoveryRefusal struct {
 	Stage, Path, Pre, Post, Current string
 }
@@ -69,7 +80,7 @@ func (e *RecoveryRefusal) state(h string) string {
 	if h == "" {
 		return "absent (remove the file)"
 	}
-	return h + " in " + filepath.Join(e.Stage, h)
+	return h + " in " + stageFile(e.Stage, h)
 }
 
 func (e *RecoveryRefusal) Error() string {
@@ -81,9 +92,9 @@ func (e *RecoveryRefusal) Error() string {
 		e.Path, current, e.state(e.Pre), e.state(e.Post), e.Path)
 }
 
-// CommitError is a commit that stopped. Prepared says whether its prepare record is in its stage: before it the commit
-// wrote no target and recovery discards its stage; from it on the commit is decided, and recovery completes it (spec 40
-// The commit protocol). Err is the cause.
+// CommitError is a commit that stopped. Prepared says whether its prepare record is in the journal: before it the
+// commit wrote no target and recovery discards its stage; from it on the commit is decided, and recovery completes it
+// (spec 40 The commit protocol). Err is the cause.
 type CommitError struct {
 	Prepared bool
 	Err      error
@@ -186,12 +197,12 @@ func writeDurable(k *cost.Counts, dir, name string, data []byte) error {
 	return nil
 }
 
-// Commit runs steps 3 to 8 of the spec 40 commit protocol for changes, under l: every post-image is written into a
-// new stage once, content-addressed, with a copy per rename; every pre-image content-addressed; the prepare record;
-// the renames; the commit record; and the stage is collected. The caller has run steps 1 and 2. A target folder, or a
-// folder to create, on another file system than the journal refuses before anything is staged. A stage left by an
-// interrupted commit refuses a new commit until Recover has run. A commit that stops returns a *CommitError saying
-// whether its prepare record is written.
+// Commit runs steps 3 to 7 of the spec 40 commit protocol for changes, under l: a synced copy of each post-image; the
+// prepare record, synced with its folder, which decides the commit; the renames, each folder of a target synced once;
+// the generation; and the collection of the stage. The caller has run steps 1 and 2. A target folder, or a folder to
+// create, on another file system than the journal refuses before anything is staged. A stage left by an interrupted
+// commit refuses a new commit until Recover has run. A commit that stops returns a *CommitError saying whether its
+// prepare record is written.
 func (c *Corpus) Commit(l *Lock, changes []Change) error {
 	prepared := false
 	if err := c.commit(l, changes, &prepared); err != nil {
@@ -238,9 +249,10 @@ func (c *Corpus) commit(l *Lock, changes []Change, prepared *bool) error {
 	if err := c.ensureDir(txRel); err != nil {
 		return fmt.Errorf("journal: %w", err)
 	}
-	// The generation the commit record takes is read after the renames; one that cannot be read refuses the commit
-	// here, before anything is staged.
-	if _, err := c.Generation(); err != nil {
+	// The generation the commit takes is the one after the corpus's, read before anything is staged; one that cannot
+	// be read refuses the commit here.
+	g, err := c.Generation()
+	if err != nil {
 		return err
 	}
 	if err := c.checkDevices(renames); err != nil {
@@ -254,47 +266,24 @@ func (c *Corpus) commit(l *Lock, changes []Change, prepared *bool) error {
 		return fmt.Errorf("journal: %s holds an interrupted commit; recover the corpus before a new commit", c.txDir())
 	}
 	stage := filepath.Join(c.txDir(), randomHex(16))
-	if err := mkdirDurable(c.cost, stage); err != nil {
-		return fmt.Errorf("journal: %w", err)
-	}
-	// Step 3: each post-image once, and the copy that is the source of each rename.
-	posts := map[string]bool{}
+	// Step 3: the copy that is the source of each rename, synced; the folder sync of the record makes its name durable,
+	// and a recovery writes a missing one again from the record.
 	for n, r := range renames {
 		if r.Post == "" {
 			continue
 		}
-		if !posts[r.Post] {
-			posts[r.Post] = true
-			if err := writeDurable(c.cost, stage, r.Post, blobs[r.Post]); err != nil {
-				return err
-			}
-		}
-		if err := writeDurable(c.cost, stage, copyName(n, r.Post), blobs[r.Post]); err != nil {
-			return err
+		if err := writeSynced(c.cost, stageFile(stage, copyName(n, r.Post)), blobs[r.Post], os.O_TRUNC); err != nil {
+			return fmt.Errorf("journal: writing the copy of %s: %w", r.Path, err)
 		}
 	}
 	if err := c.step("post-images", 0); err != nil {
 		return err
 	}
-	// Step 4: the pre-images not already written as a post-image of the same bytes.
-	for _, h := range sortedKeys(blobs) {
-		if !posts[h] {
-			if err := writeDurable(c.cost, stage, h, blobs[h]); err != nil {
-				return err
-			}
-		}
-	}
-	if err := c.step("pre-images", 0); err != nil {
-		return err
-	}
-	// Step 5: the prepare record.
-	record, err := json.Marshal(prepareRecord{Renames: renames})
-	if err != nil {
-		return fmt.Errorf("journal: %w", err)
-	}
-	if err := writeDurable(c.cost, stage, prepareName, append(record, '\n')); err != nil {
-		// A record renamed into place before its folder sync failed is in the stage, and recovery completes it.
-		exists, serr := regularExists(filepath.Join(stage, prepareName))
+	// Step 4: the prepare record, which decides the commit.
+	rec := prepareRecord{Generation: g.N + 1, Renames: renames, Blobs: blobs}
+	if err := c.writeRecord(stage, rec); err != nil {
+		// A record renamed into place before its folder sync failed is in the journal, and recovery completes it.
+		exists, serr := regularExists(stageFile(stage, prepareName))
 		*prepared = exists
 		return errors.Join(err, serr)
 	}
@@ -303,7 +292,27 @@ func (c *Corpus) commit(l *Lock, changes []Change, prepared *bool) error {
 	if err := c.step("prepare", 0); err != nil {
 		return err
 	}
-	return c.complete(stage, renames)
+	return c.complete(stage, rec)
+}
+
+// writeRecord writes the prepare record of the stage at stage to its partial name, syncs it, renames it into place and
+// syncs the folder of the stages, so the copies and the record are durable.
+func (c *Corpus) writeRecord(stage string, rec prepareRecord) error {
+	data, err := json.Marshal(rec)
+	if err != nil {
+		return fmt.Errorf("journal: %w", err)
+	}
+	part := stageFile(stage, prepareName+partSuffix)
+	if err := writeSynced(c.cost, part, append(data, '\n'), os.O_TRUNC); err != nil {
+		return fmt.Errorf("journal: writing the prepare record: %w", err)
+	}
+	if err := moveName(c.cost, part, stageFile(stage, prepareName)); err != nil {
+		return fmt.Errorf("journal: placing the prepare record: %w", err)
+	}
+	if err := syncFolder(c.cost, c.txDir()); err != nil {
+		return fmt.Errorf("journal: the folder of the prepare record: %w", err)
+	}
+	return nil
 }
 
 // checkDevices refuses a target folder, or the folder a missing one would be created in, on another file system than
@@ -338,12 +347,13 @@ func sortedKeys[V any](m map[string]V) []string {
 	return keys
 }
 
-// complete runs steps 6 to 8 for a prepared stage; it is the commit's own path and the replay's, and running it again
+// complete runs steps 5 to 7 for a prepared stage; it is the commit's own path and the replay's, and running it again
 // on the same stage is idempotent. Every target is checked before any is touched: one that holds its post-image is
-// done, one that holds its pre-image is pending, and any other refuses the whole stage.
-func (c *Corpus) complete(stage string, renames []rename) error {
+// done, one that holds its pre-image is pending, and any other refuses the whole stage, its recorded states written
+// beside the record for the person who resolves it.
+func (c *Corpus) complete(stage string, rec prepareRecord) error {
 	var pending []int
-	for n, r := range renames {
+	for n, r := range rec.Renames {
 		cur, err := c.currentHash(r.Path)
 		if err != nil {
 			return fmt.Errorf("journal: %w", err)
@@ -353,60 +363,55 @@ func (c *Corpus) complete(stage string, renames []rename) error {
 		case r.Pre:
 			pending = append(pending, n)
 		default:
-			return &RecoveryRefusal{Stage: stage, Path: r.Path, Pre: r.Pre, Post: r.Post, Current: cur}
+			refusal := &RecoveryRefusal{Stage: stage, Path: r.Path, Pre: r.Pre, Post: r.Post, Current: cur}
+			return errors.Join(refusal, writeStates(stage, rec, r))
 		}
 	}
 	// Every rename source is checked against its hash before any target is touched; a missing copy is written again
-	// from its blob.
+	// from the record.
 	for _, n := range pending {
-		if r := renames[n]; r.Post != "" {
-			if err := c.ensureCopy(stage, n, r); err != nil {
+		if r := rec.Renames[n]; r.Post != "" {
+			if err := c.ensureCopy(stage, n, r, rec.Blobs[r.Post]); err != nil {
 				return err
 			}
 		}
 	}
-	// Step 6: the renames; a delete is a rename into the stage.
+	// Step 5: the renames; a delete is a rename into the stage. Each folder that gained or lost a name is synced once,
+	// after all of them.
+	folders := map[string]bool{}
 	for _, n := range pending {
-		r := renames[n]
+		r := rec.Renames[n]
 		target := c.abs(r.Path)
 		var err error
 		if r.Post == "" {
-			err = moveDurable(c.cost, target, filepath.Join(stage, deletedName(n)))
+			err = moveName(c.cost, target, stageFile(stage, deletedName(n)))
 		} else {
 			if r.Pre == "" {
-				if err := c.makeFolders(stage, n, path.Dir(r.Path)); err != nil {
+				if err := c.makeFolders(stage, n, path.Dir(r.Path), folders); err != nil {
 					return err
 				}
 			}
-			err = moveDurable(c.cost, filepath.Join(stage, copyName(n, r.Post)), target)
+			err = moveName(c.cost, stageFile(stage, copyName(n, r.Post)), target)
 		}
 		if err != nil {
 			return fmt.Errorf("journal: applying %s: %w", r.Path, err)
 		}
+		folders[filepath.Dir(target)] = true
 		if err := c.step("rename", n); err != nil {
 			return err
 		}
 	}
+	for _, dir := range sortedKeys(folders) {
+		if err := syncFolder(c.cost, dir); err != nil {
+			return fmt.Errorf("journal: %w", err)
+		}
+	}
+	c.obs.Observe(Event{Kind: Applied, Path: stage})
 	if err := c.step("renames", 0); err != nil {
 		return err
 	}
-	// Step 7: the commit record, which holds the generation the commit takes, and then the generation itself.
-	n, err := c.commitGeneration(stage)
-	if err != nil {
-		return err
-	}
-	record, err := json.Marshal(commitRecord{Generation: n})
-	if err != nil {
-		return fmt.Errorf("journal: %w", err)
-	}
-	if err := writeDurable(c.cost, stage, commitName, append(record, '\n')); err != nil {
-		return err
-	}
-	c.obs.Observe(Event{Kind: Applied, Path: stage})
-	if err := c.step("commit", 0); err != nil {
-		return err
-	}
-	if err := c.publishGeneration(n, renames); err != nil {
+	// Step 6: the generation, which says the renames are done.
+	if err := c.publishGeneration(rec.Generation, rec.Renames); err != nil {
 		return err
 	}
 	if err := c.step("generation", 0); err != nil {
@@ -415,65 +420,28 @@ func (c *Corpus) complete(stage string, renames []rename) error {
 	return c.collect(stage)
 }
 
-// collectCommitted collects a stage that holds its commit record, writing its generation first when the corpus's is
-// before it: the commit was interrupted between its commit record and its generation. A stage whose generation is
-// written needs its renames no more, so one whose collection removed its records is collected as it is.
-func (c *Corpus) collectCommitted(stage string) error {
-	rec, err := readCommit(stage)
-	if err != nil {
-		return err
-	}
-	g, err := c.Generation()
-	if err != nil {
-		return err
-	}
-	if rec.Generation == 0 || rec.Generation > g.N {
-		n := rec.Generation
-		if n == 0 {
-			n = g.N + 1
+// writeStates writes the recorded states of the rename r beside the prepare record of the stage, as `<id>.<hash>`, for
+// the refusal that names them.
+func writeStates(stage string, rec prepareRecord, r rename) error {
+	var errs []error
+	for _, h := range []string{r.Pre, r.Post} {
+		if h == "" {
+			continue
 		}
-		renames, err := stageRenames(stage)
-		if err != nil {
-			return err
-		}
-		if err := c.publishGeneration(n, renames); err != nil {
-			return err
+		if err := os.WriteFile(stageFile(stage, h), rec.Blobs[h], 0o644); err != nil {
+			errs = append(errs, fmt.Errorf("journal: writing the recorded state %s of %s: %w", h, r.Path, err))
 		}
 	}
-	return c.collect(stage)
+	return errors.Join(errs...)
 }
 
-// stageRenames reads the renames of a committed stage from its prepare record, or from the record its collection
-// renamed aside.
-func stageRenames(stage string) ([]rename, error) {
-	for _, name := range []string{prepareName, collectedName} {
-		ok, err := regularExists(filepath.Join(stage, name))
-		if err != nil {
-			return nil, err
-		}
-		if ok {
-			rec, err := readRecord(stage, name)
-			return rec.Renames, err
-		}
-	}
-	return nil, fmt.Errorf("journal: the committed stage %s holds no prepare record, so the paths of its generation are not known", stage)
-}
-
-// ensureCopy makes sure the source of rename n holds its post-image, writing it again from the blob when absent.
-func (c *Corpus) ensureCopy(stage string, n int, r rename) error {
-	src := filepath.Join(stage, copyName(n, r.Post))
+// ensureCopy makes sure the source of rename n holds its post-image blob, writing it again when absent.
+func (c *Corpus) ensureCopy(stage string, n int, r rename, blob []byte) error {
+	src := stageFile(stage, copyName(n, r.Post))
 	_, err := os.Lstat(src)
 	if errors.Is(err, fs.ErrNotExist) {
-		blob := filepath.Join(stage, r.Post)
-		data, _, err := readShared(blob)
-		if err != nil {
-			return fmt.Errorf("journal: the stage blob %s of %s: %w", r.Post, r.Path, err)
-		}
-		if got := sum(data); got != r.Post {
-			return fmt.Errorf("journal: the stage blob %s of %s holds bytes of hash %s; the stage %s is damaged and nothing of it is applied", r.Post, r.Path, got, stage)
-		}
-		if err := writeDurable(c.cost, stage, copyName(n, r.Post), data); err != nil {
-			return err
+		if err := writeSynced(c.cost, src, blob, os.O_TRUNC); err != nil {
+			return fmt.Errorf("journal: writing the copy of %s again: %w", r.Path, err)
 		}
 	} else if err != nil {
 		return fmt.Errorf("journal: %w", err)
@@ -483,21 +451,23 @@ func (c *Corpus) ensureCopy(stage string, n int, r rename) error {
 		return fmt.Errorf("journal: %w", err)
 	}
 	if got != r.Post {
-		return fmt.Errorf("journal: the stage file %s for %s holds bytes of hash %s, not %s; the stage %s is damaged and nothing of it is applied", copyName(n, r.Post), r.Path, got, r.Post, stage)
+		return fmt.Errorf("journal: the stage file %s for %s holds bytes of hash %s, not %s; the stage %s is damaged and nothing of it is applied", filepath.Base(src), r.Path, got, r.Post, stage)
 	}
 	return nil
 }
 
 // makeFolders creates the missing folders of dir for the create of rename n, from the corpus root, following no
-// symlink. Where folders are staged (Windows), each is made in the stage as `<n>.dir.<k>` and moved into place; a
-// replay skips a folder in place and moves one it finds staged.
-func (c *Corpus) makeFolders(stage string, n int, dir string) error {
+// symlink, and adds the folder each is created in to folders, which the commit syncs. Where folders are staged
+// (Windows), each is made in the stage as `<id>.<n>.dir.<k>` and moved into place; a replay skips a folder in place and
+// moves one it finds staged.
+func (c *Corpus) makeFolders(stage string, n int, dir string, folders map[string]bool) error {
 	if dir == "." {
 		return nil
 	}
 	cur := c.root
 	made := false
 	for k, part := range strings.Split(dir, "/") {
+		parent := cur
 		cur = filepath.Join(cur, part)
 		fi, err := os.Lstat(cur)
 		switch {
@@ -511,7 +481,7 @@ func (c *Corpus) makeFolders(stage string, n int, dir string) error {
 			return fmt.Errorf("journal: %w", err)
 		}
 		if c.stageFolders {
-			staged := filepath.Join(stage, folderName(n, k))
+			staged := stageFile(stage, folderName(n, k))
 			_, err := os.Lstat(staged)
 			if errors.Is(err, fs.ErrNotExist) {
 				if err := os.Mkdir(staged, 0o755); err != nil {
@@ -523,12 +493,13 @@ func (c *Corpus) makeFolders(stage string, n int, dir string) error {
 			} else if err != nil {
 				return fmt.Errorf("journal: %w", err)
 			}
-			if err := moveFolderDurable(c.cost, staged, cur); err != nil {
+			if err := moveFolderName(c.cost, staged, cur); err != nil {
 				return fmt.Errorf("journal: creating the folder %s: %w", cur, err)
 			}
-		} else if err := mkdirDurable(c.cost, cur); err != nil {
+		} else if err := os.Mkdir(cur, 0o755); err != nil {
 			return fmt.Errorf("journal: creating the folder %s: %w", cur, err)
 		}
+		folders[parent] = true
 		made = true
 	}
 	if made {
@@ -537,32 +508,39 @@ func (c *Corpus) makeFolders(stage string, n int, dir string) error {
 	return nil
 }
 
-// collect runs step 8. The prepare record is renamed aside first, so a stage interrupted while it is collected holds
-// the commit record without it and is collected again.
+// collect runs step 7: it removes the files of the stage and then its prepare record, without a flush. A record that a
+// power loss brings back names a generation that is written, and the recovery collects it again.
 func (c *Corpus) collect(stage string) error {
-	_, err := os.Lstat(filepath.Join(stage, prepareName))
-	switch {
-	case err == nil:
-		if err := moveDurable(c.cost, filepath.Join(stage, prepareName), filepath.Join(stage, collectedName)); err != nil {
-			return fmt.Errorf("journal: %w", err)
-		}
-	case !errors.Is(err, fs.ErrNotExist):
-		return fmt.Errorf("journal: %w", err)
+	if err := c.removeFiles(stage, false); err != nil {
+		return err
 	}
 	if err := c.step("collect", 0); err != nil {
 		return err
 	}
-	return c.remove(stage, Collected)
+	if err := c.removeFiles(stage, true); err != nil {
+		return err
+	}
+	c.obs.Observe(Event{Kind: Collected, Path: stage})
+	return nil
 }
 
-func (c *Corpus) remove(stage string, kind Kind) error {
-	if err := os.RemoveAll(stage); err != nil {
-		return fmt.Errorf("journal: removing the stage: %w", err)
-	}
-	if err := syncRemoved(c.cost, c.txDir()); err != nil {
+// removeFiles removes the files of the stage at stage: those other than its prepare record, or with record also that
+// record.
+func (c *Corpus) removeFiles(stage string, record bool) error {
+	entries, err := os.ReadDir(c.txDir())
+	if err != nil {
 		return fmt.Errorf("journal: %w", err)
 	}
-	c.obs.Observe(Event{Kind: kind, Path: stage})
+	prefix := filepath.Base(stage) + "."
+	for _, e := range entries {
+		name := e.Name()
+		if !strings.HasPrefix(name, prefix) || name == prefix+prepareName && !record {
+			continue
+		}
+		if err := os.RemoveAll(filepath.Join(c.txDir(), name)); err != nil {
+			return fmt.Errorf("journal: removing the stage: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -589,10 +567,10 @@ func (c *Corpus) Staged() (bool, error) {
 	return len(names) > 0, nil
 }
 
-// Prepared reports whether a stage holds a prepare record, a commit record or the record its collection left: a commit
-// that may be renaming its targets, so a read without the lock may find some of them written and others not (spec 40
-// Reads). A stage before its prepare record has written no target. An entry that is no stage, or a file in the folder's
-// place, is reported too: the recovery judges it under the lock.
+// Prepared reports whether the journal holds a prepare record: a commit that may be renaming its targets, so a read
+// without the lock may find some of them written and others not (spec 40 Reads). A stage before its prepare record has
+// written no target. An entry that is no file of a stage, a stage folder of an earlier engine, or a file in the
+// folder's place is reported too: the recovery judges it under the lock.
 func (c *Corpus) Prepared() (bool, error) {
 	present, folder, err := c.stageFolder()
 	if err != nil || !present {
@@ -606,17 +584,9 @@ func (c *Corpus) Prepared() (bool, error) {
 		return false, fmt.Errorf("journal: %w", err)
 	}
 	for _, e := range entries {
-		if !e.IsDir() || !isHex(e.Name(), 32) {
+		m := stageFileName.FindStringSubmatch(e.Name())
+		if m == nil || m[1] == prepareName || e.IsDir() != strings.Contains(m[1], ".dir.") {
 			return true, nil
-		}
-		for _, name := range []string{prepareName, commitName, collectedName} {
-			ok, err := regularExists(filepath.Join(c.txDir(), e.Name(), name))
-			if err != nil {
-				return false, err
-			}
-			if ok {
-				return true, nil
-			}
 		}
 	}
 	return false, nil
@@ -643,10 +613,11 @@ func ignoreEOF(err error) error {
 }
 
 // Recover runs the recovery of spec 40, opening a corpus, under l. It removes the pending records of ended lock
-// holders and the databases of ended openings (removeEndedDatabases); then the one stage of `.flowmark/tx/` is collected when it holds a commit record, completed when it holds a
-// prepare record, and discarded otherwise. A target whose current hash matches neither recorded hash refuses with
-// *RecoveryRefusal and leaves the stage. A second stage, or an entry that is no stage, refuses opening. Recover is
-// idempotent.
+// holders and the databases of ended openings (removeEndedDatabases); then the one stage of `.flowmark/tx/` is
+// collected when its prepare record names a generation the corpus has, completed when it holds a prepare record, and
+// discarded otherwise. A target whose current hash matches neither recorded hash refuses with *RecoveryRefusal and
+// leaves the stage. A second stage, an entry that is no file of a stage and a stage folder of an earlier engine refuse
+// opening. Recover is idempotent.
 func (c *Corpus) Recover(l *Lock) error {
 	if err := c.checkHeld(l); err != nil {
 		return err
@@ -671,43 +642,53 @@ func (c *Corpus) Recover(l *Lock) error {
 	if err != nil {
 		return fmt.Errorf("journal: %w", err)
 	}
-	var names []string
+	ids := map[string]bool{}
 	for _, e := range entries {
 		p := filepath.Join(c.txDir(), e.Name())
 		if e.Type()&fs.ModeSymlink != 0 {
 			return fmt.Errorf("journal: %w", symlinkError(p))
 		}
-		if !e.IsDir() || !isHex(e.Name(), 32) {
-			return fmt.Errorf("journal: %s is no stage (a folder of 32 lowercase hex digits); only commits write into %s, so remove it after checking what wrote it", p, c.txDir())
+		if e.IsDir() && isHex(e.Name(), 32) {
+			return fmt.Errorf("journal: %s is the stage folder of an earlier engine of flowmark, whose protocol this engine does not complete; open the corpus with the engine that wrote it, which completes or discards the stage, then open it with this one", p)
 		}
-		names = append(names, e.Name())
+		m := stageFileName.FindStringSubmatch(e.Name())
+		if m == nil || e.IsDir() != strings.Contains(m[1], ".dir.") {
+			return fmt.Errorf("journal: %s is no file of a stage (`<id>.<name>`, the id 32 lowercase hex digits); only commits write into %s, so remove it after checking what wrote it", p, c.txDir())
+		}
+		ids[e.Name()[:32]] = true
 	}
-	switch len(names) {
+	switch len(ids) {
 	case 0:
 		return nil
 	case 1:
 	default:
-		return fmt.Errorf("journal: %s holds the stages %s, but a commit leaves at most one; check what wrote them before removing any", c.txDir(), strings.Join(names, ", "))
+		return fmt.Errorf("journal: %s holds the stages %s, but a commit leaves at most one; check what wrote them before removing any", c.txDir(), strings.Join(sortedKeys(ids), ", "))
 	}
-	stage := filepath.Join(c.txDir(), names[0])
-	committed, err := regularExists(filepath.Join(stage, commitName))
+	stage := filepath.Join(c.txDir(), sortedKeys(ids)[0])
+	prepared, err := regularExists(stageFile(stage, prepareName))
 	if err != nil {
 		return err
 	}
-	prepared, err := regularExists(filepath.Join(stage, prepareName))
-	if err != nil {
-		return err
-	}
-	switch {
-	case committed:
-		err = c.collectCommitted(stage)
-	case prepared:
-		var rec prepareRecord
-		if rec, err = readPrepare(stage); err == nil {
-			err = c.complete(stage, rec.Renames)
+	if !prepared {
+		if err := c.removeFiles(stage, true); err != nil {
+			return err
 		}
-	default:
-		return c.remove(stage, Discarded)
+		c.obs.Observe(Event{Kind: Discarded, Path: stage})
+		return nil
+	}
+	rec, err := readRecord(stage)
+	if err != nil {
+		return err
+	}
+	g, err := c.Generation()
+	if err != nil {
+		return err
+	}
+	if g.N >= rec.Generation {
+		// The generation is written, so the renames are done: the stage is only collected.
+		err = c.collect(stage)
+	} else {
+		err = c.complete(stage, rec)
 	}
 	if err != nil {
 		return err
@@ -730,13 +711,10 @@ func regularExists(p string) (bool, error) {
 	return true, nil
 }
 
-// readPrepare reads and checks a prepare record; one that does not parse is an error, never an absent record.
-func readPrepare(stage string) (prepareRecord, error) { return readRecord(stage, prepareName) }
-
-// readRecord reads and checks the prepare record of a stage under name: its own name, or the name its collection gives
-// it.
-func readRecord(stage, name string) (prepareRecord, error) {
-	p := filepath.Join(stage, name)
+// readRecord reads and checks the prepare record of the stage at stage; one that does not parse is an error, never an
+// absent record. Every recorded state is checked against its hash, so a damaged record applies nothing.
+func readRecord(stage string) (prepareRecord, error) {
+	p := stageFile(stage, prepareName)
 	data, _, err := readShared(p)
 	if err != nil {
 		return prepareRecord{}, fmt.Errorf("journal: %w", err)
@@ -750,6 +728,9 @@ func readRecord(stage, name string) (prepareRecord, error) {
 	if _, err := dec.Token(); err != io.EOF {
 		return prepareRecord{}, fmt.Errorf("journal: %s holds more than one prepare record", p)
 	}
+	if rec.Generation == 0 {
+		return prepareRecord{}, fmt.Errorf("journal: %s names no generation", p)
+	}
 	seen := map[string]bool{}
 	for _, r := range rec.Renames {
 		if err := checkTarget(r.Path); err != nil {
@@ -759,6 +740,18 @@ func readRecord(stage, name string) (prepareRecord, error) {
 			return prepareRecord{}, fmt.Errorf("journal: %s holds a malformed rename of %s", p, r.Path)
 		}
 		seen[r.Path] = true
+		for _, h := range []string{r.Pre, r.Post} {
+			if h == "" {
+				continue
+			}
+			blob, ok := rec.Blobs[h]
+			if !ok {
+				return prepareRecord{}, fmt.Errorf("journal: %s holds no bytes of the state %s of %s", p, h, r.Path)
+			}
+			if got := sum(blob); got != h {
+				return prepareRecord{}, fmt.Errorf("journal: %s holds bytes of hash %s for the state %s of %s; the stage is damaged and nothing of it is applied", p, got, h, r.Path)
+			}
+		}
 	}
 	return rec, nil
 }

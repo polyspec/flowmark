@@ -145,9 +145,18 @@ func stages(t *testing.T, c *Corpus) []string {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The files of a stage are `<id>.<name>`; each stage is named once, by its id, and any other entry by its name.
 	names := []string{}
+	seen := map[string]bool{}
 	for _, e := range entries {
-		names = append(names, e.Name())
+		name := e.Name()
+		if len(name) > 33 && name[32] == '.' && isHex(name[:32], 32) {
+			name = name[:32]
+		}
+		if !seen[name] {
+			seen[name] = true
+			names = append(names, name)
+		}
 	}
 	return names
 }

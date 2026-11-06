@@ -141,7 +141,7 @@ func TestGenerationFile(t *testing.T) {
 }
 
 // TestGeneration pins the commit generation (spec 40 The commit generation): each commit takes the next number at its
-// commit record and writes it with its paths before its stage is collected, the last Generations commits are kept,
+// prepare record and writes it with its paths after its renames, before its stage is collected, the last Generations commits are kept,
 // and another handle of the corpus learns it from the file alone.
 func TestGeneration(t *testing.T) {
 	t.Run("a corpus no commit wrote is generation 0", func(t *testing.T) {
@@ -220,15 +220,6 @@ func TestGeneration(t *testing.T) {
 			t.Fatalf("stages = %v", s)
 		}
 	})
-	t.Run("a commit record of an earlier engine takes the next generation", func(t *testing.T) {
-		c, l, root, stage, _, after := crashed(t, "commit", 0)
-		writeFile(t, stage, commitName, "{}\n")
-		if err := os.Remove(filepath.Join(root, ".flowmark", "generation")); err != nil && !errors.Is(err, os.ErrNotExist) {
-			t.Fatal(err)
-		}
-		wantRecovered(t, c, l, root, after)
-		wantGeneration(t, c, fixtureGeneration(1))
-	})
 	t.Run("a generation file removed by hand keeps the commit alone", func(t *testing.T) {
 		root, changes, _, _ := fixture(t)
 		c, _ := newCorpus(t, root)
@@ -238,7 +229,7 @@ func TestGeneration(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		c.fault = crashAt("commit", 0)
+		c.fault = crashAt("renames", 0)
 		if err := c.Commit(l, changes); !errors.Is(err, errCrash) {
 			t.Fatalf("Commit = %v, want the crash", err)
 		}
@@ -254,30 +245,24 @@ func TestGeneration(t *testing.T) {
 			t.Fatal("a corpus read at generation 2 learns paths across the removed commits")
 		}
 	})
-	t.Run("a committed stage whose collection removed its records is collected", func(t *testing.T) {
-		c, l, root, stage, _, after := crashed(t, "generation", 0)
-		for _, name := range []string{prepareName, collectedName} {
-			if err := os.Remove(filepath.Join(stage, name)); err != nil && !errors.Is(err, os.ErrNotExist) {
-				t.Fatal(err)
-			}
+	t.Run("a stage whose collection was interrupted is collected", func(t *testing.T) {
+		c, l, root, _, _, after := crashed(t, "collect", 0)
+		if s := stages(t, c); len(s) != 1 {
+			t.Fatalf("stages = %v, want the prepare record kept", s)
 		}
 		wantRecovered(t, c, l, root, after)
 		wantGeneration(t, c, fixtureGeneration(1))
-	})
-	t.Run("a committed stage without its records and its generation is refused", func(t *testing.T) {
-		c, l, _, stage, _, _ := crashed(t, "commit", 0)
-		if err := os.Remove(filepath.Join(stage, prepareName)); err != nil {
-			t.Fatal(err)
-		}
-		if err := c.Recover(l); err == nil || !strings.Contains(err.Error(), "paths of its generation are not known") {
-			t.Fatalf("Recover = %v", err)
+		if s := stages(t, c); len(s) != 0 {
+			t.Fatalf("stages = %v", s)
 		}
 	})
-	t.Run("a commit record that does not parse is refused", func(t *testing.T) {
-		c, l, _, stage, _, _ := crashed(t, "commit", 0)
-		writeFile(t, stage, commitName, `{"generation": "one"}`)
-		if err := c.Recover(l); err == nil || !strings.Contains(err.Error(), "holds no commit record") {
-			t.Fatalf("Recover = %v", err)
-		}
+	t.Run("a stage whose generation is written is collected without its targets judged", func(t *testing.T) {
+		// The renames are done once the generation names the commit, so an edit made after it is the corpus's and no
+		// change that landed while the commit was interrupted.
+		c, l, root, _, _, after := crashed(t, "generation", 0)
+		writeFile(t, root, "a.md", "edited after the commit\n")
+		after["a.md"] = "edited after the commit\n"
+		wantRecovered(t, c, l, root, after)
+		wantGeneration(t, c, fixtureGeneration(1))
 	})
 }

@@ -12,9 +12,10 @@ The order of the commit protocol is normative.
 - Opening runs **recovery first**, under the lock. It removes the pending lock records of ended
   holders ([the lock](#the-lock)) and the databases of ended openings ([SQL statements](#sql-statements)),
   and leaves every `*.clearing` claim alone. `.flowmark/tx/` holds
-  at most one stage, named by 32 lowercase hex digits of 128 random bits from the OS random source;
-  an entry of another name or form, or a second stage, refuses opening and is named. The stage is
-  collected when it holds a commit record, completed when it holds a prepare record, and discarded
+  the files of at most one stage, named `<id>.<name>` after its id, 32 lowercase hex digits of 128
+  random bits from the OS random source; an entry of another name or form, a second stage, or a stage
+  folder of an earlier engine refuses opening and is named. The stage is collected when its prepare
+  record names a generation the corpus has, completed when it holds a prepare record, and discarded
   otherwise. Recovery is idempotent: a replay interrupted at any step is completed by the next.
   Recovery runs again at every acquisition of the lock, before the operation reads the corpus: a stage
   found under the lock is a commit whose holder ended, as SQLite rolls a hot journal back before it
@@ -605,39 +606,46 @@ the writer of the difference.
    maps 40001 to `DEADLOCK`), since the client never retries it. When the re-read corpus is the one read, the writes were checked on it as
    they ran. The rewrite refusal below is checked as each request runs too, as SQL checks a constraint
    that is not deferred, so the request that must rewrite such a file fails at once. A validator diagnostic on another row (`type`, `key.duplicate`, `reference.dangling`, `check`, `codec`, `view`, `order`, `state.transition`, `state.required`, `state.limit`, `history.gap`, `history.chain`, and the validator's `parent.cycle` across several `files` files) never fails the commit, except that a `type` diagnostic fails it when a constraint check of the commit must evaluate that value ([canonical format](10-canonical-format.md#readable-values)), and two rows with byte-for-byte equal keys make their table unavailable ([canonical format](10-canonical-format.md#diagnostics)); a `format.*` diagnostic fails it only as the rewrite refusal and the unavailable table state ([canonical format](10-canonical-format.md#diagnostics)). A commit that must rewrite a file — the row's own file, a file holding a link to a row whose derived target changes (its detail section appears or disappears, or an insert gives a dangling link its row), an `order` sibling — is refused when that file has a `format.*` diagnostic: `CONSTRAINT`, naming the file and the diagnostic, and naming `flowmark canon` when it is `format.noncanonical`. Three commits are exempt: `flowmark canon` for its targets ([operations](#the-canon-operation)); the add-column migration, for the diagnostics the added column causes, which do not make its table unavailable to that migration ([migration](80-migration.md)); and a delete that removes a `files` row's whole file from the rewrite refusal only — its restrict check still needs the rows of every table that may reference the row (its own table through `parent`, its child blocks and its history rows, and every table with a foreign key to it), so such a delete is `CONSTRAINT` when any of them is unavailable.
-3. Write each post-image once into `.flowmark/tx/<id>/`, content-addressed as `<hash>`, and, as
-   the source of rename n, a copy `<n>.<hash>` of it; both stay until the stage is collected.
-   Before this step, the folder of every target and every folder to create is checked to be on
-   the device of `.flowmark/tx/` (`st_dev`; on Windows the volume serial number of
+3. Write, as the source of rename n, a copy of its post-image `.flowmark/tx/<id>.<n>.<hash>`, and
+   sync it; every file of the stage `<id>` (32 lowercase hex digits) is named `<id>.<name>` in
+   `.flowmark/tx/`. Before this step, the folder of every target and every folder to create is
+   checked to be on the device of `.flowmark/tx/` (`st_dev`; on Windows the volume serial number of
    `GetFileInformationByHandle`); a mismatch refuses the commit, naming the folder and "a mount
    point inside the corpus is unsupported", and nothing is staged.
-4. Write the pre-image of every target into the stage, content-addressed as `<hash>`.
-5. Write the **prepare record**: every rename with its pre- and post-hashes. An absent file is the
-   empty hash `""`: a create has an empty pre-hash, and a delete an empty post-hash.
-6. Perform the renames through the runtime's atomic rename, after checking every target: one that
+4. Write the **prepare record** `<id>.prepare`: the generation the commit takes, every rename with
+   its pre- and post-hashes, and the bytes of every pre- and post-image by its hash. An absent file
+   is the empty hash `""`: a create has an empty pre-hash, and a delete an empty post-hash. It is
+   written to `<id>.prepare.part`, synced, renamed into place, and `.flowmark/tx/` is synced; from
+   it on the commit is decided. A record whose recorded state does not match its hash is damaged,
+   and nothing of it is applied.
+5. Perform the renames through the runtime's atomic rename, after checking every target: one that
    holds its post-image is done, one that holds its pre-image is renamed, and any other refuses
-   the whole stage. A delete renames its target into the stage as `<n>.deleted`. A create whose
-   folder is absent first creates that folder, from the corpus root, following no symlink; on
-   Windows each missing folder is created in the stage as `<n>.dir.<k>` and moved into place. A
-   replay does the same: it skips a folder it finds in place and moves one it finds staged, and
-   when it finds a target at its pre-hash and `<n>.<hash>` absent it writes the copy again from
-   `<hash>`. An empty table folder left by an interruption is an empty table
-   ([document model](20-document-model.md#storage)).
-7. Write the commit record, which holds the commit's generation, and then the
-   [commit generation](#the-commit-generation) with the paths of the renames.
-8. Collect the stage: the prepare record is renamed aside first, so a stage interrupted while it
-   is collected holds the commit record alone and is collected again; collecting removes the
-   `<n>.deleted` files.
+   the whole stage. A delete renames its target into the journal as `<id>.<n>.deleted`. A create
+   whose folder is absent first creates that folder, from the corpus root, following no symlink;
+   on Windows each missing folder is created as `<id>.<n>.dir.<k>` and moved into place. Then each
+   folder that gained or lost a name is synced once. A replay does the same: it skips a folder it
+   finds in place and moves one it finds staged, and when it finds a target at its pre-hash and its
+   copy absent it writes the copy again from the record. An empty table folder left by an
+   interruption is an empty table ([document model](20-document-model.md#storage)).
+6. Write the [commit generation](#the-commit-generation) with the paths of the renames: it says the
+   renames are done.
+7. Collect the stage: remove its files, the prepare record last, without a sync. A record that a
+   power loss brings back names a generation that is written, and is collected again.
 
 Grounding: a rename gives the target the source's file. Distinct per-rename copies keep two
-identical targets as two files and keep the target sharing no file with the stage, and both
-recorded states stay in the stage for a recovery refusal. The journal needs no hard link.
+identical targets as two files and keep the target sharing no file with the stage, and the prepare
+record holds both recorded states, so a recovery refusal writes them beside it as `<id>.<hash>` and
+names them. The journal needs no hard link. A one-row commit waits for the disk six times: the
+copy, the record and its folder, the target's folder, and the generation and its folder
+(`TestFlushes` of `journal`); SQLite with `synchronous=FULL` waits once or twice, and a commit of
+several files cannot be atomic with fewer.
 
 Every hash of the journal and of recovery is the SHA-256 of the file's raw bytes, as 64
 lowercase hex digits (raw-file-bytes hashing, [design plan](../plans/flowmark/plan.md)). Each step
-is published: `journal.prepared` after step 5, `journal.applied` after the commit record of step 7,
-`journal.generation` after its generation, `journal.collected` after step 8, and on opening
-`journal.replayed` or `journal.discarded`.
+is published: `journal.prepared` after step 4, `journal.applied` after the renames of step 5 and
+their folders, `journal.generation` after step 6, `journal.collected` after step 7, and on opening
+`journal.replayed` or `journal.discarded`. A stage folder `.flowmark/tx/<id>/` of an earlier engine
+is refused on opening, naming the engine that wrote it, which completes or discards it.
 
 ### The commit generation
 
@@ -646,18 +654,15 @@ is published: `journal.prepared` after step 5, `journal.applied` after the commi
   the last commit, 0 with no commits for a corpus that no commit has written, and `commits` the last
   64 commits, oldest first and numbered in order up to N, each with the corpus paths it wrote or
   deleted, sorted. A file of another form, a folder or a link in its place is refused, naming it.
-- A commit takes the generation after the one written: its commit record holds that number, and the
-  file is then replaced whole, through a partial name and a rename, as every stage file is; so a
-  reader that takes no lock reads one generation or the next, never a part. The commit reads the
-  generation before it stages anything, and one it cannot read refuses the commit there.
-- A recovery that completes a prepared stage writes its commit record and generation as the commit
-  does; one that collects a stage whose commit record holds a generation after the file's writes it
-  first, with the paths of the stage's prepare record, so a crash between the commit record and the
-  generation loses no commit, and a recovery run again writes nothing. A commit record of an earlier
-  engine holds no generation and takes the next one. A stage whose record names a generation after
-  the file's and holds no prepare record is refused, since its paths are not known. A generation file
-  removed or replaced by hand while a commit record names a later generation keeps that commit alone,
-  so a corpus read before it learns no paths and reads the whole tree.
+- A commit takes the generation after the one written: its prepare record holds that number, and
+  the file is then replaced whole, through a partial name and a rename; so a reader that takes no
+  lock reads one generation or the next, never a part. The commit reads the generation before it
+  stages anything, and one it cannot read refuses the commit there.
+- A recovery that completes a prepared stage writes its generation as the commit does. A stage whose
+  prepare record names a generation the file already holds is collected and its targets are not
+  judged: the renames are done, so an edit since is the corpus's own. A generation file removed or
+  replaced by hand while a prepare record names a later generation keeps that commit alone, so a
+  corpus read before it learns no paths and reads the whole tree.
 - A corpus carries the generation it was read at, read under the lock before the tree. Another
   process learns from the file alone which paths the commits after its read wrote; a read older than
   the 64 kept commits learns none and reads the whole tree. A hand edit goes through no commit and
@@ -668,11 +673,13 @@ is published: `journal.prepared` after step 5, `journal.applied` after the commi
 Durability across power loss needs each step's files and folder entries on disk before the next
 step begins. A file is synced by the runtime's sync (`fsync`; `F_FULLFSYNC` on macOS;
 `FlushFileBuffers` on Windows). A created, renamed or removed name is made durable on Linux and
-macOS by syncing its folder, as POSIX defines, and on Windows, which has no folder flush, by
-renaming with `MoveFileEx` and `MOVEFILE_WRITE_THROUGH`, which returns once the move is on disk;
-so every stage file is written to a partial name and renamed into place, and a delete is a
-rename. A created folder is made durable on Linux and macOS by syncing its parent, and on Windows
-by creating it in the stage and moving it into place with `MOVEFILE_WRITE_THROUGH`. The lock is
+macOS by syncing its folder, as POSIX defines, once for all the names of a step, and on Windows,
+which has no folder flush, by renaming with `MoveFileEx` and `MOVEFILE_WRITE_THROUGH`, which
+returns once the move is on disk; so the prepare record is written to a partial name and renamed
+into place, and a delete is a rename. The name of a copy needs no flush of its own: the folder sync
+of the record covers it on Linux and macOS, and a recovery writes a missing copy again from the
+record. A created folder is made durable on Linux and macOS by syncing its parent, and on Windows by
+creating it in the stage and moving it into place with `MOVEFILE_WRITE_THROUGH`. The lock is
 never synced, neither its record nor its folder entry: a power loss ends its holder. On Windows a holder's liveness is read from its process handle, never from its exit code.
 
 ## The file system

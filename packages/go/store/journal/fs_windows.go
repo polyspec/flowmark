@@ -77,9 +77,13 @@ func moveDurable(k *cost.Counts, src, dst string) error {
 	return moveFileEx(k, src, dst, windows.MOVEFILE_REPLACE_EXISTING|writeThrough())
 }
 
-// moveFolderDurable moves a folder to a name that does not exist; MOVEFILE_REPLACE_EXISTING cannot be used for a
-// folder.
-func moveFolderDurable(k *cost.Counts, src, dst string) error {
+// moveName moves src to dst with a write-through move, which makes the name durable at once: Windows has no folder
+// flush to defer it to (syncFolder).
+func moveName(k *cost.Counts, src, dst string) error { return moveDurable(k, src, dst) }
+
+// moveFolderName moves a folder to a name that does not exist with a write-through move; MOVEFILE_REPLACE_EXISTING
+// cannot be used for a folder.
+func moveFolderName(k *cost.Counts, src, dst string) error {
 	return moveFileEx(k, src, dst, writeThrough())
 }
 
@@ -111,14 +115,14 @@ func moveFileEx(k *cost.Counts, src, dst string, flags uint32) error {
 	return nil
 }
 
-// mkdirDurable creates one of the journal's own folders (`.flowmark/`, `.flowmark/tx/`, a stage). Windows cannot
-// flush a folder; these folders hold only files moved in with write-through moves, and a corpus folder is created in
+// mkdirDurable creates one of the journal's own folders (`.flowmark/`, `.flowmark/tx/`). Windows cannot flush a folder;
+// the names in these folders that must last are moved in with write-through moves, and a corpus folder is created in
 // the stage and moved into place instead.
 func mkdirDurable(_ *cost.Counts, p string) error { return os.Mkdir(p, 0o755) }
 
-// syncRemoved does nothing on Windows, which has no folder flush. It follows only the removal of a collected or
-// discarded stage, which a power loss may bring back; recovery then collects or discards it again.
-func syncRemoved(*cost.Counts, string) error { return nil }
+// syncFolder does nothing on Windows, which has no folder flush: every name the journal makes durable is moved with a
+// write-through move.
+func syncFolder(*cost.Counts, string) error { return nil }
 
 // deviceOf returns the volume serial number of a path, from GetFileInformationByHandle.
 func deviceOf(p string) (uint64, error) {
