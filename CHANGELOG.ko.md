@@ -1,9 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: b37953b1120610e357369dfedf33eb9584ae98569c7bfe9582383d3ed8557312 -->
+<!-- source-sha256: 5c5d9987cae7009418a67cd73e2f822b2084ed2f6fa1c33a1641c1af7d4c17f3 -->
 # Changelog
 
 ## Unreleased
 
+- T65: board 예제는 hyper 0.0.31, template 0.0.20, crudui 0.0.13을 한 변경으로 쓰고, hyper-server 0.0.31이 require하는 @polyspec/php-serialize 0.0.1을 그 release tarball로 고정한다. ordered-json은 orm 0.0.21이 require하는 0.0.18에 머문다.
 - T64: flowmark은 Kit 0.0.93을 쓴다: package.json과 그 lock은 그 release asset을 고정하고, ci-pipeline.yml은 ci-setup으로 PHP symbol extractor를 설치한다(K1018).
 - T19: run 41317062220은 Windows에서 layout metric을 보인다: sharded events=20000의 비용은 insert가 아니라 fixture의 setup과 teardown이다. 이 행은 다음 실행들을 기다린다.
 - T15-2: flowmark은 구현이 하나이고 config/parity.json이 없으므로, make parity-declarations-check는 kit 0.0.92에서 선언할 unit 없이 통과한다.

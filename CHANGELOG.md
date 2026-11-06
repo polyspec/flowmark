@@ -3,6 +3,7 @@
 
 ## Unreleased
 
+- T65: The board example takes hyper 0.0.31, template 0.0.20 and crudui 0.0.13 in one change, with @polyspec/php-serialize 0.0.1, which hyper-server 0.0.31 requires, pinned to its release tarball; ordered-json stays at 0.0.18, which orm 0.0.21 requires.
 - T64: flowmark takes Kit 0.0.93: package.json and its lock pin its release asset, and ci-pipeline.yml installs the PHP symbol extractor through ci-setup (K1018).
 - T19: Run 41317062220 shows the layout metrics on Windows: the cost of sharded events=20000 is the setup and the teardown of the fixture, not the insert; the row waits for more runs.
 - T15-2: flowmark has one implementation and no config/parity.json, so make parity-declarations-check holds with no unit to declare, on kit 0.0.92.
