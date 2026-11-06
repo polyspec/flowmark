@@ -315,3 +315,60 @@ func TestCreateFolderRefusesSymlink(t *testing.T) {
 		}
 	})
 }
+
+// TestStaged pins what a read without the lock reads of the stages (spec 40 Reads): no folder and an empty folder hold
+// no stage; a stage, whatever it holds, an entry of any other name and a file in the folder's place are present, so the
+// read takes the lock and the recovery judges them; a commit leaves none.
+func TestStaged(t *testing.T) {
+	cases := []struct {
+		name   string
+		plant  func(t *testing.T, root string)
+		staged bool
+	}{
+		{"40#reads: no folder of the stages", func(*testing.T, string) {}, false},
+		{"40#reads: an empty folder of the stages", func(t *testing.T, root string) {
+			if err := os.MkdirAll(filepath.Join(root, filepath.FromSlash(txRel)), 0o755); err != nil {
+				t.Fatal(err)
+			}
+		}, false},
+		{"40#reads: a stage", func(t *testing.T, root string) {
+			if err := os.MkdirAll(filepath.Join(root, filepath.FromSlash(txRel), "00000000000000000000000000000001"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+		}, true},
+		{"40#reads: an entry of another name", func(t *testing.T, root string) {
+			writeFile(t, root, txRel+"/notes.txt", "x")
+		}, true},
+		{"40#reads: a file in the folder's place", func(t *testing.T, root string) {
+			writeFile(t, root, txRel, "x")
+		}, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			tc.plant(t, root)
+			c, _ := newCorpus(t, root)
+			got, err := c.Staged()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != tc.staged {
+				t.Fatalf("Staged = %v, want %v", got, tc.staged)
+			}
+		})
+	}
+	t.Run("40#reads: a commit leaves no stage", func(t *testing.T) {
+		root := t.TempDir()
+		c, _ := newCorpus(t, root)
+		l := acquire(t, c, "s1")
+		if err := c.Commit(l, []Change{{Path: "a.flowmark.md", Data: []byte("a\n")}}); err != nil {
+			t.Fatal(err)
+		}
+		if err := l.Release(); err != nil {
+			t.Fatal(err)
+		}
+		if got, err := c.Staged(); err != nil || got {
+			t.Fatalf("Staged after a commit = %v, %v; want false", got, err)
+		}
+	})
+}

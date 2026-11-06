@@ -128,10 +128,7 @@ func Run(s *writepath.Session, text string, params []json.RawMessage) (_ *Answer
 // a writer waits for a writer, as on a SQLite database in WAL mode.
 func runAlone(ctx context.Context, s *writepath.Session, text string, args []any) (_ *Answer, err error) {
 	if readsOnly(text) {
-		answer, read, err := readCommitted(ctx, s, text, args)
-		if read {
-			return answer, err
-		}
+		return readCommitted(ctx, s, text, args)
 	}
 	if err := s.Begin(ctx, s.QueryOnly()); err != nil {
 		return nil, err
@@ -339,19 +336,18 @@ func runInTransaction(ctx context.Context, s *writepath.Session, text string, ar
 	return nil, err
 }
 
-// readCommitted answers a read from what is committed when another session holds the lock, on a reader connection, and
-// reports whether it did. It is not a read when the lock is free, since the session then reads under it.
-func readCommitted(ctx context.Context, s *writepath.Session, text string, args []any) (*Answer, bool, error) {
-	var answer *Answer
-	read, err := s.ReadCommitted(ctx, func(c *irexec.Corpus) error {
-		r, err := readerFor(ctx, s, c)
-		if err != nil {
-			return err
-		}
-		answer, err = readOn(ctx, s, r, text, args)
-		return err
-	})
-	return answer, read, err
+// readCommitted answers a read outside a transaction on a reader connection, from the corpus Committed returns: it takes
+// no corpus lock when nothing changed since the last read under it, and its rows that go on hold none (spec 40 Reads).
+func readCommitted(ctx context.Context, s *writepath.Session, text string, args []any) (*Answer, error) {
+	c, err := s.Committed(ctx)
+	if err != nil {
+		return nil, err
+	}
+	r, err := readerFor(ctx, s, c)
+	if err != nil {
+		return nil, err
+	}
+	return readOn(ctx, s, r, text, args)
 }
 
 // readOn answers a read on the connection r; rows that go on keep it until they end.

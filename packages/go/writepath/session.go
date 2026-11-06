@@ -264,6 +264,7 @@ func (s *Session) Snapshot(ctx context.Context) (*irexec.Corpus, error) {
 	}
 	l, err := s.c.j.Acquire(ctx, s.name, 0)
 	if err == nil {
+		s.c.cost.Add(cost.LocksTaken, 1)
 		if err := s.c.j.Recover(l); err != nil {
 			return nil, release(l, driverError("recovering the corpus", err))
 		}
@@ -277,7 +278,7 @@ func (s *Session) Snapshot(ctx context.Context) (*irexec.Corpus, error) {
 		return s.c.read()
 	}
 	var timeout *journal.LockTimeout
-	if c := s.c.committed.Load(); c != nil && errors.As(err, &timeout) {
+	if c := s.c.committed(); c != nil && errors.As(err, &timeout) {
 		return c, nil
 	}
 	return nil, lockError(err)
@@ -306,29 +307,18 @@ func (s *Session) Ended() bool { return s.ended.Load() }
 // Transaction reports whether a transaction is open in the session, for the holder of its lock.
 func (s *Session) Transaction() bool { return s.tx != nil }
 
-// ReadCommitted calls read with the corpus last committed and reports true, when another session holds the lock; a free
-// lock, or a corpus not read yet, is false and read is not called.
-func (s *Session) ReadCommitted(ctx context.Context, read func(c *irexec.Corpus) error) (bool, error) {
-	if s.kept.Load() != nil {
-		return false, nil
-	}
-	c := s.c.committed.Load()
-	l, err := s.c.j.Acquire(ctx, s.name, 0)
-	if err == nil {
-		// The lock is free: the statement reads under it, from the database of its writers.
-		return false, l.Release()
-	}
-	var timeout *journal.LockTimeout
-	switch {
-	case errors.Is(err, fs.ErrPermission):
-		// No one can hold the lock of a corpus the process may only read, and reading needs none.
-		if c, err = s.c.read(); err != nil {
-			return false, err
+// Committed returns the corpus a statement outside a transaction reads (spec 40 Reads): the one last read under the
+// lock, without taking it, when nothing changed since; otherwise Snapshot's, which takes the lock to recover and read
+// the corpus again, or answers the corpus last read while another session holds it. A session that keeps its lock
+// reads under it.
+func (s *Session) Committed(ctx context.Context) (*irexec.Corpus, error) {
+	if s.kept.Load() == nil {
+		cur, ok, err := s.c.unchanged()
+		if err != nil || ok {
+			return cur, err
 		}
-	case !errors.As(err, &timeout), c == nil:
-		return false, nil
 	}
-	return true, read(c)
+	return s.Snapshot(ctx)
 }
 
 // Cost returns the counts of the work of the session's corpus.

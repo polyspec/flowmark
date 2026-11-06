@@ -352,8 +352,13 @@ utility of orm's SQLite dialect holds on a corpus, and a client has only this dr
   catalog is built again, and the old one is closed when its last read ends. The opening's end removes its database.
   A corpus the process may only read keeps its database in memory, whose one connection reads, one read at a time.
   `TestConcurrentReads`, `TestWriterFollowsTransaction` and `TestCost` of `statement` hold it.
-- **Reads.** A read that finds the lock held by another session reads what is committed, on a reader connection, and never
-  waits for a writer nor for another read: the behaviour of SQLite in WAL mode.
+- **Reads.** A read outside a transaction takes no lock when nothing changed since the last read under it: no stage is
+  present in `.flowmark/tx/`, the commit generation is the one that read was at, and no notification was queued since.
+  Otherwise it takes the lock only to recover and read the corpus again, and releases it before it reads; one that finds
+  the lock held by another session reads what is committed. It reads on a reader connection, so a lock record is written
+  once for each change, not for each read, and a read and its rows that go on hold no lock and wait for no writer nor
+  another read: the behaviour of SQLite in WAL mode. `TestConcurrentReads` and `TestCost` of `statement`, and
+  `TestTreeQuiet` and `TestStaged` of `store/journal` hold it.
 - **Session settings.** `foreign_keys`, `query_only`, `busy_timeout` and `locking_mode` are the session's. Under
   `locking_mode = EXCLUSIVE` the lock its next transaction takes stays after that transaction, until the mode is `NORMAL`
   again. Any other `PRAGMA` setting holds for the session's own statements.

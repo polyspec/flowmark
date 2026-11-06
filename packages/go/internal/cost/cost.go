@@ -1,7 +1,7 @@
 // Package cost counts the work of the engine's operations: the files a read reads from the disk, visits and parses,
 // the rows it places and indexes, the rows a write copies, the files a comparison compares, the stored rows a request
-// forms, and the rows a statement reads and writes in its SQLite database (plan, Ruling: an operation costs what it
-// touches). An operation that costs what it touches counts the same on a corpus of any size; the counts are how a test
+// forms, the rows a statement reads and writes in its SQLite database, and the acquisitions of the corpus lock (plan,
+// Ruling: an operation costs what it touches). An operation that costs what it touches counts the same on a corpus of any size; the counts are how a test
 // says so. A nil *Counts counts nothing.
 package cost
 
@@ -35,6 +35,8 @@ const (
 	DatabaseRowsRead
 	// DatabaseRowsWritten is a row a fill or a refresh wrote into the SQLite database.
 	DatabaseRowsWritten
+	// LocksTaken is an acquisition of the corpus lock: a lock record written and removed.
+	LocksTaken
 	counters
 )
 
@@ -50,6 +52,7 @@ var names = [counters]string{
 	RowsStored:          "rows-stored",
 	DatabaseRowsRead:    "database-rows-read",
 	DatabaseRowsWritten: "database-rows-written",
+	LocksTaken:          "locks-taken",
 }
 
 // String is the name of the counter.

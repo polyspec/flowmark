@@ -104,7 +104,7 @@ func TestTreeReadIsTheRead(t *testing.T) {
 		if _, err := f.c.read(); err != nil {
 			t.Fatal(err)
 		}
-		got := f.c.committed.Load()
+		got := f.c.committed()
 		want, err := irexec.Open(f.cat, store.DirFS(f.root))
 		if err != nil {
 			t.Fatal(err)

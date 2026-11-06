@@ -569,6 +569,40 @@ func (c *Corpus) remove(stage string, kind Kind) error {
 // prepare record, and discarded otherwise. A target whose current hash matches neither recorded hash refuses with
 // *RecoveryRefusal and leaves the stage. A second stage, or an entry that is no stage, refuses opening. Recover is
 // idempotent.
+// Staged reports whether the folder of the stages holds an entry: a commit in progress, or one a process left, which
+// the recovery completes or discards under the lock. A read without the lock answers from the corpus it last read only
+// when no stage is present (spec 40 Reads), so the folder is read and nothing in it is judged here.
+func (c *Corpus) Staged() (bool, error) {
+	info, err := c.lstat(txRel)
+	if err != nil {
+		return false, fmt.Errorf("journal: %w", err)
+	}
+	if info == nil {
+		return false, nil
+	}
+	if !info.IsDir() {
+		// The recovery refuses it under the lock, so the read takes the lock to report it.
+		return true, nil
+	}
+	f, err := os.Open(c.txDir())
+	if err != nil {
+		return false, fmt.Errorf("journal: %w", err)
+	}
+	names, err := f.Readdirnames(1)
+	if err = errors.Join(ignoreEOF(err), f.Close()); err != nil {
+		return false, fmt.Errorf("journal: %w", err)
+	}
+	return len(names) > 0, nil
+}
+
+// ignoreEOF is err without the io.EOF of a folder read to its end.
+func ignoreEOF(err error) error {
+	if errors.Is(err, io.EOF) {
+		return nil
+	}
+	return err
+}
+
 func (c *Corpus) Recover(l *Lock) error {
 	if err := c.checkHeld(l); err != nil {
 		return err

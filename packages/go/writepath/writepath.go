@@ -131,13 +131,55 @@ type Corpus struct {
 	readHook func(attempt int)
 	// published is the catalog the corpus last took, which a face reads without the lock.
 	published atomic.Pointer[catalog.Catalog]
-	// committed is the corpus last read under the lock, which a read answers from while another session holds it.
-	committed atomic.Pointer[irexec.Corpus]
-	// readAt is the commit generation the corpus was last read at under the lock.
-	readAt atomic.Uint64
+	// last is the corpus last read under the lock with the commit generation it was read at, which a read answers from
+	// while another session holds the lock, or without the lock when nothing changed since.
+	last atomic.Pointer[readState]
 	// sql is what package statement keeps of the SQL database of the corpus, under sqlMu: it is read without the lock.
 	sql   io.Closer
 	sqlMu sync.Mutex
+}
+
+// readState is a read of the corpus under the lock: the corpus and the commit generation it was read at, kept as one
+// so a read without the lock never pairs one read's corpus with another's generation. fresh is false from the start of
+// a read until it succeeds, so a read that failed leaves nothing a read without the lock answers from.
+type readState struct {
+	cur   *irexec.Corpus
+	gen   uint64
+	fresh bool
+}
+
+// committed returns the corpus last read under the lock, nil before the first.
+func (c *Corpus) committed() *irexec.Corpus {
+	if st := c.last.Load(); st != nil {
+		return st.cur
+	}
+	return nil
+}
+
+// unchanged returns the corpus last read under the lock and true when nothing changed since that read (spec 40 Reads):
+// no stage is present, the commit generation is the one it was read at, and no notification was queued. The stage is
+// checked before the generation, so a commit that ended between the two checks is seen at its generation, and a commit
+// whose renames land after them is answered before it, as a SQLite read that began before a commit is.
+func (c *Corpus) unchanged() (*irexec.Corpus, bool, error) {
+	st := c.last.Load()
+	if st == nil || !st.fresh {
+		return nil, false, nil
+	}
+	staged, err := c.j.Staged()
+	if err != nil {
+		return nil, false, driverError("reading the stages of the corpus", err)
+	}
+	if staged {
+		return nil, false, nil
+	}
+	g, err := c.j.Generation()
+	if err != nil {
+		return nil, false, driverError("reading the commit generation of the corpus", err)
+	}
+	if g.N != st.gen || !c.tree.Quiet() {
+		return nil, false, nil
+	}
+	return st.cur, true, nil
 }
 
 // Open opens the corpus of the journal corpus j with the catalog cat: it runs recovery first, under the lock (spec 40
@@ -191,6 +233,9 @@ func (c *Corpus) acquire(ctx context.Context, session string) (*journal.Lock, er
 // acquireWait is acquire with its wait.
 func (c *Corpus) acquireWait(ctx context.Context, session string, wait time.Duration) (_ *journal.Lock, err error) {
 	l, err := c.j.Acquire(ctx, session, wait)
+	if err == nil {
+		c.cost.Add(cost.LocksTaken, 1)
+	}
 	if err != nil {
 		e := lockError(err)
 		if errors.Is(context.Cause(ctx), errSessionClosed) {
@@ -241,10 +286,18 @@ func (c *Corpus) read() (*irexec.Corpus, error) {
 	if err != nil {
 		return nil, driverError("reading the commit generation of the corpus", err)
 	}
-	paths, kept := g.Since(c.readAt.Load())
+	var prev *irexec.Corpus
+	var at uint64
+	if st := c.last.Load(); st != nil {
+		prev, at = st.cur, st.gen
+		if st.fresh {
+			c.last.Store(&readState{cur: prev, gen: at})
+		}
+	}
+	paths, kept := g.Since(at)
 	// The schema statements are read when the corpus is read from nothing and after each commit that wrote them, of any
 	// process, as the generation names it: a process takes the schema another committed, as a SQLite connection does.
-	if c.committed.Load() == nil || !kept || slices.Contains(paths, catalog.StatementsFile) {
+	if prev == nil || !kept || slices.Contains(paths, catalog.StatementsFile) {
 		if err := c.takeStatements(); err != nil {
 			return nil, err
 		}
@@ -265,7 +318,6 @@ func (c *Corpus) read() (*irexec.Corpus, error) {
 		c.live.Reset()
 		return nil, driverError("reading the corpus", err)
 	}
-	prev := c.committed.Load()
 	cur := irexec.FromSnapshot(c.cat, s, prev, c.cost)
 	// The counters' file is read with the corpus from nothing and after a commit that wrote it, whatever process made
 	// that commit: the generation names it (spec 40 SQL statements).
@@ -282,8 +334,7 @@ func (c *Corpus) read() (*irexec.Corpus, error) {
 			return nil, driverError("reading the AUTOINCREMENT counters of the corpus", err)
 		}
 	}
-	c.readAt.Store(g.N)
-	c.committed.Store(cur)
+	c.last.Store(&readState{cur: cur, gen: g.N, fresh: true})
 	return cur, nil
 }
 
@@ -325,7 +376,12 @@ func (c *Corpus) useCatalog(cat *catalog.Catalog) error {
 func (c *Corpus) Catalog() *catalog.Catalog { return c.published.Load() }
 
 // Generation returns the commit generation the corpus was last read at under the lock.
-func (c *Corpus) Generation() uint64 { return c.readAt.Load() }
+func (c *Corpus) Generation() uint64 {
+	if st := c.last.Load(); st != nil {
+		return st.gen
+	}
+	return 0
+}
 
 // Close closes the corpus: the watch of its tree. An operation of a closed corpus fails.
 func (c *Corpus) Close() error {

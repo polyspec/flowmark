@@ -232,7 +232,8 @@ var refusedCost = []cost.Counter{cost.RowsStored, cost.DatabaseRowsWritten}
 // readCost are the counts of a corpus read: the documents it visits and parses, and the rows it places and indexes.
 var readCost = []cost.Counter{cost.FilesVisited, cost.FilesParsed, cost.RowsPlaced, cost.RowsIndexed}
 
-// quietCost names the operations that count nothing: a read of a corpus nothing changed since the statement before it.
+// quietCost names the operations that count nothing: a read of a corpus nothing changed since the statement before it,
+// which takes no lock (T43-3).
 var quietCost = map[string]bool{"read task": true, "read note": true}
 
 // editReadCost are the counts of the read after an external edit, the rows the corpus enters in its index (T40-1), and the

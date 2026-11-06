@@ -48,6 +48,9 @@ type Tree struct {
 	// fault is a failure of the watch met by a read; Fault returns it and Refresh clears it, since a read that met it
 	// cached nothing.
 	fault error
+	// held are the notifications Quiet took, and heldErr the failure of its drain, which the next Refresh takes first.
+	held    Notices
+	heldErr error
 	// notices is the test seam that rewrites the notifications each Refresh takes; nil outside the tests.
 	notices func(Notices) Notices
 	// cost counts the folders and files read from the disk.
@@ -101,15 +104,18 @@ func (t *Tree) Refresh() error {
 		return errors.New("the corpus tree is closed")
 	}
 	t.fault = nil
+	held, heldErr := t.held, t.heldErr
+	t.held, t.heldErr = Notices{}, nil
 	n, err := t.w.drain()
-	if err != nil {
+	if err == nil && t.notices != nil {
+		n = t.notices(n)
+	}
+	n = Notices{Overflow: held.Overflow || n.Overflow, Changed: append(held.Changed, n.Changed...), Moved: append(held.Moved, n.Moved...)}
+	if err = errors.Join(heldErr, err); err != nil {
 		// The notifications the failed drain took are lost with it, so nothing the tree holds is known current: the
 		// next read reads the whole corpus again, as after an overflow, and this operation fails naming the cause.
 		t.dropAll()
 		return fmt.Errorf("taking the change notifications of the corpus: %w", err)
-	}
-	if t.notices != nil {
-		n = t.notices(n)
 	}
 	if n.Overflow {
 		t.dropAll()
@@ -124,6 +130,31 @@ func (t *Tree) Refresh() error {
 	}
 	return nil
 }
+
+// Quiet reports whether no notification was queued since the last Refresh, so the tree holds the corpus as the last
+// read under the lock read it: a read without the lock answers from that read only then (spec 40 Reads). It drops
+// nothing, since an operation under the lock may be reading the tree: what it takes, and a failure of its drain, the
+// next Refresh takes first.
+func (t *Tree) Quiet() bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.w == nil || t.heldErr != nil || !t.held.empty() {
+		return false
+	}
+	n, err := t.w.drain()
+	if err != nil {
+		t.heldErr = err
+		return false
+	}
+	if t.notices != nil {
+		n = t.notices(n)
+	}
+	t.held = n
+	return n.empty()
+}
+
+// empty reports whether n names no change.
+func (n Notices) empty() bool { return !n.Overflow && len(n.Changed) == 0 && len(n.Moved) == 0 }
 
 // Forget drops what the tree holds of each path, what lies under it, and the entries of every folder above it, so
 // the next read reads them from the disk whatever the notifications said: the write path forgets its commit targets

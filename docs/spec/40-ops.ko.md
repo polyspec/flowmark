@@ -1,5 +1,5 @@
 <!-- doc-id: spec-ops -->
-<!-- source-sha256: 81979c15ea09c142b12c1a2ab7af13df4cdcc0504df8b56b4da04b31bc1e206a -->
+<!-- source-sha256: 3cb6d85ab8e156edf463b908a84b0cf73f80c7aec6f8b0edcb7344ecad695cb7 -->
 # Operations
 
 [English](40-ops.md)
@@ -299,8 +299,13 @@ client가 구현할 것은 이 driver뿐이다.
   끝날 때 닫는다. 열기가 끝나면 그 database를 지운다. process가 읽기만 할 수 있는 corpus는 database를 메모리에 유지하며, 그
   연결 하나가 한 번에 하나씩 읽는다. `statement`의 `TestConcurrentReads`, `TestWriterFollowsTransaction`, `TestCost`가 이를
   보장한다.
-- **읽기.** 다른 session이 lock을 쥔 것을 본 읽기는 reader 연결에서 commit된 것을 읽고 writer도 다른 읽기도 기다리지 않는다.
-  WAL mode의 SQLite와 같은 동작이다.
+- **읽기.** transaction 밖의 읽기는 lock 아래의 마지막 읽기 뒤로 바뀐 것이 없으면 lock을 잡지 않는다: `.flowmark/tx/`에
+  stage가 없고, commit generation이 그 읽기의 것이며, 그 뒤로 쌓인 알림이 없을 때다. 그렇지 않으면 recovery와 corpus를
+  다시 읽는 동안만 lock을 잡고 읽기 전에 놓는다. 다른 session이 lock을 쥔 것을 본 읽기는 commit된 것을 읽는다. 읽기는
+  reader 연결에서 하므로 lock record는 읽기마다가 아니라 변경마다 한 번 쓰이고, 읽기와 이어지는 그 행은 lock을 쥐지 않으며
+  writer도 다른 읽기도 기다리지 않는다. WAL mode의 SQLite와 같은 동작이다. `statement`의 `TestConcurrentReads`와 `TestCost`,
+  `store/journal`의 `TestTreeQuiet`과 `TestStaged`가 이를
+  보장한다.
 - **Session 설정.** `foreign_keys`, `query_only`, `busy_timeout`, `locking_mode`는 session의 것이다. `locking_mode =
   EXCLUSIVE`에서는 다음 transaction이 잡은 lock이 그 transaction 뒤에도 남고, mode가 `NORMAL`로 돌아오면 놓는다. 다른
   `PRAGMA` 설정은 session 자신의 문장에만 적용된다.

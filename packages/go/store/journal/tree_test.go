@@ -438,3 +438,87 @@ func TestTreeChanges(t *testing.T) {
 		})
 	}
 }
+
+// TestTreeQuiet pins the check of a read without the lock (spec 40 Reads): the tree is quiet when no notification was
+// queued, a notification or an overflow or a failed drain makes it not quiet, and what Quiet took drops nothing until the
+// next Refresh, which takes it first, so an operation under the lock reads the tree as it was.
+func TestTreeQuiet(t *testing.T) {
+	files := map[string]string{"a.flowmark.md": "a\n", "t/x.flowmark.md": "x\n"}
+	all := []string{".", "t/", "a.flowmark.md", "t/x.flowmark.md"}
+	cases := []struct {
+		name  string
+		n     Notices
+		err   error
+		quiet bool
+		// again is what the read after the next Refresh reads from the disk.
+		again []string
+	}{
+		{name: "40#reads: no notification is quiet", quiet: true, again: []string{}},
+		{name: "40#reads: a changed file is not quiet", n: Notices{Changed: []string{"t/x.flowmark.md"}}, again: []string{"t/x.flowmark.md"}},
+		{name: "40#reads: a moved file is not quiet", n: Notices{Moved: []string{"a.flowmark.md"}}, again: []string{".", "a.flowmark.md"}},
+		{name: "40#reads: a change of a path the tree does not hold is not quiet", n: Notices{Changed: []string{"t/q.flowmark.md"}}, again: []string{}},
+		{name: "40#reads: an overflow is not quiet", n: Notices{Overflow: true}, again: []string{".", "t", "a.flowmark.md", "t/x.flowmark.md"}},
+		{name: "40#reads: a failed drain is not quiet and fails the next Refresh", err: errors.New("the queue is gone"),
+			again: []string{".", "t", "a.flowmark.md", "t/x.flowmark.md"}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			tr, w, rec, root := scriptedTree(t, files)
+			readAll(t, tr, all...)
+			reads(t, rec, root)
+			w.next, w.drainErr = c.n, c.err
+			if got := tr.Quiet(); got != c.quiet {
+				t.Fatalf("Quiet = %v, want %v", got, c.quiet)
+			}
+			if !c.quiet && tr.Quiet() {
+				t.Fatal("a second Quiet before the Refresh is quiet: what the first took is lost")
+			}
+			readAll(t, tr, all...)
+			if got := reads(t, rec, root); len(got) != 0 {
+				t.Fatalf("Quiet dropped what the tree holds: the read before the Refresh read %v", got)
+			}
+			err := tr.Refresh()
+			if (err != nil) != (c.err != nil) || (err != nil && !strings.Contains(err.Error(), c.err.Error())) {
+				t.Fatalf("Refresh = %v, want %v", err, c.err)
+			}
+			readAll(t, tr, all...)
+			got := reads(t, rec, root)
+			slices.Sort(got)
+			want := slices.Sorted(slices.Values(c.again))
+			if !slices.Equal(got, want) {
+				t.Fatalf("read again %v, want %v", got, want)
+			}
+			if !tr.Quiet() {
+				t.Fatal("the tree is not quiet after the Refresh took every notification")
+			}
+		})
+	}
+	t.Run("40#reads: the notifications Quiet took come before those queued after it", func(t *testing.T) {
+		tr, w, rec, root := scriptedTree(t, files)
+		readAll(t, tr, all...)
+		reads(t, rec, root)
+		w.next = Notices{Changed: []string{"a.flowmark.md"}}
+		if tr.Quiet() {
+			t.Fatal("a changed file is quiet")
+		}
+		w.next = Notices{Changed: []string{"t/x.flowmark.md"}}
+		if err := tr.Refresh(); err != nil {
+			t.Fatal(err)
+		}
+		readAll(t, tr, all...)
+		got := reads(t, rec, root)
+		slices.Sort(got)
+		if want := []string{"a.flowmark.md", "t/x.flowmark.md"}; !reflect.DeepEqual(got, want) {
+			t.Fatalf("read again %v, want %v", got, want)
+		}
+	})
+	t.Run("40#reads: a closed tree is not quiet", func(t *testing.T) {
+		tr, _, _, _ := scriptedTree(t, files)
+		if err := tr.Close(); err != nil {
+			t.Fatal(err)
+		}
+		if tr.Quiet() {
+			t.Fatal("a closed tree is quiet")
+		}
+	})
+}

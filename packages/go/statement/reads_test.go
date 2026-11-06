@@ -38,7 +38,8 @@ func answers(t *testing.T, s *writepath.Session, text, want string) {
 }
 
 // TestConcurrentReads pins the reads of an opening (plan, Reads without the lock): a read runs on a reader connection
-// of its own, so it never waits for another read's rows, while another session holds the lock or not.
+// of its own, so it never waits for another read's rows, while another session holds the lock or not, and it holds no
+// corpus lock, so a write never waits for a read's rows.
 func TestConcurrentReads(t *testing.T) {
 	c, _ := openCorpus(t)
 	session := func(name string) *writepath.Session {
@@ -63,5 +64,16 @@ func TestConcurrentReads(t *testing.T) {
 			t.Fatal(err)
 		}
 		run(t, writer, "ROLLBACK")
+	})
+	t.Run("a read whose rows go on holds no lock", func(t *testing.T) {
+		run(t, writer, "PRAGMA busy_timeout = 0")
+		if a := run(t, first, "SELECT a.n FROM numbers a, numbers b, numbers c, numbers d"); !a.More {
+			t.Fatal("the first read's rows do not go on")
+		}
+		answers(t, writer, "INSERT INTO numbers (n) VALUES (12) RETURNING n", `[[12]]`)
+		answers(t, second, "SELECT COUNT(*) FROM numbers", `[[11]]`)
+		if err := statement.Close(first); err != nil {
+			t.Fatal(err)
+		}
 	})
 }
