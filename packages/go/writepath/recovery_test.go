@@ -104,6 +104,20 @@ func crashTx(f *fixture) [][]byte {
 	}
 }
 
+// wantCrashed requires the corpus of f to hold after, when the crash came after its commit point (committed), or
+// before otherwise, and cleans f.
+func wantCrashed(t *testing.T, f *fixture, committed bool, before, after map[string]string) {
+	t.Helper()
+	want := before
+	if committed {
+		want = after
+	}
+	if got := snapshot(t, f.root); !reflect.DeepEqual(got, want) {
+		t.Fatalf("corpus = %v, want %v", got, want)
+	}
+	f.clean()
+}
+
 // snapshot returns every corpus file outside .flowmark/ and dbspec/ by slash path.
 func snapshot(t testing.TB, root string) map[string]string {
 	t.Helper()
@@ -171,14 +185,7 @@ func TestRecoveryOnAcquisition(t *testing.T) {
 		f.rec.reset()
 		want(t, f.session("cli"), f.countTags(), map[bool]string{false: `{"count":2}`, true: `{"count":3}`}[cp.new])
 		f.rec.wantKinds(t, opened...)
-		wantSnap := before
-		if cp.new {
-			wantSnap = after
-		}
-		if got := snapshot(t, f.root); !reflect.DeepEqual(got, wantSnap) {
-			t.Fatalf("corpus = %v, want %v", got, wantSnap)
-		}
-		f.clean()
+		wantCrashed(t, f, cp.new, before, after)
 	})
 }
 

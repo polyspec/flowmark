@@ -46,13 +46,7 @@ func TestRecoverRemovesEndedDatabases(t *testing.T) {
 		plant(tc.token, tc.holder)
 	}
 	writeFile(t, root, DatabaseDir+"/notes.txt", "kept")
-	l := acquire(t, c, "s1")
-	defer func() {
-		if err := l.Release(); err != nil {
-			t.Fatal(err)
-		}
-	}()
-	if err := c.Recover(l); err != nil {
+	if err := recoverHeld(t, c); err != nil {
 		t.Fatal(err)
 	}
 	exists := func(name string) bool {
@@ -85,28 +79,12 @@ func TestRecoverRefusesLinkedDatabases(t *testing.T) {
 			}
 			symlink(t, filepath.Join(root, "elsewhere.holder"), filepath.Join(root, filepath.FromSlash(DatabaseDir), "00000000000000000000000000000001.holder"))
 		},
-		"a linked folder": func(t *testing.T, root string) {
-			if err := os.MkdirAll(filepath.Join(root, "elsewhere"), 0o700); err != nil {
-				t.Fatal(err)
-			}
-			if err := os.MkdirAll(filepath.Join(root, ".flowmark"), 0o755); err != nil {
-				t.Fatal(err)
-			}
-			symlink(t, filepath.Join(root, "elsewhere"), filepath.Join(root, filepath.FromSlash(DatabaseDir)))
-		},
+		"a linked folder": linkDatabaseDir,
 	}
 	for name, plant := range cases {
 		t.Run(name, func(t *testing.T) {
-			root := t.TempDir()
-			plant(t, root)
-			c, _ := newCorpus(t, root)
-			l := acquire(t, c, "s1")
-			defer func() {
-				if err := l.Release(); err != nil {
-					t.Fatal(err)
-				}
-			}()
-			if err := c.Recover(l); err == nil || !strings.Contains(err.Error(), "symbolic link") {
+			c, _ := plantedCorpus(t, plant)
+			if err := recoverHeld(t, c); err == nil || !strings.Contains(err.Error(), "symbolic link") {
 				t.Fatalf("Recover = %v, want a symlink refusal", err)
 			}
 		})
@@ -117,12 +95,7 @@ func TestRecoverRefusesLinkedDatabases(t *testing.T) {
 // is written under a new token before the database exists, and Remove takes the database, the files beside it and the
 // record away.
 func TestNewDatabase(t *testing.T) {
-	root := t.TempDir()
-	c, _ := newCorpus(t, root)
-	d, err := c.NewDatabase()
-	if err != nil {
-		t.Fatal(err)
-	}
+	root, c, d := newDatabaseIn(t)
 	dir := filepath.Join(root, filepath.FromSlash(DatabaseDir))
 	if err := checkPrivate(dir); err != nil {
 		t.Fatalf("the folder made for the databases: %v", err)
@@ -184,24 +157,14 @@ func TestNewDatabaseRefuses(t *testing.T) {
 				t.Fatal(err)
 			}
 		}, "its owner's alone"},
-		{"a linked folder", func(t *testing.T, root string) {
-			if err := os.MkdirAll(filepath.Join(root, "elsewhere"), 0o700); err != nil {
-				t.Fatal(err)
-			}
-			if err := os.MkdirAll(filepath.Join(root, ".flowmark"), 0o755); err != nil {
-				t.Fatal(err)
-			}
-			symlink(t, filepath.Join(root, "elsewhere"), filepath.Join(root, filepath.FromSlash(DatabaseDir)))
-		}, "symbolic link"},
+		{"a linked folder", linkDatabaseDir, "symbolic link"},
 		{"a file for the folder", func(t *testing.T, root string) {
 			writeFile(t, root, DatabaseDir, "no folder")
 		}, "not a folder"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			root := t.TempDir()
-			tc.plant(t, root)
-			c, _ := newCorpus(t, root)
+			c, _ := plantedCorpus(t, tc.plant)
 			if _, err := c.NewDatabase(); err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("NewDatabase = %v, want a refusal holding %q", err, tc.want)
 			}
@@ -211,12 +174,7 @@ func TestNewDatabaseRefuses(t *testing.T) {
 	for _, name := range databaseFiles(token) {
 		for _, linked := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s planted, linked %v", name, linked), func(t *testing.T) {
-				root := t.TempDir()
-				c, _ := newCorpus(t, root)
-				d, err := c.NewDatabase()
-				if err != nil {
-					t.Fatal(err)
-				}
+				root, c, d := newDatabaseIn(t)
 				if err := d.Remove(); err != nil {
 					t.Fatal(err)
 				}

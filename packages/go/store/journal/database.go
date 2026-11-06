@@ -113,7 +113,15 @@ func (c *Corpus) removeEndedDatabases() error {
 	if err := c.checkDatabaseDir(); err != nil {
 		return err
 	}
-	entries, err := os.ReadDir(c.abs(DatabaseDir))
+	return c.removeEnded(DatabaseDir, holderName, func(name, _ string) error { return c.removeDatabase(name[:32]) })
+}
+
+// removeEnded calls remove with the name and the path of each record in the folder dir of the corpus whose name name
+// matches and whose holder has ended, on opening: a record of a running holder, of another host, or one that does not
+// parse, since its writer may still be writing it, stays, and a name that does not match is never touched. A symlink
+// among the records is refused.
+func (c *Corpus) removeEnded(dir string, name *regexp.Regexp, remove func(name, path string) error) error {
+	entries, err := os.ReadDir(c.abs(dir))
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil
 	}
@@ -121,10 +129,10 @@ func (c *Corpus) removeEndedDatabases() error {
 		return fmt.Errorf("journal: %w", err)
 	}
 	for _, e := range entries {
-		if !holderName.MatchString(e.Name()) {
+		if !name.MatchString(e.Name()) {
 			continue
 		}
-		p := c.abs(DatabaseDir + "/" + e.Name())
+		p := c.abs(dir + "/" + e.Name())
 		if e.Type()&fs.ModeSymlink != 0 {
 			return fmt.Errorf("journal: %w", symlinkError(p))
 		}
@@ -144,7 +152,7 @@ func (c *Corpus) removeEndedDatabases() error {
 			return err
 		}
 		if state == HolderEnded {
-			if err := c.removeDatabase(e.Name()[:32]); err != nil {
+			if err := remove(e.Name(), p); err != nil {
 				return err
 			}
 		}

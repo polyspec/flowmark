@@ -1036,11 +1036,9 @@ func insertRows(ctx context.Context, tx runner, c *irexec.Corpus, tb *catalog.Ta
 	}
 	defer closed(&err, insert)
 	for _, row := range rows {
-		args := make([]any, len(row))
-		for i, v := range row {
-			if args[i], err = stored(tb.Columns[i].Type, v); err != nil {
-				return err
-			}
+		args, err := storedArgs(tb, row)
+		if err != nil {
+			return err
 		}
 		if _, err := insert.ExecContext(ctx, args...); err != nil {
 			return &Error{codeInternal, fmt.Sprintf("a row of %s: %v", tb.Name, err)}
@@ -1048,6 +1046,18 @@ func insertRows(ctx context.Context, tx runner, c *irexec.Corpus, tb *catalog.Ta
 		c.Cost().Add(cost.DatabaseRowsWritten, 1)
 	}
 	return nil
+}
+
+// storedArgs are the arguments that write the stored row row of tb, each value in the form its column type stores.
+func storedArgs(tb *catalog.Table, row []any) ([]any, error) {
+	args := make([]any, len(row))
+	for i, v := range row {
+		var err error
+		if args[i], err = stored(tb.Columns[i].Type, v); err != nil {
+			return nil, err
+		}
+	}
+	return args, nil
 }
 
 // closed closes c when its function returns and adds the failure of the close to that function's error *err.
@@ -1413,8 +1423,7 @@ func allRows(ctx context.Context, db runner, c *irexec.Corpus) (map[string]table
 // rowsOf reads the rows of tb from db: of a table with a rowid in the order of their rowids, so the rows that an insert
 // leaves to the corpus to place take their positions in the order they were inserted, and of a table without a rowid
 // in the order of its primary key.
-func rowsOf(ctx context.Context, db runner, tb *catalog.Table, k *cost.Counts) (_ [][]any, err error) {
-	names := columnNames(tb)
+func rowsOf(ctx context.Context, db runner, tb *catalog.Table, k *cost.Counts) ([][]any, error) {
 	text := "SELECT " + readColumns(tb) + " FROM " + quote(tb.Name)
 	without, err := column[bool](ctx, db, "SELECT wr FROM pragma_table_list WHERE schema = 'main' AND name = ?", nil, tb.Name)
 	if err != nil {
@@ -1425,32 +1434,11 @@ func rowsOf(ctx context.Context, db runner, tb *catalog.Table, k *cost.Counts) (
 		if err != nil {
 			return nil, err
 		}
-		cols := make([]string, len(key.names))
-		for i, name := range key.names {
-			cols[i] = quote(name)
-		}
-		text += key.order("", cols)
+		text += key.order("", quoted(key.names))
 	} else {
 		text += " ORDER BY rowid"
 	}
-	rows, err := db.QueryContext(ctx, text)
-	if err != nil {
-		return nil, &Error{codeInternal, err.Error()}
-	}
-	defer closed(&err, rows)
-	var out [][]any
-	for rows.Next() {
-		row, err := scan(rows, len(names))
-		if err != nil {
-			return nil, &Error{codeInternal, err.Error()}
-		}
-		k.Add(cost.DatabaseRowsRead, 1)
-		out = append(out, row)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, &Error{codeInternal, err.Error()}
-	}
-	return out, nil
+	return readRows(ctx, db, tb, text, nil, k)
 }
 
 // keyColumns are the names of the columns of the primary key of tb.
@@ -1962,7 +1950,17 @@ func takenKeys(ctx context.Context, db runner, table, name string, ch *changedRo
 }
 
 // column reads the one column of the rows of text.
-func column[T any](ctx context.Context, db runner, text string, k *cost.Counts, args ...any) (_ []T, err error) {
+func column[T any](ctx context.Context, db runner, text string, k *cost.Counts, args ...any) ([]T, error) {
+	return queryRows(ctx, db, text, args, k, func(rows *sql.Rows) (T, error) {
+		var v T
+		err := rows.Scan(&v)
+		return v, err
+	})
+}
+
+// queryRows runs the query text with args and returns what read takes from each of its rows, each counted as a row read
+// from the database.
+func queryRows[T any](ctx context.Context, db runner, text string, args []any, k *cost.Counts, read func(*sql.Rows) (T, error)) (_ []T, err error) {
 	rows, err := db.QueryContext(ctx, text, args...)
 	if err != nil {
 		return nil, &Error{codeInternal, err.Error()}
@@ -1970,8 +1968,8 @@ func column[T any](ctx context.Context, db runner, text string, k *cost.Counts, 
 	defer closed(&err, rows)
 	var out []T
 	for rows.Next() {
-		var v T
-		if err := rows.Scan(&v); err != nil {
+		v, err := read(rows)
+		if err != nil {
 			return nil, &Error{codeInternal, err.Error()}
 		}
 		k.Add(cost.DatabaseRowsRead, 1)

@@ -564,23 +564,15 @@ func (c *Corpus) remove(stage string, kind Kind) error {
 	return nil
 }
 
-// Recover runs the recovery of spec 40, opening a corpus, under l. It removes the pending records of ended lock
-// holders and the databases of ended openings (removeEndedDatabases); then the one stage of `.flowmark/tx/` is collected when it holds a commit record, completed when it holds a
-// prepare record, and discarded otherwise. A target whose current hash matches neither recorded hash refuses with
-// *RecoveryRefusal and leaves the stage. A second stage, or an entry that is no stage, refuses opening. Recover is
-// idempotent.
 // Staged reports whether the folder of the stages holds an entry: a commit in progress, or one a process left, which
 // the recovery completes or discards under the lock. A read without the lock answers from the corpus it last read only
 // when no stage is present (spec 40 Reads), so the folder is read and nothing in it is judged here.
 func (c *Corpus) Staged() (bool, error) {
-	info, err := c.lstat(txRel)
-	if err != nil {
-		return false, fmt.Errorf("journal: %w", err)
+	present, folder, err := c.stageFolder()
+	if err != nil || !present {
+		return false, err
 	}
-	if info == nil {
-		return false, nil
-	}
-	if !info.IsDir() {
+	if !folder {
 		// The recovery refuses it under the lock, so the read takes the lock to report it.
 		return true, nil
 	}
@@ -600,14 +592,11 @@ func (c *Corpus) Staged() (bool, error) {
 // Reads). A stage before its prepare record has written no target. An entry that is no stage, or a file in the folder's
 // place, is reported too: the recovery judges it under the lock.
 func (c *Corpus) Prepared() (bool, error) {
-	info, err := c.lstat(txRel)
-	if err != nil {
-		return false, fmt.Errorf("journal: %w", err)
+	present, folder, err := c.stageFolder()
+	if err != nil || !present {
+		return false, err
 	}
-	if info == nil {
-		return false, nil
-	}
-	if !info.IsDir() {
+	if !folder {
 		return true, nil
 	}
 	entries, err := os.ReadDir(c.txDir())
@@ -631,6 +620,18 @@ func (c *Corpus) Prepared() (bool, error) {
 	return false, nil
 }
 
+// stageFolder reads the place of the folder of the stages: whether an entry is there, and whether it is a folder.
+func (c *Corpus) stageFolder() (present, folder bool, err error) {
+	info, err := c.lstat(txRel)
+	if err != nil {
+		return false, false, fmt.Errorf("journal: %w", err)
+	}
+	if info == nil {
+		return false, false, nil
+	}
+	return true, info.IsDir(), nil
+}
+
 // ignoreEOF is err without the io.EOF of a folder read to its end.
 func ignoreEOF(err error) error {
 	if errors.Is(err, io.EOF) {
@@ -639,6 +640,11 @@ func ignoreEOF(err error) error {
 	return err
 }
 
+// Recover runs the recovery of spec 40, opening a corpus, under l. It removes the pending records of ended lock
+// holders and the databases of ended openings (removeEndedDatabases); then the one stage of `.flowmark/tx/` is collected when it holds a commit record, completed when it holds a
+// prepare record, and discarded otherwise. A target whose current hash matches neither recorded hash refuses with
+// *RecoveryRefusal and leaves the stage. A second stage, or an entry that is no stage, refuses opening. Recover is
+// idempotent.
 func (c *Corpus) Recover(l *Lock) error {
 	if err := c.checkHeld(l); err != nil {
 		return err

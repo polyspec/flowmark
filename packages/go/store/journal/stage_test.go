@@ -345,9 +345,7 @@ func TestStaged(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			root := t.TempDir()
-			tc.plant(t, root)
-			c, _ := newCorpus(t, root)
+			c, _ := plantedCorpus(t, tc.plant)
 			got, err := c.Staged()
 			if err != nil {
 				t.Fatal(err)

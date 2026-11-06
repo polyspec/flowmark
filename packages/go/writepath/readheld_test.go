@@ -5,7 +5,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"reflect"
 	"testing"
 
 	"github.com/polyspec/flowmark/packages/go/internal/corpustest"
@@ -26,26 +25,38 @@ func (f *fixture) fromDisk() *irexec.Corpus {
 // committedIs requires the corpus Committed returns to s to be want.
 func committedIs(t *testing.T, s *Session, want *irexec.Corpus, step string) {
 	t.Helper()
-	got, err := s.Committed(context.Background())
-	if err != nil {
-		t.Fatalf("%s: %v", step, err)
-	}
-	if d := got.Differs(want); len(d) != 0 {
-		t.Fatalf("%s: the read differs at %v", step, d)
-	}
+	committedAs(t, s, func() *irexec.Corpus { return want }, step)
 }
 
 // recoveredIs requires the corpus Committed returns to s to be the one the disk holds after it, which its recovery may
 // have changed.
 func recoveredIs(t *testing.T, s *Session, f *fixture, step string) {
 	t.Helper()
+	committedAs(t, s, f.fromDisk, step)
+}
+
+// committedAs requires the corpus Committed returns to s to be the corpus want returns after it.
+func committedAs(t *testing.T, s *Session, want func() *irexec.Corpus, step string) {
+	t.Helper()
 	got, err := s.Committed(context.Background())
 	if err != nil {
 		t.Fatalf("%s: %v", step, err)
 	}
-	if d := got.Differs(f.fromDisk()); len(d) != 0 {
+	if d := got.Differs(want()); len(d) != 0 {
 		t.Fatalf("%s: the read differs at %v", step, d)
 	}
+}
+
+// heldReader is a corpus written by one fixture and read by a second over its root, a session of the reader, and the
+// corpus of its first read.
+func heldReader(t *testing.T) (writer, reader *fixture, rs *Session, before *irexec.Corpus) {
+	t.Helper()
+	writer = baseFixture(t)
+	reader = openFixture(t, writer.root)
+	rs = reader.session("reader")
+	before = reader.fromDisk()
+	committedIs(t, rs, before, "the first read")
+	return writer, reader, rs, before
 }
 
 // TestReadHeld pins the read of a corpus whose lock another holds (spec 40 Reads): without the lock it reads what that
@@ -80,11 +91,7 @@ func TestReadHeld(t *testing.T) {
 		reader.wantRead()
 	})
 	t.Run("40#sql-statements: a prepare record present answers the corpus last read", func(t *testing.T) {
-		writer := baseFixture(t)
-		reader := openFixture(t, writer.root)
-		rs := reader.session("reader")
-		before := reader.fromDisk()
-		committedIs(t, rs, before, "the first read")
+		writer, reader, rs, before := heldReader(t)
 		update(t, writer.session("writer"), writer, "Committed under a stage")
 		holder := writer.begun(t, "holder")
 		stage := filepath.Join(writer.root, ".flowmark", "tx", "0123456789abcdef0123456789abcdef")
@@ -99,11 +106,7 @@ func TestReadHeld(t *testing.T) {
 		must(t, holder.Rollback())
 	})
 	t.Run("40#sql-statements: a commit during the read answers the corpus last read, and the next read builds it again", func(t *testing.T) {
-		writer := baseFixture(t)
-		reader := openFixture(t, writer.root)
-		rs := reader.session("reader")
-		before := reader.fromDisk()
-		committedIs(t, rs, before, "the first read")
+		writer, reader, rs, before := heldReader(t)
 		holder := writer.begun(t, "holder")
 		update(t, holder, writer, "Committed during the read")
 		// A file written again with its own bytes is a notification that changes nothing, so the read is one without the
@@ -166,13 +169,6 @@ func TestReadRecoversPrepared(t *testing.T) {
 		if staged, err := reader.j.Staged(); err != nil || staged {
 			t.Fatalf("after the read the corpus is staged %v, %v; want no stage", staged, err)
 		}
-		wantSnap := before
-		if cp.new {
-			wantSnap = after
-		}
-		if got := snapshot(t, f.root); !reflect.DeepEqual(got, wantSnap) {
-			t.Fatalf("corpus = %v, want %v", got, wantSnap)
-		}
-		f.clean()
+		wantCrashed(t, f, cp.new, before, after)
 	})
 }

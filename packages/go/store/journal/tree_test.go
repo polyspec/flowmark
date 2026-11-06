@@ -99,6 +99,18 @@ func reads(t *testing.T, rec *recorder, root string) []string {
 	return out
 }
 
+// readTree is a scripted tree of files that has read every folder and file of all once, the first read of each, and
+// its watch, its recorder, emptied of those reads, and its root.
+func readTree(t *testing.T, files map[string]string, all []string) (*Tree, *scriptedWatch, *recorder, string) {
+	t.Helper()
+	tr, w, rec, root := scriptedTree(t, files)
+	readAll(t, tr, all...)
+	if got := reads(t, rec, root); len(got) != len(all) {
+		t.Fatalf("the first read read %v", got)
+	}
+	return tr, w, rec, root
+}
+
 // readAll reads the folders and files of paths through the tree.
 func readAll(t *testing.T, tr *Tree, paths ...string) {
 	t.Helper()
@@ -144,11 +156,7 @@ func TestTreeKeepsWhatItRead(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			tr, w, rec, root := scriptedTree(t, files)
-			readAll(t, tr, all...)
-			if got := reads(t, rec, root); len(got) != len(all) {
-				t.Fatalf("the first read read %v", got)
-			}
+			tr, w, rec, root := readTree(t, files, all)
 			readAll(t, tr, all...)
 			if got := reads(t, rec, root); len(got) != 0 {
 				t.Fatalf("a second read read %v from the disk", got)
@@ -463,9 +471,7 @@ func TestTreeQuiet(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			tr, w, rec, root := scriptedTree(t, files)
-			readAll(t, tr, all...)
-			reads(t, rec, root)
+			tr, w, rec, root := readTree(t, files, all)
 			w.next, w.drainErr = c.n, c.err
 			if got := tr.Quiet(); got != c.quiet {
 				t.Fatalf("Quiet = %v, want %v", got, c.quiet)

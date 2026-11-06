@@ -604,11 +604,9 @@ func mergeRows(ctx context.Context, w runner, c *irexec.Corpus, tb *catalog.Tabl
 		if err != nil {
 			return err
 		}
-		args := make([]any, len(row))
-		for i, v := range row {
-			if args[i], err = stored(tb.Columns[i].Type, v); err != nil {
-				return err
-			}
+		args, err := storedArgs(tb, row)
+		if err != nil {
+			return err
 		}
 		res, err := w.ExecContext(ctx, update, append(args, keyArgs...)...)
 		if err != nil {

@@ -3,6 +3,7 @@ package statement
 import (
 	"cmp"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -320,31 +321,26 @@ func rowsAt(ctx context.Context, db runner, tb *catalog.Table, t *changedRows, k
 		text += " WHERE rowid IN (SELECT value FROM json_each(?)) ORDER BY rowid"
 		args = []any{t.rowidList()}
 	} else {
-		cols := make([]string, len(t.key.names))
-		for i, name := range t.key.names {
-			cols[i] = quote(name)
-		}
+		cols := quoted(t.key.names)
 		text += " WHERE (" + strings.Join(cols, ", ") + ") IN (SELECT " + keyColumnList(len(cols)) + " FROM " + keys + ")" +
 			t.key.order("", cols)
 	}
-	rows, err := db.QueryContext(ctx, text, args...)
-	if err != nil {
-		return nil, &Error{codeInternal, err.Error()}
+	return readRows(ctx, db, tb, text, args, k)
+}
+
+// quoted are the names, each quoted as an identifier.
+func quoted(names []string) []string {
+	out := make([]string, len(names))
+	for i, name := range names {
+		out[i] = quote(name)
 	}
-	defer closed(&err, rows)
-	var out [][]any
-	for rows.Next() {
-		row, err := scan(rows, len(tb.Columns))
-		if err != nil {
-			return nil, &Error{codeInternal, err.Error()}
-		}
-		k.Add(cost.DatabaseRowsRead, 1)
-		out = append(out, row)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, &Error{codeInternal, err.Error()}
-	}
-	return out, nil
+	return out
+}
+
+// readRows runs the query text of the columns readColumns names of tb with args and returns its rows, each counted as a
+// row read from the database.
+func readRows(ctx context.Context, db runner, tb *catalog.Table, text string, args []any, k *cost.Counts) ([][]any, error) {
+	return queryRows(ctx, db, text, args, k, func(rows *sql.Rows) ([]any, error) { return scan(rows, len(tb.Columns)) })
 }
 
 // keyColumnList is the columns k1, ..., kn of a table of keys.

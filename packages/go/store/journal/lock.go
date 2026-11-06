@@ -444,41 +444,10 @@ func (c *Corpus) Unlock(holder string) (Holder, error) {
 // is a waiter's and stays; a record that does not parse stays, since its writer may still be writing it; a claim of
 // an unlock is never touched.
 func (c *Corpus) removeEndedPendings() error {
-	entries, err := os.ReadDir(c.abs(".flowmark"))
-	if errors.Is(err, fs.ErrNotExist) {
-		return nil
-	}
-	if err != nil {
-		return fmt.Errorf("journal: %w", err)
-	}
-	for _, e := range entries {
-		if !pendingName.MatchString(e.Name()) {
-			continue
-		}
-		p := c.abs(".flowmark/" + e.Name())
-		if e.Type()&fs.ModeSymlink != 0 {
-			return fmt.Errorf("journal: %w", symlinkError(p))
-		}
-		data, _, err := readShared(p)
-		if errors.Is(err, fs.ErrNotExist) {
-			continue
-		}
-		if err != nil {
+	return c.removeEnded(".flowmark", pendingName, func(_, path string) error {
+		if err := removeAbsent(path); err != nil {
 			return fmt.Errorf("journal: %w", err)
 		}
-		h, err := parseRecord(data)
-		if err != nil {
-			continue
-		}
-		state, err := c.judge(h)
-		if err != nil {
-			return err
-		}
-		if state == HolderEnded {
-			if err := removeAbsent(p); err != nil {
-				return fmt.Errorf("journal: %w", err)
-			}
-		}
-	}
-	return nil
+		return nil
+	})
 }
