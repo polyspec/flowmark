@@ -72,13 +72,22 @@ func fileIdentity(*os.File) (fileID, error) { return fileID{}, nil }
 // moveDurable moves src to dst with MoveFileEx and MOVEFILE_WRITE_THROUGH, which returns once the move is on disk;
 // Windows has no folder flush, so this is how a name is made durable there.
 func moveDurable(src, dst string) error {
-	return moveFileEx(src, dst, windows.MOVEFILE_REPLACE_EXISTING|windows.MOVEFILE_WRITE_THROUGH)
+	return moveFileEx(src, dst, windows.MOVEFILE_REPLACE_EXISTING|writeThrough())
 }
 
 // moveFolderDurable moves a folder to a name that does not exist; MOVEFILE_REPLACE_EXISTING cannot be used for a
 // folder.
 func moveFolderDurable(src, dst string) error {
-	return moveFileEx(src, dst, windows.MOVEFILE_WRITE_THROUGH)
+	return moveFileEx(src, dst, writeThrough())
+}
+
+// writeThrough is MOVEFILE_WRITE_THROUGH, unless this process does not wait for its writes to reach the disk
+// (SetSynchronous), as syncDir and writeSynced do not on the other platforms.
+func writeThrough() uint32 {
+	if asynchronous.Load() {
+		return 0
+	}
+	return windows.MOVEFILE_WRITE_THROUGH
 }
 
 func moveFileEx(src, dst string, flags uint32) error {

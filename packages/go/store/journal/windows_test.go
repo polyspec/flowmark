@@ -192,3 +192,17 @@ func TestAcquireAfterPendingRelease(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// A move waits for the disk only while the process waits for its writes: `flowmark serve --synchronous off` gives up
+// MOVEFILE_WRITE_THROUGH as it gives up the flush of a file.
+func TestWriteThroughFollowsSynchronous(t *testing.T) {
+	defer SetSynchronous(!asynchronous.Load())
+	SetSynchronous(true)
+	if got := writeThrough(); got != windows.MOVEFILE_WRITE_THROUGH {
+		t.Fatalf("writeThrough while synchronous = %#x, want MOVEFILE_WRITE_THROUGH", got)
+	}
+	SetSynchronous(false)
+	if got := writeThrough(); got != 0 {
+		t.Fatalf("writeThrough while asynchronous = %#x, want 0", got)
+	}
+}
