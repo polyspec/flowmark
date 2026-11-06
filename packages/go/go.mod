@@ -3,6 +3,7 @@ module github.com/polyspec/flowmark/packages/go
 go 1.27.3
 
 require (
+	github.com/min-0-max/sqlite v1.61.0-polyspec.5
 	github.com/polyspec/orm/packages/go v0.0.21
 	golang.org/x/sys v0.49.0
 	golang.org/x/text v0.42.0
@@ -24,5 +25,3 @@ require (
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.12.1 // indirect
 )
-
-replace modernc.org/sqlite => github.com/min-0-max/sqlite v1.61.0-polyspec.3

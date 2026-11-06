@@ -12,14 +12,14 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/min-0-max/sqlite"
+	sqlite3 "github.com/min-0-max/sqlite/lib"
 	"github.com/polyspec/flowmark/packages/go/catalog"
 	"github.com/polyspec/flowmark/packages/go/internal/cost"
 	"github.com/polyspec/flowmark/packages/go/irexec"
 	"github.com/polyspec/flowmark/packages/go/store/journal"
 	"github.com/polyspec/flowmark/packages/go/writepath"
 	"github.com/polyspec/orm/packages/go/engine/dbspec"
-	"modernc.org/sqlite"
-	sqlite3 "modernc.org/sqlite/lib"
 )
 
 // runner is what a statement runs on: a connection of a database, a database of one connection, or a transaction.
@@ -110,13 +110,13 @@ func openDatabase(ctx context.Context, s *writepath.Session) (_ *database, err e
 	if file != nil {
 		common := []string{"journal_mode(WAL)", "synchronous(OFF)", "wal_autocheckpoint(" + strconv.Itoa(walCheckpoint) + ")"}
 		writer = databaseURI(file.Path, common...)
-		if d.readers, err = sql.Open("sqlite", databaseURI(file.Path, append(common, "query_only(1)")...)); err != nil {
+		if d.readers, err = sql.Open(sqlite.DriverName, databaseURI(file.Path, append(common, "query_only(1)")...)); err != nil {
 			return nil, &Error{codeInternal, err.Error()}
 		}
 		d.readers.SetMaxOpenConns(Readers)
 		d.readers.SetMaxIdleConns(Readers)
 	}
-	if d.pool, err = sql.Open("sqlite", writer); err != nil {
+	if d.pool, err = sql.Open(sqlite.DriverName, writer); err != nil {
 		return nil, &Error{codeInternal, err.Error()}
 	}
 	d.pool.SetMaxOpenConns(1)

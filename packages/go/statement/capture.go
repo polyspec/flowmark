@@ -13,11 +13,11 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/min-0-max/sqlite"
+	sqlite3 "github.com/min-0-max/sqlite/lib"
 	"github.com/polyspec/flowmark/packages/go/catalog"
 	"github.com/polyspec/flowmark/packages/go/internal/cost"
 	"github.com/polyspec/flowmark/packages/go/irexec"
-	"modernc.org/sqlite"
-	sqlite3 "modernc.org/sqlite/lib"
 )
 
 // capture records the rows a statement changes on the writer connection, from SQLite's pre-update hook (spec 40 SQL

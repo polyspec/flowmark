@@ -24,14 +24,14 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/min-0-max/sqlite"
+	sqlite3 "github.com/min-0-max/sqlite/lib"
 	"github.com/polyspec/flowmark/packages/go/catalog"
 	"github.com/polyspec/flowmark/packages/go/irexec"
 	"github.com/polyspec/flowmark/packages/go/store"
 	"github.com/polyspec/flowmark/packages/go/writepath"
 	"github.com/polyspec/orm/packages/go/engine/dbspec"
 	"github.com/polyspec/orm/packages/go/engine/ir"
-	"modernc.org/sqlite"
-	sqlite3 "modernc.org/sqlite/lib"
 )
 
 // Column is one column of a statement's result: its name and the type SQLite declares for it.
@@ -803,7 +803,7 @@ func argumentForm(t map[string]any) (any, error) {
 
 // materialize returns an in-memory SQLite database that holds the schema and the rows of the corpus.
 func materialize(ctx context.Context, c *irexec.Corpus) (*sql.DB, error) {
-	db, err := sql.Open("sqlite", memoryURI)
+	db, err := sql.Open(sqlite.DriverName, memoryURI)
 	if err != nil {
 		return nil, &Error{codeInternal, err.Error()}
 	}

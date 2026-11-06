@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/min-0-max/sqlite"
+
 	"github.com/polyspec/flowmark/packages/go/statement"
 )
 
@@ -102,7 +104,7 @@ func TestWriterFollowsTransaction(t *testing.T) {
 // the failure of its COMMIT, without its result code.
 func plainCommitFailure(t *testing.T, schema []string, text string) string {
 	t.Helper()
-	db, err := sql.Open("sqlite", ":memory:?_pragma=foreign_keys(1)")
+	db, err := sql.Open(sqlite.DriverName, ":memory:?_pragma=foreign_keys(1)")
 	if err != nil {
 		t.Fatal(err)
 	}

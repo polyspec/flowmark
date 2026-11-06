@@ -21,6 +21,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/min-0-max/sqlite"
 	"github.com/polyspec/flowmark/packages/go/catalog"
 	"github.com/polyspec/flowmark/packages/go/irexec"
 	"github.com/polyspec/flowmark/packages/go/store"
@@ -29,7 +30,6 @@ import (
 	"github.com/polyspec/orm/packages/go/engine/runtimemodel"
 	"github.com/polyspec/orm/packages/go/orm"
 	_ "github.com/polyspec/orm/packages/go/orm/sqlite"
-	_ "modernc.org/sqlite"
 )
 
 // equivalenceRoots are the store goldens whose catalogs hold no identity column.
@@ -142,7 +142,7 @@ func hostFirstDocs(t *testing.T) map[string]string {
 func apply(t *testing.T, c *irexec.Corpus, stmts []Statement) *sql.DB {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "export.sqlite")
-	db, err := sql.Open("sqlite", path)
+	db, err := sql.Open(sqlite.DriverName, path)
 	if err != nil {
 		t.Fatal(err)
 	}

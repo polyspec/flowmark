@@ -14,8 +14,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/min-0-max/sqlite" // the database that a schema statement of a corpus runs in
 	"github.com/polyspec/orm/packages/go/engine/dbspec"
-	_ "modernc.org/sqlite" // the database that a schema statement of a corpus runs in
 )
 
 // StatementsFile is the file of the schema statements a corpus took in SQL, relative to its root, a JSON array of their
@@ -114,7 +114,7 @@ func (l *loader) applyStatements(docs []*document, added []string) (_ *dbspec.Do
 		return nil, err
 	}
 	ctx := context.Background()
-	db, err := sql.Open("sqlite", ":memory:")
+	db, err := sql.Open(sqlite.DriverName, ":memory:")
 	if err != nil {
 		return nil, err
 	}
@@ -243,7 +243,7 @@ func autoincrementTables(ctx context.Context, db *sql.DB, names []string) (map[s
 // declaresAutoincrement reports whether the schema statement text of a table, run alone in a new database, makes SQLite
 // keep an AUTOINCREMENT counter for its table.
 func declaresAutoincrement(ctx context.Context, text string) (_ bool, err error) {
-	db, err := sql.Open("sqlite", ":memory:")
+	db, err := sql.Open(sqlite.DriverName, ":memory:")
 	if err != nil {
 		return false, err
 	}
