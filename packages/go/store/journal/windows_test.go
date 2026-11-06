@@ -143,7 +143,7 @@ func TestDeletePendingReadsRemoved(t *testing.T) {
 	if _, err := lstatFile(gone); !errors.Is(err, fs.ErrNotExist) {
 		t.Errorf("lstatFile of a delete-pending name = %v, want fs.ErrNotExist", err)
 	}
-	if err := writeSynced(gone, []byte("y"), os.O_EXCL); !errors.Is(err, fs.ErrExist) {
+	if err := writeSynced(nil, gone, []byte("y"), os.O_EXCL); !errors.Is(err, fs.ErrExist) {
 		t.Errorf("an exclusive create of a delete-pending name = %v, want fs.ErrExist", err)
 	}
 	if err := linkFile(other, gone); !errors.Is(err, fs.ErrExist) {

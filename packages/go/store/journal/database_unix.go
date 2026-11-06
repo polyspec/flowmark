@@ -7,14 +7,16 @@ import (
 	"os"
 	"path/filepath"
 	"syscall"
+
+	"github.com/polyspec/flowmark/packages/go/internal/cost"
 )
 
 // mkdirPrivate creates the folder p with access for its owner alone, and syncs its parent.
-func mkdirPrivate(p string) error {
+func mkdirPrivate(k *cost.Counts, p string) error {
 	if err := os.Mkdir(p, 0o700); err != nil {
 		return err
 	}
-	return syncDir(filepath.Dir(p))
+	return syncDir(k, filepath.Dir(p))
 }
 
 // checkPrivate refuses the folder p unless this process's user owns it and no one else has access to it.

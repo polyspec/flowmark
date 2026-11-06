@@ -15,6 +15,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/polyspec/flowmark/packages/go/internal/cost"
 )
 
 // txRel is the journal folder of spec 40: a commit stages in `.flowmark/tx/<id>/`, and it holds at most one stage.
@@ -173,12 +175,12 @@ func (c *Corpus) currentHash(rel string) (string, error) {
 }
 
 // writeDurable writes a stage file to its partial name, syncs it and renames it into place.
-func writeDurable(dir, name string, data []byte) error {
+func writeDurable(k *cost.Counts, dir, name string, data []byte) error {
 	part := filepath.Join(dir, name+partSuffix)
-	if err := writeSynced(part, data, os.O_TRUNC); err != nil {
+	if err := writeSynced(k, part, data, os.O_TRUNC); err != nil {
 		return fmt.Errorf("journal: writing %s: %w", name, err)
 	}
-	if err := moveDurable(part, filepath.Join(dir, name)); err != nil {
+	if err := moveDurable(k, part, filepath.Join(dir, name)); err != nil {
 		return fmt.Errorf("journal: placing %s: %w", name, err)
 	}
 	return nil
@@ -252,7 +254,7 @@ func (c *Corpus) commit(l *Lock, changes []Change, prepared *bool) error {
 		return fmt.Errorf("journal: %s holds an interrupted commit; recover the corpus before a new commit", c.txDir())
 	}
 	stage := filepath.Join(c.txDir(), randomHex(16))
-	if err := mkdirDurable(stage); err != nil {
+	if err := mkdirDurable(c.cost, stage); err != nil {
 		return fmt.Errorf("journal: %w", err)
 	}
 	// Step 3: each post-image once, and the copy that is the source of each rename.
@@ -263,11 +265,11 @@ func (c *Corpus) commit(l *Lock, changes []Change, prepared *bool) error {
 		}
 		if !posts[r.Post] {
 			posts[r.Post] = true
-			if err := writeDurable(stage, r.Post, blobs[r.Post]); err != nil {
+			if err := writeDurable(c.cost, stage, r.Post, blobs[r.Post]); err != nil {
 				return err
 			}
 		}
-		if err := writeDurable(stage, copyName(n, r.Post), blobs[r.Post]); err != nil {
+		if err := writeDurable(c.cost, stage, copyName(n, r.Post), blobs[r.Post]); err != nil {
 			return err
 		}
 	}
@@ -277,7 +279,7 @@ func (c *Corpus) commit(l *Lock, changes []Change, prepared *bool) error {
 	// Step 4: the pre-images not already written as a post-image of the same bytes.
 	for _, h := range sortedKeys(blobs) {
 		if !posts[h] {
-			if err := writeDurable(stage, h, blobs[h]); err != nil {
+			if err := writeDurable(c.cost, stage, h, blobs[h]); err != nil {
 				return err
 			}
 		}
@@ -290,7 +292,7 @@ func (c *Corpus) commit(l *Lock, changes []Change, prepared *bool) error {
 	if err != nil {
 		return fmt.Errorf("journal: %w", err)
 	}
-	if err := writeDurable(stage, prepareName, append(record, '\n')); err != nil {
+	if err := writeDurable(c.cost, stage, prepareName, append(record, '\n')); err != nil {
 		// A record renamed into place before its folder sync failed is in the stage, and recovery completes it.
 		exists, serr := regularExists(filepath.Join(stage, prepareName))
 		*prepared = exists
@@ -369,14 +371,14 @@ func (c *Corpus) complete(stage string, renames []rename) error {
 		target := c.abs(r.Path)
 		var err error
 		if r.Post == "" {
-			err = moveDurable(target, filepath.Join(stage, deletedName(n)))
+			err = moveDurable(c.cost, target, filepath.Join(stage, deletedName(n)))
 		} else {
 			if r.Pre == "" {
 				if err := c.makeFolders(stage, n, path.Dir(r.Path)); err != nil {
 					return err
 				}
 			}
-			err = moveDurable(filepath.Join(stage, copyName(n, r.Post)), target)
+			err = moveDurable(c.cost, filepath.Join(stage, copyName(n, r.Post)), target)
 		}
 		if err != nil {
 			return fmt.Errorf("journal: applying %s: %w", r.Path, err)
@@ -397,7 +399,7 @@ func (c *Corpus) complete(stage string, renames []rename) error {
 	if err != nil {
 		return fmt.Errorf("journal: %w", err)
 	}
-	if err := writeDurable(stage, commitName, append(record, '\n')); err != nil {
+	if err := writeDurable(c.cost, stage, commitName, append(record, '\n')); err != nil {
 		return err
 	}
 	c.obs.Observe(Event{Kind: Applied, Path: stage})
@@ -470,7 +472,7 @@ func (c *Corpus) ensureCopy(stage string, n int, r rename) error {
 		if got := sum(data); got != r.Post {
 			return fmt.Errorf("journal: the stage blob %s of %s holds bytes of hash %s; the stage %s is damaged and nothing of it is applied", r.Post, r.Path, got, stage)
 		}
-		if err := writeDurable(stage, copyName(n, r.Post), data); err != nil {
+		if err := writeDurable(c.cost, stage, copyName(n, r.Post), data); err != nil {
 			return err
 		}
 	} else if err != nil {
@@ -521,10 +523,10 @@ func (c *Corpus) makeFolders(stage string, n int, dir string) error {
 			} else if err != nil {
 				return fmt.Errorf("journal: %w", err)
 			}
-			if err := moveFolderDurable(staged, cur); err != nil {
+			if err := moveFolderDurable(c.cost, staged, cur); err != nil {
 				return fmt.Errorf("journal: creating the folder %s: %w", cur, err)
 			}
-		} else if err := mkdirDurable(cur); err != nil {
+		} else if err := mkdirDurable(c.cost, cur); err != nil {
 			return fmt.Errorf("journal: creating the folder %s: %w", cur, err)
 		}
 		made = true
@@ -541,7 +543,7 @@ func (c *Corpus) collect(stage string) error {
 	_, err := os.Lstat(filepath.Join(stage, prepareName))
 	switch {
 	case err == nil:
-		if err := moveDurable(filepath.Join(stage, prepareName), filepath.Join(stage, collectedName)); err != nil {
+		if err := moveDurable(c.cost, filepath.Join(stage, prepareName), filepath.Join(stage, collectedName)); err != nil {
 			return fmt.Errorf("journal: %w", err)
 		}
 	case !errors.Is(err, fs.ErrNotExist):
@@ -557,7 +559,7 @@ func (c *Corpus) remove(stage string, kind Kind) error {
 	if err := os.RemoveAll(stage); err != nil {
 		return fmt.Errorf("journal: removing the stage: %w", err)
 	}
-	if err := syncRemoved(c.txDir()); err != nil {
+	if err := syncRemoved(c.cost, c.txDir()); err != nil {
 		return fmt.Errorf("journal: %w", err)
 	}
 	c.obs.Observe(Event{Kind: kind, Path: stage})

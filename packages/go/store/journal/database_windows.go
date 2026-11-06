@@ -10,6 +10,8 @@ import (
 	"unsafe"
 
 	"golang.org/x/sys/windows"
+
+	"github.com/polyspec/flowmark/packages/go/internal/cost"
 )
 
 // currentUser returns the security identifier of this process's user.
@@ -24,7 +26,7 @@ func currentUser() (*windows.SID, error) {
 // mkdirPrivate creates the folder p with a protected access list that grants this process's user alone, inherited by
 // what is created in it. Windows cannot flush a folder; the folder holds only the databases, which a crash leaves for
 // the recovery.
-func mkdirPrivate(p string) error {
+func mkdirPrivate(_ *cost.Counts, p string) error {
 	sid, err := currentUser()
 	if err != nil {
 		return err

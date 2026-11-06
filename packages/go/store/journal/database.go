@@ -41,7 +41,7 @@ func (c *Corpus) NewDatabase() (*Database, error) {
 		return nil, fmt.Errorf("journal: the folder of the databases: %w", err)
 	}
 	dir := c.abs(DatabaseDir)
-	if err := mkdirPrivate(dir); err != nil && !errors.Is(err, fs.ErrExist) {
+	if err := mkdirPrivate(c.cost, dir); err != nil && !errors.Is(err, fs.ErrExist) {
 		return nil, fmt.Errorf("journal: the folder of the databases: %w", err)
 	}
 	if err := c.checkDatabaseDir(); err != nil {
@@ -54,7 +54,7 @@ func (c *Corpus) NewDatabase() (*Database, error) {
 	if err := c.checkAbsent(d.token); err != nil {
 		return nil, err
 	}
-	if err := writeSynced(c.abs(DatabaseDir+"/"+d.token+".holder"), self.record(), os.O_EXCL); err != nil {
+	if err := writeSynced(c.cost, c.abs(DatabaseDir+"/"+d.token+".holder"), self.record(), os.O_EXCL); err != nil {
 		return nil, fmt.Errorf("journal: the holder record of a database: %w", err)
 	}
 	return d, nil

@@ -1,6 +1,6 @@
 // Package cost counts the work of the engine's operations: the files a read reads from the disk, visits and parses,
 // the rows it places and indexes, the rows a write copies, the files a comparison compares, the stored rows a request
-// forms, the rows a statement reads and writes in its SQLite database, and the acquisitions of the corpus lock (plan,
+// forms, the rows a statement reads and writes in its SQLite database, the acquisitions of the corpus lock, and the flushes that wait for the disk (plan,
 // Ruling: an operation costs what it touches). An operation that costs what it touches counts the same on a corpus of any size; the counts are how a test
 // says so. A nil *Counts counts nothing.
 package cost
@@ -40,6 +40,9 @@ const (
 	DatabaseRowsWritten
 	// LocksTaken is an acquisition of the corpus lock: a lock record written and removed.
 	LocksTaken
+	// Flushes is a wait of the journal for the disk: the sync of a file or a folder, and on Windows a write-through
+	// move. A corpus that does not wait for its writes (`flowmark serve --synchronous off`) makes none.
+	Flushes
 	counters
 )
 
@@ -57,6 +60,7 @@ var names = [counters]string{
 	DatabaseRowsRead:    "database-rows-read",
 	DatabaseRowsWritten: "database-rows-written",
 	LocksTaken:          "locks-taken",
+	Flushes:             "flushes",
 }
 
 // String is the name of the counter.

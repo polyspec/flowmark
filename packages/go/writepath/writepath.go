@@ -247,7 +247,7 @@ func Open(ctx context.Context, cat *catalog.Catalog, j *journal.Corpus, wait tim
 	if err != nil {
 		return nil, err
 	}
-	k := &cost.Counts{}
+	k := j.Cost()
 	tree, err := j.Tree(k)
 	if err != nil {
 		return nil, driverError("watching the corpus", err)

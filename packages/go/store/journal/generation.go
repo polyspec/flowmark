@@ -191,7 +191,7 @@ func (c *Corpus) publishGeneration(n uint64, renames []rename) error {
 	if err != nil {
 		return fmt.Errorf("journal: %w", err)
 	}
-	if err := writeDurable(c.abs(".flowmark"), "generation", append(data, '\n')); err != nil {
+	if err := writeDurable(c.cost, c.abs(".flowmark"), "generation", append(data, '\n')); err != nil {
 		return err
 	}
 	c.obs.Observe(Event{Kind: Generated, Path: c.abs(GenerationPath), Detail: strconv.FormatUint(n, 10)})

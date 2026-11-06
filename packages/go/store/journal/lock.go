@@ -11,6 +11,8 @@ import (
 	"regexp"
 	"sync"
 	"time"
+
+	"github.com/polyspec/flowmark/packages/go/internal/cost"
 )
 
 // LockPath is the lock file of every corpus, under its root (spec 40, the lock).
@@ -91,7 +93,7 @@ func readShared(p string) ([]byte, fileID, error) {
 }
 
 // writeSynced writes data to a file (flag adds os.O_EXCL or os.O_TRUNC) and syncs it before closing.
-func writeSynced(p string, data []byte, flag int) error {
+func writeSynced(k *cost.Counts, p string, data []byte, flag int) error {
 	f, err := openShared(p, os.O_WRONLY|os.O_CREATE|flag, 0o644)
 	if err != nil {
 		return err
@@ -99,6 +101,7 @@ func writeSynced(p string, data []byte, flag int) error {
 	_, werr := f.Write(data)
 	if werr == nil {
 		if !asynchronous.Load() {
+			k.Add(cost.Flushes, 1)
 			werr = f.Sync()
 		}
 	}
@@ -162,7 +165,7 @@ func (c *Corpus) Acquire(ctx context.Context, session string, wait time.Duration
 	}
 	a := &acquirer{c: c, self: self, record: self.record(), lock: c.abs(LockPath), wait: wait,
 		pending: c.abs(".flowmark/lock." + self.Acquisition + pendingSuffix)}
-	if err := writeSynced(a.pending, a.record, os.O_EXCL); err != nil {
+	if err := writeSynced(a.c.cost, a.pending, a.record, os.O_EXCL); err != nil {
 		return nil, errors.Join(fmt.Errorf("journal: the pending lock record: %w", err), removeAbsent(a.pending))
 	}
 	defer func() {

@@ -10,6 +10,8 @@ import (
 	"runtime"
 
 	"golang.org/x/sys/windows"
+
+	"github.com/polyspec/flowmark/packages/go/internal/cost"
 )
 
 // stageFoldersDefault: Windows has no folder flush, so a created folder is made in the stage and moved into place
@@ -71,14 +73,14 @@ func fileIdentity(*os.File) (fileID, error) { return fileID{}, nil }
 
 // moveDurable moves src to dst with MoveFileEx and MOVEFILE_WRITE_THROUGH, which returns once the move is on disk;
 // Windows has no folder flush, so this is how a name is made durable there.
-func moveDurable(src, dst string) error {
-	return moveFileEx(src, dst, windows.MOVEFILE_REPLACE_EXISTING|writeThrough())
+func moveDurable(k *cost.Counts, src, dst string) error {
+	return moveFileEx(k, src, dst, windows.MOVEFILE_REPLACE_EXISTING|writeThrough())
 }
 
 // moveFolderDurable moves a folder to a name that does not exist; MOVEFILE_REPLACE_EXISTING cannot be used for a
 // folder.
-func moveFolderDurable(src, dst string) error {
-	return moveFileEx(src, dst, writeThrough())
+func moveFolderDurable(k *cost.Counts, src, dst string) error {
+	return moveFileEx(k, src, dst, writeThrough())
 }
 
 // writeThrough is MOVEFILE_WRITE_THROUGH, unless this process does not wait for its writes to reach the disk
@@ -90,7 +92,8 @@ func writeThrough() uint32 {
 	return windows.MOVEFILE_WRITE_THROUGH
 }
 
-func moveFileEx(src, dst string, flags uint32) error {
+// moveFileEx moves src to dst; a write-through move is a flush, which k counts.
+func moveFileEx(k *cost.Counts, src, dst string, flags uint32) error {
 	from, err := windows.UTF16PtrFromString(src)
 	if err != nil {
 		return err
@@ -98,6 +101,9 @@ func moveFileEx(src, dst string, flags uint32) error {
 	to, err := windows.UTF16PtrFromString(dst)
 	if err != nil {
 		return err
+	}
+	if flags&windows.MOVEFILE_WRITE_THROUGH != 0 {
+		k.Add(cost.Flushes, 1)
 	}
 	if err := windows.MoveFileEx(from, to, flags); err != nil {
 		return &os.LinkError{Op: "move", Old: src, New: dst, Err: err}
@@ -108,11 +114,11 @@ func moveFileEx(src, dst string, flags uint32) error {
 // mkdirDurable creates one of the journal's own folders (`.flowmark/`, `.flowmark/tx/`, a stage). Windows cannot
 // flush a folder; these folders hold only files moved in with write-through moves, and a corpus folder is created in
 // the stage and moved into place instead.
-func mkdirDurable(p string) error { return os.Mkdir(p, 0o755) }
+func mkdirDurable(_ *cost.Counts, p string) error { return os.Mkdir(p, 0o755) }
 
 // syncRemoved does nothing on Windows, which has no folder flush. It follows only the removal of a collected or
 // discarded stage, which a power loss may bring back; recovery then collects or discards it again.
-func syncRemoved(string) error { return nil }
+func syncRemoved(*cost.Counts, string) error { return nil }
 
 // deviceOf returns the volume serial number of a path, from GetFileInformationByHandle.
 func deviceOf(p string) (uint64, error) {

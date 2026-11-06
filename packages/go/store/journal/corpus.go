@@ -17,6 +17,8 @@ import (
 	"path/filepath"
 	"strings"
 	"sync/atomic"
+
+	"github.com/polyspec/flowmark/packages/go/internal/cost"
 )
 
 // Corpus is the declared root of one corpus and the observer of its lock and journal events.
@@ -34,7 +36,12 @@ type Corpus struct {
 	// holding counts the locks of this corpus that are held: a read of a corpus whose own session holds the lock knows
 	// that no other process can commit.
 	holding atomic.Int32
+	// cost counts the work of the corpus's operations; the journal adds each flush it asks of the disk.
+	cost *cost.Counts
 }
+
+// Cost returns the counts of the corpus's operations, which the write path above the journal adds to as well.
+func (c *Corpus) Cost() *cost.Counts { return c.cost }
 
 // Holding reports whether a lock of this corpus is held, by one of its own sessions.
 func (c *Corpus) Holding() bool { return c.holding.Load() > 0 }
@@ -66,7 +73,7 @@ func New(root string, obs Observer) (*Corpus, error) {
 	if !info.IsDir() {
 		return nil, fmt.Errorf("journal: the corpus root %s is not a folder", root)
 	}
-	c := &Corpus{root: root, obs: obs, stageFolders: stageFoldersDefault}
+	c := &Corpus{root: root, obs: obs, stageFolders: stageFoldersDefault, cost: &cost.Counts{}}
 	c.newWatch = watchFactory(c)
 	return c, nil
 }
@@ -169,7 +176,7 @@ func (c *Corpus) ensureDir(rel string) error {
 		cur = filepath.Join(cur, part)
 		// The folder is made first and judged after: another process of the corpus may make it between a look and
 		// the making, and a name that exists now is judged as one that existed before.
-		if err := mkdirDurable(cur); err != nil && !errors.Is(err, fs.ErrExist) {
+		if err := mkdirDurable(c.cost, cur); err != nil && !errors.Is(err, fs.ErrExist) {
 			return err
 		}
 		fi, err := os.Lstat(cur)

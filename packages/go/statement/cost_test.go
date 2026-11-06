@@ -6,6 +6,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -361,6 +362,9 @@ func TestCost(t *testing.T) {
 			if quiet := c == (cost.Snapshot{}); quiet != quietCost[op.name] {
 				t.Errorf("%s at %d rows counts %s, and it counts nothing only when nothing changed before it", op.name, rows, describe(c))
 			}
+			if got, want := c.Get(cost.Flushes), flushCost(op.name); got != want {
+				t.Errorf("%s at %d rows makes %d flushes, want %d", op.name, rows, got, want)
+			}
 			for _, k := range logCost[op.name] {
 				if bound := logFactor * math.Log2(float64(costDocuments(rows))); float64(c.Get(k)) > bound {
 					t.Errorf("%s at %d rows counts %d %s, more than %.0f, logFactor times the logarithm of its documents", op.name, rows, c.Get(k), k, bound)
@@ -374,6 +378,28 @@ func TestCost(t *testing.T) {
 			}
 		}
 	}
+}
+
+// lockFlushes is the flushes of an acquisition of the lock, and commitFlushes those of a commit that writes one file of a
+// folder that exists, on Linux and macOS and on Windows (T55; plan, Ruling: a commit waits for the disk as few times as
+// its atomicity needs). TestFlushes of the journal pins the flushes of every kind of commit.
+var lockFlushes, commitFlushes = map[string]int64{"windows": 1}, map[string]int64{"windows": 14}
+
+// flushCost is the flushes of the operation op: a write is an acquisition and a commit of one file; an operation that
+// takes the lock for its read, after an external edit or to refresh its database, is an acquisition; a read of a
+// corpus nothing changed makes none.
+func flushCost(op string) int64 {
+	lock, commit := int64(1), int64(17)
+	if n, ok := lockFlushes[runtime.GOOS]; ok {
+		lock, commit = n, commitFlushes[runtime.GOOS]
+	}
+	switch {
+	case quietCost[op]:
+		return 0
+	case op == "external edit", op == "face read note", op == "refused write":
+		return lock
+	}
+	return lock + commit
 }
 
 // describe writes the counts of c that are not zero.
