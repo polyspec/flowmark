@@ -749,8 +749,9 @@ and MySQL and PostgreSQL compare a `datetime(p)` column with `NOW(6)` at six dig
   the same at the three sizes: a write statement of one row reads at most 6 files, parses at most 2 documents, places at
   most 204 rows, indexes at most 455, copies at most 102, scans at most 306, stores at most 204 and reads at most 2 rows
   of the database, under one lock; a refused write stops before it stores a row; an external edit of 100 rows writes
-  those 100 rows to the database. The documents compared grow with the logarithm of the documents, 6, 11 and 19 for a
-  write of a note at the three sizes. On macOS (Apple M3 Pro, `T44`), on an idle machine, at 1,000, 10,000 and 100,000
+  those 100 rows to the database. The documents compared grow with the logarithm of the documents,
+  within eight times its base-2 logarithm, and differ between runs, since the shape of the map follows the seed the
+  process draws. On macOS (Apple M3 Pro, `T44`), on an idle machine, at 1,000, 10,000 and 100,000
   rows: a read of one row takes 0.08 to 0.10 ms of CPU, with a wall-time p95 of at most 0.12 ms; a write statement of one
   row 12 to 40 ms of CPU, with a wall-time p95 of 62 to 88 ms; a refused write 3.6 to 8.1 ms, with a p95 of at most
   11 ms; and an external edit 4.5 to 6.3 ms, with a p95 of at most 10 ms.
