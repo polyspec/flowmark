@@ -3,6 +3,8 @@
 
 ## Unreleased
 
+## 0.0.6
+
 - T67: A refusal of the server states its code once: the message of an error answer is the coded error's own, also when a rollback or another error is joined to it or wraps it, so a client does not read the code twice.
 
 ## 0.0.5
