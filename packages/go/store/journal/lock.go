@@ -11,6 +11,8 @@ import (
 	"regexp"
 	"sync"
 	"time"
+
+	"github.com/polyspec/flowmark/packages/go/internal/cost"
 )
 
 // LockPath is the lock file of every corpus, under its root (spec 40, the lock).
@@ -35,6 +37,9 @@ type LockTimeout struct {
 }
 
 func (e *LockTimeout) Error() string {
+	if e.Holder == (Holder{}) {
+		return fmt.Sprintf("journal: LOCK_TIMEOUT: %s holds no record: a power loss ended its holder before the record reached the disk; run `flowmark unlock %s`", e.Path, e.Corpus)
+	}
 	switch e.State {
 	case HolderEnded:
 		return fmt.Sprintf("journal: LOCK_TIMEOUT: %s is held by %s, which has ended without releasing it; check that it no longer runs, then run `flowmark unlock %s`", e.Path, e.Holder.describe(), e.Corpus)
@@ -90,8 +95,24 @@ func readShared(p string) ([]byte, fileID, error) {
 	return data, id, nil
 }
 
+// writeWhole creates p with data, without waiting for the disk: the pending lock record, which the lock takes whole
+// through its link.
+func writeWhole(p string, data []byte) error {
+	f, err := openShared(p, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	if err != nil {
+		return err
+	}
+	_, werr := f.Write(data)
+	return errors.Join(werr, f.Close())
+}
+
+// lostRecord reports a lock record that a power loss lost: no byte, or zero bytes alone. The lock appears through its
+// link only once its record is written whole, so no running process reads such a record; only a power loss before
+// the record reached the disk leaves it, and that power loss ended its holder.
+func lostRecord(data []byte) bool { return len(bytes.Trim(data, "\x00")) == 0 }
+
 // writeSynced writes data to a file (flag adds os.O_EXCL or os.O_TRUNC) and syncs it before closing.
-func writeSynced(p string, data []byte, flag int) error {
+func writeSynced(k *cost.Counts, p string, data []byte, flag int) error {
 	f, err := openShared(p, os.O_WRONLY|os.O_CREATE|flag, 0o644)
 	if err != nil {
 		return err
@@ -99,6 +120,7 @@ func writeSynced(p string, data []byte, flag int) error {
 	_, werr := f.Write(data)
 	if werr == nil {
 		if !asynchronous.Load() {
+			k.Add(cost.Flushes, 1)
 			werr = f.Sync()
 		}
 	}
@@ -162,7 +184,9 @@ func (c *Corpus) Acquire(ctx context.Context, session string, wait time.Duration
 	}
 	a := &acquirer{c: c, self: self, record: self.record(), lock: c.abs(LockPath), wait: wait,
 		pending: c.abs(".flowmark/lock." + self.Acquisition + pendingSuffix)}
-	if err := writeSynced(a.pending, a.record, os.O_EXCL); err != nil {
+	// The record is not synced: the lock appears whole through its link, and a power loss that keeps the link and loses
+	// the record ended its holder (lostRecord).
+	if err := writeWhole(a.pending, a.record); err != nil {
 		return nil, errors.Join(fmt.Errorf("journal: the pending lock record: %w", err), removeAbsent(a.pending))
 	}
 	defer func() {
@@ -194,19 +218,22 @@ func (a *acquirer) timeout(h Holder, state HolderState) error {
 
 func (a *acquirer) held() *Lock {
 	l := &Lock{c: a.c, path: a.lock, holder: a.self, rec: a.record, held: true}
+	a.c.holding.Add(1)
 	a.c.obs.Observe(Event{Kind: LockAcquired, Path: a.lock, Holder: a.self.String()})
 	return l
 }
 
 // try is one acquisition attempt. A lock that disappears between the failed link and its read is tried again at
-// once; a lock that holds this acquirer's own record was linked by this attempt although its reply was lost (REVIEW
-// 2-a: its acquisition token is unique, so no other acquisition writes the same record).
+// once, as is a lock whose release is still closing its handle on Windows, which the link finds present and the read
+// absent until that release's own call returns; a lock that holds this acquirer's own record was linked by this
+// attempt although its reply was lost (REVIEW 2-a: its acquisition token is unique, so no other acquisition writes the
+// same record).
 func (a *acquirer) try() (tried, error) {
 	for {
 		if err := a.c.step("lock-attempt", 0); err != nil {
 			return tried{}, err
 		}
-		err := os.Link(a.pending, a.lock)
+		err := linkFile(a.pending, a.lock)
 		if err == nil {
 			return tried{acquired: true}, nil
 		}
@@ -222,6 +249,9 @@ func (a *acquirer) try() (tried, error) {
 		}
 		if bytes.Equal(data, a.record) {
 			return tried{acquired: true}, nil
+		}
+		if lostRecord(data) {
+			return tried{state: HolderEnded, id: id}, nil
 		}
 		h, err := parseRecord(data)
 		if err != nil {
@@ -351,6 +381,7 @@ func (l *Lock) Release() error {
 		return fmt.Errorf("journal: removing the lock: %w", err)
 	}
 	l.held = false
+	l.c.holding.Add(-1)
 	l.c.obs.Observe(Event{Kind: LockReleased, Path: l.path, Holder: l.holder.String()})
 	return nil
 }
@@ -389,13 +420,19 @@ func (c *Corpus) Unlock(holder string) (Holder, error) {
 	if err != nil {
 		return Holder{}, fmt.Errorf("journal: reading the lock: %w", err)
 	}
-	h, err := parseRecord(data)
-	if err != nil {
-		return Holder{}, fmt.Errorf("journal: %s %w; check that no operation runs, then remove it", lock, err)
-	}
-	state, err := c.judge(h)
-	if err != nil {
-		return Holder{}, err
+	h, state := Holder{}, HolderEnded
+	if lostRecord(data) {
+		// A power loss lost the record and ended its holder; no --holder names it.
+		if holder != "" {
+			return Holder{}, fmt.Errorf("journal: --holder names %s, but %s holds no record: a power loss ended its holder; unlock without --holder", holder, lock)
+		}
+	} else {
+		if h, err = parseRecord(data); err != nil {
+			return Holder{}, fmt.Errorf("journal: %s %w; check that no operation runs, then remove it", lock, err)
+		}
+		if state, err = c.judge(h); err != nil {
+			return Holder{}, err
+		}
 	}
 	switch {
 	case state == HolderRunning:
@@ -409,7 +446,7 @@ func (c *Corpus) Unlock(holder string) (Holder, error) {
 		return Holder{}, err
 	}
 	claim := c.abs(".flowmark/lock." + sum(data)[:32] + clearingSuffix)
-	if err := os.Link(lock, claim); err != nil {
+	if err := linkFile(lock, claim); err != nil {
 		switch {
 		case errors.Is(err, fs.ErrExist):
 			return Holder{}, fmt.Errorf("journal: %s exists: another unlock of %s runs or was interrupted; check that no unlock runs, then remove it", claim, h)
@@ -434,7 +471,11 @@ func (c *Corpus) Unlock(holder string) (Holder, error) {
 	if err := os.Remove(claim); err != nil {
 		return Holder{}, fmt.Errorf("journal: the lock is removed, but its claim %s stays: %w", claim, err)
 	}
-	c.obs.Observe(Event{Kind: LockCleared, Path: lock, Holder: h.String()})
+	cleared := h.String()
+	if h == (Holder{}) {
+		cleared = ""
+	}
+	c.obs.Observe(Event{Kind: LockCleared, Path: lock, Holder: cleared})
 	return h, nil
 }
 
@@ -442,41 +483,10 @@ func (c *Corpus) Unlock(holder string) (Holder, error) {
 // is a waiter's and stays; a record that does not parse stays, since its writer may still be writing it; a claim of
 // an unlock is never touched.
 func (c *Corpus) removeEndedPendings() error {
-	entries, err := os.ReadDir(c.abs(".flowmark"))
-	if errors.Is(err, fs.ErrNotExist) {
-		return nil
-	}
-	if err != nil {
-		return fmt.Errorf("journal: %w", err)
-	}
-	for _, e := range entries {
-		if !pendingName.MatchString(e.Name()) {
-			continue
-		}
-		p := c.abs(".flowmark/" + e.Name())
-		if e.Type()&fs.ModeSymlink != 0 {
-			return fmt.Errorf("journal: %w", symlinkError(p))
-		}
-		data, _, err := readShared(p)
-		if errors.Is(err, fs.ErrNotExist) {
-			continue
-		}
-		if err != nil {
+	return c.removeEnded(".flowmark", pendingName, func(_, path string) error {
+		if err := removeAbsent(path); err != nil {
 			return fmt.Errorf("journal: %w", err)
 		}
-		h, err := parseRecord(data)
-		if err != nil {
-			continue
-		}
-		state, err := c.judge(h)
-		if err != nil {
-			return err
-		}
-		if state == HolderEnded {
-			if err := removeAbsent(p); err != nil {
-				return fmt.Errorf("journal: %w", err)
-			}
-		}
-	}
-	return nil
+		return nil
+	})
 }

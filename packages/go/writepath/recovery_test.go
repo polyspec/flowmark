@@ -52,7 +52,7 @@ func TestDecidedCommitRecoveryFails(t *testing.T) {
 	f.j.SetFault(nil)
 	f.rec.reset()
 	want(t, f.session("cli"), f.countTags(), `{"count":3}`)
-	f.rec.wantKinds(t, journal.LockAcquired, journal.Applied, journal.Collected, journal.Replayed, journal.LockReleased)
+	f.rec.wantKinds(t, journal.LockAcquired, journal.Applied, journal.Generated, journal.Collected, journal.Replayed, journal.LockReleased)
 	if got := snapshot(t, f.root); !reflect.DeepEqual(got, afterCrashTx(t)) {
 		t.Fatalf("corpus = %v", got)
 	}
@@ -84,13 +84,11 @@ func eachCrashPoint(t *testing.T, check func(t *testing.T, cp crashPoint, f *fix
 // whole-file delete), people.flowmark.md and tags.flowmark.md.
 var crashPoints = []crashPoint{
 	{"post-images", 0, false, journal.Discarded},
-	{"pre-images", 0, false, journal.Discarded},
 	{"prepare", 0, true, journal.Replayed},
 	{"rename", 0, true, journal.Replayed},
 	{"rename", 1, true, journal.Replayed},
 	{"rename", 2, true, journal.Replayed},
 	{"renames", 0, true, journal.Replayed},
-	{"commit", 0, true, journal.Replayed},
 	{"collect", 0, true, journal.Replayed},
 }
 
@@ -102,6 +100,20 @@ func crashTx(f *fixture) [][]byte {
 		f.msg("insert", "people", map[string]any{"set": sets(0, "name")}, "Lin"),
 		f.msg("delete", "notes", map[string]any{"where": corpustest.WhereID(0)}, "N3"),
 	}
+}
+
+// wantCrashed requires the corpus of f to hold after, when the crash came after its commit point (committed), or
+// before otherwise, and cleans f.
+func wantCrashed(t *testing.T, f *fixture, committed bool, before, after map[string]string) {
+	t.Helper()
+	want := before
+	if committed {
+		want = after
+	}
+	if got := snapshot(t, f.root); !reflect.DeepEqual(got, want) {
+		t.Fatalf("corpus = %v, want %v", got, want)
+	}
+	f.clean()
 }
 
 // snapshot returns every corpus file outside .flowmark/ and dbspec/ by slash path.
@@ -171,14 +183,7 @@ func TestRecoveryOnAcquisition(t *testing.T) {
 		f.rec.reset()
 		want(t, f.session("cli"), f.countTags(), map[bool]string{false: `{"count":2}`, true: `{"count":3}`}[cp.new])
 		f.rec.wantKinds(t, opened...)
-		wantSnap := before
-		if cp.new {
-			wantSnap = after
-		}
-		if got := snapshot(t, f.root); !reflect.DeepEqual(got, wantSnap) {
-			t.Fatalf("corpus = %v, want %v", got, wantSnap)
-		}
-		f.clean()
+		wantCrashed(t, f, cp.new, before, after)
 	})
 }
 
@@ -206,7 +211,7 @@ func TestOpenRecovers(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		rec.wantKinds(t, journal.LockAcquired, journal.Applied, journal.Collected, journal.Replayed, journal.LockReleased)
+		rec.wantKinds(t, journal.LockAcquired, journal.Applied, journal.Generated, journal.Collected, journal.Replayed, journal.LockReleased)
 		if got := snapshot(t, f.root); !reflect.DeepEqual(got, afterCrashTx(t)) {
 			t.Fatalf("corpus = %v", got)
 		}

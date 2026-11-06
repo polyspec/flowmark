@@ -1,5 +1,5 @@
 <!-- doc-id: spec-schema -->
-<!-- source-sha256: 3519f0a35e5f5fb241d04e0fbc11967999b3d3d01eb8f03fed645341faeeb43f -->
+<!-- source-sha256: 44dd4444c810bf9345a366b8c5a07a2a9aef88cf4de66b0afebd6a90d53d65bc -->
 # Schema
 
 [English](30-schema.md)
@@ -62,7 +62,7 @@ column을 이름 붙인다 — column 이름이 동작을 고르지 않는다.
   마지막 stage가 `yaml`인 `codec` — orm의 encoder(go-yaml의 `Marshal`)는 모든 값을
   line feed로 끝내며 형식의 어떤 자리도 그것을 담지 못한다. 그 뒤의 stage는 그것을 encode해 없앤다.
   view table은 setting이 아니라 [응용 schema](100-checklist.ko.md#view)가 선언한다.
-- **허용**: markdown table의 `i64` primary key column에만 `identity`를 쓴다. lock 아래 `max+1`로 할당한다. dbspec은 그 밖의 type에 대한 `identity`를 거절하므로(`an identity column has type i64`), `i16`이나 `i32` key도 쓸 수 없다. 근거: `max+1`은 정수 순열이며, `bool`, `varchar`, `uuid`, `date` key에는 더할 최댓값이 없다.
+- **허용**: markdown table의 `i64` primary key column에만 `identity`를 쓴다. lock 아래에서 가장 큰 key와 표의 counter 가운데 큰 것보다 하나 큰 key로 할당한다([document model](20-document-model.ko.md#key)). dbspec은 그 밖의 type에 대한 `identity`를 거절하므로(`an identity column has type i64`), `i16`이나 `i32` key도 쓸 수 없다. 근거: `max+1`은 정수 순열이며, `bool`, `varchar`, `uuid`, `date` key에는 더할 최댓값이 없다.
 - **요구**: `state_machine`을 가진 table은 `history`와 적어도 하나의 `initial` 상태를 선언한다. `list`나
   `files` 저장은 `title`을 선언한다. state machine을 가진 `list` 저장은 `checkbox`를 적어도 하나 선언하며, dbspec이 그 뒤로 모든 상태를 덮도록 요구한다. dbspec은 checkbox가 하나도 없는 state machine을 받아들이므로 이 규칙은 flowmark의 것이다.
 - **key 타입.** markdown table의 단일 column primary key는 integer type(`i16`, `i32`, `i64`), `bool`, `varchar`,

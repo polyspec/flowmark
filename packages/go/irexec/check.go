@@ -23,7 +23,7 @@ func (w *writer) checks() *Error {
 		return nil
 	}
 	for _, g := range w.given {
-		x := w.next.byRow[g.row]
+		x := w.next.recOf(g.row)
 		var parent *store.Row
 		if x != nil && x.parent != nil {
 			parent = x.parent.row

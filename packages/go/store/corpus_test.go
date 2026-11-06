@@ -183,7 +183,7 @@ func TestParseFilesTableWalk(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			root := tree(t, c.files, c.links)
-			rows, _, diags := ParseFilesTable(cat, DirFS(root), "tasks", lk, nil)
+			rows, _, diags := ParseFilesTable(cat, DirFS(root), "tasks", lk)
 			wantKeysAndRules(t, rows, diags, c.keys, c.rules)
 			for _, d := range diags {
 				if d.Line < 1 || d.Column < 1 || d.File == "" {
@@ -230,7 +230,7 @@ func TestIntegerKeysAndMandatorySection(t *testing.T) {
 		t.Fatalf("corpus: %+v", diags)
 	}
 	lk := stubLinker{}
-	rows, _, diags := ParseFilesTable(cat, DirFS(root), "notes", lk, nil)
+	rows, _, diags := ParseFilesTable(cat, DirFS(root), "notes", lk)
 	if len(diags) > 0 || len(rows) != 1 || rows[0].Key != "7" || rows[0].Title != "Seven" || *rows[0].Sections["summary"] != "x\n" {
 		t.Fatalf("rows = %+v, diagnostics %+v", rows, diags)
 	}
@@ -289,7 +289,7 @@ func TestKeysCollideWithoutRegardToCase(t *testing.T) {
 	if len(entries) < 2 {
 		t.Fatalf("the folder holds %d entries; the two names differ only in case and must coexist", len(entries))
 	}
-	rows, _, diags := ParseFilesTable(cat, DirFS(root), "tasks", lk, nil)
+	rows, _, diags := ParseFilesTable(cat, DirFS(root), "tasks", lk)
 	var keys []string
 	for _, r := range rows {
 		keys = append(keys, r.Key)
@@ -313,9 +313,9 @@ func TestShardMissingFolder(t *testing.T) {
 		t.Fatalf("catalog: %+v", diags)
 	}
 	root := t.TempDir()
-	rows, _, diags := ParseFilesTable(cat, DirFS(root), "events", stubLinker{}, nil)
+	rows, _, diags := ParseFilesTable(cat, DirFS(root), "events", stubLinker{})
 	wantKeysAndRules(t, rows, diags, nil, nil)
-	docs, diags, err := ParseDocumentTable(cat, DirFS(root), "notes", stubLinker{}, nil)
+	docs, diags, err := ParseDocumentTable(cat, DirFS(root), "notes", stubLinker{})
 	if err != nil || len(docs) > 0 || len(diags) > 0 {
 		t.Fatalf("documents %+v, diagnostics %+v, %v; want none", docs, diags, err)
 	}
@@ -354,7 +354,7 @@ func TestParseFilesTableShard(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			root := tree(t, c.files, nil)
-			rows, _, diags := ParseFilesTable(cat, DirFS(root), "events", stubLinker{}, nil)
+			rows, _, diags := ParseFilesTable(cat, DirFS(root), "events", stubLinker{})
 			wantKeysAndRules(t, rows, diags, c.keys, c.rules)
 			var paths []string
 			for _, r := range rows {
@@ -416,7 +416,7 @@ func TestParseDocumentTableShard(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			root := tree(t, c.files, c.links)
-			docs, diags, err := ParseDocumentTable(cat, DirFS(root), "notes", stubLinker{}, nil)
+			docs, diags, err := ParseDocumentTable(cat, DirFS(root), "notes", stubLinker{})
 			if err != nil {
 				t.Fatal(err)
 			}

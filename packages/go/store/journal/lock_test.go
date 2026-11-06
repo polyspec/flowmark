@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // Spec 40, the lock: the lock file is `.flowmark/lock` under the corpus root, a constant; `.flowmark/` is created
@@ -134,22 +135,7 @@ func TestAcquireStaleLockReported(t *testing.T) {
 	gone.PID = endedPID(t)
 	plantRecord(t, root, LockPath, gone)
 	_, err := c.Acquire(context.Background(), "s1", 0)
-	var timeout *LockTimeout
-	if !errors.As(err, &timeout) || timeout.State != HolderEnded || timeout.Holder != gone {
-		t.Fatalf("Acquire = %v, want the ended holder %v", err, gone)
-	}
-	for _, part := range []string{"ended", gone.String(), "flowmark unlock " + root} {
-		if !strings.Contains(err.Error(), part) {
-			t.Fatalf("message %q does not name %q", err, part)
-		}
-	}
-	data, readErr := os.ReadFile(lockFile(root))
-	if readErr != nil {
-		t.Fatal(readErr)
-	}
-	if string(data) != string(gone.record()) {
-		t.Fatalf("stale lock changed to %q", data)
-	}
+	wantEnded(t, err, root, gone, string(gone.record()), "ended", gone.String())
 	wantKinds(t, rec)
 }
 
@@ -168,7 +154,7 @@ func TestAcquireOtherHostUnknown(t *testing.T) {
 
 // A lock file that holds no record is an error and never a free lock.
 func TestAcquireMalformedRecord(t *testing.T) {
-	for _, text := range []string{"", "\n", "garbage\n", "12@h/s\n", `{"pid":1}` + "\n"} {
+	for _, text := range []string{"\n", " ", "\x00\n", "garbage\n", "12@h/s\n", `{"pid":1}` + "\n"} {
 		t.Run(fmt.Sprintf("%q", text), func(t *testing.T) {
 			root := t.TempDir()
 			writeFile(t, root, LockPath, text)
@@ -185,6 +171,47 @@ func TestAcquireMalformedRecord(t *testing.T) {
 			if string(data) != text {
 				t.Fatalf("lock file changed to %q", data)
 			}
+		})
+	}
+}
+
+// wantEnded checks that err refuses the lock at root as held by holder, which has ended, naming each of parts and
+// `flowmark unlock`, and that the lock still holds record.
+func wantEnded(t *testing.T, err error, root string, holder Holder, record string, parts ...string) {
+	t.Helper()
+	var timeout *LockTimeout
+	if !errors.As(err, &timeout) || timeout.State != HolderEnded || timeout.Holder != holder {
+		t.Fatalf("Acquire = %v, want the ended holder %v", err, holder)
+	}
+	for _, part := range append(parts, "flowmark unlock "+root) {
+		if !strings.Contains(err.Error(), part) {
+			t.Fatalf("message %q does not name %q", err, part)
+		}
+	}
+	data, readErr := os.ReadFile(lockFile(root))
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	if string(data) != record {
+		t.Fatalf("the lock changed to %q", data)
+	}
+}
+
+// lostRecords are the lock records a power loss leaves when the record never reached the disk: no byte, or zero bytes
+// alone.
+var lostRecords = []string{"", "\x00", strings.Repeat("\x00", 4096)}
+
+// A lock whose record a power loss lost names no holder, and that power loss ended its holder: it is reported at once
+// as a holder that has ended, naming `flowmark unlock`, and never removed (T57).
+func TestAcquireLostRecord(t *testing.T) {
+	for _, text := range lostRecords {
+		t.Run(fmt.Sprintf("%d bytes", len(text)), func(t *testing.T) {
+			root := t.TempDir()
+			writeFile(t, root, LockPath, text)
+			c, rec := newCorpus(t, root)
+			_, err := c.Acquire(context.Background(), "s1", time.Minute)
+			wantEnded(t, err, root, Holder{}, text, "power loss")
+			wantKinds(t, rec)
 		})
 	}
 }
@@ -362,5 +389,38 @@ func TestOpenKeepsRunningPendingRecord(t *testing.T) {
 		if _, err := os.Lstat(filepath.Join(root, filepath.FromSlash(rel))); err != nil {
 			t.Fatalf("%s: %v", rel, err)
 		}
+	}
+}
+
+// TestHolding pins what a read learns of its own corpus's lock (spec 40 Reads): a corpus holds no lock until one of its
+// acquisitions succeeds, holds it while that lock is held or kept, and none once it is released; another corpus of
+// the same folder never holds it.
+func TestHolding(t *testing.T) {
+	root := t.TempDir()
+	c, _ := newCorpus(t, root)
+	other, _ := newCorpus(t, root)
+	if c.Holding() {
+		t.Fatal("a corpus holds a lock before any acquisition")
+	}
+	l := acquire(t, c, "s1")
+	if !c.Holding() || other.Holding() {
+		t.Fatalf("while the lock is held: Holding = %v, the other corpus %v; want true, false", c.Holding(), other.Holding())
+	}
+	l.Keep(true)
+	if err := l.Release(); err != nil {
+		t.Fatal(err)
+	}
+	if !c.Holding() {
+		t.Fatal("a kept lock is not held after its release")
+	}
+	l.Keep(false)
+	if err := l.Release(); err != nil {
+		t.Fatal(err)
+	}
+	if c.Holding() {
+		t.Fatal("a released lock is still held")
+	}
+	if err := l.Release(); err != nil || c.Holding() {
+		t.Fatalf("a second release: %v, Holding %v", err, c.Holding())
 	}
 }

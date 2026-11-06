@@ -6,6 +6,8 @@ import (
 	"github.com/polyspec/flowmark/packages/go/internal/corpustest"
 	"os"
 	"path/filepath"
+	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -98,7 +100,7 @@ func (f *fixture) sub(t *testing.T, name string, fn func(f *fixture)) {
 // reopen reads the corpus of the fixture again.
 func (f *fixture) reopen() {
 	f.t.Helper()
-	c, err := Open(f.cat, store.DirFS(f.root), nil)
+	c, err := Open(f.cat, store.DirFS(f.root))
 	if err != nil {
 		f.t.Fatal(err)
 	}
@@ -120,7 +122,9 @@ func (f *fixture) msgAt(now, kind, entity string, body map[string]any, params ..
 
 // run executes a message against the fixture's corpus.
 func (f *fixture) run(m []byte) (*Result, *Error) {
+	before := imageOf(f.c)
 	res, err := f.e.Execute(f.c, m)
+	wantImage(f.t, f.c, before)
 	if err != nil {
 		var e *Error
 		if !errors.As(err, &e) {
@@ -232,14 +236,17 @@ func (f *fixture) commit(res *Result) {
 	}
 	f.reopen()
 	next := res.Post.Next
-	if len(next.files) != len(f.c.files) {
-		f.t.Fatalf("the next corpus holds %d files; the committed corpus %d", len(next.files), len(f.c.files))
+	if next.files.Len() != f.c.files.Len() {
+		f.t.Fatalf("the next corpus holds %d files; the committed corpus %d", next.files.Len(), f.c.files.Len())
 	}
-	for p, file := range f.c.files {
-		nf := next.files[p]
+	for p, file := range f.c.files.All() {
+		nf := next.file(p)
 		if nf == nil || string(nf.data) != string(file.data) || len(nf.rows) != len(file.rows) {
 			f.t.Fatalf("the next corpus differs from the committed corpus at %s", p)
 		}
+	}
+	if g, w := next.Data(catalog.SequencesFile), f.c.Data(catalog.SequencesFile); string(g) != string(w) || (g == nil) != (w == nil) {
+		f.t.Fatalf("the next corpus holds the counters %q; the committed corpus %q", g, w)
 	}
 }
 
@@ -289,4 +296,40 @@ func rowIDs(t testing.TB, res *Result) []string {
 		ids = append(ids, s)
 	}
 	return ids
+}
+
+// fileImage is a deep copy of a corpus document: its table, bytes, rows and diagnostics.
+type fileImage struct {
+	table string
+	data  []byte
+	rows  []*store.Row
+	diags []catalog.Diagnostic
+}
+
+// imageOf returns a deep copy of every document of c, which a request must leave as it was: a write computes its next
+// corpus beside c and shares c's documents, so a change of a shared row would change the corpus it read.
+func imageOf(c *Corpus) map[string]fileImage {
+	out := map[string]fileImage{}
+	for p, f := range c.files.All() {
+		rows := make([]*store.Row, len(f.rows))
+		for i, r := range f.rows {
+			rows[i] = cloneRow(r)
+		}
+		out[p] = fileImage{f.table, slices.Clone(f.data), rows, slices.Clone(f.diags)}
+	}
+	return out
+}
+
+// wantImage requires every document of c to equal its image before the request.
+func wantImage(t testing.TB, c *Corpus, before map[string]fileImage) {
+	t.Helper()
+	after := imageOf(c)
+	if len(after) != len(before) {
+		t.Fatalf("the request changed the documents of the corpus it read: %d before, %d after", len(before), len(after))
+	}
+	for p, b := range before {
+		if !reflect.DeepEqual(after[p], b) {
+			t.Fatalf("the request changed %s of the corpus it read", p)
+		}
+	}
 }

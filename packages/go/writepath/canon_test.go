@@ -341,7 +341,7 @@ func TestCanonCrash(t *testing.T) {
 		// The next canon recovers the stage under the lock before it reads: the corpus is canonical, so it writes nothing.
 		r := f.canonOf()
 		wantRewritten(t, r)
-		f.rec.wantKinds(t, journal.LockAcquired, journal.Applied, journal.Collected, journal.Replayed, journal.LockReleased)
+		f.rec.wantKinds(t, journal.LockAcquired, journal.Applied, journal.Generated, journal.Collected, journal.Replayed, journal.LockReleased)
 		if got := snapshot(t, f.root); !reflect.DeepEqual(got, canonical) {
 			t.Fatalf("corpus = %v, want the canonical corpus", got)
 		}

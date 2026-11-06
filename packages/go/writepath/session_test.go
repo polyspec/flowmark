@@ -103,7 +103,7 @@ func TestTransaction(t *testing.T) {
 		if err := s.Commit(); err != nil {
 			t.Fatal(err)
 		}
-		f.rec.wantKinds(t, journal.LockAcquired, journal.Prepared, journal.Applied, journal.Collected, journal.LockReleased)
+		f.rec.wantKinds(t, journal.LockAcquired, journal.Prepared, journal.Applied, journal.Generated, journal.Collected, journal.LockReleased)
 		if !strings.HasSuffix(f.file("tags.flowmark.md"), "| 3 | web | area |\n| 4 | db | area |\n") {
 			t.Fatalf("tags:\n%s", f.file("tags.flowmark.md"))
 		}

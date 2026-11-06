@@ -1,5 +1,5 @@
 <!-- doc-id: spec-ops -->
-<!-- source-sha256: 1c904c91dec70add8a9e3bf02dfda730dabd75ee4a809f00ec48cbd90f2631c5 -->
+<!-- source-sha256: 58a11a1ebaddfe0473dbf7956f877c92a777e77602d52560ac3eebd321e16b45 -->
 # Operations
 
 [English](40-ops.md)
@@ -9,11 +9,12 @@
 
 ## Corpus 열기
 
-- 열기는 lock 아래에서 **복구를 먼저** 실행한다. 끝난 holder의 pending lock record를 지우고
-  ([lock](#lock)), `*.clearing` claim은 건드리지 않는다. `.flowmark/tx/`는 stage를 많아야 하나 가지며,
-  그 이름은 OS random source의 128 random bit를 나타내는 소문자 hex 32자리다. 다른 이름이나 형태의
-  항목, 또는 두 번째 stage는 열기를 거절하며 그 이름을 밝힌다. stage는 commit record가 있으면 거두고,
-  prepare record가 있으면 완료하며, 둘 다 없으면 버린다. 복구는 idempotent다: 어느 단계에서 중단된
+- 열기는 lock 아래에서 **복구를 먼저** 실행한다. 끝난 holder의 pending lock record와
+  ([lock](#lock)) 끝난 열기의 database를 지우고 ([SQL statements](#sql-statements)), `*.clearing` claim은 건드리지 않는다. `.flowmark/tx/`는 많아야 한 stage의
+  file을 가지며, 그 file은 stage의 id, 곧 OS random source의 128 random bit를 나타내는 소문자 hex 32자리를 따라
+  `<id>.<name>`으로 이름 짓는다. 다른 이름이나 형태의 항목, 두 번째 stage, 또는 이전 엔진의 stage folder는
+  열기를 거절하며 그 이름을 밝힌다. stage는 prepare record가 corpus가 가진 generation을 밝히면 거두고,
+  prepare record가 있으면 완료하며, 없으면 버린다. 복구는 idempotent다: 어느 단계에서 중단된
   replay든 다음 replay가 완료한다.
   복구는 lock을 잡을 때마다, operation이 corpus를 읽기 전에 다시 실행한다: lock 아래에서 찾은 stage는
   holder가 끝난 commit이며, SQLite가 읽기 전에 hot journal을 rollback하는 것과 같다. 근거: 그렇지 않으면
@@ -64,6 +65,17 @@
   - 문서는 bytes가 바뀌었거나, 그 parse가 다른 file에서 유도한 link target이 바뀌었을 때 — detail
     section이 생기거나 사라진 행, 공유가 된 key, 행이 나타난 dangling link — 만 다시 parse한다. 다른
     문서의 행은 operation 사이에 그대로 두며 결코 바꾸지 않는다. 쓰기는 그 사본을 바꾼다.
+  - 읽기는 단위별로 유지한다: folder와 문서가 각각 하나의 단위이고, 그 결과는 그것이 읽는 것 — folder는
+    entry, 문서는 bytes — 과 그 parse가 물은 link target에만 달려 있다. entry가 바뀐 folder는 entry를
+    다시 나열하고, 새 entry와 종류가 바뀐 entry(folder가 된 문서, 문서 대신 들어선 symbolic link)의
+    단위를 만들며, 사라진 entry의 단위를 그 아래 전부와 함께 없앤다. 그 비용은 corpus가 아니라 그
+    folder의 entry다. 첫 pass는 각 key의 target을 그것을 담은 문서별로 유지하고, 둘째 pass는 각 key를
+    물은 link가 있는 문서를 key별로 유지한다. 그래서 target이 바뀐 key는 정확히 그 문서들만 다시
+    parse한다. 각 표의 중복 key와 표를 쓸 수 없게 하는 읽을 수 없는 entry는 표별로 유지하므로, 표를 쓸
+    수 있는지는 그 행 없이 안다. 읽기는 문서나 진단이 바뀐 path를 다음 corpus에 넘기고, 그 corpus는 나머지
+    문서를 모두 이전 corpus와 공유한다. 읽기는 path마다 처음부터 읽은 결과와 같다: `validate`의
+    `TestLive`와 `FuzzLive`가 모든 case와 golden corpus의 모든 변경 뒤에 이를 확인하고, `irexec`의
+    `TestFromSnapshot`이 이전 corpus 위에 만든 corpus를 확인한다.
   - 걸 수 없는 watch는 원인을 밝히며 operation을 `DRIVER`로 실패시킨다: macOS에서는 열린 file 한도
     (`ulimit -n`, `kern.maxfilesperproc`), Linux에서는 `fs.inotify.max_user_watches`.
 
@@ -228,15 +240,48 @@ control message `{"op": "statement", "sql", "params"}`는 SQLite dialect의 문�
 연결은 이 server가 문장에 답하는 SQLite 연결이므로 orm SQLite dialect의 plan, codec, utility가 corpus에서 그대로 성립하고,
 client가 구현할 것은 이 driver뿐이다.
 
-- **실행하는 곳.** corpus를 in-memory SQLite database로 옮긴다: document와 `dbspec/statements.json`의 schema, 그다음 행.
-  문장은 거기서 실행된다. 행의 차이는 표마다 쓰기 하나로 executor를 거쳐 돌아가므로 corpus의 규칙이 판정하고 commit
+- **실행하는 곳.** corpus를 SQLite database로 옮긴다: document와 `dbspec/statements.json`의 schema,
+  그다음 행. 문장은 거기서 실행된다. SQLite의 pre-update hook이 문장이 바꾼 행을 하나하나 알린다: 문장 자신의 행과
+  REPLACE, foreign key action, trigger의 행이다. 차이는 그런 행마다 첫 변경 전의 image와, 바뀐 rowid에서 database가 지닌
+  행으로 만들므로, 쓰기는 모든 행이 아니라 자기가 바꾼 행을 읽는다. SQLite가 rowid를 정의하지 않는 rowid 없는 표의 행은
+  primary key로 알고, 그 행은 바뀐 key에서 그 key의 collation에 따른 순서로 읽는다. corpus가 key를 비교하는 대로
+  대소문자를 가리지 않고 더한 행의 key와 같은 key를 가진 사라진 행은 insert보다 먼저 지우며, SQLite가 이미 판정한
+  foreign key로 다시 판정하지 않으므로 대소문자만 바뀐 key도 database가 commit한 대로 쓰인다. image의 text는 길이로 읽으므로 NUL을 품은 text도
+  온전히 온다. driver의 release는 text를 첫 NUL까지 읽으므로, 엔진은 text를 길이로 읽는 driver fork를
+  고정한다. 행의 차이는 표마다 쓰기 하나로 executor를 거쳐 돌아가므로 corpus의 규칙이 판정하고 commit
   protocol이 기록한다. NOT NULL과 foreign key는 SQLite가 이미 판정했고, trigger는 자기 행을 썼으며, codec은 문장이 저장한
-  값을 판정하지 않는다. database는 corpus와 다르지 않은 동안 lock 아래에서 문장 사이에 유지된다.
+  값을 판정하지 않는다. database는 corpus와 다르지 않은 동안 lock 아래에서 문장 사이에 유지된다. 같은 catalog
+  아래에서 corpus가 다르면, 어떤 transaction도 잡지 않은 database는 그 corpus로 갱신되고([비용 모델](#비용-모델)),
+  그렇지 않으면 다시 채워진다.
 - **Schema 문장.** schema 문장은 자기만의 transaction이다: 열린 transaction은 먼저 commit하고 그 뒤에 새 transaction이
   이어진다. schema를 바꾼 문장은 `dbspec/statements.json`에 덧붙고, 바뀐 표는 새 column으로 다시 쓰이며, document의 글은
   그대로다. 이미 그 상태인 `CREATE ... IF NOT EXISTS`와 `DROP ... IF EXISTS`는 아무것도 바꾸지 않고 lock을 잡지 않는다.
+  schema 문장은 corpus를 처음부터 읽을 때와, 어느 process든 그것을 쓴 commit 뒤에 commit generation이 그 경로를 알릴 때
+  corpus와 함께 읽히고, process는 SQLite connection이 다른 connection이 바꾼 schema를 받듯 그 문장이 주는 catalog를 받는다.
+  다른 process가 이름을 바꾸거나 지운 표에 대한 문장은 SQLite처럼 거절되고, snapshot이 그 schema보다 오래된 deferred
+  transaction은 쓰지 못한다(`SQLITE_BUSY_SNAPSHOT`). face의 operation은 schema 문장이 더한 표도 읽고, face의 `schema`는 지금의
+  catalog를 답한다. orm 요청은 manifest가 가리키는 set의 표를 읽는다. `statement`의 `TestSchemaOfAnotherProcess`와 `ops`의
+  `TestCatalogOfSchemaStatements`가 이를 확인한다.
+- **문장 읽기.** server는 문장의 종류(읽기, transaction 문장, `PRAGMA`, schema 문장)를 SQLite의 tokenizer가 읽는 대로
+  읽은 단어로 안다: `--`나 `/* */` comment는 공백이고, string이나 quoted identifier 안의 단어는 단어가 아니다. comment 뒤의
+  문장은 comment가 없을 때의 문장과 같으므로, comment 뒤의 읽기도 다른 읽기처럼 `query_only` 아래에서 실행된다(`statement`의
+  `TestCommentsBeforeAStatement`와 `TestTokens`).
 - **표.** 표는 column, 선언 타입, key를 자기 문장에서 받는다. SQLite가 NULL을 허용하는 primary key는 행을 가리키지
   못하므로 그런 표는 primary key가 없는 표처럼 rowid를 key로 쓴다.
+- **값.** cell은 SQLite가 지닌 값을 답한다. `DATE`, `DATETIME`, `TIMESTAMP`로 선언된 column의 text는 SQLite 연결이
+  읽듯이 저장된 text 그대로, byte 단위로 같다. driver의 release는 그런 text를 시각으로 해석해 다른 형태로 다시 쓰므로,
+  엔진은 driver의 fork가 저장된 그대로 읽게 한다(`statement`의 `TestTemporalText`).
+- **AUTOINCREMENT counter.** 문장이 key를 `AUTOINCREMENT`로 선언한 표와, set이 그렇게 render하는 `identity` key의 표는
+  SQLite의 `AUTOINCREMENT`처럼 같은 key를 두 번 주지 않는다. 그냥 `INTEGER PRIMARY KEY`는 SQLite처럼 가장 큰 key보다 하나 큰
+  key를 준다. 그런 표의 counter는 corpus의 일부로 `dbspec/sequences.json`에 있으며, 표마다 양의 counter를 가진 JSON 객체다.
+  표의 sequence는 counter와 가장 큰 key 가운데 큰 것이고, 다음에 주는 key는 그보다 하나 크다. 그래서 손으로 쓴 key도
+  셈에 들어간다. sequence를 낮추는 쓰기, 곧 가장 큰 key 행의 delete나 key 변경은 counter를 그 값으로 올리고, database가
+  sequence를 넘어 준 key, 곧 한 문장이 넣었다가 다시 지운 key는 문장 뒤에 counter를 올린다. commit은 행과 함께 이 파일을
+  쓴다. fill과 refresh는 database에 corpus의 sequence를 준다. 이름을 바꾼 표는 counter를 지키고, 지운 표는 SQLite의
+  `sqlite_sequence`처럼 counter를 함께 가져간다. 이 파일은 corpus를 처음부터 읽을 때와, 어느 process든 이 파일을 쓴 commit
+  뒤에 commit generation이 그 경로를 알릴 때 corpus와 함께 읽는다. 손으로 고친 파일은 `dbspec/`을 손으로 고친 것처럼
+  그다음 읽기에서 읽힌다. git을 되감으면 counter도 행과 함께 되감긴다. `statement`의 `TestSequences`, `irexec`의
+  `TestSequenceRaise`와 `TestRaiseSequences`, `catalog`의 `TestAutoincrement`와 `TestSequencesFile`이 이를 확인한다.
 - **할당 column.** `key_prefix` key와 `order` 위치는 corpus가 할당하므로, 문장의 schema는 SQLite의 `INTEGER PRIMARY KEY`처럼
   둘 다 NULL을 허용한다. 하나를 빠뜨리거나 NULL을 준 insert는 prefix의 다음 key([document model](20-document-model.ko.md#key))나
   parent 아래 다음 위치를 행이 insert된 순서대로 받고, key의 `RETURNING`은 행이 받은 key를 읽는다. `ON CONFLICT`는 SQLite처럼
@@ -245,8 +290,45 @@ client가 구현할 것은 이 driver뿐이다.
   읽기가 읽을 corpus를 정하고, 첫 쓰기가 lock을 잡는다. 대기가 끝나면 `(SQLITE_BUSY)`로 끝나는 `CANCELED`이고, 첫 읽기보다
   새로운 commit 뒤의 쓰기는 `(SQLITE_BUSY_SNAPSHOT)`으로 끝나는 `CANCELED`이며, 둘 다 `ROLLBACK`을 위해 transaction을 열어
   둔다. 지연된 foreign key 실패는 SQLite처럼 `COMMIT`에서 실패하고 transaction을 열어 둔다.
-- **읽기.** 다른 session이 lock을 쥔 것을 본 읽기는 자기 database에서 commit된 것을 읽고 writer를 기다리지 않는다. WAL
-  mode의 SQLite와 같은 동작이다.
+- **열기의 database.** 열기의 문장이 쓰는 database는 `.flowmark/sql/`의 file이며, 이 folder는 engine이 소유자만 접근하도록
+  만든다: Windows에서는 process의 사용자에게만 허용하는 보호된 access list, 그 밖에서는 mode `0700`이다. 그보다 넓게 허용하는
+  기존 folder, link, reparse point, folder 대신 있는 file은 거절한다. database마다 `<token>.db`와 SQLite가 그 옆에 만드는
+  file(`-wal`, `-shm`, `-journal`), 그리고 그것을 만든 process의 holder record인 `<token>.holder`([holder record](#holder-record))가
+  있으며, record는 database가 생기기 전에 쓰고 sync한다. token은 128 random bit를 나타내는 소문자 hex 32자리이므로 한 process의
+  두 열기는 database 둘을 가진다. 새 token의 file이 이미 있으면 link를 포함해 거절한다. driver는 고정된 flag로 file을 열고
+  `SQLITE_OPEN_NOFOLLOW`가 없으므로, 검사와 열기 사이에 심은 link는 그 folder에 대한 소유자 자신의 접근이 필요하다. 복구는
+  끝난 이 host의 holder가 가진 database를 지우며 record를 마지막에 지운다. 실행 중인 holder의 database, 이곳에서 process를
+  판정할 수 없는 다른 host의 holder의 database, 그리고 쓰는 쪽이 아직 쓰고 있을 수 있으므로 parse되지 않는 record의 database는
+  남고, holder record가 아닌 이름은 건드리지 않는다. `store/journal`의 `TestNewDatabase`, `TestNewDatabaseRefuses`,
+  `TestRecoverRemovesEndedDatabases`, `TestRecoverRefusesLinkedDatabases`가 이를 보장한다.
+- **연결.** database는 SQLite 자동 checkpoint(`wal_autocheckpoint` 1000 page, SQLite 기본값)와 `synchronous` off의 WAL
+  mode다. corpus의 cache이고 crash가 남긴 것은 복구가 지우기 때문이다. writer 연결 하나를 database가 사는 동안 쥔다. 이
+  연결은 session의 transaction을 따른다: transaction의 첫 문장에서 transaction이 시작한 corpus로 `BEGIN IMMEDIATE`를 시작하고,
+  그 savepoint와 문장 밖에서 바꾼 행(session의 IR 요청 같은)을 받으며, savepoint를 함께 설정·해제·rollback하고, corpus commit이
+  쓰인 뒤 commit하며 그 밖의 모든 끝에서 rollback한다. SQLite가 풀지 못한 지연된 foreign key는 SQLite가 `COMMIT`을 거절하듯
+  corpus commit 전에 commit을 거절하고 transaction을 열어 둔다. 실패한 SQLite의 `COMMIT`이나 `ROLLBACK`은 database를 다시
+  만든다. 실패한 문장과 corpus 규칙이 쓰기를 거절한 문장은 자기 savepoint로 rollback하고 database는 아무것도 다시 채우지
+  않는다. reader 연결 8개의 pool(`Readers`)은 각각 `query_only` on과 읽기 동안의 session 설정을 가지고 database의 마지막
+  commit이 가진 것을 읽으며, writer가 열어 둔 transaction은 결코 읽지 않는다. 모두 쓰이는 것을 본 읽기는 하나가 반환되기를
+  기다리고, 이어지는 행은 끝날 때까지 자기 연결을 쥔다. 다른 catalog의 database는 다시 만들고, 옛 database는 마지막 읽기가
+  끝날 때 닫는다. 열기가 끝나면 그 database를 지운다. process가 읽기만 할 수 있는 corpus는 database를 메모리에 유지하며, 그
+  연결 하나가 한 번에 하나씩 읽는다. `statement`의 `TestConcurrentReads`, `TestWriterFollowsTransaction`, `TestCost`가 이를
+  보장한다.
+- **읽기.** transaction 밖의 읽기는 lock 아래의 마지막 읽기 뒤로 바뀐 것이 없으면 lock을 잡지 않는다: `.flowmark/tx/`에
+  stage가 없고, commit generation이 그 읽기의 것이며, 그 뒤로 쌓인 알림이 그 읽기가 읽은 folder나 file을 가리키지 않을
+  때다. 그 읽기는 모든 경로를 corpus tree로 읽었으므로, 읽지 않은 경로의 알림은 그것이 답하는 어떤 것도 바꾸지 않았다:
+  Windows에서 subtree 전체의 watch가 알리는 `.flowmark/` 아래의 lock과 journal은 읽기가 lock을 잡게 하지 않는다
+  (`journal`의 `TestTreeQuiet`, `statement`의 `TestCost`). 그렇지 않으면 recovery와 corpus를
+  다시 읽는 동안만 lock을 잡고 읽기 전에 놓으므로, crash가 빈 lock 아래 남긴 stage는 읽기가 recovery하며 이것이 읽기의
+  유일한 쓰기다. 자기 corpus의 session이 lock을 쥔 것을 본 읽기는 다른 process가 commit할 수 없으므로 그 corpus가 마지막에
+  읽은 것으로 답한다. 다른 process가 쥔 것을 본 읽기는 lock 없이 corpus를 읽고, 읽기 전후의 commit generation이 같고 두
+  확인 어느 쪽에도 prepare record가 없을 때 그 읽기를 유지한다. commit은 그 둘 사이에서만 target을 rename하기 때문이다.
+  그렇지 않으면 마지막에 읽은 것으로 답하고, 다음 읽기가 알림과 generation이 가리키는 것을 다시 읽는다. 읽기는
+  reader 연결에서 하므로 lock record는 읽기마다가 아니라 변경마다 한 번 쓰이고, 읽기와 이어지는 그 행은 lock을 쥐지 않으며
+  writer도 다른 읽기도 기다리지 않는다. WAL mode의 SQLite와 같은 동작이다. `statement`의 `TestConcurrentReads`와 `TestCost`,
+  `store/journal`의 `TestTreeQuiet`과 `TestStaged`, `statement`의
+  `TestReadRecovery`, `writepath`의 `TestReadHeld`와 `TestReadRecoversPrepared`, `store/journal`의 `TestPrepared`와
+  `TestHolding`이 이를 보장한다.
 - **Session 설정.** `foreign_keys`, `query_only`, `busy_timeout`, `locking_mode`는 session의 것이다. `locking_mode =
   EXCLUSIVE`에서는 다음 transaction이 잡은 lock이 그 transaction 뒤에도 남고, mode가 `NORMAL`로 돌아오면 놓는다. 다른
   `PRAGMA` 설정은 session 자신의 문장에만 적용된다.
@@ -280,7 +362,8 @@ client가 구현할 것은 이 driver뿐이다.
 - lock file은 JSON 한 줄 `{"pid", "start", "host", "hostname", "session",
   "acquisition"}`과 line feed를 담는다. holder의 이름은 `<pid>@<host>/<session>`이다. `acquisition`은 획득
   하나의 token이다: OS random source의 128 random bit를 나타내는 소문자 hex 32자리이며 그 pending record의
-  이름도 된다. 그 밖의 것을 담은 file은 결코 빈 lock으로 여기지 않는다. 근거: session은 자기 process에서
+  이름도 된다. 그 밖의 것을 담은 file은 결코 빈 lock으로 여기지 않는다. byte가 없거나 0 byte만 담은
+  file은 정전이 record를 잃은 lock이다(아래). 근거: session은 자기 process에서
   다시 획득할 수 있으므로, 획득마다의 token만이 두 획득자가 byte 단위로 같은 record를 쓰지 않게 하며, 그렇지
   않으면 아래의 응답 유실 규칙이 둘을 하나로 여긴다.
 - `start`는 process의 시작이다: Linux에서는 `/proc/sys/kernel/random/boot_id`의 boot와
@@ -302,9 +385,13 @@ client가 구현할 것은 이 driver뿐이다.
 
 ### 잡기와 기다리기
 
-- record는 `.flowmark/lock.<acquisition>.pending`에 통째로 쓰고 sync한 뒤
+- record는 `.flowmark/lock.<acquisition>.pending`에 sync 없이 통째로 쓴 뒤
   `.flowmark/lock`으로 hard link한다. lock이 있으면 link가 실패하므로 lock은 record 전체와 함께
   atomic하게 나타난다. 대기자는 pending record를 한 번만 쓴다. pending record는 배타에 관여하지 않는다.
+- lock은 record 전체와 함께만 나타나므로, record에 byte가 없거나 0 byte만 담긴 lock은 정전만이 남긴다:
+  link는 disk에 닿았고 record는 닿지 못했다. 그 정전이 holder를 끝냈으므로 그런 lock은 끝난 holder이며,
+  `flowmark unlock`을 밝혀 즉시 거부한다(`journal`의 `TestAcquireLostRecord`). 근거: 획득마다 disk를
+  기다리는 record의 sync는 어차피 정전이 끝낸 holder만을 지킨다.
 - link가 `EEXIST`로 실패한 시도는 lock을 읽는다. 잡으려는 쪽 자신의 record와 byte 단위로 같은
   record(그 획득 token은 유일하다)는 응답을 잃었어도 link가 이루어졌다는 뜻이며(NFS), lock을 잡은 것이다.
   읽기 전에 사라진 lock은 곧바로 다시 시도한다.
@@ -343,6 +430,11 @@ client가 구현할 것은 이 driver뿐이다.
   거절한다.
 - Windows에서 lock file, pending record, stage file을 여는 일은 모두 `FILE_SHARE_READ | FILE_SHARE_WRITE |
   FILE_SHARE_DELETE`를 준 `CreateFileW`이므로, 읽는 쪽이 holder의 delete나 unlock을 막지 않는다.
+  지우는 쪽은 그런 file을 자기 handle로 삭제 표시하고, 이름은 그 handle이 닫힐 때 사라진다. 그 사이 Windows는 그
+  이름의 모든 open과 link를 `ERROR_ACCESS_DENIED`로 거절하며, `STATUS_DELETE_PENDING`이 이것을 접근 거부와 구별한다.
+  엔진은 그런 이름을 지워진 것으로 읽는다: 그 이름의 open이나 link는 file을 찾지 못하고, 그 이름의 배타 생성이나 그
+  이름으로의 link는 file을 찾는다. 그래서 잡기는 link와 read 사이에 사라진 lock에서처럼 곧바로 다시 시도한다
+  (`journal`의 `TestDeletePendingReadsRemoved`와 `TestAcquireAfterPendingRelease`).
 - 잡기, 풀기, 치우기, 기다리기는 event `lock.acquired`, `lock.released`, `lock.cleared`,
   `lock.waiting`(기다리는 holder마다 한 번, watch를 arm한 뒤)으로 publish한다.
 
@@ -350,7 +442,8 @@ client가 구현할 것은 이 driver뿐이다.
 
 - stale lock은 operation이 결코 지우지 않는다. `flowmark unlock <corpus>`가 지운다:
   1. record R을 읽는다. 실행 중인 holder는 거절하고, 다른 host의 holder는 그것을 가리키는
-     `--holder <pid>@<host>/<session>`이 없으면 거절한다.
+     `--holder <pid>@<host>/<session>`이 없으면 거절한다. 정전이 잃은 record는 holder를 가리키지 않으며
+     `--holder` 없이 unlock한다(`journal`의 `TestUnlockLostRecord`).
   2. `.flowmark/lock`을 `.flowmark/lock.<R의 SHA-256 앞 hex 32자리>.clearing`으로 link한다. `EEXIST`는 그
      file을 같은 holder의 다른 unlock — 실행 중이거나 중단된 — 으로 밝히며 거절한다.
   3. claim을 읽는다. R이 아닌 record는 새 holder가 lock을 잡았다는 뜻이다: claim을 지우고 거절한다.
@@ -380,7 +473,9 @@ client가 구현할 것은 이 driver뿐이다.
   읽으며, 쓰기는 lock을 풀기 전에 commit한다.
 - transaction 안에서 실패한 요청은 아무것도 바꾸지 않으며, transaction은 그 요청 전 상태로 열린 채
   남는다. 근거: SQL 문장 원자성 — 실패한 문장은 효과가 없고 MySQL과 SQLite는 transaction을 열어 둔다.
-  orm client는 callback이 실패하면 transaction이나 그 savepoint를 rollback한다.
+  orm client는 callback이 실패하면 transaction이나 그 savepoint를 rollback한다. `RAISE(ROLLBACK)`처럼
+  SQLite transaction을 스스로 끝내는 문장은 transaction도 함께 끝낸다. 그 답은 그 문장의 오류뿐이고, 뒤따르는
+  `ROLLBACK`은 끝낼 것이 없다(`statement`의 `TestStatementEndsTheTransaction`).
 - `savepoint <name>`은 transaction의 현재 상태에 단계를 둔다. 같은 이름의 savepoint는 SQL 표준이 그것을
   없애듯 대체된다. `release <name>`은 그 savepoint와 그 뒤에 둔 모든 savepoint를 지우고 그 쓰기는
   유지한다. `rollback_to <name>`은 그 savepoint 이후의 쓰기와 그 뒤에 둔 모든 savepoint를 버리고 그
@@ -424,41 +519,70 @@ client가 구현할 것은 이 driver뿐이다.
    보고한다(orm은 40001을 `DEADLOCK`으로 대응시킨다). 다시 읽은 corpus가 읽은 corpus와 같으면 쓰기는 실행될 때 이미 그 위에서 검사되었다.
    아래의 다시 쓰기 거절도 SQL이 deferred가 아닌 제약을 검사하듯 각 요청이 실행될 때 검사하므로, 그런
    file을 다시 써야 하는 요청은 곧바로 실패한다. 다른 행의 validator 진단(`type`, `key.duplicate`, `reference.dangling`, `check`, `codec`, `view`, `order`, `state.transition`, `state.required`, `state.limit`, `history.gap`, `history.chain`, 여러 `files` file에 걸친 `parent.cycle`)은 commit을 실패시키지 않되, `type` 진단은 commit의 제약 검사가 그 값을 평가해야 할 때 commit을 실패시키고, 바이트 단위로 같은 key를 가진 두 행은 그 table을 사용할 수 없게 한다([canonical format](10-canonical-format.ko.md#진단)); `format.*` 진단은 다시 쓰기 거절과 사용할 수 없는 table 상태([canonical format](10-canonical-format.ko.md#진단))가 정하는 경우에만 commit을 실패시킨다. file을 다시 써야 하는 commit — 행 자신의 file, 유도된 target이 바뀌는 행(상세 섹션이 생기거나 사라지거나, insert가 dangling link에 그 행을 주는 행)으로의 link를 가진 file, `order`의 형제 — 은 그 file이 `format.*` 진단을 가지면 거절한다: `CONSTRAINT`이며 file과 진단을 밝히고, `format.noncanonical`이면 `flowmark canon`을 밝힌다. 세 commit은 면제된다: 대상에 대한 `flowmark canon`([operations](#canon-연산)), 추가된 column이 일으킨 진단에 대한 add-column migration([migration](80-migration.ko.md)) — 그 진단은 그 migration에 대해 table을 사용할 수 없게 하지 않는다 —, `files` 행의 file 전체를 지우는 delete는 rewrite 거절에서만 면제되며, restrict 검사는 그 행을 참조할 수 있는 모든 table의 행을 여전히 필요로 하며(자신의 table을 `parent`로 하는 것, 자식 block과 이력 행, 그 행으로의 foreign key를 가진 모든 table), 그 중 하나라도 사용할 수 없으면 그 delete는 `CONSTRAINT`다.
-3. 각 post-image를 `.flowmark/tx/<id>/`에 `<hash>`로 content-addressed하여 한 번 쓰고, rename n의
-   source로 그 사본 `<n>.<hash>`를 쓴다. 둘 다 stage를 거둘 때까지 남는다. 이 단계 전에 모든 대상의
-   folder와 만들 모든 folder가 `.flowmark/tx/`의 device(`st_dev`, Windows에서는
+3. rename n의 source로 그 post-image의 사본 `.flowmark/tx/<id>.<n>.<hash>`를 쓰고 sync한다. stage
+   `<id>`(소문자 hex 32자리)의 모든 file은 `.flowmark/tx/` 안에서 `<id>.<name>`으로 이름 짓는다. 이 단계
+   전에 모든 대상의 folder와 만들 모든 folder가 `.flowmark/tx/`의 device(`st_dev`, Windows에서는
    `GetFileInformationByHandle`의 volume serial number)에 있는지 확인한다. 다르면 folder와 "a mount point
    inside the corpus is unsupported"를 밝히며 commit을 거절하고, 아무것도 stage하지 않는다.
-4. 모든 대상의 pre-image를 stage에 `<hash>`로 content-addressed하여 쓴다.
-5. **prepare record**를 쓴다: pre-hash와 post-hash를 가진 모든 rename. 없는 file은 빈 hash `""`다:
-   create는 빈 pre-hash를, delete는 빈 post-hash를 가진다.
-6. 모든 대상을 확인한 뒤 runtime의 atomic rename으로 rename을 실행한다: post-image를 가진 대상은 끝난
+4. **prepare record** `<id>.prepare`를 쓴다: commit이 받는 generation, pre-hash와 post-hash를 가진 모든
+   rename, 모든 pre-image와 post-image의 byte를 그 hash로. 없는 file은 빈 hash `""`다: create는 빈
+   pre-hash를, delete는 빈 post-hash를 가진다. record는 `<id>.prepare.part`에 쓰고 sync한 뒤 제자리로
+   rename하고 `.flowmark/tx/`를 sync한다. 이때부터 commit은 정해진다. 기록된 상태가 그 hash와 맞지 않는
+   record는 손상된 것이며 그 어떤 것도 적용하지 않는다.
+5. 모든 대상을 확인한 뒤 runtime의 atomic rename으로 rename을 실행한다: post-image를 가진 대상은 끝난
    것이고, pre-image를 가진 대상은 rename하며, 그 밖의 대상은 stage 전체를 거절한다. delete는 대상을
-   stage 안의 `<n>.deleted`로 rename한다. folder가 없는 create는 먼저 그 folder를 corpus root에서부터
-   symlink를 따르지 않고 만든다. Windows에서는 없는 folder마다 stage 안에 `<n>.dir.<k>`로 만들어 제자리로
-   옮긴다. replay도 똑같이 한다: 제자리에 있는 folder는 건너뛰고 stage에 있는 folder는 옮기며, 대상이
-   pre-hash에 있고 `<n>.<hash>`가 없으면 `<hash>`에서 사본을 다시 쓴다. 중단으로 남은 빈 table folder는
-   빈 table이다([문서 모델](20-document-model.ko.md#저장)).
-7. commit record를 쓴다.
-8. stage를 거둔다: prepare record를 먼저 옆으로 rename하므로, 거두는 도중 중단된 stage는 commit
-   record만 가지며 다시 거두어진다. 거두기는 `<n>.deleted` file을 지운다.
+   journal 안의 `<id>.<n>.deleted`로 rename한다. folder가 없는 create는 먼저 그 folder를 corpus root에서부터
+   symlink를 따르지 않고 만든다. Windows에서는 없는 folder마다 `<id>.<n>.dir.<k>`로 만들어 제자리로 옮긴다.
+   그다음 이름을 얻거나 잃은 folder를 한 번씩 sync한다. replay도 똑같이 한다: 제자리에 있는 folder는
+   건너뛰고 stage에 있는 folder는 옮기며, 대상이 pre-hash에 있고 사본이 없으면 record에서 사본을 다시 쓴다.
+   중단으로 남은 빈 table folder는 빈 table이다([문서 모델](20-document-model.ko.md#저장)).
+6. rename의 경로와 함께 [commit generation](#commit-generation)을 쓴다: generation이 rename이 끝났음을
+   말한다.
+7. stage를 거둔다: 그 file들을 지우되 prepare record를 마지막에, sync 없이 지운다. 정전이 되살린 record는
+   이미 쓰인 generation을 가리키며 다시 거두어진다.
 
 근거: rename은 대상에게 source의 file을 준다. rename마다 별개의 사본은 같은 두 대상을 두 file로
-유지하고 대상이 stage와 file을 나누지 않게 하며, 기록된 두 상태가 복구 거절을 위해 stage에 남는다.
-journal은 hard link가 필요 없다.
+유지하고 대상이 stage와 file을 나누지 않게 한다. prepare record가 기록된 두 상태를 가지므로, 복구 거절은 그
+옆에 `<id>.<hash>`로 그것을 쓰고 밝힌다. journal은 hard link가 필요 없다. 한 행 commit은 disk를 여섯 번
+기다린다: 사본, record와 그 folder, 대상의 folder, generation과 그 folder(`journal`의 `TestFlushes`).
+`synchronous=FULL`의 SQLite는 한두 번 기다리며, 여러 file의 commit은 그보다 적게 기다리고 atomic할 수 없다.
 
 journal과 복구의 모든 hash는 file의 raw byte의 SHA-256이며 소문자 hex 64자리다(raw-file-bytes hashing,
-[design plan](../plans/flowmark/plan.ko.md)). 각 단계는 publish된다: 5단계 뒤 `journal.prepared`, 7단계 뒤
-`journal.applied`, 8단계 뒤 `journal.collected`, 열 때 `journal.replayed`나 `journal.discarded`다.
+[design plan](../plans/flowmark/plan.ko.md)). 각 단계는 publish된다: 4단계 뒤 `journal.prepared`, 5단계의
+rename과 그 folder 뒤 `journal.applied`, 6단계 뒤 `journal.generation`, 7단계 뒤 `journal.collected`, 열 때
+`journal.replayed`나 `journal.discarded`다. 이전 엔진의 stage folder `.flowmark/tx/<id>/`는 열 때 그것을 쓴
+엔진을 밝혀 거절한다. 그 엔진이 stage를 완료하거나 버린다.
+
+### Commit generation
+
+- `.flowmark/generation`은 corpus의 commit generation의 선언된 장소다: JSON object 하나
+  `{"generation": N, "commits": [{"generation": n, "paths": [...]}, ...]}`이며, N은 마지막 commit의 번호이고
+  어떤 commit도 쓰지 않은 corpus에서는 commit 없이 0이다. `commits`는 마지막 64개 commit을 오래된 것부터
+  N까지 차례로 번호 매겨 가지며, 각각 그 commit이 쓰거나 지운 corpus 경로를 정렬해 가진다. 다른 형태의
+  file, 그 장소의 folder나 link는 그것을 밝혀 거절한다.
+- commit은 쓰인 generation의 다음 번호를 받는다: prepare record가 그 번호를 가지며, 이어서 file은 부분
+  이름과 rename으로 통째로 바뀐다. 그래서 lock을 잡지 않는 reader도 한 generation이나 그다음을 읽으며 일부를
+  읽지 않는다. commit은 무엇이든 stage하기 전에 generation을 읽으며, 읽을 수 없는 generation은 거기서
+  commit을 거절한다.
+- prepare된 stage를 완료하는 복구는 commit처럼 generation을 쓴다. prepare record가 file이 이미 가진
+  generation을 밝히는 stage는 거두어지며 그 대상은 판정하지 않는다: rename이 끝났으므로 그 뒤의 편집은
+  corpus 자신의 것이다. prepare record가 더 뒤의 generation을 밝히는 동안 손으로 지우거나 바꾼 generation
+  file은 그 commit만 가지므로, 그 전에 읽은 corpus는 경로를 얻지 못하고 tree 전체를 다시 읽는다.
+- corpus는 자신을 읽은 generation을 가지며, 이는 lock 아래에서 tree보다 먼저 읽는다. 다른 process는 file만으로
+  자신의 read 뒤의 commit들이 쓴 경로를 안다. 보관한 64개 commit보다 오래된 read는 경로를 얻지 못하고 tree
+  전체를 다시 읽는다. 손 편집은 commit을 거치지 않아 generation이 없으며 tree의 알림으로 알게 된다.
+  근거: 그렇지 않으면 corpus의 두 번째 handle은 다른 handle의 commit을 그것이 쓴 모든 file의 알림으로만 알게
+  되며, commit과 손 편집을 구별하지 못한다.
 
 전원 손실을 넘는 내구성은 각 단계의 file과 folder 항목이 다음 단계가 시작하기 전에 disk에 있기를
 요구한다. file은 runtime의 sync(`fsync`, macOS에서는 `F_FULLFSYNC`, Windows에서는 `FlushFileBuffers`)로
-sync한다. 만들거나 rename하거나 지운 이름은 Linux와 macOS에서 POSIX가 정하듯 그 folder를 sync하여
-지속되게 하고, folder flush가 없는 Windows에서는 move가 disk에 닿은 뒤 돌아오는 `MoveFileEx`와
-`MOVEFILE_WRITE_THROUGH`로 rename하여 지속되게 한다. 그래서 모든 stage file은 부분 이름에 쓴 뒤 제자리로
-rename하고, delete는 rename이다. 만든 folder는 Linux와 macOS에서 그 부모를 sync하여, Windows에서는 stage
-안에 만들어 `MOVEFILE_WRITE_THROUGH`로 제자리에 옮겨 지속되게 한다. lock은 folder 항목으로 sync하지
-않는다: 전원 손실은 그 holder를 끝내며, 그 record는 link 전에 sync한다. Windows에서 holder의 생존은 그
+sync한다. 만들거나 rename하거나 지운 이름은 Linux와 macOS에서 POSIX가 정하듯 그 folder를 단계의 모든 이름에
+대해 한 번 sync하여 지속되게 하고, folder flush가 없는 Windows에서는 move가 disk에 닿은 뒤 돌아오는
+`MoveFileEx`와 `MOVEFILE_WRITE_THROUGH`로 rename하여 지속되게 한다. 그래서 prepare record는 부분 이름에 쓴 뒤
+제자리로 rename하고, delete는 rename이다. 사본의 이름은 따로 flush하지 않는다: Linux와 macOS에서는 record의
+folder sync가 그것을 덮고, 복구는 없는 사본을 record에서 다시 쓴다. 만든 folder는 Linux와 macOS에서 그 부모를
+sync하여, Windows에서는 stage 안에 만들어 `MOVEFILE_WRITE_THROUGH`로 제자리로 옮겨 지속되게 한다. lock은 record도 folder 항목도
+sync하지 않는다: 전원 손실은 그 holder를 끝낸다. Windows에서 holder의 생존은 그
 process handle에서 읽으며 결코 exit code에서 읽지 않는다.
 
 ## File system
@@ -483,9 +607,10 @@ MySQL과 PostgreSQL은 `datetime(p)` column을 `NOW(6)`와 여섯 자리로 비�
 
 - command별 p95 지연 목표를 여기서 선언한다([open questions](110-open-questions.md)의 corpus 규모에서
   수백 millisecond).
-- 열린 corpus의 operation은 바뀐 것만 disk에서 읽고, parse가 달라질 수 있는 문서만 parse한다
-  ([corpus 열기](#corpus-열기)). 그래도 memory 안에서 corpus의 행을 훑으므로 그 비용은 bytes가 아니라
-  행에 따라 커진다. `writepath`의 benchmark `BenchmarkOpen`, `BenchmarkRead`, `BenchmarkWrite`가 이를
+- 열린 corpus의 operation은 바뀐 것만 disk에서 읽고, parse가 달라질 수 있는 문서의 행만 parse하고
+  배치한다([corpus 열기](#corpus-열기)). 그래서 operation의 읽기 비용은 corpus가 아니라 바뀐 것이다.
+  `statement`의 `TestCost`가 이를 확인한다: 읽기가 방문하고 parse하는 문서와 배치하고 색인하는 행은
+  1,000행과 100,000행에서 같다. `writepath`의 benchmark `BenchmarkOpen`, `BenchmarkRead`, `BenchmarkWrite`가 이를
   규모 한계에서 잰다: 작은 corpus 옆에 행 하나짜리 문서 10k를 두고, 각 operation의 CPU 시간과 wall
   시간의 95번째 백분위를 보고한다. macOS(Apple M3 Pro, `T12.5-2`)에서 읽기는 CPU 68 ms, 쓰기 — lock
   아래의 transaction 하나를 journal로 commit — 는 216 ms로 예산 안이다. wall 시간 p95인 273 ms와 1.1 s는
@@ -497,9 +622,68 @@ MySQL과 PostgreSQL은 `datetime(p)` column을 `NOW(6)`와 여섯 자리로 비�
   예산은 문서마다 행 하나일 때 — 행이 가장 많이 드는 경우 — 행마다 heap 8 KB이며,
   `TestKeptHeapBudget`이 지킨다(macOS에서 4.5 KB). 행이 많은 문서도 통째로 가진다. 그것을 parse할 때
   할당하는 것은 아래 codec의 비용이다.
-- 쓰기는 여전히 바뀐 대상마다 통째로 parse하고 render하며, executor의 post-image는 corpus의 행을
-  복사하므로 쓰기 비용은 대상 file과 행에 따라 커진다. 대상 file의 크기를 묶는 것은 [규모 한계](#규모-한계)이며,
-  대상의 byte당 비용은 codec의 비용이다.
+- 쓰기는 바뀐 대상마다 통째로 parse하고 render한다. executor의 post-image는 읽은 corpus의 문서를 모두
+  공유하고, 쓰기가 어떤 문서를 처음 바꿀 때에만 그 문서의 행을 복사한다. 그래서 쓰기는 corpus가 아니라 대상
+  file을 복사한다. 대상 file의 크기를 묶는 것은 [규모 한계](#규모-한계)이며, 대상의 byte당 비용은 codec의
+  비용이다. `irexec`의 `TestPostImage`가 공유를 확인하고, executor 시험의 모든 요청은 읽은 corpus가 그대로인지
+  확인한다.
+- 서로에게서 읽거나 쓴 두 corpus는 다른 곳에서만 비교한다: 문서는 바뀌지 않은 부분 tree를 둘이 공유하는 순서
+  있는 map이므로, 비교 — 예를 들어 commit이 lock 아래에서 다시 읽은 corpus를 transaction이 읽은 corpus와
+  비교하는 것 — 는 다른 문서까지의 경로만 걷는다. 그 길이는 B-tree의 조회가 그 깊이를 걷듯 문서 수의 로그의
+  상수배 이하다. map의 모양은 process가 뽑은 seed 아래의 hash를 거쳐 key의 함수가 되므로, 같은 문서의 두
+  map은 같은 경로를 따라 비교된다. `TestCost`가 둘을 확인한다: 쓰기는 1,000행과 100,000행에서 같은 행을
+  복사하고, 문서 수의 밑 2 로그의 여덟 배 이하를 비교한다.
+- corpus는 행의 index를 유지한다: key로, 대소문자를 가리지 않는 key로, 쓰기가 값으로 읽는 각 column의 값 —
+  foreign key, placement 또는 parent key, unique key, state machine의 column, 순서 있는 행의 형제 group —
+  으로, 각 identity column과 `key_prefix` key의 수로 찾는다. index는 문서처럼 persistent하며, 서로에게서
+  읽거나 쓴 corpus 사이에 공유된다. 읽기나 쓰기는 행을 바꾸는 문서마다 표시하고, 다음에 index에 접근하기 전에
+  표시된 문서의 행 가운데 새 행, 바뀐 행, 다른 부모 아래로 간 행, 다시 들어간 부모 아래의 행이 index에서
+  빠졌다가 지금 모습으로 다시 들어간다. 그래서 index의 비용은 바뀐 문서의 행이다. corpus를 연 뒤 첫 쓰기가
+  첫 읽기가 모든 문서를 읽듯 index를 한 번 만든다. `TestCost`가 쓰기와 외부 편집이 1,000행과 100,000행에서
+  같은 행을 넣음을 확인하고, executor 시험에서 index에 접근할 때마다 처음부터 만든 index와 비교한다. index는 각 key의
+  행을 그 행을 지닌 문서별로 지니고, index에 들어오는 문서는 자기 행이 바꾸는 key를 각각 한 번 쓰므로, 변경은 key를
+  함께 가진 모든 행이 아니라 그 key 아래 자기 문서의 행만큼 비용이 든다. 한 item을 참조하거나 한 sibling group을 함께
+  가진 note가 그 예다. `irexec`의 `TestIndexEntries`가 key를 함께 가진 200행과 2,000행에서 index가 행마다 같은 항목으로
+  만들어지고 그중 한 행의 쓰기가 두 크기에서 같은 항목을 씀을 확인하고, `TestCost`가 모든 연산이 1,000행과 100,000행에서
+  같은 항목을 씀을 확인한다.
+- 쓰기와 그 검사는 필요한 행을 table을 걷지 않고 index로 읽는다: 진술된 행, placement 행, parent 행,
+  참조되는 행은 key로, 가장 큰 `key_prefix` 수와 identity는 수 index로, 형제 group은 group으로, 한 행을
+  참조하는 행은 그 foreign key가 가리키는 key로, state의 행은 그 값으로, unique key의 행은 그 값으로 읽는다.
+  index는 이 값들 가운데 column type의 값이 아닌 것에 대해, 평가가 실패하는 행도 가진다. 검사는 필요한
+  key의 행을 그 행들과 함께 읽고, table의 각 행을 판정하던 대로 corpus 순서로 하나씩 판정한다. 그래서 table을
+  걷던 때와 같은 행에서 실패한다. 쓰기가 옮길 수 있는 link target은 쓰기가 바꾼 문서의 행에서 구하고, link
+  target 하나는 link나 쓰기가 요구할 때 그 key의 행에서 구한다. `TestCost`가 모든 쓰기가 1,000행과
+  100,000행에서 같은 행을 읽음을 확인하고, `TestIndexMarks`가 쓰기의 corpus를 바꾸는 각 변경이 표시되면
+  index가 처음부터 만든 index와 같고, 표시되지 않으면 다름을 확인한다.
+- corpus가 달라진 database는 다시 채우지 않고 갱신한다: 달라진 문서의 행은 key로 database에서 빠지고 corpus가
+  저장하는 대로 다시 들어간다. order column을 가진 files table에서는 바뀐 행이 들어가거나 떠나는 형제 group의
+  행도 함께 그렇게 한다. 위치는 group에서 구하기 때문이다. 가용성이 달라진 table은 다시 채운다. 갱신은 채우기와
+  같은 조건, 곧 foreign key를 끄고 상시 trigger를 내리고 check를 무시한 채 실행되므로, database는 corpus를
+  처음부터 채운 database와 같은 것을 가진다. 쓰기는 같은 차이에서 자기가 바꾼 행의 위치를 database에 돌려준다.
+  `TestCost`가 외부 편집과 쓰기가 1,000행과 100,000행에서 같은 행을 가져와 씀을 확인하고, `statement`의
+  `TestRefresh`와 `FuzzRefresh`가 각 golden corpus의 문서를 자르고, 지우고, 되돌리고, 맞바꾸며 갱신한 database가
+  처음부터 채운 database와 같고, 그 채우기가 실패할 때에만 실패함을 확인한다.
+- 쓰기 문장은 database에서 표가 아니라 자기가 바꾼 행을 읽는다: SQLite의 pre-update hook이 알린 행을 그 rowid에서
+  읽고, 할당하는 key는 corpus의 number index에서 가장 큰 것부터 내려가며 문장이 가져간 key를 건너뛴다. `TestCost`가
+  쓰기와 거부된 쓰기가 1,000행과 100,000행에서 database의 같은 행을 읽음을 확인하고, `statement`의 `TestCapture`,
+  `TestCaptureKeys`, `FuzzCapture`가 그 행으로 만든 차이가 표의 모든 행의 차이와 같음을 REPLACE, foreign key action,
+  trigger, rowid 변경, NUL을 품은 text에 걸쳐 확인한다.
+- 이 경로의 한계는 `TestCost`가 기록하는 비용과 `statement`의 `BenchmarkStatement`가 재는 시간이며, 작은 corpus 옆에
+  둔 표 하나의 1,000행, 10,000행, 100,000행에서 잰다. 비교한 문서를 뺀 모든 수치는 세 크기에서 같다: 한 행의 쓰기
+  statement는 lock 하나 아래에서 file을 많아야 6개 읽고, document를 많아야 2개 parse하고, 행을 많아야 204개 배치하고,
+  455개 index에 넣고, 102개 복사하고, 306개 훑고, 204개 저장하고, database의 행을 많아야 2개 읽는다; 거부된 쓰기는 행을
+  저장하기 전에 멈춘다; 100행의 외부 편집은 그 100행을 database에 쓴다. 비교한 문서는 문서 수의 로그로 늘어나
+  그 밑이 2인 로그의 여덟 배 안에 있으며, map의 모양이 process가 고른 seed를 따르므로 실행마다 다르다.
+  macOS(Apple M3 Pro, `T44`)의 한가한 기계에서 1,000행, 10,000행, 100,000행에
+  걸쳐: 한 행 읽기는 CPU 0.08~0.10 ms이고 wall time p95는 많아야 0.12 ms다; 한 행의 쓰기 statement는 CPU 12~40 ms이고
+  wall time p95는 62~88 ms다; 거부된 쓰기는 3.6~8.1 ms이고 p95는 많아야 11 ms다; 외부 편집은 4.5~6.3 ms이고 p95는
+  많아야 10 ms다.
+- face의 요청은 where가 단일 열 key와 parameter의 같음을 조건 하나로 지닌 conjunction이면 표의 행을 index로 읽는다:
+  그 key의 행이고, 모든 조건이 여전히 그 행을 판정하므로 답하는 행은 표를 걸어 얻는 행과 같다. 다른 where는 표를 걷고,
+  걷기는 훑은 행으로 counter에 기록된다. `TestCost`가 face의 한 행 읽기, insert, update, delete가 1,000행과 100,000행에서
+  같은 행을 읽음을 확인하고, `irexec`의 `TestKeyedRows`가 key로 고른 where가 걷기의 행을 답함을 확인한다. macOS(Apple M3 Pro, `T46`)의 한가한 기계에서 1,000행, 10,000행,
+  100,000행에 걸쳐 face의 key로 고른 한 행 읽기는 CPU 1.0~1.5 ms이고 wall time p95는 많아야 7.2 ms이며, 한 행의 insert,
+  update, delete는 CPU 1.2~16 ms이고 wall time p95는 많아야 74 ms다.
 - **codec의 비용**은 file의 byte에 선형이다: 상세 섹션을 가진 행들의 document file에서, file의 parse와
   render는 각각 그 megabyte당 CPU 0.1초 이하가 들고 그 byte당 64 byte 이하를 할당한다. 어떤 pass도 각
   heading을 각 상세 anchor와, 또는 각 행을 각 행과 비교하지 않는다: heading의 slug는 자기가 가져가는

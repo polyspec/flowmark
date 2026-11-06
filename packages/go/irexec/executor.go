@@ -16,6 +16,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"maps"
 	"slices"
 	"time"
 
@@ -36,6 +37,9 @@ type Executor struct {
 	loading *runtimemodel.Model
 	// stated is the model of the difference of a SQL statement, which SQLite has judged: a column's NOT NULL is its own.
 	stated *runtimemodel.Model
+	// face is the model a face's other operations read: the set's tables and the tables that schema statements added,
+	// since an operation works over any table of the catalog (spec 40 The faces).
+	face *runtimemodel.Model
 }
 
 // New returns the executor of cat. The catalog was loaded valid, so its set builds
@@ -55,7 +59,9 @@ func New(cat *catalog.Catalog) (*Executor, error) {
 		owned.External = false
 		loading.Entities[name] = &owned
 	}
-	// The difference of a SQL statement also writes the tables that schema statements added.
+	face := *m
+	face.Entities = maps.Clone(m.Entities)
+	// The difference of a SQL statement and a face also write the tables that schema statements added.
 	if cat.Added != nil && len(cat.Added.Tables) > 0 {
 		all, diags := runtimemodel.Build(append(slices.Clone(cat.Documents), cat.Added))
 		if len(diags) > 0 {
@@ -64,6 +70,7 @@ func New(cat *catalog.Catalog) (*Executor, error) {
 		for name, ent := range all.Entities {
 			if _, set := m.Entities[name]; !set {
 				loading.Entities[name] = ent
+				face.Entities[name] = ent
 			}
 		}
 	}
@@ -72,7 +79,7 @@ func New(cat *catalog.Catalog) (*Executor, error) {
 		return nil, err
 	}
 	stated.ManifestHash = m.ManifestHash
-	return &Executor{cat: cat, model: m, loading: &loading, stated: stated}, nil
+	return &Executor{cat: cat, model: m, loading: &loading, stated: stated, face: &face}, nil
 }
 
 // statedModel is the model of the difference of a SQL statement, over every table of the corpus: SQLite has judged the
@@ -102,6 +109,21 @@ func statedModel(cat *catalog.Catalog) (*runtimemodel.Model, error) {
 		return nil, &Error{Code: "SCHEMA_INVALID", Msg: runtimemodel.DiagnosticsError(diags)}
 	}
 	return m, nil
+}
+
+// modelOf returns the runtime model the request of cl reads: the difference of a SQL statement reads every table with
+// each column's NOT NULL its own, a face's load the tables a set does not own too, a face's other operations the tables
+// schema statements added too, and an orm request the set's tables.
+func (e *Executor) modelOf(cl *call) *runtimemodel.Model {
+	switch {
+	case cl.stated:
+		return e.stated
+	case cl.seed:
+		return e.loading
+	case cl.face:
+		return e.face
+	}
+	return e.model
 }
 
 // Model returns the runtime model of the executor's catalog.
@@ -137,6 +159,8 @@ type StatedUpdate struct {
 type call struct {
 	req   *ir.Request
 	audit *cell
+	// face is a request of a face operation, which reads the tables schema statements added too.
+	face bool
 	// seed is a write a face forms from stored rows: rows.load, or the difference of a SQL statement.
 	seed bool
 	// noForeignKeys is a seed of a connection whose foreign_keys is off.
@@ -175,14 +199,8 @@ func (e *Executor) decode(b []byte, orm bool) (*call, *Error) {
 	if len(m.Request) == 0 || string(bytes.TrimSpace(m.Request)) == "null" {
 		return nil, errf(codeIRInvalid, "the request message has no request")
 	}
-	decodeModel := e.model
-	if !orm && m.Seed {
-		decodeModel = e.loading
-		if m.ForeignKeysOff != nil {
-			decodeModel = e.stated
-		}
-	}
-	req, err := ir.Decode(decodeModel, m.Request)
+	kind := call{face: !orm, seed: !orm && m.Seed, stated: !orm && m.Seed && m.ForeignKeysOff != nil}
+	req, err := ir.Decode(e.modelOf(&kind), m.Request)
 	if err != nil {
 		return nil, fromIR(err)
 	}
@@ -217,7 +235,7 @@ func (e *Executor) decode(b []byte, orm bool) (*call, *Error) {
 		}
 		audit = &v
 	}
-	return &call{keys: m.Keys, updates: m.Updates, req: req, audit: audit, seed: !orm && m.Seed, stated: !orm && m.Seed && m.ForeignKeysOff != nil, noForeignKeys: !orm && m.Seed && m.ForeignKeysOff != nil && *m.ForeignKeysOff, params: m.Params, page: page, now: tm}, nil
+	return &call{keys: m.Keys, updates: m.Updates, req: req, audit: audit, face: kind.face, seed: kind.seed, stated: kind.stated, noForeignKeys: kind.stated && *m.ForeignKeysOff, params: m.Params, page: page, now: tm}, nil
 }
 
 // IsWrite reports whether the request message msg holds a write — insert, update,
@@ -281,14 +299,7 @@ func (e *Executor) run(c *Corpus, cl *call) (*Result, *Error) {
 	if c.cat != e.cat {
 		return nil, errf(codeInternal, "the corpus was read with another catalog than the executor's")
 	}
-	entities := e.model.Entities
-	if cl.seed {
-		entities = e.loading.Entities
-		if cl.stated {
-			entities = e.stated.Entities
-		}
-	}
-	if ent := entities[cl.req.Entity]; ent != nil {
+	if ent := e.modelOf(cl).Entities[cl.req.Entity]; ent != nil {
 		if _, ok := c.cat.Table(ent.Table); !ok {
 			return nil, errf("DRIVER", "no such table: %s", ent.Table)
 		}

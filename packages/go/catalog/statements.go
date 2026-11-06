@@ -14,13 +14,52 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/min-0-max/sqlite" // the database that a schema statement of a corpus runs in
 	"github.com/polyspec/orm/packages/go/engine/dbspec"
-	_ "modernc.org/sqlite" // the database that a schema statement of a corpus runs in
 )
 
 // StatementsFile is the file of the schema statements a corpus took in SQL, relative to its root, a JSON array of their
 // texts in order (spec 40 SQL statements). The document set declares what the set owns, and this file what SQL added.
 const StatementsFile = dbspecDir + "/statements.json"
+
+// SequencesFile is the file of the AUTOINCREMENT counters of a corpus, relative to its root: a JSON object of the
+// counter of each AUTOINCREMENT table that holds one, the largest key the table gave or held that no row of it holds
+// now (spec 40 SQL statements). The next key of such a table is one more than the larger of its counter and its largest
+// key, so no key is given twice.
+const SequencesFile = dbspecDir + "/sequences.json"
+
+// ParseSequences reads the counters of the bytes of SequencesFile; nil bytes, a corpus without the file, hold none.
+// A counter is a positive integer.
+func ParseSequences(data []byte) (map[string]int64, error) {
+	if data == nil {
+		return nil, nil
+	}
+	var out map[string]int64
+	if err := json.Unmarshal(data, &out); err != nil {
+		return nil, fmt.Errorf("%s: %w", SequencesFile, err)
+	}
+	if out == nil {
+		return nil, fmt.Errorf("%s: not a JSON object of counters", SequencesFile)
+	}
+	for table, n := range out {
+		if n <= 0 {
+			return nil, fmt.Errorf("%s: the counter of %s is %d, not a positive integer", SequencesFile, table, n)
+		}
+	}
+	return out, nil
+}
+
+// RenderSequences writes the counters as the bytes of SequencesFile, by table name; no counter is no file (nil).
+func RenderSequences(counters map[string]int64) []byte {
+	if len(counters) == 0 {
+		return nil
+	}
+	data, err := json.MarshalIndent(counters, "", "  ")
+	if err != nil {
+		panic("catalog: the counters do not marshal: " + err.Error())
+	}
+	return append(data, '\n')
+}
 
 // AddedDocument is the name of the document of the tables that schema statements added.
 const AddedDocument = "statements"
@@ -75,7 +114,7 @@ func (l *loader) applyStatements(docs []*document, added []string) (_ *dbspec.Do
 		return nil, err
 	}
 	ctx := context.Background()
-	db, err := sql.Open("sqlite", ":memory:")
+	db, err := sql.Open(sqlite.DriverName, ":memory:")
 	if err != nil {
 		return nil, err
 	}
@@ -101,6 +140,9 @@ func (l *loader) applyStatements(docs []*document, added []string) (_ *dbspec.Do
 	}
 	names, err := liveTables(ctx, db)
 	if err != nil {
+		return nil, err
+	}
+	if l.autoincrement, err = autoincrementTables(ctx, db, names); err != nil {
 		return nil, err
 	}
 	out := &dbspec.Document{Name: AddedDocument}
@@ -175,6 +217,46 @@ func liveTables(ctx context.Context, db *sql.DB) (_ []string, err error) {
 		out = append(out, n)
 	}
 	return out, rows.Err()
+}
+
+// autoincrementTables returns the tables of names in db whose schema statement declares AUTOINCREMENT. SQLite keeps that
+// flag to itself and creates its sqlite_sequence table with the first such table, so each statement, as db holds it,
+// runs alone in a new database, and SQLite says whether it made one: no text of the statement is read for it.
+func autoincrementTables(ctx context.Context, db *sql.DB, names []string) (map[string]bool, error) {
+	out := map[string]bool{}
+	for _, name := range names {
+		var text string
+		if err := db.QueryRowContext(ctx, "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?", name).Scan(&text); err != nil {
+			return nil, err
+		}
+		on, err := declaresAutoincrement(ctx, text)
+		if err != nil {
+			return nil, fmt.Errorf("the schema statement of %s: %w", name, err)
+		}
+		if on {
+			out[name] = true
+		}
+	}
+	return out, nil
+}
+
+// declaresAutoincrement reports whether the schema statement text of a table, run alone in a new database, makes SQLite
+// keep an AUTOINCREMENT counter for its table.
+func declaresAutoincrement(ctx context.Context, text string) (_ bool, err error) {
+	db, err := sql.Open(sqlite.DriverName, ":memory:")
+	if err != nil {
+		return false, err
+	}
+	defer func() { err = errors.Join(err, db.Close()) }()
+	db.SetMaxOpenConns(1)
+	if _, err := db.ExecContext(ctx, text); err != nil {
+		return false, err
+	}
+	var n int
+	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'sqlite_sequence'").Scan(&n); err != nil {
+		return false, err
+	}
+	return n > 0, nil
 }
 
 // RowIDColumn is the key column of a table that SQL created without a primary key: the rowid SQLite gives its rows.

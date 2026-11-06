@@ -145,9 +145,18 @@ func stages(t *testing.T, c *Corpus) []string {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The files of a stage are `<id>.<name>`; each stage is named once, by its id, and any other entry by its name.
 	names := []string{}
+	seen := map[string]bool{}
 	for _, e := range entries {
-		names = append(names, e.Name())
+		name := e.Name()
+		if len(name) > 33 && name[32] == '.' && isHex(name[:32], 32) {
+			name = name[:32]
+		}
+		if !seen[name] {
+			seen[name] = true
+			names = append(names, name)
+		}
 	}
 	return names
 }
@@ -253,4 +262,49 @@ func wantLinkErrors(t *testing.T, cases map[error]bool) {
 			t.Errorf("linkError(%v) = %v, want the hard-link cause", errno, linkError(err))
 		}
 	}
+}
+
+// recoverHeld runs the recovery of c under a lock it takes and releases, and returns the error of the recovery.
+func recoverHeld(t *testing.T, c *Corpus) error {
+	t.Helper()
+	l := acquire(t, c, "s1")
+	defer func() {
+		if err := l.Release(); err != nil {
+			t.Fatal(err)
+		}
+	}()
+	return c.Recover(l)
+}
+
+// plantedCorpus is a corpus in a new root that plant prepared, and the root.
+func plantedCorpus(t *testing.T, plant func(t *testing.T, root string)) (*Corpus, string) {
+	t.Helper()
+	root := t.TempDir()
+	plant(t, root)
+	c, _ := newCorpus(t, root)
+	return c, root
+}
+
+// newDatabaseIn opens a corpus in a new root and the new database of this process in it.
+func newDatabaseIn(t *testing.T) (string, *Corpus, *Database) {
+	t.Helper()
+	root := t.TempDir()
+	c, _ := newCorpus(t, root)
+	d, err := c.NewDatabase()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return root, c, d
+}
+
+// linkDatabaseDir puts a symbolic link to a folder elsewhere in the root in the place of the folder of the databases.
+func linkDatabaseDir(t *testing.T, root string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Join(root, "elsewhere"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, ".flowmark"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	symlink(t, filepath.Join(root, "elsewhere"), filepath.Join(root, filepath.FromSlash(DatabaseDir)))
 }

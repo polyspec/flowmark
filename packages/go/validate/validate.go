@@ -10,7 +10,10 @@ package validate
 
 import (
 	"fmt"
+	"iter"
 	"sort"
+
+	"github.com/polyspec/flowmark/packages/go/internal/pmap"
 
 	"github.com/polyspec/flowmark/packages/go/catalog"
 	"github.com/polyspec/flowmark/packages/go/store"
@@ -22,7 +25,7 @@ import (
 // it. An error is returned only when the corpus root cannot be read, or when orm
 // builds no runtime model of the loaded catalog that the view rule needs.
 func Corpus(cat *catalog.Catalog, root string) ([]catalog.Diagnostic, error) {
-	c, err := load(cat, store.DirFS(root), nil)
+	c, err := load(cat, store.DirFS(root))
 	if err != nil {
 		return nil, err
 	}
@@ -33,42 +36,19 @@ func Corpus(cat *catalog.Catalog, root string) ([]catalog.Diagnostic, error) {
 	return c.diags, nil
 }
 
-// load reads the corpus fsys in its two passes: the first locates the rows,
-// the second reads them with the index of the first. Each pass parses through its
-// memo of m; a nil m parses every document.
-func load(cat *catalog.Catalog, fsys store.FS, m *Memo) (*corpus, error) {
-	var first, second *store.Memo
-	if m != nil {
-		first, second = m.first, m.second
-	}
-	first.Begin(cat)
-	c, err := read(cat, fsys, noTargets{}, first)
+// load reads the corpus fsys in its two passes: the first locates the rows, the second reads them with the index of
+// the first. It is the read from nothing, which validate.Corpus reports on and every Live read equals.
+func load(cat *catalog.Catalog, fsys store.FS) (*corpus, error) {
+	c, err := read(cat, fsys, noTargets{})
 	if err != nil {
 		return nil, err
 	}
-	first.End()
 	idx, err := indexOf(cat, c)
 	if err != nil {
 		return nil, err
 	}
-	second.Begin(cat)
-	c, err = read(cat, fsys, idx, second)
-	if err != nil {
-		return nil, err
-	}
-	second.End()
-	return c, nil
+	return read(cat, fsys, idx)
 }
-
-// Memo keeps the parses of both passes of a read across the reads of a
-// long-lived corpus (store.Memo): a read parses only the documents whose parse
-// can differ from the last read's.
-type Memo struct {
-	first, second *store.Memo
-}
-
-// NewMemo returns an empty memo.
-func NewMemo() *Memo { return &Memo{first: store.NewMemo(), second: store.NewMemo()} }
 
 // sortDiags sorts diagnostics by file, line, column, rule and message.
 func sortDiags(diags []catalog.Diagnostic) {
@@ -90,38 +70,61 @@ func sortDiags(diags []catalog.Diagnostic) {
 	})
 }
 
-// Snapshot is a corpus read once, as a request reads it: every corpus document at
-// the place of a table with its bytes and rows, the read diagnostics (the walk and
-// the format rules), and the unavailable tables (spec 10 Diagnostics, "Unavailable
-// table"). It holds no validator rule but the byte-for-byte key duplicate that makes
-// a table unavailable.
+// Snapshot is a corpus read as a request reads it: every corpus document at the
+// place of a table with its bytes and rows, the read diagnostics (the walk and
+// the format rules) by file, and the unavailable tables (spec 10 Diagnostics,
+// "Unavailable table"). It holds no validator rule but the byte-for-byte key
+// duplicate that makes a table unavailable. Its maps are shared with the
+// snapshots read before and after it, and never changed.
 type Snapshot struct {
-	// Files holds each corpus document read at the place of a table, by corpus path.
-	Files map[string]*File
-	// Diagnostics holds the walk and format diagnostics of the read, sorted.
-	Diagnostics []catalog.Diagnostic
+	files pmap.Map[string, *File]
+	diags pmap.Map[string, []catalog.Diagnostic]
 	// unavailable holds, for each unavailable table, the diagnostic a request
 	// that needs its rows names.
 	unavailable map[string]catalog.Diagnostic
+	// full is whether the read read the whole corpus, and changed the paths whose
+	// file or diagnostics changed since the snapshot before, when it did not.
+	full    bool
+	changed []string
 }
 
-// Read reads the corpus fsys as a request reads it, parsing through m (nil to
-// parse every document). An error is returned only when the corpus root cannot be
-// read.
-func Read(cat *catalog.Catalog, fsys store.FS, m *Memo) (*Snapshot, error) {
-	c, err := load(cat, fsys, m)
-	if err != nil {
-		return nil, err
-	}
-	sortDiags(c.diags)
-	s := &Snapshot{Files: c.files, Diagnostics: c.diags, unavailable: map[string]catalog.Diagnostic{}}
-	for _, tb := range cat.Tables {
-		if d, ok := c.unavailableBy(tb.Name); ok {
-			s.unavailable[tb.Name] = d
-		}
-	}
-	return s, nil
+// Read reads the corpus fsys as a request reads it, from nothing. An error is
+// returned only when the corpus root cannot be read.
+func Read(cat *catalog.Catalog, fsys store.FS) (*Snapshot, error) {
+	return NewLive(cat, nil).Read(fsys, nil, true)
 }
+
+// File returns the corpus document at path, nil when the corpus holds none.
+func (s *Snapshot) File(path string) *File {
+	f, _ := s.files.Get(path)
+	return f
+}
+
+// Files yields every corpus document by corpus path, in byte order of the paths.
+func (s *Snapshot) Files() iter.Seq2[string, *File] { return s.files.All() }
+
+// DiagnosticsAt returns the read diagnostics at the corpus path file, sorted.
+func (s *Snapshot) DiagnosticsAt(file string) []catalog.Diagnostic {
+	d, _ := s.diags.Get(file)
+	return d
+}
+
+// AllDiagnostics yields the read diagnostics of each corpus path that has any, by path in byte order, each sorted.
+func (s *Snapshot) AllDiagnostics() iter.Seq2[string, []catalog.Diagnostic] { return s.diags.All() }
+
+// Diagnostics returns every read diagnostic, sorted.
+func (s *Snapshot) Diagnostics() []catalog.Diagnostic {
+	var out []catalog.Diagnostic
+	for _, ds := range s.diags.All() {
+		out = append(out, ds...)
+	}
+	return out
+}
+
+// Changed returns the paths whose document or diagnostics changed since the
+// snapshot the same Live read before, and false; or true when the read read the
+// whole corpus, so every path may have changed.
+func (s *Snapshot) Changed() ([]string, bool) { return s.changed, s.full }
 
 // Unavailable returns the diagnostic that makes table unavailable, and false when
 // the table is available.
@@ -165,12 +168,16 @@ func (c *corpus) unavailableBy(table string) (catalog.Diagnostic, bool) {
 
 // holds reports whether table holds the files at the place of placeTable: the table
 // itself, or a block table whose placement chain reaches it.
-func (c *corpus) holds(table, placeTable string) bool {
+func (c *corpus) holds(table, placeTable string) bool { return holds(c.cat, table, placeTable) }
+
+// holds reports whether table of cat holds the files at the place of placeTable: the table itself, or a block table
+// whose placement chain reaches it.
+func holds(cat *catalog.Catalog, table, placeTable string) bool {
 	for name := table; ; {
 		if name == placeTable {
 			return true
 		}
-		tb, ok := c.cat.Table(name)
+		tb, ok := cat.Table(name)
 		if !ok || tb.Storage.Kind != catalog.StorageBlock {
 			return false
 		}

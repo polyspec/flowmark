@@ -10,6 +10,8 @@ import (
 	"syscall"
 
 	"golang.org/x/sys/unix"
+
+	"github.com/polyspec/flowmark/packages/go/internal/cost"
 )
 
 // stageFoldersDefault: Linux and macOS make a created folder durable by syncing its parent, so no folder is staged.
@@ -35,7 +37,7 @@ func fileIdentity(f *os.File) (fileID, error) {
 
 // syncDir syncs a folder, so the names created, renamed or removed in it are on disk (POSIX); the runtime's Sync is
 // F_FULLFSYNC on macOS.
-func syncDir(dir string) error {
+func syncDir(k *cost.Counts, dir string) error {
 	if asynchronous.Load() {
 		return nil
 	}
@@ -43,36 +45,41 @@ func syncDir(dir string) error {
 	if err != nil {
 		return err
 	}
+	k.Add(cost.Flushes, 1)
 	return errors.Join(f.Sync(), f.Close())
 }
 
 // moveDurable renames src to dst and syncs the folders of both names.
-func moveDurable(src, dst string) error {
+func moveDurable(k *cost.Counts, src, dst string) error {
 	if err := os.Rename(src, dst); err != nil {
 		return err
 	}
-	if err := syncDir(filepath.Dir(dst)); err != nil {
+	if err := syncDir(k, filepath.Dir(dst)); err != nil {
 		return err
 	}
 	if filepath.Dir(src) != filepath.Dir(dst) {
-		return syncDir(filepath.Dir(src))
+		return syncDir(k, filepath.Dir(src))
 	}
 	return nil
 }
 
-// moveFolderDurable moves a folder to a name that does not exist, as moveDurable does a file.
-func moveFolderDurable(src, dst string) error { return moveDurable(src, dst) }
+// moveName renames src to dst; the commit syncs the folders that gained or lost a name once, after all its renames
+// (syncFolder).
+func moveName(_ *cost.Counts, src, dst string) error { return os.Rename(src, dst) }
+
+// moveFolderName moves a folder to a name that does not exist, as moveName does a file.
+func moveFolderName(_ *cost.Counts, src, dst string) error { return os.Rename(src, dst) }
 
 // mkdirDurable creates a folder and syncs its parent.
-func mkdirDurable(p string) error {
+func mkdirDurable(k *cost.Counts, p string) error {
 	if err := os.Mkdir(p, 0o755); err != nil {
 		return err
 	}
-	return syncDir(filepath.Dir(p))
+	return syncDir(k, filepath.Dir(p))
 }
 
-// syncRemoved makes the removal of a name in dir durable.
-func syncRemoved(dir string) error { return syncDir(dir) }
+// syncFolder makes the names created, renamed or removed in dir durable.
+func syncFolder(k *cost.Counts, dir string) error { return syncDir(k, dir) }
 
 // deviceOf returns the device of a path, st_dev.
 func deviceOf(p string) (uint64, error) {
@@ -88,3 +95,9 @@ func deviceOf(p string) (uint64, error) {
 func linkUnsupported(err error) bool {
 	return errors.Is(err, unix.EPERM) || errors.Is(err, unix.ENOTSUP) || errors.Is(err, unix.EOPNOTSUPP)
 }
+
+// linkFile links new to old, the hard link that makes the lock and an unlock's claim appear atomically.
+func linkFile(old, new string) error { return os.Link(old, new) }
+
+// lstatFile reads the attributes of p without following a symbolic link at its name.
+func lstatFile(p string) (os.FileInfo, error) { return os.Lstat(p) }

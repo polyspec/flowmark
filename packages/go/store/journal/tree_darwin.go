@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"golang.org/x/sys/unix"
 )
@@ -78,6 +79,9 @@ func (w *darwinTree) watch(rel string, dir bool) error {
 	w.byPath[rel] = fd
 	return nil
 }
+
+// wait has nothing to wait for: the kernel queues a notification in the system call that makes the change.
+func (w *darwinTree) wait(time.Duration) (bool, error) { return false, nil }
 
 func (w *darwinTree) drain() (Notices, error) {
 	var n Notices

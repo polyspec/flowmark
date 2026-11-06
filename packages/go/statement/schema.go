@@ -2,12 +2,10 @@ package statement
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"regexp"
+	"maps"
 	"slices"
 	"strings"
 
@@ -19,39 +17,83 @@ import (
 
 // schemaChange reports whether the statement changes the schema.
 func schemaChange(text string) bool {
-	fields := strings.Fields(text)
-	if len(fields) == 0 {
-		return false
-	}
-	switch strings.ToUpper(fields[0]) {
+	switch firstKeyword(statementTokens(text)) {
 	case "CREATE", "ALTER", "DROP":
 		return true
 	}
 	return false
 }
 
-var conditionalSchema = regexp.MustCompile(`(?i)^\s*(CREATE|DROP)\s+(?:(?:TEMP|TEMPORARY|UNIQUE|VIRTUAL)\s+)?(?:TABLE|INDEX|VIEW|TRIGGER)\s+IF\s+(NOT\s+)?EXISTS\s+(?:"([^"]+)"|([^\s(;]+))`)
+// conditional reads a CREATE IF NOT EXISTS or a DROP IF EXISTS of a table, an index, a view or a trigger of the main
+// schema from its tokens: the name it states and whether it states NOT. ok is false for any other statement.
+func conditional(toks []token) (name string, not, ok bool) {
+	at := func(i int) string {
+		if i < len(toks) {
+			return toks[i].keyword()
+		}
+		return ""
+	}
+	verb := at(0)
+	if verb != "CREATE" && verb != "DROP" {
+		return "", false, false
+	}
+	i := 1
+	switch at(i) {
+	case "TEMP", "TEMPORARY", "UNIQUE", "VIRTUAL":
+		i++
+	}
+	switch at(i) {
+	case "TABLE", "INDEX", "VIEW", "TRIGGER":
+	default:
+		return "", false, false
+	}
+	if at(i+1) != "IF" {
+		return "", false, false
+	}
+	i += 2
+	if at(i) == "NOT" {
+		not = true
+		i++
+	}
+	if at(i) != "EXISTS" || i+1 >= len(toks) {
+		return "", false, false
+	}
+	named := toks[i+1]
+	if i+3 < len(toks) && toks[i+2].is(".") {
+		if !strings.EqualFold(named.text, "main") {
+			return "", false, false
+		}
+		named = toks[i+3]
+	}
+	if named.kind != tokenWord && named.kind != tokenQuoted {
+		return "", false, false
+	}
+	return named.text, not, true
+}
 
 // alreadySo reports whether a CREATE IF NOT EXISTS or a DROP IF EXISTS finds what it states, and so changes nothing. Such
 // a statement asks SQLite for no write lock, so it does not wait for a writer.
 func alreadySo(ctx context.Context, s *writepath.Session, text string) (bool, error) {
-	m := conditionalSchema.FindStringSubmatch(text)
-	if m == nil {
+	name, not, ok := conditional(statementTokens(text))
+	if !ok {
 		return false, nil
 	}
 	c, err := s.Snapshot(ctx)
 	if err != nil {
 		return false, err
 	}
-	var found *Answer
-	err = s.ReadSnapshot(func(slot *io.Closer, unlock func()) (bool, error) {
-		found, _, err = readInto(ctx, s, c, slot, unlock, "SELECT 1 FROM sqlite_master WHERE name = ?", []any{m[3] + m[4]})
-		return false, err
-	})
+	r, err := readerFor(ctx, s, c)
 	if err != nil {
 		return false, err
 	}
-	return (len(found.Rows) > 0) == (m[2] != ""), nil
+	found, open, err := readBatch(ctx, r.q, "SELECT 1 FROM sqlite_master WHERE name = ?", []any{name})
+	if open != nil {
+		err = errors.Join(err, open.Close())
+	}
+	if err = errors.Join(err, r.release()); err != nil {
+		return false, err
+	}
+	return (len(found.Rows) > 0) == not, nil
 }
 
 // runSchema runs a schema statement. It is its own transaction: an open transaction commits first and goes on after it,
@@ -60,7 +102,7 @@ func alreadySo(ctx context.Context, s *writepath.Session, text string) (bool, er
 // corpus's schema statements, with the rows of the tables it changed written again under the new columns.
 func runSchema(ctx context.Context, s *writepath.Session, text string, args []any) (_ *Answer, err error) {
 	if s.InTransaction() {
-		if err := commit(s); err != nil {
+		if err := s.Commit(); err != nil {
 			return nil, err
 		}
 		defer func() {
@@ -72,67 +114,64 @@ func runSchema(ctx context.Context, s *writepath.Session, text string, args []an
 	}
 	var answer *Answer
 	err = s.Reschema(ctx, func(c *irexec.Corpus) (*catalog.Catalog, []journal.Change, error) {
-		h, err := heldFor(ctx, s, c)
+		d, release, err := writerFor(ctx, s, c)
 		if err != nil {
 			return nil, nil, err
 		}
-		cat, changes, err := apply(ctx, s, h.db, c, text, args, &answer)
+		// The writer's transaction ends with the schema statement's commit: it commits after the corpus commit is written.
+		if err := follow(ctx, s, d, release); err != nil {
+			return nil, nil, err
+		}
+		cat, next, changes, err := apply(ctx, s, d.w, c, text, args, &answer)
 		if err != nil {
 			return nil, nil, err
 		}
+		// The database holds what the corpus then holds, its AUTOINCREMENT counters included.
+		d.corpus = next
 		return cat, changes, nil
 	})
 	if err != nil {
-		return nil, errors.Join(err, drop(s))
-	}
-	// The database already holds what the corpus now holds, its AUTOINCREMENT counters included.
-	err = s.View(ctx, func(c *irexec.Corpus) error {
-		if h, ok := s.Held().(*held); ok {
-			h.corpus = c
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, errors.Join(err, drop(s))
+		return nil, err
 	}
 	return answer, nil
 }
 
-// apply runs the schema statement on db and returns the catalog and the changes that make it stand.
-func apply(ctx context.Context, s *writepath.Session, db *sql.DB, c *irexec.Corpus, text string, args []any, answer **Answer) (*catalog.Catalog, []journal.Change, error) {
+// apply runs the schema statement on db and returns the catalog, the corpus under it that the database then holds, and
+// the changes that make it stand.
+func apply(ctx context.Context, s *writepath.Session, db runner, c *irexec.Corpus, text string, args []any, answer **Answer) (*catalog.Catalog, *irexec.Corpus, []journal.Change, error) {
 	before, err := columnsOf(ctx, db)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	schemaBefore, err := schemaText(ctx, db)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	a, err := query(ctx, db, text, args)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	*answer = a
 	schemaAfter, err := schemaText(ctx, db)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	// CREATE ... IF NOT EXISTS of what exists changes nothing, so it does not stand in the corpus.
 	if schemaBefore == schemaAfter {
-		return c.Catalog(), nil, nil
+		return c.Catalog(), c, nil, nil
 	}
 	after, err := columnsOf(ctx, db)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	added := append(slices.Clone(c.Catalog().Statements), text)
 	cat, diags := catalog.LoadStatements(s.Root(), added)
 	if len(diags) > 0 {
-		return nil, nil, &Error{codeConstraint, fmt.Sprintf("the schema statement leaves a corpus that does not load: %v", diags)}
+		return nil, nil, nil, &Error{codeConstraint, fmt.Sprintf("the schema statement leaves a corpus that does not load: %v", diags)}
 	}
 	file, err := json.MarshalIndent(added, "", "  ")
 	if err != nil {
-		return nil, nil, &Error{codeInternal, err.Error()}
+		return nil, nil, nil, &Error{codeInternal, err.Error()}
 	}
 	changes := []journal.Change{{Path: catalog.StatementsFile, Data: append(file, '\n')}}
 	var rewrite []*catalog.Table
@@ -158,9 +197,6 @@ func apply(ctx context.Context, s *writepath.Session, db *sql.DB, c *irexec.Corp
 			}
 		}
 	}
-	if len(gone) == 0 && len(rewrite) == 0 {
-		return cat, changes, nil
-	}
 	old := c.Catalog()
 	var drop []string
 	for _, name := range gone {
@@ -170,48 +206,91 @@ func apply(ctx context.Context, s *writepath.Session, db *sql.DB, c *irexec.Corp
 		}
 		paths, err := c.FilesOf(tb.Name)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		drop = append(drop, paths...)
 	}
 	next := c.Rebased(cat, drop)
 	exec, err := irexec.New(cat)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	for _, tb := range fillOrder(cat) {
 		if !slices.Contains(rewrite, tb) {
 			continue
 		}
-		rows, err := rowsOf(ctx, db, tb)
+		rows, err := rowsOf(ctx, db, tb, c.Cost())
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		if len(rows) == 0 {
 			continue
 		}
 		msg, err := insertMessage(cat, tb, rows, true)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		res, err := exec.ExecuteFace(next, msg)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		next = res.Post.Next
 	}
+	if next, err = sequencedUnder(ctx, db, c, next, cat); err != nil {
+		return nil, nil, nil, err
+	}
 	for _, p := range next.Differs(c) {
+		if p == catalog.StatementsFile {
+			continue // written above, as the statements stand
+		}
 		if data := next.Data(p); data != nil {
 			changes = append(changes, journal.Change{Path: p, Data: data})
 		} else {
 			changes = append(changes, journal.Change{Path: p, Delete: true})
 		}
 	}
-	return cat, changes, nil
+	return cat, next, changes, nil
+}
+
+// sequencedUnder gives next, the corpus of the schema statement under the catalog cat, the AUTOINCREMENT counters the
+// statement left in db: a counter of c whose table is still an AUTOINCREMENT table stays, and a sequence SQLite keeps
+// past the table's sequence in next, as the counter of a table the statement renamed, is its counter. A dropped table
+// leaves no counter, as SQLite drops its row of sqlite_sequence.
+func sequencedUnder(ctx context.Context, db runner, c, next *irexec.Corpus, cat *catalog.Catalog) (*irexec.Corpus, error) {
+	counters, err := catalog.ParseSequences(c.Data(catalog.SequencesFile))
+	if err != nil {
+		return nil, &Error{codeInternal, err.Error()}
+	}
+	maps.DeleteFunc(counters, func(table string, _ int64) bool {
+		tb, ok := cat.Table(table)
+		return !ok || !tb.Autoincrement
+	})
+	if err := next.SetSequences(catalog.RenderSequences(counters)); err != nil {
+		return nil, &Error{codeInternal, err.Error()}
+	}
+	given, err := sequencesOf(ctx, db, cat)
+	if err != nil {
+		return nil, err
+	}
+	risen := false
+	for table, n := range given {
+		if n > next.Sequence(table) {
+			if counters == nil {
+				counters = map[string]int64{}
+			}
+			counters[table], risen = n, true
+		}
+	}
+	if risen {
+		if err := next.SetSequences(catalog.RenderSequences(counters)); err != nil {
+			return nil, &Error{codeInternal, err.Error()}
+		}
+	}
+	return next, nil
 }
 
 // schemaText is the text of the schema of db.
-func schemaText(ctx context.Context, db *sql.DB) (string, error) {
+func schemaText(ctx context.Context, db runner) (string, error) {
 	var text string
 	row := db.QueryRowContext(ctx, "SELECT COALESCE(group_concat(type || name || COALESCE(sql, ''), char(10)), '') FROM sqlite_master")
 	if err := row.Scan(&text); err != nil {
@@ -221,7 +300,7 @@ func schemaText(ctx context.Context, db *sql.DB) (string, error) {
 }
 
 // columnsOf is the columns of each table of db, in order.
-func columnsOf(ctx context.Context, db *sql.DB) (_ map[string][]string, err error) {
+func columnsOf(ctx context.Context, db runner) (_ map[string][]string, err error) {
 	rows, err := db.QueryContext(ctx, `SELECT m.name, p.name FROM sqlite_master m, pragma_table_info(m.name) p WHERE m.type = 'table' AND m.name NOT LIKE 'sqlite_%' ORDER BY m.name, p.cid`)
 	if err != nil {
 		return nil, &Error{codeInternal, err.Error()}

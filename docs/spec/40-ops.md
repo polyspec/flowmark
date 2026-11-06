@@ -10,10 +10,12 @@ The order of the commit protocol is normative.
 ## Opening a corpus
 
 - Opening runs **recovery first**, under the lock. It removes the pending lock records of ended
-  holders ([the lock](#the-lock)) and leaves every `*.clearing` claim alone. `.flowmark/tx/` holds
-  at most one stage, named by 32 lowercase hex digits of 128 random bits from the OS random source;
-  an entry of another name or form, or a second stage, refuses opening and is named. The stage is
-  collected when it holds a commit record, completed when it holds a prepare record, and discarded
+  holders ([the lock](#the-lock)) and the databases of ended openings ([SQL statements](#sql-statements)),
+  and leaves every `*.clearing` claim alone. `.flowmark/tx/` holds
+  the files of at most one stage, named `<id>.<name>` after its id, 32 lowercase hex digits of 128
+  random bits from the OS random source; an entry of another name or form, a second stage, or a stage
+  folder of an earlier engine refuses opening and is named. The stage is collected when its prepare
+  record names a generation the corpus has, completed when it holds a prepare record, and discarded
   otherwise. Recovery is idempotent: a replay interrupted at any step is completed by the next.
   Recovery runs again at every acquisition of the lock, before the operation reads the corpus: a stage
   found under the lock is a commit whose holder ended, as SQLite rolls a hot journal back before it
@@ -73,6 +75,20 @@ The order of the commit protocol is normative.
     from another file changed — a row whose detail section appeared or disappeared, a key that became
     shared, a dangling link whose row appeared. The rows of the other documents are kept between
     operations and never changed; a write changes copies of them.
+  - The read is kept by unit: each folder and each document is one, and its result depends only on
+    what it reads — a folder its entries, a document its bytes — and on the link targets its parse
+    asked for. A folder whose entries changed lists them again, builds the units of its new entries
+    and of those whose kind changed (a document that became a folder, a symbolic link in a
+    document's stead), and removes the units of the entries gone, with everything under them; its
+    cost is its entries, not the corpus. The first pass keeps the targets of every key by the
+    document that holds it, and the second pass keeps, by key, the documents whose links asked for
+    it, so a key whose target changed parses again exactly those documents. The duplicate keys of
+    each table and the unreadable entries that make a table unavailable are kept by table, so the
+    availability of a table is known without its rows. The read hands the next corpus the paths
+    whose document or diagnostics changed, and that corpus shares every other document with the one
+    before it. A read is the read from nothing, path for path: `TestLive` and `FuzzLive` of
+    `validate` hold it after every change of every case and golden corpus, and `TestFromSnapshot` of
+    `irexec` holds the corpus built on the one before.
   - A watch that cannot be armed fails the operation as `DRIVER`, naming the cause: on macOS the
     limit of open files (`ulimit -n`, `kern.maxfilesperproc`), on Linux
     `fs.inotify.max_user_watches`.
@@ -265,17 +281,57 @@ answer is that of a SQLite connection: `columns`, `rows`, `affected`, `last_inse
 corpus: an orm markdown connection is a SQLite connection whose statements this server answers, so every plan, codec and
 utility of orm's SQLite dialect holds on a corpus, and a client has only this driver to implement.
 
-- **What runs them.** The corpus is materialized into an in-memory SQLite database: the schema of its documents and of
-  `dbspec/statements.json`, then its rows. The statement runs there. The difference of its rows goes back through the
-  executor as one write per table, so the corpus's rules still judge it and the commit protocol writes it; SQLite has
+- **What runs them.** The corpus is materialized into a SQLite database: the schema
+  of its documents and of `dbspec/statements.json`, then its rows. The statement runs there. SQLite's pre-update hook
+  reports each row the statement changed, its own and those of a REPLACE, a foreign key action and a trigger; the
+  difference is formed from the image of each such row before its first change and from the rows the database holds at
+  the rowids it changed, so a write reads the rows it changed and not every row. A row of a table without a rowid,
+  whose rowid SQLite leaves undefined, is known by its primary key, and its rows are read at the keys it changed in the
+  order of that key under its collations. A row gone whose key equals the key of a row added without regard to case,
+  as the corpus compares keys, is deleted before the inserts, unjudged by the foreign keys SQLite already judged, so a
+  key changed only in its case is written as the database committed it. A text of an image is read by its length,
+  so a text holding a NUL comes whole; the driver's release reads it up to its first NUL, and the engine pins a
+  fork of the driver, which reads it by its length. The difference goes back through the executor as one write per
+  table, so the corpus's rules still judge it and the commit protocol writes it; SQLite has
   already judged NOT NULL and the foreign keys, its triggers wrote their rows, and a codec does not judge what a statement
-  stores. The database stands between statements under the lock while the corpus does not differ from it.
+  stores. The database stands between statements under the lock while the corpus does not differ from it; when the
+  corpus differs under the same catalog, a database no transaction holds is refreshed to it
+  ([cost model](#cost-model)), and otherwise it is filled again.
 - **Schema statements.** A schema statement is its own transaction: an open transaction commits first and a new one goes
   on after it. A statement that changes the schema is appended to `dbspec/statements.json`, and the tables it changed
   are written again under their new columns; a document keeps its text. `CREATE ... IF NOT EXISTS` and `DROP ... IF
-  EXISTS` that find what they state change nothing and take no lock.
+  EXISTS` that find what they state change nothing and take no lock. The schema statements are read with the corpus
+  when it is read from nothing and after each commit that wrote them, of any process, as the commit generation names
+  it, and the process takes the catalog they give, as a SQLite connection takes the schema another connection changed:
+  a statement on a table another process renamed or dropped is refused as SQLite refuses it, and a deferred transaction
+  whose snapshot is older than the schema cannot write (`SQLITE_BUSY_SNAPSHOT`). A face's operation reads the tables
+  that schema statements added, and the face's `schema` the catalog as it stands; an orm request reads the set's tables,
+  which its manifest names. `TestSchemaOfAnotherProcess` of `statement` and `TestCatalogOfSchemaStatements` of `ops`
+  hold it.
+- **Reading a statement.** The server knows a statement's kind — a read, a transaction statement, a `PRAGMA`, a schema
+  statement — by its words, read as SQLite's tokenizer reads them: a `--` or `/* */` comment is whitespace, and a word
+  inside a string or a quoted identifier is no word. A statement after a comment is the statement it would be without
+  it, so a read after a comment runs under `query_only` as any read does (`TestCommentsBeforeAStatement` and
+  `TestTokens` of `statement`).
 - **Tables.** A table takes its columns, its declared types and its key from its statement. A primary key that SQLite lets
   hold NULL names no row, so such a table keys by its rowid, as does a table with no primary key.
+- **Values.** A cell answers the value SQLite holds: the text of a column declared `DATE`, `DATETIME` or `TIMESTAMP`
+  is the text stored, byte for byte, as a SQLite connection reads it. The driver's release parses such a text into a
+  time, which another form writes back; the engine's fork of the driver reads it as stored (`TestTemporalText` of
+  `statement`).
+- **AUTOINCREMENT counters.** A table whose statement declares its key `AUTOINCREMENT`, and a table of an `identity`
+  key, which the set renders so, never gives a key twice, as SQLite's `AUTOINCREMENT` gives none; a plain `INTEGER PRIMARY
+  KEY` gives one more than its largest key, as SQLite does. The counter of such a table is part of the corpus, in
+  `dbspec/sequences.json`, a JSON object of a positive counter by table. The sequence of the table is the larger of its
+  counter and its largest key, and the key it gives next is one more, so a key written by hand counts too. A write that
+  lowers the sequence, a delete or a key change of the row of the largest key, raises the counter to it, and a key the
+  database gave past the sequence, as a key a statement inserted and deleted again, raises it after the statement; the
+  commit writes the file with the rows. A fill and a refresh give the database the sequence of the corpus. A renamed
+  table keeps its counter, and a dropped table takes it away, as SQLite's `sqlite_sequence` does. The file is read with
+  the corpus when it is read from nothing and after each commit that wrote it, of any process, as the commit generation
+  names it; a hand edit of the file is read at the next of these, as a hand edit of `dbspec/` is. A git rewind rewinds
+  the counters with the rows. `TestSequences` of `statement`, `TestSequenceRaise` and `TestRaiseSequences` of `irexec`,
+  and `TestAutoincrement` and `TestSequencesFile` of `catalog` hold it.
 - **Assigned columns.** A `key_prefix` key and an `order` position are the corpus's to assign, so the schema of the
   statements lets each hold NULL, as SQLite's `INTEGER PRIMARY KEY` does. An insert that leaves one out, or gives it NULL,
   is given the next key of the prefix ([document model](20-document-model.md#keys)) or the next position under its parent,
@@ -287,8 +343,51 @@ utility of orm's SQLite dialect holds on a corpus, and a client has only this dr
   `(SQLITE_BUSY)`, and a write after a commit newer than its first read is `CANCELED` ending in `(SQLITE_BUSY_SNAPSHOT)`;
   both leave the transaction open for its `ROLLBACK`. A deferred failure of a foreign key fails at `COMMIT` and leaves the
   transaction open, as on SQLite.
-- **Reads.** A read that finds the lock held by another session reads what is committed, on a database of its own, and never
-  waits for a writer: the behaviour of SQLite in WAL mode.
+- **The database of an opening.** The database of an opening's statements is a file of `.flowmark/sql/`, a folder
+  the engine makes with access for its owner alone: a protected access list that grants the process's user alone on
+  Windows, mode `0700` elsewhere; an existing folder that grants more, a link, a reparse point and a file in its place
+  are refused. Each database is `<token>.db`, with the files SQLite keeps beside it (`-wal`, `-shm`, `-journal`), and
+  `<token>.holder`, the holder record of the process that made it ([the holder record](#the-holder-record)), written
+  and synced before the database exists; the token is 32 lowercase hex digits of 128 random bits, so two openings of
+  one process have two databases. A file of a new token that exists already, a link included, is refused; the driver
+  opens a file with fixed flags and has no `SQLITE_OPEN_NOFOLLOW`, so a link planted between the check and the open
+  needs the owner's own access to the folder. The recovery removes the database of a holder of this host that has
+  ended, its record last; a database of a running holder, of a holder of another host, whose processes cannot be judged
+  from here, and of a record that does not parse, since its writer may still be writing it, stays, and a name that is
+  no holder record is never touched. `TestNewDatabase`, `TestNewDatabaseRefuses`, `TestRecoverRemovesEndedDatabases`
+  and `TestRecoverRefusesLinkedDatabases` of `store/journal` hold it.
+- **Its connections.** The database is in WAL mode with SQLite's automatic checkpoint (`wal_autocheckpoint` 1000 pages,
+  SQLite's default) and `synchronous` off, since it is a cache of the corpus that a crash leaves for the recovery to
+  remove. One writer connection is held for the database's life. It follows the session's transaction: it begins
+  `BEGIN IMMEDIATE` at the transaction's first statement, at the corpus the transaction began from, takes each of its
+  savepoints and the rows it changed outside its statements, as an IR request of the session, sets, releases and rolls
+  back to each savepoint with it, commits after the corpus commit is written and rolls back on every other end. A
+  deferred foreign key SQLite has not resolved refuses the commit before the corpus commit, as SQLite refuses the
+  `COMMIT`, and leaves the transaction open; a `COMMIT` or a `ROLLBACK` of SQLite that fails builds the database again.
+  A statement that fails, or whose writes a corpus rule refuses, rolls back to its savepoint, and the database fills
+  nothing again. A pool of 8 reader connections (`Readers`), each with `query_only` on and the session's settings for
+  its read, reads what the database's last commit holds, never a transaction the writer holds open; a read that finds
+  every one in use waits for the release of one, and rows that go on keep theirs until they end. A database of another
+  catalog is built again, and the old one is closed when its last read ends. The opening's end removes its database.
+  A corpus the process may only read keeps its database in memory, whose one connection reads, one read at a time.
+  `TestConcurrentReads`, `TestWriterFollowsTransaction` and `TestCost` of `statement` hold it.
+- **Reads.** A read outside a transaction takes no lock when nothing changed since the last read under it: no stage is
+  present in `.flowmark/tx/`, the commit generation is the one that read was at, and no notification queued since names
+  a folder or file that read read. That read read every path through the corpus tree, so a notification of a path it
+  did not read changed nothing it answers: the lock and the journal under `.flowmark/`, which the watch of the whole
+  subtree on Windows reports, never make a read take the lock (`TestTreeQuiet` of `journal`, `TestCost` of
+  `statement`).
+  Otherwise it takes the lock only to recover and read the corpus again, and releases it before it reads, so a stage a
+  crash left under a free lock is recovered by the read, its one write. A read that finds the lock held by a session of
+  its own corpus answers what that corpus last read, since no other process can commit. One that finds it held by
+  another process reads the corpus without the lock, and keeps that read when the commit generation is the same before
+  and after it and no prepare record is present at either check, since a commit renames its targets only between the
+  two; otherwise it answers what it last read, and the next read reads again what the notifications and the
+  generation name. It reads on a reader connection, so a lock record is written
+  once for each change, not for each read, and a read and its rows that go on hold no lock and wait for no writer nor
+  another read: the behaviour of SQLite in WAL mode. `TestConcurrentReads` and `TestCost` of `statement`, and
+  `TestTreeQuiet` and `TestStaged` of `store/journal` hold it, with `TestReadRecovery` of `statement`, `TestReadHeld` and
+  `TestReadRecoversPrepared` of `writepath`, and `TestPrepared` and `TestHolding` of `store/journal`.
 - **Session settings.** `foreign_keys`, `query_only`, `busy_timeout` and `locking_mode` are the session's. Under
   `locking_mode = EXCLUSIVE` the lock its next transaction takes stays after that transaction, until the mode is `NORMAL`
   again. Any other `PRAGMA` setting holds for the session's own statements.
@@ -325,7 +424,8 @@ the writer of the difference.
 - The lock file holds one line of JSON, `{"pid", "start", "host", "hostname", "session",
   "acquisition"}`, and a line feed; the holder is named `<pid>@<host>/<session>`. `acquisition` is
   the token of one acquisition: 32 lowercase hex digits of 128 random bits from the OS random source,
-  which also name its pending record. A file that holds anything else is never taken for a free lock.
+  which also name its pending record. A file that holds anything else is never taken for a free lock;
+  one that holds no byte, or zero bytes alone, is a lock whose record a power loss lost (below).
   Grounding: a session may acquire again in its process, so only a token per acquisition keeps two
   acquirers from writing byte-equal records, which the lost-reply rule below would take for one.
 - `start` is the start of the process: on Linux the boot of `/proc/sys/kernel/random/boot_id` with
@@ -350,10 +450,15 @@ the writer of the difference.
 
 ### Acquiring and waiting
 
-- The record is written whole to `.flowmark/lock.<acquisition>.pending`,
-  synced, and hard-linked to `.flowmark/lock`; the link fails when the lock exists, so the lock
-  appears atomically with its whole record. A waiter writes its pending record once. A pending
-  record takes no part in exclusion.
+- The record is written whole to `.flowmark/lock.<acquisition>.pending`, without a sync, and
+  hard-linked to `.flowmark/lock`; the link fails when the lock exists, so the lock appears
+  atomically with its whole record. A waiter writes its pending record once. A pending record takes
+  no part in exclusion.
+- Since a lock appears only with its whole record, only a power loss leaves a lock whose record
+  holds no byte or zero bytes alone: the link reached the disk and the record did not. That power
+  loss ended its holder, so such a lock is a holder that has ended, refused at once, naming
+  `flowmark unlock` (`TestAcquireLostRecord` of `journal`). Grounding: a sync of the record, a wait
+  for the disk in every acquisition, would protect only a holder that the power loss ended anyway.
 - A try whose link fails with `EEXIST` reads the lock. A record byte-equal to the acquirer's own
   (its acquisition token is unique) means the link took effect although its reply was lost (NFS), and the
   lock is held. A lock that disappears before it is read is tried again at once.
@@ -397,6 +502,13 @@ the writer of the difference.
 - On Windows every open of the lock file, a pending record or a stage file is `CreateFileW` with
   `FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE`, so a reader never blocks the holder's
   delete or an unlock.
+  A remover marks such a file deleted through its own handle and the name goes when that handle
+  closes; between the two Windows refuses every open and every link of the name with
+  `ERROR_ACCESS_DENIED`, and `STATUS_DELETE_PENDING` tells it from a refusal of access. The engine
+  reads such a name as removed: an open or a link of it finds no file, an exclusive create of it or
+  a link to it finds one, so an acquisition tries again at once, as it does for a lock that
+  disappears between its link and its read (`TestDeletePendingReadsRemoved` and
+  `TestAcquireAfterPendingRelease` of `journal`).
 - Acquiring, releasing, clearing and waiting are published as the events `lock.acquired`,
   `lock.released`, `lock.cleared` and `lock.waiting` (once per holder waited for, after the watch
   is armed).
@@ -405,7 +517,8 @@ the writer of the difference.
 
 - A stale lock is never removed by an operation. `flowmark unlock <corpus>` removes it:
   1. Read the record R. Refuse a running holder, and a holder on another host without
-     `--holder <pid>@<host>/<session>` naming it.
+     `--holder <pid>@<host>/<session>` naming it. A record a power loss lost names no holder and is
+     unlocked without `--holder` (`TestUnlockLostRecord` of `journal`).
   2. Link `.flowmark/lock` to `.flowmark/lock.<first 32 hex digits of the SHA-256 of R>.clearing`.
      `EEXIST` refuses, naming that file as another unlock of the same holder, running or
      interrupted.
@@ -439,7 +552,9 @@ the writer of the difference.
 - A request that fails inside a transaction changes nothing, and the transaction stays open at its
   state before the request. Grounding: SQL statement atomicity — a failed statement has no effect, and
   MySQL and SQLite keep the transaction open; the orm client rolls the transaction or its savepoint back
-  when its callback fails.
+  when its callback fails. A statement that ends the SQLite transaction itself, as `RAISE(ROLLBACK)` does,
+  ends the transaction with it: its answer is its own error, and the `ROLLBACK` that follows has nothing to
+  end (`TestStatementEndsTheTransaction` of `statement`).
 - `savepoint <name>` sets a level at the transaction's present state; a savepoint of the same name is
   replaced, as the SQL standard destroys it. `release <name>` removes that savepoint and every one set
   after it, keeping their writes. `rollback_to <name>` discards the writes since that savepoint and every
@@ -491,48 +606,81 @@ the writer of the difference.
    maps 40001 to `DEADLOCK`), since the client never retries it. When the re-read corpus is the one read, the writes were checked on it as
    they ran. The rewrite refusal below is checked as each request runs too, as SQL checks a constraint
    that is not deferred, so the request that must rewrite such a file fails at once. A validator diagnostic on another row (`type`, `key.duplicate`, `reference.dangling`, `check`, `codec`, `view`, `order`, `state.transition`, `state.required`, `state.limit`, `history.gap`, `history.chain`, and the validator's `parent.cycle` across several `files` files) never fails the commit, except that a `type` diagnostic fails it when a constraint check of the commit must evaluate that value ([canonical format](10-canonical-format.md#readable-values)), and two rows with byte-for-byte equal keys make their table unavailable ([canonical format](10-canonical-format.md#diagnostics)); a `format.*` diagnostic fails it only as the rewrite refusal and the unavailable table state ([canonical format](10-canonical-format.md#diagnostics)). A commit that must rewrite a file — the row's own file, a file holding a link to a row whose derived target changes (its detail section appears or disappears, or an insert gives a dangling link its row), an `order` sibling — is refused when that file has a `format.*` diagnostic: `CONSTRAINT`, naming the file and the diagnostic, and naming `flowmark canon` when it is `format.noncanonical`. Three commits are exempt: `flowmark canon` for its targets ([operations](#the-canon-operation)); the add-column migration, for the diagnostics the added column causes, which do not make its table unavailable to that migration ([migration](80-migration.md)); and a delete that removes a `files` row's whole file from the rewrite refusal only — its restrict check still needs the rows of every table that may reference the row (its own table through `parent`, its child blocks and its history rows, and every table with a foreign key to it), so such a delete is `CONSTRAINT` when any of them is unavailable.
-3. Write each post-image once into `.flowmark/tx/<id>/`, content-addressed as `<hash>`, and, as
-   the source of rename n, a copy `<n>.<hash>` of it; both stay until the stage is collected.
-   Before this step, the folder of every target and every folder to create is checked to be on
-   the device of `.flowmark/tx/` (`st_dev`; on Windows the volume serial number of
+3. Write, as the source of rename n, a copy of its post-image `.flowmark/tx/<id>.<n>.<hash>`, and
+   sync it; every file of the stage `<id>` (32 lowercase hex digits) is named `<id>.<name>` in
+   `.flowmark/tx/`. Before this step, the folder of every target and every folder to create is
+   checked to be on the device of `.flowmark/tx/` (`st_dev`; on Windows the volume serial number of
    `GetFileInformationByHandle`); a mismatch refuses the commit, naming the folder and "a mount
    point inside the corpus is unsupported", and nothing is staged.
-4. Write the pre-image of every target into the stage, content-addressed as `<hash>`.
-5. Write the **prepare record**: every rename with its pre- and post-hashes. An absent file is the
-   empty hash `""`: a create has an empty pre-hash, and a delete an empty post-hash.
-6. Perform the renames through the runtime's atomic rename, after checking every target: one that
+4. Write the **prepare record** `<id>.prepare`: the generation the commit takes, every rename with
+   its pre- and post-hashes, and the bytes of every pre- and post-image by its hash. An absent file
+   is the empty hash `""`: a create has an empty pre-hash, and a delete an empty post-hash. It is
+   written to `<id>.prepare.part`, synced, renamed into place, and `.flowmark/tx/` is synced; from
+   it on the commit is decided. A record whose recorded state does not match its hash is damaged,
+   and nothing of it is applied.
+5. Perform the renames through the runtime's atomic rename, after checking every target: one that
    holds its post-image is done, one that holds its pre-image is renamed, and any other refuses
-   the whole stage. A delete renames its target into the stage as `<n>.deleted`. A create whose
-   folder is absent first creates that folder, from the corpus root, following no symlink; on
-   Windows each missing folder is created in the stage as `<n>.dir.<k>` and moved into place. A
-   replay does the same: it skips a folder it finds in place and moves one it finds staged, and
-   when it finds a target at its pre-hash and `<n>.<hash>` absent it writes the copy again from
-   `<hash>`. An empty table folder left by an interruption is an empty table
-   ([document model](20-document-model.md#storage)).
-7. Write the commit record.
-8. Collect the stage: the prepare record is renamed aside first, so a stage interrupted while it
-   is collected holds the commit record alone and is collected again; collecting removes the
-   `<n>.deleted` files.
+   the whole stage. A delete renames its target into the journal as `<id>.<n>.deleted`. A create
+   whose folder is absent first creates that folder, from the corpus root, following no symlink;
+   on Windows each missing folder is created as `<id>.<n>.dir.<k>` and moved into place. Then each
+   folder that gained or lost a name is synced once. A replay does the same: it skips a folder it
+   finds in place and moves one it finds staged, and when it finds a target at its pre-hash and its
+   copy absent it writes the copy again from the record. An empty table folder left by an
+   interruption is an empty table ([document model](20-document-model.md#storage)).
+6. Write the [commit generation](#the-commit-generation) with the paths of the renames: it says the
+   renames are done.
+7. Collect the stage: remove its files, the prepare record last, without a sync. A record that a
+   power loss brings back names a generation that is written, and is collected again.
 
 Grounding: a rename gives the target the source's file. Distinct per-rename copies keep two
-identical targets as two files and keep the target sharing no file with the stage, and both
-recorded states stay in the stage for a recovery refusal. The journal needs no hard link.
+identical targets as two files and keep the target sharing no file with the stage, and the prepare
+record holds both recorded states, so a recovery refusal writes them beside it as `<id>.<hash>` and
+names them. The journal needs no hard link. A one-row commit waits for the disk six times: the
+copy, the record and its folder, the target's folder, and the generation and its folder
+(`TestFlushes` of `journal`); SQLite with `synchronous=FULL` waits once or twice, and a commit of
+several files cannot be atomic with fewer.
 
 Every hash of the journal and of recovery is the SHA-256 of the file's raw bytes, as 64
 lowercase hex digits (raw-file-bytes hashing, [design plan](../plans/flowmark/plan.md)). Each step
-is published: `journal.prepared` after step 5, `journal.applied` after step 7,
-`journal.collected` after step 8, and on opening `journal.replayed` or `journal.discarded`.
+is published: `journal.prepared` after step 4, `journal.applied` after the renames of step 5 and
+their folders, `journal.generation` after step 6, `journal.collected` after step 7, and on opening
+`journal.replayed` or `journal.discarded`. A stage folder `.flowmark/tx/<id>/` of an earlier engine
+is refused on opening, naming the engine that wrote it, which completes or discards it.
+
+### The commit generation
+
+- `.flowmark/generation` is the declared place of the corpus's commit generation: one JSON object
+  `{"generation": N, "commits": [{"generation": n, "paths": [...]}, ...]}`, where N is the number of
+  the last commit, 0 with no commits for a corpus that no commit has written, and `commits` the last
+  64 commits, oldest first and numbered in order up to N, each with the corpus paths it wrote or
+  deleted, sorted. A file of another form, a folder or a link in its place is refused, naming it.
+- A commit takes the generation after the one written: its prepare record holds that number, and
+  the file is then replaced whole, through a partial name and a rename; so a reader that takes no
+  lock reads one generation or the next, never a part. The commit reads the generation before it
+  stages anything, and one it cannot read refuses the commit there.
+- A recovery that completes a prepared stage writes its generation as the commit does. A stage whose
+  prepare record names a generation the file already holds is collected and its targets are not
+  judged: the renames are done, so an edit since is the corpus's own. A generation file removed or
+  replaced by hand while a prepare record names a later generation keeps that commit alone, so a
+  corpus read before it learns no paths and reads the whole tree.
+- A corpus carries the generation it was read at, read under the lock before the tree. Another
+  process learns from the file alone which paths the commits after its read wrote; a read older than
+  the 64 kept commits learns none and reads the whole tree. A hand edit goes through no commit and
+  has no generation; it is learned from the tree's notifications.
+  Grounding: a second handle of a corpus otherwise learns another's commit only through the
+  notifications of every file it wrote, and cannot tell a commit from a hand edit.
 
 Durability across power loss needs each step's files and folder entries on disk before the next
 step begins. A file is synced by the runtime's sync (`fsync`; `F_FULLFSYNC` on macOS;
 `FlushFileBuffers` on Windows). A created, renamed or removed name is made durable on Linux and
-macOS by syncing its folder, as POSIX defines, and on Windows, which has no folder flush, by
-renaming with `MoveFileEx` and `MOVEFILE_WRITE_THROUGH`, which returns once the move is on disk;
-so every stage file is written to a partial name and renamed into place, and a delete is a
-rename. A created folder is made durable on Linux and macOS by syncing its parent, and on Windows
-by creating it in the stage and moving it into place with `MOVEFILE_WRITE_THROUGH`. The lock is
-never synced as a folder entry: a power loss ends its holder; its record is synced before its
-link. On Windows a holder's liveness is read from its process handle, never from its exit code.
+macOS by syncing its folder, as POSIX defines, once for all the names of a step, and on Windows,
+which has no folder flush, by renaming with `MoveFileEx` and `MOVEFILE_WRITE_THROUGH`, which
+returns once the move is on disk; so the prepare record is written to a partial name and renamed
+into place, and a delete is a rename. The name of a copy needs no flush of its own: the folder sync
+of the record covers it on Linux and macOS, and a recovery writes a missing copy again from the
+record. A created folder is made durable on Linux and macOS by syncing its parent, and on Windows by
+creating it in the stage and moving it into place with `MOVEFILE_WRITE_THROUGH`. The lock is
+never synced, neither its record nor its folder entry: a power loss ends its holder. On Windows a holder's liveness is read from its process handle, never from its exit code.
 
 ## The file system
 
@@ -559,9 +707,11 @@ and MySQL and PostgreSQL compare a `datetime(p)` column with `NOW(6)` at six dig
 
 - A per-command p95 latency target is declared here (hundreds of milliseconds at the corpus
   envelope of [open questions](110-open-questions.md)).
-- An operation on an opened corpus reads from the disk only what changed and parses only the
-  documents whose parse can differ ([opening a corpus](#opening-a-corpus)); it still walks the rows
-  of the corpus in memory, so its cost grows with the rows, not with the bytes. The benchmarks
+- An operation on an opened corpus reads from the disk only what changed and parses and places
+  only the rows of the documents whose parse can differ ([opening a corpus](#opening-a-corpus)), so
+  the read of an operation costs what changed, not the corpus. `TestCost` of `statement` holds it:
+  the documents a read visits and parses and the rows it places and indexes are the same at 1,000
+  and at 100,000 rows. The benchmarks
   `BenchmarkOpen`, `BenchmarkRead` and `BenchmarkWrite` of `writepath` measure it at the envelope,
   10k one-row documents beside a small corpus, reporting the CPU time of each operation and the
   95th percentile of its wall time. On macOS (Apple M3 Pro, `T12.5-2`) a read takes 68 ms of CPU and
@@ -575,9 +725,84 @@ and MySQL and PostgreSQL compare a `datetime(p)` column with `NOW(6)` at six dig
   executor and the document's watch: its budget is 8 KB of heap per row at one row a document, the
   most a row costs, and `TestKeptHeapBudget` holds it (4.5 KB measured on macOS). A document of many
   rows is held whole; what parsing it allocates is the codec's cost below.
-- A write still parses and renders each changed target whole, and the executor's post-image copies
-  the rows of the corpus, so a write's cost grows with its target files and with the rows; bounding
-  the size of a target file is [the scale envelope](#the-scale-envelope), and the cost per byte of a target is the codec's cost.
+- A write parses and renders each changed target whole. The executor's post-image shares every
+  document of the corpus it read and copies the rows of a document only when the write first changes
+  it, so a write copies its target files, not the corpus; bounding the size of a target file is
+  [the scale envelope](#the-scale-envelope), and the cost per byte of a target is the codec's cost.
+  `TestPostImage` of `irexec` holds the sharing, and every request of the executor's tests checks
+  that the corpus it read is unchanged.
+- Two corpora read or written one from the other are compared where they differ: the documents are
+  an ordered map whose unchanged subtrees the two share, so a comparison, such as the commit's of the
+  corpus re-read under the lock with the corpus its transaction read, walks the paths to the
+  documents that differ, at most a constant times the logarithm of the documents, as a lookup in a
+  B-tree walks its depth. The shape of the map is a function of its keys, through a hash under a seed
+  the process draws, so two maps of the same documents compare along the same paths. `TestCost`
+  holds both: a write copies the same rows at 1,000 and at 100,000 rows, and compares at most eight
+  times the base-2 logarithm of the documents.
+- The corpus keeps an index of its rows: by key, by key without regard to case, by the value of each
+  column a write reads by value (a foreign key, a placement or parent key, a unique key, a state
+  machine's column and the sibling group of an ordered row) and by the number of each identity column
+  and `key_prefix` key. The index is persistent like the documents and shared between the corpora
+  read or written one from the other. A read or a write marks each document whose rows it changes,
+  and before the next access of the index the rows of the marked documents leave it and enter it again
+  as they stand: a row that is new, changed, under another parent or under a parent that entered
+  again, so the index costs the rows of the documents that changed. The first write after a corpus is
+  opened builds the index, once, as the first read reads every document. `TestCost` holds that a
+  write and an external edit enter the same rows at 1,000 and at 100,000 rows, and every access of
+  the index in the executor's tests compares it with the index built from nothing. The index holds the rows of each key
+  by the document that holds them, and a document entering it writes each key its rows change once, so a change costs
+  the rows of its document under that key, not every row that shares the key, such as the notes that reference one item
+  or share one sibling group. `TestIndexEntries` of `irexec` holds that the index is built with the same entries per row
+  at 200 and at 2,000 rows that share a key and that a write of one of them writes the same entries at both sizes, and
+  `TestCost` that every operation writes the same entries at 1,000 and at 100,000 rows.
+- A write and its checks read the rows they need through the index, not by walking a table: a
+  stated, placement, parent or referenced row by its key, the largest `key_prefix` number and
+  identity by the number index, a sibling group by its group, the rows that reference a row by the
+  key their foreign key names, a state's rows by its value and a unique key's rows by its values.
+  The index also holds, for each of these values that is not a value of its column type, the row
+  whose evaluation fails; a check reads the rows of the keys it needs with those rows and judges each
+  in corpus order as it judged each row of the table, so it fails on the same row as the walk did.
+  The link targets a write may move are derived from the rows of the documents it changed, and a
+  link target is derived from the rows of its key when a link or the write asks for it.
+  `TestCost` holds that every write reads the same rows at 1,000 and at 100,000 rows, and
+  `TestIndexMarks` that each change of a write's corpus, marked, leaves the index equal to the index
+  built from nothing and, unmarked, does not.
+- A database whose corpus differs is refreshed, not filled again: the rows of the documents that
+  differ leave it by their keys and enter it as the corpus stores them, with the rows of each sibling
+  group of a files table with an order column that a changed row joins or leaves, since a position
+  is derived from its group; a table whose availability differs is filled again. The refresh runs
+  under the conditions of a fill, with foreign keys off, the standing triggers dropped and checks
+  ignored, so the database holds what a fill of the corpus from nothing holds. A write gives the
+  database back the positions of the rows it changed from the same difference. `TestCost` holds that
+  an external edit and a write take and write the same rows at 1,000 and at 100,000 rows, and
+  `TestRefresh` and `FuzzRefresh` of `statement` that a database refreshed through a cut, a removal, a
+  restoration and an exchange of documents of each golden corpus equals the database filled from
+  nothing, and fails exactly when that fill fails.
+- A write statement reads from its database the rows it changed, not its tables: the rows SQLite's pre-update hook
+  reports, read at their rowids, and the keys it allocates by the number index of the corpus from the largest down,
+  skipping a key the statement took. `TestCost` holds that a write and a refused write read the same rows of the database
+  at 1,000 and at 100,000 rows, and `TestCapture`, `TestCaptureKeys` and `FuzzCapture` of `statement` that the difference
+  formed from those rows equals the difference of every row of the tables, through REPLACE, foreign key actions,
+  triggers, rowid changes and texts holding a NUL.
+- The limits of the path are the costs that `TestCost` counts and the times that `BenchmarkStatement` of `statement`
+  measures, at 1,000, 10,000 and 100,000 rows of a table beside a small corpus. Every count but the documents compared is
+  the same at the three sizes: a write statement of one row reads at most 6 files, parses at most 2 documents, places at
+  most 204 rows, indexes at most 455, copies at most 102, scans at most 306, stores at most 204 and reads at most 2 rows
+  of the database, under one lock; a refused write stops before it stores a row; an external edit of 100 rows writes
+  those 100 rows to the database. The documents compared grow with the logarithm of the documents,
+  within eight times its base-2 logarithm, and differ between runs, since the shape of the map follows the seed the
+  process draws. On macOS (Apple M3 Pro, `T44`), on an idle machine, at 1,000, 10,000 and 100,000
+  rows: a read of one row takes 0.08 to 0.10 ms of CPU, with a wall-time p95 of at most 0.12 ms; a write statement of one
+  row 12 to 40 ms of CPU, with a wall-time p95 of 62 to 88 ms; a refused write 3.6 to 8.1 ms, with a p95 of at most
+  11 ms; and an external edit 4.5 to 6.3 ms, with a p95 of at most 10 ms.
+- A request of a face reads the rows of its table through the index when its where is a conjunction one of whose
+  conditions compares the single-column key with a parameter for equality: the row of that key, which every condition
+  still judges, so the rows it answers are those a walk of the table answers; any other where walks the table, and a
+  walk is counted as the rows it scans. `TestCost` holds that a face's read, insert, update and delete of one row read
+  the same rows at 1,000 and at 100,000 rows, and `TestKeyedRows` of `irexec` that a keyed where answers the rows of the
+  walk. On macOS (Apple M3 Pro, `T46`), on an idle machine, at 1,000, 10,000 and 100,000 rows, a face's keyed read of one
+  row takes 1.0 to 1.5 ms of CPU with a wall-time p95 of at most 7.2 ms, and its insert, update and delete of one row 1.2
+  to 16 ms of CPU with a wall-time p95 of at most 74 ms.
 - **The codec's cost** is linear in the bytes of a file: the parse and the render of a file each take
   at most 0.1 s of CPU per megabyte of it and allocate at most 64 bytes per byte of it, for a document
   file of rows with detail sections. No pass compares each heading with each detail anchor, or each

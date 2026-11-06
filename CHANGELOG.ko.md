@@ -1,9 +1,11 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: aef45401188344f15961634dac0e547ae7449065b5de189b9d00c36cd02e59aa -->
+<!-- source-sha256: 3c637ada68bdfe1a0579785348460d9d0c8c185bbef3200163524553001a432c -->
 # Changelog
 
 ## Unreleased
 
+- T65: board 예제는 hyper 0.0.31, template 0.0.20, crudui 0.0.13을 한 변경으로 쓰고, hyper-server 0.0.31이 require하는 @polyspec/php-serialize 0.0.1을 그 release tarball로 고정한다. ordered-json은 orm 0.0.21이 require하는 0.0.18에 머문다.
+- T64: flowmark은 Kit 0.0.93을 쓴다: package.json과 그 lock은 그 release asset을 고정하고, ci-pipeline.yml은 ci-setup으로 PHP symbol extractor를 설치한다(K1018).
 - T19: run 41317062220은 Windows에서 layout metric을 보인다: sharded events=20000의 비용은 insert가 아니라 fixture의 setup과 teardown이다. 이 행은 다음 실행들을 기다린다.
 - T15-2: flowmark은 구현이 하나이고 config/parity.json이 없으므로, make parity-declarations-check는 kit 0.0.92에서 선언할 unit 없이 통과한다.
 - T15-42: checkout의 link 선언 .links는 T15-48 줄대로 orm과 kit checkout을 쓰고, make link-check가 그 위에서 통과한다. 이 파일은 tracked되지 않는 local 파일로 남는다.
@@ -15,6 +17,43 @@
 - T15-51: ci.yml의 job ci-passed를 삭제한다: run은 그 모든 job이 성공할 때만 성공하며, 저장소 job인 language와 benchmarks는 kit의 gate처럼 kit을 needs로 가지므로 release는 run의 결론을 읽는다 (T15-51).
 - T15-43: 설치 target은 ci-setup이 부르는 deps-<runtime> target이다(K859): deps-go, deps-node, deps-php가 flowmark-go-install, flowmark-node-install, flowmark-php-install을 대신하고, config/ci.json과 ci.yml의 go job이 이들을 부르며, flowmark-install은 deps-php와 deps-node를 실행한다 (T15-43).
 - T24-12: board-models-ts recipe는 package 안의 파일 dist/bin/orm-gen.js 대신 @polyspec/orm이 선언한 orm-gen bin, node_modules/.bin/orm-gen을 실행한다. flowmark는 orm에 선언된 interface로만 닿는다.
+- T25: corpus의 fulltext 조건은 행을 읽기 전에 OPERATOR_NOT_ALLOWED로 거부한다.
+- T26: join의 order 항목은 문장이 만드는 순서대로 부모의 항목 다음에, join 순서로 행을 정렬한다.
+- T27: in과 not_in 조건은 파라미터를 집합으로 한 번 읽어, 행 n개와 파라미터 m개의 읽기 비용이 n+m이다.
+- T28: corpus가 aes, aes_version, blind_index를 받고 엔진은 주입으로 key를 받는다.
+- T29: corpus가 SQL 데이터베이스의 dbspec 문서를 받는다.
+- T30: corpus가 document와 block 저장에서 composite primary key와 foreign key를 받는다.
+- T31: corpus가 SQLite 문장에 답한다.
+- T32: SQL 문장의 insert는 corpus가 할당하는 key_prefix key와 order 위치를 빠뜨릴 수 있다.
+- T33: 문장 매개변수는 답이 값에 쓰는 모든 형식을 받는다.
+- T34: T25부터 T33까지 더한 코드는 한 번만 있고 그 시험은 모든 platform에서 실행된다.
+- T35: Go 코드는 kit의 lint를 통과한다.
+- T36: 엔진은 자신이 읽고 parsing하고 비교하는 파일, index하고 복사하는 행, 문장이 database에서 읽고 쓰는 행을 기록하고, TestCost는 그 비용을 1,000행과 100,000행에서 고정한다.
+- T37: journal은 commit 세대와 명시된 세대 수만큼 각 commit의 경로를 알리고, 세대는 commit record에서, 그리고 commit을 마치는 recovery에서 오르며, corpus는 자신을 읽은 세대를 지닌다.
+- T38: corpus 읽기는 알림이 이름 댄 경로와 자신의 세대 이후 commit들의 경로를 받고 그 folder와 문서만 다시 읽는다.
+- T39: 쓰기의 post-image는 읽은 corpus의 문서를 공유하고 어떤 문서의 행을 처음 바꿀 때에만 복사하며, 서로에게서 읽거나 쓴 두 corpus는 모양이 key의 함수인 순서 있는 map의 경로를 따라 다른 곳에서만 비교한다.
+- T40: 저장된 행은 key로 읽고, placeBack은 쓰기가 옮긴 형제 묶음을 배치하며, allocate는 corpus가 유지하는 index에서 prefix의 가장 큰 key를 가져오며, commit이 대상 행의 key, 참조, 부모 순환, 위치, limit, unique column을 검사할 때는 표의 모든 행이 아니라, corpus가 문서별로 유지하고 corpus 사이에 공유하는 index로 필요한 행을 key와 각 행을 참조하는 key로 읽는다.
+- T41: 문장의 쓰기는 writer 연결에서 SQLite의 preupdate hook이 알리는 행으로 문장마다 savepoint 아래에서 만들어지며, 모든 행의 diff가 만드는 쓰기와 같다.
+- T42: corpus가 다른 database는 바뀐 경로의 행을, availability가 바뀐 표는 표 전체를, transaction 밖에서 foreign key를 끄고 trigger를 내리고 check를 무시한 채 refresh한다.
+- T43: 읽기는 .flowmark/sql/<token>.db에 있는 열기 전용 WAL database의 reader 연결에서 실행되고 corpus lock을 쥐지 않는다.
+- T44: docs/spec/40-ops.md는 T36이 세는 비용과 benchmark가 1,000, 10,000, 100,000행에서 측정한 시간을 이 경로의 한계로 명시한다.
+- T45: process는 다른 process가 commit한 schema 문장을 받는다.
+- T46: face의 요청 — writepath.Session.Exec를 통한 key로의 한 점 읽기, insert, update, delete — 은 SQL 문장처럼 건드린 만큼 비용이 든다.
+- T47: index는 key를 함께 가진 행이 아니라 자기가 넣는 행만큼 비용이 든다.
+- T48: 엔진의 코드 조각은 한 번만 있다.
+- T49: 문장은 DATE, DATETIME, TIMESTAMP로 선언된 column의 text를 SQLite 연결이 읽듯 SQLite가 지닌 그대로 답한다.
+- T50: RAISE(ROLLBACK)처럼 SQLite transaction을 스스로 끝내는 문장은 자기 오류만 답하고 session의 transaction도 함께 종료한다.
+- T51: SQLite의 tokenizer가 읽듯 comment는 공백이다.
+- T52: Windows에서 delete가 pending인 이름은 지워진 것으로 읽힌다.
+- T53: 엔진의 느린 시험은 durable file primitive가 Linux보다 10에서 50배 느린 Windows에서도 runner의 30초 한도 안에 끝난다.
+- T54: lock 없는 읽기는 알림이 그 읽기가 읽은 folder나 file을 가리키지 않는 한 lock 아래의 마지막 읽기로 답한다.
+- T55: journal은 disk에 요청하는 flush를 하나씩 기록한다.
+- T56: Windows의 move는 process가 쓰기를 기다릴 때만 disk를 기다린다.
+- T57: lock record는 flush하지 않는다.
+- T58: record 하나가 commit을 정한다.
+- T59: 엔진 module은 replace directive 없이 설치되고, driver의 원본인 SQLite module과 함께 link된다.
+- T60: document에 많은 행을 insert하는 statement 하나는 건드린 만큼만 비용을 쓴다.
+- T63: corpus를 손으로 편집하는 시험은 그 알림이 도착한 뒤에만 편집을 읽는다.
 
 ## 0.0.4
 

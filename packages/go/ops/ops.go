@@ -178,8 +178,7 @@ func JSON(v any) ([]byte, error) { return irexec.MarshalPlain(v) }
 
 // Corpus is a corpus opened for the faces: its catalog and the write path.
 type Corpus struct {
-	cat *catalog.Catalog
-	wp  *writepath.Corpus
+	wp *writepath.Corpus
 }
 
 // Open opens the corpus at root through the write path (spec 40 Opening a corpus), each operation waiting wait for the
@@ -202,12 +201,15 @@ func Open(ctx context.Context, root string, wait time.Duration) (*Corpus, error)
 	if err != nil {
 		return nil, err
 	}
-	return &Corpus{cat: cat, wp: wp}, nil
+	return &Corpus{wp: wp}, nil
 }
 
 // ViewTable returns the view table of the catalog (spec 100 Views), nil when it has none.
-func (c *Corpus) ViewTable() *catalog.Table {
-	for _, tb := range c.cat.Tables {
+func (c *Corpus) ViewTable() *catalog.Table { return viewTable(c.Catalog()) }
+
+// viewTable returns the view table of cat, nil when it has none.
+func viewTable(cat *catalog.Catalog) *catalog.Table {
+	for _, tb := range cat.Tables {
 		if tb.View != nil {
 			return tb
 		}
@@ -216,7 +218,7 @@ func (c *Corpus) ViewTable() *catalog.Table {
 }
 
 // Catalog returns the catalog of the corpus.
-func (c *Corpus) Catalog() *catalog.Catalog { return c.cat }
+func (c *Corpus) Catalog() *catalog.Catalog { return c.wp.Catalog() }
 
 // Close closes the corpus: the watch of its tree (spec 40 Opening a corpus). Every face closes the corpus it opened.
 func (c *Corpus) Close() error { return c.wp.Close() }
@@ -250,30 +252,44 @@ func (c *Corpus) RunText(ctx context.Context, session, op, members string) ([]by
 
 // Run runs the operation r in a new session named session and returns its answer, which marshals to the answer's
 // JSON (spec 40 The faces).
-func (c *Corpus) Run(ctx context.Context, session string, r *Request) (any, error) {
-	if r.Operation == "schema" {
-		return schemaOf(c.cat), nil
-	}
-	var tb *catalog.Table
-	if r.Operation == "views" {
-		if tb = c.ViewTable(); tb == nil {
-			return nil, errf(codeConfig, "views: the catalog has no view table, the table %s of the document %s (spec 100 Views)", catalog.ViewTable, catalog.ApplicationDocument)
-		}
-	} else {
-		var ok bool
-		if tb, ok = c.cat.Table(r.Table); !ok {
-			return nil, errf(codeEntityUnknown, "the catalog declares no table %s", r.Table)
-		}
-	}
+func (c *Corpus) Run(ctx context.Context, session string, r *Request) (_ any, err error) {
 	s, err := c.wp.Session(session)
 	if err != nil {
 		return nil, err
 	}
-	a, err := c.run(ctx, s, tb, r)
-	if cerr := s.Close(); err == nil && cerr != nil {
-		return nil, cerr
+	defer func() {
+		if cerr := s.Close(); err == nil && cerr != nil {
+			err = cerr
+		}
+	}()
+	cat := c.Catalog()
+	tb, ok := c.table(cat, r)
+	if r.Operation == "schema" || !ok {
+		// The catalog the corpus holds as it stands, read under the lock: a schema statement of SQL that another process
+		// committed is taken by that read (spec 40 SQL statements).
+		if err := s.View(ctx, func(cur *irexec.Corpus) error { cat = cur.Catalog(); return nil }); err != nil {
+			return nil, err
+		}
+		tb, ok = c.table(cat, r)
 	}
-	return a, err
+	switch {
+	case r.Operation == "schema":
+		return schemaOf(cat), nil
+	case ok:
+		return c.run(ctx, s, tb, r)
+	case r.Operation == "views":
+		return nil, errf(codeConfig, "views: the catalog has no view table, the table %s of the document %s (spec 100 Views)", catalog.ViewTable, catalog.ApplicationDocument)
+	}
+	return nil, errf(codeEntityUnknown, "the catalog declares no table %s", r.Table)
+}
+
+// table returns the table of the operation r in the catalog cat: the view table for views, the table it names otherwise.
+func (c *Corpus) table(cat *catalog.Catalog, r *Request) (*catalog.Table, bool) {
+	if r.Operation == "views" {
+		tb := viewTable(cat)
+		return tb, tb != nil
+	}
+	return cat.Table(r.Table)
 }
 
 // rowAnswer is the answer of row.get, and writeAnswer the answer of a write.
@@ -294,7 +310,7 @@ type writeAnswer struct {
 
 // run runs the operation r on the table tb in the session s.
 func (c *Corpus) run(ctx context.Context, s *writepath.Session, tb *catalog.Table, r *Request) (any, error) {
-	m := message{hash: c.cat.ManifestHash, table: tb.Name}
+	m := message{hash: c.Catalog().ManifestHash, table: tb.Name}
 	switch r.Operation {
 	case "rows":
 		return c.exec(ctx, s, m.request("all", nil))
@@ -372,7 +388,7 @@ func (c *Corpus) run(ctx context.Context, s *writepath.Session, tb *catalog.Tabl
 func (c *Corpus) load(ctx context.Context, s *writepath.Session, tb *catalog.Table, rows []map[string]json.RawMessage) (any, error) {
 	var total int64
 	for start := 0; start < len(rows); {
-		m := message{hash: c.cat.ManifestHash, table: tb.Name, seed: true}
+		m := message{hash: c.Catalog().ManifestHash, table: tb.Name, seed: true}
 		end := start + 1
 		for end < len(rows) && sameColumns(rows[start], rows[end]) {
 			end++
@@ -434,7 +450,7 @@ func (c *Corpus) write(ctx context.Context, s *writepath.Session, tb *catalog.Ta
 	if key != nil && a.Affected == 0 {
 		return nil, noRow(tb, key)
 	}
-	m := message{hash: c.cat.ManifestHash, table: tb.Name}
+	m := message{hash: c.Catalog().ManifestHash, table: tb.Name}
 	rows, err := c.exec(ctx, s, m.request("all", nil))
 	if err != nil {
 		return nil, err
@@ -616,7 +632,7 @@ func (c *Corpus) TextValue(table, column, text string) json.RawMessage {
 	if err != nil {
 		panic("ops: a string does not marshal: " + err.Error())
 	}
-	tb, ok := c.cat.Table(table)
+	tb, ok := c.Catalog().Table(table)
 	if !ok {
 		return str
 	}

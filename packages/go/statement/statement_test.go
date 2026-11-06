@@ -39,7 +39,7 @@ table tags {
 `
 
 // openCorpus opens a new corpus of the set of this file.
-func openCorpus(t *testing.T) (*ops.Corpus, string) {
+func openCorpus(t testing.TB) (*ops.Corpus, string) {
 	t.Helper()
 	root := t.TempDir()
 	corpustest.WriteTree(t, root, map[string]string{
@@ -51,7 +51,7 @@ func openCorpus(t *testing.T) (*ops.Corpus, string) {
 	return c, root
 }
 
-func open(t *testing.T) (*writepath.Session, string) {
+func open(t testing.TB) (*writepath.Session, string) {
 	t.Helper()
 	c, root := openCorpus(t)
 	s, err := c.Session("statement-test")
@@ -62,7 +62,7 @@ func open(t *testing.T) (*writepath.Session, string) {
 	return s, root
 }
 
-func run(t *testing.T, s *writepath.Session, text string, params ...string) *statement.Answer {
+func run(t testing.TB, s *writepath.Session, text string, params ...string) *statement.Answer {
 	t.Helper()
 	raw := make([]json.RawMessage, len(params))
 	for i, p := range params {
@@ -542,9 +542,153 @@ func TestAssignedColumns(t *testing.T) {
 }
 
 // closeSession closes the session s and fails the test when the close fails.
-func closeSession(t *testing.T, s io.Closer) {
+func closeSession(t testing.TB, s io.Closer) {
 	t.Helper()
 	if err := s.Close(); err != nil {
 		t.Error(err)
+	}
+}
+
+// TestSequences pins that an AUTOINCREMENT key is never given twice, as SQLite's AUTOINCREMENT gives none (plan, A
+// refresh of the changed rows): the counter of each AUTOINCREMENT table is part of the corpus, in dbspec/sequences.json,
+// so a database filled after a new opening, a database another process refreshes to the commit, and the database of the
+// session itself give the next key after the largest key the table gave or held, the deleted ones included. A table
+// whose key is a plain INTEGER PRIMARY KEY reuses the largest key a delete freed, as SQLite does; a renamed table keeps
+// its counter, and a dropped table takes its counter with it.
+func TestSequences(t *testing.T) {
+	counted := "CREATE TABLE counted (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT)"
+	cases := []struct {
+		name string
+		// create creates the tables of the case that the set does not declare.
+		create []string
+		// steps run in the first session; table is the table the inserts after them insert into.
+		steps []string
+		table string
+		// opened is the number of the steps after which the other process opens the corpus: a process takes the schema
+		// statements its opening found (spec 40 Opening a corpus).
+		opened int
+		// want is the key the first insert after the steps gives.
+		want int
+	}{
+		{"a declared identity key after a delete of the largest", nil, []string{
+			"INSERT INTO notes (title) VALUES ('a'), ('b'), ('c')",
+			"DELETE FROM notes WHERE id = 3",
+		}, "notes", 0, 4},
+		{"an AUTOINCREMENT key of SQL after a delete of the largest", []string{counted}, []string{
+			"INSERT INTO counted (title) VALUES ('a'), ('b')",
+			"DELETE FROM counted WHERE id = 2",
+		}, "counted", 0, 3},
+		{"a key inserted and deleted in one transaction", nil, []string{
+			"INSERT INTO notes (title) VALUES ('a')",
+			"BEGIN IMMEDIATE",
+			"INSERT INTO notes (title) VALUES ('b')",
+			"DELETE FROM notes WHERE id = 2",
+			"COMMIT",
+		}, "notes", 0, 3},
+		{"a key inserted and deleted by one statement", []string{counted,
+			"CREATE TRIGGER counted_gone AFTER INSERT ON counted BEGIN DELETE FROM counted WHERE id = NEW.id; END"}, []string{
+			"INSERT INTO counted (title) VALUES ('a'), ('b')",
+		}, "counted", 0, 3},
+		{"a key written by hand and deleted", nil, []string{
+			"INSERT INTO notes (id, title) VALUES (10, 'a')",
+			"DELETE FROM notes WHERE id = 10",
+		}, "notes", 0, 11},
+		{"every row deleted", []string{counted}, []string{
+			"INSERT INTO counted (title) VALUES ('a'), ('b'), ('c')",
+			"DELETE FROM counted",
+		}, "counted", 0, 4},
+		{"a renamed table", []string{counted}, []string{
+			"INSERT INTO counted (title) VALUES ('a'), ('b')",
+			"DELETE FROM counted WHERE id = 2",
+			"ALTER TABLE counted RENAME TO renamed",
+		}, "renamed", 3, 3},
+		{"a dropped table made again", []string{counted}, []string{
+			"INSERT INTO counted (title) VALUES ('a'), ('b')",
+			"DELETE FROM counted WHERE id = 2",
+			"DROP TABLE counted",
+			counted,
+		}, "counted", 4, 1},
+		{"a plain INTEGER PRIMARY KEY reuses a freed key", []string{"CREATE TABLE plain (id INTEGER PRIMARY KEY, title TEXT)"}, []string{
+			"INSERT INTO plain (title) VALUES ('a'), ('b')",
+			"DELETE FROM plain WHERE id = 2",
+		}, "plain", 0, 2},
+	}
+	session := func(t *testing.T, root, name string) *writepath.Session {
+		t.Helper()
+		c, err := ops.Open(context.Background(), root, 0)
+		corpustest.Opened(t, c, err)
+		s, err := c.Session(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { closeSession(t, s) })
+		return s
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s, root := open(t)
+			for _, text := range tc.create {
+				run(t, s, text)
+			}
+			// Another process holds a database of the corpus from before the steps that write rows.
+			var other *writepath.Session
+			for i, step := range tc.steps {
+				if i == tc.opened {
+					other = session(t, root, "other")
+					run(t, other, "SELECT COUNT(*) FROM notes")
+				}
+				run(t, s, step)
+			}
+			if other == nil {
+				other = session(t, root, "other")
+				run(t, other, "SELECT COUNT(*) FROM notes")
+			}
+			insert := "INSERT INTO " + tc.table + " (title) VALUES ('next') RETURNING id"
+			for i, sess := range []*writepath.Session{other, session(t, root, "new"), s} {
+				if got, want := cells(run(t, sess, insert)), fmt.Sprintf("[[%d]]", tc.want+i); got != want {
+					t.Fatalf("insert %d, of %s, gives %s, want %s", i+1, []string{"the other process", "a new opening", "the first session"}[i], got, want)
+				}
+			}
+		})
+	}
+}
+
+// TestSchemaOfAnotherProcess pins that a process takes the schema statements another process committed, as a SQLite
+// connection takes the schema another connection changed (spec 40 SQL statements): after a rename by one process, the
+// other refuses a statement on the old name as SQLite does, reads the rows under the new name, and writes none of its
+// rows to a document of a table the corpus no longer holds.
+func TestSchemaOfAnotherProcess(t *testing.T) {
+	s, root := open(t)
+	run(t, s, "CREATE TABLE counted (id INTEGER PRIMARY KEY, title TEXT)")
+	run(t, s, "INSERT INTO counted (title) VALUES ('a')")
+	c, err := ops.Open(context.Background(), root, 0)
+	corpustest.Opened(t, c, err)
+	other, err := c.Session("other")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer closeSession(t, other)
+	run(t, other, "SELECT COUNT(*) FROM counted")
+	run(t, s, "ALTER TABLE counted RENAME TO renamed")
+	refused(t, other, "INSERT INTO counted (title) VALUES ('b')", "no such table: counted")
+	if got := cells(run(t, other, "SELECT title FROM renamed")); got != `[["a"]]` {
+		t.Fatalf("the other process reads the renamed table as %s", got)
+	}
+	run(t, other, "INSERT INTO renamed (title) VALUES ('b')")
+	if _, err := os.Stat(filepath.Join(root, "counted.flowmark.md")); err == nil {
+		t.Fatal("a write of the other process made a document of the table the rename took away")
+	}
+	if got := cells(run(t, s, "SELECT title FROM renamed ORDER BY id")); got != `[["a"],["b"]]` {
+		t.Fatalf("the first process reads the renamed table as %s", got)
+	}
+	// A deferred transaction whose snapshot is older than a schema statement that changed no document cannot write.
+	run(t, other, "BEGIN")
+	run(t, other, "SELECT COUNT(*) FROM renamed")
+	run(t, s, "CREATE TABLE extra (id INTEGER PRIMARY KEY)")
+	fails(t, other, "INSERT INTO renamed (title) VALUES ('stale')", "CANCELED", "(SQLITE_BUSY_SNAPSHOT)")
+	run(t, other, "ROLLBACK")
+	run(t, other, "INSERT INTO extra (id) VALUES (1)")
+	if got := cells(run(t, s, "SELECT id FROM extra")); got != `[[1]]` {
+		t.Fatalf("the first process reads the table the other filled as %s", got)
 	}
 }

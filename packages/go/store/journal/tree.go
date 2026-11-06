@@ -3,11 +3,16 @@ package journal
 import (
 	"errors"
 	"fmt"
+	"github.com/polyspec/flowmark/packages/go/internal/cost"
 	"io/fs"
+	"maps"
 	"path"
+	"slices"
 	"strings"
 	"sync"
+	"time"
 
+	"github.com/polyspec/flowmark/packages/go/internal/pmap"
 	"github.com/polyspec/flowmark/packages/go/store"
 )
 
@@ -33,15 +38,24 @@ type Tree struct {
 	c    *Corpus
 	disk store.FS
 
-	mu    sync.Mutex
-	w     treeWatch
-	dirs  map[string][]fs.DirEntry
-	files map[string][]byte
+	mu sync.Mutex
+	w  treeWatch
+	// dirs and files hold what the reads asked for, by corpus path, ordered so that what lies under a path is one range.
+	dirs  pmap.Map[string, []fs.DirEntry]
+	files pmap.Map[string, []byte]
+	// changed holds the paths dropped since the last Changes that the tree held, and all whether everything was.
+	changed map[string]bool
+	all     bool
 	// fault is a failure of the watch met by a read; Fault returns it and Refresh clears it, since a read that met it
 	// cached nothing.
 	fault error
+	// held are the notifications Quiet took, and heldErr the failure of its drain, which the next Refresh takes first.
+	held    Notices
+	heldErr error
 	// notices is the test seam that rewrites the notifications each Refresh takes; nil outside the tests.
 	notices func(Notices) Notices
+	// cost counts the folders and files read from the disk.
+	cost *cost.Counts
 }
 
 // Notices are the notifications one Refresh takes: Changed names each path whose bytes or entries changed, Moved each
@@ -61,16 +75,19 @@ type treeWatch interface {
 	watch(rel string, dir bool) error
 	// drain returns, without waiting, the notifications queued since the last drain.
 	drain() (Notices, error)
+	// wait waits, at most d, until a notification may be queued that drain has not returned, and reports whether one
+	// may be; a watch whose kernel queues a notification in the system call that makes the change has none to wait for.
+	wait(d time.Duration) (bool, error)
 	close() error
 }
 
 // Tree returns the corpus tree of c, its watch armed.
-func (c *Corpus) Tree() (*Tree, error) {
+func (c *Corpus) Tree(k *cost.Counts) (*Tree, error) {
 	w, err := newTreeWatch(c)
 	if err != nil {
 		return nil, fmt.Errorf("watching the corpus %s: %w", c.root, err)
 	}
-	return &Tree{c: c, disk: store.DirFS(c.root), w: w, dirs: map[string][]fs.DirEntry{}, files: map[string][]byte{}}, nil
+	return &Tree{c: c, disk: store.DirFS(c.root), w: w, changed: map[string]bool{}, cost: k}, nil
 }
 
 // SetNotices installs the test seam that rewrites the notifications each Refresh takes — to hold one back, as a
@@ -82,6 +99,57 @@ func (t *Tree) SetNotices(f func(Notices) Notices) {
 	t.notices = f
 }
 
+// AwaitNotice waits, at most d, until a notification names the corpus path rel, the folder of a path above it or an
+// overflow, and holds what it takes for the next Refresh, as Quiet does. It is the test seam that orders a change made
+// outside the engine before the operation that reads it, where the notification of the change may come after the change
+// returned (ReadDirectoryChangesW); it waits on the notification, never on a timer. It returns at once when the tree
+// holds neither rel nor the entries of its folder, since the next read reads rel from the disk, and when the test
+// scripts the notifications (SetNotices), since the script, not the platform, decides what arrives.
+func (t *Tree) AwaitNotice(rel string, d time.Duration) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.w == nil {
+		return errors.New("the corpus tree is closed")
+	}
+	if _, dir := t.dirs.Get(path.Dir(rel)); t.notices != nil || (!dir && !t.holds(rel)) {
+		return nil
+	}
+	names := func(n Notices) bool {
+		if n.Overflow {
+			return true
+		}
+		for _, p := range slices.Concat(n.Changed, n.Moved) {
+			if p == rel || p == "." || strings.HasPrefix(rel, p+"/") {
+				return true
+			}
+		}
+		return false
+	}
+	deadline := time.Now().Add(d)
+	for {
+		n, err := t.w.drain()
+		if err != nil {
+			t.heldErr = errors.Join(t.heldErr, err)
+			return err
+		}
+		t.held = Notices{Overflow: t.held.Overflow || n.Overflow, Changed: append(t.held.Changed, n.Changed...), Moved: append(t.held.Moved, n.Moved...)}
+		if names(t.held) {
+			return nil
+		}
+		left := time.Until(deadline)
+		if left <= 0 {
+			return fmt.Errorf("no notification named %s within %v", rel, d)
+		}
+		more, err := t.w.wait(left)
+		if err != nil {
+			return err
+		}
+		if !more {
+			return fmt.Errorf("no notification named %s within %v", rel, d)
+		}
+	}
+}
+
 // Refresh takes the notifications queued since the last Refresh and drops what they name; each path dropped is
 // published as corpus.changed, and an overflow as corpus.overflow.
 func (t *Tree) Refresh() error {
@@ -91,20 +159,21 @@ func (t *Tree) Refresh() error {
 		return errors.New("the corpus tree is closed")
 	}
 	t.fault = nil
+	held, heldErr := t.held, t.heldErr
+	t.held, t.heldErr = Notices{}, nil
 	n, err := t.w.drain()
-	if err != nil {
-		// The notifications the failed drain took are lost with it, so nothing the tree holds is known current: the
-		// next read reads the whole corpus again, as after an overflow, and this operation fails naming the cause.
-		t.dirs = map[string][]fs.DirEntry{}
-		t.files = map[string][]byte{}
-		return fmt.Errorf("taking the change notifications of the corpus: %w", err)
-	}
-	if t.notices != nil {
+	if err == nil && t.notices != nil {
 		n = t.notices(n)
 	}
+	n = Notices{Overflow: held.Overflow || n.Overflow, Changed: append(held.Changed, n.Changed...), Moved: append(held.Moved, n.Moved...)}
+	if err = errors.Join(heldErr, err); err != nil {
+		// The notifications the failed drain took are lost with it, so nothing the tree holds is known current: the
+		// next read reads the whole corpus again, as after an overflow, and this operation fails naming the cause.
+		t.dropAll()
+		return fmt.Errorf("taking the change notifications of the corpus: %w", err)
+	}
 	if n.Overflow {
-		t.dirs = map[string][]fs.DirEntry{}
-		t.files = map[string][]byte{}
+		t.dropAll()
 		t.c.obs.Observe(Event{Kind: CorpusOverflow, Path: t.c.root})
 		return nil
 	}
@@ -117,6 +186,76 @@ func (t *Tree) Refresh() error {
 	return nil
 }
 
+// Quiet reports whether no notification queued since the last Refresh names a folder or file the tree holds, so the
+// tree holds the corpus as the last read under the lock read it: a read without the lock answers from that read only
+// then (spec 40 Reads). That read read every path through the tree, so a notification of a path the tree does not hold
+// — such as the lock and the journal under `.flowmark/`, which the watch of the whole subtree on Windows reports —
+// changed nothing it read. It drops nothing, since an operation under the lock may be reading the tree: what it takes,
+// and a failure of its drain, the next Refresh takes first.
+func (t *Tree) Quiet() bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.w == nil || t.heldErr != nil {
+		return false
+	}
+	n, err := t.w.drain()
+	if err != nil {
+		t.heldErr = err
+		return false
+	}
+	if t.notices != nil {
+		n = t.notices(n)
+	}
+	t.held = Notices{Overflow: t.held.Overflow || n.Overflow, Changed: append(t.held.Changed, n.Changed...), Moved: append(t.held.Moved, n.Moved...)}
+	return !t.names(t.held)
+}
+
+// names reports whether n names what the tree holds: what Refresh would drop for it.
+func (t *Tree) names(n Notices) bool {
+	if n.Overflow {
+		return true
+	}
+	for _, p := range n.Changed {
+		if t.holds(p) {
+			return true
+		}
+	}
+	for _, p := range n.Moved {
+		if p == "." {
+			if t.files.Len() > 0 || t.dirs.Len() > 0 {
+				return true
+			}
+			continue
+		}
+		if _, ok := t.dirs.Get(path.Dir(p)); ok || t.holds(p) || t.holdsUnder(p+"/") {
+			return true
+		}
+	}
+	return false
+}
+
+// holds reports whether the tree holds the bytes or the entries of p.
+func (t *Tree) holds(p string) bool {
+	if _, ok := t.files.Get(p); ok {
+		return true
+	}
+	_, ok := t.dirs.Get(p)
+	return ok
+}
+
+// holdsUnder reports whether the tree holds a file or a folder whose path begins with under.
+func (t *Tree) holdsUnder(under string) bool {
+	return hasPrefix(t.files, under) || hasPrefix(t.dirs, under)
+}
+
+// hasPrefix reports whether a key of m begins with under; such keys stand together in its order.
+func hasPrefix[V any](m pmap.Map[string, V], under string) bool {
+	for q := range m.From(under) {
+		return strings.HasPrefix(q, under)
+	}
+	return false
+}
+
 // Forget drops what the tree holds of each path, what lies under it, and the entries of every folder above it, so
 // the next read reads them from the disk whatever the notifications said: the write path forgets its commit targets
 // before it reads them under the lock, and after it wrote them.
@@ -126,52 +265,84 @@ func (t *Tree) Forget(paths ...string) {
 	for _, p := range paths {
 		t.drop(p, true)
 		for d := path.Dir(p); d != "."; d = path.Dir(d) {
-			delete(t.dirs, d)
+			t.dropDir(d)
 		}
-		delete(t.dirs, ".")
+		t.dropDir(".")
 	}
 }
 
 // drop drops the bytes and the entries held at p; moved drops what lies under p and the entries of its folder too.
 // A path the tree held is published as corpus.changed.
 func (t *Tree) drop(p string, moved bool) {
-	held := false
-	if _, ok := t.files[p]; ok {
-		delete(t.files, p)
-		held = true
-	}
-	if _, ok := t.dirs[p]; ok {
-		delete(t.dirs, p)
-		held = true
-	}
+	held := t.dropFile(p)
+	held = t.dropDir(p) || held
 	if moved {
 		if p == "." {
-			held = held || len(t.files) > 0 || len(t.dirs) > 0
-			t.files = map[string][]byte{}
-			t.dirs = map[string][]fs.DirEntry{}
+			held = held || t.files.Len() > 0 || t.dirs.Len() > 0
+			t.dropAll()
 		} else {
 			under := p + "/"
-			for q := range t.files {
-				if strings.HasPrefix(q, under) {
-					delete(t.files, q)
-					held = true
-				}
+			for _, q := range underKeys(t.files, under) {
+				held = t.dropFile(q) || held
 			}
-			for q := range t.dirs {
-				if strings.HasPrefix(q, under) {
-					delete(t.dirs, q)
-					held = true
-				}
+			for _, q := range underKeys(t.dirs, under) {
+				held = t.dropDir(q) || held
 			}
-			if _, ok := t.dirs[path.Dir(p)]; ok {
-				delete(t.dirs, path.Dir(p))
-				held = true
-			}
+			held = t.dropDir(path.Dir(p)) || held
 		}
 	}
 	if held {
 		t.c.obs.Observe(Event{Kind: CorpusChanged, Path: t.c.abs(p)})
 	}
+}
+
+// underKeys returns the keys of m that begin with under, which stand together in its order.
+func underKeys[V any](m pmap.Map[string, V], under string) []string {
+	var out []string
+	for q := range m.From(under) {
+		if !strings.HasPrefix(q, under) {
+			break
+		}
+		out = append(out, q)
+	}
+	return out
+}
+
+// dropFile drops the bytes held at p, recording p as changed, and reports whether the tree held them.
+func (t *Tree) dropFile(p string) bool {
+	if _, ok := t.files.Get(p); !ok {
+		return false
+	}
+	t.files = t.files.Delete(p)
+	t.changed[p] = true
+	return true
+}
+
+// dropDir drops the entries held at p, recording p as changed, and reports whether the tree held them.
+func (t *Tree) dropDir(p string) bool {
+	if _, ok := t.dirs.Get(p); !ok {
+		return false
+	}
+	t.dirs = t.dirs.Delete(p)
+	t.changed[p] = true
+	return true
+}
+
+// dropAll drops everything the tree holds, so the next read reads the whole corpus and Changes reports all.
+func (t *Tree) dropAll() {
+	t.dirs, t.files = pmap.Map[string, []fs.DirEntry]{}, pmap.Map[string, []byte]{}
+	t.changed, t.all = map[string]bool{}, true
+}
+
+// Changes returns, sorted, the paths of the folders and files the tree held and dropped since the last Changes —
+// by a notification, by Forget, or by an overflow, which reports all instead — and starts the next record. A read that
+// kept what it made of the tree reads again only these paths (plan, Ruling: an operation costs what it touches).
+func (t *Tree) Changes() (paths []string, all bool) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	paths, all = slices.Sorted(maps.Keys(t.changed)), t.all
+	t.changed, t.all = map[string]bool{}, false
+	return paths, all
 }
 
 // Fault returns the failure of the watch that a read since the last Refresh met; the write path fails the operation
@@ -200,18 +371,19 @@ func (t *Tree) arm(rel string, dir bool) error {
 func (t *Tree) ReadDir(name string) ([]fs.DirEntry, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	if es, ok := t.dirs[name]; ok {
+	if es, ok := t.dirs.Get(name); ok {
 		return es, nil
 	}
 	if err := t.arm(name, true); err != nil {
 		return nil, err
 	}
 	t.c.obs.Observe(Event{Kind: CorpusRead, Path: t.c.abs(name)})
+	t.cost.Add(cost.FilesRead, 1)
 	es, err := t.disk.ReadDir(name)
 	if err != nil {
 		return nil, err
 	}
-	t.dirs[name] = es
+	t.dirs = t.dirs.Set(name, es)
 	return es, nil
 }
 
@@ -219,18 +391,19 @@ func (t *Tree) ReadDir(name string) ([]fs.DirEntry, error) {
 func (t *Tree) ReadFile(name string) ([]byte, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	if b, ok := t.files[name]; ok {
+	if b, ok := t.files.Get(name); ok {
 		return b, nil
 	}
 	if err := t.arm(name, false); err != nil {
 		return nil, err
 	}
 	t.c.obs.Observe(Event{Kind: CorpusRead, Path: t.c.abs(name)})
+	t.cost.Add(cost.FilesRead, 1)
 	b, err := t.disk.ReadFile(name)
 	if err != nil {
 		return nil, err
 	}
-	t.files[name] = b
+	t.files = t.files.Set(name, b)
 	return b, nil
 }
 
@@ -243,7 +416,7 @@ func (t *Tree) Close() error {
 	}
 	err := t.w.close()
 	t.w = nil
-	t.dirs, t.files = nil, nil
+	t.dirs, t.files = pmap.Map[string, []fs.DirEntry]{}, pmap.Map[string, []byte]{}
 	return err
 }
 

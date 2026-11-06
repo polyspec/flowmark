@@ -3,6 +3,8 @@
 
 ## Unreleased
 
+- T65: The board example takes hyper 0.0.31, template 0.0.20 and crudui 0.0.13 in one change, with @polyspec/php-serialize 0.0.1, which hyper-server 0.0.31 requires, pinned to its release tarball; ordered-json stays at 0.0.18, which orm 0.0.21 requires.
+- T64: flowmark takes Kit 0.0.93: package.json and its lock pin its release asset, and ci-pipeline.yml installs the PHP symbol extractor through ci-setup (K1018).
 - T19: Run 41317062220 shows the layout metrics on Windows: the cost of sharded events=20000 is the setup and the teardown of the fixture, not the insert; the row waits for more runs.
 - T15-2: flowmark has one implementation and no config/parity.json, so make parity-declarations-check holds with no unit to declare, on kit 0.0.92.
 - T15-42: The link declaration .links of the checkout names the orm and kit checkouts, as the T15-48 line says, and make link-check holds on it; the file stays local and untracked.
@@ -14,6 +16,43 @@
 - T15-51: The job ci-passed of ci.yml is deleted: the run succeeds only when every job of it succeeds, and the repository jobs language and benchmarks need kit as the gates of kit do, so the release reads the conclusion of the run (T15-51).
 - T15-43: The install targets are the deps-<runtime> targets that ci-setup calls (K859): deps-go, deps-node and deps-php replace flowmark-go-install, flowmark-node-install and flowmark-php-install, config/ci.json and the go job of ci.yml name them, and flowmark-install runs deps-php and deps-node (T15-43).
 - T24-12: The board-models-ts recipe runs the orm-gen bin that @polyspec/orm declares, node_modules/.bin/orm-gen, in place of the file dist/bin/orm-gen.js inside the package, so flowmark reaches orm only through its declared interface.
+- T25: A fulltext predicate on a corpus is refused with OPERATOR_NOT_ALLOWED before any row is read.
+- T26: The order items of a join sort the rows after those of its parent, in join order, as a statement renders them.
+- T27: An in or not_in predicate reads its parameters once into a set, so a read of n rows against m parameters costs n+m.
+- T28: A corpus takes aes, aes_version and blind_index, and the engine takes its keys by injection.
+- T29: A corpus takes the dbspec documents of a SQL database.
+- T30: A corpus takes composite primary and foreign keys in document and block storage, with the key cell holding the values joined by a dot, and the engine accepts every nowait lock.
+- T31: A corpus answers the statements of SQLite.
+- T32: An insert through a SQL statement may leave out a key_prefix key and an order position, which the corpus assigns.
+- T33: A statement parameter takes every form that an answer writes for a value.
+- T34: The code that T25 to T33 added exists once and its tests run on every platform.
+- T35: The Go code passes the lint of kit.
+- T36: The engine counts the files it reads, parses and compares, the rows it indexes and copies, and the rows a statement reads and writes in its database, and TestCost pins those costs at 1,000 and 100,000 rows.
+- T37: The journal publishes a commit generation and the paths of each commit for a stated number of generations, incremented at the commit record and by a recovery that completes a commit, and a corpus carries the generation it was read at.
+- T38: A corpus read takes the paths the notifications name and the paths of the commits since its generation, and reads again only those folders and documents.
+- T39: A write's post-image shares the documents of the corpus it read and copies a document's rows only when it first changes them, and two corpora read or written one from the other are compared where they differ, along the paths of an ordered map whose shape is a function of its keys, so the commit's comparison of the corpus re-read under the lock walks the logarithm of the documents.
+- T40: A stored row is read by its key, placeBack places the sibling group a write moved, allocate takes the largest key of a prefix from an index the corpus keeps, and the commit's checks of the keys, references, parent cycles, positions, limits and unique columns of its target rows read the rows they need through indexes the corpus keeps per document and shares between corpora, by key and by the keys that reference each row, not every row of a table.
+- T41: A statement's writes are formed from the rows SQLite's preupdate hook reports on the writer connection, under a savepoint per statement, and equal those the diff of every row forms.
+- T42: A database whose corpus differs refreshes the rows of the changed paths, a whole table when its availability changed, outside a transaction with foreign keys off, triggers dropped and checks ignored; AUTOINCREMENT counters are part of the corpus in dbspec/sequences.json; the refreshed database equals the database filled from nothing.
+- T43: A read runs on a reader connection of a WAL database private to the opening at .flowmark/sql/<token>.db and holds no corpus lock; it takes the lock only to refresh, refreshes without it while a live holder has it by the generation and the prepare record, and recovers a prepared stage of an ended holder; the writer connection holds BEGIN IMMEDIATE to the corpus commit.
+- T44: docs/spec/40-ops.md states the costs T36 counts and the times the benchmarks measure at 1,000, 10,000 and 100,000 rows as the limits of the path.
+- T45: A process takes the schema statements another process committed.
+- T46: A request of a face — a point read, insert, update and delete by its key through writepath.Session.Exec — costs what it touches, as a SQL statement does.
+- T47: The index costs the rows it enters, not the rows that share their keys.
+- T48: Each piece of code of the engine exists once.
+- T49: A statement answers the text of a column declared DATE, DATETIME or TIMESTAMP as SQLite holds it, as a SQLite connection reads it.
+- T50: A statement that ends the SQLite transaction itself, as RAISE(ROLLBACK) does, answers its own error alone and ends the session's transaction with it.
+- T51: A comment is whitespace, as SQLite's tokenizer reads it.
+- T52: A name whose delete is pending on Windows reads as removed.
+- T53: The engine's slow tests finish within the runner's 30-second limit on Windows, where a durable file primitive is 10 to 50 times slower than on Linux, by running independent work in parallel or by starting from the state they pin, never by a weaker check.
+- T54: A read without the lock is answered from the last read under it unless a notification names a folder or file that read read.
+- T55: The journal counts each flush it asks of the disk.
+- T56: A move on Windows waits for the disk only while the process waits for its writes.
+- T57: The lock record is not flushed.
+- T58: One record decides a commit.
+- T59: The engine module installs without a replace directive and links beside the SQLite module its driver is forked from.
+- T60: One statement that inserts many rows into a document costs what it touches.
+- T63: A test that edits a corpus by hand reads the edit only after its notification arrived.
 
 ## 0.0.4
 

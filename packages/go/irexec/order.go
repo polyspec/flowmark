@@ -22,24 +22,7 @@ import (
 // neighbours' and leaves the other files alone while such a rank exists.
 
 // groupKey names the sibling group of row x: its placement parent and its parent.
-func (w *writer) groupKey(x *rec) (string, *Error) {
-	k := ""
-	if x.parent != nil {
-		k = fmt.Sprintf("%p", x.parent.row)
-	}
-	if pc := parentColumn(x.tb); pc != "" {
-		v, err := w.next.value(x, pc)
-		if err != nil {
-			return "", err
-		}
-		if v.null {
-			k += "\x00null"
-		} else {
-			k += "\x00=" + v.text
-		}
-	}
-	return k, nil
-}
+func (w *writer) groupKey(x *rec) (string, *Error) { return w.next.groupKey(x) }
 
 // siblings returns the rows of x's sibling group other than x.
 func (w *writer) siblings(x *rec) ([]*rec, *Error) {
@@ -48,7 +31,7 @@ func (w *writer) siblings(x *rec) ([]*rec, *Error) {
 		return nil, err
 	}
 	var out []*rec
-	for _, y := range w.next.recs[x.tb.Name] {
+	for _, y := range w.next.candidates(groupIndex(x.tb.Name, key), groupFault(x.tb.Name)) {
 		if y == x {
 			continue
 		}
@@ -66,6 +49,7 @@ func (w *writer) siblings(x *rec) ([]*rec, *Error) {
 // setOrder gives row y the stored order value v — its rank in files storage, its
 // position in the others — and marks its file changed.
 func (w *writer) setOrder(y *rec, v int64) {
+	w.own(y)
 	setValue(y.tb, y.row, y.tb.Order, cell{text: strconv.FormatInt(v, 10)})
 	w.touched[y.file] = true
 	w.next.reorder()
@@ -73,7 +57,7 @@ func (w *writer) setOrder(y *rec, v int64) {
 
 // placeInOrder places the inserted row g at k among its siblings, or appends it.
 func (w *writer) placeInOrder(g *given, k *cell) *Error {
-	return w.insertAt(g, w.next.byRow[g.row], k)
+	return w.insertAt(g, w.next.recOf(g.row), k)
 }
 
 // placeAt returns the siblings of x and the place among them that k names (position); ok is false when the write is
@@ -245,7 +229,7 @@ func (w *writer) rank(g *given, x *rec, k *cell) *Error {
 // closes the gap. The old group is the one the row held before the update:
 // oldParent names its placement parent.
 func (w *writer) move(g *given, k *cell, oldParent *store.Row) *Error {
-	x := w.next.byRow[g.row]
+	x := w.next.recOf(g.row)
 	if x.tb.Storage.Kind == catalog.StorageFiles {
 		return w.rank(g, x, k)
 	}
@@ -266,7 +250,7 @@ func (w *writer) move(g *given, k *cell, oldParent *store.Row) *Error {
 			oldKey += "\x00=" + v.text
 		}
 	}
-	for _, y := range w.next.recs[x.tb.Name] {
+	for _, y := range w.next.candidates(groupIndex(x.tb.Name, oldKey), groupFault(x.tb.Name)) {
 		if y == x {
 			continue
 		}

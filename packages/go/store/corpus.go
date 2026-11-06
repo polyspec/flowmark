@@ -37,17 +37,16 @@ func DirFS(root string) FS {
 // Only the documents of the folder are read; a symbolic link is never
 // followed, and a document that is not of the folder is a walk diagnostic.
 // The bytes of each document read are returned by corpus path, so that a
-// caller holds the exact pre-image of every file its rows came from. Each
-// document is parsed through memo, nil to parse every one.
-func ParseFilesTable(cat *catalog.Catalog, fsys FS, table string, lk Linker, memo *Memo) ([]*Row, map[string][]byte, []Diagnostic) {
+// caller holds the exact pre-image of every file its rows came from.
+func ParseFilesTable(cat *catalog.Catalog, fsys FS, table string, lk Linker) ([]*Row, map[string][]byte, []Diagnostic) {
 	lay, err := layoutOf(cat, table)
 	if err != nil {
 		return nil, nil, []Diagnostic{fileDiag(table, RuleWalk, err.Error())}
 	}
-	if found, diags := tableFolder(fsys, table, "a files table"); !found {
+	if found, diags := tableFolder(fsys, table, FilesTableWhat); !found {
 		return nil, nil, diags
 	}
-	w := &walker{cat: cat, fsys: fsys, lay: lay, lk: lk, memo: memo, data: map[string][]byte{}, shard: lay.shard}
+	w := &walker{cat: cat, fsys: fsys, lay: lay, lk: lk, data: map[string][]byte{}, shard: lay.shard}
 	w.visit(table, 0)
 	return w.rows, w.data, w.diags
 }
@@ -59,7 +58,6 @@ type walker struct {
 	lay   *filesLayout
 	shard *catalog.Shard // the time shard of the table, nil when none: its rows stand one folder deeper
 	lk    Linker
-	memo  *Memo
 	rows  []*Row
 	data  map[string][]byte // the bytes of each document read, by corpus path
 	diags []Diagnostic
@@ -72,56 +70,101 @@ type walker struct {
 func (w *walker) visit(rel string, depth int) {
 	entries, err := w.fsys.ReadDir(rel)
 	if err != nil {
-		w.diags = append(w.diags, fileDiag(rel, RuleWalk, "cannot read the folder: "+err.Error()))
+		w.diags = append(w.diags, fileDiag(rel, RuleWalk, FolderFailure(err)))
 		return
 	}
 	for _, e := range entries {
-		name := e.Name()
-		if strings.HasPrefix(name, ".") {
-			continue
-		}
-		file := rel + "/" + name
-		doc := strings.HasSuffix(name, fileSuffix)
-		looseDoc := !doc && strings.HasSuffix(strings.ToLower(name), fileSuffix)
-		if w.shard != nil && depth == 0 {
-			// The table folder of a sharded table holds the folders of its periods and nothing else.
-			switch {
-			case e.IsDir() && e.Type()&fs.ModeSymlink == 0 && catalog.ValidPeriod(w.shard.Period, name):
-				w.visit(file, depth+1)
-			case e.IsDir() && e.Type()&fs.ModeSymlink == 0:
-				w.diags = append(w.diags, fileDiag(file, RuleWalk, "a folder of a sharded table is named as a "+string(w.shard.Period)+", not "+name))
-			case doc || looseDoc:
-				w.diags = append(w.diags, fileDiag(file, RuleWalk, "a document directly in the table folder of a sharded table is not a row; a row stands in the folder of its "+string(w.shard.Period)))
+		file := rel + "/" + e.Name()
+		switch en := FilesEntry(w.shard, e, depth); en.Kind {
+		case EntryFolder:
+			w.visit(file, depth+1)
+		case EntryDiag:
+			w.diags = append(w.diags, fileDiag(file, RuleWalk, en.Reason))
+		case EntryRow:
+			data, err := w.fsys.ReadFile(file)
+			if err != nil {
+				w.diags = append(w.diags, fileDiag(file, RuleWalk, ReadFailure(err)))
+				continue
 			}
-			continue
-		}
-		if !doc && !looseDoc {
-			if e.IsDir() {
-				w.visit(file, depth+1)
+			w.data[file] = data
+			row, diags := ParseFile(w.cat, w.lay.table, file, data, w.lk)
+			w.diags = append(w.diags, diags...)
+			if row != nil {
+				w.rows = append(w.rows, row)
 			}
-			continue
-		}
-		rowDepth := depth
-		if w.shard != nil {
-			rowDepth = depth - 1
-		}
-		if reason := notARow(e, rowDepth, looseDoc); reason != "" {
-			w.diags = append(w.diags, fileDiag(file, RuleWalk, reason))
-			continue
-		}
-		data, err := w.fsys.ReadFile(file)
-		if err != nil {
-			w.diags = append(w.diags, fileDiag(file, RuleWalk, "cannot read the document: "+err.Error()))
-			continue
-		}
-		w.data[file] = data
-		row, diags := w.memo.ParseFile(w.cat, w.lay.table, file, data, w.lk)
-		w.diags = append(w.diags, diags...)
-		if row != nil {
-			w.rows = append(w.rows, row)
 		}
 	}
 }
+
+// EntryKind is what a corpus read makes of an entry of a folder at a table's place.
+type EntryKind int
+
+// The kinds of an entry.
+const (
+	// EntrySkip is an entry outside the database: a hidden entry, or one that is no document.
+	EntrySkip EntryKind = iota
+	// EntryFolder is a folder that the read searches for documents.
+	EntryFolder
+	// EntryRow is a document the read parses: a row of a files table, or the rows of a document table.
+	EntryRow
+	// EntryDiag is an entry that is a corpus.walk diagnostic, for its Reason.
+	EntryDiag
+)
+
+// Entry is the kind of an entry of a folder at a table's place and, for EntryDiag, the message of its diagnostic.
+type Entry struct {
+	Kind   EntryKind
+	Reason string
+}
+
+// entryName reports whether the entry name is hidden, a document, and a document whose suffix differs only in case.
+func entryName(name string) (hidden, doc, looseDoc bool) {
+	doc = strings.HasSuffix(name, fileSuffix)
+	return strings.HasPrefix(name, "."), doc, !doc && strings.HasSuffix(strings.ToLower(name), fileSuffix)
+}
+
+// FilesEntry classifies the entry e of a folder of a files table whose time shard is shard (nil for none), the folder
+// depth levels under the table folder: a document at the level of the rows is a row, a document elsewhere or of
+// another suffix case is a walk diagnostic, a folder is searched for such documents, and any other entry is outside
+// the database. The table folder of a sharded table holds the folders of its periods and nothing else.
+func FilesEntry(shard *catalog.Shard, e fs.DirEntry, depth int) Entry {
+	name := e.Name()
+	hidden, doc, looseDoc := entryName(name)
+	if hidden {
+		return Entry{}
+	}
+	if shard != nil && depth == 0 {
+		switch {
+		case e.IsDir() && e.Type()&fs.ModeSymlink == 0 && catalog.ValidPeriod(shard.Period, name):
+			return Entry{Kind: EntryFolder}
+		case e.IsDir() && e.Type()&fs.ModeSymlink == 0:
+			return Entry{EntryDiag, "a folder of a sharded table is named as a " + string(shard.Period) + ", not " + name}
+		case doc || looseDoc:
+			return Entry{EntryDiag, "a document directly in the table folder of a sharded table is not a row; a row stands in the folder of its " + string(shard.Period)}
+		}
+		return Entry{}
+	}
+	if !doc && !looseDoc {
+		if e.IsDir() {
+			return Entry{Kind: EntryFolder}
+		}
+		return Entry{}
+	}
+	rowDepth := depth
+	if shard != nil {
+		rowDepth = depth - 1
+	}
+	if reason := notARow(e, rowDepth, looseDoc); reason != "" {
+		return Entry{EntryDiag, reason}
+	}
+	return Entry{Kind: EntryRow}
+}
+
+// ReadFailure is the message of the walk diagnostic of a document the read cannot read.
+func ReadFailure(err error) string { return "cannot read the document: " + err.Error() }
+
+// FolderFailure is the message of the walk diagnostic of a folder the read cannot read.
+func FolderFailure(err error) string { return "cannot read the folder: " + err.Error() }
 
 // notARow returns the reason an entry named like a document is not a row, or
 // "" when it is a regular document of the table folder.
@@ -158,69 +201,100 @@ func tableFolder(fsys FS, table, what string) (bool, []Diagnostic) {
 		return false, []Diagnostic{fileDiag(table, RuleWalk, "cannot read the corpus root: "+err.Error())}
 	}
 	i := slices.IndexFunc(root, func(e fs.DirEntry) bool { return e.Name() == table })
-	switch {
-	case i < 0:
+	if i < 0 {
 		return false, nil
-	case root[i].Type()&fs.ModeSymlink != 0:
-		return false, []Diagnostic{fileDiag(table, RuleWalk, "a symbolic link named as "+what+" is not followed")}
-	case !root[i].IsDir():
-		return false, []Diagnostic{fileDiag(table, RuleWalk, "the table folder is not a folder")}
+	}
+	if reason := TableFolderFault(root[i], what); reason != "" {
+		return false, []Diagnostic{fileDiag(table, RuleWalk, reason)}
 	}
 	return true, nil
 }
 
-// unreadable is the answer of a folder of the table that cannot be read: a walk diagnostic that names the cause, and no
-// error, since the parse reports a folder it cannot read and goes on.
-func unreadable(table, what string, err error) ([]DocFile, []Diagnostic, error) {
-	return nil, []Diagnostic{fileDiag(table, RuleWalk, what+": "+err.Error())}, nil
+// TableFolderFault returns why the root entry e named as a table folder of what kind (such as "a files table") is not
+// read as one — a symbolic link, or an entry that is no folder — or "" when it is a folder.
+func TableFolderFault(e fs.DirEntry, what string) string {
+	switch {
+	case e.Type()&fs.ModeSymlink != 0:
+		return "a symbolic link named as " + what + " is not followed"
+	case !e.IsDir():
+		return "the table folder is not a folder"
+	}
+	return ""
+}
+
+// FilesTableWhat and DocumentTableWhat name the kind of a table folder in the walk diagnostics of its root entry.
+const (
+	FilesTableWhat    = "a files table"
+	DocumentTableWhat = "a sharded table"
+)
+
+// CheckFilesTable returns the error of a files table whose layout the store cannot build from the catalog, which a
+// read reports as the walk diagnostic of the table.
+func CheckFilesTable(cat *catalog.Catalog, table string) error {
+	_, err := layoutOf(cat, table)
+	return err
+}
+
+// Diag returns the diagnostic of rule at the first line of file, as the store reports a walk diagnostic.
+func Diag(file, rule, msg string) Diagnostic { return fileDiag(file, rule, msg) }
+
+// DocumentEntry classifies the entry e of the folder of a document table sharded by shard: a document named as a period
+// of its grain is read; a folder, a document of another suffix case, a symbolic link, an entry that is no regular file
+// and a document named as no period are walk diagnostics; any other entry is outside the database.
+func DocumentEntry(shard *catalog.Shard, e fs.DirEntry) Entry {
+	name := e.Name()
+	hidden, doc, looseDoc := entryName(name)
+	if hidden {
+		return Entry{}
+	}
+	switch {
+	case e.IsDir() && e.Type()&fs.ModeSymlink == 0:
+		return Entry{EntryDiag, "a folder in the folder of a sharded document table is not a period"}
+	case !doc && !looseDoc:
+		return Entry{}
+	case looseDoc:
+		return Entry{EntryDiag, "the suffix of a document is .flowmark.md in lower case"}
+	case e.Type()&fs.ModeSymlink != 0:
+		return Entry{EntryDiag, "a symbolic link is not followed"}
+	case !e.Type().IsRegular():
+		return Entry{EntryDiag, "not a regular file"}
+	case !catalog.ValidPeriod(shard.Period, strings.TrimSuffix(name, fileSuffix)):
+		return Entry{EntryDiag, "a document of a sharded document table is named as a " + string(shard.Period) + ", not " + strings.TrimSuffix(name, fileSuffix)}
+	}
+	return Entry{Kind: EntryRow}
 }
 
 // ParseDocumentTable reads the documents of the sharded document table of the corpus fsys: the files
 // <table>/<period>.flowmark.md, the period named at the grain of the table's shard (spec 20 Time shards). A
 // missing folder has no documents. A document named as another grain or as no period, a folder, and a
 // symbolic link are walk diagnostics; none is followed. A document that is read is returned with the
-// diagnostics of its read, each document through memo, nil to parse every one.
-func ParseDocumentTable(cat *catalog.Catalog, fsys FS, table string, lk Linker, memo *Memo) ([]DocFile, []Diagnostic, error) {
+// diagnostics of its read.
+func ParseDocumentTable(cat *catalog.Catalog, fsys FS, table string, lk Linker) ([]DocFile, []Diagnostic, error) {
 	tb, ok := cat.Table(table)
 	if !ok || tb.Storage.Kind != catalog.StorageDocument || tb.Storage.Shard == nil {
 		return nil, nil, fmt.Errorf("table %s is not a sharded document table", table)
 	}
-	if found, diags := tableFolder(fsys, table, "a sharded table"); !found {
+	if found, diags := tableFolder(fsys, table, DocumentTableWhat); !found {
 		return nil, diags, nil
 	}
 	entries, err := fsys.ReadDir(table)
 	if err != nil {
-		return unreadable(table, "cannot read the folder", err)
+		return nil, []Diagnostic{fileDiag(table, RuleWalk, FolderFailure(err))}, nil
 	}
 	var docs []DocFile
 	var diags []Diagnostic
 	for _, e := range entries {
-		name := e.Name()
-		if strings.HasPrefix(name, ".") {
-			continue
-		}
-		file := table + "/" + name
-		doc := strings.HasSuffix(name, fileSuffix)
-		looseDoc := !doc && strings.HasSuffix(strings.ToLower(name), fileSuffix)
-		switch {
-		case e.IsDir() && e.Type()&fs.ModeSymlink == 0:
-			diags = append(diags, fileDiag(file, RuleWalk, "a folder in the folder of a sharded document table is not a period"))
-		case !doc && !looseDoc:
-		case looseDoc:
-			diags = append(diags, fileDiag(file, RuleWalk, "the suffix of a document is .flowmark.md in lower case"))
-		case e.Type()&fs.ModeSymlink != 0:
-			diags = append(diags, fileDiag(file, RuleWalk, "a symbolic link is not followed"))
-		case !e.Type().IsRegular():
-			diags = append(diags, fileDiag(file, RuleWalk, "not a regular file"))
-		case !catalog.ValidPeriod(tb.Storage.Shard.Period, strings.TrimSuffix(name, fileSuffix)):
-			diags = append(diags, fileDiag(file, RuleWalk, "a document of a sharded document table is named as a "+string(tb.Storage.Shard.Period)+", not "+strings.TrimSuffix(name, fileSuffix)))
-		default:
+		file := table + "/" + e.Name()
+		switch en := DocumentEntry(tb.Storage.Shard, e); en.Kind {
+		case EntryDiag:
+			diags = append(diags, fileDiag(file, RuleWalk, en.Reason))
+		case EntryRow:
 			data, err := fsys.ReadFile(file)
 			if err != nil {
-				diags = append(diags, fileDiag(file, RuleWalk, "cannot read the document: "+err.Error()))
+				diags = append(diags, fileDiag(file, RuleWalk, ReadFailure(err)))
 				continue
 			}
-			rows, ds, err := memo.ParseDocument(cat, table, file, data, lk)
+			rows, ds, err := ParseDocument(cat, table, file, data, lk)
 			if err != nil {
 				return nil, nil, err
 			}

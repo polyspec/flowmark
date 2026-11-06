@@ -65,7 +65,7 @@ func seedMessages(f *fixture) [][]byte {
 			f.msg("group_count", n, map[string]any{"group_by": []string{key}}),
 			f.msg("paginate", n, map[string]any{"limit": map[string]any{"offset": 0, "count": 1}, "order": []any{map[string]any{"column": key, "desc": true}}}),
 		)
-		for _, x := range f.c.recs[ent.Table] {
+		for _, x := range f.c.tableRecs(ent.Table) {
 			v, err := f.c.value(x, key)
 			if err != nil {
 				break
@@ -113,7 +113,9 @@ func FuzzExecute(f *testing.F) {
 
 // outcome runs msg and returns its answer, or its error code, as bytes.
 func outcome(t *testing.T, fx *fixture, msg []byte) []byte {
+	before := imageOf(fx.c)
 	res, err := fx.e.Execute(fx.c, msg)
+	wantImage(t, fx.c, before)
 	if err != nil {
 		var e *Error
 		if !errors.As(err, &e) {

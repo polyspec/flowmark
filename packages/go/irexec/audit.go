@@ -22,7 +22,7 @@ func (w *writer) auditRow(row *store.Row, action string, previous cell) *Error {
 	if a == nil || w.r.cl.req.Load {
 		return nil
 	}
-	x := w.next.byRow[row]
+	x := w.next.recOf(row)
 	ht, _ := w.c.cat.Table(a.History)
 	if err := w.next.need(ht.Name); err != nil {
 		return err
@@ -54,7 +54,7 @@ func (w *writer) auditRow(row *store.Row, action string, previous cell) *Error {
 		return err
 	}
 	key := joinedKey(tt, map[string]string{a.TablesRecord: record.text, a.TablesName: w.tb.Name})
-	if firstByKey(w.next.recs[tt.Name], func(k string) bool { return k == key }) != nil {
+	if w.next.lookupOne(keyIndex(tt.Name, key)) != nil {
 		return nil
 	}
 	named := &store.Row{Table: tt.Name, Key: key, Scalars: map[string]*string{}, Sections: map[string]*string{}}
@@ -74,12 +74,11 @@ func joinedKey(tb *catalog.Table, values map[string]string) string {
 // appendRow adds a row the write originates to its table, stored as a document.
 func (w *writer) appendRow(tb *catalog.Table, row *store.Row) {
 	path := tb.Name + docSuffix
-	f := w.next.files[path]
+	f := w.ownFile(path)
 	if f == nil {
 		f = &file{table: tb.Name}
-		w.next.files[path] = f
+		w.next.setFile(path, f)
 	}
 	f.rows = append(f.rows, row)
 	w.touched[path] = true
-	w.next.index()
 }

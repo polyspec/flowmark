@@ -10,11 +10,11 @@
         },
         {
             "type": "composer",
-            "url": "https://github.com/polyspec/template/releases/download/v0.0.19/packages.json"
+            "url": "https://github.com/polyspec/template/releases/download/v0.0.20/packages.json"
         },
         {
             "type": "composer",
-            "url": "https://github.com/polyspec/hyper/releases/download/v0.0.25/packages.json"
+            "url": "https://github.com/polyspec/hyper/releases/download/v0.0.31/packages.json"
         },
         {
             "type": "composer",
@@ -22,7 +22,7 @@
         },
         {
             "type": "composer",
-            "url": "https://github.com/polyspec/crudui/releases/download/v0.0.12/packages.json"
+            "url": "https://github.com/polyspec/crudui/releases/download/v0.0.13/packages.json"
         },
         {
             "type": "vcs",
@@ -37,10 +37,10 @@
     ],
     "require": {
         "php": ">=8.5",
-        "polyspec/crudui-generator": "0.0.12",
-        "polyspec/hyper-server": "0.0.25",
+        "polyspec/crudui-generator": "0.0.13",
+        "polyspec/hyper-server": "0.0.31",
         "polyspec/orm": "0.0.21",
-        "polyspec/template": "0.0.19"
+        "polyspec/template": "0.0.20"
     },
     "autoload": {
         "psr-4": {

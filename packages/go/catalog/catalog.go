@@ -63,6 +63,10 @@ type Table struct {
 	AESVersion   string               // the column that records the key version of the row, "" when none does
 	BlindIndexes map[string]string    // the blind index column of each aes column that has one
 	View         *View                // the view columns when the table is the view table, else nil
+	// Autoincrement is true when the table's schema statement, as SQLite holds it, declares its key AUTOINCREMENT: the
+	// rendered statement of an identity key, or a schema statement of SQL. Its counter is part of the corpus
+	// (SequencesFile).
+	Autoincrement bool
 }
 
 // KeySeparator joins the values of a composite key in its key cell, and the names of its columns in its heading. No value

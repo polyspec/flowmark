@@ -2,13 +2,18 @@ package irexec
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
+	"io/fs"
 	"slices"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/polyspec/flowmark/packages/go/catalog"
+	"github.com/polyspec/flowmark/packages/go/internal/cost"
+	"github.com/polyspec/flowmark/packages/go/internal/pmap"
 	"github.com/polyspec/flowmark/packages/go/store"
 	"github.com/polyspec/flowmark/packages/go/validate"
 	"github.com/polyspec/orm/packages/go/engine/dbspec"
@@ -22,22 +27,34 @@ const docSuffix = ".flowmark.md"
 // are unavailable (spec 10 Diagnostics, "Unavailable table"). A Corpus is never
 // changed: a write computes the next Corpus beside it (see PostImage).
 type Corpus struct {
-	cat         *catalog.Catalog
-	files       map[string]*file
+	cat *catalog.Catalog
+	// files holds the corpus documents by corpus path, shared with the corpora read or written from this one.
+	files       pmap.Map[string, *file]
 	unavailable map[string]catalog.Diagnostic
 	// walk holds the first corpus.walk diagnostic of each entry at a table's place
 	// that is no corpus document, by its corpus path.
-	walk map[string]catalog.Diagnostic
-	// recs holds the rows of each table, by file path order and then the order
-	// the store returns them in; a block row follows its placement row.
-	recs map[string][]*rec
+	walk pmap.Map[string, catalog.Diagnostic]
+	// idx is the index of the rows (index.go), the locators of each key by the document that holds them, and keys the
+	// index keys of each document's rows, both shared with the corpora read or written from this one.
+	idx  pmap.Map[string, byDoc]
+	keys pmap.Map[string, docKeys]
+	// docs holds the records of each document this corpus built, guarded by docsMu, since the requests that read a
+	// committed corpus may run at once.
+	docs map[string]*docRecs
+	// dirty marks the documents whose rows changed since they entered the index (docs.go).
+	dirty map[string]*mark
+	// ownKeys holds the documents whose index keys this corpus made and shares with no other corpus.
+	ownKeys map[string]bool
+	docsMu  sync.Mutex
 	// ordered caches the storage order of each table.
 	ordered map[string][]*rec
 	// positions caches the 1-based sibling position of each row of a files table
 	// with an order column, which its stored rank gives (spec 20 Order).
 	positions map[string]map[*rec]int64
-	// byRow finds the record of a row.
-	byRow map[*store.Row]*rec
+	// cost counts the work of the corpus's operations; nil counts nothing.
+	cost *cost.Counts
+	// seq holds the AUTOINCREMENT counters of the corpus (sequences.go), nil when it holds none.
+	seq *sequences
 }
 
 // file is a corpus document at the place of a files or document table.
@@ -56,28 +73,59 @@ type rec struct {
 	file   string
 	parent *rec
 	tb     *catalog.Table
+	// at is the place of the record in the walk of its document, gen the walk that placed it, moved the walk that found it
+	// new or under another parent, and again the walk that entered it in the index again (docs.go).
+	at, gen, moved, again int
 }
 
-// Open reads the corpus fsys as a request reads it: the corpus folder itself
-// (store.DirFS), or the write path's mirror of it, parsing through the memo m of a
-// long-lived corpus (nil to parse every document). An error is returned only when
-// the corpus root cannot be read.
-func Open(cat *catalog.Catalog, fsys store.FS, m *validate.Memo) (*Corpus, error) {
-	s, err := validate.Read(cat, fsys, m)
+// Open reads the corpus fsys as a request reads it, from nothing: the corpus folder itself (store.DirFS), or the
+// write path's mirror of it. An error is returned only when the corpus root cannot be read.
+func Open(cat *catalog.Catalog, fsys store.FS) (*Corpus, error) {
+	s, err := validate.Read(cat, fsys)
 	if err != nil {
 		return nil, err
 	}
-	c := &Corpus{cat: cat, files: map[string]*file{}, unavailable: map[string]catalog.Diagnostic{}, walk: map[string]catalog.Diagnostic{}}
-	for path, f := range s.Files {
-		c.files[path] = &file{table: f.Table, data: f.Data, rows: f.Rows}
+	data, err := fsys.ReadFile(catalog.SequencesFile)
+	if errors.Is(err, fs.ErrNotExist) {
+		data, err = nil, nil
 	}
-	for _, d := range s.Diagnostics {
-		if f := c.files[d.File]; f != nil {
-			f.diags = append(f.diags, d)
-			continue
+	if err != nil {
+		return nil, err
+	}
+	c := FromSnapshot(cat, s, nil, nil)
+	if err := c.SetSequences(data); err != nil {
+		return nil, err
+	}
+	return c, nil
+}
+
+// FromSnapshot returns the corpus of the read s of the catalog cat, counting its work in k. When prev is the corpus of
+// the read before s of the same validate.Live, under the same catalog, the corpus shares every document of prev that
+// the read did not change, and sets only the paths it did (plan, Ruling: an operation costs what it touches).
+func FromSnapshot(cat *catalog.Catalog, s *validate.Snapshot, prev *Corpus, k *cost.Counts) *Corpus {
+	c := &Corpus{cat: cat, unavailable: map[string]catalog.Diagnostic{}, cost: k}
+	if prev != nil && prev.cat == cat {
+		// The counters are no document of the read: the reader sets them again when their file changed (SetSequences).
+		c.seq = prev.seq
+	}
+	changed, full := s.Changed()
+	if prev == nil || prev.cat != cat || full {
+		for path := range s.Files() {
+			c.readPath(s, path)
 		}
-		if _, seen := c.walk[d.File]; !seen && d.Rule == store.RuleWalk {
-			c.walk[d.File] = d
+		for path := range s.AllDiagnostics() {
+			c.readPath(s, path)
+		}
+	} else {
+		c.files, c.walk = prev.files, prev.walk
+		prev.docsMu.Lock()
+		c.idx, c.keys = prev.shareKeysLocked()
+		for p := range prev.dirty {
+			c.markLocked(p).walk = true
+		}
+		prev.docsMu.Unlock()
+		for _, path := range changed {
+			c.readPath(s, path)
 		}
 	}
 	for _, tb := range cat.Tables {
@@ -85,14 +133,34 @@ func Open(cat *catalog.Catalog, fsys store.FS, m *validate.Memo) (*Corpus, error
 			c.unavailable[tb.Name] = d
 		}
 	}
-	c.index()
-	return c, nil
+	return c
 }
+
+// readPath sets the document and the walk entry of the corpus path from the read s: the document with its
+// diagnostics, or, for a path that is no document, the first corpus.walk diagnostic of the entry.
+func (c *Corpus) readPath(s *validate.Snapshot, path string) {
+	diags := s.DiagnosticsAt(path)
+	c.walk = c.walk.Delete(path)
+	if f := s.File(path); f != nil {
+		c.setFile(path, &file{table: f.Table, data: f.Data, rows: f.Rows, diags: diags})
+		return
+	}
+	c.dropFile(path)
+	for _, d := range diags {
+		if d.Rule == store.RuleWalk {
+			c.walk = c.walk.Set(path, d)
+			return
+		}
+	}
+}
+
+// Cost returns the counts of the work of the corpus's operations, nil when it counts none.
+func (c *Corpus) Cost() *cost.Counts { return c.cost }
 
 // FilesOf returns the paths of the files that hold rows of table.
 func (c *Corpus) FilesOf(table string) ([]string, error) {
 	var out []string
-	for p, f := range c.files {
+	for p, f := range c.files.All() {
 		if f.table == table {
 			out = append(out, p)
 		}
@@ -104,31 +172,15 @@ func (c *Corpus) FilesOf(table string) ([]string, error) {
 // Rebased returns the corpus under the catalog cat of the schema statements that stand next, without the files of drop:
 // the tables a schema statement changed, whose rows come again from the statement's database.
 func (c *Corpus) Rebased(cat *catalog.Catalog, drop []string) *Corpus {
-	n := c.clone()
-	n.cat = cat
+	n := &Corpus{cat: cat, files: c.files, walk: c.walk, unavailable: map[string]catalog.Diagnostic{}, cost: c.cost, seq: c.seq}
 	for _, p := range drop {
-		delete(n.files, p)
+		n.dropFile(p)
 	}
-	n.unavailable = map[string]catalog.Diagnostic{}
-	n.index()
+	// The index keys of a row follow its table's declaration, so the index under cat is built from nothing.
+	for p := range n.files.All() {
+		n.changed(p)
+	}
 	return n
-}
-
-// index builds the rows of each table from the files.
-func (c *Corpus) index() {
-	c.recs = map[string][]*rec{}
-	c.reorder()
-	c.byRow = map[*store.Row]*rec{}
-	paths := make([]string, 0, len(c.files))
-	for p := range c.files {
-		paths = append(paths, p)
-	}
-	sort.Strings(paths)
-	for _, p := range paths {
-		for _, r := range c.files[p].rows {
-			c.place(r, p, nil)
-		}
-	}
 }
 
 // reorder drops the cached storage orders and positions, which a changed rank or
@@ -138,17 +190,24 @@ func (c *Corpus) reorder() {
 	c.positions = map[string]map[*rec]int64{}
 }
 
-// place records row r, held by the file path, and its block rows.
-func (c *Corpus) place(r *store.Row, path string, parent *rec) {
-	tb, _ := c.cat.Table(r.Table)
-	x := &rec{row: r, file: path, parent: parent, tb: tb}
-	c.recs[r.Table] = append(c.recs[r.Table], x)
-	c.byRow[r] = x
-	for _, name := range r.BlockNames() {
-		for _, child := range r.Blocks[name] {
-			c.place(child, path, x)
-		}
-	}
+// file returns the corpus document at path, nil when the corpus holds none.
+func (c *Corpus) file(path string) *file {
+	f, _ := c.files.Get(path)
+	return f
+}
+
+// setFile makes f the document at path of c, a corpus that a read or a write is computing and no other reads, and
+// marks it.
+func (c *Corpus) setFile(path string, f *file) {
+	c.files = c.files.Set(path, f)
+	c.changed(path)
+}
+
+// dropFile removes the document at path from c, a corpus that a read or a write is computing and no other reads, and
+// marks it.
+func (c *Corpus) dropFile(path string) {
+	c.files = c.files.Delete(path)
+	c.changed(path)
 }
 
 // Catalog returns the catalog the corpus was read with.
@@ -172,24 +231,25 @@ func (c *Corpus) Rows(table string) ([][]any, error) {
 
 // StoredRows returns every row of table as Rows does, each value that is not of its column's type as the file holds it: a
 // store.Literal, or the text. The database of a SQL statement holds them as a statement stored them (spec 40 SQL statements).
-func (c *Corpus) StoredRows(table string) ([][]any, error) {
-	return c.tableRows(table, func(x *rec, col dbspec.Column) (any, error) {
-		if raw, ok := x.row.Raw[col.Name]; ok {
-			if store.IsLiteral(raw) {
-				return store.Literal(raw), nil
-			}
-			return raw, nil
+func (c *Corpus) StoredRows(table string) ([][]any, error) { return c.tableRows(table, c.storedValue) }
+
+// storedValue is the stored value of column col of x, as a database of the corpus holds it.
+func (c *Corpus) storedValue(x *rec, col dbspec.Column) (any, error) {
+	if raw, ok := x.row.Raw[col.Name]; ok {
+		if store.IsLiteral(raw) {
+			return store.Literal(raw), nil
 		}
-		v, err := c.value(x, col.Name)
-		if err != nil {
-			return nil, err
-		}
-		if !v.null && (col.Type.Kind == dbspec.TypeDatetime || col.Type.Kind == dbspec.TypeTime || col.Type.Kind == dbspec.TypeDate) {
-			// SQLite holds these as text, at the precision of the type, which is how the file holds them.
-			return v.text, nil
-		}
-		return cellOutput(col, v)
-	})
+		return raw, nil
+	}
+	v, err := c.value(x, col.Name)
+	if err != nil {
+		return nil, err
+	}
+	if !v.null && (col.Type.Kind == dbspec.TypeDatetime || col.Type.Kind == dbspec.TypeTime || col.Type.Kind == dbspec.TypeDate) {
+		// SQLite holds these as text, at the precision of the type, which is how the file holds them.
+		return v.text, nil
+	}
+	return cellOutput(col, v)
 }
 
 // cellOutput is the wire value of v in column col, its failure an error only when there is one: output answers a typed
@@ -213,6 +273,7 @@ func (c *Corpus) tableRows(table string, of func(*rec, dbspec.Column) (any, erro
 		return nil, err
 	}
 	out := make([][]any, 0, len(recs))
+	c.cost.Add(cost.RowsStored, len(recs))
 	for _, x := range recs {
 		row := make([]any, len(x.tb.Columns))
 		for i, col := range x.tb.Columns {
@@ -239,7 +300,7 @@ func (c *Corpus) need(table string) *Error {
 // Diagnostics returns the read diagnostics of the corpus file path: its format
 // diagnostics, which the commit's rewrite refusal reads.
 func (c *Corpus) Diagnostics(path string) []catalog.Diagnostic {
-	if f := c.files[path]; f != nil {
+	if f := c.file(path); f != nil {
 		return slices.Clone(f.diags)
 	}
 	return nil
@@ -249,7 +310,10 @@ func (c *Corpus) Diagnostics(path string) []catalog.Diagnostic {
 // the corpus holds no document there: the write path checks a target against them
 // and reads a file it rewrites outside the executor from them.
 func (c *Corpus) Data(path string) []byte {
-	if f := c.files[path]; f != nil && f.data != nil {
+	if path == catalog.SequencesFile {
+		return slices.Clone(c.sequenceData())
+	}
+	if f := c.file(path); f != nil && f.data != nil {
 		return slices.Clone(f.data)
 	}
 	return nil
@@ -259,19 +323,23 @@ func (c *Corpus) Data(path string) []byte {
 // document that one holds and the other does not or that the two hold with other
 // bytes, and the file named by the diagnostic of each table whose unavailability
 // differs — a walk entry has no bytes in the corpus, so its table's diagnostic stands
-// for it. The write path reads it to know whether a corpus re-read under the lock is
-// the one a transaction read, and to name a change that landed.
+// for it —, the file of the AUTOINCREMENT counters when theirs differ, and the file of
+// the schema statements when their catalogs differ. The write path reads it to know whether a corpus re-read under the lock is
+// the one a transaction read, and to name a change that landed. The documents the two
+// corpora share are not compared, so corpora read or written one from the other cost
+// the paths they changed (plan, Ruling: an operation costs what it touches).
 func (c *Corpus) Differs(o *Corpus) []string {
 	set := map[string]bool{}
-	for p, f := range c.files {
-		if g := o.files[p]; g == nil || !bytes.Equal(f.data, g.data) || (f.data == nil) != (g.data == nil) {
-			set[p] = true
-		}
+	same := func(f, g *file) bool {
+		return f == g || bytes.Equal(f.data, g.data) && (f.data == nil) == (g.data == nil)
 	}
-	for p := range o.files {
-		if c.files[p] == nil {
-			set[p] = true
-		}
+	c.cost.Add(cost.FilesCompared, pmap.Diff(c.files, o.files, same, func(p string) { set[p] = true }))
+	if a, b := c.sequenceData(), o.sequenceData(); !bytes.Equal(a, b) || (a == nil) != (b == nil) {
+		set[catalog.SequencesFile] = true
+	}
+	// Corpora under two catalogs differ at the schema statements, which give a corpus its catalog.
+	if c.cat != o.cat {
+		set[catalog.StatementsFile] = true
 	}
 	for _, tb := range c.cat.Tables {
 		a, aok := c.unavailable[tb.Name]
@@ -385,14 +453,14 @@ func (c *Corpus) rows(table string) ([]*rec, *Error) {
 	switch tb.Storage.Kind {
 	case catalog.StorageDocument:
 		// The store returns a document's rows in storage order.
-		out = slices.Clone(c.recs[table])
+		out = slices.Clone(c.tableRecs(table))
 	case catalog.StorageBlock:
 		parents, err := c.rows(tb.Storage.Parent)
 		if err != nil {
 			return nil, err
 		}
 		byParent := map[*store.Row][]*rec{}
-		for _, x := range c.recs[table] {
+		for _, x := range c.tableRecs(table) {
 			byParent[x.parent.row] = append(byParent[x.parent.row], x)
 		}
 		for _, p := range parents {
@@ -421,7 +489,7 @@ func (c *Corpus) rows(table string) ([]*rec, *Error) {
 // that share an order value stand in corpus order, and rows whose order value is
 // not of its type stand after the others in corpus order.
 func (c *Corpus) filesOrder(tb *catalog.Table) ([]*rec, *Error) {
-	all := c.recs[tb.Name]
+	all := c.tableRecs(tb.Name)
 	parent := parentColumn(tb)
 	keyInt := isInteger(columnOf(tb, tb.Key).Type.Kind)
 	byKey := map[string]*rec{}
@@ -550,32 +618,27 @@ func (c *Corpus) position(x *rec) (cell, *Error) {
 	if _, raw := x.row.Raw[tb.Order]; raw {
 		return cell{}, c.typeFault(x, tb.Order)
 	}
-	if _, ok := filesGroup(x); !ok {
+	g, ok := filesGroup(x)
+	if !ok {
 		return cell{}, c.typeFault(x, parentColumn(tb))
 	}
-	at, ok := c.positions[tb.Name]
-	if !ok {
-		groups := map[string][]*rec{}
-		var keys []string
-		for _, y := range c.recs[tb.Name] {
-			g, ok := filesGroup(y)
-			if !ok {
-				continue
-			}
-			if _, seen := groups[g]; !seen {
-				keys = append(keys, g)
-			}
-			groups[g] = append(groups[g], y)
-		}
+	at := c.positions[tb.Name]
+	if at == nil {
 		at = map[*rec]int64{}
-		for _, g := range keys {
-			members := groups[g]
-			c.sortSiblings(tb, members)
-			for i, y := range members {
-				at[y] = int64(i + 1)
-			}
-		}
 		c.positions[tb.Name] = at
+	}
+	if _, placed := at[x]; !placed {
+		// The siblings of a files row are the rows of its group in the index (groupKey: a files row has no placement
+		// parent), in corpus order.
+		key := g
+		if g != "" {
+			key = "\x00" + g
+		}
+		members := c.lookup(groupIndex(tb.Name, key))
+		c.sortSiblings(tb, members)
+		for i, y := range members {
+			at[y] = int64(i + 1)
+		}
 	}
 	return cell{text: strconv.FormatInt(at[x], 10)}, nil
 }

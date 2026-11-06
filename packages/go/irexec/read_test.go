@@ -713,7 +713,7 @@ func TestRelativeTimeRange(t *testing.T) {
 func TestOutputInvariant(t *testing.T) {
 	f := baseFixture(t).on(t)
 	bad := "2026-13-45 99:00:00"
-	for _, x := range f.c.recs["people"] {
+	for _, x := range f.c.tableRecs("people") {
 		if x.row.Key == "P1" {
 			x.row.Scalars["joined"] = &bad
 		}

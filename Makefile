@@ -80,5 +80,6 @@ lint-php: board-models-php
 # A parent benchmark runs through all of its sub-benchmarks: BenchmarkShardOpen took 31.9 s on an Apple M3 Pro, past the
 # runner's 30 s default, so each test is given 120 s, about four times the slowest measured one.
 .PHONY: flowmark-benchmarks
-flowmark-benchmarks: ## Run writepath tests and benchmarks through the Kit runner; offline
+flowmark-benchmarks: ## Run the writepath tests and benchmarks and the statement benchmark through the Kit runner; offline
 	$(NODE) $(KIT)/run-tests.$(KIT_EXT) go --timeout 120 --cwd packages/go -- -bench . -benchmem ./writepath
+	$(NODE) $(KIT)/run-tests.$(KIT_EXT) go --timeout 600 --cwd packages/go -- -run '^$$' -bench BenchmarkStatement -benchtime 20x ./statement

@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/polyspec/flowmark/packages/go/catalog"
+	"github.com/polyspec/flowmark/packages/go/irexec"
 	"github.com/polyspec/flowmark/packages/go/store"
 	"github.com/polyspec/flowmark/packages/go/store/journal"
 	"github.com/polyspec/flowmark/packages/go/validate"
@@ -93,28 +94,41 @@ func TestTreeHandEditRacingCommit(t *testing.T) {
 	})
 }
 
-// TestTreeReadIsTheRead: the read of a long-lived corpus, through its tree and its memo of parses, is the read of the
+// TestTreeReadIsTheRead: the read of a long-lived corpus, through its tree and the paths it dropped, is the read of the
 // corpus from the disk after every change, a change that alters the parse of an unchanged file included: a row that
 // loses its detail section makes the links to it in other files noncanonical (spec 40 Opening a corpus).
 func TestTreeReadIsTheRead(t *testing.T) {
 	f := baseFixture(t)
-	same := func(step string) *validate.Snapshot {
+	same := func(step string) []catalog.Diagnostic {
 		t.Helper()
-		if err := f.c.tree.Refresh(); err != nil {
+		if _, err := f.c.read(); err != nil {
 			t.Fatal(err)
 		}
-		got, err := validate.Read(f.cat, f.c.tree, f.c.memo)
+		got := f.c.committed()
+		want, err := irexec.Open(f.cat, store.DirFS(f.root))
 		if err != nil {
 			t.Fatal(err)
 		}
-		want, err := validate.Read(f.cat, store.DirFS(f.root), nil)
+		if d := got.Differs(want); len(d) != 0 {
+			t.Fatalf("%s: the long-lived read differs from the read from the disk at %v", step, d)
+		}
+		s, err := validate.Read(f.cat, store.DirFS(f.root))
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !reflect.DeepEqual(got, want) {
-			t.Fatalf("%s: the long-lived read is\n%+v\nthe read from the disk is\n%+v", step, got.Diagnostics, want.Diagnostics)
+		for path := range s.AllDiagnostics() {
+			if !reflect.DeepEqual(got.Diagnostics(path), want.Diagnostics(path)) {
+				t.Fatalf("%s: the diagnostics of %s are %+v; from the disk %+v", step, path, got.Diagnostics(path), want.Diagnostics(path))
+			}
 		}
-		return want
+		for _, tb := range f.cat.Tables {
+			g, gerr := got.Rows(tb.Name)
+			w, werr := want.Rows(tb.Name)
+			if !reflect.DeepEqual(g, w) || (gerr == nil) != (werr == nil) {
+				t.Fatalf("%s: the rows of %s are %v, %v; from the disk %v, %v", step, tb.Name, g, gerr, w, werr)
+			}
+		}
+		return s.Diagnostics()
 	}
 	same("40#opening-a-corpus: the corpus as opened")
 	items := baseDocs()["items.flowmark.md"]
@@ -122,10 +136,10 @@ func TestTreeReadIsTheRead(t *testing.T) {
 	j := strings.Index(items, "## items row T2\n")
 	f.write("items.flowmark.md", items[:i]+items[j:])
 	s := same("40#opening-a-corpus: a row loses its detail section, and the links to it in unchanged files change")
-	if !slices.ContainsFunc(s.Diagnostics, func(d catalog.Diagnostic) bool {
+	if !slices.ContainsFunc(s, func(d catalog.Diagnostic) bool {
 		return d.File == "notes/N1.flowmark.md" && d.Rule == "format.noncanonical"
 	}) {
-		t.Fatalf("the link of the unchanged N1 did not become noncanonical: %+v", s.Diagnostics)
+		t.Fatalf("the link of the unchanged N1 did not become noncanonical: %+v", s)
 	}
 	f.write("notes/N4.flowmark.md", lines("# Fourth", "- item: [T3](../items.flowmark.md)", "- position: 3"))
 	same("40#opening-a-corpus: a new file links to a row")

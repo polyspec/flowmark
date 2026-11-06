@@ -1,5 +1,5 @@
 <!-- doc-id: spec-document-model -->
-<!-- source-sha256: 732a3d568a3f916921bca3c04377c2a670067ff23cc8cde2c4f615340267d83b -->
+<!-- source-sha256: 48963d73d7aba2b7465c87d8722175e55ed9080a75fc0e1639295b9ef9285885 -->
 # 문서 모델
 
 [English](20-document-model.md)
@@ -111,8 +111,10 @@ aggregate냐 split이냐는 저장 선언이다. 논리 관계는 모든 저장�
 - `files` key는 최대 243 byte이며, 그래서 file 이름이 255 byte 안에 든다.
 - key 타입의 정식 텍스트가 아닌 file 이름은 `format.block`이다: 정수 key 7의 정식 file 이름은
   `7.flowmark.md`이고 `007.flowmark.md`는 아니다.
-- `identity`는 `i64` primary key column에만 허용된다([schema](30-schema.md)): key를 생략한 insert는 lock 아래 할당된 `max+1`을 받는다.
-  git을 되감은 뒤의 재사용은 받아들인다 — 할당의 기록은 sequence가 아니라 git history다.
+- `identity`는 `i64` primary key column에만 허용된다([schema](30-schema.md)): key를 생략한 insert는 가장 큰 key와 표의
+  counter([AUTOINCREMENT counter](40-ops.ko.md#sql-statements)) 가운데 큰 것보다 하나 큰 key를 lock 아래에서 받으므로, 같은
+  key를 두 번 받지 않는다. git을 되감으면 counter도 행과 함께 되감기며, 그 뒤의 재사용은 받아들인다 — 할당의 기록은 git
+  history다.
 - `key_prefix <p>`를 가진 key는 `<p><n + 1>`로 할당되며, n은 `<p><n>` 꼴 key 가운데 선행 0 없는 가장 큰
   10진 접미사다. orm은 이 column을 `identity`와 같이 executor가 할당하는 것으로 다루므로 insert는 이를
   생략할 수 있다. `key_prefix` 없는 text key는 insert가 주어야 한다.

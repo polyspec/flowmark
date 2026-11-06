@@ -57,7 +57,7 @@ func (noTargets) Target(fromFile, table, key string) (string, error) {
 
 // read reads the corpus fsys by storage, and reports the walk and the format
 // diagnostics of its files. A row of a block table is read with its placement row.
-func read(cat *catalog.Catalog, fsys store.FS, lk store.Linker, memo *store.Memo) (*corpus, error) {
+func read(cat *catalog.Catalog, fsys store.FS, lk store.Linker) (*corpus, error) {
 	entries, err := fsys.ReadDir(".")
 	if err != nil {
 		return nil, fmt.Errorf("cannot read the corpus root: %w", err)
@@ -70,7 +70,7 @@ func read(cat *catalog.Catalog, fsys store.FS, lk store.Linker, memo *store.Memo
 			if !listed(entries, tb.Name) {
 				continue
 			}
-			rows, data, ds := store.ParseFilesTable(cat, fsys, tb.Name, lk, memo)
+			rows, data, ds := store.ParseFilesTable(cat, fsys, tb.Name, lk)
 			c.diags = append(c.diags, ds...)
 			for path, b := range data {
 				c.files[path] = &File{Table: tb.Name, Data: b}
@@ -87,7 +87,7 @@ func read(cat *catalog.Catalog, fsys store.FS, lk store.Linker, memo *store.Memo
 				if !listed(entries, tb.Name) {
 					continue
 				}
-				docs, ds, err := store.ParseDocumentTable(cat, fsys, tb.Name, lk, memo)
+				docs, ds, err := store.ParseDocumentTable(cat, fsys, tb.Name, lk)
 				if err != nil {
 					return nil, err
 				}
@@ -106,10 +106,10 @@ func read(cat *catalog.Catalog, fsys store.FS, lk store.Linker, memo *store.Memo
 			}
 			data, err := fsys.ReadFile(file)
 			if err != nil {
-				c.diags = append(c.diags, walkDiag(file, "cannot read the document: "+err.Error()))
+				c.diags = append(c.diags, walkDiag(file, store.ReadFailure(err)))
 				continue
 			}
-			rows, ds, err := memo.ParseDocument(cat, tb.Name, file, data, lk)
+			rows, ds, err := store.ParseDocument(cat, tb.Name, file, data, lk)
 			if err != nil {
 				return nil, err
 			}
