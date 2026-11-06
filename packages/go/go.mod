@@ -24,3 +24,5 @@ require (
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.12.1 // indirect
 )
+
+replace modernc.org/sqlite => github.com/min-0-max/sqlite v1.61.0-polyspec.1

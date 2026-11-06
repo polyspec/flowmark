@@ -280,9 +280,14 @@ answer is that of a SQLite connection: `columns`, `rows`, `affected`, `last_inse
 corpus: an orm markdown connection is a SQLite connection whose statements this server answers, so every plan, codec and
 utility of orm's SQLite dialect holds on a corpus, and a client has only this driver to implement.
 
-- **What runs them.** The corpus is materialized into an in-memory SQLite database: the schema of its documents and of
-  `dbspec/statements.json`, then its rows. The statement runs there. The difference of its rows goes back through the
-  executor as one write per table, so the corpus's rules still judge it and the commit protocol writes it; SQLite has
+- **What runs them.** The corpus is materialized into a SQLite database: the schema
+  of its documents and of `dbspec/statements.json`, then its rows. The statement runs there. SQLite's pre-update hook
+  reports each row the statement changed, its own and those of a REPLACE, a foreign key action and a trigger; the
+  difference is formed from the image of each such row before its first change and from the rows the database holds at
+  the rowids it changed, so a write reads the rows it changed and not every row. A text of an image is read by its length,
+  so a text holding a NUL comes whole; the driver's release reads it up to its first NUL, and the engine pins polyspec's
+  fork of the driver, which reads it by its length. The difference goes back through the executor as one write per
+  table, so the corpus's rules still judge it and the commit protocol writes it; SQLite has
   already judged NOT NULL and the foreign keys, its triggers wrote their rows, and a codec does not judge what a statement
   stores. The database stands between statements under the lock while the corpus does not differ from it; when the
   corpus differs under the same catalog, a database no transaction holds is refreshed to it
@@ -729,6 +734,12 @@ and MySQL and PostgreSQL compare a `datetime(p)` column with `NOW(6)` at six dig
   `TestRefresh` and `FuzzRefresh` of `statement` that a database refreshed through a cut, a removal, a
   restoration and an exchange of documents of each golden corpus equals the database filled from
   nothing, and fails exactly when that fill fails.
+- A write statement reads from its database the rows it changed, not its tables: the rows SQLite's pre-update hook
+  reports, read at their rowids, and the keys it allocates by the number index of the corpus from the largest down,
+  skipping a key the statement took. `TestCost` holds that a write and a refused write read the same rows of the database
+  at 1,000 and at 100,000 rows, and `TestCapture`, `TestCaptureKeys` and `FuzzCapture` of `statement` that the difference
+  formed from those rows equals the difference of every row of the tables, through REPLACE, foreign key actions,
+  triggers, rowid changes and texts holding a NUL.
 - **The codec's cost** is linear in the bytes of a file: the parse and the render of a file each take
   at most 0.1 s of CPU per megabyte of it and allocate at most 64 bytes per byte of it, for a document
   file of rows with detail sections. No pass compares each heading with each detail anchor, or each

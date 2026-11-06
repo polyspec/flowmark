@@ -226,8 +226,9 @@ var equalCost = map[string][]cost.Counter{
 	"refused write": refusedCost,
 }
 
-// refusedCost are the counts of a write the corpus refuses and the read after it: the rows the database takes again.
-var refusedCost = []cost.Counter{cost.RowsStored, cost.DatabaseRowsWritten}
+// refusedCost are the counts of a write the corpus refuses and the read after it: the rows the database takes again, and
+// the rows of the database it reads for its difference (T41).
+var refusedCost = []cost.Counter{cost.RowsStored, cost.DatabaseRowsWritten, cost.DatabaseRowsRead}
 
 // readCost are the counts of a corpus read: the documents it visits and parses, and the rows it places and indexes.
 var readCost = []cost.Counter{cost.FilesVisited, cost.FilesParsed, cost.RowsPlaced, cost.RowsIndexed}
@@ -243,9 +244,10 @@ var editReadCost = []cost.Counter{cost.FilesVisited, cost.FilesParsed, cost.Rows
 
 // writeReadCost are the counts of the reads of a write, at its start and under the lock at its commit, the rows its
 // post-image copies (T39), the rows the corpus enters in its index (T40-1), and the rows the write and its checks read
-// (T40-2), and the rows whose positions it gives the database back (T42-1).
+// (T40-2), the rows whose positions it gives the database back (T42-1), and the rows of the database it reads for its
+// difference, the rows it changed (T41).
 var writeReadCost = []cost.Counter{cost.FilesVisited, cost.FilesParsed, cost.RowsPlaced, cost.RowsCopied, cost.RowsIndexed,
-	cost.RowsScanned, cost.RowsStored}
+	cost.RowsScanned, cost.RowsStored, cost.DatabaseRowsRead}
 
 // logCost names, for each operation, the counters whose count grows at most with the logarithm of the documents of
 // the corpus: a comparison of two corpora walks the paths of the ordered map of their documents to the documents that

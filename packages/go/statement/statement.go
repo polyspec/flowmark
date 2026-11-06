@@ -152,7 +152,7 @@ func runAlone(ctx context.Context, s *writepath.Session, text string, args []any
 		if err != nil {
 			return err
 		}
-		answer, open, writes, err = execute(ctx, d.w, c, text, args, s.ForeignKeysOff())
+		answer, open, writes, err = execute(ctx, d, c, text, args, s.ForeignKeysOff())
 		return err
 	})
 	if err != nil {
@@ -313,7 +313,7 @@ func runInTransaction(ctx context.Context, s *writepath.Session, text string, ar
 	var answer *Answer
 	err = s.View(ctx, func(c *irexec.Corpus) error {
 		var err error
-		answer, _, writes, err = execute(ctx, d.w, c, text, args, s.ForeignKeysOff())
+		answer, _, writes, err = execute(ctx, d, c, text, args, s.ForeignKeysOff())
 		return err
 	})
 	if err == nil {
@@ -1182,30 +1182,59 @@ func decimalText(n int64, scale int) string {
 	return sign + digits[:len(digits)-scale] + "." + digits[len(digits)-scale:]
 }
 
-// execute runs the statement on db, and returns its answer and the request messages of the rows it changed.
-func execute(ctx context.Context, db runner, c *irexec.Corpus, text string, args []any, foreignKeysOff bool) (*Answer, *sql.Rows, written, error) {
+// fullDiff is the seam of the tests that forms the difference of each write statement from every row of the database as
+// well, before and after it, and gives both differences to compare (TestCapture); it is nil outside the tests.
+var fullDiff func(text string, captured, full [][]byte)
+
+// execute runs the statement on the writer connection of d, and returns its answer and the request messages of the rows
+// it changed: the difference of the rows the pre-update hook reports it changed, before and after it, so a statement
+// reads the rows it changed and not every row (spec 40 SQL statements).
+func execute(ctx context.Context, d *database, c *irexec.Corpus, text string, args []any, foreignKeysOff bool) (_ *Answer, _ *sql.Rows, _ written, err error) {
+	db := d.w
 	if readsOnly(text) {
 		answer, open, err := readBatch(ctx, db, text, args)
 		return answer, open, written{}, err
 	}
-	before, err := allRows(ctx, db, c)
-	if err != nil {
-		return nil, nil, written{}, err
+	var full map[string]tableRows
+	if fullDiff != nil {
+		if full, err = allRows(ctx, db, c); err != nil {
+			return nil, nil, written{}, err
+		}
 	}
+	d.cap.start()
+	defer d.cap.stop()
 	answer, err := query(ctx, db, text, args)
 	if err != nil {
 		return nil, nil, written{}, err
 	}
-	if err := allocate(ctx, db, c, answer); err != nil {
+	changed, err := d.cap.changes()
+	if err != nil {
 		return nil, nil, written{}, err
 	}
-	after, err := allRows(ctx, db, c)
+	if err := allocate(ctx, db, c, answer, changed); err != nil {
+		return nil, nil, written{}, err
+	}
+	if changed, err = d.cap.changes(); err != nil {
+		return nil, nil, written{}, err
+	}
+	before, after, err := changedTables(ctx, db, c, changed)
 	if err != nil {
 		return nil, nil, written{}, err
 	}
 	writes, err := diff(c, before, after, foreignKeysOff)
 	if err != nil {
 		return nil, nil, written{}, err
+	}
+	if fullDiff != nil {
+		now, err := allRows(ctx, db, c)
+		if err != nil {
+			return nil, nil, written{}, err
+		}
+		reference, err := diff(c, full, now, foreignKeysOff)
+		if err != nil {
+			return nil, nil, written{}, err
+		}
+		fullDiff(text, writes, reference)
 	}
 	given, err := sequencesOf(ctx, db, c.Catalog())
 	if err != nil {
@@ -1365,7 +1394,7 @@ type tableRows struct {
 	keys  []string
 }
 
-// allRows reads the rows of every table.
+// allRows reads the rows of every table: the difference a test forms from every row (fullDiff).
 func allRows(ctx context.Context, db runner, c *irexec.Corpus) (map[string]tableRows, error) {
 	out := map[string]tableRows{}
 	for _, tb := range c.Catalog().Tables {
@@ -1373,13 +1402,7 @@ func allRows(ctx context.Context, db runner, c *irexec.Corpus) (map[string]table
 		if err != nil {
 			return nil, err
 		}
-		t := tableRows{byKey: make(map[string][]any, len(rows)), keys: make([]string, 0, len(rows))}
-		for _, row := range rows {
-			key := rowKey(tb, row)
-			t.byKey[key] = row
-			t.keys = append(t.keys, key)
-		}
-		out[tb.Name] = t
+		out[tb.Name] = keyed(tb, rows)
 	}
 	return out, nil
 }
@@ -1806,29 +1829,46 @@ func assignable(documents []*dbspec.Document) []*dbspec.Document {
 }
 
 // allocate gives each row of a key_prefix table whose key is NULL the next key of the prefix, in the order the rows were
-// inserted. The rows that the statement returns read the keys it gave: a NULL in a column of the key's name is the next of
-// them, as a RETURNING of the key reads the value the row was given.
-func allocate(ctx context.Context, db runner, c *irexec.Corpus, answer *Answer) error {
+// inserted: past the largest number of the keys the statement left in the rows it changed and of the keys of the corpus
+// that it did not take away, which the corpus's index holds, so it reads the rows the statement changed and not the
+// table (spec 20 Keys). The rows that the statement returns read the keys it gave: a NULL in a column of the key's name
+// is the next of them, as a RETURNING of the key reads the value the row was given.
+func allocate(ctx context.Context, db runner, c *irexec.Corpus, answer *Answer, changed map[string]*changedRows) error {
 	given := map[string][]string{}
 	for _, d := range c.Catalog().Documents {
 		for _, t := range d.Tables {
 			if t.Settings == nil || t.Settings.KeyPrefix == nil || len(t.PrimaryKey.Columns) != 1 {
 				continue
 			}
-			table, name := quote(t.Name), t.PrimaryKey.Columns[0]
-			open, err := column[int64](ctx, db, "SELECT rowid FROM "+table+" WHERE "+quote(name)+" IS NULL ORDER BY rowid", c.Cost())
+			ch := changed[t.Name]
+			if ch == nil {
+				continue
+			}
+			table, name, ids := quote(t.Name), t.PrimaryKey.Columns[0], ch.rowidList()
+			open, err := column[int64](ctx, db, "SELECT rowid FROM "+table+" WHERE rowid IN (SELECT value FROM json_each(?)) AND "+quote(name)+" IS NULL ORDER BY rowid", c.Cost(), ids)
 			if err != nil {
 				return err
 			}
 			if len(open) == 0 {
 				continue
 			}
-			keys, err := column[string](ctx, db, "SELECT "+quote(name)+" FROM "+table+" WHERE "+quote(name)+" IS NOT NULL", c.Cost())
+			keys, err := column[string](ctx, db, "SELECT "+quote(name)+" FROM "+table+" WHERE rowid IN (SELECT value FROM json_each(?)) AND "+quote(name)+" IS NOT NULL", c.Cost(), ids)
 			if err != nil {
 				return err
 			}
+			gone, err := takenKeys(ctx, db, t.Name, name, ch, keys)
+			if err != nil {
+				return err
+			}
+			p := t.Settings.KeyPrefix.Prefix
+			for n := range c.KeyNumbers(t.Name) {
+				if !gone[p+n] {
+					keys = append(keys, p+n)
+					break
+				}
+			}
 			for _, rowid := range open {
-				key := irexec.NextPrefixed(t.Settings.KeyPrefix.Prefix, keys)
+				key := irexec.NextPrefixed(p, keys)
 				keys = append(keys, key)
 				given[name] = append(given[name], key)
 				if _, err := db.ExecContext(ctx, "UPDATE "+table+" SET "+quote(name)+" = ? WHERE rowid = ?", key, rowid); err != nil {
@@ -1848,9 +1888,29 @@ func allocate(ctx context.Context, db runner, c *irexec.Corpus, answer *Answer) 
 	return nil
 }
 
+// takenKeys returns the keys, in the column name of the table, of the rows the statement changed that it left in none
+// of them: keys holds the keys the changed rows hold now.
+func takenKeys(ctx context.Context, db runner, table, name string, ch *changedRows, keys []string) (map[string]bool, error) {
+	cols, err := tableColumns(ctx, db, table)
+	if err != nil {
+		return nil, err
+	}
+	i := slices.Index(cols, name)
+	if i < 0 {
+		return nil, &Error{codeInternal, fmt.Sprintf("the table %s of the database has no column %s", table, name)}
+	}
+	gone := map[string]bool{}
+	for _, old := range ch.olds {
+		if key, ok := old[i].(string); ok && !slices.Contains(keys, key) {
+			gone[key] = true
+		}
+	}
+	return gone, nil
+}
+
 // column reads the one column of the rows of text.
-func column[T any](ctx context.Context, db runner, text string, k *cost.Counts) (_ []T, err error) {
-	rows, err := db.QueryContext(ctx, text)
+func column[T any](ctx context.Context, db runner, text string, k *cost.Counts, args ...any) (_ []T, err error) {
+	rows, err := db.QueryContext(ctx, text, args...)
 	if err != nil {
 		return nil, &Error{codeInternal, err.Error()}
 	}

@@ -1,5 +1,5 @@
 <!-- doc-id: spec-ops -->
-<!-- source-sha256: bf6299638b862158ed66be77d9a4745ba6b782fb1fcbb99a28b660b2565c18c4 -->
+<!-- source-sha256: fc60cb3a5feb1051cabe2ba0e1bbb7832c8a96651e6de81d0ba6f37a972eb1eb -->
 # Operations
 
 [English](40-ops.md)
@@ -239,8 +239,12 @@ control message `{"op": "statement", "sql", "params"}`는 SQLite dialect의 문�
 연결은 이 server가 문장에 답하는 SQLite 연결이므로 orm SQLite dialect의 plan, codec, utility가 corpus에서 그대로 성립하고,
 client가 구현할 것은 이 driver뿐이다.
 
-- **실행하는 곳.** corpus를 in-memory SQLite database로 옮긴다: document와 `dbspec/statements.json`의 schema, 그다음 행.
-  문장은 거기서 실행된다. 행의 차이는 표마다 쓰기 하나로 executor를 거쳐 돌아가므로 corpus의 규칙이 판정하고 commit
+- **실행하는 곳.** corpus를 SQLite database로 옮긴다: document와 `dbspec/statements.json`의 schema,
+  그다음 행. 문장은 거기서 실행된다. SQLite의 pre-update hook이 문장이 바꾼 행을 하나하나 알린다: 문장 자신의 행과
+  REPLACE, foreign key action, trigger의 행이다. 차이는 그런 행마다 첫 변경 전의 image와, 바뀐 rowid에서 database가 지닌
+  행으로 만들므로, 쓰기는 모든 행이 아니라 자기가 바꾼 행을 읽는다. image의 text는 길이로 읽으므로 NUL을 품은 text도
+  온전히 온다. driver의 release는 text를 첫 NUL까지 읽으므로, 엔진은 text를 길이로 읽는 polyspec의 driver fork를
+  고정한다. 행의 차이는 표마다 쓰기 하나로 executor를 거쳐 돌아가므로 corpus의 규칙이 판정하고 commit
   protocol이 기록한다. NOT NULL과 foreign key는 SQLite가 이미 판정했고, trigger는 자기 행을 썼으며, codec은 문장이 저장한
   값을 판정하지 않는다. database는 corpus와 다르지 않은 동안 lock 아래에서 문장 사이에 유지된다. 같은 catalog
   아래에서 corpus가 다르면, 어떤 transaction도 잡지 않은 database는 그 corpus로 갱신되고([비용 모델](#비용-모델)),
@@ -624,6 +628,11 @@ MySQL과 PostgreSQL은 `datetime(p)` column을 `NOW(6)`와 여섯 자리로 비�
   `TestCost`가 외부 편집과 쓰기가 1,000행과 100,000행에서 같은 행을 가져와 씀을 확인하고, `statement`의
   `TestRefresh`와 `FuzzRefresh`가 각 golden corpus의 문서를 자르고, 지우고, 되돌리고, 맞바꾸며 갱신한 database가
   처음부터 채운 database와 같고, 그 채우기가 실패할 때에만 실패함을 확인한다.
+- 쓰기 문장은 database에서 표가 아니라 자기가 바꾼 행을 읽는다: SQLite의 pre-update hook이 알린 행을 그 rowid에서
+  읽고, 할당하는 key는 corpus의 number index에서 가장 큰 것부터 내려가며 문장이 가져간 key를 건너뛴다. `TestCost`가
+  쓰기와 거부된 쓰기가 1,000행과 100,000행에서 database의 같은 행을 읽음을 확인하고, `statement`의 `TestCapture`,
+  `TestCaptureKeys`, `FuzzCapture`가 그 행으로 만든 차이가 표의 모든 행의 차이와 같음을 REPLACE, foreign key action,
+  trigger, rowid 변경, NUL을 품은 text에 걸쳐 확인한다.
 - **codec의 비용**은 file의 byte에 선형이다: 상세 섹션을 가진 행들의 document file에서, file의 parse와
   render는 각각 그 megabyte당 CPU 0.1초 이하가 들고 그 byte당 64 byte 이하를 할당한다. 어떤 pass도 각
   heading을 각 상세 anchor와, 또는 각 행을 각 행과 비교하지 않는다: heading의 slug는 자기가 가져가는

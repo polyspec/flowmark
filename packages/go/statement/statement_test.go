@@ -39,7 +39,7 @@ table tags {
 `
 
 // openCorpus opens a new corpus of the set of this file.
-func openCorpus(t *testing.T) (*ops.Corpus, string) {
+func openCorpus(t testing.TB) (*ops.Corpus, string) {
 	t.Helper()
 	root := t.TempDir()
 	corpustest.WriteTree(t, root, map[string]string{
@@ -51,7 +51,7 @@ func openCorpus(t *testing.T) (*ops.Corpus, string) {
 	return c, root
 }
 
-func open(t *testing.T) (*writepath.Session, string) {
+func open(t testing.TB) (*writepath.Session, string) {
 	t.Helper()
 	c, root := openCorpus(t)
 	s, err := c.Session("statement-test")
@@ -62,7 +62,7 @@ func open(t *testing.T) (*writepath.Session, string) {
 	return s, root
 }
 
-func run(t *testing.T, s *writepath.Session, text string, params ...string) *statement.Answer {
+func run(t testing.TB, s *writepath.Session, text string, params ...string) *statement.Answer {
 	t.Helper()
 	raw := make([]json.RawMessage, len(params))
 	for i, p := range params {
@@ -542,7 +542,7 @@ func TestAssignedColumns(t *testing.T) {
 }
 
 // closeSession closes the session s and fails the test when the close fails.
-func closeSession(t *testing.T, s io.Closer) {
+func closeSession(t testing.TB, s io.Closer) {
 	t.Helper()
 	if err := s.Close(); err != nil {
 		t.Error(err)

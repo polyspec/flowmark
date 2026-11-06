@@ -54,6 +54,8 @@ type database struct {
 	pool    *sql.DB
 	w       *sql.Conn
 	readers *sql.DB
+	// cap records the rows each statement changes on w, from its pre-update hook.
+	cap *capture
 
 	// wmu is the use of the writer connection: a statement's, a refresh's, or a transaction's from its first statement
 	// to its end.
@@ -91,7 +93,7 @@ func openDatabase(ctx context.Context, s *writepath.Session) (_ *database, err e
 	if err != nil {
 		return nil, err
 	}
-	d := &database{file: file}
+	d := &database{file: file, cap: &capture{}}
 	defer func() {
 		if err != nil {
 			err = errors.Join(err, d.close())
@@ -113,6 +115,9 @@ func openDatabase(ctx context.Context, s *writepath.Session) (_ *database, err e
 	d.pool.SetMaxOpenConns(1)
 	if d.w, err = d.pool.Conn(ctx); err != nil {
 		return nil, &Error{codeInternal, err.Error()}
+	}
+	if err := d.w.Raw(d.cap.register); err != nil {
+		return nil, err
 	}
 	return d, nil
 }

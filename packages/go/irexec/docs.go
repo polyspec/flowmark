@@ -2,6 +2,7 @@ package irexec
 
 import (
 	"cmp"
+	"iter"
 	"maps"
 	"slices"
 
@@ -310,6 +311,26 @@ func (c *Corpus) maxNumber(table, col string) string {
 		return k[len(first)+10:]
 	}
 	return ""
+}
+
+// KeyNumbers returns the numbers of the keys of table under its key_prefix, the largest first, from the index (spec 20
+// Keys): a SQL statement gives a NULL key the number past the largest whose key it did not take away.
+func (c *Corpus) KeyNumbers(table string) iter.Seq[string] {
+	return func(yield func(string) bool) {
+		c.docsMu.Lock()
+		defer c.docsMu.Unlock()
+		c.freshLocked()
+		first, end := numberRange(table, "")
+		for k := range c.idx.Before(end) {
+			if k < first {
+				return
+			}
+			c.cost.Add(cost.RowsScanned, 1)
+			if !yield(k[len(first)+10:]) {
+				return
+			}
+		}
+	}
 }
 
 // sortCorpusOrder sorts records in corpus order: by document path, then in the walk of their document.
