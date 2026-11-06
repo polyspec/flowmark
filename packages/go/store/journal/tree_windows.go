@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"golang.org/x/sys/windows"
 )
@@ -46,6 +47,20 @@ func newTreeWatch(c *Corpus) (treeWatch, error) {
 
 func (w *windowsTree) issue() error {
 	return windows.ReadDirectoryChanges(w.dir, &w.buf[0], uint32(len(w.buf)), true, treeFilter, nil, &w.ov, 0)
+}
+
+// wait waits, at most d, on the event of the overlapped read, which the system signals when the read completes with a
+// notification that drain has not taken.
+func (w *windowsTree) wait(d time.Duration) (bool, error) {
+	ms := uint32(d / time.Millisecond)
+	ev, err := windows.WaitForSingleObject(w.ov.HEvent, ms)
+	switch {
+	case err != nil:
+		return false, fmt.Errorf("waiting on ReadDirectoryChangesW: %w", err)
+	case ev == uint32(windows.WAIT_TIMEOUT):
+		return false, nil
+	}
+	return true, nil
 }
 
 // watch arms nothing: the subtree of the root is watched from the start.

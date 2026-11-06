@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 // scriptedWatch is a tree watch whose notifications and failures a test sets.
@@ -34,6 +35,9 @@ func (w *scriptedWatch) drain() (Notices, error) {
 	w.next, w.drainErr = Notices{}, nil
 	return n, err
 }
+
+// wait has nothing more to give: the script queues every notification before the drain that takes it.
+func (w *scriptedWatch) wait(time.Duration) (bool, error) { return false, nil }
 
 func (w *scriptedWatch) close() error {
 	w.closed = true

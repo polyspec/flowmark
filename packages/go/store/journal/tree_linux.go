@@ -8,6 +8,7 @@ import (
 	"path"
 	"slices"
 	"strings"
+	"time"
 
 	"golang.org/x/sys/unix"
 )
@@ -90,6 +91,9 @@ func (w *linuxTree) add(rel string, dir bool) error {
 	w.byPath[rel] = wd
 	return nil
 }
+
+// wait has nothing to wait for: the kernel queues a notification in the system call that makes the change.
+func (w *linuxTree) wait(time.Duration) (bool, error) { return false, nil }
 
 func (w *linuxTree) drain() (Notices, error) {
 	var n Notices

@@ -204,6 +204,11 @@ var costOps = []costOp{
 		if err := os.WriteFile(p, []byte(edited), 0o644); err != nil {
 			t.Fatal(err)
 		}
+		// The read answers the edit once its notification arrived, which ReadDirectoryChangesW may report after the
+		// write returned (spec 40 Opening a corpus).
+		if err := s.AwaitNotice("notes/2020-01-03.flowmark.md", 30*time.Second); err != nil {
+			t.Fatal(err)
+		}
 		if got := cells(run(t, s, "SELECT title FROM notes WHERE id = 'N201'")); got != `[["`+after+`"]]` {
 			t.Fatalf("the read after the edit answers %s", got)
 		}

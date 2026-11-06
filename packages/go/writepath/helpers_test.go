@@ -291,7 +291,20 @@ func (f *fixture) file(p string) string {
 func (f *fixture) write(p, text string) {
 	f.t.Helper()
 	corpustest.WriteTree(f.t, f.root, map[string]string{p: text})
+	f.awaitNotice(p)
 }
+
+// awaitNotice orders a change of p made outside the engine before the next operation: it returns once the notification
+// of the change arrived, where the platform may report it after the change returned (journal Tree.AwaitNotice).
+func (f *fixture) awaitNotice(p string) {
+	f.t.Helper()
+	if err := f.c.tree.AwaitNotice(p, noticeWait); err != nil {
+		f.t.Fatal(err)
+	}
+}
+
+// noticeWait bounds the wait for the notification of a change made outside the engine.
+const noticeWait = 30 * time.Second
 
 // remove removes a corpus file as a human edit would.
 func (f *fixture) remove(p string) {
@@ -299,6 +312,7 @@ func (f *fixture) remove(p string) {
 	if err := os.Remove(filepath.Join(f.root, filepath.FromSlash(p))); err != nil {
 		f.t.Fatal(err)
 	}
+	f.awaitNotice(p)
 }
 
 // clean requires the corpus to validate without a diagnostic and to hold no stage.

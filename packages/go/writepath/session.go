@@ -444,6 +444,11 @@ func (s *Session) Reschema(ctx context.Context, compute func(*irexec.Corpus) (*c
 	return s.c.useCatalog(cat)
 }
 
+// AwaitNotice waits, at most d, until the notification of a change of the corpus path rel made outside the engine
+// arrived, and holds it for the next operation (journal Tree.AwaitNotice). Like the tree's SetNotices it is a test seam,
+// exported for the tests of the statement path, which order an edit by hand before the read that answers it.
+func (s *Session) AwaitNotice(rel string, d time.Duration) error { return s.c.tree.AwaitNotice(rel, d) }
+
 // Executor returns the executor of the corpus's catalog. Under the lock.
 func (s *Session) Executor() *irexec.Executor { return s.c.exec }
 

@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/polyspec/flowmark/packages/go/internal/pmap"
 	"github.com/polyspec/flowmark/packages/go/store"
@@ -74,6 +75,9 @@ type treeWatch interface {
 	watch(rel string, dir bool) error
 	// drain returns, without waiting, the notifications queued since the last drain.
 	drain() (Notices, error)
+	// wait waits, at most d, until a notification may be queued that drain has not returned, and reports whether one
+	// may be; a watch whose kernel queues a notification in the system call that makes the change has none to wait for.
+	wait(d time.Duration) (bool, error)
 	close() error
 }
 
@@ -93,6 +97,57 @@ func (t *Tree) SetNotices(f func(Notices) Notices) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.notices = f
+}
+
+// AwaitNotice waits, at most d, until a notification names the corpus path rel, the folder of a path above it or an
+// overflow, and holds what it takes for the next Refresh, as Quiet does. It is the test seam that orders a change made
+// outside the engine before the operation that reads it, where the notification of the change may come after the change
+// returned (ReadDirectoryChangesW); it waits on the notification, never on a timer. It returns at once when the tree
+// holds neither rel nor the entries of its folder, since the next read reads rel from the disk, and when the test
+// scripts the notifications (SetNotices), since the script, not the platform, decides what arrives.
+func (t *Tree) AwaitNotice(rel string, d time.Duration) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.w == nil {
+		return errors.New("the corpus tree is closed")
+	}
+	if _, dir := t.dirs.Get(path.Dir(rel)); t.notices != nil || (!dir && !t.holds(rel)) {
+		return nil
+	}
+	names := func(n Notices) bool {
+		if n.Overflow {
+			return true
+		}
+		for _, p := range slices.Concat(n.Changed, n.Moved) {
+			if p == rel || p == "." || strings.HasPrefix(rel, p+"/") {
+				return true
+			}
+		}
+		return false
+	}
+	deadline := time.Now().Add(d)
+	for {
+		n, err := t.w.drain()
+		if err != nil {
+			t.heldErr = errors.Join(t.heldErr, err)
+			return err
+		}
+		t.held = Notices{Overflow: t.held.Overflow || n.Overflow, Changed: append(t.held.Changed, n.Changed...), Moved: append(t.held.Moved, n.Moved...)}
+		if names(t.held) {
+			return nil
+		}
+		left := time.Until(deadline)
+		if left <= 0 {
+			return fmt.Errorf("no notification named %s within %v", rel, d)
+		}
+		more, err := t.w.wait(left)
+		if err != nil {
+			return err
+		}
+		if !more {
+			return fmt.Errorf("no notification named %s within %v", rel, d)
+		}
+	}
 }
 
 // Refresh takes the notifications queued since the last Refresh and drops what they name; each path dropped is
