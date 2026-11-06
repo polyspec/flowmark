@@ -22,6 +22,7 @@ func TestStatementEndsTheTransaction(t *testing.T) {
 		{"RAISE(ABORT) after a deferred BEGIN", "BEGIN", "ABORT", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			s, root := open(t)
 			run(t, s, "CREATE TABLE guarded (id INTEGER PRIMARY KEY, name TEXT NOT NULL)")
 			run(t, s, "CREATE TRIGGER guarded_refuse BEFORE INSERT ON guarded WHEN NEW.name = 'refused' BEGIN SELECT RAISE("+tc.raise+", 'refused'); END")

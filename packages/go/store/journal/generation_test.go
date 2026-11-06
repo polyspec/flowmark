@@ -187,16 +187,22 @@ func TestGeneration(t *testing.T) {
 		}
 	})
 	t.Run("the last Generations commits are kept", func(t *testing.T) {
+		// The generation holds a full window of Generations commits, as after that many commits; each commit after it
+		// drops the oldest.
 		root := t.TempDir()
+		full, err := json.Marshal(generationOf(1, Generations))
+		if err != nil {
+			t.Fatal(err)
+		}
+		writeFile(t, root, GenerationPath, string(full))
 		c, _ := newCorpus(t, root)
 		l := acquire(t, c, "s1")
-		const commits = Generations + 6
-		for i := 1; i <= commits; i++ {
+		for i := Generations + 1; i <= Generations+2; i++ {
 			if err := c.Commit(l, []Change{{Path: fmt.Sprintf("p%d.md", i), Data: []byte("x\n")}}); err != nil {
 				t.Fatal(err)
 			}
+			wantGeneration(t, c, generationOf(uint64(i-Generations+1), uint64(i)))
 		}
-		wantGeneration(t, c, generationOf(commits-Generations+1, commits))
 	})
 	t.Run("an unreadable generation refuses a commit before anything is staged", func(t *testing.T) {
 		root, changes, before, _ := fixture(t)

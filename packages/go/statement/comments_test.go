@@ -14,6 +14,7 @@ import (
 func TestCommentsBeforeAStatement(t *testing.T) {
 	comments := []string{"-- query\n", "/* query */ ", "/* two\nlines */ -- and one\n", "  \t-- indented\n"}
 	t.Run("a read under query_only", func(t *testing.T) {
+		t.Parallel()
 		s, _ := open(t)
 		run(t, s, "PRAGMA query_only=ON")
 		for _, c := range comments {
@@ -31,6 +32,7 @@ func TestCommentsBeforeAStatement(t *testing.T) {
 		}
 	})
 	t.Run("transaction statements and a PRAGMA", func(t *testing.T) {
+		t.Parallel()
 		s, root := open(t)
 		for i, c := range comments {
 			run(t, s, c+"BEGIN IMMEDIATE")
@@ -46,6 +48,7 @@ func TestCommentsBeforeAStatement(t *testing.T) {
 		run(t, s, "INSERT INTO notes (title) VALUES ('written')")
 	})
 	t.Run("a schema statement", func(t *testing.T) {
+		t.Parallel()
 		s, _ := open(t)
 		run(t, s, "-- a table\nCREATE TABLE IF NOT EXISTS commented (id INTEGER PRIMARY KEY, v TEXT)")
 		run(t, s, "/* again */ CREATE TABLE IF NOT EXISTS commented (id INTEGER PRIMARY KEY, v TEXT)")
@@ -55,6 +58,7 @@ func TestCommentsBeforeAStatement(t *testing.T) {
 		}
 	})
 	t.Run("a text of only comments", func(t *testing.T) {
+		t.Parallel()
 		s, _ := open(t)
 		for _, c := range comments {
 			a, err := statement.Run(s, c, nil)

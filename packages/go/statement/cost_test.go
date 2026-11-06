@@ -327,17 +327,32 @@ func costDocuments(rows int) int { return rows / costGroup }
 // nothing only when nothing changed before it; each count equalCost names is equal at every size; and each count
 // logCost names stays within its logarithmic bound.
 func TestCost(t *testing.T) {
-	t.Run("two corpora of the same rows count the same", func(t *testing.T) {
-		first, second := measure(t, costSizes[0]), measure(t, costSizes[0])
-		for _, op := range costOps {
-			if first[op.name] != second[op.name] {
-				t.Errorf("%s counts %v, then %v", op.name, first[op.name], second[op.name])
-			}
+	// Each corpus is its own folder and session, so the measures run in parallel; the group returns when all have.
+	measured := make([]map[string]cost.Snapshot, len(costSizes))
+	var again map[string]cost.Snapshot
+	t.Run("measures", func(t *testing.T) {
+		for i, rows := range costSizes {
+			t.Run(fmt.Sprintf("%d rows", rows), func(t *testing.T) {
+				t.Parallel()
+				measured[i] = measure(t, rows)
+			})
 		}
+		t.Run(fmt.Sprintf("%d rows again", costSizes[0]), func(t *testing.T) {
+			t.Parallel()
+			again = measure(t, costSizes[0])
+		})
 	})
+	if t.Failed() {
+		return
+	}
+	for _, op := range costOps {
+		if first := measured[0][op.name]; first != again[op.name] {
+			t.Errorf("two corpora of the same rows count differently: %s counts %v, then %v", op.name, first, again[op.name])
+		}
+	}
 	counts := map[int]map[string]cost.Snapshot{}
-	for _, rows := range costSizes {
-		counts[rows] = measure(t, rows)
+	for i, rows := range costSizes {
+		counts[rows] = measured[i]
 	}
 	for _, op := range costOps {
 		for _, rows := range costSizes {

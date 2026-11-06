@@ -20,6 +20,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -151,7 +152,7 @@ func runAlone(ctx context.Context, s *writepath.Session, text string, args []any
 		if err != nil {
 			return err
 		}
-		answer, open, writes, err = execute(ctx, d, c, text, args, s.ForeignKeysOff())
+		answer, open, writes, err = execute(ctx, s, d, c, text, args)
 		return err
 	})
 	if err != nil {
@@ -312,7 +313,7 @@ func runInTransaction(ctx context.Context, s *writepath.Session, text string, ar
 	var answer *Answer
 	err = s.View(ctx, func(c *irexec.Corpus) error {
 		var err error
-		answer, _, writes, err = execute(ctx, d, c, text, args, s.ForeignKeysOff())
+		answer, _, writes, err = execute(ctx, s, d, c, text, args)
 		return err
 	})
 	if err == nil {
@@ -1205,21 +1206,36 @@ func decimalText(n int64, scale int) string {
 	return sign + digits[:len(digits)-scale] + "." + digits[len(digits)-scale:]
 }
 
-// fullDiff is the seam of the tests that forms the difference of each write statement from every row of the database as
-// well, before and after it, and gives both differences to compare (TestCapture); it is nil outside the tests.
-var fullDiff func(text string, captured, full [][]byte)
+// fullDiffs is the seam of the tests that forms the difference of each write statement of a session from every row of
+// the database as well, before and after it, and gives both differences to compare (TestCapture); it is empty outside
+// the tests. It is kept by session, so tests of different sessions run in parallel.
+var fullDiffs sync.Map // *writepath.Session → fullDiff
+
+// fullDiff gives the difference of a write statement formed from the rows it changed and from every row.
+type fullDiff func(text string, captured, full [][]byte)
+
+// fullDiffOf is the full difference seam of s, nil when none is installed.
+func fullDiffOf(s *writepath.Session) fullDiff {
+	f, _ := fullDiffs.Load(s)
+	if check, ok := f.(fullDiff); ok {
+		return check
+	}
+	return nil
+}
 
 // execute runs the statement on the writer connection of d, and returns its answer and the request messages of the rows
 // it changed: the difference of the rows the pre-update hook reports it changed, before and after it, so a statement
 // reads the rows it changed and not every row (spec 40 SQL statements).
-func execute(ctx context.Context, d *database, c *irexec.Corpus, text string, args []any, foreignKeysOff bool) (_ *Answer, _ *sql.Rows, _ written, err error) {
+func execute(ctx context.Context, s *writepath.Session, d *database, c *irexec.Corpus, text string, args []any) (_ *Answer, _ *sql.Rows, _ written, err error) {
 	db := d.w
+	foreignKeysOff := s.ForeignKeysOff()
+	check := fullDiffOf(s)
 	if readsOnly(text) {
 		answer, open, err := readBatch(ctx, db, text, args)
 		return answer, open, written{}, err
 	}
 	var full map[string]tableRows
-	if fullDiff != nil {
+	if check != nil {
 		if full, err = allRows(ctx, db, c); err != nil {
 			return nil, nil, written{}, err
 		}
@@ -1251,7 +1267,7 @@ func execute(ctx context.Context, d *database, c *irexec.Corpus, text string, ar
 	if err != nil {
 		return nil, nil, written{}, err
 	}
-	if fullDiff != nil {
+	if check != nil {
 		now, err := allRows(ctx, db, c)
 		if err != nil {
 			return nil, nil, written{}, err
@@ -1260,7 +1276,7 @@ func execute(ctx context.Context, d *database, c *irexec.Corpus, text string, ar
 		if err != nil {
 			return nil, nil, written{}, err
 		}
-		fullDiff(text, writes, reference)
+		check(text, writes, reference)
 	}
 	given, err := sequencesOf(ctx, db, c.Catalog())
 	if err != nil {

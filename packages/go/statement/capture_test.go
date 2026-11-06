@@ -13,15 +13,16 @@ import (
 	"github.com/polyspec/flowmark/packages/go/internal/corpustest"
 	"github.com/polyspec/flowmark/packages/go/ops"
 	"github.com/polyspec/flowmark/packages/go/statement"
+	"github.com/polyspec/flowmark/packages/go/writepath"
 )
 
-// compareDiffs installs the seam that forms the difference of each write statement from every row as well, and fails
+// compareDiffs installs the seam of s that forms the difference of each write statement from every row as well, and fails
 // t when the difference of the rows the pre-update hook reported differs from it; it returns the count of the
 // statements compared.
-func compareDiffs(t *testing.T) *int {
+func compareDiffs(t *testing.T, s *writepath.Session) *int {
 	t.Helper()
 	n := new(int)
-	t.Cleanup(statement.SetFullDiff(func(text string, captured, full [][]byte) {
+	t.Cleanup(statement.SetFullDiff(s, func(text string, captured, full [][]byte) {
 		*n++
 		if !slices.EqualFunc(captured, full, sameWrite) {
 			t.Errorf("%s: the difference of the changed rows is\n%s\nand of every row\n%s", text, joined(captured), joined(full))
@@ -159,12 +160,14 @@ func TestCapture(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			// Each case is its own corpus and session, and so its own seam.
+			t.Parallel()
 			s, root := open(t)
 			run(t, s, "INSERT INTO notes (title) VALUES ('seed')")
 			for _, text := range tc.setup {
 				run(t, s, text)
 			}
-			n := compareDiffs(t)
+			n := compareDiffs(t, s)
 			writes := 0
 			for _, text := range tc.texts {
 				run(t, s, text)
@@ -212,11 +215,12 @@ func TestCaptureKeys(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			s, _ := openCost(t, 2000)
 			for _, text := range tc.setup {
 				run(t, s, text)
 			}
-			compareDiffs(t)
+			compareDiffs(t, s)
 			if got := fmt.Sprint(run(t, s, tc.text).Rows); got != tc.want {
 				t.Fatalf("%s returns %s, want %s", tc.text, got, tc.want)
 			}
@@ -261,7 +265,7 @@ func FuzzCapture(f *testing.F) {
 		if len(input) > 24 {
 			return
 		}
-		compareDiffs(t)
+		compareDiffs(t, s)
 		run(t, s, "BEGIN")
 		defer run(t, s, "ROLLBACK")
 		for i := 0; i+1 < len(input); i += 2 {
