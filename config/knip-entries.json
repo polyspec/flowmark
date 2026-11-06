@@ -12,7 +12,8 @@
         "client/main.ts": "The browser client of the board example, which its README builds."
       },
       "ignoreDependencies": {
-        "@polyspec/ordered-json": "orm requires it, and npm fetches the release tarball of a dependency that is no direct one only when the project names its URL among its own dependencies (allow-remote=root); no file of the board imports it"
+        "@polyspec/ordered-json": "orm requires it, and npm fetches the release tarball of a dependency that is no direct one only when the project names its URL among its own dependencies (allow-remote=root); no file of the board imports it",
+        "@polyspec/php-serialize": "hyper-server requires it, and npm fetches the release tarball of a dependency that is no direct one only when the project names its URL among its own dependencies (allow-remote=root); no file of the board imports it"
       }
     }
   }
