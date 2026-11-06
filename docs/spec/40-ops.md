@@ -423,7 +423,8 @@ the writer of the difference.
 - The lock file holds one line of JSON, `{"pid", "start", "host", "hostname", "session",
   "acquisition"}`, and a line feed; the holder is named `<pid>@<host>/<session>`. `acquisition` is
   the token of one acquisition: 32 lowercase hex digits of 128 random bits from the OS random source,
-  which also name its pending record. A file that holds anything else is never taken for a free lock.
+  which also name its pending record. A file that holds anything else is never taken for a free lock;
+  one that holds no byte, or zero bytes alone, is a lock whose record a power loss lost (below).
   Grounding: a session may acquire again in its process, so only a token per acquisition keeps two
   acquirers from writing byte-equal records, which the lost-reply rule below would take for one.
 - `start` is the start of the process: on Linux the boot of `/proc/sys/kernel/random/boot_id` with
@@ -448,10 +449,15 @@ the writer of the difference.
 
 ### Acquiring and waiting
 
-- The record is written whole to `.flowmark/lock.<acquisition>.pending`,
-  synced, and hard-linked to `.flowmark/lock`; the link fails when the lock exists, so the lock
-  appears atomically with its whole record. A waiter writes its pending record once. A pending
-  record takes no part in exclusion.
+- The record is written whole to `.flowmark/lock.<acquisition>.pending`, without a sync, and
+  hard-linked to `.flowmark/lock`; the link fails when the lock exists, so the lock appears
+  atomically with its whole record. A waiter writes its pending record once. A pending record takes
+  no part in exclusion.
+- Since a lock appears only with its whole record, only a power loss leaves a lock whose record
+  holds no byte or zero bytes alone: the link reached the disk and the record did not. That power
+  loss ended its holder, so such a lock is a holder that has ended, refused at once, naming
+  `flowmark unlock` (`TestAcquireLostRecord` of `journal`). Grounding: a sync of the record, a wait
+  for the disk in every acquisition, would protect only a holder that the power loss ended anyway.
 - A try whose link fails with `EEXIST` reads the lock. A record byte-equal to the acquirer's own
   (its acquisition token is unique) means the link took effect although its reply was lost (NFS), and the
   lock is held. A lock that disappears before it is read is tried again at once.
@@ -510,7 +516,8 @@ the writer of the difference.
 
 - A stale lock is never removed by an operation. `flowmark unlock <corpus>` removes it:
   1. Read the record R. Refuse a running holder, and a holder on another host without
-     `--holder <pid>@<host>/<session>` naming it.
+     `--holder <pid>@<host>/<session>` naming it. A record a power loss lost names no holder and is
+     unlocked without `--holder` (`TestUnlockLostRecord` of `journal`).
   2. Link `.flowmark/lock` to `.flowmark/lock.<first 32 hex digits of the SHA-256 of R>.clearing`.
      `EEXIST` refuses, naming that file as another unlock of the same holder, running or
      interrupted.
@@ -666,8 +673,7 @@ renaming with `MoveFileEx` and `MOVEFILE_WRITE_THROUGH`, which returns once the 
 so every stage file is written to a partial name and renamed into place, and a delete is a
 rename. A created folder is made durable on Linux and macOS by syncing its parent, and on Windows
 by creating it in the stage and moving it into place with `MOVEFILE_WRITE_THROUGH`. The lock is
-never synced as a folder entry: a power loss ends its holder; its record is synced before its
-link. On Windows a holder's liveness is read from its process handle, never from its exit code.
+never synced, neither its record nor its folder entry: a power loss ends its holder. On Windows a holder's liveness is read from its process handle, never from its exit code.
 
 ## The file system
 

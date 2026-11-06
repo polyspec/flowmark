@@ -20,12 +20,12 @@ type flushCase struct {
 }
 
 var flushCases = []flushCase{
-	{"the lock alone", nil, 1, 1},
-	{"an update of one file", []Change{{Path: "a.flowmark.md", Data: []byte("a2\n")}}, 18, 15},
-	{"a create in a folder that exists", []Change{{Path: "notes/c.flowmark.md", Data: []byte("c\n")}}, 16, 13},
-	{"a delete of one file", []Change{{Path: "b.flowmark.md", Delete: true}}, 14, 11},
-	{"a create in a folder that does not exist", []Change{{Path: "new/d.flowmark.md", Data: []byte("d\n")}}, 17, 14},
-	{"an update of two files", []Change{{Path: "a.flowmark.md", Data: []byte("a2\n")}, {Path: "b.flowmark.md", Data: []byte("b2\n")}}, 26, 22},
+	{"the lock alone", nil, 0, 0},
+	{"an update of one file", []Change{{Path: "a.flowmark.md", Data: []byte("a2\n")}}, 17, 14},
+	{"a create in a folder that exists", []Change{{Path: "notes/c.flowmark.md", Data: []byte("c\n")}}, 15, 12},
+	{"a delete of one file", []Change{{Path: "b.flowmark.md", Delete: true}}, 13, 10},
+	{"a create in a folder that does not exist", []Change{{Path: "new/d.flowmark.md", Data: []byte("d\n")}}, 16, 13},
+	{"an update of two files", []Change{{Path: "a.flowmark.md", Data: []byte("a2\n")}, {Path: "b.flowmark.md", Data: []byte("b2\n")}}, 25, 21},
 }
 
 // TestFlushes pins the flushes of each operation of the journal, which its corpus counts (T55; plan, Ruling: a commit

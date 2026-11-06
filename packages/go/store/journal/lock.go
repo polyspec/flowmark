@@ -37,6 +37,9 @@ type LockTimeout struct {
 }
 
 func (e *LockTimeout) Error() string {
+	if e.Holder == (Holder{}) {
+		return fmt.Sprintf("journal: LOCK_TIMEOUT: %s holds no record: a power loss ended its holder before the record reached the disk; run `flowmark unlock %s`", e.Path, e.Corpus)
+	}
 	switch e.State {
 	case HolderEnded:
 		return fmt.Sprintf("journal: LOCK_TIMEOUT: %s is held by %s, which has ended without releasing it; check that it no longer runs, then run `flowmark unlock %s`", e.Path, e.Holder.describe(), e.Corpus)
@@ -91,6 +94,22 @@ func readShared(p string) ([]byte, fileID, error) {
 	}
 	return data, id, nil
 }
+
+// writeWhole creates p with data, without waiting for the disk: the pending lock record, which the lock takes whole
+// through its link.
+func writeWhole(p string, data []byte) error {
+	f, err := openShared(p, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	if err != nil {
+		return err
+	}
+	_, werr := f.Write(data)
+	return errors.Join(werr, f.Close())
+}
+
+// lostRecord reports a lock record that a power loss lost: no byte, or zero bytes alone. The lock appears through its
+// link only once its record is written whole, so no running process reads such a record; only a power loss before
+// the record reached the disk leaves it, and that power loss ended its holder.
+func lostRecord(data []byte) bool { return len(bytes.Trim(data, "\x00")) == 0 }
 
 // writeSynced writes data to a file (flag adds os.O_EXCL or os.O_TRUNC) and syncs it before closing.
 func writeSynced(k *cost.Counts, p string, data []byte, flag int) error {
@@ -165,7 +184,9 @@ func (c *Corpus) Acquire(ctx context.Context, session string, wait time.Duration
 	}
 	a := &acquirer{c: c, self: self, record: self.record(), lock: c.abs(LockPath), wait: wait,
 		pending: c.abs(".flowmark/lock." + self.Acquisition + pendingSuffix)}
-	if err := writeSynced(a.c.cost, a.pending, a.record, os.O_EXCL); err != nil {
+	// The record is not synced: the lock appears whole through its link, and a power loss that keeps the link and loses
+	// the record ended its holder (lostRecord).
+	if err := writeWhole(a.pending, a.record); err != nil {
 		return nil, errors.Join(fmt.Errorf("journal: the pending lock record: %w", err), removeAbsent(a.pending))
 	}
 	defer func() {
@@ -228,6 +249,9 @@ func (a *acquirer) try() (tried, error) {
 		}
 		if bytes.Equal(data, a.record) {
 			return tried{acquired: true}, nil
+		}
+		if lostRecord(data) {
+			return tried{state: HolderEnded, id: id}, nil
 		}
 		h, err := parseRecord(data)
 		if err != nil {
@@ -396,13 +420,19 @@ func (c *Corpus) Unlock(holder string) (Holder, error) {
 	if err != nil {
 		return Holder{}, fmt.Errorf("journal: reading the lock: %w", err)
 	}
-	h, err := parseRecord(data)
-	if err != nil {
-		return Holder{}, fmt.Errorf("journal: %s %w; check that no operation runs, then remove it", lock, err)
-	}
-	state, err := c.judge(h)
-	if err != nil {
-		return Holder{}, err
+	h, state := Holder{}, HolderEnded
+	if lostRecord(data) {
+		// A power loss lost the record and ended its holder; no --holder names it.
+		if holder != "" {
+			return Holder{}, fmt.Errorf("journal: --holder names %s, but %s holds no record: a power loss ended its holder; unlock without --holder", holder, lock)
+		}
+	} else {
+		if h, err = parseRecord(data); err != nil {
+			return Holder{}, fmt.Errorf("journal: %s %w; check that no operation runs, then remove it", lock, err)
+		}
+		if state, err = c.judge(h); err != nil {
+			return Holder{}, err
+		}
 	}
 	switch {
 	case state == HolderRunning:
@@ -441,7 +471,11 @@ func (c *Corpus) Unlock(holder string) (Holder, error) {
 	if err := os.Remove(claim); err != nil {
 		return Holder{}, fmt.Errorf("journal: the lock is removed, but its claim %s stays: %w", claim, err)
 	}
-	c.obs.Observe(Event{Kind: LockCleared, Path: lock, Holder: h.String()})
+	cleared := h.String()
+	if h == (Holder{}) {
+		cleared = ""
+	}
+	c.obs.Observe(Event{Kind: LockCleared, Path: lock, Holder: cleared})
 	return h, nil
 }
 

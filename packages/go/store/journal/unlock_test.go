@@ -43,6 +43,31 @@ func TestUnlockRemovesEndedHolder(t *testing.T) {
 	acquire(t, c, "s1")
 }
 
+// A lock whose record a power loss lost is unlocked without --holder: it names no holder, and the power loss ended
+// it (T57).
+func TestUnlockLostRecord(t *testing.T) {
+	for _, text := range lostRecords {
+		root := t.TempDir()
+		writeFile(t, root, LockPath, text)
+		c, rec := newCorpus(t, root)
+		got, err := c.Unlock("")
+		if err != nil {
+			t.Fatalf("Unlock of a lock of %d bytes: %v", len(text), err)
+		}
+		if got != (Holder{}) {
+			t.Fatalf("Unlock removed %v, want no holder", got)
+		}
+		s := sha256.Sum256([]byte(text))
+		for _, p := range []string{lockFile(root), filepath.Join(root, ".flowmark", "lock."+hex.EncodeToString(s[:])[:32]+".clearing")} {
+			if _, err := os.Lstat(p); !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("%s after the unlock: %v", p, err)
+			}
+		}
+		wantKinds(t, rec, LockCleared)
+		release(t, acquire(t, c, "s1"))
+	}
+}
+
 func TestUnlockPublishesEvent(t *testing.T) {
 	root := t.TempDir()
 	c, rec := newCorpus(t, root)

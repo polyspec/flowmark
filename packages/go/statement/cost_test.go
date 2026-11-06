@@ -383,13 +383,13 @@ func TestCost(t *testing.T) {
 // lockFlushes is the flushes of an acquisition of the lock, and commitFlushes those of a commit that writes one file of a
 // folder that exists, on Linux and macOS and on Windows (T55; plan, Ruling: a commit waits for the disk as few times as
 // its atomicity needs). TestFlushes of the journal pins the flushes of every kind of commit.
-var lockFlushes, commitFlushes = map[string]int64{"windows": 1}, map[string]int64{"windows": 14}
+var lockFlushes, commitFlushes = map[string]int64{"windows": 0}, map[string]int64{"windows": 14}
 
 // flushCost is the flushes of the operation op: a write is an acquisition and a commit of one file; an operation that
 // takes the lock for its read, after an external edit or to refresh its database, is an acquisition; a read of a
 // corpus nothing changed makes none.
 func flushCost(op string) int64 {
-	lock, commit := int64(1), int64(17)
+	lock, commit := int64(0), int64(17)
 	if n, ok := lockFlushes[runtime.GOOS]; ok {
 		lock, commit = n, commitFlushes[runtime.GOOS]
 	}

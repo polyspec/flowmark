@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // Spec 40, the lock: the lock file is `.flowmark/lock` under the corpus root, a constant; `.flowmark/` is created
@@ -168,7 +169,7 @@ func TestAcquireOtherHostUnknown(t *testing.T) {
 
 // A lock file that holds no record is an error and never a free lock.
 func TestAcquireMalformedRecord(t *testing.T) {
-	for _, text := range []string{"", "\n", "garbage\n", "12@h/s\n", `{"pid":1}` + "\n"} {
+	for _, text := range []string{"\n", " ", "\x00\n", "garbage\n", "12@h/s\n", `{"pid":1}` + "\n"} {
 		t.Run(fmt.Sprintf("%q", text), func(t *testing.T) {
 			root := t.TempDir()
 			writeFile(t, root, LockPath, text)
@@ -185,6 +186,40 @@ func TestAcquireMalformedRecord(t *testing.T) {
 			if string(data) != text {
 				t.Fatalf("lock file changed to %q", data)
 			}
+		})
+	}
+}
+
+// lostRecords are the lock records a power loss leaves when the record never reached the disk: no byte, or zero bytes
+// alone.
+var lostRecords = []string{"", "\x00", strings.Repeat("\x00", 4096)}
+
+// A lock whose record a power loss lost names no holder, and that power loss ended its holder: it is reported at once
+// as a holder that has ended, naming `flowmark unlock`, and never removed (T57).
+func TestAcquireLostRecord(t *testing.T) {
+	for _, text := range lostRecords {
+		t.Run(fmt.Sprintf("%d bytes", len(text)), func(t *testing.T) {
+			root := t.TempDir()
+			writeFile(t, root, LockPath, text)
+			c, rec := newCorpus(t, root)
+			_, err := c.Acquire(context.Background(), "s1", time.Minute)
+			var timeout *LockTimeout
+			if !errors.As(err, &timeout) || timeout.State != HolderEnded || timeout.Holder != (Holder{}) {
+				t.Fatalf("Acquire = %v, want a holder a power loss ended", err)
+			}
+			for _, part := range []string{"power loss", "flowmark unlock " + root} {
+				if !strings.Contains(err.Error(), part) {
+					t.Fatalf("message %q does not name %q", err, part)
+				}
+			}
+			data, readErr := os.ReadFile(lockFile(root))
+			if readErr != nil {
+				t.Fatal(readErr)
+			}
+			if string(data) != text {
+				t.Fatalf("lock file changed to %q", data)
+			}
+			wantKinds(t, rec)
 		})
 	}
 }

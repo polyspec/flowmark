@@ -361,7 +361,8 @@ client가 구현할 것은 이 driver뿐이다.
 - lock file은 JSON 한 줄 `{"pid", "start", "host", "hostname", "session",
   "acquisition"}`과 line feed를 담는다. holder의 이름은 `<pid>@<host>/<session>`이다. `acquisition`은 획득
   하나의 token이다: OS random source의 128 random bit를 나타내는 소문자 hex 32자리이며 그 pending record의
-  이름도 된다. 그 밖의 것을 담은 file은 결코 빈 lock으로 여기지 않는다. 근거: session은 자기 process에서
+  이름도 된다. 그 밖의 것을 담은 file은 결코 빈 lock으로 여기지 않는다. byte가 없거나 0 byte만 담은
+  file은 정전이 record를 잃은 lock이다(아래). 근거: session은 자기 process에서
   다시 획득할 수 있으므로, 획득마다의 token만이 두 획득자가 byte 단위로 같은 record를 쓰지 않게 하며, 그렇지
   않으면 아래의 응답 유실 규칙이 둘을 하나로 여긴다.
 - `start`는 process의 시작이다: Linux에서는 `/proc/sys/kernel/random/boot_id`의 boot와
@@ -383,9 +384,13 @@ client가 구현할 것은 이 driver뿐이다.
 
 ### 잡기와 기다리기
 
-- record는 `.flowmark/lock.<acquisition>.pending`에 통째로 쓰고 sync한 뒤
+- record는 `.flowmark/lock.<acquisition>.pending`에 sync 없이 통째로 쓴 뒤
   `.flowmark/lock`으로 hard link한다. lock이 있으면 link가 실패하므로 lock은 record 전체와 함께
   atomic하게 나타난다. 대기자는 pending record를 한 번만 쓴다. pending record는 배타에 관여하지 않는다.
+- lock은 record 전체와 함께만 나타나므로, record에 byte가 없거나 0 byte만 담긴 lock은 정전만이 남긴다:
+  link는 disk에 닿았고 record는 닿지 못했다. 그 정전이 holder를 끝냈으므로 그런 lock은 끝난 holder이며,
+  `flowmark unlock`을 밝혀 즉시 거부한다(`journal`의 `TestAcquireLostRecord`). 근거: 획득마다 disk를
+  기다리는 record의 sync는 어차피 정전이 끝낸 holder만을 지킨다.
 - link가 `EEXIST`로 실패한 시도는 lock을 읽는다. 잡으려는 쪽 자신의 record와 byte 단위로 같은
   record(그 획득 token은 유일하다)는 응답을 잃었어도 link가 이루어졌다는 뜻이며(NFS), lock을 잡은 것이다.
   읽기 전에 사라진 lock은 곧바로 다시 시도한다.
@@ -436,7 +441,8 @@ client가 구현할 것은 이 driver뿐이다.
 
 - stale lock은 operation이 결코 지우지 않는다. `flowmark unlock <corpus>`가 지운다:
   1. record R을 읽는다. 실행 중인 holder는 거절하고, 다른 host의 holder는 그것을 가리키는
-     `--holder <pid>@<host>/<session>`이 없으면 거절한다.
+     `--holder <pid>@<host>/<session>`이 없으면 거절한다. 정전이 잃은 record는 holder를 가리키지 않으며
+     `--holder` 없이 unlock한다(`journal`의 `TestUnlockLostRecord`).
   2. `.flowmark/lock`을 `.flowmark/lock.<R의 SHA-256 앞 hex 32자리>.clearing`으로 link한다. `EEXIST`는 그
      file을 같은 holder의 다른 unlock — 실행 중이거나 중단된 — 으로 밝히며 거절한다.
   3. claim을 읽는다. R이 아닌 record는 새 holder가 lock을 잡았다는 뜻이다: claim을 지우고 거절한다.
@@ -571,8 +577,8 @@ sync한다. 만들거나 rename하거나 지운 이름은 Linux와 macOS에서 P
 지속되게 하고, folder flush가 없는 Windows에서는 move가 disk에 닿은 뒤 돌아오는 `MoveFileEx`와
 `MOVEFILE_WRITE_THROUGH`로 rename하여 지속되게 한다. 그래서 모든 stage file은 부분 이름에 쓴 뒤 제자리로
 rename하고, delete는 rename이다. 만든 folder는 Linux와 macOS에서 그 부모를 sync하여, Windows에서는 stage
-안에 만들어 `MOVEFILE_WRITE_THROUGH`로 제자리에 옮겨 지속되게 한다. lock은 folder 항목으로 sync하지
-않는다: 전원 손실은 그 holder를 끝내며, 그 record는 link 전에 sync한다. Windows에서 holder의 생존은 그
+안에 만들어 `MOVEFILE_WRITE_THROUGH`로 제자리에 옮겨 지속되게 한다. lock은 record도 folder 항목도
+sync하지 않는다: 전원 손실은 그 holder를 끝낸다. Windows에서 holder의 생존은 그
 process handle에서 읽으며 결코 exit code에서 읽지 않는다.
 
 ## File system

@@ -24,6 +24,10 @@ type Holder struct {
 }
 
 func (h Holder) String() string {
+	if h == (Holder{}) {
+		// The holder of a lock whose record a power loss lost (lostRecord).
+		return "a holder whose record was lost"
+	}
 	return fmt.Sprintf("%d@%s/%s", h.PID, h.Host, h.Session)
 }
 
