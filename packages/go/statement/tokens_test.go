@@ -50,7 +50,7 @@ func TestTokens(t *testing.T) {
 // statements of their first words and reject every other, a comment before the words included.
 func TestStatementKinds(t *testing.T) {
 	for _, tc := range []struct {
-		text         string
+		text          string
 		reads, schema bool
 	}{
 		{"SELECT 1", true, false},
