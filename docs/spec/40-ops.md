@@ -371,7 +371,11 @@ utility of orm's SQLite dialect holds on a corpus, and a client has only this dr
   A corpus the process may only read keeps its database in memory, whose one connection reads, one read at a time.
   `TestConcurrentReads`, `TestWriterFollowsTransaction` and `TestCost` of `statement` hold it.
 - **Reads.** A read outside a transaction takes no lock when nothing changed since the last read under it: no stage is
-  present in `.flowmark/tx/`, the commit generation is the one that read was at, and no notification was queued since.
+  present in `.flowmark/tx/`, the commit generation is the one that read was at, and no notification queued since names
+  a folder or file that read read. That read read every path through the corpus tree, so a notification of a path it
+  did not read changed nothing it answers: the lock and the journal under `.flowmark/`, which the watch of the whole
+  subtree on Windows reports, never make a read take the lock (`TestTreeQuiet` of `journal`, `TestCost` of
+  `statement`).
   Otherwise it takes the lock only to recover and read the corpus again, and releases it before it reads, so a stage a
   crash left under a free lock is recovered by the read, its one write. A read that finds the lock held by a session of
   its own corpus answers what that corpus last read, since no other process can commit. One that finds it held by

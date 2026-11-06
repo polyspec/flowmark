@@ -1,5 +1,5 @@
 <!-- doc-id: spec-ops -->
-<!-- source-sha256: 74209576e3da0337884c68dfd9f3848bc0c0cbceaf9aab2b38d1ed6e8f9415ee -->
+<!-- source-sha256: 58a11a1ebaddfe0473dbf7956f877c92a777e77602d52560ac3eebd321e16b45 -->
 # Operations
 
 [English](40-ops.md)
@@ -314,7 +314,10 @@ client가 구현할 것은 이 driver뿐이다.
   연결 하나가 한 번에 하나씩 읽는다. `statement`의 `TestConcurrentReads`, `TestWriterFollowsTransaction`, `TestCost`가 이를
   보장한다.
 - **읽기.** transaction 밖의 읽기는 lock 아래의 마지막 읽기 뒤로 바뀐 것이 없으면 lock을 잡지 않는다: `.flowmark/tx/`에
-  stage가 없고, commit generation이 그 읽기의 것이며, 그 뒤로 쌓인 알림이 없을 때다. 그렇지 않으면 recovery와 corpus를
+  stage가 없고, commit generation이 그 읽기의 것이며, 그 뒤로 쌓인 알림이 그 읽기가 읽은 folder나 file을 가리키지 않을
+  때다. 그 읽기는 모든 경로를 corpus tree로 읽었으므로, 읽지 않은 경로의 알림은 그것이 답하는 어떤 것도 바꾸지 않았다:
+  Windows에서 subtree 전체의 watch가 알리는 `.flowmark/` 아래의 lock과 journal은 읽기가 lock을 잡게 하지 않는다
+  (`journal`의 `TestTreeQuiet`, `statement`의 `TestCost`). 그렇지 않으면 recovery와 corpus를
   다시 읽는 동안만 lock을 잡고 읽기 전에 놓으므로, crash가 빈 lock 아래 남긴 stage는 읽기가 recovery하며 이것이 읽기의
   유일한 쓰기다. 자기 corpus의 session이 lock을 쥔 것을 본 읽기는 다른 process가 commit할 수 없으므로 그 corpus가 마지막에
   읽은 것으로 답한다. 다른 process가 쥔 것을 본 읽기는 lock 없이 corpus를 읽고, 읽기 전후의 commit generation이 같고 두

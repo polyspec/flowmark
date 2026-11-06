@@ -131,14 +131,16 @@ func (t *Tree) Refresh() error {
 	return nil
 }
 
-// Quiet reports whether no notification was queued since the last Refresh, so the tree holds the corpus as the last
-// read under the lock read it: a read without the lock answers from that read only then (spec 40 Reads). It drops
-// nothing, since an operation under the lock may be reading the tree: what it takes, and a failure of its drain, the
-// next Refresh takes first.
+// Quiet reports whether no notification queued since the last Refresh names a folder or file the tree holds, so the
+// tree holds the corpus as the last read under the lock read it: a read without the lock answers from that read only
+// then (spec 40 Reads). That read read every path through the tree, so a notification of a path the tree does not hold
+// — such as the lock and the journal under `.flowmark/`, which the watch of the whole subtree on Windows reports —
+// changed nothing it read. It drops nothing, since an operation under the lock may be reading the tree: what it takes,
+// and a failure of its drain, the next Refresh takes first.
 func (t *Tree) Quiet() bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	if t.w == nil || t.heldErr != nil || !t.held.empty() {
+	if t.w == nil || t.heldErr != nil {
 		return false
 	}
 	n, err := t.w.drain()
@@ -149,12 +151,53 @@ func (t *Tree) Quiet() bool {
 	if t.notices != nil {
 		n = t.notices(n)
 	}
-	t.held = n
-	return n.empty()
+	t.held = Notices{Overflow: t.held.Overflow || n.Overflow, Changed: append(t.held.Changed, n.Changed...), Moved: append(t.held.Moved, n.Moved...)}
+	return !t.names(t.held)
 }
 
-// empty reports whether n names no change.
-func (n Notices) empty() bool { return !n.Overflow && len(n.Changed) == 0 && len(n.Moved) == 0 }
+// names reports whether n names what the tree holds: what Refresh would drop for it.
+func (t *Tree) names(n Notices) bool {
+	if n.Overflow {
+		return true
+	}
+	for _, p := range n.Changed {
+		if t.holds(p) {
+			return true
+		}
+	}
+	for _, p := range n.Moved {
+		if p == "." {
+			if t.files.Len() > 0 || t.dirs.Len() > 0 {
+				return true
+			}
+			continue
+		}
+		if _, ok := t.dirs.Get(path.Dir(p)); ok || t.holds(p) || t.holdsUnder(p+"/") {
+			return true
+		}
+	}
+	return false
+}
+
+// holds reports whether the tree holds the bytes or the entries of p.
+func (t *Tree) holds(p string) bool {
+	if _, ok := t.files.Get(p); ok {
+		return true
+	}
+	_, ok := t.dirs.Get(p)
+	return ok
+}
+
+// holdsUnder reports whether the tree holds a file or a folder whose path begins with under.
+func (t *Tree) holdsUnder(under string) bool { return hasPrefix(t.files, under) || hasPrefix(t.dirs, under) }
+
+// hasPrefix reports whether a key of m begins with under; such keys stand together in its order.
+func hasPrefix[V any](m pmap.Map[string, V], under string) bool {
+	for q := range m.From(under) {
+		return strings.HasPrefix(q, under)
+	}
+	return false
+}
 
 // Forget drops what the tree holds of each path, what lies under it, and the entries of every folder above it, so
 // the next read reads them from the disk whatever the notifications said: the write path forgets its commit targets

@@ -447,8 +447,8 @@ func TestTreeChanges(t *testing.T) {
 	}
 }
 
-// TestTreeQuiet pins the check of a read without the lock (spec 40 Reads): the tree is quiet when no notification was
-// queued, a notification or an overflow or a failed drain makes it not quiet, and what Quiet took drops nothing until the
+// TestTreeQuiet pins the check of a read without the lock (spec 40 Reads): the tree is quiet when no notification
+// queued names what it holds, a notification of what it holds or an overflow or a failed drain makes it not quiet, and what Quiet took drops nothing until the
 // next Refresh, which takes it first, so an operation under the lock reads the tree as it was.
 func TestTreeQuiet(t *testing.T) {
 	files := map[string]string{"a.flowmark.md": "a\n", "t/x.flowmark.md": "x\n"}
@@ -464,7 +464,11 @@ func TestTreeQuiet(t *testing.T) {
 		{name: "40#sql-statements: no notification is quiet", quiet: true, again: []string{}},
 		{name: "40#sql-statements: a changed file is not quiet", n: Notices{Changed: []string{"t/x.flowmark.md"}}, again: []string{"t/x.flowmark.md"}},
 		{name: "40#sql-statements: a moved file is not quiet", n: Notices{Moved: []string{"a.flowmark.md"}}, again: []string{".", "a.flowmark.md"}},
-		{name: "40#sql-statements: a change of a path the tree does not hold is not quiet", n: Notices{Changed: []string{"t/q.flowmark.md"}}, again: []string{}},
+		{name: "40#sql-statements: a change of a path the tree does not hold is quiet", n: Notices{Changed: []string{"t/q.flowmark.md"}}, quiet: true, again: []string{}},
+		{name: "40#sql-statements: the lock and the journal under .flowmark are quiet", n: Notices{Changed: []string{".flowmark", ".flowmark/generation"}, Moved: []string{".flowmark/lock", ".flowmark/tx/s1"}}, quiet: true, again: []string{}},
+		{name: "40#sql-statements: a file added to a folder the tree holds is not quiet", n: Notices{Moved: []string{"t/new.flowmark.md"}}, again: []string{"t"}},
+		{name: "40#sql-statements: a moved folder the tree holds under it is not quiet", n: Notices{Moved: []string{"t"}}, again: []string{".", "t", "t/x.flowmark.md"}},
+		{name: "40#sql-statements: a moved root is not quiet", n: Notices{Moved: []string{"."}}, again: []string{".", "t", "a.flowmark.md", "t/x.flowmark.md"}},
 		{name: "40#sql-statements: an overflow is not quiet", n: Notices{Overflow: true}, again: []string{".", "t", "a.flowmark.md", "t/x.flowmark.md"}},
 		{name: "40#sql-statements: a failed drain is not quiet and fails the next Refresh", err: errors.New("the queue is gone"),
 			again: []string{".", "t", "a.flowmark.md", "t/x.flowmark.md"}},
