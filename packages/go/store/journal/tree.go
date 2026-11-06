@@ -189,7 +189,9 @@ func (t *Tree) holds(p string) bool {
 }
 
 // holdsUnder reports whether the tree holds a file or a folder whose path begins with under.
-func (t *Tree) holdsUnder(under string) bool { return hasPrefix(t.files, under) || hasPrefix(t.dirs, under) }
+func (t *Tree) holdsUnder(under string) bool {
+	return hasPrefix(t.files, under) || hasPrefix(t.dirs, under)
+}
 
 // hasPrefix reports whether a key of m begins with under; such keys stand together in its order.
 func hasPrefix[V any](m pmap.Map[string, V], under string) bool {
