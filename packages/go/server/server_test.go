@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/polyspec/flowmark/packages/go/internal/corpustest"
 	"io"
 	"net"
@@ -18,6 +19,7 @@ import (
 
 	"github.com/polyspec/flowmark/packages/go/catalog"
 	"github.com/polyspec/flowmark/packages/go/irexec"
+	"github.com/polyspec/flowmark/packages/go/statement"
 	"github.com/polyspec/flowmark/packages/go/store/journal"
 	"github.com/polyspec/flowmark/packages/go/writepath"
 )
@@ -717,4 +719,34 @@ func TestNew(t *testing.T) {
 			t.Fatalf("bound %v", a)
 		}
 	})
+}
+
+// TestFailureLine states the code of a refusal once: the message is the coded error's own, also when another error is
+// joined to it or wraps it, and the other parts of the whole error are kept.
+func TestFailureLine(t *testing.T) {
+	coded := &statement.Error{Code: "DUPLICATE_KEY", Msg: "UNIQUE constraint failed: author.uuid"}
+	for _, c := range []struct {
+		name    string
+		err     error
+		code    string
+		message string
+	}{
+		{"alone", coded, "DUPLICATE_KEY", "UNIQUE constraint failed: author.uuid"},
+		{"joined to a rollback that succeeds", errors.Join(coded, nil), "DUPLICATE_KEY", "UNIQUE constraint failed: author.uuid"},
+		{"joined to a rollback that fails", errors.Join(coded, errors.New("rollback: disk I/O error")), "DUPLICATE_KEY", "UNIQUE constraint failed: author.uuid\nrollback: disk I/O error"},
+		{"wrapped", fmt.Errorf("insert: %w", coded), "DUPLICATE_KEY", "insert: UNIQUE constraint failed: author.uuid"},
+		{"without a code", errors.New("disk I/O error"), "INTERNAL", "disk I/O error"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			var got struct {
+				Error struct{ Code, Message string } `json:"error"`
+			}
+			if err := json.Unmarshal(failureLine(c.err), &got); err != nil {
+				t.Fatal(err)
+			}
+			if got.Error.Code != c.code || got.Error.Message != c.message {
+				t.Fatalf("got %q %q, want %q %q", got.Error.Code, got.Error.Message, c.code, c.message)
+			}
+		})
+	}
 }

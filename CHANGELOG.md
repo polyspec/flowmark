@@ -3,6 +3,8 @@
 
 ## Unreleased
 
+- T67: A refusal of the server states its code once: the message of an error answer is the coded error's own, also when a rollback or another error is joined to it or wraps it, so a client does not read the code twice.
+
 ## 0.0.5
 
 - T65-1: The board example names the tarball of @polyspec/php-serialize 0.0.1 among its own dependencies, so npm ci fetches it under allow-remote=root.

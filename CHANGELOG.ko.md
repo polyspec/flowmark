@@ -1,8 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: e24a8ce7f81fc21f2e3d56bf421108744add3e223dd22e0412a81e8ff4b86b7b -->
+<!-- source-sha256: 8b386a7fa8018d7dd8f511fa5aeba9bb709779849bc33e8c5f3d8c1395c38f62 -->
 # Changelog
 
 ## Unreleased
+
+- T67: server의 거부는 code를 한 번만 적는다. 오류 답의 message는 rollback이나 다른 오류가 결합되거나 감싸도 coded error 자체의 것이므로, client가 code를 두 번 읽지 않는다.
 
 ## 0.0.5
 

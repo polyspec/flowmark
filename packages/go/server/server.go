@@ -15,6 +15,7 @@ import (
 	"io"
 	"net"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -371,8 +372,9 @@ func errorLine(code, msg string) []byte {
 type failure interface{ Failure() (code, msg string) }
 
 // failureLine is the answer of a failure of the write path or the executor, with its orm code: the code of the first
-// coded error in the error's tree, INTERNAL when none has one. The message is that of the coded error when it is the
-// whole error, else the whole error's, so a joined failure, such as a close after the coded one, is kept.
+// coded error in the error's tree, INTERNAL when none has one. The message is the whole error's text with the coded
+// error's own message in place of its text, so a joined or wrapped failure, such as a rollback after the coded one,
+// keeps its other parts and the code is stated once, by the code field.
 func failureLine(err error) []byte {
 	var f failure
 	if !errors.As(err, &f) {
@@ -380,7 +382,7 @@ func failureLine(err error) []byte {
 	}
 	code, msg := f.Failure()
 	if any(f) != any(err) {
-		msg = err.Error()
+		msg = strings.Replace(err.Error(), f.(error).Error(), msg, 1)
 	}
 	var coded interface{ ResultCode() int }
 	if errors.As(err, &coded) && coded.ResultCode() != 0 {
