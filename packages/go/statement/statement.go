@@ -1473,11 +1473,39 @@ func rowKey(tb *catalog.Table, row []any) string {
 // diff forms the writes that take the corpus from before to after: the inserts with a table after the tables it
 // references, then the updates, then the deletes with a table before the tables it references. A delete is the
 // statement's own, so a soft delete column does not turn it into an update, and the rows of its foreign key actions
-// are in the difference already.
+// are in the difference already. A row gone whose key equals the key of a row added without regard to case, which the
+// corpus compares keys by (spec 20 Keys), is deleted before the inserts, as the database already holds the new key in
+// its place: SQLite judged the foreign keys of the statement, so that delete is not judged by them again.
 func diff(c *irexec.Corpus, before, after map[string]tableRows, foreignKeysOff bool) ([][]byte, error) {
 	cat := c.Catalog()
-	var inserts, changes, deletes [][]byte
+	var displaced, inserts, changes, deletes [][]byte
 	order := fillOrder(cat)
+	moved := map[string]map[string]bool{}
+	for _, tb := range order {
+		folded := map[string]bool{}
+		for _, key := range after[tb.Name].keys {
+			if _, held := before[tb.Name].byKey[key]; !held {
+				folded[foldKey(key)] = true
+			}
+		}
+		var gone [][]any
+		for _, key := range before[tb.Name].keys {
+			if _, held := after[tb.Name].byKey[key]; !held && folded[foldKey(key)] {
+				gone = append(gone, before[tb.Name].byKey[key])
+				if moved[tb.Name] == nil {
+					moved[tb.Name] = map[string]bool{}
+				}
+				moved[tb.Name][key] = true
+			}
+		}
+		if len(gone) > 0 {
+			msg, err := deleteMessage(cat, tb, gone, true)
+			if err != nil {
+				return nil, err
+			}
+			displaced = append(displaced, msg)
+		}
+	}
 	for _, tb := range order {
 		var added [][]any
 		var changed [][2][]any
@@ -1509,7 +1537,7 @@ func diff(c *irexec.Corpus, before, after map[string]tableRows, foreignKeysOff b
 		var gone [][]any
 		for _, key := range before[tb.Name].keys {
 			row := before[tb.Name].byKey[key]
-			if _, held := after[tb.Name].byKey[key]; !held {
+			if _, held := after[tb.Name].byKey[key]; !held && !moved[tb.Name][key] {
 				gone = append(gone, row)
 			}
 		}
@@ -1521,7 +1549,17 @@ func diff(c *irexec.Corpus, before, after map[string]tableRows, foreignKeysOff b
 			deletes = append(deletes, msg)
 		}
 	}
-	return slices.Concat(inserts, changes, deletes), nil
+	return slices.Concat(displaced, inserts, changes, deletes), nil
+}
+
+// foldKey is the key k without regard to the case of A–Z, as the corpus compares keys.
+func foldKey(k string) string {
+	return strings.Map(func(r rune) rune {
+		if 'A' <= r && r <= 'Z' {
+			return r + 'a' - 'A'
+		}
+		return r
+	}, k)
 }
 
 // fillOrder is the tables with each after the tables it references.

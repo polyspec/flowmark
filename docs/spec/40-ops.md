@@ -286,7 +286,9 @@ utility of orm's SQLite dialect holds on a corpus, and a client has only this dr
   difference is formed from the image of each such row before its first change and from the rows the database holds at
   the rowids it changed, so a write reads the rows it changed and not every row. A row of a table without a rowid,
   whose rowid SQLite leaves undefined, is known by its primary key, and its rows are read at the keys it changed in the
-  order of that key under its collations. A text of an image is read by its length,
+  order of that key under its collations. A row gone whose key equals the key of a row added without regard to case,
+  as the corpus compares keys, is deleted before the inserts, unjudged by the foreign keys SQLite already judged, so a
+  key changed only in its case is written as the database committed it. A text of an image is read by its length,
   so a text holding a NUL comes whole; the driver's release reads it up to its first NUL, and the engine pins a
   fork of the driver, which reads it by its length. The difference goes back through the executor as one write per
   table, so the corpus's rules still judge it and the commit protocol writes it; SQLite has

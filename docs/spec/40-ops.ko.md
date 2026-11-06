@@ -1,5 +1,5 @@
 <!-- doc-id: spec-ops -->
-<!-- source-sha256: 8f47914bca9cd490150b27926ba2eb9df8a839013191c6f9141925792162b13d -->
+<!-- source-sha256: e20b2edc8a2f54d7b67c82cab0044e441af730e5fa066f5fbbc02136ec4abd40 -->
 # Operations
 
 [English](40-ops.md)
@@ -243,7 +243,9 @@ client가 구현할 것은 이 driver뿐이다.
   그다음 행. 문장은 거기서 실행된다. SQLite의 pre-update hook이 문장이 바꾼 행을 하나하나 알린다: 문장 자신의 행과
   REPLACE, foreign key action, trigger의 행이다. 차이는 그런 행마다 첫 변경 전의 image와, 바뀐 rowid에서 database가 지닌
   행으로 만들므로, 쓰기는 모든 행이 아니라 자기가 바꾼 행을 읽는다. SQLite가 rowid를 정의하지 않는 rowid 없는 표의 행은
-  primary key로 알고, 그 행은 바뀐 key에서 그 key의 collation에 따른 순서로 읽는다. image의 text는 길이로 읽으므로 NUL을 품은 text도
+  primary key로 알고, 그 행은 바뀐 key에서 그 key의 collation에 따른 순서로 읽는다. corpus가 key를 비교하는 대로
+  대소문자를 가리지 않고 더한 행의 key와 같은 key를 가진 사라진 행은 insert보다 먼저 지우며, SQLite가 이미 판정한
+  foreign key로 다시 판정하지 않으므로 대소문자만 바뀐 key도 database가 commit한 대로 쓰인다. image의 text는 길이로 읽으므로 NUL을 품은 text도
   온전히 온다. driver의 release는 text를 첫 NUL까지 읽으므로, 엔진은 text를 길이로 읽는 driver fork를
   고정한다. 행의 차이는 표마다 쓰기 하나로 executor를 거쳐 돌아가므로 corpus의 규칙이 판정하고 commit
   protocol이 기록한다. NOT NULL과 foreign key는 SQLite가 이미 판정했고, trigger는 자기 행을 썼으며, codec은 문장이 저장한

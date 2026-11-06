@@ -2,6 +2,7 @@ package statement_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/polyspec/flowmark/packages/go/internal/corpustest"
+	"github.com/polyspec/flowmark/packages/go/ops"
 	"github.com/polyspec/flowmark/packages/go/statement"
 )
 
@@ -120,6 +123,17 @@ func TestCapture(t *testing.T) {
 			"REPLACE INTO wc (a, b, v) VALUES ('a', 2, x'aa'), ('c', 9, x'bb')",
 			"DELETE FROM wc WHERE a = 'b'",
 		}},
+		{"a key of a table without a rowid changed only in its case", []string{
+			"CREATE TABLE wp (k TEXT PRIMARY KEY, v TEXT) WITHOUT ROWID",
+			"CREATE TABLE wq (id INTEGER PRIMARY KEY, p TEXT REFERENCES wp (k) ON UPDATE CASCADE ON DELETE RESTRICT)",
+			"INSERT INTO wp (k, v) VALUES ('a', '1'), ('b', '2'), ('c', '3')",
+			"INSERT INTO wq (p) VALUES ('a'), ('b')",
+		}, []string{
+			"UPDATE wp SET k = upper(k) WHERE k <> 'c'",
+			"UPDATE wp SET k = 'c', v = '4' WHERE k = 'C'",
+			"REPLACE INTO wp (k, v) VALUES ('c', '5')",
+			"UPDATE wp SET k = lower(k)",
+		}},
 		{"a table whose integer key is its rowid", []string{"CREATE TABLE ip (id INTEGER PRIMARY KEY, v TEXT)"}, []string{
 			"INSERT INTO ip (id, v) VALUES (5, 'a'), (2, 'b'), (NULL, 'c')",
 			"UPDATE ip SET id = id + 10 WHERE v <> 'b'",
@@ -137,9 +151,15 @@ func TestCapture(t *testing.T) {
 			"COMMIT",
 		}},
 	}
+	// held are, by case, a read whose rows a corpus opened again from the files must answer as the database does.
+	held := map[string]string{
+		"a table without a rowid": "SELECT k, v FROM wr ORDER BY k",
+		"a table without a rowid of a descending key under a collation": "SELECT a, b, hex(v) FROM wc ORDER BY a, b",
+		"a key of a table without a rowid changed only in its case":     "SELECT k, v, (SELECT group_concat(p) FROM wq WHERE p = wp.k) FROM wp ORDER BY k",
+	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			s, _ := open(t)
+			s, root := open(t)
 			run(t, s, "INSERT INTO notes (title) VALUES ('seed')")
 			for _, text := range tc.setup {
 				run(t, s, text)
@@ -154,6 +174,18 @@ func TestCapture(t *testing.T) {
 			}
 			if *n != writes {
 				t.Fatalf("%d statements compared, want %d", *n, writes)
+			}
+			if text := held[tc.name]; text != "" {
+				c, err := ops.Open(context.Background(), root, 0)
+				corpustest.Opened(t, c, err)
+				other, err := c.Session("again")
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer closeSession(t, other)
+				if got, want := fmt.Sprint(run(t, other, text).Rows), fmt.Sprint(run(t, s, text).Rows); got != want {
+					t.Fatalf("the corpus read again holds %s, and the database %s", got, want)
+				}
 			}
 		})
 	}
