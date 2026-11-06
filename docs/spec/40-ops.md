@@ -309,6 +309,10 @@ utility of orm's SQLite dialect holds on a corpus, and a client has only this dr
   hold it.
 - **Tables.** A table takes its columns, its declared types and its key from its statement. A primary key that SQLite lets
   hold NULL names no row, so such a table keys by its rowid, as does a table with no primary key.
+- **Values.** A cell answers the value SQLite holds: the text of a column declared `DATE`, `DATETIME` or `TIMESTAMP`
+  is the text stored, byte for byte, as a SQLite connection reads it. The driver's release parses such a text into a
+  time, which another form writes back; the engine's fork of the driver reads it as stored (`TestTemporalText` of
+  `statement`).
 - **AUTOINCREMENT counters.** A table whose statement declares its key `AUTOINCREMENT`, and a table of an `identity`
   key, which the set renders so, never gives a key twice, as SQLite's `AUTOINCREMENT` gives none; a plain `INTEGER PRIMARY
   KEY` gives one more than its largest key, as SQLite does. The counter of such a table is part of the corpus, in

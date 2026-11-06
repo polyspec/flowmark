@@ -73,6 +73,13 @@ type database struct {
 	retired   bool
 }
 
+// textAsStored is the driver setting that reads the text of a column declared DATE, DATETIME or TIMESTAMP as SQLite
+// holds it, as a SQLite connection answers it, instead of a time the driver parsed from it.
+const textAsStored = "_decltime=0"
+
+// memoryURI is the SQLite URI of a new in-memory database.
+const memoryURI = ":memory:?" + textAsStored
+
 // databaseURI is the SQLite URI of the file p with the PRAGMA settings pragmas, each run on every connection it opens.
 func databaseURI(p string, pragmas ...string) string {
 	slash := filepath.ToSlash(p)
@@ -80,9 +87,9 @@ func databaseURI(p string, pragmas ...string) string {
 		slash = "/" + slash // a Windows volume: file:///C:/...
 	}
 	u := url.URL{Scheme: "file", Path: slash}
-	q := make([]string, len(pragmas))
-	for i, p := range pragmas {
-		q[i] = "_pragma=" + url.QueryEscape(p)
+	q := []string{textAsStored}
+	for _, p := range pragmas {
+		q = append(q, "_pragma="+url.QueryEscape(p))
 	}
 	return u.String() + "?" + strings.Join(q, "&")
 }
@@ -99,7 +106,7 @@ func openDatabase(ctx context.Context, s *writepath.Session) (_ *database, err e
 			err = errors.Join(err, d.close())
 		}
 	}()
-	writer := ":memory:"
+	writer := memoryURI
 	if file != nil {
 		common := []string{"journal_mode(WAL)", "synchronous(OFF)", "wal_autocheckpoint(" + strconv.Itoa(walCheckpoint) + ")"}
 		writer = databaseURI(file.Path, common...)

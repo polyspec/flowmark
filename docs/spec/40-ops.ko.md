@@ -1,5 +1,5 @@
 <!-- doc-id: spec-ops -->
-<!-- source-sha256: e20b2edc8a2f54d7b67c82cab0044e441af730e5fa066f5fbbc02136ec4abd40 -->
+<!-- source-sha256: bdcff21b994b47dbacfec18e4f0c0bf3e25db47871ca8551738fffc4ffa6cbd3 -->
 # Operations
 
 [English](40-ops.md)
@@ -263,6 +263,9 @@ client가 구현할 것은 이 driver뿐이다.
   `TestCatalogOfSchemaStatements`가 이를 확인한다.
 - **표.** 표는 column, 선언 타입, key를 자기 문장에서 받는다. SQLite가 NULL을 허용하는 primary key는 행을 가리키지
   못하므로 그런 표는 primary key가 없는 표처럼 rowid를 key로 쓴다.
+- **값.** cell은 SQLite가 지닌 값을 답한다. `DATE`, `DATETIME`, `TIMESTAMP`로 선언된 column의 text는 SQLite 연결이
+  읽듯이 저장된 text 그대로, byte 단위로 같다. driver의 release는 그런 text를 시각으로 해석해 다른 형태로 다시 쓰므로,
+  엔진은 driver의 fork가 저장된 그대로 읽게 한다(`statement`의 `TestTemporalText`).
 - **AUTOINCREMENT counter.** 문장이 key를 `AUTOINCREMENT`로 선언한 표와, set이 그렇게 render하는 `identity` key의 표는
   SQLite의 `AUTOINCREMENT`처럼 같은 key를 두 번 주지 않는다. 그냥 `INTEGER PRIMARY KEY`는 SQLite처럼 가장 큰 key보다 하나 큰
   key를 준다. 그런 표의 counter는 corpus의 일부로 `dbspec/sequences.json`에 있으며, 표마다 양의 counter를 가진 JSON 객체다.

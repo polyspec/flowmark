@@ -789,7 +789,7 @@ func argumentForm(t map[string]any) (any, error) {
 
 // materialize returns an in-memory SQLite database that holds the schema and the rows of the corpus.
 func materialize(ctx context.Context, c *irexec.Corpus) (*sql.DB, error) {
-	db, err := sql.Open("sqlite", ":memory:")
+	db, err := sql.Open("sqlite", memoryURI)
 	if err != nil {
 		return nil, &Error{codeInternal, err.Error()}
 	}

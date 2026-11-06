@@ -22,8 +22,8 @@ github.com/jackc/puddle/v2 v2.2.2 h1:PR8nw+E/1w0GLuRFSmiioY6UooMp6KJv0/61nB7icHo
 github.com/jackc/puddle/v2 v2.2.2/go.mod h1:vriiEXHvEE654aYKXXjOvZM39qJ0q+azkZFrfEOc3H4=
 github.com/mattn/go-isatty v0.0.24 h1:tGZZoVgT/KiqK1c8ocVLeDS8BSWMRd47J3Lbz7vsReI=
 github.com/mattn/go-isatty v0.0.24/go.mod h1:nMCL3Zebbrt45jsMDgnfIwz6ydEQApk5oEI3HqDio6A=
-github.com/min-0-max/sqlite v1.61.0-polyspec.1 h1:RpRMFND0YqJhAm56eZa/CqGJsXMdCony8+rr1YmvSD8=
-github.com/min-0-max/sqlite v1.61.0-polyspec.1/go.mod h1:f4gr5tbpx2umklaT/QVtbi/50hNdM+4ng+2zMo8KXJ0=
+github.com/min-0-max/sqlite v1.61.0-polyspec.3 h1:I7TEAP0vu/Pb7me8q+7PFr2s8Ftz71argLFNf457khc=
+github.com/min-0-max/sqlite v1.61.0-polyspec.3/go.mod h1:f4gr5tbpx2umklaT/QVtbi/50hNdM+4ng+2zMo8KXJ0=
 github.com/ncruces/go-strftime v1.1.0 h1:vtPmPWMkb539RGV9WpWT9EwJGvrOCKvMNI4obWL47Hk=
 github.com/ncruces/go-strftime v1.1.0/go.mod h1:yVaq7iwCN09vHRrKBrrflXT0M9tTMG2KmZ9Fj7xeG/g=
 github.com/polyspec/ordered-json/packages/go v0.0.18 h1:CRtZmcd1kYj3jaS+qXomEEeF++suVlfK+UqL3m3L+is=
