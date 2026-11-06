@@ -1,5 +1,5 @@
 <!-- doc-id: plans-design-plan -->
-<!-- source-sha256: 7155d83c8aa35db420ae0a3f5e9a6317ab6de5d4ff6e65765ca416c8968a2669 -->
+<!-- source-sha256: f0ef55e6946190fe0de43f98f2a4ca0f7db734fe92a1068ba7280a2782d5344a -->
 # flowmark 설계 계획
 
 Revision 2 — 3개 lane의 적대 감사 결과(engine core, orm 통합, 운영)와 multi-platform 지시를 아래 판정에 접는다. 감사의 blocker는 전부 판정이 되었고, 부수지 못한 주장은 문서 끝에 남긴다.
@@ -171,7 +171,7 @@ flowmark = the markdown database engine (one Go binary)
    읽는다.
 6. **문장의 차이는 알려진다(T41).** database의 writer 연결은 수명 동안 쥐는 `*sql.Conn` 하나이고, 그 위에서 SQLite의 preupdate
    hook은 문장, 그 trigger, foreign key action이 건드린 행을 기록한다: 표, 연산, 예전과 새 rowid, 그리고 예전과 새 key. hook이 알리는
-   key는 그 길이로 읽는다(`sqlite3_value_bytes`, NUL에서 text 읽기를 멈추는 driver의 polyspec fork를 통해). text가 온전하지 않거나
+   key는 그 길이로 읽는다(`sqlite3_value_bytes`, release가 NUL에서 text 읽기를 멈추는 driver의 fork를 통해). text가 온전하지 않거나
    key 규칙(spec 20 Keys, `store.keyFault`)을 어기는 key는 쓰기를 만들기 전에 문장을 실패시킨다. driver와 그 fork는 Go이고, 빌드에 cgo는 필요 없다. temp schema는 무시하고, hook은
    fill, refresh, `placeBack` 동안 아무것도 기록하지 않는다. 행은 hook이 알린 순서로 최종 key에 따라 합쳐지며, 그 순서가 문장이
    insert한 행을 배치하는 순서다. 예전 행은 그 key의 corpus 저장 행이고(T40), 새 행은 `rowsOf`의 projection으로 key에 따라 읽는다.

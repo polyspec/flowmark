@@ -284,8 +284,10 @@ utility of orm's SQLite dialect holds on a corpus, and a client has only this dr
   of its documents and of `dbspec/statements.json`, then its rows. The statement runs there. SQLite's pre-update hook
   reports each row the statement changed, its own and those of a REPLACE, a foreign key action and a trigger; the
   difference is formed from the image of each such row before its first change and from the rows the database holds at
-  the rowids it changed, so a write reads the rows it changed and not every row. A text of an image is read by its length,
-  so a text holding a NUL comes whole; the driver's release reads it up to its first NUL, and the engine pins polyspec's
+  the rowids it changed, so a write reads the rows it changed and not every row. A row of a table without a rowid,
+  whose rowid SQLite leaves undefined, is known by its primary key, and its rows are read at the keys it changed in the
+  order of that key under its collations. A text of an image is read by its length,
+  so a text holding a NUL comes whole; the driver's release reads it up to its first NUL, and the engine pins a
   fork of the driver, which reads it by its length. The difference goes back through the executor as one write per
   table, so the corpus's rules still judge it and the commit protocol writes it; SQLite has
   already judged NOT NULL and the foreign keys, its triggers wrote their rows, and a codec does not judge what a statement

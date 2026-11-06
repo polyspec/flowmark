@@ -1,11 +1,14 @@
 package statement
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -18,32 +21,83 @@ import (
 
 // capture records the rows a statement changes on the writer connection, from SQLite's pre-update hook (spec 40 SQL
 // statements): for each table of the main database, the image of each row before the statement's first change of it,
-// and the rowid of each row it inserted, updated or deleted, in the order of their first change. The hook reports the
-// rows a REPLACE deletes, the rows of foreign key actions and the rows of triggers as it reports the statement's own, so
-// the difference of a statement is formed from the rows it changed and not from every row. A text of an image is read
-// by its length, so a text holding a NUL comes whole (polyspec's fork of the driver).
+// and the identity of each row it inserted, updated or deleted, in the order of their first change. The identity of a
+// row is its rowid, and of a row of a table without a rowid, whose rowid SQLite leaves undefined, its primary key. The
+// hook reports the rows a REPLACE deletes, the rows of foreign key actions and the rows of triggers as it reports the
+// statement's own, so the difference of a statement is formed from the rows it changed and not from every row. A text
+// of an image is read by its length, so a text holding a NUL comes whole (the fork of the driver the engine pins).
 type capture struct {
 	mu     sync.Mutex
 	on     bool
 	tables map[string]*changedRows
 	err    error
+	// schema is the main schema_version the keys were read at, and keys the primary key of each table without a rowid.
+	schema int64
+	keys   map[string]*primaryKey
+}
+
+// primaryKey is the primary key of a table without a rowid, in the order of its index: the position of each of its
+// columns among the values of an image, its name, its collation and whether it is descending.
+type primaryKey struct {
+	at    []int
+	names []string
+	colls []string
+	desc  []bool
 }
 
 // changedRows are the rows of one table a statement changed: olds holds the image of each row before its first change,
-// by its rowid, in the order of the table's columns in the database; rowids holds each rowid the statement changed,
-// old and new, in the order of their first change.
+// by its identity, in the order of the table's columns in the database; ids holds the identity values of each row the
+// statement changed, old and new, in the order of their first change: its rowid, or the values of key; and rowids the
+// rowid of each, for a table with a rowid.
 type changedRows struct {
-	olds   map[int64][]any
-	seen   map[int64]bool
+	key    *primaryKey
+	olds   map[string][]any
+	seen   map[string]bool
+	ids    [][]any
 	rowids []int64
 }
 
-// note records the change of the row at rowid.
-func (t *changedRows) note(rowid int64) {
-	if !t.seen[rowid] {
-		t.seen[rowid] = true
-		t.rowids = append(t.rowids, rowid)
+// identity is the identity of the row whose identity values are vs: two rows have the same identity exactly when each
+// value is of the same type and equal.
+func identity(vs []any) string {
+	var b strings.Builder
+	for _, v := range vs {
+		switch x := v.(type) {
+		case nil:
+			b.WriteString("n;")
+		case int64:
+			b.WriteString("i" + strconv.FormatInt(x, 10) + ";")
+		case float64:
+			b.WriteString("f" + strconv.FormatUint(math.Float64bits(x), 16) + ";")
+		case string:
+			b.WriteString("s" + strconv.Itoa(len(x)) + ":" + x)
+		case []byte:
+			b.WriteString("b" + strconv.Itoa(len(x)) + ":" + string(x))
+		default:
+			fmt.Fprintf(&b, "%T:%v;", v, v)
+		}
 	}
+	return b.String()
+}
+
+// note records the change of the row whose identity values are vs, at rowid in a table with a rowid.
+func (t *changedRows) note(vs []any, rowid int64) {
+	if id := identity(vs); !t.seen[id] {
+		t.seen[id] = true
+		t.ids = append(t.ids, vs)
+		if t.key == nil {
+			t.rowids = append(t.rowids, rowid)
+		}
+	}
+}
+
+// keyOf is the values of the primary key k in the image values.
+func keyOf(k *primaryKey, values []any) []any {
+	out := make([]any, len(k.at))
+	for i, at := range k.at {
+		out[i] = values[at]
+	}
+	return out
 }
 
 // hook is the pre-update hook of the writer connection; it records only while a statement runs.
@@ -55,23 +109,110 @@ func (cp *capture) hook(data sqlite.SQLitePreUpdateData) {
 	}
 	t := cp.tables[data.TableName]
 	if t == nil {
-		t = &changedRows{olds: map[int64][]any{}, seen: map[int64]bool{}}
+		t = &changedRows{key: cp.keys[data.TableName], olds: map[string][]any{}, seen: map[string]bool{}}
 		cp.tables[data.TableName] = t
 	}
 	if data.Op != sqlite3.SQLITE_INSERT {
-		if !t.seen[data.OldRowID] {
-			// A row the statement inserted first has no image before it.
-			image := make([]any, data.Count())
-			if err := data.Old(image...); err != nil {
-				cp.err = errors.Join(cp.err, err)
-			}
-			t.olds[data.OldRowID] = image
+		image := make([]any, data.Count())
+		if err := data.Old(image...); err != nil {
+			cp.err = errors.Join(cp.err, err)
 		}
-		t.note(data.OldRowID)
+		vs := []any{data.OldRowID}
+		if t.key != nil {
+			vs = keyOf(t.key, image)
+		}
+		// A row the statement inserted first has no image before it.
+		if id := identity(vs); !t.seen[id] {
+			t.olds[id] = image
+		}
+		t.note(vs, data.OldRowID)
 	}
 	if data.Op != sqlite3.SQLITE_DELETE {
-		t.note(data.NewRowID)
+		vs := []any{data.NewRowID}
+		if t.key != nil {
+			values := make([]any, data.Count())
+			if err := data.New(values...); err != nil {
+				cp.err = errors.Join(cp.err, err)
+			}
+			vs = keyOf(t.key, values)
+		}
+		t.note(vs, data.NewRowID)
 	}
+}
+
+// prepare reads, when the schema of the main database changed since it last did, the primary key of each table without
+// a rowid, which the hook takes a row's identity from. It runs on db before a statement, as the hook cannot read.
+func (cp *capture) prepare(ctx context.Context, db runner) error {
+	var version int64
+	if err := db.QueryRowContext(ctx, "PRAGMA main.schema_version").Scan(&version); err != nil {
+		return &Error{codeInternal, err.Error()}
+	}
+	cp.mu.Lock()
+	known := cp.keys != nil && cp.schema == version
+	cp.mu.Unlock()
+	if known {
+		return nil
+	}
+	names, err := column[string](ctx, db, "SELECT name FROM pragma_table_list WHERE schema = 'main' AND type = 'table' AND wr = 1", nil)
+	if err != nil {
+		return err
+	}
+	keys := map[string]*primaryKey{}
+	for _, name := range names {
+		if keys[name], err = primaryKeyOf(ctx, db, name); err != nil {
+			return err
+		}
+	}
+	cp.mu.Lock()
+	defer cp.mu.Unlock()
+	cp.schema, cp.keys = version, keys
+	return nil
+}
+
+// primaryKeyOf reads the primary key of the table name without a rowid from its index.
+func primaryKeyOf(ctx context.Context, db runner, name string) (_ *primaryKey, err error) {
+	cols, err := tableColumns(ctx, db, name)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := db.QueryContext(ctx, "SELECT x.name, x.coll, x.desc FROM pragma_index_list(?1) AS l, pragma_index_xinfo(l.name) AS x"+
+		" WHERE l.origin = 'pk' AND x.key = 1 ORDER BY x.seqno", name)
+	if err != nil {
+		return nil, &Error{codeInternal, err.Error()}
+	}
+	defer closed(&err, rows)
+	k := &primaryKey{}
+	for rows.Next() {
+		var col, coll string
+		var desc bool
+		if err := rows.Scan(&col, &coll, &desc); err != nil {
+			return nil, &Error{codeInternal, err.Error()}
+		}
+		at := slices.Index(cols, col)
+		if at < 0 {
+			return nil, &Error{codeInternal, fmt.Sprintf("the primary key of %s names no column %s", name, col)}
+		}
+		k.at, k.names, k.colls, k.desc = append(k.at, at), append(k.names, col), append(k.colls, coll), append(k.desc, desc)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, &Error{codeInternal, err.Error()}
+	}
+	if len(k.at) == 0 {
+		return nil, &Error{codeInternal, "the table " + name + " without a rowid has no primary key"}
+	}
+	return k, nil
+}
+
+// order is the ORDER BY of the rows of a table in the order of the primary key k, each term prefixed by prefix.
+func (k *primaryKey) order(prefix string, names []string) string {
+	terms := make([]string, len(names))
+	for i, name := range names {
+		terms[i] = prefix + name + " COLLATE " + quote(k.colls[i])
+		if k.desc[i] {
+			terms[i] += " DESC"
+		}
+	}
+	return " ORDER BY " + strings.Join(terms, ", ")
 }
 
 // start begins the record of a statement's changes.
@@ -108,7 +249,7 @@ func (cp *capture) register(dc any) error {
 	return nil
 }
 
-// rowidList is the JSON array of the rowids of t, the one parameter of a read of their rows.
+// rowidList is the JSON array of the rowids of t, a table with a rowid, the one parameter of a read of their rows.
 func (t *changedRows) rowidList() string {
 	b, err := json.Marshal(t.rowids)
 	if err != nil {
@@ -160,23 +301,40 @@ func image(tb *catalog.Table, cols []string, rowid int64, values []any) ([]any, 
 	return row, nil
 }
 
-// rowsAt reads the rows of tb at the rowids of t, in the order of their rowids.
-func rowsAt(ctx context.Context, db runner, tb *catalog.Table, t *changedRows, k *cost.Counts) (_ [][]any, err error) {
+// readColumns are the columns of tb as a read of its rows names them: without its declared type the driver reads the
+// stored value itself, as the hook reports it.
+func readColumns(tb *catalog.Table) string {
 	names := columnNames(tb)
 	for i := range names {
-		// Without its declared type the driver reads the stored value itself, as the hook reports it.
 		names[i] = "+" + names[i]
 	}
-	text := "SELECT " + strings.Join(names, ", ") + " FROM " + quote(tb.Name) +
-		" WHERE rowid IN (SELECT value FROM json_each(?)) ORDER BY rowid"
-	rows, err := db.QueryContext(ctx, text, t.rowidList())
+	return strings.Join(names, ", ")
+}
+
+// rowsAt reads the rows of tb at the identities of t: of a table with a rowid in the order of their rowids, and of a
+// table without one in the order of its primary key, whose values keys holds.
+func rowsAt(ctx context.Context, db runner, tb *catalog.Table, t *changedRows, keys string, k *cost.Counts) (_ [][]any, err error) {
+	text := "SELECT " + readColumns(tb) + " FROM " + quote(tb.Name)
+	var args []any
+	if t.key == nil {
+		text += " WHERE rowid IN (SELECT value FROM json_each(?)) ORDER BY rowid"
+		args = []any{t.rowidList()}
+	} else {
+		cols := make([]string, len(t.key.names))
+		for i, name := range t.key.names {
+			cols[i] = quote(name)
+		}
+		text += " WHERE (" + strings.Join(cols, ", ") + ") IN (SELECT " + keyColumnList(len(cols)) + " FROM " + keys + ")" +
+			t.key.order("", cols)
+	}
+	rows, err := db.QueryContext(ctx, text, args...)
 	if err != nil {
 		return nil, &Error{codeInternal, err.Error()}
 	}
 	defer closed(&err, rows)
 	var out [][]any
 	for rows.Next() {
-		row, err := scan(rows, len(names))
+		row, err := scan(rows, len(tb.Columns))
 		if err != nil {
 			return nil, &Error{codeInternal, err.Error()}
 		}
@@ -189,8 +347,43 @@ func rowsAt(ctx context.Context, db runner, tb *catalog.Table, t *changedRows, k
 	return out, nil
 }
 
+// keyColumnList is the columns k1, ..., kn of a table of keys.
+func keyColumnList(n int) string {
+	cols := make([]string, n)
+	for i := range cols {
+		cols[i] = "k" + strconv.Itoa(i+1)
+	}
+	return strings.Join(cols, ", ")
+}
+
+// keysTable fills the temporary table of the identities of t, a table without a rowid, whose rows are i, the position
+// of an identity in ids, and its values k1, ..., kn, and returns its name: the database orders and matches the values
+// of a primary key under its collations, which the engine does not repeat. The hook records nothing of the temporary
+// database, and the table is emptied after the statement's difference is formed.
+func keysTable(ctx context.Context, db runner, n int, ids [][]any) (_ string, err error) {
+	name := "temp.flowmark_keys_" + strconv.Itoa(n)
+	if _, err := db.ExecContext(ctx, "CREATE TABLE IF NOT EXISTS "+name+" (i INTEGER, "+keyColumnList(n)+")"); err != nil {
+		return "", &Error{codeInternal, err.Error()}
+	}
+	if _, err := db.ExecContext(ctx, "DELETE FROM "+name); err != nil {
+		return "", &Error{codeInternal, err.Error()}
+	}
+	insert, err := db.PrepareContext(ctx, "INSERT INTO "+name+" VALUES (?"+strings.Repeat(", ?", n)+")")
+	if err != nil {
+		return "", &Error{codeInternal, err.Error()}
+	}
+	defer closed(&err, insert)
+	for i, vs := range ids {
+		if _, err := insert.ExecContext(ctx, append([]any{i}, vs...)...); err != nil {
+			return "", &Error{codeInternal, err.Error()}
+		}
+	}
+	return name, nil
+}
+
 // changedTables returns the rows of each table of the catalog of c that a statement changed, before and after it: the
-// images the hook recorded, in the order of their rowids, and the rows the database holds at the rowids it changed.
+// images the hook recorded and the rows the database holds at the identities it changed, both in the order of the
+// table's rowids, or of its primary key for a table without a rowid.
 func changedTables(ctx context.Context, db runner, c *irexec.Corpus, changed map[string]*changedRows) (before, after map[string]tableRows, err error) {
 	before, after = map[string]tableRows{}, map[string]tableRows{}
 	for _, tb := range c.Catalog().Tables {
@@ -202,27 +395,73 @@ func changedTables(ctx context.Context, db runner, c *irexec.Corpus, changed map
 		if err != nil {
 			return nil, nil, err
 		}
-		olds := make([]int64, 0, len(t.olds))
-		for rowid := range t.olds {
-			olds = append(olds, rowid)
+		keys := ""
+		if t.key != nil {
+			if keys, err = keysTable(ctx, db, len(t.key.at), t.ids); err != nil {
+				return nil, nil, err
+			}
 		}
-		slices.Sort(olds)
+		olds, err := oldOrder(ctx, db, t, keys)
+		if err != nil {
+			return nil, nil, err
+		}
 		var rows [][]any
-		for _, rowid := range olds {
-			row, err := image(tb, cols, rowid, t.olds[rowid])
+		for _, i := range olds {
+			var rowid int64
+			if t.key == nil {
+				rowid = t.rowids[i]
+			}
+			row, err := image(tb, cols, rowid, t.olds[identity(t.ids[i])])
 			if err != nil {
 				return nil, nil, err
 			}
 			rows = append(rows, row)
 		}
 		before[tb.Name] = keyed(tb, rows)
-		now, err := rowsAt(ctx, db, tb, t, c.Cost())
+		now, err := rowsAt(ctx, db, tb, t, keys, c.Cost())
 		if err != nil {
 			return nil, nil, err
 		}
 		after[tb.Name] = keyed(tb, now)
+		if keys != "" {
+			if _, err := db.ExecContext(ctx, "DELETE FROM "+keys); err != nil {
+				return nil, nil, &Error{codeInternal, err.Error()}
+			}
+		}
 	}
 	return before, after, nil
+}
+
+// oldOrder returns the positions in t.ids of the rows of t that have an image, in the order of their rowids, or of the
+// primary key for a table without a rowid, whose identities the table keys holds.
+func oldOrder(ctx context.Context, db runner, t *changedRows, keys string) ([]int, error) {
+	var at []int
+	for i, vs := range t.ids {
+		if _, ok := t.olds[identity(vs)]; ok {
+			at = append(at, i)
+		}
+	}
+	if t.key == nil {
+		slices.SortFunc(at, func(a, b int) int { return cmp.Compare(t.rowids[a], t.rowids[b]) })
+		return at, nil
+	}
+	if len(at) < 2 {
+		return at, nil
+	}
+	cols := strings.Split(keyColumnList(len(t.key.at)), ", ")
+	list, err := json.Marshal(at)
+	if err != nil {
+		return nil, &Error{codeInternal, err.Error()}
+	}
+	order, err := column[int64](ctx, db, "SELECT i FROM "+keys+" WHERE i IN (SELECT value FROM json_each(?))"+t.key.order("", cols), nil, string(list))
+	if err != nil {
+		return nil, err
+	}
+	out := make([]int, len(order))
+	for j, i := range order {
+		out[j] = int(i)
+	}
+	return out, nil
 }
 
 // keyed is rows by their key, in their order.

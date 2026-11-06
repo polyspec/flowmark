@@ -47,19 +47,21 @@ func sameWrite(a, b []byte) bool {
 }
 
 // captureSchema are the tables SQL adds to the board corpus for the cases of TestCapture: a table with no primary key,
-// whose key is the rowid; a table with a text key, which a REPLACE and an upsert meet; and a trigger that writes a row
-// of one for each update of the other.
+// whose key is the rowid; a table with a text key, which a REPLACE and an upsert meet; a trigger that writes a row of
+// one for each update of the other; and a table without a rowid of a descending key under a collation.
 var captureSchema = []string{
 	"CREATE TABLE plain (name TEXT)",
 	"CREATE TABLE kv (k TEXT PRIMARY KEY, v TEXT)",
 	"CREATE TRIGGER kv_log AFTER UPDATE ON kv BEGIN INSERT INTO plain (name) VALUES (NEW.k); END",
+	"CREATE TABLE wk (k TEXT COLLATE NOCASE, n INTEGER, v BLOB, PRIMARY KEY (k, n DESC)) WITHOUT ROWID",
 }
 
 // TestCapture pins the difference of a write statement (spec 40 SQL statements): formed from the rows SQLite's
 // pre-update hook reports the statement changed, it equals the difference formed from every row before and after it,
 // for an insert, an update and a delete of many rows, a key that changes, a REPLACE, an upsert, the rows of a foreign key
-// action and of a trigger, a table whose key is the rowid, texts and keys holding a NUL, and a statement of a
-// transaction.
+// action and of a trigger, a table whose key is the rowid, a table whose integer key is its rowid, a table without a
+// rowid, whose rows the hook reports by their primary key, of one column and of a descending key under a collation,
+// texts and keys holding a NUL, and a statement of a transaction.
 func TestCapture(t *testing.T) {
 	cases := []struct {
 		name  string
@@ -100,6 +102,29 @@ func TestCapture(t *testing.T) {
 			"REPLACE INTO kv (k, v) VALUES ('a' || char(0) || 'b', 'z')",
 			"UPDATE notes SET title = 'n' || char(0) WHERE id IN (SELECT id FROM notes LIMIT 1)",
 			"DELETE FROM kv WHERE k = char(0)",
+		}},
+		{"a table without a rowid", []string{"CREATE TABLE wr (k TEXT PRIMARY KEY, v TEXT) WITHOUT ROWID"}, []string{
+			"INSERT INTO wr (k, v) VALUES ('c', '1'), ('a', '2'), ('b', '3')",
+			"UPDATE wr SET v = v || '!' WHERE k <> 'b'",
+			"UPDATE wr SET k = '0' || k WHERE k <> 'a'",
+			"REPLACE INTO wr (k, v) VALUES ('a', '4'), ('0b', '5')",
+			"INSERT INTO wr (k, v) VALUES ('d', '6'), ('a', '7') ON CONFLICT (k) DO UPDATE SET v = excluded.v",
+			"DELETE FROM wr WHERE k <> '0c'",
+		}},
+		{"a table without a rowid of a descending key under a collation", []string{
+			"CREATE TABLE wc (a TEXT COLLATE NOCASE, b INTEGER, v BLOB, PRIMARY KEY (a, b DESC)) WITHOUT ROWID",
+		}, []string{
+			"INSERT INTO wc (a, b, v) VALUES ('B', 1, x'00'), ('a', 2, x'01'), ('a', 3, NULL), ('b', 2, x'0200')",
+			"UPDATE wc SET v = x'ff' WHERE b >= 2",
+			"UPDATE wc SET b = b + 10 WHERE a = 'A' AND b = 3",
+			"REPLACE INTO wc (a, b, v) VALUES ('a', 2, x'aa'), ('c', 9, x'bb')",
+			"DELETE FROM wc WHERE a = 'b'",
+		}},
+		{"a table whose integer key is its rowid", []string{"CREATE TABLE ip (id INTEGER PRIMARY KEY, v TEXT)"}, []string{
+			"INSERT INTO ip (id, v) VALUES (5, 'a'), (2, 'b'), (NULL, 'c')",
+			"UPDATE ip SET id = id + 10 WHERE v <> 'b'",
+			"REPLACE INTO ip (id, v) VALUES (2, 'd')",
+			"DELETE FROM ip WHERE id > 15",
 		}},
 		{"statements of a transaction", captureSchema, []string{
 			"BEGIN",
@@ -181,6 +206,10 @@ var captureTexts = []string{
 	"UPDATE notes SET title = substr(%s, 1, 32), done = NOT done WHERE title > %s",
 	"DELETE FROM notes WHERE title = %s OR id %% 4 = length(%s) %% 4",
 	"INSERT INTO tags (note) SELECT id FROM notes WHERE title >= %s OR title < %s",
+	"INSERT OR IGNORE INTO wk (k, n, v) VALUES (%s, 1, x'00'), (upper(%s), 2, NULL)",
+	"REPLACE INTO wk (k, n, v) VALUES (%s, 2, x'01'), (%s, 3, x'02')",
+	"UPDATE wk SET v = CAST(%s AS BLOB) WHERE k >= %s",
+	"DELETE FROM wk WHERE k = %s OR n = length(%s)",
 }
 
 // FuzzCapture pins TestCapture's equality for any sequence of the statements of captureTexts: each byte pair of the
@@ -190,6 +219,7 @@ func FuzzCapture(f *testing.F) {
 	f.Add([]byte{0, 'a', 1, 'a', 2, 'b', 3, 0, 4, 'b'})
 	f.Add([]byte{5, 'x', 6, 'y', 7, 'z', 8, 'n', 9, 'm', 10, 'n', 11, 0})
 	f.Add([]byte{0, 0, 1, 0, 3, 0, 2, 1, 4, 0, 8, 0, 11, 1, 10, 0})
+	f.Add([]byte{12, 'a', 12, 'b', 13, 'a', 14, 'c', 15, 'b', 12, 0})
 	s, _ := open(f)
 	run(f, s, "INSERT INTO notes (title) VALUES ('seed'), ('a'), ('n')")
 	for _, text := range captureSchema {
@@ -208,8 +238,11 @@ func FuzzCapture(f *testing.F) {
 			// A statement SQLite or the corpus refuses changes nothing, and the next one goes on from the same rows; an
 			// internal failure, such as an image the hook could not read, fails the input.
 			if _, err := statement.Run(s, text, nil); err != nil {
-				var se *statement.Error
-				if !errors.As(err, &se) || se.Code == "INTERNAL" {
+				var f interface{ Failure() (code, msg string) }
+				if !errors.As(err, &f) {
+					t.Fatalf("%s: %v", text, err)
+				}
+				if code, _ := f.Failure(); code == "INTERNAL" {
 					t.Fatalf("%s: %v", text, err)
 				}
 			}

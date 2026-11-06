@@ -1201,6 +1201,9 @@ func execute(ctx context.Context, d *database, c *irexec.Corpus, text string, ar
 			return nil, nil, written{}, err
 		}
 	}
+	if err := d.cap.prepare(ctx, db); err != nil {
+		return nil, nil, written{}, err
+	}
 	d.cap.start()
 	defer d.cap.stop()
 	answer, err := query(ctx, db, text, args)
@@ -1407,16 +1410,27 @@ func allRows(ctx context.Context, db runner, c *irexec.Corpus) (map[string]table
 	return out, nil
 }
 
-// rowsOf reads the rows of tb from db.
+// rowsOf reads the rows of tb from db: of a table with a rowid in the order of their rowids, so the rows that an insert
+// leaves to the corpus to place take their positions in the order they were inserted, and of a table without a rowid
+// in the order of its primary key.
 func rowsOf(ctx context.Context, db runner, tb *catalog.Table, k *cost.Counts) (_ [][]any, err error) {
 	names := columnNames(tb)
-	for i := range names {
-		// Without its declared type the driver reads the stored value itself, not a time of a DATE or DATETIME column.
-		names[i] = "+" + names[i]
+	text := "SELECT " + readColumns(tb) + " FROM " + quote(tb.Name)
+	without, err := column[bool](ctx, db, "SELECT wr FROM pragma_table_list WHERE schema = 'main' AND name = ?", nil, tb.Name)
+	if err != nil {
+		return nil, err
 	}
-	text := "SELECT " + strings.Join(names, ", ") + " FROM " + quote(tb.Name)
-	if tb.Order != "" {
-		// The rows that an insert leaves to the corpus to place take their positions in the order they were inserted.
+	if len(without) == 1 && without[0] {
+		key, err := primaryKeyOf(ctx, db, tb.Name)
+		if err != nil {
+			return nil, err
+		}
+		cols := make([]string, len(key.names))
+		for i, name := range key.names {
+			cols[i] = quote(name)
+		}
+		text += key.order("", cols)
+	} else {
 		text += " ORDER BY rowid"
 	}
 	rows, err := db.QueryContext(ctx, text)
@@ -1841,7 +1855,8 @@ func allocate(ctx context.Context, db runner, c *irexec.Corpus, answer *Answer, 
 				continue
 			}
 			ch := changed[t.Name]
-			if ch == nil {
+			if ch == nil || ch.key != nil {
+				// A table without a rowid holds no NULL in its primary key.
 				continue
 			}
 			table, name, ids := quote(t.Name), t.PrimaryKey.Columns[0], ch.rowidList()

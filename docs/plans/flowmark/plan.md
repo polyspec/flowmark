@@ -177,7 +177,7 @@ Each layer is a row, in this order, and each row's Red is a count of the cost co
 6. **The difference of a statement is published (T41).** The database's writer connection is one `*sql.Conn` held for its life,
    on which SQLite's preupdate hook records which rows a statement, its triggers and its foreign key actions touched: table,
    operation, old and new rowid, and the old and new key. A key the hook reports is read with its length
-   (`sqlite3_value_bytes`, through polyspec's fork of the driver, whose text reading stops at a NUL); a key whose text is not
+   (`sqlite3_value_bytes`, through a fork of the driver, whose release stops reading a text at a NUL); a key whose text is not
    whole, or that breaks the rule of keys (spec 20 Keys, `store.keyFault`), fails the statement before any write is
    formed. The driver and its fork are Go, and the build needs no cgo. The temp schema is ignored, and the hook records nothing during a fill, a refresh or
    `placeBack`. The rows are coalesced by their final key, in the order the hook reports them, which is the order the rows
