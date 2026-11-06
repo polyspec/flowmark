@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/polyspec/flowmark/packages/go/catalog"
 	"github.com/polyspec/orm/packages/go/engine/dbspec"
 	"github.com/polyspec/orm/packages/go/engine/ir"
 )
@@ -168,7 +169,7 @@ func walkGroup(g *ir.Group, f func(*ir.Query)) {
 // root and of every join whose where no joined item places.
 func (r *reader) statement(q *ir.Query, outer *frame, deleted bool, keep func(*rec) (bool, *Error)) (*scope, []*env, *Error) {
 	s := r.buildScope(q, "")
-	base, err := r.c.rows(s.tb.Name)
+	base, err := r.keyedRows(s, q)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -213,6 +214,54 @@ func (r *reader) statement(q *ir.Query, outer *frame, deleted bool, keep func(*r
 		}
 	}
 	return s, out, nil
+}
+
+// keyedRows returns the rows of the table of s that the where of q can hold: when the where is a conjunction one of
+// whose conditions compares the single-column key with a parameter for equality, the rows of that key, which the index
+// gives (withKey), and otherwise every row in storage order. Every condition still judges each row, so the rows the
+// where holds are the same; at most one row has a key, and it stands where storage order puts it.
+func (r *reader) keyedRows(s *scope, q *ir.Query) ([]*rec, *Error) {
+	if p := keyCondition(s.tb, q.Where); p != nil {
+		if err := r.c.need(s.tb.Name); err != nil {
+			return nil, err
+		}
+		v, err := r.param(*p.P, columnOf(s.tb, s.tb.Key).Type)
+		if err == nil {
+			if v.null {
+				return nil, nil
+			}
+			return r.c.withKey(s.tb, v.text), nil
+		}
+	}
+	return r.c.rows(s.tb.Name)
+}
+
+// keyCondition returns the condition of the where g that compares the single-column key of tb with a parameter for
+// equality when g is a conjunction, nil when it holds none or is not one.
+func keyCondition(tb *catalog.Table, g *ir.Group) *ir.Pred {
+	if g == nil || g.Not || len(tb.KeyParts) > 0 {
+		return nil
+	}
+	var found *ir.Pred
+	for i, it := range g.Items {
+		conn := ""
+		switch {
+		case it.Pred != nil:
+			conn = it.Pred.Conn
+		case it.Group != nil:
+			conn = it.Group.Conn
+		case it.Joined != nil:
+			conn = it.Joined.Conn
+		}
+		if i > 0 && conn == "or" {
+			return nil
+		}
+		if p := it.Pred; found == nil && p != nil && p.Column == tb.Key && p.Op == "eq" && p.P != nil &&
+			p.Fn == nil && p.Value == nil && p.Sub == nil && p.Ref == nil {
+			found = p
+		}
+	}
+	return found
 }
 
 // expand joins the rows of each join of s, in declaration order and each join's

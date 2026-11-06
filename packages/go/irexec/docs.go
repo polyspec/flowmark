@@ -6,6 +6,7 @@ import (
 	"maps"
 	"slices"
 
+	"github.com/polyspec/flowmark/packages/go/catalog"
 	"github.com/polyspec/flowmark/packages/go/internal/cost"
 	"github.com/polyspec/flowmark/packages/go/internal/pmap"
 	"github.com/polyspec/flowmark/packages/go/store"
@@ -296,6 +297,18 @@ func (c *Corpus) candidates(keys ...string) []*rec {
 	return out
 }
 
+// withKey returns the records of table whose key a comparison holds equal to the value text of the type of its key
+// column, in corpus order: the rows a where that fixes the key reads (spec 40 Cost model). A key of a table that is
+// available is the canonical text of its value (spec 20 Keys), so the key a comparison meets is the canonical text of
+// that value.
+func (c *Corpus) withKey(tb *catalog.Table, text string) []*rec {
+	canon, ok := store.Readable(columnOf(tb, tb.Key).Type, text)
+	if !ok {
+		return nil
+	}
+	return c.lookup(keyIndex(tb.Name, canon))
+}
+
 // maxNumber returns the largest number of column col of table that the index holds (numberIndex), "" when it holds
 // none.
 func (c *Corpus) maxNumber(table, col string) string {
@@ -367,8 +380,9 @@ func (c *Corpus) recOf(r *store.Row) *rec {
 	return nil
 }
 
-// tableRecs returns every record of table in corpus order, walking every document: a read of a table's storage order
-// reads it through here.
+// tableRecs returns every record of table in corpus order, walking every document, and counts each as scanned: a read
+// of a table's storage order reads it through here, as a write or its checks read what they read by walking a table
+// and not by the index.
 func (c *Corpus) tableRecs(table string) []*rec {
 	c.docsMu.Lock()
 	defer c.docsMu.Unlock()
@@ -383,13 +397,9 @@ func (c *Corpus) tableRecs(table string) []*rec {
 			}
 		}
 	}
-	return out
-}
-
-// scan returns every record of table of c as tableRecs does, for a write or its checks, counting each as scanned: what a
-// write reads by walking a table and not by the index.
-func scan(c *Corpus, table string) []*rec {
-	out := c.tableRecs(table)
 	c.cost.Add(cost.RowsScanned, len(out))
 	return out
 }
+
+// scan returns every record of table of c as tableRecs does, for a write or its checks.
+func scan(c *Corpus, table string) []*rec { return c.tableRecs(table) }

@@ -645,6 +645,12 @@ MySQL과 PostgreSQL은 `datetime(p)` column을 `NOW(6)`와 여섯 자리로 비�
   걸쳐: 한 행 읽기는 CPU 0.08~0.10 ms이고 wall time p95는 많아야 0.12 ms다; 한 행의 쓰기 statement는 CPU 12~40 ms이고
   wall time p95는 62~88 ms다; 거부된 쓰기는 3.6~8.1 ms이고 p95는 많아야 11 ms다; 외부 편집은 4.5~6.3 ms이고 p95는
   많아야 10 ms다.
+- face의 요청은 where가 단일 열 key와 parameter의 같음을 조건 하나로 지닌 conjunction이면 표의 행을 index로 읽는다:
+  그 key의 행이고, 모든 조건이 여전히 그 행을 판정하므로 답하는 행은 표를 걸어 얻는 행과 같다. 다른 where는 표를 걷고,
+  걷기는 훑은 행으로 counter에 기록된다. `TestCost`가 face의 한 행 읽기, insert, update, delete가 1,000행과 100,000행에서
+  같은 행을 읽음을 확인하고, `irexec`의 `TestKeyedRows`가 key로 고른 where가 걷기의 행을 답함을 확인한다. macOS(Apple M3 Pro, `T46`)의 한가한 기계에서 1,000행, 10,000행,
+  100,000행에 걸쳐 face의 key로 고른 한 행 읽기는 CPU 1.0~1.5 ms이고 wall time p95는 많아야 7.2 ms이며, 한 행의 insert,
+  update, delete는 CPU 1.2~16 ms이고 wall time p95는 많아야 74 ms다.
 - **codec의 비용**은 file의 byte에 선형이다: 상세 섹션을 가진 행들의 document file에서, file의 parse와
   render는 각각 그 megabyte당 CPU 0.1초 이하가 들고 그 byte당 64 byte 이하를 할당한다. 어떤 pass도 각
   heading을 각 상세 anchor와, 또는 각 행을 각 행과 비교하지 않는다: heading의 slug는 자기가 가져가는

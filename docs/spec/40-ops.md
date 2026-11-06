@@ -754,6 +754,14 @@ and MySQL and PostgreSQL compare a `datetime(p)` column with `NOW(6)` at six dig
   rows: a read of one row takes 0.08 to 0.10 ms of CPU, with a wall-time p95 of at most 0.12 ms; a write statement of one
   row 12 to 40 ms of CPU, with a wall-time p95 of 62 to 88 ms; a refused write 3.6 to 8.1 ms, with a p95 of at most
   11 ms; and an external edit 4.5 to 6.3 ms, with a p95 of at most 10 ms.
+- A request of a face reads the rows of its table through the index when its where is a conjunction one of whose
+  conditions compares the single-column key with a parameter for equality: the row of that key, which every condition
+  still judges, so the rows it answers are those a walk of the table answers; any other where walks the table, and a
+  walk is counted as the rows it scans. `TestCost` holds that a face's read, insert, update and delete of one row read
+  the same rows at 1,000 and at 100,000 rows, and `TestKeyedRows` of `irexec` that a keyed where answers the rows of the
+  walk. On macOS (Apple M3 Pro, `T46`), on an idle machine, at 1,000, 10,000 and 100,000 rows, a face's keyed read of one
+  row takes 1.0 to 1.5 ms of CPU with a wall-time p95 of at most 7.2 ms, and its insert, update and delete of one row 1.2
+  to 16 ms of CPU with a wall-time p95 of at most 74 ms.
 - **The codec's cost** is linear in the bytes of a file: the parse and the render of a file each take
   at most 0.1 s of CPU per megabyte of it and allocate at most 64 bytes per byte of it, for a document
   file of rows with detail sections. No pass compares each heading with each detail anchor, or each

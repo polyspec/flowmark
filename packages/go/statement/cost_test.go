@@ -167,6 +167,20 @@ var costOps = []costOp{
 	{"delete note", func(t testing.TB, s *writepath.Session, _ string, i int) {
 		run(t, s, fmt.Sprintf("DELETE FROM notes WHERE id = 'N%d'", 151+i))
 	}},
+	{"face read note", func(t testing.TB, s *writepath.Session, _ string, _ int) {
+		face(t, s, "one", "notes", map[string]any{"columns": map[string]any{"mode": "none", "add": []string{"title"}}, "where": corpustest.WhereID(0)}, "N7")
+	}},
+	{"face insert note", func(t testing.TB, s *writepath.Session, _ string, i int) {
+		face(t, s, "insert", "notes", map[string]any{"set": []any{map[string]any{"column": "title", "p": 0}, map[string]any{"column": "written", "p": 1}}},
+			fmt.Sprintf("face %d", i), "2020-01-02")
+	}},
+	{"face update note", func(t testing.TB, s *writepath.Session, _ string, i int) {
+		face(t, s, "update", "notes", map[string]any{"set": []any{map[string]any{"column": "title", "p": 0}}, "where": corpustest.WhereID(1)},
+			fmt.Sprintf("face renamed %d", i), "N160")
+	}},
+	{"face delete note", func(t testing.TB, s *writepath.Session, _ string, i int) {
+		face(t, s, "delete", "notes", map[string]any{"where": corpustest.WhereID(0)}, fmt.Sprintf("N%d", 301+i))
+	}},
 	{"refused write", func(t testing.TB, s *writepath.Session, _ string, _ int) {
 		// SQLite takes the key; the rule of keys refuses it, as equal to T7 without regard to case.
 		if _, err := statement.Run(s, "INSERT INTO tasks (id, project, title) VALUES ('t7', 'P2', 'folded')", nil); err == nil {
@@ -194,6 +208,15 @@ var costOps = []costOp{
 			t.Fatalf("the read after the edit answers %s", got)
 		}
 	}},
+}
+
+// face runs a request of a face, an orm request message of kind on entity, and fails t when it fails.
+func face(t testing.TB, s *writepath.Session, kind, entity string, body map[string]any, params ...any) {
+	t.Helper()
+	msg := corpustest.Message(t, s.Executor().Model().ManifestHash, "2026-01-01 00:00:00.000000", kind, entity, body, params...)
+	if _, err := s.Exec(context.Background(), msg); err != nil {
+		t.Fatalf("%s %s: %v", kind, entity, err)
+	}
 }
 
 // editedTitle is the title of N201 after the external edit of repetition i, and before the first, at -1, the one the
@@ -244,6 +267,11 @@ var equalCost = map[string][]cost.Counter{
 	"update note":   writeReadCost,
 	"delete task":   writeReadCost,
 	"delete note":   writeReadCost,
+	// T46: a request of a face costs what it touches, as a statement does.
+	"face read note":   faceReadCost,
+	"face insert note": writeReadCost,
+	"face update note": writeReadCost,
+	"face delete note": writeReadCost,
 	// T43-2: a refused write rolls the database back, and fills nothing again.
 	"refused write": refusedCost,
 }
@@ -254,6 +282,9 @@ var refusedCost = []cost.Counter{cost.RowsStored, cost.DatabaseRowsWritten, cost
 
 // readCost are the counts of a corpus read: the documents it visits and parses, and the rows it places and indexes.
 var readCost = []cost.Counter{cost.FilesVisited, cost.FilesParsed, cost.RowsPlaced, cost.RowsIndexed}
+
+// faceReadCost are the counts of a read of a face: a corpus read, and the rows the read reads (T46).
+var faceReadCost = []cost.Counter{cost.FilesVisited, cost.FilesParsed, cost.RowsPlaced, cost.RowsIndexed, cost.RowsScanned}
 
 // quietCost names the operations that count nothing: a read of a corpus nothing changed since the statement before it,
 // which takes no lock (T43-3).
