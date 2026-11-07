@@ -1,10 +1,13 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 699376e97bce5e25e7e9e9c4ad72b51e47d64d65061aa3f4b59646eb9e1b67ed -->
+<!-- source-sha256: 6107c0a74493fb61987fdd54aceb67a9ef1407988ca46f8f333bbb1159519031 -->
 # Changelog
 
 ## Unreleased
 
+## 0.0.7
+
 - T69: flowmark은 repository에 아무것도 강제하지 않는 kit 0.0.98을 지원한다: Makefile은 kit의 recipe를 include하지 않고 설치된 kit의 utility를 실행하는 자기 target을 가지며, CI는 자기 gates job을 실행하고, kit이 강제하던 설정은 .npmrc, mise.toml과 루트의 lint 설정이 갖고, vendor된 pipeline, hook과 kit이 더는 요구하지 않는 사본은 지운다.
+
 ## 0.0.6
 
 - T67: server의 거부는 code를 한 번만 적는다. 오류 답의 message는 rollback이나 다른 오류가 결합되거나 감싸도 coded error 자체의 것이므로, client가 code를 두 번 읽지 않는다.
