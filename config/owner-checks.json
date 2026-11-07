@@ -88,12 +88,10 @@
     },
     {
       "paths": [
-        "Makefile",
-        ".claude/settings.json",
-        ".editorconfig"
+        "Makefile"
       ],
       "targets": [
-        "kit-check"
+        "owner-validate"
       ]
     },
     {
@@ -102,6 +100,7 @@
         "config/layout.yml",
         "config/*.schema.json",
         "config/generated.json",
+        ".editorconfig",
         ".gitignore",
         ".gitattributes",
         ".github/**"
@@ -124,21 +123,32 @@
     },
     {
       "paths": [
-        "config/knip-entries.json",
+        ".golangci.yml"
+      ],
+      "targets": [
+        "lint-go"
+      ]
+    },
+    {
+      "paths": [
+        "phpcs.xml.dist",
+        "phpstan.dist.neon"
+      ],
+      "targets": [
+        "lint-php"
+      ]
+    },
+    {
+      "paths": [
+        "knip.json",
+        ".oxlintrc.json",
+        ".npmrc",
         "package.json",
         "package-lock.json",
         "tsconfig.json"
       ],
       "targets": [
         "lint-ts"
-      ]
-    },
-    {
-      "paths": [
-        ".githooks/**"
-      ],
-      "targets": [
-        "hooks-check"
       ]
     },
     {
@@ -168,14 +178,6 @@
     {
       "paths": [
         "config/release.json"
-      ],
-      "targets": [
-        "kit-check"
-      ]
-    },
-    {
-      "paths": [
-        "config/ci.json"
       ],
       "targets": [
         "kit-check"

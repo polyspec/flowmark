@@ -3,6 +3,7 @@
 
 ## Unreleased
 
+- T69: flowmark supports kit 0.0.98, which forces nothing on a repository: the Makefile includes no recipe of kit and holds its own targets, which run the utilities of the installed kit; CI runs its own gates job; .npmrc, mise.toml and the lint configurations of the root hold the settings that kit forced; the vendored pipeline, the hooks and the copies that kit no longer requires are removed.
 ## 0.0.6
 
 - T67: A refusal of the server states its code once: the message of an error answer is the coded error's own, also when a rollback or another error is joined to it or wraps it, so a client does not read the code twice.

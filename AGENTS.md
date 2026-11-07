@@ -13,8 +13,8 @@ has its checklist in `docs/plans/`.
 
 ## Principles
 
-The working principles of every polyspec repository are [PRINCIPLES.md](PRINCIPLES.md), which kit
-vendors here byte for byte; they bind all work in this repository. This file states only
+The working principles of every polyspec repository are [PRINCIPLES.md](PRINCIPLES.md), taken from kit
+and kept here as flowmark's own file; they bind all work in this repository. This file states only
 flowmark's own rules: the ones below refine a principle for the engine, and the section after
 them holds the rules of this repository.
 
@@ -39,10 +39,13 @@ them holds the rules of this repository.
 ## Rules
 
 - Own: The shared tools are the installed package `@polyspec/kit`, pinned by its release asset URL and lock integrity.
-  The Makefile includes `node_modules/@polyspec/kit/scripts/kit/kit-bootstrap.mk`; `make kit-sync` writes its declared
-  copies and `make kit-check` compares them. Shared files are changed in kit. flowmark runs kit tools through their make
-  targets or `$(KIT)/<tool>.$(KIT_EXT)` and declares ecosystem libraries in its own package manifests.
-  Enforced by: `make kit-check`
+  kit includes no recipe: the `Makefile` of flowmark holds every target that the repository, its CI and its documents
+  call, and each recipe runs a utility of the installed package, `$(KIT)/<tool>.mjs` of its dist, with its own arguments;
+  the CI workflows run only those targets. The settings of the tools are flowmark's own files: `.npmrc`, the `[settings]`
+  and `[env]` of `mise.toml`, `.golangci.yml`, `.oxlintrc.json`, `knip.json`, `phpcs.xml.dist` and `phpstan.dist.neon`;
+  PRINCIPLES.md, `config/layout.kit.yml` and its schemas were taken from kit and are kept here. flowmark declares ecosystem
+  libraries in its own package manifests.
+  Enforced by: `make test-infrastructure`, which runs tests/release-config.test.mts
 - Own: Kit owns test discovery, execution and case-sensitive resources. `make test-go` covers every module in the tracked
   `go.work`; `make test-infrastructure` covers the root TypeScript tests. `CASE_SENSITIVE_ENV` names
   `FLOWMARK_CASE_SENSITIVE_DIR`, which Kit prepares and cleans up. CI independently installs locked prerequisites for each
@@ -51,7 +54,7 @@ them holds the rules of this repository.
   as Kit issues, and release requires all mandatory checks and the provider release proof.
   Enforced by: `make kit-check`
 - Own: A release is a dispatch of `.github/workflows/release.yml` with the id of a successful push run of
-  `.github/workflows/ci.yml` on `main`, whose run succeeds only when every job of it succeeds, the gates of kit among them:
+  `.github/workflows/ci.yml` on `main`, whose run succeeds only when every job of it succeeds, the gates among them:
   `gh workflow run release.yml -f run=<id>`. Its version X.Y.Z is the newest section `## X.Y.Z` of CHANGELOG.md at the
   commit of that run, and the release is refused while `## Unreleased` holds an entry. `make release-tag` creates the
   annotated tags `vX.Y.Z` and `packages/go/vX.Y.Z` at that commit; no one creates, moves or pushes a tag by hand, and a

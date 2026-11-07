@@ -1,4 +1,5 @@
-# All test discovery, execution and case-sensitive resources belong to Kit. The release takes the id of a successful push run of
+# The CI of flowmark. Each step runs a target of the Makefile of this repository, whose recipes run the utilities of kit; the
+# test discovery, execution and case-sensitive resources are kit's runner. The release takes the id of a successful push run of
 # this workflow on main (release.yml, make release-tag); the run succeeds only when every job of it succeeds (T15-51).
 name: ci
 on:
@@ -12,14 +13,41 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 jobs:
-  # The gates of kit (kit S12): ci-pipeline.yml, which kit-sync copies, plans and runs the shared, parity and runtime gates.
-  kit:
-    uses: ./.github/workflows/ci-pipeline.yml
-    permissions:
-      contents: read
+  # The gates: the shared checks, and the lint of Go and of the PHP and the TypeScript of the board example. The job installs
+  # what they need (make gates-setup) and runs them past failures (make gates), which writes the report var/report/ci-targets;
+  # the other jobs follow it.
+  gates:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+      # shivammathur/setup-php 2.40.0: the PHP of .php-version for the lint of the board example.
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962
+        with:
+          php-version-file: .php-version
+          tools: none
+          coverage: none
+      - name: Bootstrap the Node.js of mise.toml, npm and the packages of package-lock.json
+        uses: ./.github/actions/bootstrap
+      - name: install the tools and dependencies of the gates
+        run: make gates-setup
+      - name: gates
+        run: make gates
+      # actions/upload-artifact v7.0.1: the report of the gates.
+      - name: report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: gates-report
+          path: var/report/ci-targets/
+          if-no-files-found: ignore
   language:
     name: ${{ matrix.language }} (${{ matrix.os }})
-    needs: kit
+    needs: gates
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -31,8 +59,8 @@ jobs:
         language: [typescript, go]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-      - name: Bootstrap kit, npm and the packages of package-lock.json (K992)
-        uses: ./.github/actions/kit-bootstrap
+      - name: Bootstrap the Node.js of mise.toml, npm and the packages of package-lock.json
+        uses: ./.github/actions/bootstrap
       - name: install Go
         if: matrix.language == 'go'
         run: make install-tools TOOLS=go
@@ -54,7 +82,7 @@ jobs:
         run: make refs-check
   benchmarks:
     name: benchmarks (${{ matrix.os }})
-    needs: kit
+    needs: gates
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -65,8 +93,8 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-      - name: Bootstrap kit, npm and the packages of package-lock.json (K992)
-        uses: ./.github/actions/kit-bootstrap
+      - name: Bootstrap the Node.js of mise.toml, npm and the packages of package-lock.json
+        uses: ./.github/actions/bootstrap
       - name: install Go
         run: make install-tools TOOLS=go
       - name: install locked Go dependencies

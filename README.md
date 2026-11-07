@@ -25,4 +25,4 @@ Status: the engine is being rebuilt on its storage grammar. The rulings live in
 [docs/plans/flowmark/checklist.md](docs/plans/flowmark/checklist.md) and
 [docs/plans/markdown-database/checklist.md](docs/plans/markdown-database/checklist.md).
 The shared tooling is the npm package [@polyspec/kit](https://github.com/polyspec/kit), a devDependency
-(`make install-packages` installs it; `make kit-check` verifies its copies).
+(`make install-packages` installs it, and the recipes of the `Makefile` run its utilities).

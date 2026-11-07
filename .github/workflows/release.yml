@@ -1,5 +1,5 @@
-# Release workflow of a repository that adopts kit. kit-sync copies this file from the installed package @polyspec/kit to
-# .github/workflows/release.yml, and kit-check fails when the checkout differs from it; a repository never edits it.
+# The release workflow of flowmark; each step runs one target of the Makefile of this repository, whose recipes run the release
+# utilities of kit.
 #
 # The workflow starts by itself when a push run of the CI workflow ci succeeds on main (K987): it checks out the head_sha of that
 # run, and release-tag with AUTO releases it only when it is the version commit of the top ## X.Y.Z of its change log, which is
@@ -8,21 +8,18 @@
 # A dispatch of the workflow with the id of a successful CI run releases the commit of that run (K911): it tags the commit with
 # the version of the newest section ## X.Y.Z of its change log (K924) and creates the GitHub Release of the tag as a draft with
 # its archives, and makes it public. The run is the evidence; the release runs no test again. The steps run in order and stop at
-# the first failure; each step runs one make target of kit with TAG, vX.Y.Z, from the environment, which release-tag writes:
-#   bootstrap package installs the locked kit with the npm that devEngines.packageManager names for consumers, without scripts
-#   install-tools TOOLS=npm installs the mise, the node and the npm of mise.toml with the copied installer of scripts/kit/bootstrap
-#   install-packages installs package-lock.json with that npm, @polyspec/kit included, whose kit.mk has the targets below
-#   release-tag      with the kit of main: requires a completed successful push or dispatch run RUN of ci.yml on main whose
-#                    commit is on origin/main, reads X.Y.Z from the change log of that commit, creates and pushes the annotated
-#                    tag vX.Y.Z and the tag of every Go module at that commit, or passes for a tag there already (K269), and
-#                    appends TAG and VERSION to GITHUB_ENV; a tag pushed with the token of the run starts no run
-#   checkout of the tag, then the bootstrap, npm and the packages of the tagged commit again
-#   release-prepare  the preparation that the release of the repository declares with release-prepare:: (none by default)
-#   release-tools    installs the tools that config/release.json needs for the packages of this repository; a make entry adds none
+# the first failure; each step runs one make target with TAG, vX.Y.Z, from the environment, which release-tag writes:
+#   bootstrap        the Node.js of mise.toml, the locked packages, the mise, node and npm of mise.toml, then package-lock.json
+#   release-tag      requires a completed successful push or dispatch run RUN of ci.yml on main whose commit is on origin/main,
+#                    reads X.Y.Z from the change log of that commit, creates and pushes the annotated tag vX.Y.Z and the tag of
+#                    every Go module at that commit, or passes for a tag there already (K269), and appends TAG and VERSION to
+#                    GITHUB_ENV; a tag pushed with the token of the run starts no run
+#   checkout of the tag, then the bootstrap of the tagged commit again
+#   release-tools    installs the tools that config/release.json needs for the packages of this repository
 #   release-tools-path puts var/tools/bin on the PATH of the steps that follow, through GITHUB_PATH
-#   release-assets  builds the archive of every package, and packages.json of the Composer packages, into var/release/assets
-#   release-publish creates the GitHub Release of the tag as a draft, with its notes and those files
-#   release-undraft makes the release public
+#   release-assets   builds the archive of every package into var/release/assets
+#   release-publish  creates the GitHub Release of the tag as a draft, with its notes and those files
+#   release-undraft  makes the release public
 # A failed step leaves the release a draft and fails the run.
 name: release
 
@@ -56,39 +53,32 @@ jobs:
       GH_TOKEN: ${{ github.token }}
     steps:
       # actions/checkout v7.0.1: with the whole history and every branch, so origin/main is there for the ancestry check; a
-      # workflow_run checks out the head_sha of its CI run, never a later main (K987), and a dispatch checks out main, whose kit
-      # runs release-tag.
+      # workflow_run checks out the head_sha of its CI run, never a later main (K987), and a dispatch checks out main, whose
+      # Makefile runs release-tag.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 0
           ref: ${{ github.event.workflow_run.head_sha }}
       - name: verify the Composer archive tool
         run: command -v zip >/dev/null || { echo 'Info-ZIP is required for Composer release archives; install the zip package on the Ubuntu runner'; exit 1; }
-      # shivammathur/setup-php 2.40.0: the PHP of .php-version for the Composer packages and the extension of the release. A
-      # repository that needs PHP (a Composer package of config/release.json, or php of config/toolchain.json) declares
-      # .php-version, which the kit-check of CI requires (K193); a repository without PHP has none and sets up no PHP. The
-      # release runs no kit-check of its own: release-tag refuses a commit whose CI run, kit-check included, did not pass
-      # (K755).
+      # shivammathur/setup-php 2.40.0: the PHP of .php-version, which the tools of the release read.
       - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962
         if: ${{ hashFiles('.php-version') != '' }}
         with:
           php-version-file: .php-version
           # The proof runs with no debugger or coverage driver, as the checks do.
           coverage: none
-      # The bootstrap of kit (K992): the Node.js of mise.toml, the locked kit package, the npm of var/tools and the packages.
-      - uses: ./.github/actions/kit-bootstrap
+      # The bootstrap: the Node.js of mise.toml, the locked packages, the npm of var/tools and the packages.
+      - uses: ./.github/actions/bootstrap
       - name: tag the commit of the CI run
         run: make release-tag ${{ github.event_name == 'workflow_run' && 'AUTO=1' || '' }}
-      # The release builds the tagged commit with its own kit and packages.
+      # The release builds the tagged commit with its own Makefile, kit and packages.
       - name: check out the tag
         if: ${{ env.TAG != '' }}
         run: git checkout --quiet "$TAG"
-      # The bootstrap of kit for the tagged commit, with its own kit and packages (K992).
-      - uses: ./.github/actions/kit-bootstrap
+      # The bootstrap of the tagged commit, with its own kit and packages.
+      - uses: ./.github/actions/bootstrap
         if: ${{ env.TAG != '' }}
-      - name: prepare the release of the repository
-        if: ${{ env.TAG != '' }}
-        run: make release-prepare
       - name: make release-tools
         if: ${{ env.TAG != '' }}
         run: make release-tools

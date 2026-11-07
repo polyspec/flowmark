@@ -1,5 +1,5 @@
 <!-- doc-id: agents -->
-<!-- source-sha256: df8e2b2d22460d512dc2dc525ba16214e6ecdb8c345f1c8bb6c6f3ec9c955572 -->
+<!-- source-sha256: a3d7e15accf70b0774e5eaf380f1029e3d9ecd69e081b105c63591b343feedcc -->
 # 개발 규칙
 
 [English](AGENTS.md)
@@ -13,7 +13,7 @@ GitHub, Jira), 응용 schema이고, [polyspec/orm](https://github.com/polyspec/o
 
 ## 원칙
 
-모든 polyspec repository의 작업 원칙은 kit이 여기에 byte 그대로 vendor하는 [PRINCIPLES.md](PRINCIPLES.ko.md)이며,
+모든 polyspec repository의 작업 원칙은 kit에서 가져와 flowmark 자신의 파일로 두는 [PRINCIPLES.md](PRINCIPLES.ko.md)이며,
 이 repository의 모든 작업을 구속한다. 이 파일은 flowmark만의 규칙만 적는다: 아래 항목은 원칙을 엔진에 맞게
 구체화한 것이고, 그다음 절은 이 repository의 규칙이다.
 
@@ -34,10 +34,13 @@ GitHub, Jira), 응용 schema이고, [polyspec/orm](https://github.com/polyspec/o
 ## 규칙
 
 - Own: 공유 tool은 설치된 package `@polyspec/kit`이며 release asset URL과 lock integrity로 고정한다.
-  Makefile은 `node_modules/@polyspec/kit/scripts/kit/kit-bootstrap.mk`를 include한다. `make kit-sync`는 선언된 사본을 쓰고
-  `make kit-check`는 비교한다. 공유 파일은 kit에서 바꾼다. flowmark는 make target 또는 `$(KIT)/<tool>.$(KIT_EXT)`로
-  kit tool을 실행하고 생태계 library는 자신의 package manifest에 선언한다.
-  Enforced by: `make kit-check`
+  kit은 recipe를 include시키지 않는다: flowmark의 `Makefile`이 이 repository, 그 CI와 그 문서가 부르는 모든 target을
+  갖고, 각 recipe는 설치된 package의 utility, 곧 그 dist의 `$(KIT)/<tool>.mjs`를 자기 인자로 실행한다. CI workflow는
+  그 target만 실행한다. tool의 설정은 flowmark 자신의 파일이다: `.npmrc`, `mise.toml`의 `[settings]`와 `[env]`,
+  `.golangci.yml`, `.oxlintrc.json`, `knip.json`, `phpcs.xml.dist`, `phpstan.dist.neon`. PRINCIPLES.md,
+  `config/layout.kit.yml`과 그 schema는 kit에서 가져와 여기에 둔다. flowmark는 생태계 library를 자신의 package
+  manifest에 선언한다.
+  Enforced by: `make test-infrastructure`, which runs tests/release-config.test.mts
 - Own: test 탐색, 실행과 대소문자 구분 자원은 Kit이 소유한다. `make test-go`는 추적된 `go.work`의 모든 module을,
   `make test-infrastructure`는 루트 TypeScript test를 실행한다. `CASE_SENSITIVE_ENV`는 Kit이 준비하고 정리하는
   `FLOWMARK_CASE_SENSITIVE_DIR`를 지정한다. CI는 언어별 잠긴 사전 의존성을 독립 설치하고 Linux, Windows, macOS에서
@@ -46,7 +49,7 @@ GitHub, Jira), 응용 schema이고, [polyspec/orm](https://github.com/polyspec/o
   성공해야 release한다.
   Enforced by: `make kit-check`
 - Own: release는 `main`에서 성공한 `.github/workflows/ci.yml` push run의 id로 하는 `.github/workflows/release.yml`의
-  dispatch다. 그 run은 kit의 gate를 포함한 그 모든 job이 성공할 때만 성공한다:
+  dispatch다. 그 run은 gate를 포함한 그 모든 job이 성공할 때만 성공한다:
   `gh workflow run release.yml -f run=<id>`. 그 version X.Y.Z는 그 run의 commit에 있는 CHANGELOG.md의 가장 새로운 section
   `## X.Y.Z`이며, `## Unreleased`에 항목이 있는 동안 release는 거부된다. `make release-tag`가 그 commit에 annotated tag
   `vX.Y.Z`와 `packages/go/vX.Y.Z`를 만든다. 손으로 tag를 만들고 옮기고 push하는 사람은 없으며, push한 tag는 release를

@@ -1,56 +1,80 @@
-# Shared targets come from the locked installed kit package.
-include node_modules/@polyspec/kit/scripts/kit/kit-bootstrap.mk
+# The recipes of flowmark. Each recipe runs a utility of the installed package @polyspec/kit with its own arguments: KIT is
+# the dist folder of that package, the same for a release install and for a link to the kit checkout, whose make kit-build
+# writes it. kit includes no recipe here; the targets below are the ones that this repository, its CI and its documents call.
+KIT := $(CURDIR)/node_modules/@polyspec/kit/dist
+ONLINE ?=
 
-# The suite of the repository: the gates of kit and its own checks and tests.
-CHECK_TARGETS := kit-check layout-check docs-check rules-check owner-validate rebuild-check language-check test-markers-check duplication-check parity-declarations-check parity-check link-check bypass-check suppression-check divergence-check lint-ts lint-php lint-go refs-check internal-paths-check test-go test-infrastructure
+# The suite of the repository: the checks and the tests that config/owner-checks.json selects from.
+CHECK_TARGETS := kit-check layout-check docs-check rules-check owner-validate rebuild-check language-check test-markers-check duplication-check parity-declarations-check link-check suppression-check divergence-check lint-ts lint-php lint-go refs-check internal-paths-check test-go test-infrastructure
 
-# The Composer of mise.toml, by its shim, which installs the PHP packages of the board example.
+# ---- Tools ------------------------------------------------------------------------------------------------------------
+# The tools of mise.toml run from the shims of the mise that make install-tools TOOLS=npm installs into var/tools, the
+# checkout's own (a linked worktree installs its own). The shims read the environment of that mise, so every recipe runs with
+# it, and with var/tools/bin and the shims first on PATH. The settings of mise and uv are those of mise.toml.
+KIT_TOOLS := $(CURDIR)/var/tools
+export MISE_DATA_DIR := $(KIT_TOOLS)/mise
+export MISE_CACHE_DIR := $(KIT_TOOLS)/mise/cache
+export MISE_STATE_DIR := $(KIT_TOOLS)/mise/state
+export MISE_CONFIG_DIR := $(KIT_TOOLS)/mise/config
+export MISE_GLOBAL_CONFIG_FILE := $(CURDIR)/mise.toml
+export MISE_GLOBAL_CONFIG_ROOT := $(CURDIR)
+MISE_ENVIRONMENT := MISE_DATA_DIR MISE_CACHE_DIR MISE_STATE_DIR MISE_CONFIG_DIR MISE_GLOBAL_CONFIG_FILE MISE_GLOBAL_CONFIG_ROOT
+# On Windows a shim of mise starts mise.exe by its PATH name, so the folder of the mise binary is on PATH too, and the recipes,
+# which Git Bash runs, start node.exe and the npm-cli.js of the npm of mise.toml in place of their .cmd wrappers.
+ifeq ($(OS),Windows_NT)
+export PATH := $(KIT_TOOLS)/bin:$(KIT_TOOLS)/mise-release/mise/bin:$(KIT_TOOLS)/mise/shims:$(PATH)
+MISE_BINARY := $(KIT_TOOLS)/mise-release/mise/bin/mise.exe
+ifneq ($(wildcard $(MISE_BINARY)),)
+MISE_ENVIRONMENT_ARGS := $(foreach variable,$(MISE_ENVIRONMENT),$(variable)="$($(variable))")
+NODE_DIRECTORY := $(shell $(MISE_ENVIRONMENT_ARGS) "$(MISE_BINARY)" where node)
+NPM_DIRECTORY := $(shell $(MISE_ENVIRONMENT_ARGS) "$(MISE_BINARY)" where npm:npm)
+endif
+NODE := $(if $(NODE_DIRECTORY),$(subst \,/,$(NODE_DIRECTORY))/node.exe,$(KIT_TOOLS)/bin/node)
+NPM := $(if $(NPM_DIRECTORY),$(NODE) $(subst \,/,$(NPM_DIRECTORY))/node_modules/npm/bin/npm-cli.js,$(KIT_TOOLS)/bin/npm)
+else
+export PATH := $(KIT_TOOLS)/bin:$(KIT_TOOLS)/mise/shims:$(PATH)
+NODE := $(KIT_TOOLS)/bin/node
+NPM := $(KIT_TOOLS)/bin/npm
+endif
+ALINT := $(KIT_TOOLS)/mise/shims/alint
 COMPOSER := $(KIT_TOOLS)/mise/shims/composer
-
-# The Go of the checkout, by its absolute path (kit-check: a recipe starts a tool by its absolute path, as NODE and ALINT of kit.mk do).
 GO := $(firstword $(wildcard $(KIT_TOOLS)/mise/shims/go.exe $(KIT_TOOLS)/mise/shims/go.cmd $(KIT_TOOLS)/mise/shims/go))
+PHP := $(firstword $(wildcard $(KIT_TOOLS)/bin/php.cmd $(KIT_TOOLS)/bin/php))
 
-.PHONY: internal-paths-check
-internal-paths-check: ## Check that no tracked file names a dependency's source or build output by its path (K1002); offline
-	$(NODE) scripts/check-internal-paths.mts
+# ---- Install ----------------------------------------------------------------------------------------------------------
+# The order of a checkout: the mise, node and npm of mise.toml (the bootstrap of kit, which the Node.js of the machine runs,
+# since var/tools has no node yet), the packages of package-lock.json, the other tools of mise.toml, the locks of the board
+# example, then the links of .links. Each step is a make of its own, so it reads the tools that the step before installed.
+.PHONY: install install-tools install-packages install-link toolchain-lock
+install: ## Install the tools, the packages, the board dependencies and the links of the checkout, in that order; ONLINE
+	$(MAKE) --no-print-directory install-tools TOOLS=npm
+	$(MAKE) --no-print-directory install-packages
+	$(MAKE) --no-print-directory install-tools
+	$(MAKE) --no-print-directory deps-php deps-node
+	$(MAKE) --no-print-directory install-link
 
-.PHONY: refs-check
-refs-check: ## Check that every task ID a document names resolves to a checklist item; offline
-	$(NODE) scripts/check-refs.mts
+install-tools: ## Install the locked tools of mise.toml, or those that TOOLS names; TOOLS=npm installs mise, node and npm; ONLINE
+ifeq ($(TOOLS),npm)
+	$(ONLINE) node $(KIT)/bootstrap/bootstrap.mjs
+else
+	$(ONLINE) $(NODE) $(KIT)/install-tools.mjs $(TOOLS)
+endif
 
-# Kit owns native test discovery, workspace coverage and case-sensitive resources.
-test-go: CASE_SENSITIVE_ENV := FLOWMARK_CASE_SENSITIVE_DIR
+install-packages: ## Install the packages of package-lock.json, @polyspec/kit included, with the npm of var/tools; ONLINE
+	$(ONLINE) $(NPM) ci
 
-# The suites of flowmark, each runtime independently: the Node suite of the root infrastructure, and the Go workspace.
-.PHONY: flowmark-node-check flowmark-go-check flowmark-test
-flowmark-node-check: test-infrastructure ## Run the Node suite of the root infrastructure; offline
-flowmark-go-check: build-go test-go ## Build and test the complete Go workspace; offline
-flowmark-test: flowmark-node-check flowmark-go-check ## Run the Node and the Go suites (AGENTS: flowmark-test); offline
+install-link: ## Link the installed packages to the checkouts that .links names; PROJECT and RUNTIME select as for make link
+	$(NODE) $(KIT)/link.mjs link$(if $(PROJECT), --project $(PROJECT))$(if $(RUNTIME), --runtime $(RUNTIME))
 
-# The complete local install adds the locked board dependencies after the Kit bootstrap.
-.PHONY: flowmark-install
-flowmark-install: install-kit deps-php deps-node ## Install the Composer and npm packages of the board example from their locks; ONLINE
+# mise locks a pypi: tool with the first uv on PATH, so it locks and installs uv and python first, and locks the rest with
+# that Python as UV_PYTHON; mise records the archive of each platform that has one.
+TOOLCHAIN_LOCK_PLATFORMS := linux-x64,linux-arm64,macos-arm64,macos-x64,windows-x64,windows-arm64
+toolchain-lock: ## Write mise.lock with mise lock for each platform of linux, macOS and Windows on x64 and arm64; ONLINE
+	$(ONLINE) $(KIT_TOOLS)/bin/mise lock uv python --global --platform $(TOOLCHAIN_LOCK_PLATFORMS)
+	$(ONLINE) $(KIT_TOOLS)/bin/mise install --locked uv python
+	UV_PYTHON="$$($(KIT_TOOLS)/bin/mise which python3)" $(ONLINE) $(KIT_TOOLS)/bin/mise lock --global --platform $(TOOLCHAIN_LOCK_PLATFORMS)
 
-install: flowmark-install
-
-.PHONY: slug-vectors
-slug-vectors: ## Record the heading ids GitHub, VS Code and GitLab render into store/testdata/slug; needs the network, gh, npm and cargo
-	$(NODE) scripts/record-slugs.mts
-
-# The check of the commit-msg hook: the message MESSAGE against the commit rules of kit, and the item rules of the index.
-.PHONY: commit-msg-check
-commit-msg-check: ## Check the commit message MESSAGE and the index against the commit rules of kit; offline
-	$(NODE) $(KIT)/check-commits.$(KIT_EXT) --message "$(MESSAGE)"
-
-# The executable that sidecar.json names. build, the task of kit, builds it as a prerequisite.
-.PHONY: flowmark-build
-flowmark-build: ## Build the executable that sidecar.json names
-	cd packages/go && $(GO) build -o $(CURDIR)/build/flowmark ./cmd/flowmark
-
-build: flowmark-build
-
-# Locked online dependency preparation: ci-setup calls one deps-<runtime> target per runtime of config/ci.json (K859), so
-# the installs are owned here, each as the locked install of its package manager.
+# The locked online dependencies of each language, each the locked install of its package manager.
 .PHONY: deps-go deps-node deps-php
 deps-go: ## Download the locked Go workspace dependencies; ONLINE
 	cd packages/go && $(ONLINE) $(GO) mod download
@@ -61,10 +85,55 @@ deps-node: ## Install the board example npm lock; ONLINE
 deps-php: ## Install the board example Composer lock; ONLINE
 	$(ONLINE) $(COMPOSER) install --no-interaction --working-dir=examples/board/web
 
+# ---- Links of 0.0.x development (.links) ------------------------------------------------------------------------------
+.PHONY: link link-check unlink worktree-setup
+link: ## Link the installed packages to the checkouts that .links names (PROJECT names the consumer); offline
+	$(NODE) $(KIT)/link.mjs link$(if $(PROJECT), --project $(PROJECT))$(if $(RUNTIME), --runtime $(RUNTIME))
+
+link-check: ## Fail while the links differ from .links; offline
+	$(NODE) $(KIT)/link-check.mjs$(if $(PROJECT), --project $(PROJECT))
+
+unlink: ## Remove the links of PROJECT and the go.work files that link wrote; make install restores the locked installs; offline
+	$(NODE) $(KIT)/link.mjs unlink$(if $(PROJECT), --project $(PROJECT))$(if $(RUNTIME), --runtime $(RUNTIME))
+
+worktree-setup: ## Create or reuse the worktree NAME of the row ID (TYPE, fix by default) from main, then make install and make link-check in it; ONLINE
+	$(ONLINE) $(NODE) $(KIT)/worktree-setup.mjs $(NAME) $(ID) $(or $(TYPE),fix)
+
+# ---- Build and test ---------------------------------------------------------------------------------------------------
+.PHONY: build build-go flowmark-build test-go test-infrastructure flowmark-node-check flowmark-go-check flowmark-test flowmark-benchmarks
+build: build-go flowmark-build ## Build the Go workspace and the executable that sidecar.json names; offline
+
+build-go: ## Build every module of the tracked go.work; offline
+	$(NODE) $(KIT)/runtime-targets.mjs build go
+
+flowmark-build: ## Build the executable that sidecar.json names into build/flowmark; offline
+	cd packages/go && $(GO) build -o $(CURDIR)/build/flowmark ./cmd/flowmark
+
+# kit's runner discovers the tests, and prepares and cleans up the case-sensitive folder that FLOWMARK_CASE_SENSITIVE_DIR names.
+test-go: ## Run the unit tests of every module of go.work, with the name filter CASES=<pattern>; offline
+	CASE_SENSITIVE_ENV=FLOWMARK_CASE_SENSITIVE_DIR $(NODE) $(KIT)/runtime-targets.mjs go
+
+test-infrastructure: ## Run every tracked root Node test through the runner of kit; offline
+	CASE_SENSITIVE_ENV=FLOWMARK_CASE_SENSITIVE_DIR $(NODE) $(KIT)/runtime-targets.mjs infrastructure
+
+flowmark-node-check: test-infrastructure ## Run the Node suite of the root infrastructure; offline
+flowmark-go-check: build-go test-go ## Build and test the complete Go workspace; offline
+flowmark-test: flowmark-node-check flowmark-go-check ## Run the Node and the Go suites; offline
+
+# A parent benchmark runs through all of its sub-benchmarks: BenchmarkShardOpen took 31.9 s on an Apple M3 Pro, past the
+# runner's 30 s default, so each test is given 120 s, about four times the slowest measured one.
+flowmark-benchmarks: ## Run the writepath tests and benchmarks and the statement benchmark through the runner of kit; offline
+	$(NODE) $(KIT)/run-tests.mjs go --timeout 120 --cwd packages/go -- -bench . -benchmem ./writepath
+	$(NODE) $(KIT)/run-tests.mjs go --timeout 600 --cwd packages/go -- -run '^$$' -bench BenchmarkStatement -benchtime 20x ./statement
+
+.PHONY: slug-vectors
+slug-vectors: ## Record the heading ids GitHub, VS Code and GitLab render into store/testdata/slug; needs the network, gh, npm and cargo
+	$(NODE) scripts/record-slugs.mts
+
+# ---- Board example models ---------------------------------------------------------------------------------------------
 # The models of the board example are generated, never tracked (P34): the orm-gen of the installed @polyspec/orm and
 # polyspec/orm writes them from the corpus catalog, and lint-ts and lint-php, which read them, write them first.
 BOARD := examples/board/web
-PHP := $(firstword $(wildcard $(KIT_TOOLS)/bin/php.cmd $(KIT_TOOLS)/bin/php))
 .PHONY: board-models board-models-ts board-models-php
 board-models: board-models-ts board-models-php ## Write the TypeScript and PHP models of the board example from the corpus catalog; offline
 
@@ -74,12 +143,156 @@ board-models-ts: ## Write node/model/models.ts of the board example with the orm
 board-models-php: ## Write src/Model of the board example with the orm-gen of its Composer lock; offline
 	cd $(BOARD) && $(PHP) vendor/bin/orm-gen gen --set ../block/dbspec/dbspec-set.json --out src/Model --namespace 'Flowmark\Board\Model'
 
-lint-ts: board-models-ts
-lint-php: board-models-php
+# ---- Lint: each tool reads the configuration of this repository by its own discovery: .oxlintrc.json and knip.json,
+# .golangci.yml, phpcs.xml.dist and phpstan.dist.neon -------------------------------------------------------------------
+.PHONY: lint-ts lint-php lint-go
+lint-ts: board-models-ts ## Lint the TypeScript: oxlint and knip from the root; offline
+	$(NODE) $(KIT)/lint-ts.mjs
 
-# A parent benchmark runs through all of its sub-benchmarks: BenchmarkShardOpen took 31.9 s on an Apple M3 Pro, past the
-# runner's 30 s default, so each test is given 120 s, about four times the slowest measured one.
-.PHONY: flowmark-benchmarks
-flowmark-benchmarks: ## Run the writepath tests and benchmarks and the statement benchmark through the Kit runner; offline
-	$(NODE) $(KIT)/run-tests.$(KIT_EXT) go --timeout 120 --cwd packages/go -- -bench . -benchmem ./writepath
-	$(NODE) $(KIT)/run-tests.$(KIT_EXT) go --timeout 600 --cwd packages/go -- -run '^$$' -bench BenchmarkStatement -benchtime 20x ./statement
+lint-php: board-models-php ## Lint the PHP of the board example: phpcs and PHPStan; offline
+	$(NODE) $(KIT)/lint-php.mjs
+
+lint-go: ## Lint each Go module: golangci-lint and deadcode -test; offline once the modules are downloaded
+	$(NODE) $(KIT)/lint-go.mjs
+
+# ---- Checks -----------------------------------------------------------------------------------------------------------
+.PHONY: kit-check layout-check docs-check rules-check owner-check owner-validate rebuild-check language-check test-markers-check duplication-check parity-declarations-check suppression-check divergence-check refs-check internal-paths-check commit-msg-check
+kit-check: ## Check the config files of kit's utilities (config/*.json) against their schemas; offline
+	$(NODE) $(KIT)/kit-check.mjs
+
+layout-check: ## Check the folder layout against config/layout.yml with alint, that Git ignores each install folder and that no tracked file is generated; offline
+	$(ALINT) check --config config/layout.yml --color never --compact .
+	$(NODE) $(KIT)/generated-files.mjs installs
+	$(NODE) $(KIT)/generated-files.mjs tracked
+
+docs-check: ## Check the documents of config/documents.json and the checklists of config/checklist.json; offline
+	$(NODE) $(KIT)/check-documents.mjs
+
+rules-check: ## Check that every rule of PRINCIPLES.md and AGENTS.md names the check that enforces it; offline
+	$(NODE) $(KIT)/check-rules.mjs
+
+owner-check: ## Run the checks that own the changed paths (config/owner-checks.json); PATHS="a b" or BASE=<revision> selects the paths
+	$(NODE) $(KIT)/owner-check.mjs $(if $(PATHS),--paths "$(PATHS)") $(if $(BASE),--base $(BASE))
+
+owner-validate: ## Check that config/owner-checks.json owns every tracked path and names only existing targets; offline
+	$(NODE) $(KIT)/owner-check.mjs --validate
+
+rebuild-check: ## Check that every tool that config/rebuild.json selects has its class (S1); offline
+	$(NODE) $(KIT)/rebuild-check.mjs
+
+language-check: ## Fail on Hangul in a comment, an identifier, a message or a test name of the code; offline
+	$(NODE) $(KIT)/language-check.mjs
+
+test-markers-check: ## Fail on a test that a marker skips or narrows; offline
+	$(NODE) $(KIT)/test-markers.mjs
+
+duplication-check: ## Fail while a piece of 6 lines or more of code exists twice outside the folders of config/duplication.json; offline
+	$(NODE) $(KIT)/duplication-check.mjs
+
+parity-declarations-check: ## Check the parity declarations that need no run; flowmark has one implementation and no config/parity.json; offline
+	$(NODE) $(KIT)/parity.mjs --declarations
+
+suppression-check: ## Fail on a tracked suppression of a lint finding that states no reason; offline
+	$(NODE) $(KIT)/suppression-check.mjs
+
+divergence-check: ## Fail on an implementation that branches on the runtime or narrows its run without a reason; offline
+	$(NODE) $(KIT)/divergence-check.mjs
+
+refs-check: ## Check that every task ID a document names resolves to a checklist item; offline
+	$(NODE) scripts/check-refs.mts
+
+internal-paths-check: ## Check that no tracked file names a dependency's source or build output by its path (K1002); offline
+	$(NODE) scripts/check-internal-paths.mts
+
+commit-msg-check: ## Check the commit message MESSAGE and the index against the commit rules of kit; offline
+	$(NODE) $(KIT)/check-commits.mjs --message "$(MESSAGE)"
+
+# ---- CI: the gates job of .github/workflows/ci.yml installs every tool and locked dependency that the gates need, then runs
+# them past failures through ci-targets, which writes the report CI_REPORT ------------------------------------------------
+CI_REPORT ?= var/report/ci-targets
+GATES := kit-check layout-check docs-check rules-check owner-validate rebuild-check language-check test-markers-check duplication-check parity-declarations-check suppression-check divergence-check lint-go lint-php lint-ts
+.PHONY: ci-targets gates gates-setup
+ci-targets: ## Run TARGETS past failures and write CI_REPORT (logs, record.json, summary.md)
+	$(NODE) $(KIT)/ci-targets.mjs $(CI_REPORT) $(TARGETS)
+
+gates: ## Run the gates past failures through ci-targets and write CI_REPORT
+	$(NODE) $(KIT)/ci-targets.mjs $(CI_REPORT) $(GATES)
+
+gates-setup: ## Install the tools of mise.toml, the locked Go, Composer and npm dependencies, and build the Go workspace; ONLINE
+	$(MAKE) --no-print-directory install-tools
+	$(MAKE) --no-print-directory deps-go deps-php deps-node build-go
+
+# ---- Plans and commits ------------------------------------------------------------------------------------------------
+# The plan utility reads its values from the environment, where make puts its command-line variables. The texts of a row reach
+# it unexpanded: each text that is set is passed as its raw value, in single quotes, and an unset text stays unset.
+raw_text = $(foreach v,$(1),$(if $(filter undefined,$(origin $(v))),,$(v)='$(subst ','\'',$(value $(v)))'))
+.PHONY: plan-new plan-split item-new item-edit item-state item-test commit documents-stamp text-absent twin-merge land
+plan-new: ## Write the plan NAME=<slug> with TITLE and TITLE_KO into docs/plans/<slug>/; offline
+	$(NODE) $(KIT)/plan.mjs plan-new
+
+plan-split: ## Move the items IDS from the checklist of the plan FROM to the plan TO, in both languages; offline
+	$(NODE) $(KIT)/plan.mjs plan-split
+
+item-new: ## Add the item ID to the checklist of PLAN and its Korean twin with TASK, TASK_KO, DELIVERABLES and VERIFICATION; offline
+	$(call raw_text,TASK TASK_KO DELIVERABLES VERIFICATION) $(NODE) $(KIT)/plan.mjs item-new
+
+item-edit: ## Replace the cells of the item ID with TASK, TASK_KO, DELIVERABLES, VERIFICATION, CAUSE, RETRY, CAUSE_KO or RETRY_KO; offline
+	$(call raw_text,TASK TASK_KO DELIVERABLES VERIFICATION CAUSE RETRY CAUSE_KO RETRY_KO) $(NODE) $(KIT)/plan.mjs item-edit
+
+item-state: ## Move the item ID to STATE in both languages; offline
+	$(NODE) $(KIT)/plan.mjs item-state
+
+item-test: ## Run the commands of the Verification cell of the item ID in order; offline
+	$(NODE) $(KIT)/plan.mjs item-test
+
+commit: ## Commit the index for the item ID as TYPE(SCOPE): SUBJECT (#ID) with the body of BODY_FILE; offline
+	$(NODE) $(KIT)/plan.mjs commit
+
+documents-stamp: ## Write the source-sha256 of each English document into the Korean twins that PATHS names; offline
+	$(NODE) $(KIT)/documents-stamp.mjs $(PATHS)
+
+# FILE and TEXT reach the tool through its environment, unexpanded, since a stale text may hold a backquote, a $ or a quote.
+unexport TEXT
+text-absent: export KIT_TEXT_ABSENT_FILE = $(value FILE)
+text-absent: export KIT_TEXT_ABSENT_TEXT = $(value TEXT)
+text-absent: ## Fail while the tracked file FILE holds the stale text TEXT, naming each line; offline
+	$(NODE) $(KIT)/text-absent.mjs
+
+# The merge drivers kit-twin, kit-changelog and kit-checklist of the Git configuration run it with MERGE="%O %A %B %P".
+twin-merge: ## Merge a Korean twin, a changelog or a checklist for Git with MERGE="<base> <ours> <theirs> <path>"; offline
+	@$(NODE) $(KIT)/twin-merge.mjs $(MERGE)
+
+land: ## Land the branch BRANCH of its worktree on main by a fast-forward merge, then remove the worktree and the branch; offline
+	$(NODE) $(KIT)/land.mjs $(BRANCH)
+
+# ---- Release (.github/workflows/release.yml, config/release.json) -----------------------------------------------------
+# The release uses the released versions, so its Go runs without the go.work of the links; the archive build builds the tree of
+# the repository, whose tracked go.work is its own workspace.
+.PHONY: release-tag release-tools release-tools-path release-assets release-publish release-undraft
+release-tag release-tools release-publish release-undraft: export GOWORK := off
+release-assets: export GOWORK = $(CURDIR)/go.work
+
+release-tag: ## Tag vX.Y.Z of the change log and packages/go/vX.Y.Z at the commit of the successful CI run RUN of main; AUTO releases only a version commit
+	@test -n "$$RUN" || { echo "release-tag: RUN is required, for example make release-tag RUN=123"; exit 1; }
+	$(NODE) $(KIT)/release-run.mjs tag "$$RUN"$(if $(AUTO), --auto)
+
+release-tools: ## Install the tools that config/release.json needs for the release; ONLINE
+	$(ONLINE) $(NODE) $(KIT)/release-tools.mjs
+
+release-tools-path: ## Append var/tools/bin, the shims of mise and the environment of mise to GITHUB_PATH and GITHUB_ENV for the steps that follow
+	@test -n "$$GITHUB_PATH" && test -n "$$GITHUB_ENV" || { echo 'release-tools-path: run it in the release workflow, which sets GITHUB_PATH and GITHUB_ENV'; exit 1; }
+	@echo "$(KIT_TOOLS)/mise/shims" >> "$$GITHUB_PATH"
+	@echo "$(KIT_TOOLS)/bin" >> "$$GITHUB_PATH"
+	@for name in $(MISE_ENVIRONMENT); do echo "$$name=$$(printenv $$name)"; done >> "$$GITHUB_ENV"
+
+release-assets: ## Build the archives of TAG into var/release/assets; ONLINE
+	@test -n "$$TAG" || { echo "release-assets: TAG is required, for example make release-assets TAG=v0.0.1"; exit 1; }
+	$(ONLINE) $(NODE) $(KIT)/release.mjs assets "$$TAG"
+
+release-publish: ## Create the GitHub Release of TAG as a draft with its notes and the files of release-assets
+	@test -n "$$TAG" || { echo "release-publish: TAG is required, for example make release-publish TAG=v0.0.1"; exit 1; }
+	$(NODE) $(KIT)/release.mjs publish "$$TAG"
+
+release-undraft: ## Make the draft release of TAG public
+	@test -n "$$TAG" || { echo "release-undraft: TAG is required, for example make release-undraft TAG=v0.0.1"; exit 1; }
+	$(NODE) $(KIT)/release.mjs undraft "$$TAG"

@@ -1,7 +1,6 @@
-# The EditorConfig of every polyspec repository, copied by kit; change it in kit, never in a copy. Each language follows the
-# indentation of its formatter: gofmt, cargo fmt, ruff format and the PSR-12 of phpcs. A folder whose files keep their bytes,
-# such as the inputs and expected outputs of tests, holds a .editorconfig of its own that unsets these properties, as
-# EditorConfig applies the nearest file last.
+# The EditorConfig of flowmark, first taken from kit. Each language follows the indentation of its formatter: gofmt, cargo
+# fmt, ruff format and the PSR-12 of phpcs. A folder whose files keep their bytes, such as the inputs and expected outputs of
+# tests, holds a .editorconfig of its own that unsets these properties, as EditorConfig applies the nearest file last.
 root = true
 
 [*]

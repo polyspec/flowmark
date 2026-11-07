@@ -1,4 +1,4 @@
-# The folder layout of flowmark (S5, S7, S9), checked by make layout-check: the common rules of config/layout.kit.yml (a copy of
+# The folder layout of flowmark (S5, S7, S9), checked by make layout-check: the common rules of config/layout.kit.yml (taken from
 # kit) and the map of this repository. A rule named here replaces the field it names; each exception carries its reason.
 version: 1
 extends:
@@ -14,10 +14,11 @@ rules:
     vars: { repo: flowmark }
 
   # S5: sidecar.json is the manifest that the soksak host reads from the root of the checkout (protocol v1), named by
-  # sidecar.json and package.json. The other root files are those of the kit template.
+  # sidecar.json and package.json; .npmrc holds the npm setting allow-remote of the root project, which npm reads only there.
+  # The other root files are those of the kit template.
   - extends_template: root-files
     id: layout-root-files
-    vars: { root_files: "{sidecar.json}" }
+    vars: { root_files: "{sidecar.json,.npmrc}" }
 
   # K244: the Go suite of the conformance vectors crosses packages, so it lies in tests/conformance/go, a module of its own; the
   # vectors and catalogs that every runtime reads lie beside it in tests/conformance/. tests/kit holds the tests of kit.

@@ -1,5 +1,5 @@
 <!-- doc-id: readme -->
-<!-- source-sha256: 81ed053dba6729d577d1fac17d1fbb9246bfbc9565856472551d87865ed541fd -->
+<!-- source-sha256: ea078c8e2e382709b34c930937ca1ecbcefb75faedd41a1c43f374161e809aa2 -->
 # flowmark
 
 [English](README.md)
@@ -22,4 +22,4 @@ canonical rendering, corpus-global 제약(type, key, foreign key, state machine)
 [docs/plans/flowmark/checklist.ko.md](docs/plans/flowmark/checklist.ko.md)와
 [docs/plans/markdown-database/checklist.ko.md](docs/plans/markdown-database/checklist.ko.md)에 있다.
 공유 tooling은 [@polyspec/kit](https://github.com/polyspec/kit) npm package이며 devDependency다
-(`make install-packages`가 설치하고 `make kit-check`가 그 사본을 검증한다).
+(`make install-packages`가 설치하고, `Makefile`의 recipe가 그 utility를 실행한다).
