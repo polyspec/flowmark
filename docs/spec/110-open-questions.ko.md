@@ -1,5 +1,5 @@
 <!-- doc-id: spec-open-questions -->
-<!-- source-sha256: 1e836ac320bc84aed86dbbc671e7e4cde7d5a36649fcc459583f2d820e37e8be -->
+<!-- source-sha256: 4643910e7842c06de1ad555d43ba6e1d6ac41d6e8c019e1522a17989a5aa1186 -->
 # Open questions
 
 [English](110-open-questions.md)
@@ -12,7 +12,7 @@
 | 1 | 이 repository의 license | Apache-2.0 (schema 언어 파생물을 위한 특허 허여) | 첫 공개 push 전 |
 | 2 | corpus 규모(문서, 행)와 40-ops의 p95 지연 예산 | 결정됨: 문서 하나에 1 MiB, folder와 corpus에 문서 20,000개, command당 수백 millisecond([규모 한계](40-ops.ko.md#규모-한계)) | `T12.5-3`의 benchmark |
 | 3 | T12가 요구하는 orm 항목의 순서 | protocol의 IR executor와 `WRITE_CONFLICT`가 먼저, 그다음 markdown setting — setting 항목은 protocol 항목이 정의하는 executor 할당 column을 필요로 한다 | orm checklist의 등재 |
-| 4 | 사용자가 다음 kit release에 tag를 붙인 뒤 kit 재vendor | `make kit-sync KIT_TAG=<tag>`가 local path lock 기록을 대체한다 | kit release tag |
+| 4 | `@polyspec/kit` pin을 다음 kit release로 옮김 | 그 release asset의 `npm install`이 package.json의 URL과 package-lock.json의 기록을 고쳐 쓴다. kit은 flowmark의 파일을 쓰지 않는다 | 게시된 kit release asset |
 | 5 | comment를 갖지 않게 된 document에서, adapter가 소유한 document의 sync provenance가 어디에 놓이는가 | 아직 기록된 권고가 없다. adapter 작업이 정한다 | database export 너머의 첫 adapter |
 | 6 | database export가 기다리는 orm의 surface([sync](70-sync.ko.md#export)) | 다음을 위한 orm 항목: 저장된 identity 값을 지키는 insert와 PostgreSQL identity를 그 값 너머로 다시 시작하는 statement; orm의 Go client가 비공개로 두는, plan의 parameter를 database driver에 bind하는 공개 기능; 그리고 p자리 소수를 가진 SQLite `datetime(p)` bind — 그 executor는 여섯 자리를 bind하지만 renderer의 CHECK는 p자리를 요구한다 | orm checklist의 등재 |
 
