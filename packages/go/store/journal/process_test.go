@@ -265,31 +265,11 @@ func TestCrashedProcessRecovers(t *testing.T) {
 
 // heldByChild starts a child that holds the lock at root until its stdin closes, then releases it and exits; the
 // returned func closes that stdin and waits for the child, so the lock is released and its holder ended when it returns.
-func heldByChild(t *testing.T, root string) (Holder, func()) {
+func heldByChild(t *testing.T, root string) func() {
 	t.Helper()
-	cmd := childCommand(t, "hold", root, "child")
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := cmd.Start(); err != nil {
-		t.Fatal(err)
-	}
-	line, err := bufio.NewReader(stdout).ReadString('\n')
-	if err != nil {
-		t.Fatal(err)
-	}
-	record, ok := strings.CutPrefix(line, "acquired ")
-	if !ok {
+	p := startChild(t, "hold", root, "child")
+	if line := p.line(t); !strings.HasPrefix(line, "acquired ") {
 		t.Fatalf("child = %q, want the lock acquired", line)
-	}
-	h, err := parseRecord([]byte(record))
-	if err != nil {
-		t.Fatal(err)
 	}
 	done := false
 	end := func() {
@@ -297,15 +277,15 @@ func heldByChild(t *testing.T, root string) (Holder, func()) {
 			return
 		}
 		done = true
-		if err := stdin.Close(); err != nil {
+		if err := p.stdin.Close(); err != nil {
 			t.Error(err)
 		}
-		if err := cmd.Wait(); err != nil {
+		if err := p.cmd.Wait(); err != nil {
 			t.Error(err)
 		}
 	}
 	t.Cleanup(end)
-	return h, end
+	return end
 }
 
 // endAtJudge makes the holder release the lock and end at the judgement number n of c: the lock that held its record
@@ -327,7 +307,7 @@ func endAtJudge(c *Corpus, n int, end func()) {
 // the attempt acquires it, never refusing it as held by an ended holder.
 func TestHolderReleasedBeforeJudgement(t *testing.T) {
 	root := t.TempDir()
-	_, end := heldByChild(t, root)
+	end := heldByChild(t, root)
 	c, _ := newCorpus(t, root)
 	endAtJudge(c, 1, end)
 	l, err := c.Acquire(context.Background(), "parent", 0)
@@ -343,7 +323,7 @@ func TestHolderReleasedBeforeJudgement(t *testing.T) {
 // the wait acquires it, never refusing it as held by an ended holder.
 func TestHolderReleasedBeforeWaitJudgement(t *testing.T) {
 	root := t.TempDir()
-	_, end := heldByChild(t, root)
+	end := heldByChild(t, root)
 	c, _ := newCorpus(t, root)
 	endAtJudge(c, 2, end)
 	l, err := c.Acquire(context.Background(), "parent", patience)
