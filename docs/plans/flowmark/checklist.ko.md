@@ -1,5 +1,5 @@
 <!-- doc-id: execution-checklist -->
-<!-- source-sha256: f6a1692ffbdd52425c0e52f2a095b0544972042c4db3206562c84776d398f8ed -->
+<!-- source-sha256: 56f1f898fc987b90596b75700ecd734545b126ac2540ecacd839a751584690d9 -->
 # 실행 체크리스트
 
 | ID | Task | Deliverables | Verification | State |
@@ -163,3 +163,4 @@
 | T79 | flowmark은 release된 Go module이 자기에게 없는 package를 import하는 test를 담지 않는 orm v0.0.24를 받는다: packages/go는 orm/packages/go v0.0.24와 그것을 통해 ordered-json/packages/go v0.0.22를 require하고, tests/conformance/go는 간접 orm과 ordered-json을 같은 release로 옮기며, go get과 go mod tidy가 go.mod와 go.sum을 썼다 | packages/go/go.mod, packages/go/go.sum, tests/conformance/go/go.mod, tests/conformance/go/go.sum | `make build-go`, `make test-go` and `make lint-go` exit 0 | [o] |
 | T80 | flowmark은 T79를 담아 0.0.10을 release하여, 그 release가 orm v0.0.24를 받게 한다. Unreleased 항목은 0.0.10 절이 되고, package.json과 그 lock은 0.0.10을 적으며, release workflow는 main의 CI가 green이면 v0.0.10과 packages/go/v0.0.10을 tag한다 | CHANGELOG.md, CHANGELOG.ko.md, package.json, package-lock.json | `make docs-check` exit 0 | [o] |
 | T81 | 설치가 실패하면 uv-install이 지운 provider 링크를 되돌리는 kit 0.0.102(K1134)를 채택한다: 0.0.102 release asset을 고정하며, recipe 줄은 바뀌지 않는다 | `package.json`, `package-lock.json` | `make docs-check` and `make lint-ts` exit 0 | [o] |
+| T82 | flowmark은 T81을 담아 0.0.11을 release하여, 그 release가 kit 0.0.102를 받게 한다. changelog의 0.0.11 절은 T81을 담고, package.json과 그 lock은 0.0.11을 적으며, release workflow는 main의 CI가 green이면 v0.0.11과 packages/go/v0.0.11을 tag한다 | CHANGELOG.md, CHANGELOG.ko.md, package.json, package-lock.json | `make docs-check` exit 0 | [o] |

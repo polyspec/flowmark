@@ -3,6 +3,10 @@
 
 ## Unreleased
 
+## 0.0.11
+
+- T81: flowmark takes kit 0.0.102, whose uv-install puts back the provider links it removed when the install fails.
+
 ## 0.0.10
 
 - T79: flowmark takes orm v0.0.24 and, through it, ordered-json v0.0.22 in its Go module.

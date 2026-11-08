@@ -1,8 +1,12 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: e56df4943f3c6457ee2c9d9b91d26568d9f001096be3cf7bca3a1abe7b339a59 -->
+<!-- source-sha256: dd8731a8bcaee61f7399816dc58d2693354179c903d594f947fbe9650cadbb1c -->
 # Changelog
 
 ## Unreleased
+
+## 0.0.11
+
+- T81: flowmark은 설치가 실패하면 uv-install이 지운 provider 링크를 되돌리는 kit 0.0.102를 받는다.
 
 ## 0.0.10
 
