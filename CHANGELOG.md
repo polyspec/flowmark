@@ -3,6 +3,8 @@
 
 ## Unreleased
 
+- T79: flowmark takes orm v0.0.24 and, through it, ordered-json v0.0.22 in its Go module.
+
 ## 0.0.9
 
 - T77: flowmark holds the engine and only its own dependencies: the examples and the board web application moved to the repository flowmark-examples, and the board, PHP and Composer machinery that only they needed is removed.

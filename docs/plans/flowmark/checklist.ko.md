@@ -1,5 +1,5 @@
 <!-- doc-id: execution-checklist -->
-<!-- source-sha256: c35edb4e006d1cbb1cbceba72b07b1e72ae919e0747e85e5e63a876df3a4b6ea -->
+<!-- source-sha256: d2c856e69b72fb01f00342bf3b7c0b4b8f1e2896a1ef787cc3a5024e6df11bea -->
 # 실행 체크리스트
 
 | ID | Task | Deliverables | Verification | State |
@@ -160,3 +160,4 @@
 | T76 | flowmark은 T71부터 T75까지를 담아 0.0.8을 release하여, 그 release가 kit 0.0.101의 채택과 T74의 lock 수정을 담게 한다. Unreleased 항목은 0.0.8 절이 되고, package.json과 그 lock은 0.0.8을 적으며, release workflow는 main의 CI가 green이면 v0.0.8과 packages/go/v0.0.8을 tag한다 | CHANGELOG.md, CHANGELOG.ko.md, package.json, package-lock.json | `make docs-check`, then the CI run of main and the release workflow succeed | [ ] |
 | T77 | flowmark는 엔진과 자기 의존만 갖는다: 예제와, hyper, crudui, orm, template, php-serialize, ordered-json을 고정하는 board web application은 history와 함께 저장소 flowmark-examples로 옮기고, 그것만 필요로 하던 장치는 flowmark에서 뺀다: board, deps-node, deps-php, lint-php target, PHP와 Composer toolchain, tests/board-lock.test.mts, 그리고 config, go.work, lint 설정의 그 항목 | examples/와 그 장치의 제거; 계획 판정 | `make docs-check`, `make owner-validate`, `make layout-check`, `make lint-ts` and `make test-go` exit 0 | [o] |
 | T78 | flowmark은 T77을 담아 0.0.9를 release하여, 그 release가 예제와 그 의존을 더는 담지 않게 한다. Unreleased 항목은 0.0.9 절이 되고, package.json과 그 lock은 0.0.9를 적으며, release workflow는 main의 CI가 green이면 v0.0.9와 packages/go/v0.0.9를 tag한다 | CHANGELOG.md, CHANGELOG.ko.md, package.json, package-lock.json | `make docs-check` exit 0 | [o] |
+| T79 | flowmark은 release된 Go module이 자기에게 없는 package를 import하는 test를 담지 않는 orm v0.0.24를 받는다: packages/go는 orm/packages/go v0.0.24와 그것을 통해 ordered-json/packages/go v0.0.22를 require하고, tests/conformance/go는 간접 orm과 ordered-json을 같은 release로 옮기며, go get과 go mod tidy가 go.mod와 go.sum을 썼다 | packages/go/go.mod, packages/go/go.sum, tests/conformance/go/go.mod, tests/conformance/go/go.sum | `make build-go`, `make test-go` and `make lint-go` exit 0 | [o] |
