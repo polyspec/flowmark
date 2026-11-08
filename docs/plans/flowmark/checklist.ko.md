@@ -1,5 +1,5 @@
 <!-- doc-id: execution-checklist -->
-<!-- source-sha256: b7837fc26696d3020f24a40b29468afe22c6d1bb2bdacf8284f094a688f202c8 -->
+<!-- source-sha256: 7c9c4ed0a86bcd3cd307964e0c64a50f1a28f41b36bb92b75b0cca76c9ac0c24 -->
 # 실행 체크리스트
 
 | ID | Task | Deliverables | Verification | State |
@@ -157,3 +157,4 @@
 | T73 | parity를 지우는 kit 0.0.100을 채택한다: Makefile과 그 gate에서 test-markers-check, parity-declarations-check, divergence-check target을 지우고, PRINCIPLES의 parity 규칙 P32와 S6, P33, S3, S7, S10의 parity 문구, config/layout.kit.yml의 parity 예외를 지우며, 0.0.100 release asset을 고정한다 | `Makefile`, `PRINCIPLES.md(.ko)`, `config/layout.kit.yml`, `package.json`, `package-lock.json` | `make owner-validate`, `make docs-check` and `make lint-ts` exit 0 | [o] |
 | T74 | 대기자는 판정 뒤에 다시 읽은 lock이 그 holder를 적은 record의 file을 아직 담고 있을 때만 lock을 끝난 holder가 잡은 것으로 거절한다. Red: writepath의 TestConcurrentProcesses가 CI run 42453618008에서 형제들이 도는 동안 0.0s에 LOCK_TIMEOUT "held by 7178 ... which has ended without releasing it"으로 실패했다: holder가 record를 읽은 뒤 판정 전에 lock을 release하고 끝났으므로 빈 lock이 거절되었다. journal의 TestHolderReleasedBeforeJudgement와 TestHolderReleasedBeforeWaitJudgement는 lock-judge step으로 그 판정에서 holder를 끝내며 같은 식으로 실패한다. try의 판정과 arm한 뒤 대기의 판정은 holder가 끝났으면 lock을 다시 읽고, 그 file을 더는 담지 않은 lock은 다시 시도한다. sleep, 재시도 횟수, timer는 없다 | `packages/go/store/journal/lock.go`, `packages/go/store/journal/process_test.go`, `docs/spec/40-ops.md(.ko)` | `go test ./store/journal/ -count=1` and `go test ./writepath/ -run TestConcurrentProcesses -count=20` in packages/go | [v] |
 | T75 | kit 거부 두 가지만 멈추는 kit 0.0.101을 채택한다: 0.0.101 release asset을 고정하며, recipe 줄은 바뀌지 않는다 | `package.json`, `package-lock.json` | `make docs-check` and `make lint-ts` exit 0 | [o] |
+| T76 | flowmark은 T71부터 T75까지를 담아 0.0.8을 release하여, 그 release가 kit 0.0.101의 채택과 T74의 lock 수정을 담게 한다. Unreleased 항목은 0.0.8 절이 되고, package.json과 그 lock은 0.0.8을 적으며, release workflow는 main의 CI가 green이면 v0.0.8과 packages/go/v0.0.8을 tag한다 | CHANGELOG.md, CHANGELOG.ko.md, package.json, package-lock.json | `make docs-check`, then the CI run of main and the release workflow succeed | [ ] |

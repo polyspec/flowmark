@@ -1,9 +1,12 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 09113cab1be9a98a7dec461290c5492d209df2881baf82d635bcdb3bcb816419 -->
+<!-- source-sha256: 870981ebd63578b933360a16448e8d4858e7e5e03fdfa476aeb13f3f7fadfe34 -->
 # Changelog
 
 ## Unreleased
 
+## 0.0.8
+
+- T71, T73, T75: flowmark은 0.0.99와 0.0.100을 거쳐 kit 0.0.101을 채택한다: recipe는 자기 인자를 명시적으로 넘기고, parity target과 규칙은 지우며, package.json은 0.0.101 release asset을 고정한다.
 - T74: 대기자가 판정하는 동안 holder가 release하고 끝난 lock은 끝난 holder가 잡은 것으로 거절되지 않고 잡힌다: 대기자는 holder가 끝났다고 판정한 뒤 lock을 다시 읽는다.
 
 ## 0.0.7

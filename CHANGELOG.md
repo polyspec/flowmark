@@ -3,6 +3,9 @@
 
 ## Unreleased
 
+## 0.0.8
+
+- T71, T73, T75: flowmark adopts kit 0.0.101 through 0.0.99 and 0.0.100: its recipes pass their arguments explicitly, the parity targets and rules are removed, and package.json pins the 0.0.101 release asset.
 - T74: A lock whose holder released it and ended while a waiter judged it is acquired, never refused as held by an ended holder: the waiter reads the lock again after it judges the holder ended.
 
 ## 0.0.7
