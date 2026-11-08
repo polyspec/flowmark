@@ -1,0 +1,26 @@
+{
+  "schema": 1,
+  "formats": [
+    "typescript",
+    "javascript",
+    "go",
+    "php",
+    "python",
+    "rust",
+    "c"
+  ],
+  "minLines": 6,
+  "ignorePatterns": [
+    "(?m)^(declare\\([^)]*\\)|namespace [^;]+|use [^;]+);$",
+    "(?m)^import\\s[^;'\"]*['\"][^'\"\\n]*['\"];?$",
+    "(?m)^package \\w+$",
+    "(?m)^import (\\w+ )?\"[^\"\\n]*\"$",
+    "(?m)^import \\([^)]*\\)$",
+    "(?m)^import [^\\n]+$",
+    "(?m)^from [\\w.]+ import [^\\n(]+$",
+    "(?m)^from [\\w.]+ import \\([^)]*\\)$",
+    "(?m)^(pub )?use [^;]+;$",
+    "(?m)^#include [<\"][^>\"\\n]*[>\"]$"
+  ],
+  "exclude": []
+}

@@ -2,7 +2,15 @@
   "schema": 1,
   "paths": [
     "examples/board/web/node/model/models.ts",
-    "examples/board/web/src/Model/**"
+    "examples/board/web/src/Model/**",
+    "**/node_modules/**",
+    "**/vendor/**",
+    "**/.venv/**",
+    "**/venv/**",
+    "**/__pycache__/**",
+    "**/target/**",
+    "**/dist/**",
+    "**/*.egg-info/**"
   ],
   "tracked": [
     {
@@ -18,5 +26,12 @@
       "reason": "go generate writes it from DerivedCoreProperties.txt of Unicode 17.0.0; the Go module packages/go is installed as the tagged tree, so the table is part of it"
     }
   ],
-  "exceptions": []
+  "exceptions": [],
+  "headers": [
+    "Code generated .* DO NOT EDIT"
+  ],
+  "moduleFiles": [
+    "go.mod",
+    "Cargo.toml"
+  ]
 }

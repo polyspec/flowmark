@@ -17,6 +17,14 @@
     },
     {
       "paths": [
+        "config/duplication.json"
+      ],
+      "targets": [
+        "duplication-check"
+      ]
+    },
+    {
+      "paths": [
         "AGENTS.md",
         "PRINCIPLES.md",
         "PRINCIPLES.ko.md"
@@ -117,9 +125,7 @@
         ".mise/**",
         ".php-version"
       ],
-      "targets": [
-        "kit-check"
-      ]
+      "targets": []
     },
     {
       "paths": [
@@ -179,9 +185,7 @@
       "paths": [
         "config/release.json"
       ],
-      "targets": [
-        "kit-check"
-      ]
+      "targets": []
     }
   ]
 }

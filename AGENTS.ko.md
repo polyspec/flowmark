@@ -1,5 +1,5 @@
 <!-- doc-id: agents -->
-<!-- source-sha256: a3d7e15accf70b0774e5eaf380f1029e3d9ecd69e081b105c63591b343feedcc -->
+<!-- source-sha256: 26168f769981c52734c1ed68fc4551b1227c1b41ebdf3b52148720332759fa5f -->
 # 개발 규칙
 
 [English](AGENTS.md)
@@ -47,7 +47,7 @@ GitHub, Jira), 응용 schema이고, [polyspec/orm](https://github.com/polyspec/o
   provider의 build, test, gate 경로만 사용한다. benchmark는 Kit native runner로 writepath test와 함께 실행한다.
   Kit 지원 부족을 consumer runner로 대체하지 않고 Kit issue로 보고하며 모든 필수 검사와 provider release proof가
   성공해야 release한다.
-  Enforced by: `make kit-check`
+  Enforced by: `make test-go`, `make test-infrastructure`
 - Own: release는 `main`에서 성공한 `.github/workflows/ci.yml` push run의 id로 하는 `.github/workflows/release.yml`의
   dispatch다. 그 run은 gate를 포함한 그 모든 job이 성공할 때만 성공한다:
   `gh workflow run release.yml -f run=<id>`. 그 version X.Y.Z는 그 run의 commit에 있는 CHANGELOG.md의 가장 새로운 section

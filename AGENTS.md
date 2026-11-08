@@ -52,7 +52,7 @@ them holds the rules of this repository.
   language and runs only the provider build, test and gate paths on Linux, Windows and macOS. Benchmarks use Kit's native
   runner together with the writepath tests. No consumer runner substitutes for missing Kit support; defects are reported
   as Kit issues, and release requires all mandatory checks and the provider release proof.
-  Enforced by: `make kit-check`
+  Enforced by: `make test-go`, `make test-infrastructure`
 - Own: A release is a dispatch of `.github/workflows/release.yml` with the id of a successful push run of
   `.github/workflows/ci.yml` on `main`, whose run succeeds only when every job of it succeeds, the gates among them:
   `gh workflow run release.yml -f run=<id>`. Its version X.Y.Z is the newest section `## X.Y.Z` of CHANGELOG.md at the
