@@ -1,5 +1,5 @@
 <!-- doc-id: execution-checklist -->
-<!-- source-sha256: cfdd9887e030c835181887d60bde80494a8a246ddfe29d69c3472ede4681faa5 -->
+<!-- source-sha256: c35edb4e006d1cbb1cbceba72b07b1e72ae919e0747e85e5e63a876df3a4b6ea -->
 # 실행 체크리스트
 
 | ID | Task | Deliverables | Verification | State |
@@ -159,3 +159,4 @@
 | T75 | kit 거부 두 가지만 멈추는 kit 0.0.101을 채택한다: 0.0.101 release asset을 고정하며, recipe 줄은 바뀌지 않는다 | `package.json`, `package-lock.json` | `make docs-check` and `make lint-ts` exit 0 | [o] |
 | T76 | flowmark은 T71부터 T75까지를 담아 0.0.8을 release하여, 그 release가 kit 0.0.101의 채택과 T74의 lock 수정을 담게 한다. Unreleased 항목은 0.0.8 절이 되고, package.json과 그 lock은 0.0.8을 적으며, release workflow는 main의 CI가 green이면 v0.0.8과 packages/go/v0.0.8을 tag한다 | CHANGELOG.md, CHANGELOG.ko.md, package.json, package-lock.json | `make docs-check`, then the CI run of main and the release workflow succeed | [ ] |
 | T77 | flowmark는 엔진과 자기 의존만 갖는다: 예제와, hyper, crudui, orm, template, php-serialize, ordered-json을 고정하는 board web application은 history와 함께 저장소 flowmark-examples로 옮기고, 그것만 필요로 하던 장치는 flowmark에서 뺀다: board, deps-node, deps-php, lint-php target, PHP와 Composer toolchain, tests/board-lock.test.mts, 그리고 config, go.work, lint 설정의 그 항목 | examples/와 그 장치의 제거; 계획 판정 | `make docs-check`, `make owner-validate`, `make layout-check`, `make lint-ts` and `make test-go` exit 0 | [o] |
+| T78 | flowmark은 T77을 담아 0.0.9를 release하여, 그 release가 예제와 그 의존을 더는 담지 않게 한다. Unreleased 항목은 0.0.9 절이 되고, package.json과 그 lock은 0.0.9를 적으며, release workflow는 main의 CI가 green이면 v0.0.9와 packages/go/v0.0.9를 tag한다 | CHANGELOG.md, CHANGELOG.ko.md, package.json, package-lock.json | `make docs-check` exit 0 | [o] |
