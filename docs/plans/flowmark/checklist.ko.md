@@ -1,5 +1,5 @@
 <!-- doc-id: execution-checklist -->
-<!-- source-sha256: 5725d0c723994afb7e4acb8c5c93bd4e831f072bd6362a2466dd651280720fe7 -->
+<!-- source-sha256: ab1a8da78263216c9aa1f572be84e158793133badcedf951b536cd4400c64304 -->
 # 실행 체크리스트
 
 | ID | Task | Deliverables | Verification | State |
@@ -166,3 +166,4 @@
 | T82 | flowmark은 T81을 담아 0.0.11을 release하여, 그 release가 kit 0.0.102를 받게 한다. changelog의 0.0.11 절은 T81을 담고, package.json과 그 lock은 0.0.11을 적으며, release workflow는 main의 CI가 green이면 v0.0.11과 packages/go/v0.0.11을 tag한다 | CHANGELOG.md, CHANGELOG.ko.md, package.json, package-lock.json | `make docs-check` exit 0 | [o] |
 | T83 | 한국어 twin이 영어 원문의 개정을 적는다: kit-standard checklist, markdown-database plan, spec 10, 50, 60, 90은 이미 원문의 변경(닫힌 T15 행, 지원하는 aes stage, stored literal, 엔진의 참조 action과 immutable table, `markdown://`의 SQLite 연결, vector의 face)을 담고 있으며, 각 twin은 원문의 digest로 stamp한다 | the six `.ko.md` twins | `make documents-stamp` with no PATHS reports 0 moved; `make docs-check` exits 0 | [o] |
 | T84 | flowmark은 provider의 최신 release인 orm v0.0.26을 받는다: packages/go는 orm/packages/go v0.0.26과 그것을 통해 ordered-json/packages/go v0.0.23을 require하고, tests/conformance/go는 간접 orm과 ordered-json을 같은 release로 옮기며, go get과 go mod tidy가 go.mod와 go.sum을 썼다 | packages/go/go.mod, packages/go/go.sum, tests/conformance/go/go.mod, tests/conformance/go/go.sum | `make build-go`, `make test-go` and `make lint-go` exit 0 | [o] |
+| T85 | flowmark은 T83과 T84를 담아 0.0.12를 release하여, 그 release가 orm v0.0.26을 받게 한다. Unreleased 항목은 0.0.12 절이 되고, package.json과 그 lock은 0.0.12를 적으며, release workflow는 main의 CI가 green이면 v0.0.12와 packages/go/v0.0.12를 tag한다 | CHANGELOG.md, CHANGELOG.ko.md, package.json, package-lock.json | `make docs-check` exit 0 | [o] |

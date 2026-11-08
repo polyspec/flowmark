@@ -1,10 +1,13 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 77725fe97a24f8908e481d0503220eef34bf590a9f1851e4a0d05e68d6d5c8d7 -->
+<!-- source-sha256: 1c0ef43932d51772d6debeb3d57f7efd2b119205d64520bb96bb0d0aa23cc91e -->
 # Changelog
 
 ## Unreleased
 
+## 0.0.12
+
 - T84: flowmark은 Go module에서 orm v0.0.26과 그것을 통해 ordered-json v0.0.23을 받는다.
+- T83: 한국어 twin이 영어 원문의 revision을 적는다.
 
 ## 0.0.11
 
