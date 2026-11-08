@@ -116,7 +116,7 @@ worktree-setup: ## Create or reuse the worktree NAME of the row ID (TYPE, fix by
 build: build-go flowmark-build ## Build the Go workspace and the executable that sidecar.json names; offline
 
 build-go: ## Build every module of the tracked go.work; offline
-	$(NODE) $(KIT)/runtime-targets.mjs build --roots examples packages/go tests/conformance/go -- var/tools/bin/go build ./...
+	$(NODE) $(KIT)/runtime-targets.mjs build --roots examples packages/go tests/conformance/go -- $(GO) build ./...
 
 flowmark-build: ## Build the executable that sidecar.json names into build/flowmark; offline
 	cd packages/go && $(GO) build -o $(CURDIR)/build/flowmark ./cmd/flowmark
