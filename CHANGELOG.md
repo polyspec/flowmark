@@ -3,6 +3,8 @@
 
 ## Unreleased
 
+## 0.0.10
+
 - T79: flowmark takes orm v0.0.24 and, through it, ordered-json v0.0.22 in its Go module.
 
 ## 0.0.9

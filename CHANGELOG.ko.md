@@ -1,8 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: c006562a3f7f6ee0a98d62cd8bfe21815d8cdffe786348e96a2af528bab9cdb0 -->
+<!-- source-sha256: e56df4943f3c6457ee2c9d9b91d26568d9f001096be3cf7bca3a1abe7b339a59 -->
 # Changelog
 
 ## Unreleased
+
+## 0.0.10
 
 - T79: flowmark은 Go module에서 orm v0.0.24와 그것을 통해 ordered-json v0.0.22를 받는다.
 
