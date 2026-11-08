@@ -257,12 +257,43 @@ func (a *acquirer) try() (tried, error) {
 		if err != nil {
 			return tried{}, fmt.Errorf("journal: %s %w; it is never taken for a free lock: check that no operation runs, then remove it", a.lock, err)
 		}
-		state, err := a.c.judge(h)
+		state, err := a.judge(h, id)
+		if errors.Is(err, errLockChanged) {
+			continue
+		}
 		if err != nil {
 			return tried{}, err
 		}
 		return tried{holder: h, state: state, id: id}, nil
 	}
+}
+
+// errLockChanged reports that the lock no longer holds the file whose holder was judged ended.
+var errLockChanged = errors.New("the lock changed while its holder was judged")
+
+// judge judges the holder h of the lock file id. A holder judged ended is confirmed by reading the lock again after
+// the judgement: a holder that released the lock and then ended between the read of its record and the judgement has
+// not ended holding it, so the lock that no longer holds file id is reported as errLockChanged and tried again. An
+// ended process releases nothing, so a lock that still holds file id after the judgement is held by an ended holder.
+func (a *acquirer) judge(h Holder, id fileID) (HolderState, error) {
+	if err := a.c.step("lock-judge", 0); err != nil {
+		return 0, err
+	}
+	state, err := a.c.judge(h)
+	if err != nil || state != HolderEnded {
+		return state, err
+	}
+	_, now, err := readShared(a.lock)
+	if errors.Is(err, fs.ErrNotExist) {
+		return 0, errLockChanged
+	}
+	if err != nil {
+		return 0, fmt.Errorf("journal: reading the lock: %w", err)
+	}
+	if now != id {
+		return 0, errLockChanged
+	}
+	return state, nil
 }
 
 // waitFor waits for the release of the lock that r found held. The watch is armed after the failed try and the
@@ -290,17 +321,23 @@ func (a *acquirer) waitFor(ctx context.Context, r tried) (l *Lock, err error) {
 				if err := w.armHolder(r.holder); err != nil {
 					return nil, fmt.Errorf("journal: watching the holder %s: %w", r.holder, err)
 				}
-				// Judged again after arming, so a holder that ended meanwhile, or a reused PID, is never watched.
-				state, err := a.c.judge(r.holder)
-				if err != nil {
+				// Judged again after arming, so a holder that ended meanwhile, or a reused PID, is never watched; a
+				// lock that changed meanwhile is tried again.
+				state, err := a.judge(r.holder, r.id)
+				switch {
+				case errors.Is(err, errLockChanged):
+					retry = true
+				case err != nil:
 					return nil, err
-				}
-				if state == HolderEnded {
+				case state == HolderEnded:
 					return nil, a.timeout(r.holder, state)
+				default:
+					watched = r.holder
+					a.c.obs.Observe(Event{Kind: LockWaiting, Path: a.lock, Holder: r.holder.String()})
 				}
-				watched = r.holder
-				a.c.obs.Observe(Event{Kind: LockWaiting, Path: a.lock, Holder: r.holder.String()})
 			}
+		}
+		if !retry {
 			attempt, err := a.block(ctx, w, r)
 			if err != nil {
 				return nil, err

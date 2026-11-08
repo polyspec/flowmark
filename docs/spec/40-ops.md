@@ -464,7 +464,11 @@ the writer of the difference.
   lock is held. A lock that disappears before it is read is tried again at once.
 - An operation that finds the lock held by a running holder, or by one on another host, waits for
   its release and fails with `LOCK_TIMEOUT`, naming the holder and its state, when its deadline
-  passes first. A holder that has ended refuses at once. The deadline is the wait's one timer: the
+  passes first. A holder that has ended refuses at once. A holder is judged ended only when the lock,
+  read again after the judgement, still holds the file whose record named it: an ended process releases
+  nothing, while a holder that released the lock and then ended between the read of its record and the
+  judgement left it free, and the lock is tried again (`TestHolderReleasedBeforeJudgement` and
+  `TestHolderReleasedBeforeWaitJudgement` of `journal`). The deadline is the wait's one timer: the
   CLI, MCP and sidecar take `--lock-wait-ms <n>` (default 5000; 0 refuses at once), and the server
   takes the same flag; a closed connection ends the wait. Grounding: an
   immediate refusal would move the retry loop into every caller.

@@ -1,5 +1,5 @@
 <!-- doc-id: spec-ops -->
-<!-- source-sha256: 58a11a1ebaddfe0473dbf7956f877c92a777e77602d52560ac3eebd321e16b45 -->
+<!-- source-sha256: 918daedafdf32727996a6ca448ae573be39b31f78218278665b25fc85d690a26 -->
 # Operations
 
 [English](40-ops.md)
@@ -397,6 +397,10 @@ client가 구현할 것은 이 driver뿐이다.
   읽기 전에 사라진 lock은 곧바로 다시 시도한다.
 - 실행 중인 holder나 다른 host의 holder가 잡은 lock을 만난 operation은 그 release를 기다리며, deadline이
   먼저 지나면 holder와 그 상태를 밝히는 `LOCK_TIMEOUT`으로 실패한다. 끝난 holder는 곧바로 거절한다.
+  holder는 판정 뒤에 lock을 다시 읽어 그 record를 담았던 file을 아직 담고 있을 때만 끝났다고 판정한다: 끝난
+  process는 아무것도 release하지 않지만, record를 읽은 뒤 판정 전에 lock을 release하고 끝난 holder는 lock을
+  비워 두었으므로 lock을 다시 시도한다(`journal`의 `TestHolderReleasedBeforeJudgement`와
+  `TestHolderReleasedBeforeWaitJudgement`).
   deadline이 대기의 유일한 timer다: CLI, MCP, sidecar는 `--lock-wait-ms <n>`(기본 5000, 0이면 곧바로
   거절)을 받고 server도 같은 flag를 받는다. 연결이 닫히면 대기가 끝난다. 근거:
   곧바로 거절하면 재시도 loop가 모든 호출자에게 옮겨 간다.
