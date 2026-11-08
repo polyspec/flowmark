@@ -3,6 +3,8 @@
 
 ## Unreleased
 
+- T74: A lock whose holder released it and ended while a waiter judged it is acquired, never refused as held by an ended holder: the waiter reads the lock again after it judges the holder ended.
+
 ## 0.0.7
 
 - T69: flowmark supports kit 0.0.98, which forces nothing on a repository: the Makefile includes no recipe of kit and holds its own targets, which run the utilities of the installed kit; CI runs its own gates job; .npmrc, mise.toml and the lint configurations of the root hold the settings that kit forced; the vendored pipeline, the hooks and the copies that kit no longer requires are removed.

@@ -262,3 +262,95 @@ func TestCrashedProcessRecovers(t *testing.T) {
 		})
 	}
 }
+
+// heldByChild starts a child that holds the lock at root until its stdin closes, then releases it and exits; the
+// returned func closes that stdin and waits for the child, so the lock is released and its holder ended when it returns.
+func heldByChild(t *testing.T, root string) (Holder, func()) {
+	t.Helper()
+	cmd := childCommand(t, "hold", root, "child")
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	line, err := bufio.NewReader(stdout).ReadString('\n')
+	if err != nil {
+		t.Fatal(err)
+	}
+	record, ok := strings.CutPrefix(line, "acquired ")
+	if !ok {
+		t.Fatalf("child = %q, want the lock acquired", line)
+	}
+	h, err := parseRecord([]byte(record))
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := false
+	end := func() {
+		if done {
+			return
+		}
+		done = true
+		if err := stdin.Close(); err != nil {
+			t.Error(err)
+		}
+		if err := cmd.Wait(); err != nil {
+			t.Error(err)
+		}
+	}
+	t.Cleanup(end)
+	return h, end
+}
+
+// endAtJudge makes the holder release the lock and end at the judgement number n of c: the lock that held its record
+// is free when that judgement finds the holder ended.
+func endAtJudge(c *Corpus, n int, end func()) {
+	judged := 0
+	c.fault = func(step string, _ int) error {
+		if step == "lock-judge" {
+			judged++
+			if judged == n {
+				end()
+			}
+		}
+		return nil
+	}
+}
+
+// A holder that releases the lock and ends between the read of its record and the judgement leaves the lock free:
+// the attempt acquires it, never refusing it as held by an ended holder.
+func TestHolderReleasedBeforeJudgement(t *testing.T) {
+	root := t.TempDir()
+	_, end := heldByChild(t, root)
+	c, _ := newCorpus(t, root)
+	endAtJudge(c, 1, end)
+	l, err := c.Acquire(context.Background(), "parent", 0)
+	if err != nil {
+		t.Fatalf("Acquire = %v, want the lock released by its holder", err)
+	}
+	if l.Holder().Session != "parent" {
+		t.Fatalf("holder = %v", l.Holder())
+	}
+}
+
+// A holder that releases the lock and ends between the arming of the wait and its judgement leaves the lock free:
+// the wait acquires it, never refusing it as held by an ended holder.
+func TestHolderReleasedBeforeWaitJudgement(t *testing.T) {
+	root := t.TempDir()
+	_, end := heldByChild(t, root)
+	c, _ := newCorpus(t, root)
+	endAtJudge(c, 2, end)
+	l, err := c.Acquire(context.Background(), "parent", patience)
+	if err != nil {
+		t.Fatalf("Acquire = %v, want the lock released by its holder", err)
+	}
+	if l.Holder().Session != "parent" {
+		t.Fatalf("holder = %v", l.Holder())
+	}
+}

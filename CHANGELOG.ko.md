@@ -1,8 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 6107c0a74493fb61987fdd54aceb67a9ef1407988ca46f8f333bbb1159519031 -->
+<!-- source-sha256: 09113cab1be9a98a7dec461290c5492d209df2881baf82d635bcdb3bcb816419 -->
 # Changelog
 
 ## Unreleased
+
+- T74: 대기자가 판정하는 동안 holder가 release하고 끝난 lock은 끝난 holder가 잡은 것으로 거절되지 않고 잡힌다: 대기자는 holder가 끝났다고 판정한 뒤 lock을 다시 읽는다.
 
 ## 0.0.7
 
