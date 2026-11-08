@@ -17,7 +17,7 @@
     }
   },
   "devDependencies": {
-    "@polyspec/kit": "https://github.com/polyspec/kit/releases/download/v0.0.99/polyspec-kit-0.0.99.tgz",
+    "@polyspec/kit": "https://github.com/polyspec/kit/releases/download/v0.0.100/polyspec-kit-0.0.100.tgz",
     "@types/node": "^26.6.5"
   }
 }

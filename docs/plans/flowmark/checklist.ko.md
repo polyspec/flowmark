@@ -1,5 +1,5 @@
 <!-- doc-id: execution-checklist -->
-<!-- source-sha256: ca010436dbeb25e72b0cf99bff041740a7abb2b443f1669af6c28532d8e4d75a -->
+<!-- source-sha256: 0c9901dbdbe1db3d9727d6d0ef88b9ab3fbe55994a23204e21cc2ae7e6268ee5 -->
 # 실행 체크리스트
 
 | ID | Task | Deliverables | Verification | State |
@@ -154,3 +154,4 @@
 | T70 | flowmark은 T69를 담아 0.0.7을 release하여, 그 release가 kit 0.0.98의 채택을 담게 한다. Unreleased 항목은 0.0.7 절이 되고, package.json과 그 lock은 0.0.7을 적으며, release workflow는 main의 CI가 green이면 v0.0.7과 packages/go/v0.0.7을 tag한다 | CHANGELOG.md, CHANGELOG.ko.md, package.json, package-lock.json | `make docs-check` `make kit-check`, then the CI run of main and the release workflow succeed | [ ] |
 | T71 | 0.0.98 동작을 그대로 두고 kit 0.0.99를 채택한다: recipe는 0.0.98이 기본으로 정하던 값을 명시적으로 넘긴다(divergence-check와 parity-declarations-check의 `--roots packages/go`, install-tools의 composer home과 cache, check-documents, owner-check, generated-files, rebuild-check, language-check, plan-new, item-edit, land, worktree-setup, check-commits, lint-php, release target과 runtime-targets의 인자). 0.0.99가 kit-check를 지우므로(kit K1070) kit-check는 CHECK_TARGETS에서 빠지고, config/checklist.json, documents.json, generated.json, release.json은 0.0.98이 고정하던 값을 선언한다 | `package.json`, `package-lock.json`, `Makefile`, `config/checklist.json`, `config/documents.json`, `config/generated.json`, `config/owner-checks.json`, `config/release.json`, `AGENTS.md(.ko)` | `make -n` of each changed target under 0.0.99 lists the commands of 0.0.98 with the explicit arguments; `make docs-check duplication-check lint-ts owner-validate divergence-check` | [o] |
 | T72 | recipe나 workflow의 문구를 단언하는 시험을 지운다: 그 시험은 동작을 확인하지 않고 kit나 recipe가 바뀔 때마다 깨진다 | tests/release-config.test.mts | `make lint-ts` and `make docs-check` exit 0; the deleted tests are named in the commit body | [o] |
+| T73 | parity를 지우는 kit 0.0.100을 채택한다: Makefile과 그 gate에서 test-markers-check, parity-declarations-check, divergence-check target을 지우고, PRINCIPLES의 parity 규칙 P32와 S6, P33, S3, S7, S10의 parity 문구, config/layout.kit.yml의 parity 예외를 지우며, 0.0.100 release asset을 고정한다 | `Makefile`, `PRINCIPLES.md(.ko)`, `config/layout.kit.yml`, `package.json`, `package-lock.json` | `make owner-validate`, `make docs-check` and `make lint-ts` exit 0 | [o] |

@@ -5,7 +5,7 @@ KIT := $(CURDIR)/node_modules/@polyspec/kit/dist
 ONLINE ?=
 
 # The suite of the repository: the checks and the tests that config/owner-checks.json selects from.
-CHECK_TARGETS := layout-check docs-check rules-check owner-validate rebuild-check language-check test-markers-check duplication-check parity-declarations-check link-check suppression-check divergence-check lint-ts lint-php lint-go refs-check internal-paths-check test-go test-infrastructure
+CHECK_TARGETS := layout-check docs-check rules-check owner-validate rebuild-check language-check duplication-check link-check suppression-check lint-ts lint-php lint-go refs-check internal-paths-check test-go test-infrastructure
 
 # ---- Tools ------------------------------------------------------------------------------------------------------------
 # The tools of mise.toml run from the shims of the mise that make install-tools TOOLS=npm installs into var/tools, the
@@ -170,7 +170,7 @@ lint-go: ## Lint each Go module: golangci-lint and deadcode -test; offline once 
 	$(NODE) $(KIT)/lint-go.mjs
 
 # ---- Checks -----------------------------------------------------------------------------------------------------------
-.PHONY: layout-check docs-check rules-check owner-check owner-validate rebuild-check language-check test-markers-check duplication-check parity-declarations-check suppression-check divergence-check refs-check internal-paths-check commit-msg-check
+.PHONY: layout-check docs-check rules-check owner-check owner-validate rebuild-check language-check duplication-check suppression-check refs-check internal-paths-check commit-msg-check
 
 layout-check: ## Check the folder layout against config/layout.yml with alint, that Git ignores each install folder and that no tracked file is generated; offline
 	$(ALINT) check --config config/layout.yml --color never --compact .
@@ -199,20 +199,11 @@ rebuild-check: ## Check that every tool that config/rebuild.json selects has its
 language-check: ## Fail on Hangul in a comment, an identifier, a message or a test name of the code; offline
 	$(NODE) $(KIT)/language-check.mjs --forbid '\p{Script=Hangul}'
 
-test-markers-check: ## Fail on a test that a marker skips or narrows; offline
-	$(NODE) $(KIT)/test-markers.mjs
-
 duplication-check: ## Fail while a piece of 6 lines or more of code exists twice outside the folders of config/duplication.json; offline
 	$(NODE) $(KIT)/duplication-check.mjs
 
-parity-declarations-check: ## Check the parity declarations that need no run; flowmark has one implementation and no config/parity.json; offline
-	$(NODE) $(KIT)/parity.mjs --declarations --roots packages/go
-
 suppression-check: ## Fail on a tracked suppression of a lint finding that states no reason; offline
 	$(NODE) $(KIT)/suppression-check.mjs
-
-divergence-check: ## Fail on an implementation that branches on the runtime or narrows its run without a reason; offline
-	$(NODE) $(KIT)/divergence-check.mjs --reason-kind generated --reason-kind fixture --reason-kind test --reason-kind harness --reason-kind ecosystem --reason-kind external --feature-state partial --feature-state unsupported --roots packages/go
 
 refs-check: ## Check that every task ID a document names resolves to a checklist item; offline
 	$(NODE) scripts/check-refs.mts
@@ -226,7 +217,7 @@ commit-msg-check: ## Check the commit message MESSAGE and the index against the 
 # ---- CI: the gates job of .github/workflows/ci.yml installs every tool and locked dependency that the gates need, then runs
 # them past failures through ci-targets, which writes the report CI_REPORT ------------------------------------------------
 CI_REPORT ?= var/report/ci-targets
-GATES := layout-check docs-check rules-check owner-validate rebuild-check language-check test-markers-check duplication-check parity-declarations-check suppression-check divergence-check lint-go lint-php lint-ts
+GATES := layout-check docs-check rules-check owner-validate rebuild-check language-check duplication-check suppression-check lint-go lint-php lint-ts
 .PHONY: ci-targets gates gates-setup
 ci-targets: ## Run TARGETS past failures and write CI_REPORT (logs, record.json, summary.md)
 	$(NODE) $(KIT)/ci-targets.mjs -k $(CI_REPORT) $(TARGETS)
