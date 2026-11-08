@@ -1,5 +1,5 @@
 <!-- doc-id: spec-constraints -->
-<!-- source-sha256: 7825bd1dc8e4da6ef5523134f1e2d1aee016a12cefc8a54530ca7ca23c4708cf -->
+<!-- source-sha256: 1fe69ffec27f8d37dcc760a39dfedb3df3e9af411db25310aa15f1eb3d7d5d81 -->
 # Constraints
 
 [English](50-constraints.md)

@@ -1,5 +1,5 @@
 <!-- doc-id: spec-canonical-format -->
-<!-- source-sha256: 9b80e08ad89ebc5998d34c2dbb2d3a53e5aa6dd0dde2a59db7de5dc6b85437ec -->
+<!-- source-sha256: 84dc22c08d024ae59c66fa1a3344f9f97ed3095cd88421c6ab88eceb0aac2f86 -->
 # Canonical format
 
 [English](10-canonical-format.md)

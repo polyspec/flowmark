@@ -1,5 +1,5 @@
 <!-- doc-id: spec-conformance -->
-<!-- source-sha256: 9ae4a83b4fa2f5aa3f74cc742e5585175d2b07fd2f256a0c9d27ab026bfd2566 -->
+<!-- source-sha256: 6def4369adee09ee0fb7824e57fc2aaec680cac257828981308ad3fcd4ecba3a -->
 # Conformance
 
 [English](90-conformance.md)

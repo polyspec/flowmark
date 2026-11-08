@@ -1,5 +1,5 @@
 <!-- doc-id: spec-dialect -->
-<!-- source-sha256: 379cad8455d6f66faae4d3be5d620aa766f6b2b5f7ed4c89b5fa49fbc5c3a3fd -->
+<!-- source-sha256: dc42edd7c7f1c396f801ba43f83d799d1474b80d4b11937640f62e309e33ee64 -->
 # Capability table
 
 [English](60-dialect.md)
