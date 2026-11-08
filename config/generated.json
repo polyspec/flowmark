@@ -1,8 +1,6 @@
 {
   "schema": 1,
   "paths": [
-    "examples/board/web/node/model/models.ts",
-    "examples/board/web/src/Model/**",
     "**/node_modules/**",
     "**/vendor/**",
     "**/.venv/**",

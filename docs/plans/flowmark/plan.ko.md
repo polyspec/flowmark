@@ -1,5 +1,5 @@
 <!-- doc-id: plans-design-plan -->
-<!-- source-sha256: f0ef55e6946190fe0de43f98f2a4ca0f7db734fe92a1068ba7280a2782d5344a -->
+<!-- source-sha256: b59622f4d894f64aec784feb845073c348766d35627caed29ed8253210abbe79 -->
 # flowmark 설계 계획
 
 Revision 2 — 3개 lane의 적대 감사 결과(engine core, orm 통합, 운영)와 multi-platform 지시를 아래 판정에 접는다. 감사의 blocker는 전부 판정이 되었고, 부수지 못한 주장은 문서 끝에 남긴다.
@@ -63,6 +63,8 @@ flowmark = the markdown database engine (one Go binary)
 
 - SQLite mirror는 부정한다: mirror↔corpus 동등성이 영구적인 bug class가 된다. mirror를 인정하더라도 conformance 조건은 (a) full-rebuild equivalence (b) write path 부재다.
 - IR boundedness 주장은 request layer만 대상으로 한다. **API 동등성은 주장하지 않는다** — capability table(§6)이 계약이며, orm의 `CAPABILITY_UNSUPPORTED`/`OPERATOR_NOT_ALLOWED` 전통을 따른다.
+
+**예제 판정 (T77)**: flowmark는 엔진과 엔진에 필요한 의존만 갖는다: 자기 Go module과, 그 `engine/dbspec`과 `engine/ir`을 쓰는 orm Go module이다. 예제 — tracker와 board corpus, 그 Go test, 그리고 hyper, crudui, orm, template, php-serialize, ordered-json을 고정하고 PHP와 Composer가 필요한 board web application — 는 flowmark의 tag된 Go module을 소비하는 저장소 flowmark-examples에 둔다.
 
 ### 2. Canonical format (`10-canonical-format.md`)
 

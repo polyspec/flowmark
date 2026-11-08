@@ -1,8 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 870981ebd63578b933360a16448e8d4858e7e5e03fdfa476aeb13f3f7fadfe34 -->
+<!-- source-sha256: 2665e5d87b215ed9e4c212227916402fe51074c05bb5b5b26a3d12ff854bd02c -->
 # Changelog
 
 ## Unreleased
+
+- T77: flowmark는 엔진과 자기 의존만 갖는다: 예제와 board web application은 저장소 flowmark-examples로 옮겼고, 그것만 필요로 하던 board, PHP, Composer 장치는 지웠다.
 
 ## 0.0.8
 

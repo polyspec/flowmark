@@ -25,11 +25,10 @@
 // (the type_aware rules of oxlint --rules) and the override of TypeScript enables them with the rules above; the rules
 // without types (ban-ts-comment, no-explicit-any, no-non-null-assertion and the rest of correctness) apply to every file.
 // ignorePatterns leaves out the TypeScript that is no code of flowmark: the VS Code slugify source that the store tests read as
-// data, and the models that make board-models writes.
+// data.
 {
   "ignorePatterns": [
-    "packages/go/store/testdata/slug/vscode-slugify.ts",
-    "examples/board/web/node/model/models.ts"
+    "packages/go/store/testdata/slug/vscode-slugify.ts"
   ],
   "options": {
     "typeAware": true

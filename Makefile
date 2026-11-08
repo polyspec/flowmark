@@ -5,7 +5,7 @@ KIT := $(CURDIR)/node_modules/@polyspec/kit/dist
 ONLINE ?=
 
 # The suite of the repository: the checks and the tests that config/owner-checks.json selects from.
-CHECK_TARGETS := layout-check docs-check rules-check owner-validate rebuild-check language-check duplication-check link-check suppression-check lint-ts lint-php lint-go refs-check internal-paths-check test-go test-infrastructure
+CHECK_TARGETS := layout-check docs-check rules-check owner-validate rebuild-check language-check duplication-check link-check suppression-check lint-ts lint-go refs-check internal-paths-check test-go test-infrastructure
 
 # ---- Tools ------------------------------------------------------------------------------------------------------------
 # The tools of mise.toml run from the shims of the mise that make install-tools TOOLS=npm installs into var/tools, the
@@ -40,30 +40,24 @@ NODE := $(KIT_TOOLS)/bin/node
 NPM := $(KIT_TOOLS)/bin/npm
 endif
 ALINT := $(KIT_TOOLS)/mise/shims/alint
-COMPOSER := $(KIT_TOOLS)/mise/shims/composer
 GO := $(firstword $(wildcard $(KIT_TOOLS)/mise/shims/go.exe $(KIT_TOOLS)/mise/shims/go.cmd $(KIT_TOOLS)/mise/shims/go))
-PHP := $(firstword $(wildcard $(KIT_TOOLS)/bin/php.cmd $(KIT_TOOLS)/bin/php))
 
 # ---- Install ----------------------------------------------------------------------------------------------------------
 # The order of a checkout: the mise, node and npm of mise.toml (the bootstrap of kit, which the Node.js of the machine runs,
-# since var/tools has no node yet), the packages of package-lock.json, the other tools of mise.toml, the locks of the board
-# example, then the links of .links. Each step is a make of its own, so it reads the tools that the step before installed.
+# since var/tools has no node yet), the packages of package-lock.json, the other tools of mise.toml, then the links of
+# .links. Each step is a make of its own, so it reads the tools that the step before installed.
 .PHONY: install install-tools install-packages install-link toolchain-lock
-install: ## Install the tools, the packages, the board dependencies and the links of the checkout, in that order; ONLINE
+install: ## Install the tools, the packages and the links of the checkout, in that order; ONLINE
 	$(MAKE) --no-print-directory install-tools TOOLS=npm
 	$(MAKE) --no-print-directory install-packages
 	$(MAKE) --no-print-directory install-tools
-	$(MAKE) --no-print-directory deps-php deps-node
 	$(MAKE) --no-print-directory install-link
 
-# The home and the cache of the Composer that install-tools and install-symbols run, the folders of var/tools that kit 0.0.98
-# set (kit K1095).
-COMPOSER_TOOL_ENV = COMPOSER_HOME=$(CURDIR)/var/tools/composer/home COMPOSER_CACHE_DIR=$(CURDIR)/var/tools/composer/cache
 install-tools: ## Install the locked tools of mise.toml, or those that TOOLS names; TOOLS=npm installs mise, node and npm; ONLINE
 ifeq ($(TOOLS),npm)
 	$(ONLINE) node $(KIT)/bootstrap/bootstrap.mjs
 else
-	$(COMPOSER_TOOL_ENV) $(ONLINE) $(NODE) $(KIT)/install-tools.mjs --no-self-update $(TOOLS)
+	$(ONLINE) $(NODE) $(KIT)/install-tools.mjs --no-self-update $(TOOLS)
 endif
 
 install-packages: ## Install the packages of package-lock.json, @polyspec/kit included, with the npm of var/tools; ONLINE
@@ -81,15 +75,9 @@ toolchain-lock: ## Write mise.lock with mise lock for each platform of linux, ma
 	UV_PYTHON="$$($(KIT_TOOLS)/bin/mise which python3)" $(ONLINE) $(KIT_TOOLS)/bin/mise lock --global --platform $(TOOLCHAIN_LOCK_PLATFORMS)
 
 # The locked online dependencies of each language, each the locked install of its package manager.
-.PHONY: deps-go deps-node deps-php
+.PHONY: deps-go
 deps-go: ## Download the locked Go workspace dependencies; ONLINE
 	cd packages/go && $(ONLINE) $(GO) mod download
-
-deps-node: ## Install the board example npm lock; ONLINE
-	cd examples/board/web && $(ONLINE) $(NPM) ci
-
-deps-php: ## Install the board example Composer lock; ONLINE
-	$(ONLINE) $(COMPOSER) install --no-interaction --working-dir=examples/board/web
 
 # ---- Links of 0.0.x development (.links) ------------------------------------------------------------------------------
 .PHONY: link link-check unlink worktree-setup
@@ -116,7 +104,7 @@ worktree-setup: ## Create or reuse the worktree NAME of the row ID (TYPE, fix by
 build: build-go flowmark-build ## Build the Go workspace and the executable that sidecar.json names; offline
 
 build-go: ## Build every module of the tracked go.work; offline
-	$(NODE) $(KIT)/runtime-targets.mjs build --roots examples packages/go tests/conformance/go -- $(GO) build ./...
+	$(NODE) $(KIT)/runtime-targets.mjs build --roots packages/go tests/conformance/go -- $(GO) build ./...
 
 flowmark-build: ## Build the executable that sidecar.json names into build/flowmark; offline
 	cd packages/go && $(GO) build -o $(CURDIR)/build/flowmark ./cmd/flowmark
@@ -125,7 +113,7 @@ flowmark-build: ## Build the executable that sidecar.json names into build/flowm
 # FLOWMARK_CASE_SENSITIVE_DIR names. The runner arguments are those that kit 0.0.98 passed (kit K1094, K1106): one go test with
 # -count=1 -timeout=0, and node one test at a time with the 30 s test timeout.
 test-go: ## Run the unit tests of every module of go.work, with the name filter CASES=<pattern>; offline
-	CASE_SENSITIVE_ENV=FLOWMARK_CASE_SENSITIVE_DIR $(NODE) $(KIT)/runtime-targets.mjs test --runner go --roots examples packages/go tests/conformance/go -- -count=1 -timeout=0
+	CASE_SENSITIVE_ENV=FLOWMARK_CASE_SENSITIVE_DIR $(NODE) $(KIT)/runtime-targets.mjs test --runner go --roots packages/go tests/conformance/go -- -count=1 -timeout=0
 
 test-infrastructure: ## Run every tracked root Node test through the runner of kit; offline
 	CASE_SENSITIVE_ENV=FLOWMARK_CASE_SENSITIVE_DIR $(NODE) $(KIT)/runtime-targets.mjs infrastructure tests -- --test-timeout=30000 --test-concurrency=1
@@ -144,27 +132,11 @@ flowmark-benchmarks: ## Run the writepath tests and benchmarks and the statement
 slug-vectors: ## Record the heading ids GitHub, VS Code and GitLab render into store/testdata/slug; needs the network, gh, npm and cargo
 	$(NODE) scripts/record-slugs.mts
 
-# ---- Board example models ---------------------------------------------------------------------------------------------
-# The models of the board example are generated, never tracked (P34): the orm-gen of the installed @polyspec/orm and
-# polyspec/orm writes them from the corpus catalog, and lint-ts and lint-php, which read them, write them first.
-BOARD := examples/board/web
-.PHONY: board-models board-models-ts board-models-php
-board-models: board-models-ts board-models-php ## Write the TypeScript and PHP models of the board example from the corpus catalog; offline
-
-board-models-ts: ## Write node/model/models.ts of the board example with the orm-gen of its npm lock; offline
-	cd $(BOARD) && $(NODE) node_modules/.bin/orm-gen gen --set ../block/dbspec/dbspec-set.json --out node/model --scan node/posts.ts
-
-board-models-php: ## Write src/Model of the board example with the orm-gen of its Composer lock; offline
-	cd $(BOARD) && $(PHP) vendor/bin/orm-gen gen --set ../block/dbspec/dbspec-set.json --out src/Model --namespace 'Flowmark\Board\Model'
-
-# ---- Lint: each tool reads the configuration of this repository by its own discovery: .oxlintrc.json and knip.json,
-# .golangci.yml, phpcs.xml.dist and phpstan.dist.neon -------------------------------------------------------------------
-.PHONY: lint-ts lint-php lint-go
-lint-ts: board-models-ts ## Lint the TypeScript: oxlint and knip from the root; offline
+# ---- Lint: each tool reads the configuration of this repository by its own discovery: .oxlintrc.json and knip.json, and
+# .golangci.yml -------------------------------------------------------------------------------------------------
+.PHONY: lint-ts lint-go
+lint-ts: ## Lint the TypeScript: oxlint and knip from the root; offline
 	$(NODE) $(KIT)/lint-ts.mjs
-
-lint-php: board-models-php ## Lint the PHP of the board example: phpcs and PHPStan; offline
-	$(NODE) $(KIT)/lint-php.mjs --memory-limit=-1
 
 lint-go: ## Lint each Go module: golangci-lint and deadcode -test; offline once the modules are downloaded
 	$(NODE) $(KIT)/lint-go.mjs
@@ -217,7 +189,7 @@ commit-msg-check: ## Check the commit message MESSAGE and the index against the 
 # ---- CI: the gates job of .github/workflows/ci.yml installs every tool and locked dependency that the gates need, then runs
 # them past failures through ci-targets, which writes the report CI_REPORT ------------------------------------------------
 CI_REPORT ?= var/report/ci-targets
-GATES := layout-check docs-check rules-check owner-validate rebuild-check language-check duplication-check suppression-check lint-go lint-php lint-ts
+GATES := layout-check docs-check rules-check owner-validate rebuild-check language-check duplication-check suppression-check lint-go lint-ts
 .PHONY: ci-targets gates gates-setup
 ci-targets: ## Run TARGETS past failures and write CI_REPORT (logs, record.json, summary.md)
 	$(NODE) $(KIT)/ci-targets.mjs -k $(CI_REPORT) $(TARGETS)
@@ -225,9 +197,9 @@ ci-targets: ## Run TARGETS past failures and write CI_REPORT (logs, record.json,
 gates: ## Run the gates past failures through ci-targets and write CI_REPORT
 	$(NODE) $(KIT)/ci-targets.mjs -k $(CI_REPORT) $(GATES)
 
-gates-setup: ## Install the tools of mise.toml, the locked Go, Composer and npm dependencies, and build the Go workspace; ONLINE
+gates-setup: ## Install the tools of mise.toml and the locked Go dependencies, and build the Go workspace; ONLINE
 	$(MAKE) --no-print-directory install-tools
-	$(MAKE) --no-print-directory deps-go deps-php deps-node build-go
+	$(MAKE) --no-print-directory deps-go build-go
 
 # ---- Plans and commits ------------------------------------------------------------------------------------------------
 # The plan utility reads its values from the environment, where make puts its command-line variables. The texts of a row reach

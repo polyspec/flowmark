@@ -7,17 +7,5 @@
   },
   "ignore": [
     "packages/go/store/testdata/slug/vscode-slugify.ts"
-  ],
-  "workspaces": {
-    "examples/board/web": {
-      "entry": [
-        "node/main.ts",
-        "client/main.ts"
-      ],
-      "ignoreDependencies": [
-        "@polyspec/ordered-json",
-        "@polyspec/php-serialize"
-      ]
-    }
-  }
+  ]
 }

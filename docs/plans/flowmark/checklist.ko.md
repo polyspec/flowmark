@@ -1,5 +1,5 @@
 <!-- doc-id: execution-checklist -->
-<!-- source-sha256: 7c9c4ed0a86bcd3cd307964e0c64a50f1a28f41b36bb92b75b0cca76c9ac0c24 -->
+<!-- source-sha256: cfdd9887e030c835181887d60bde80494a8a246ddfe29d69c3472ede4681faa5 -->
 # 실행 체크리스트
 
 | ID | Task | Deliverables | Verification | State |
@@ -158,3 +158,4 @@
 | T74 | 대기자는 판정 뒤에 다시 읽은 lock이 그 holder를 적은 record의 file을 아직 담고 있을 때만 lock을 끝난 holder가 잡은 것으로 거절한다. Red: writepath의 TestConcurrentProcesses가 CI run 42453618008에서 형제들이 도는 동안 0.0s에 LOCK_TIMEOUT "held by 7178 ... which has ended without releasing it"으로 실패했다: holder가 record를 읽은 뒤 판정 전에 lock을 release하고 끝났으므로 빈 lock이 거절되었다. journal의 TestHolderReleasedBeforeJudgement와 TestHolderReleasedBeforeWaitJudgement는 lock-judge step으로 그 판정에서 holder를 끝내며 같은 식으로 실패한다. try의 판정과 arm한 뒤 대기의 판정은 holder가 끝났으면 lock을 다시 읽고, 그 file을 더는 담지 않은 lock은 다시 시도한다. sleep, 재시도 횟수, timer는 없다 | `packages/go/store/journal/lock.go`, `packages/go/store/journal/process_test.go`, `docs/spec/40-ops.md(.ko)` | `go test ./store/journal/ -count=1` and `go test ./writepath/ -run TestConcurrentProcesses -count=20` in packages/go | [v] |
 | T75 | kit 거부 두 가지만 멈추는 kit 0.0.101을 채택한다: 0.0.101 release asset을 고정하며, recipe 줄은 바뀌지 않는다 | `package.json`, `package-lock.json` | `make docs-check` and `make lint-ts` exit 0 | [o] |
 | T76 | flowmark은 T71부터 T75까지를 담아 0.0.8을 release하여, 그 release가 kit 0.0.101의 채택과 T74의 lock 수정을 담게 한다. Unreleased 항목은 0.0.8 절이 되고, package.json과 그 lock은 0.0.8을 적으며, release workflow는 main의 CI가 green이면 v0.0.8과 packages/go/v0.0.8을 tag한다 | CHANGELOG.md, CHANGELOG.ko.md, package.json, package-lock.json | `make docs-check`, then the CI run of main and the release workflow succeed | [ ] |
+| T77 | flowmark는 엔진과 자기 의존만 갖는다: 예제와, hyper, crudui, orm, template, php-serialize, ordered-json을 고정하는 board web application은 history와 함께 저장소 flowmark-examples로 옮기고, 그것만 필요로 하던 장치는 flowmark에서 뺀다: board, deps-node, deps-php, lint-php target, PHP와 Composer toolchain, tests/board-lock.test.mts, 그리고 config, go.work, lint 설정의 그 항목 | examples/와 그 장치의 제거; 계획 판정 | `make docs-check`, `make owner-validate`, `make layout-check`, `make lint-ts` and `make test-go` exit 0 | [o] |

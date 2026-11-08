@@ -859,7 +859,7 @@ The engine states the size of a corpus it serves within the latency target above
     `descriptors` column of the benchmark artifacts counts the whole process, which holds the fixture's corpus and the
     freshly opened one, about two per document; one corpus alone holds one per folder and document, as the board
     measurement above shows.
-  - The board of the examples is this shape at 10,000 posts, 1,000 in each of ten month folders, served by
+  - The board of the examples (the flowmark-examples repository) is this shape at 10,000 posts, 1,000 in each of ten month folders, served by
     `flowmark serve`: the server is ready in 3.1 s, keeps 140 MB, holds 10,029 descriptors and answers a page of
     ten posts in 72 ms, one post in 44 ms and a new post in 156 ms through orm.
   - Sessions are not limited: the lock serializes them, so one write takes the same time and the last of sixteen

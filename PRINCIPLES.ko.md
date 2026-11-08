@@ -1,5 +1,5 @@
 <!-- doc-id: principles -->
-<!-- source-sha256: d7f38a4e6a90464c123cffd6f19ecf17d3e12aa8a8ee9a2df135402d379188b9 -->
+<!-- source-sha256: a871d004befdefd0847e55b41e941f79166d15540a44492d6f2ef0b650193b7a -->
 # 원칙
 
 [English](PRINCIPLES.md)
@@ -39,7 +39,7 @@ repository는 자기 사본을 자기 파일로 바꿉니다(K1055).
   Enforced by: none, 안내하는 규칙이다: kit은 어떤 명령도 커밋도 거부하지 않는다 (K1053).
 - P8 오류는 숨기지 않습니다: 잘못된 입력을 그럴듯한 입력으로 바꾸는 fallback도, 입력이나 출력을 조용히 버리는 것도, 삼킨
   오류도 없습니다. fallback은 정말 필요한 곳에만 그 필요를 적고 둡니다.
-  Enforced by: `make lint-ts`, `make lint-go`, `make lint-php`, `make suppression-check`
+  Enforced by: `make lint-ts`, `make lint-go`, `make suppression-check`
 - P9 올바름이 먼저입니다; 빠름은 올바름을 지킬 때만 좇습니다.
   Enforced by: none, 올바름과 빠름의 순서는 판단입니다.
 - P10 main에 작업이 들어가는 길은 둘입니다. main에서 직접 하는 작업은 P38의 commit으로 들어갑니다. 병렬이나 격리된
@@ -188,7 +188,7 @@ owner가 2026-10-13에 이 기준을 승인했습니다. 각 기준은 위반 �
 - S2 PHP: 파일당 class 하나; package는 PSR-4, test는 `autoload-dev`; `classmap` 금지; `files`는 namespaced function과
   constant에만; `spl_autoload_register`와 runtime `ClassLoader` 등록 금지; 생성 코드도 PSR-1과 PSR-4를 따름; test는
   PHPUnit에서 돕니다.
-  Enforced by: `make lint-php`
+  Enforced by: none, 안내하는 규칙이다: flowmark는 PHP를 갖지 않으므로 lint-php를 돌리지 않는다.
 - S3 test는 생태계 표준 runner(`node --test` 또는 vitest, PHPUnit, `go test`, `cargo test` 또는 nextest, unittest)로만
   돌며, 자체 runner protocol, `check()` helper, 파일 chain을 쓰지 않고, 설치된 package를 대상으로 돕니다: `PYTHONPATH`,
   `sys.path` 변경, repository를 벗어나는 경로를 쓰지 않습니다. test 파일은 runner가 찾는 각 runner의 파일입니다

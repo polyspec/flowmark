@@ -3,6 +3,8 @@
 
 ## Unreleased
 
+- T77: flowmark holds the engine and only its own dependencies: the examples and the board web application moved to the repository flowmark-examples, and the board, PHP and Composer machinery that only they needed is removed.
+
 ## 0.0.8
 
 - T71, T73, T75: flowmark adopts kit 0.0.101 through 0.0.99 and 0.0.100: its recipes pass their arguments explicitly, the parity targets and rules are removed, and package.json pins the 0.0.101 release asset.

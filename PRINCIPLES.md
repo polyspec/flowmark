@@ -38,7 +38,7 @@ its grounding, and a repository changes its copy as its own file (K1055).
   Enforced by: none, a guided rule: kit refuses no command or commit (K1053).
 - P8 Errors are never hidden: no fallback that turns a wrong input into a plausible one, no silent drop of an input or an
   output, no swallowed error. A fallback stands only where it is truly needed, with that need stated.
-  Enforced by: `make lint-ts`, `make lint-go`, `make lint-php`, `make suppression-check`
+  Enforced by: `make lint-ts`, `make lint-go`, `make suppression-check`
 - P9 Correct first; fast only when it stays correct.
   Enforced by: none, the order of correctness and speed is a judgement.
 - P10 Work reaches main in one of two ways. Direct work on main is committed through the commits of P38. Parallel or
@@ -205,7 +205,7 @@ tool lands, a standard binds the work as written here.
 - S2 PHP: one class per file; PSR-4 for the package and `autoload-dev` for tests; no `classmap`; `files` only for
   namespaced functions and constants; no `spl_autoload_register` and no runtime `ClassLoader` registration; generated code
   follows PSR-1 and PSR-4; tests run on PHPUnit.
-  Enforced by: `make lint-php`
+  Enforced by: none, a guided rule: flowmark holds no PHP, so it runs no lint-php.
 - S3 Tests run only on the ecosystem's standard runner (`node --test` or vitest, PHPUnit, `go test`, `cargo test` or
   nextest, unittest), with no runner protocol, `check()` helper or file chain of our own, and against installed packages:
   no `PYTHONPATH`, no `sys.path` change, no path that leaves the repository. The test files are those of each runner

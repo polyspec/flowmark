@@ -63,6 +63,8 @@ flowmark = the markdown database engine (one Go binary)
 - A SQLite mirror is rejected: mirror↔corpus equivalence becomes a permanent bug class. If a mirror is ever admitted, its conformance conditions are (a) full-rebuild equivalence and (b) no write path.
 - The IR-boundedness claim covers the request layer. **API parity is not claimed** — the capability table (§6) is the contract, in orm's `CAPABILITY_UNSUPPORTED`/`OPERATOR_NOT_ALLOWED` tradition.
 
+**The examples ruling (T77)**: flowmark holds the engine and only the dependencies the engine needs: its Go module and the orm Go module whose `engine/dbspec` and `engine/ir` it uses. The examples — the tracker and board corpora, their Go tests, and the board web application, which pins hyper, crudui, orm, template, php-serialize and ordered-json and needs PHP and Composer — live in the repository flowmark-examples, which consumes the tagged Go module of flowmark.
+
 ### 2. Canonical format (`10-canonical-format.md`)
 
 - **Idempotency is the dbspec two-clause proposition**, not a single byte-identity claim: `emit(parse(s)) == s` for canonical input `s`, and `emit(parse(emit(d))) == emit(d)` for any valid input `d`. The renderer owns exactly the **structural skeleton** — the field list of a `files` row, heading lines, and the item and table lines of the rows (Revision 3) — and never rewrites payload bytes in preserved runs (prose, fenced content). Non-canonical input is a `format.noncanonical` diagnostic plus a separate one-shot `flowmark canon` migration transaction, never a side effect of a logical write.

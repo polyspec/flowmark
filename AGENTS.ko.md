@@ -1,5 +1,5 @@
 <!-- doc-id: agents -->
-<!-- source-sha256: 26168f769981c52734c1ed68fc4551b1227c1b41ebdf3b52148720332759fa5f -->
+<!-- source-sha256: ff3acaf35b9d163e9d8d71ba2d67f5e037dcf1cee64e26498c865cb6357bfe2f -->
 # 개발 규칙
 
 [English](AGENTS.md)
@@ -37,7 +37,7 @@ GitHub, Jira), 응용 schema이고, [polyspec/orm](https://github.com/polyspec/o
   kit은 recipe를 include시키지 않는다: flowmark의 `Makefile`이 이 repository, 그 CI와 그 문서가 부르는 모든 target을
   갖고, 각 recipe는 설치된 package의 utility, 곧 그 dist의 `$(KIT)/<tool>.mjs`를 자기 인자로 실행한다. CI workflow는
   그 target만 실행한다. tool의 설정은 flowmark 자신의 파일이다: `.npmrc`, `mise.toml`의 `[settings]`와 `[env]`,
-  `.golangci.yml`, `.oxlintrc.json`, `knip.json`, `phpcs.xml.dist`, `phpstan.dist.neon`. PRINCIPLES.md,
+  `.golangci.yml`, `.oxlintrc.json`, `knip.json`. PRINCIPLES.md,
   `config/layout.kit.yml`과 그 schema는 kit에서 가져와 여기에 둔다. flowmark는 생태계 library를 자신의 package
   manifest에 선언한다.
   Enforced by: `make test-infrastructure`, which runs tests/release-config.test.mts

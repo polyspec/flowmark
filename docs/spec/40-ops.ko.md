@@ -1,5 +1,5 @@
 <!-- doc-id: spec-ops -->
-<!-- source-sha256: 918daedafdf32727996a6ca448ae573be39b31f78218278665b25fc85d690a26 -->
+<!-- source-sha256: 741c08350060bce3f4a488a99fcdf45045eeede7605d3e9a9301275afcb6400f -->
 # Operations
 
 [English](40-ops.md)
@@ -734,7 +734,7 @@ MySQL과 PostgreSQL은 `datetime(p)` column을 `NOW(6)`와 여섯 자리로 비�
     workflow가 benchmark 앞에서 그렇게 하고 runner가 허용한 값을 log에 남긴다. benchmark artifact의
     `descriptors` 값은 process 전체를 세는데 거기에는 fixture가 연 corpus와 새로 연 corpus가 있어 문서마다 약
     두 개다. corpus 하나만 놓고 보면 folder와 문서마다 하나로, 위의 board 측정이 그것을 보인다.
-  - examples의 board가 글 10,000개, 달 folder 열 개에 1,000개씩일 때 이 모양이며 `flowmark serve`로 제공하면
+  - 예제(flowmark-examples 저장소)의 board가 글 10,000개, 달 folder 열 개에 1,000개씩일 때 이 모양이며 `flowmark serve`로 제공하면
     서버는 3.1초에 준비되고 140 MB를 쥐고 descriptor 10,029개를 잡으며 orm을 거쳐 글 열 개의 페이지에 72 ms,
     글 하나에 44 ms, 새 글에 156 ms로 답한다.
   - session은 제한하지 않는다. lock이 직렬화하므로 쓰기 하나의 시간은 같고, 동시에 쓰는 session 열여섯 중

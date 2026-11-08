@@ -13,7 +13,7 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 jobs:
-  # The gates: the shared checks, and the lint of Go and of the PHP and the TypeScript of the board example. The job installs
+  # The gates: the shared checks, and the lint of Go and of the TypeScript. The job installs
   # what they need (make gates-setup) and runs them past failures (make gates), which writes the report var/report/ci-targets;
   # the other jobs follow it.
   gates:
@@ -25,12 +25,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 0
-      # shivammathur/setup-php 2.40.0: the PHP of .php-version for the lint of the board example.
-      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962
-        with:
-          php-version-file: .php-version
-          tools: none
-          coverage: none
       - name: Bootstrap the Node.js of mise.toml, npm and the packages of package-lock.json
         uses: ./.github/actions/bootstrap
       - name: install the tools and dependencies of the gates

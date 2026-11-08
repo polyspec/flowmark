@@ -123,7 +123,7 @@ func goModules(t *testing.T) []string {
 	t.Helper()
 	repo := repositoryRoot(t)
 	var modules []string
-	for _, rel := range []string{"packages/go", "examples", "tests/conformance/go"} {
+	for _, rel := range []string{"packages/go", "tests/conformance/go"} {
 		modules = append(modules, filepath.Join(repo, rel))
 	}
 	return modules

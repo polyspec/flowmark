@@ -6,7 +6,6 @@
       "paths": [
         "*.md",
         "docs/**",
-        "examples/**/*.md",
         "config/documents.json",
         "config/checklist.json"
       ],
@@ -66,18 +65,6 @@
     },
     {
       "paths": [
-        "examples/**"
-      ],
-      "targets": [
-        "lint-go",
-        "lint-ts",
-        "lint-php",
-        "duplication-check",
-        "test-go"
-      ]
-    },
-    {
-      "paths": [
         "scripts/check-internal-paths.mts"
       ],
       "targets": [
@@ -122,8 +109,7 @@
         "config/toolchain.json",
         "mise.toml",
         "mise.lock",
-        ".mise/**",
-        ".php-version"
+        ".mise/**"
       ],
       "targets": []
     },
@@ -133,15 +119,6 @@
       ],
       "targets": [
         "lint-go"
-      ]
-    },
-    {
-      "paths": [
-        "phpcs.xml.dist",
-        "phpstan.dist.neon"
-      ],
-      "targets": [
-        "lint-php"
       ]
     },
     {

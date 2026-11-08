@@ -42,7 +42,7 @@ them holds the rules of this repository.
   kit includes no recipe: the `Makefile` of flowmark holds every target that the repository, its CI and its documents
   call, and each recipe runs a utility of the installed package, `$(KIT)/<tool>.mjs` of its dist, with its own arguments;
   the CI workflows run only those targets. The settings of the tools are flowmark's own files: `.npmrc`, the `[settings]`
-  and `[env]` of `mise.toml`, `.golangci.yml`, `.oxlintrc.json`, `knip.json`, `phpcs.xml.dist` and `phpstan.dist.neon`;
+  and `[env]` of `mise.toml`, `.golangci.yml`, `.oxlintrc.json` and `knip.json`;
   PRINCIPLES.md, `config/layout.kit.yml` and its schemas were taken from kit and are kept here. flowmark declares ecosystem
   libraries in its own package manifests.
   Enforced by: `make test-infrastructure`, which runs tests/release-config.test.mts
