@@ -1,5 +1,5 @@
 <!-- doc-id: plans-design-plan -->
-<!-- source-sha256: b59622f4d894f64aec784feb845073c348766d35627caed29ed8253210abbe79 -->
+<!-- source-sha256: e2a11f467de1e20911abc310222302c31cb70a06505a65e7414330707d854041 -->
 # flowmark 설계 계획
 
 Revision 2 — 3개 lane의 적대 감사 결과(engine core, orm 통합, 운영)와 multi-platform 지시를 아래 판정에 접는다. 감사의 blocker는 전부 판정이 되었고, 부수지 못한 주장은 문서 끝에 남긴다.
@@ -241,6 +241,50 @@ flush cost counter로 재며, 그 수가 Red이다:
 **T9 conformance 계약 (지금 확정)**: markdown vector는 corpus-before + IR request + 기대 corpus-after / 기대 rows이며 Go executor에 대해 실행한다. SQL/binds 비교는 적용되지 않는다(SQL이 없으므로). 다른 client가 executor를 port할 때 교차 비교가 시작된다. (Revision 3: vector는 flowmark 엔진에 대해 실행하고, orm의 executor conformance는 flowmark build를 고정한다.)
 
 **이후 phase (checklist `[ ]` 항목으로만 등록)**: T2 codec(Go), T3 validator, T4 executor, T5 orm markdown-executor 통합(manifest setting, state-machine sub-grammar — orm 저장소 변경), T6 sync(adapter 계약과 database adapter; GitHub·Jira adapter는 그 아래에 등록), T7 세 개의 face — CLI·MCP server·soksak sidecar(protocol v1: stdio JSON lines, surface routing, host 소유 lifecycle; MCP tool 목록 mini-spec 먼저, lock은 작업마다 또는 server transaction마다 잡힌다(§5)), T8 checklist app(local issue model), T9 conformance vectors, T10 자기 repo의 soksak plugin — local 칸반 보드와 issue tracker, 또 하나의 thin consumer로서 view 전용 write path 없음.
+
+## T61 — corpus인 checklist
+
+**판정.** checklist는 corpus `docs/plans/<plan>/checklist/`이고 schema는 그 corpus의 catalog `dbspec/checklist.dbs`이다.
+kit이 읽는 두 파일 `checklist.md`와 `checklist.ko.md`는 엔진이 corpus에서 render하는 view이다. agent는 row와 그
+state를 flowmark로만 쓴다. view가 corpus의 render 결과와 다르면 `make checklist-check`가 실패한다.
+
+**근거.** 지금 형태의 표는 corpus로 읽을 수 없다. 이유는 세 가지이다.
+- kit은 고정 경로 `docs/plans/<plan>/checklist.md`와 그 twin만 읽는다(K241).
+- corpus 문서의 이름은 `<table>.flowmark.md`이고 H1은 `# <table>`이다
+  ([document model](../../spec/20-document-model.ko.md), [canonical format](../../spec/10-canonical-format.ko.md#문서-순서)).
+- kit의 state cell은 `[!] cause: <cause>; retry: <condition>`처럼 한 cell에 값 세 개를 담는다. corpus의 cell은 값
+  하나를 담는다.
+
+`checklist.md`를 corpus로 읽으려면 이 규칙마다 예외가 필요하고, 그러면 규칙이 파일마다 달라진다. kit의 문법을 바꾸면
+소비자 하나를 위해 모든 polyspec repository의 checklist가 바뀐다. view는 두 문법을 모두 그대로 지키고, drift 검사가
+corpus를 유일한 원천으로 만든다.
+
+**catalog.** `checklist.dbs`는 `store document table`인 표 `items` 하나를 선언한다.
+- `id varchar(32)`: key이고 `config/checklist.json`의 `idPattern`에 맞는다.
+- `task`, `deliverables`, `verification`: `text`이다. twin을 위해 같은 세 column의 `_ko`가 있다. twin은 같은 row를
+  가지므로 row 하나가 두 언어를 담고, 언어마다 view가 자기 column을 읽는다.
+- `position i32`: `order position`을 가지므로 view가 row의 순서를 지킨다.
+- `state varchar(16)`: check `state in ('waiting', 'active', 'verifying', 'done', 'bypassed', 'impossible')`를 가진다.
+  이것은 `config/checklist.json`의 state 이름이고 marker가 아니다. waiting state의 marker는 `[ ]`이고, cell 끝의
+  공백은 canonical이 아니다.
+- `cause text null`, `retry text null`과 그 `_ko` column: check가 이 값들을 state에 묶는다. `bypassed`는 cause와
+  retry를 요구하고, `impossible`은 cause를 요구하며 retry를 허용하지 않는다. 다른 state에는 둘 다 없다.
+
+**view.** view는 `config/checklist.json`에서 kit 표의 header를 render한다. item마다 순서대로 row 하나를 쓰고, state
+cell은 `config/checklist.json`이 그 state에 선언한 marker이다. bypassed marker 뒤에는 ` cause: <cause>; retry: <retry>`를,
+impossible marker 뒤에는 ` cause: <cause>`를 붙인다. 한국어 view는 label `원인`과 `재시도`를 쓴다. view마다 지금 파일이
+가진 doc-id 줄과 H1을 가진다. twin의 `source-sha256` stamp는 다른 twin처럼 `make documents-stamp`가 쓴다.
+
+**state.** 엔진과 orm은 전이를 갖지 않는다. polyspec fsm이 state를 정하고, `state`, `cause`, `retry`를 update해
+corpus에 쓴다. check가 거부하는 state는 그 write의 `CHECK` 거부이고, 고친 값으로 바뀌지 않는다.
+
+**board.** `items`를 `state`로 query하면 board가 나오고, row마다 한 번씩 나온다.
+
+**외부 편집.** corpus 파일의 편집은 다른 corpus 편집과 똑같이 읽힌다([sync](../../spec/70-sync.ko.md)). view의 편집은
+drift이고, 검사가 그 view를 지목하며 실패한다. 검사는 view를 고쳐 쓰지 않는다.
+
+**순서.** 먼저 이 repository의 checklist를 옮긴다. catalog, 그 case(check마다 통과 row와 거부 row 하나씩), 현재
+checklist의 corpus import, view, 검사 순서이다. 그다음 각 polyspec repository가 자기 checklist의 row로 받아들인다.
 
 ## 감사가 부수지 못한 것
 
