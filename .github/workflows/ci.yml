@@ -1,11 +1,25 @@
 # The CI of flowmark. Each step runs a target of the Makefile of this repository, whose recipes run the utilities of kit; the
 # test discovery, execution and case-sensitive resources are kit's runner. The release takes the id of a successful push run of
 # this workflow on main (release.yml, make release-tag); the run succeeds only when every job of it succeeds (T15-51).
+#
+# A push or a pull request whose every changed path is a document that only the document checks read starts no run (T90):
+# paths-ignore lists the root documents and the plans, which the documents workflow (documents.yml) checks on every push and
+# pull request. The specs are no such document: the spec anchor test of test-go reads docs/spec. GitHub starts the run when any
+# changed path of the whole push or pull request matches no pattern, so a code change pushed with documents runs every job,
+# and a version commit changes package.json, so it runs every job and the release follows its run. Past 3000 changed files
+# GitHub does not evaluate the filter; documents.yml fails such a diff (make diff-size-check). The pull request takes the same
+# list by the same rule: its documents are checked by documents.yml, and its code by this workflow. A dispatch runs every job.
 name: ci
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - '*.md'
+      - 'docs/plans/**'
   pull_request:
+    paths-ignore:
+      - '*.md'
+      - 'docs/plans/**'
   workflow_dispatch:
 permissions:
   contents: read

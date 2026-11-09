@@ -3,6 +3,8 @@
 
 ## Unreleased
 
+- T90: A push or a pull request that changes only the root documents or the plans starts no CI run; the new documents workflow runs the document checks on every push and pull request and fails a diff of more than 3000 files, past which GitHub does not evaluate a path filter.
+
 ## 0.0.13
 
 - T87: A corpus read again from its files gives every value of a table that a statement made the storage class its session gave it: the stored form follows the SQLite affinity of the column, so an INTEGER of a column without a declared type stays an INTEGER, a `BOOLEAN` column keeps an INTEGER other than 0 or 1 and its texts, a text of a number column stays a text, and a key value that would need a stored literal is refused as CONSTRAINT.

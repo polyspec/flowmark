@@ -1,5 +1,5 @@
 <!-- doc-id: agents -->
-<!-- source-sha256: ff3acaf35b9d163e9d8d71ba2d67f5e037dcf1cee64e26498c865cb6357bfe2f -->
+<!-- source-sha256: 3f2452d7751d7b0a315fb73c6ef5f5aaa77eb4fa0cad61085b9b7324b7a75d3a -->
 # 개발 규칙
 
 [English](AGENTS.md)
@@ -55,6 +55,13 @@ GitHub, Jira), 응용 schema이고, [polyspec/orm](https://github.com/polyspec/o
   `vX.Y.Z`와 `packages/go/vX.Y.Z`를 만든다. 손으로 tag를 만들고 옮기고 push하는 사람은 없으며, push한 tag는 release를
   시작하지 않는다.
   Enforced by: `make release-tag`
+- Own: 바뀐 모든 경로가 루트 문서나 plan, 곧 `.github/workflows/ci.yml`의 `paths-ignore`(`*.md`, `docs/plans/**`)인
+  push나 pull request는 CI run을 시작하지 않는다. `.github/workflows/documents.yml`은 path filter 없이 모든 push와 pull
+  request에서 Makefile의 `DOCUMENT_CHECKS` 검사를 실행하고, GitHub가 path filter를 평가하지 않는 3000개를 넘는 파일의
+  diff를 실패시킨다. `DOCUMENT_CHECKS` 밖의 검사가 읽는 경로는 spec을 포함해 무시하지 않으며, version commit은
+  package.json을 바꾸므로 모든 job을 실행하고 그 run이 release가 받는 run이다. `[skip ci]`는 push의 head commit만 읽으므로
+  쓰지 않는다.
+  Enforced by: `make test-infrastructure`, which runs tests/release-config.test.mts
 - Own: 엔진은 database이므로 그 unit test는 촘촘하다: 모든 문법과 제약 규칙에는 허용과 거절의 사례가 최소 하나씩 있고
   표 주도이며 edge case를 포함한다. 모든 storage에는 모든 column type과 NULL 및 빈 형태를 덮는 P1/P2 golden
   fixture가 있다. parse와 emit은 golden fixture를 seed로 `go test -fuzz`로 fuzz하며, fuzzer가 찾은 실패 입력은

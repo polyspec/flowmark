@@ -190,7 +190,10 @@ commit-msg-check: ## Check the commit message MESSAGE and the index against the 
 # them past failures through ci-targets, which writes the report CI_REPORT ------------------------------------------------
 CI_REPORT ?= var/report/ci-targets
 GATES := layout-check docs-check rules-check owner-validate rebuild-check language-check duplication-check suppression-check lint-go lint-ts
-.PHONY: ci-targets gates gates-setup
+# The checks that read the documents that ci.yml ignores (T90): the documents workflow (documents.yml) runs them on every push
+# and pull request, and the gates run them too, so the CI run that a release takes holds them.
+DOCUMENT_CHECKS := layout-check docs-check rules-check owner-validate refs-check internal-paths-check
+.PHONY: ci-targets gates gates-setup documents documents-setup diff-size-check
 ci-targets: ## Run TARGETS past failures and write CI_REPORT (logs, record.json, summary.md)
 	$(NODE) $(KIT)/ci-targets.mjs -k $(CI_REPORT) $(TARGETS)
 
@@ -200,6 +203,15 @@ gates: ## Run the gates past failures through ci-targets and write CI_REPORT
 gates-setup: ## Install the tools of mise.toml and the locked Go dependencies, and build the Go workspace; ONLINE
 	$(MAKE) --no-print-directory install-tools
 	$(MAKE) --no-print-directory deps-go build-go
+
+documents: ## Run the document checks past failures through ci-targets and write CI_REPORT
+	$(NODE) $(KIT)/ci-targets.mjs -k $(CI_REPORT) $(DOCUMENT_CHECKS)
+
+documents-setup: ## Install alint of mise.toml, the one tool of the document checks besides node; ONLINE
+	$(MAKE) --no-print-directory install-tools TOOLS=alint
+
+diff-size-check: ## Fail while the diff of the GitHub event GITHUB_EVENT_NAME at GITHUB_EVENT_PATH holds more than the 3000 files of GitHub's path filter; offline
+	$(NODE) scripts/check-diff-size.mts
 
 # ---- Plans and commits ------------------------------------------------------------------------------------------------
 # The plan utility reads its values from the environment, where make puts its command-line variables. The texts of a row reach
