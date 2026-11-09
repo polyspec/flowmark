@@ -395,7 +395,11 @@ utility of orm's SQLite dialect holds on a corpus, and a client has only this dr
 - **Rows.** An answer holds at most 1000 rows or 1 MiB; with `more` true, `{"op": "fetch"}` answers the next batch and
   `{"op": "close"}` ends them. A closed connection interrupts its statement, so a result takes the memory of what its client
   reads.
-- **Values.** A value of a row is a JSON number, string or null. `{"bytes": base64}` is a blob, `{"text": base64}` a text that
+- **Values.** A value of a row is a JSON number, string or null. An INTEGER is an integer literal. A finite REAL is the
+  shortest text that reads back as it, with `.0` appended when that text has neither a fraction nor an exponent, so it
+  always carries one: 2.0 is `2.0`, -0.0 is `-0.0`, 1e21 is `1e+21` and 2.5 is `2.5`. Grounding: JSON has one number type,
+  and a whole REAL written without a fraction reads as the INTEGER of the same value, so a client could not tell the two
+  apart. `{"bytes": base64}` is a blob, `{"text": base64}` a text that
   is not UTF-8, and `{"float": "+Inf"}` or `{"float": "-Inf"}` an infinity, which JSON cannot hold. A parameter takes the same
   forms, so a value read from a row binds back unchanged; any other object, and an array, is `DRIVER`. A failure carries
   `result_code`, SQLite's result code, when it has one.

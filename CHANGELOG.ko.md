@@ -1,8 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 1c0ef43932d51772d6debeb3d57f7efd2b119205d64520bb96bb0d0aa23cc91e -->
+<!-- source-sha256: fbcf115dd994a0bc6445fac64c0e0af57bfda260777c9b7046c7c9c2e0b35e7c -->
 # Changelog
 
 ## Unreleased
+
+- T86: SQL server는 유한한 REAL을 소수부나 지수와 함께 답하므로(2.0은 `2.0`, -0.0은 `-0.0`, 1e21은 `1e+21`) client가 INTEGER와 가를 수 있고, 그런 REAL의 stored literal(`n'2.0'`)은 REAL로 다시 읽힌다.
 
 ## 0.0.12
 

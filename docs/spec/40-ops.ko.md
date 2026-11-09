@@ -1,5 +1,5 @@
 <!-- doc-id: spec-ops -->
-<!-- source-sha256: 741c08350060bce3f4a488a99fcdf45045eeede7605d3e9a9301275afcb6400f -->
+<!-- source-sha256: c215098f758e578861ae03d3ac8c2cf887c66ea0e0f487c1bc73c5b292ca6059 -->
 # Operations
 
 [English](40-ops.md)
@@ -335,7 +335,10 @@ client가 구현할 것은 이 driver뿐이다.
 - **읽을 수만 있는 corpus.** lock을 쓸 수 없으므로 쓰기는 `READ_ONLY`이고 읽기는 lock이 필요 없다.
 - **행.** 답 하나는 최대 1000행 또는 1 MiB를 담는다. `more`가 true이면 `{"op": "fetch"}`가 다음 묶음을 답하고
   `{"op": "close"}`가 끝낸다. 닫힌 연결은 자기 문장을 중단하므로 결과는 client가 읽는 만큼의 메모리만 쓴다.
-- **값.** 행의 값은 JSON number, string, null이다. `{"bytes": base64}`는 blob, `{"text": base64}`는 UTF-8이 아닌 text,
+- **값.** 행의 값은 JSON number, string, null이다. INTEGER는 정수 literal이다. 유한한 REAL은 그 값으로 다시 읽히는 가장
+  짧은 text이며, 그 text에 소수부도 지수도 없으면 `.0`을 붙이므로 언제나 둘 중 하나를 가진다: 2.0은 `2.0`, -0.0은 `-0.0`,
+  1e21은 `1e+21`, 2.5는 `2.5`다. 근거: JSON의 수 타입은 하나뿐이고, 소수부 없이 쓴 정수값 REAL은 같은 값의 INTEGER로
+  읽히므로 client가 둘을 가를 수 없다. `{"bytes": base64}`는 blob, `{"text": base64}`는 UTF-8이 아닌 text,
   `{"float": "+Inf"}`와 `{"float": "-Inf"}`는 JSON이 담지 못하는 무한대다. 매개변수도 같은 형식을 받으므로 행에서 읽은 값은
   그대로 다시 bind되며, 그 밖의 object와 array는 `DRIVER`다. 실패에 SQLite result code가 있으면 `result_code`에 담는다.
 

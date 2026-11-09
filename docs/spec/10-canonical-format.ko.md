@@ -1,5 +1,5 @@
 <!-- doc-id: spec-canonical-format -->
-<!-- source-sha256: 84dc22c08d024ae59c66fa1a3344f9f97ed3095cd88421c6ab88eceb0aac2f86 -->
+<!-- source-sha256: 05e91876450966c0abdbe9c37f01fcd7f6814b98a5da8f593ea3502c9bfc193e -->
 # Canonical format
 
 [English](10-canonical-format.md)
@@ -391,7 +391,9 @@ scalar 값은 dbspec literal이 아니라 읽을 수 있는 형식으로 쓴다.
 ## Stored literals
 
 column의 타입이나 cell의 text가 담지 못하는, 문장이 쓴 값은 따옴표 없는 stored literal이다: `x'6162'`는 blob, `t'ff'`는 그
-byte의 text, `n'1.5'`는 숫자다. SQLite는 값을 column 타입에 묶지 않고 text는 줄바꿈, raw HTML, UTF-8이 아닌 byte를 담을 수
+byte의 text, `n'1.5'`는 숫자다. REAL의 숫자는 언제나 소수부나 지수를 가지며, 가장 짧은 text에 둘 다 없으면 `.0`을
+붙이고(`n'2.0'`, `n'-0.0'`, `n'1e+21'`), 무한대의 숫자는 `n'+Inf'`나 `n'-Inf'`이므로, REAL은 같은 값의 INTEGER가 아니라
+REAL로 다시 읽힌다. SQLite는 값을 column 타입에 묶지 않고 text는 줄바꿈, raw HTML, UTF-8이 아닌 byte를 담을 수
 있으므로, corpus는 문장이 저장한 것을 유지해 같은 값을 다시 읽는다. literal처럼 읽히는 text는 따옴표로 쓰며, 따옴표 cell은
 literal이 아니다. files 행의 field에는 따옴표 형식이 없으므로 그런 text는 그곳에서 `CONSTRAINT`다. model이나 face의 쓰기는
 literal을 만들지 않고 [한 줄 자리](#한-줄-자리)의 규칙을 따른다. primary key에는 literal 형식이 없다.

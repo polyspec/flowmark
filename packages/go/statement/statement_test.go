@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -346,6 +347,19 @@ func TestExclusiveLockingMode(t *testing.T) {
 	run(t, b, "INSERT INTO notes (title) VALUES ('other')")
 }
 
+// freshSession is a session of a new corpus that reads the files of root, so nothing of another session's database stands.
+func freshSession(t *testing.T, root string) *writepath.Session {
+	t.Helper()
+	c, err := ops.Open(context.Background(), root, 0)
+	corpustest.Opened(t, c, err)
+	fresh, err := c.Session("statement-fresh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { closeSession(t, fresh) })
+	return fresh
+}
+
 // TestStoredLiterals pins that a value SQLite holds comes back the same from the corpus, whatever its column declares and
 // whether or not a cell can hold it as text.
 func TestStoredLiterals(t *testing.T) {
@@ -366,13 +380,7 @@ func TestStoredLiterals(t *testing.T) {
 		run(t, s, fmt.Sprintf("INSERT INTO mix (id, note, data, wide) VALUES (%d, %s)", i+1, v.insert))
 	}
 	// A new corpus reads the files: nothing of the session's database stands.
-	c, err := ops.Open(context.Background(), root, 0)
-	corpustest.Opened(t, c, err)
-	fresh, err := c.Session("statement-fresh")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { closeSession(t, fresh) })
+	fresh := freshSession(t, root)
 	for i, v := range values {
 		a := run(t, fresh, fmt.Sprintf("SELECT note, data, wide FROM mix WHERE id = %d", i+1))
 		got := fmt.Sprint(a.Rows[0][0]) + "|" + fmt.Sprint(a.Rows[0][1]) + "|" + fmt.Sprint(a.Rows[0][2])
@@ -418,6 +426,153 @@ func TestParameterForms(t *testing.T) {
 			t.Errorf("%s: %v, want a refusal of parameter 0", v.name, err)
 		}
 	}
+}
+
+// TestRealForm pins that an answer tells a REAL from an INTEGER: a finite REAL is a JSON number with a fraction or an
+// exponent, an INTEGER an integer literal and an infinity its object form. Each binds back as the value it stands for, and
+// a corpus read again from its files answers the same, a REAL stored as a literal included.
+func TestRealForm(t *testing.T) {
+	s, root := open(t)
+	run(t, s, "CREATE TABLE nums (id INTEGER PRIMARY KEY, v, w)")
+	values := []struct{ name, insert, want string }{
+		{"a whole REAL", "2.0", `[2.0,"real"]`},
+		{"a negative zero REAL", "-0.0", `[-0.0,"real"]`},
+		{"a REAL of exponent 21", "1e21", `[1e+21,"real"]`},
+		{"a REAL with a fraction", "2.5", `[2.5,"real"]`},
+		{"a REAL below one millionth", "1e-7", `[1e-7,"real"]`},
+		{"a large whole REAL", "123456789.0", `[123456789.0,"real"]`},
+		{"an INTEGER", "2", `[2,"integer"]`},
+		{"a negative zero INTEGER", "-0", `[0,"integer"]`},
+		{"a negative INTEGER", "-3", `[-3,"integer"]`},
+		{"an infinity", "9e999", `[{"float":"+Inf"},"real"]`},
+		{"a negative infinity", "-9e999", `[{"float":"-Inf"},"real"]`},
+	}
+	read := func(t *testing.T, s *writepath.Session, column string, id int) string {
+		t.Helper()
+		a := run(t, s, fmt.Sprintf("SELECT %s, typeof(%s) FROM nums WHERE id = ?", column, column), fmt.Sprint(id))
+		return strings.TrimSuffix(strings.TrimPrefix(cells(a), "["), "]")
+	}
+	for i, v := range values {
+		run(t, s, fmt.Sprintf("INSERT INTO nums (id, v) VALUES (%d, %s)", i+1, v.insert))
+		if got := read(t, s, "v", i+1); got != v.want {
+			t.Errorf("%s: read %s, want %s", v.name, got, v.want)
+		}
+		// The value the answer wrote binds back as the same value of the same type.
+		var row []json.RawMessage
+		if err := json.Unmarshal([]byte(v.want), &row); err != nil {
+			t.Fatal(err)
+		}
+		run(t, s, "UPDATE nums SET w = ? WHERE id = ?", string(row[0]), fmt.Sprint(i+1))
+		if got := read(t, s, "w", i+1); got != v.want {
+			t.Errorf("%s: %s binds back as %s", v.name, row[0], got)
+		}
+	}
+	// A new corpus reads the files: nothing of the session's database stands. A REAL that a cell cannot hold as its
+	// column's type is a stored literal, which reads back as a REAL. An INTEGER of a column without a declared type reads
+	// back as a text, the defect of T87, so the INTEGER rows are left out here.
+	fresh := freshSession(t, root)
+	for i, v := range values {
+		if strings.HasSuffix(v.want, `"integer"]`) {
+			continue
+		}
+		for _, column := range []string{"v", "w"} {
+			if got := read(t, fresh, column, i+1); got != v.want {
+				t.Errorf("%s: read %s of %s from the files, want %s", v.name, got, column, v.want)
+			}
+		}
+	}
+	// The forms an answer never writes: a REAL as an integer literal, an INTEGER with a fraction, an infinity as a number.
+	wrong := []struct{ name, value, form string }{
+		{"a whole REAL as an integer", "2.0", `[[2,"real"]]`},
+		{"a negative zero REAL as an integer", "-0.0", `[[-0,"real"]]`},
+		{"a REAL of exponent 21 as an integer", "1e21", `[[1000000000000000000000,"real"]]`},
+		{"an INTEGER with a fraction", "2", `[[2.0,"integer"]]`},
+		{"a negative zero INTEGER as a REAL", "-0", `[[-0.0,"integer"]]`},
+		{"an infinity as a number", "9e999", `[[1e999,"real"]]`},
+	}
+	for _, v := range wrong {
+		if got := cells(run(t, s, "SELECT "+v.value+", typeof("+v.value+")")); got == v.form {
+			t.Errorf("%s: answered %s", v.name, got)
+		}
+	}
+}
+
+// TestAnswerNumbers pins the JSON of each number a row holds: a finite REAL is the shortest text that reads back as it,
+// with .0 when that text has neither a fraction nor an exponent, an INTEGER its integer literal, an infinity its object
+// form, and a NaN, which SQLite never stores, an error.
+func TestAnswerNumbers(t *testing.T) {
+	accepted := []struct {
+		name string
+		v    any
+		want string
+	}{
+		{"a whole REAL", 2.0, `2.0`},
+		{"a negative zero REAL", math.Copysign(0, -1), `-0.0`},
+		{"a zero REAL", 0.0, `0.0`},
+		{"a REAL of exponent 21", 1e21, `1e+21`},
+		{"the largest REAL written without an exponent", 1e20, `100000000000000000000.0`},
+		{"a REAL with a fraction", 2.5, `2.5`},
+		{"a REAL below one millionth", 1e-7, `1e-7`},
+		{"a negative whole REAL", -3.0, `-3.0`},
+		{"the largest finite REAL", math.MaxFloat64, `1.7976931348623157e+308`},
+		{"the smallest REAL", math.SmallestNonzeroFloat64, `5e-324`},
+		{"an INTEGER", int64(2), `2`},
+		{"a negative zero INTEGER", int64(-0), `0`},
+		{"the largest INTEGER", int64(math.MaxInt64), `9223372036854775807`},
+		{"an infinity", math.Inf(1), `{"float":"+Inf"}`},
+		{"a negative infinity", math.Inf(-1), `{"float":"-Inf"}`},
+	}
+	for _, c := range accepted {
+		got, err := statement.AnswerJSON(c.v)
+		if err != nil || string(got) != c.want {
+			t.Errorf("%s: wrote %s (%v), want %s", c.name, got, err, c.want)
+		}
+	}
+	refused := []struct {
+		name string
+		v    any
+	}{
+		{"a NaN", math.NaN()},
+	}
+	for _, c := range refused {
+		if got, err := statement.AnswerJSON(c.v); err == nil {
+			t.Errorf("%s: wrote %s, want an error", c.name, got)
+		}
+	}
+}
+
+// FuzzAnswerReal pins that every finite REAL an answer writes is a JSON number with a fraction or an exponent that reads
+// back as the same bits, and that a client reading it as a parameter takes a REAL, never an INTEGER.
+func FuzzAnswerReal(f *testing.F) {
+	for _, seed := range []float64{2.0, math.Copysign(0, -1), 1e21, 2.5, 1e-7, 123456789.0, math.MaxFloat64} {
+		f.Add(math.Float64bits(seed))
+	}
+	f.Fuzz(func(t *testing.T, bits uint64) {
+		x := math.Float64frombits(bits)
+		if math.IsInf(x, 0) || math.IsNaN(x) {
+			return
+		}
+		got, err := statement.AnswerJSON(x)
+		if err != nil {
+			t.Fatalf("%v: %v", x, err)
+		}
+		if !strings.ContainsAny(string(got), ".eE") {
+			t.Fatalf("%v: wrote %s, an integer literal", x, got)
+		}
+		dec := json.NewDecoder(strings.NewReader(string(got)))
+		dec.UseNumber()
+		var n json.Number
+		if err := dec.Decode(&n); err != nil {
+			t.Fatalf("%v: wrote %s, no JSON number: %v", x, got, err)
+		}
+		if _, err := n.Int64(); err == nil {
+			t.Fatalf("%v: wrote %s, which reads as an integer", x, got)
+		}
+		back, err := n.Float64()
+		if err != nil || math.Float64bits(back) != bits {
+			t.Fatalf("%v: wrote %s, which reads back as %v", x, got, back)
+		}
+	})
 }
 
 // TestLiveTables pins what a table takes from its statement: a key that holds no NULL, the type it declares, and rows of

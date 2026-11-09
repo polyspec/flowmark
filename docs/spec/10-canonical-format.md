@@ -650,7 +650,9 @@ and of an ATX heading's content, so these two are part of the set.
 ## Stored literals
 
 A cell of a statement-written value that its column's type or a cell's text cannot hold is a stored literal, unquoted:
-`x'6162'` is a blob, `t'ff'` a text of those bytes, and `n'1.5'` a number. SQLite binds no value to the type of its column,
+`x'6162'` is a blob, `t'ff'` a text of those bytes, and `n'1.5'` a number. The number of a REAL always carries a fraction
+or an exponent, `.0` appended to its shortest text when that has neither (`n'2.0'`, `n'-0.0'`, `n'1e+21'`), and that of an
+infinity is `n'+Inf'` or `n'-Inf'`, so a REAL reads back as a REAL and never as the INTEGER of the same value. SQLite binds no value to the type of its column,
 and a text can hold line feeds, raw HTML and bytes that are not UTF-8, so a corpus keeps what a statement stored and reads the
 same value back. A text that reads like a literal is written quoted, and a quoted cell is never a literal; a field of a
 files row has no quoted form, so such a text is `CONSTRAINT` there. A write of a model or a face never makes a literal: the

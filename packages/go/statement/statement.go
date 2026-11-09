@@ -7,6 +7,7 @@
 package statement
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/base64"
@@ -1382,6 +1383,7 @@ func answerValue(v any) any {
 		if math.IsInf(t, -1) {
 			return map[string]string{"float": "-Inf"}
 		}
+		return realValue(t)
 	case string:
 		// JSON text is UTF-8, and a SQLite text holds whatever bytes it was given.
 		if !utf8.ValidString(t) {
@@ -1389,6 +1391,29 @@ func answerValue(v any) any {
 		}
 	}
 	return v
+}
+
+// realValue is a finite REAL of an answer. JSON has one number type, and a REAL of a whole value written as Go writes a
+// float64 reads as an INTEGER, so an answer writes it with a fraction or an exponent (spec 40 "Values").
+type realValue float64
+
+// MarshalJSON writes the shortest text that reads back as r, with .0 when that text has neither a fraction nor an
+// exponent: 2.0 is 2.0, -0.0 is -0.0, 1e21 is 1e+21 and 2.5 is 2.5. A value JSON cannot hold is an error, as for a float64.
+func (r realValue) MarshalJSON() ([]byte, error) {
+	b, err := json.Marshal(float64(r))
+	if err != nil {
+		return nil, err
+	}
+	return realForm(b), nil
+}
+
+// realForm is the shortest text of a finite float, with .0 appended when it has neither a fraction nor an exponent, so
+// that it reads back as a REAL and never as an INTEGER.
+func realForm(text []byte) []byte {
+	if bytes.ContainsAny(text, ".eE") {
+		return text
+	}
+	return append(text, ".0"...)
 }
 
 // driverError is the failure of a statement SQLite refused, under the code orm gives that result code on a SQLite
@@ -1828,7 +1853,12 @@ func wire(typ dbspec.Type, v any) (json.RawMessage, error) {
 		}
 	case float64:
 		if typ.Kind != dbspec.TypeF64 || math.IsInf(x, 0) {
-			return literal("n'" + strconv.FormatFloat(x, 'g', -1, 64) + "'")
+			text := []byte(strconv.FormatFloat(x, 'g', -1, 64))
+			if !math.IsInf(x, 0) {
+				// A literal of a whole REAL without a fraction would read back as an INTEGER (literalValue).
+				text = realForm(text)
+			}
+			return literal("n'" + string(text) + "'")
 		}
 	case []byte:
 		if typ.Kind != dbspec.TypeBytes {
