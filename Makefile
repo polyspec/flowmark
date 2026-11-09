@@ -190,7 +190,10 @@ commit-msg-check: ## Check the commit message MESSAGE and the index against the 
 # them past failures through ci-targets, which writes the report CI_REPORT ------------------------------------------------
 CI_REPORT ?= var/report/ci-targets
 GATES := layout-check docs-check rules-check owner-validate rebuild-check language-check duplication-check suppression-check lint-go lint-ts
-.PHONY: ci-targets gates gates-setup
+# The checks that read the documents that ci.yml ignores (T90): the documents workflow (documents.yml) runs them on every push
+# and pull request, and the gates run them too, so the CI run that a release takes holds them.
+DOCUMENT_CHECKS := layout-check docs-check rules-check owner-validate refs-check internal-paths-check checklist-check
+.PHONY: ci-targets gates gates-setup documents documents-setup diff-size-check checklist-check checklist-render
 ci-targets: ## Run TARGETS past failures and write CI_REPORT (logs, record.json, summary.md)
 	$(NODE) $(KIT)/ci-targets.mjs -k $(CI_REPORT) $(TARGETS)
 
@@ -200,6 +203,24 @@ gates: ## Run the gates past failures through ci-targets and write CI_REPORT
 gates-setup: ## Install the tools of mise.toml and the locked Go dependencies, and build the Go workspace; ONLINE
 	$(MAKE) --no-print-directory install-tools
 	$(MAKE) --no-print-directory deps-go build-go
+
+documents: ## Run the document checks past failures through ci-targets and write CI_REPORT
+	$(NODE) $(KIT)/ci-targets.mjs -k $(CI_REPORT) $(DOCUMENT_CHECKS)
+
+documents-setup: ## Install alint and go of mise.toml, the tools of the document checks besides node, and the locked Go dependencies; ONLINE
+	$(MAKE) --no-print-directory install-tools TOOLS="alint go"
+	$(MAKE) --no-print-directory deps-go
+
+# The checklist is the corpus docs/plans/flowmark/checklist/, and checklist.md and its twin are its views (T61).
+checklist-check: flowmark-build ## Check the catalog of the checklist corpus by its cases, and fail when a view differs from what the corpus renders; offline
+	cd packages/go && $(GO) test ./ops -run '^TestChecklist' -count=1
+	FLOWMARK=$(CURDIR)/build/flowmark $(NODE) scripts/checklist.mts check flowmark
+
+checklist-render: flowmark-build ## Write checklist.md and checklist.ko.md from the checklist corpus; offline
+	FLOWMARK=$(CURDIR)/build/flowmark $(NODE) scripts/checklist.mts render flowmark
+
+diff-size-check: ## Fail while the diff of the GitHub event GITHUB_EVENT_NAME at GITHUB_EVENT_PATH holds more than the 3000 files of GitHub's path filter; offline
+	$(NODE) scripts/check-diff-size.mts
 
 # ---- Plans and commits ------------------------------------------------------------------------------------------------
 # The plan utility reads its values from the environment, where make puts its command-line variables. The texts of a row reach
@@ -251,8 +272,11 @@ land: ## Land the branch BRANCH of its worktree on main by a fast-forward merge,
 release-tag release-tools release-publish release-undraft: export GOWORK := off
 release-assets: export GOWORK = $(CURDIR)/go.work
 
-release-tag: ## Tag vX.Y.Z of the change log and packages/go/vX.Y.Z at the commit of the successful CI run RUN of main; AUTO releases only a version commit
+# The run check (scripts/check-release-run.mts, T90) comes first: kit's release-run takes a successful run of any workflow, and
+# a release takes a run of ci.yml alone. With AUTO the workflow checked out the head commit of the run, which the check compares.
+release-tag: ## Tag vX.Y.Z of the change log and packages/go/vX.Y.Z at the commit of the successful ci.yml run RUN of main; AUTO releases only a version commit
 	@test -n "$$RUN" || { echo "release-tag: RUN is required, for example make release-tag RUN=123"; exit 1; }
+	$(NODE) scripts/check-release-run.mts "$$RUN"$(if $(AUTO), --commit "$$(git rev-parse HEAD)")
 	RELEASE_MAIN=origin/main $(NODE) $(KIT)/release-run.mjs tag "$$RUN"$(if $(AUTO), --auto)
 
 release-tools: ## Install the tools that config/release.json needs for the release; ONLINE

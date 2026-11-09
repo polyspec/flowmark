@@ -316,6 +316,59 @@ that a database would not. A feature that no common database has is removed, and
 
 **Later phases (registered as `[ ]` checklist items only)**: T2 codec (Go), T3 validator, T4 executor, T5 orm markdown-executor integration (manifest settings, state-machine sub-grammar — orm-repo changes), T6 sync (the adapter contract and the database adapter; GitHub and Jira adapters register under it), T7 the three faces — CLI, MCP server and soksak sidecar (protocol v1: JSON lines over stdio, surface routing, host-owned lifecycle; the MCP tool list gets its mini-spec first, and the lock is held per operation or per server transaction (§5)), T8 checklist app (the local issue model), T9 conformance vectors, T10 the soksak plugin in its own repository — the local kanban board and issue tracker as one more thin consumer, with no view-specific write path.
 
+## T61 — the checklist as a corpus
+
+**Ruling.** A checklist is the corpus `docs/plans/<plan>/checklist/` of the catalog `dbspec/checklist.dbs` in that corpus, and the two files
+that kit reads, `checklist.md` and `checklist.ko.md`, are views that the engine renders from it. An agent writes a row
+and its state only through flowmark; `make checklist-check` fails when a view differs from what the corpus renders.
+
+**Grounding.** The tables cannot be read as they stand, for three reasons:
+- kit reads only the fixed path `docs/plans/<plan>/checklist.md` and its twin (K241);
+- a corpus document is named `<table>.flowmark.md`, and its H1 is `# <table>`
+  ([document model](../../spec/20-document-model.md), [canonical format](../../spec/10-canonical-format.md#document-order));
+- a state cell of kit holds three values in one cell, `[!] cause: <cause>; retry: <condition>`, while a cell of a corpus
+  holds one value.
+
+Reading `checklist.md` as a corpus would need an exception to each of those rules, and the rules would then differ by
+file. Changing kit's grammar would change the checklist of every polyspec repository for one consumer. A view keeps both
+grammars whole, and the drift check makes the corpus the one source.
+
+**The catalog.** `checklist.dbs` declares one table, `items`, with `store document table`:
+- `id varchar(32)`, the key, matching the `idPattern` of `config/checklist.json`;
+- `task`, `deliverables` and `verification`, as `text`, and the same three columns `_ko` for the twin. A twin holds the
+  same rows, so one row holds both languages, and the view of each language takes its own columns;
+- `position i32` with `order position`, so the view keeps the order of the rows;
+- `state varchar(16)` with the check `state in ('waiting', 'active', 'verifying', 'done', 'bypassed', 'impossible')`.
+  These are the state names of `config/checklist.json`, not its markers: the marker of the waiting state is `[ ]`, and a
+  space at the end of a cell is not canonical;
+- `cause text null`, `retry text null` and their `_ko` columns. A check ties them to the state: `bypassed` requires a
+  cause and a retry, `impossible` requires a cause and no retry, and every other state has neither.
+
+**The cells.** A cell of `items` is a single-line text of the engine, so a value with `<` followed by `!`, `/` or a
+letter is refused as raw HTML, inside a code span too ([canonical format](../../spec/10-canonical-format.md#single-line-places)).
+A placeholder in a checklist row is written `{plan}`, never `<plan>`. The import refuses such a row rather than changing
+it.
+
+**The view.** It renders the header of kit's table from `config/checklist.json`, one row per item in order, and the state
+cell as the marker that `config/checklist.json` declares for the state. It adds ` cause: <cause>; retry: <retry>` after
+the bypassed marker, and ` cause: <cause>` after the impossible marker. The Korean view
+uses the labels `원인` and `재시도`. Each view has the doc-id line and the H1 that the file has now. The twin's
+`source-sha256` stamp is written by `make documents-stamp`, as for any twin.
+
+**The states.** The engine and orm hold no transitions. polyspec fsm takes a state and writes it to the corpus with an
+update of `state`, `cause` and `retry`. A state that the check refuses is a `CHECK` refusal of the write, never a
+corrected value.
+
+**The board.** A query of `items` by `state` answers it, and each row answers once.
+
+**External edits.** An edit of a corpus file is read as every edit of a corpus is
+([sync](../../spec/70-sync.md)). An edit of a view is drift, and the check fails on it, naming the view. The check never
+rewrites the view.
+
+**Order.** First this repository's checklist: the catalog, its cases (each check with an accepting and a refusing row),
+the import of the current checklist into the corpus, the view and the check. Then each polyspec repository takes it
+through a row of its own checklist.
+
 ## What the audit could not break
 
 - Between two conforming flowmark writers, per-operation locking + stage/prepare/commit loses no update (the real holes were readers, humans, and crash windows — now ruled above).

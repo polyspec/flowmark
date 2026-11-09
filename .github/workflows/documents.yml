@@ -1,0 +1,46 @@
+# The document checks of flowmark (T90). ci.yml ignores the pushes and pull requests whose every changed path is a document
+# of its paths-ignore; this workflow runs on each push and pull request that ci.yml filters, with no path filter, so every
+# change of a document is checked. GitHub evaluates a path filter over the first 3000 files of a diff only, so a step fails a
+# diff of more files (make diff-size-check), which names the way to run ci.yml. Each step runs a target of the
+# Makefile of this repository, whose recipes run the utilities of kit and the checks of scripts/.
+name: documents
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: documents-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  documents:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        shell: bash
+    steps:
+      # actions/checkout v7.0.1, with the whole history, so the before commit of a push and the base of a pull request are there.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+      - name: Bootstrap the Node.js of mise.toml, npm and the packages of package-lock.json
+        uses: ./.github/actions/bootstrap
+      - name: diff size
+        run: make diff-size-check
+      # The document checks run after a failed size check too, so the run reports both.
+      - name: install the tools of the document checks
+        if: ${{ !cancelled() }}
+        run: make documents-setup
+      - name: document checks
+        if: ${{ !cancelled() }}
+        run: make documents
+      # actions/upload-artifact v7.0.1: the report of the document checks.
+      - name: report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: documents-report
+          path: var/report/ci-targets/
+          if-no-files-found: ignore

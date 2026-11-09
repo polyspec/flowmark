@@ -4,6 +4,9 @@
 ## Unreleased
 
 - T62: The engine holds only what the common databases hold: it reads the `state_machine` lines of a schema and applies none of them, so a write is no longer refused for an undeclared transition, a terminal state, a non-initial insert, a required column or a limit, and writes no history row; the validator reports no `state.transition`, `state.required`, `state.limit`, `history.gap` or `history.chain`; the values of a state column are what its type and the schema's foreign keys and checks allow, and a list row refuses as CONSTRAINT a value that no `checkbox` line shows. The command `flowmark transition`, the operation and MCP tool `transition` and the command `flowmark history repair` are removed, and the schema answer gives each table's `checkbox` (its column and the glyph of each value) in place of its state machine.
+- T61: The checklist is a flowmark corpus: `docs/plans/flowmark/checklist/` holds its rows under the catalog `dbspec/checklist.dbs`, whose checks tie a cause and a retry to the state, and `checklist.md` and its twin are views that `make checklist-render` writes from it; `make checklist-check`, one of the document checks, checks the catalog by its cases and fails on a view that the corpus does not render.
+- T90: A push or a pull request that changes only the root documents or the plans starts no CI run; the new documents workflow runs the document checks on every push and pull request and fails a diff of more than 3000 files, past which GitHub does not evaluate a path filter.
+- T90: `make release-tag` takes a successful push or manual run of `.github/workflows/ci.yml` alone, and refuses with the reason a run of another workflow, such as the documents workflow, a run of another event or without success, and, for a release that the run started, a run on another commit.
 
 ## 0.0.13
 

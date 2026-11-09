@@ -16,6 +16,16 @@
     },
     {
       "paths": [
+        "docs/plans/*/checklist/**",
+        "scripts/checklist.mts",
+        "packages/go/ops/checklist_test.go"
+      ],
+      "targets": [
+        "checklist-check"
+      ]
+    },
+    {
+      "paths": [
         "config/duplication.json"
       ],
       "targets": [
@@ -61,6 +71,14 @@
       "targets": [
         "lint-go",
         "duplication-check"
+      ]
+    },
+    {
+      "paths": [
+        "docs/spec/**"
+      ],
+      "targets": [
+        "test-go"
       ]
     },
     {
