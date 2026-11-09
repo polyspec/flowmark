@@ -1,5 +1,5 @@
 <!-- doc-id: agents -->
-<!-- source-sha256: 99d4b87417d989bb6ced4e8a0144bfe33dd78d8b0144cdf486a2adf2a8c389bb -->
+<!-- source-sha256: e9fd414b8060611d418189344246c9c3368662e0368a083d5980bf5358f6475e -->
 # 개발 규칙
 
 [English](AGENTS.md)
@@ -75,6 +75,10 @@ GitHub, Jira), 응용 schema이고, [polyspec/orm](https://github.com/polyspec/o
 - Own: 각 repository는 자기 checklist를 운영한다: 다른 repository의 작업은 거기서 추적하고, 여기서는 그 ID를 code span으로
   참조한다. 그래서 `make refs-check`는 다른 repository의 항목을 이 repository의 항목으로 읽지 않는다.
   Enforced by: `make refs-check`
+- Own: checklist는 corpus `docs/plans/flowmark/checklist/`이고 `checklist.md`와 그 twin은 그 view이다. row와 그 상태는
+  flowmark로 쓰고(`build/flowmark row.insert`, `row.update`, `row.move`), view는 `make checklist-render`가 쓴다. view를
+  손으로 고치면 drift이다. 엔진은 catalog가 허용하지 않는 상태, cause, retry와, `<` 뒤에 글자가 오는 cell을 거부한다.
+  Enforced by: `make checklist-check`
 - Own: Git 파일은 의존성이 아닌 외부 프로젝트를 이름으로 적지 않는다. polyspec repository(kit, orm, hyper, crudui,
   template 등)는 내부 library이므로 인용할 수 있다.
   Enforced by: none, 리뷰에서의 판단이다.

@@ -1,0 +1,25 @@
+dbspec 1 checklist
+
+table items {
+  id varchar(32)
+  task text
+  task_ko text
+  deliverables text
+  deliverables_ko text
+  verification text
+  verification_ko text
+  position i32
+  state varchar(16)
+  cause text null
+  cause_ko text null
+  retry text null
+  retry_ko text null
+  primary key (id)
+  check ck_items_state (state in ('waiting', 'active', 'verifying', 'done', 'bypassed', 'impossible'))
+  check ck_items_cause (state in ('bypassed', 'impossible') and cause is not null and cause_ko is not null or state not in ('bypassed', 'impossible') and cause is null and cause_ko is null)
+  check ck_items_retry (state = 'bypassed' and retry is not null and retry_ko is not null or state <> 'bypassed' and retry is null and retry_ko is null)
+  settings {
+    store document table
+    order position
+  }
+}
