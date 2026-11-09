@@ -1,5 +1,5 @@
 <!-- doc-id: spec-ops -->
-<!-- source-sha256: 0053130a96b88c6b8d7e12ebd2cf54faba2dd834c957e20d14b6ccb93b4546da -->
+<!-- source-sha256: 5ffe0aa6400ed8b6e0f08fa0a5e8e95675b2895cc78716fa78b68c73a97fd213 -->
 # Operations
 
 [English](40-ops.md)
@@ -238,7 +238,10 @@ client가 구현할 것은 이 driver뿐이다.
   그다음 행. 문장은 거기서 실행된다. SQLite의 pre-update hook이 문장이 바꾼 행을 하나하나 알린다: 문장 자신의 행과
   REPLACE, foreign key action, trigger의 행이다. 차이는 그런 행마다 첫 변경 전의 image와, 바뀐 rowid에서 database가 지닌
   행으로 만들므로, 쓰기는 모든 행이 아니라 자기가 바꾼 행을 읽는다. SQLite가 rowid를 정의하지 않는 rowid 없는 표의 행은
-  primary key로 알고, 그 행은 바뀐 key에서 그 key의 collation에 따른 순서로 읽는다. corpus가 key를 비교하는 대로
+  primary key로 알고, 그 행은 바뀐 key에서 그 key의 collation에 따른 순서로 읽는다. 이를 위해 엔진이 schema에서 읽는 것,
+  곧 rowid 없는 표마다의 primary key와 rowid 있는 표마다의 rowid 이름은 schema의 text가 그것을 읽은 text와 다를 때마다 다시
+  읽는다. schema version은 schema를 증명하지 못하기 때문이다: schema 변경의 rollback은 다음 변경에 자신이 되돌린 schema의
+  version을 준다(`statement`의 `TestKeysCacheCurrent`). corpus가 key를 비교하는 대로
   대소문자를 가리지 않고 더한 행의 key와 같은 key를 가진 사라진 행은 insert보다 먼저 지우며, SQLite가 이미 판정한
   foreign key로 다시 판정하지 않으므로 대소문자만 바뀐 key도 database가 commit한 대로 쓰인다. image의 text는 길이로 읽으므로 NUL을 품은 text도
   온전히 온다. driver의 release는 text를 첫 NUL까지 읽으므로, 엔진은 text를 길이로 읽는 driver fork를

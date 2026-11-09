@@ -32,9 +32,10 @@ type capture struct {
 	on     bool
 	tables map[string]*changedRows
 	err    error
-	// schema is the main schema_version the keys were read at, keys the primary key of each table without a rowid, names
-	// the name a statement gives the rowid of each table with one, and ids the tables keyed by their rowid.
-	schema int64
+	// schema is the text of the main schema the keys were read from (schemaKey), keys the primary key of each table
+	// without a rowid, names the name a statement gives the rowid of each table with one, and ids the tables keyed by
+	// their rowid.
+	schema string
 	keys   map[string]*primaryKey
 	names  rowids
 	ids    rowids
@@ -161,16 +162,23 @@ func (cp *capture) hook(data sqlite.SQLitePreUpdateData) {
 	}
 }
 
+// schemaKey reads the text of the main schema, each entry by its type, name and statement in the order SQLite keeps
+// them: two schemas of the same text have the same tables, columns and keys.
+const schemaKey = "SELECT COALESCE(group_concat(type || char(31) || name || char(31) || COALESCE(sql, ''), char(30)), '')" +
+	" FROM (SELECT type, name, sql FROM main.sqlite_schema ORDER BY rowid)"
+
 // prepare reads, when the schema of the main database changed since it last did, the primary key of each table without
 // a rowid, which the hook takes a row's identity from, and the tables keyed by their rowid (readRowids). It runs on db
 // before a statement, as the hook cannot read.
 func (cp *capture) prepare(ctx context.Context, db runner) error {
-	var version int64
-	if err := db.QueryRowContext(ctx, "PRAGMA main.schema_version").Scan(&version); err != nil {
+	// The schema_version does not prove the schema: a rollback of a schema change gives the next change the version of
+	// the schema it took back. The text of the schema does.
+	var schema string
+	if err := db.QueryRowContext(ctx, schemaKey).Scan(&schema); err != nil {
 		return &Error{codeInternal, err.Error()}
 	}
 	cp.mu.Lock()
-	known := cp.keys != nil && cp.schema == version
+	known := cp.keys != nil && cp.schema == schema
 	cp.mu.Unlock()
 	if known {
 		return nil
@@ -191,7 +199,7 @@ func (cp *capture) prepare(ctx context.Context, db runner) error {
 	}
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
-	cp.schema, cp.keys, cp.names, cp.ids = version, keys, rowidNames, ids
+	cp.schema, cp.keys, cp.names, cp.ids = schema, keys, rowidNames, ids
 	return nil
 }
 

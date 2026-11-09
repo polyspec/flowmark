@@ -280,7 +280,10 @@ utility of orm's SQLite dialect holds on a corpus, and a client has only this dr
   difference is formed from the image of each such row before its first change and from the rows the database holds at
   the rowids it changed, so a write reads the rows it changed and not every row. A row of a table without a rowid,
   whose rowid SQLite leaves undefined, is known by its primary key, and its rows are read at the keys it changed in the
-  order of that key under its collations. A row gone whose key equals the key of a row added without regard to case,
+  order of that key under its collations. What the engine reads of the schema for this — the primary key of each table
+  without a rowid, and the name of the rowid of each table with one — is read again whenever the text of the schema
+  differs from the one it was read from, since the schema version does not prove the schema: a rollback of a schema
+  change gives the next change the version of the schema it took back (`TestKeysCacheCurrent` of `statement`). A row gone whose key equals the key of a row added without regard to case,
   as the corpus compares keys, is deleted before the inserts, unjudged by the foreign keys SQLite already judged, so a
   key changed only in its case is written as the database committed it. A text of an image is read by its length,
   so a text holding a NUL comes whole; the driver's release reads it up to its first NUL, and the engine pins a
