@@ -3,6 +3,8 @@
 
 ## Unreleased
 
+- T62: The engine holds only what the common databases hold: it reads the `state_machine` lines of a schema and applies none of them, so a write is no longer refused for an undeclared transition, a terminal state, a non-initial insert, a required column or a limit, and writes no history row; the validator reports no `state.transition`, `state.required`, `state.limit`, `history.gap` or `history.chain`; the values of a state column are what its type and the schema's foreign keys and checks allow, and a list row refuses as CONSTRAINT a value that no `checkbox` line shows. The command `flowmark transition`, the operation and MCP tool `transition` and the command `flowmark history repair` are removed, and the schema answer gives each table's `checkbox` (its column and the glyph of each value) in place of its state machine.
+
 ## 0.0.13
 
 - T87: A corpus read again from its files gives every value of a table that a statement made the storage class its session gave it: the stored form follows the SQLite affinity of the column, so an INTEGER of a column without a declared type stays an INTEGER, a `BOOLEAN` column keeps an INTEGER other than 0 or 1 and its texts, a text of a number column stays a text, and a key value that would need a stored literal is refused as CONSTRAINT.

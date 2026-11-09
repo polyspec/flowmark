@@ -1,5 +1,5 @@
 {
-  "name": "writepath-insert-initial-state",
+  "name": "writepath-state-update-no-history",
   "storage": "document list",
   "catalog": "workflow",
   "corpus": {
@@ -44,42 +44,50 @@
   },
   "request": {
     "entity": "items",
-    "kind": "insert",
+    "kind": "update",
     "set": [
       {
-        "column": "id",
+        "column": "state",
         "p": 0
       },
       {
-        "column": "title",
+        "column": "evidence",
         "p": 1
-      },
-      {
-        "column": "body",
-        "p": 2
       }
-    ]
+    ],
+    "where": {
+      "items": [
+        {
+          "pred": {
+            "column": "id",
+            "op": "eq",
+            "p": 2
+          }
+        }
+      ]
+    }
   },
   "params": [
-    "T4",
-    "Fourth item",
-    ""
+    "done",
+    "Tests pass.",
+    "T2"
   ],
   "now": "2026-10-11 09:00:00.000000",
   "expect": {
     "affected": 1,
-    "keys": [
-      "T4"
-    ],
+    "keys": [],
     "corpus": {
       "items.flowmark.md": [
         "# items",
         "- [ ] T1 First item",
-        "- [~] T2 Second item",
+        "- [x] T2 Second item",
         "- [ ] T3 Third item",
-        "- [ ] T4 Fourth item",
         "",
         "## items row T2",
+        "",
+        "### evidence",
+        "",
+        "Tests pass.",
         "",
         "### item_history",
         "| id | from_state | to_state | at |",
@@ -89,6 +97,8 @@
     }
   },
   "repeat": {
-    "error": "DUPLICATE_KEY"
+    "affected": 1,
+    "keys": [],
+    "corpus": {}
   }
 }

@@ -49,7 +49,7 @@ type Target struct {
 // of a statement. The code is that of the first fault.
 func (w *writer) finish() (*PostImage, *Error) {
 	keyFaults := w.keyChecks()
-	for _, step := range []func() *Error{w.uniques, w.references, w.parents, w.values, w.checks, w.rowRules, w.limits} {
+	for _, step := range []func() *Error{w.uniques, w.references, w.parents, w.values, w.checks, w.rowRules} {
 		if err := step(); err != nil {
 			return nil, err
 		}
@@ -659,3 +659,6 @@ func (w *writer) needLinks(f *file) *Error {
 	}
 	return nil
 }
+
+// names joins names for a message.
+func names(xs []string) string { return strings.Join(xs, ", ") }

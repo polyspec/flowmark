@@ -222,3 +222,18 @@ table item_steps {
     store block fk_step_item table
   }
 }
+
+table jobs {
+  id varchar(16)
+  state varchar(16)
+  title varchar(64)
+  note text null
+  primary key (id)
+  settings {
+    store document list
+    title title
+    state_machine state initial open
+    state_machine state open -> closed
+    state_machine state terminal closed
+  }
+}

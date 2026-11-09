@@ -23,6 +23,7 @@ table items {
   foreign key fk_items_assignee (assignee) references people (id) on delete restrict on update restrict
   check ck_items_start (start_on is null or start_at is null)
   check ck_items_due (due_on is null or due_at is null)
+  check ck_items_state (state in ('waiting', 'doing', 'done', 'bypassed', 'impossible'))
   settings {
     key_prefix 'T'
     store files
@@ -33,20 +34,6 @@ table items {
     markdown evidence
     markdown cause
     markdown retry
-    checkbox state waiting ' '
-    checkbox state doing '~'
-    checkbox state done 'o'
-    checkbox state bypassed '!'
-    checkbox state impossible '-'
-    state_machine state initial waiting
-    state_machine state waiting -> doing
-    state_machine state doing -> done require (evidence)
-    state_machine state doing -> bypassed require (cause, retry)
-    state_machine state bypassed -> doing
-    state_machine state waiting -> impossible require (cause)
-    state_machine state terminal done
-    state_machine state terminal impossible
-    state_machine state history item_history row item from from_state to to_state at at
   }
 }
 
@@ -74,26 +61,6 @@ table item_links {
   check ck_item_links_kind (kind in ('blocks', 'relates', 'duplicates', 'supersedes'))
   settings {
     store block fk_item_links_from table
-  }
-}
-
-table item_history {
-  id i64 identity
-  item varchar(32)
-  from_state varchar(16)
-  to_state varchar(16)
-  at datetime(6)
-  evidence text null
-  cause text null
-  retry text null
-  primary key (id)
-  index ix_item_history_item (item)
-  foreign key fk_history_item (item) references items (id) on delete restrict on update restrict
-  settings {
-    store block fk_history_item table
-    markdown evidence
-    markdown cause
-    markdown retry
   }
 }
 

@@ -175,7 +175,6 @@ func openFixture(t testing.TB, root string) *fixture {
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	f.c.clock = func() time.Time { return time.Date(2026, 10, 11, 10, 0, 0, 123456000, time.UTC) }
 	f.rec.reset()
 	return f
 }

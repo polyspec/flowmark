@@ -43,6 +43,10 @@ func readDocumentGolden(t testing.TB, table string) []byte {
 // itemsOf is the document file of items with the lines after its H1.
 func itemsOf(lines ...string) string { return raw(append([]string{"# items"}, lines...)...) }
 
+// jobsOf is the jobs document with the given lines after its H1: a list whose state machine declares no checkbox, so
+// its state is a field (spec 30 Markdown settings).
+func jobsOf(lines ...string) string { return raw(append([]string{"# jobs"}, lines...)...) }
+
 // peopleOf is the document file of people with the lines after its H1.
 func peopleOf(lines ...string) string { return raw(append([]string{"# people"}, lines...)...) }
 
@@ -64,7 +68,7 @@ const (
 // tableOfH1 is the table that a document names in its H1 line, items when the
 // document has none: the rule cases that name no table are the items cases.
 func tableOfH1(text string) string {
-	for _, table := range []string{"people", "milestones", "notes"} {
+	for _, table := range []string{"people", "milestones", "notes", "jobs"} {
 		if strings.HasPrefix(text, "# "+table+"\n") {
 			return table
 		}
@@ -126,6 +130,12 @@ func documentParseCases() []docCase {
 		noncanonicalDoc("10#document-order: a blank line between the H1 and a table", 2, raw("# milestones", "", "| id | parent | title |", "| --- | --- | --- |", row("M1", "", "Foundation"))),
 
 		// List rows: the glyph, the key, the title and the fields.
+		// A list whose machine declares no checkbox writes its state as a field, whatever value it holds (spec 50 State
+		// columns); the machine's lines judge nothing.
+		docAccept("10#list-rows: a state field of a list without a checkbox", jobsOf("- J1 Plan state:open", "- J2 Ship state:closed note:\"\"", "- J3 Park state:parked note:Later.")),
+		docAccept("10#list-rows: a state field holding the empty text", jobsOf(`- J1 Plan state:""`)),
+		docReject("10#list-rows: a glyph in a list without a checkbox", RuleBlock, 2, jobsOf("- [ ] J1 Plan state:open")),
+		docReject("10#list-rows: a list row without its non-null state field", RuleBlock, 2, jobsOf("- J1 Plan")),
 		docAccept("10#list-rows: the glyph of each state", itemsOf("- [x] T1 Plan done:true", "- [~] T2 Plan done:false", "- [ ] T3 Plan done:false")),
 		docAccept("10#list-rows: a child row indented two spaces", itemsOf("- [ ] T1 Plan done:false", "  - [ ] T2 Child done:false")),
 		docAccept("10#list-rows: a child of a child", itemsOf("- [ ] T1 Plan done:false", "  - [ ] T2 Child done:false", "    - [ ] T3 Grandchild done:false")),

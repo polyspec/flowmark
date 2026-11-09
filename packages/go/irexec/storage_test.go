@@ -1,6 +1,8 @@
 package irexec
 
 import (
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -85,24 +87,22 @@ func TestFilesStorageOrder(t *testing.T) {
 	}
 }
 
-// TestLimitCountsSoftDeleted pins a state limit over a soft-deleted row (spec 50
-// The state machine, Limit): the soft-deleted row still counts in its state, so a
-// soft delete frees no place and a restore never exceeds the limit.
-func TestLimitCountsSoftDeleted(t *testing.T) {
+// TestLimitCountsNothing pins a limit that a state machine declares (spec 50 State columns): the engine applies none of
+// the machine, so neither a restore nor an update into a state past the declared limit is refused.
+func TestLimitCountsNothing(t *testing.T) {
 	docs := map[string]string{
 		"tasks.flowmark.md": lines("# tasks", "| id | state | title | deleted_at |", "| --- | --- | --- | --- |",
 			"| A | doing | Alpha | 2026-10-05 00:00:00.000000 |", "| B | todo | Beta |  |"),
 		"task_history.flowmark.md": lines("# task_history", "| id | task | from_state | to_state | at |", "| --- | --- | --- | --- | --- |",
 			"| 1 | [A](tasks.flowmark.md) | todo | doing | 2026-10-01 00:00:00.000000 |"),
 	}
-	t.Run("50#the-state-machine: a restore into a state at its limit succeeds", func(t *testing.T) {
+	t.Run("50#state-columns: a restore into a state at its declared limit succeeds", func(t *testing.T) {
 		f := catalogFixture(t, docs).on(t)
 		f.commit(f.want(f.msg("restore", "tasks", map[string]any{"where": where(pred("id", "eq", p(0)))}, "A"), `{"affected":1,"keys":[]}`))
 	})
-	t.Run("50#the-state-machine: a soft-deleted row holds its place under the limit", func(t *testing.T) {
+	t.Run("50#state-columns: an update past a declared limit succeeds", func(t *testing.T) {
 		f := catalogFixture(t, docs).on(t)
-		err := f.failure(f.msg("update", "tasks", map[string]any{"set": sets("state"), "where": where(pred("id", "eq", p(1)))}, "doing", "B"), "CONSTRAINT")
-		wantFaults(t, err, []dupFault{{"tasks", "B", -1, "state", "CONSTRAINT", "limit 1"}})
+		f.commit(f.want(f.msg("update", "tasks", map[string]any{"set": sets("state"), "where": where(pred("id", "eq", p(1)))}, "doing", "B"), `{"affected":1,"keys":[]}`))
 	})
 }
 
@@ -123,18 +123,17 @@ func TestDocumentLifecycle(t *testing.T) {
 	}
 }
 
-// TestDocumentHistory pins a state table whose history table is a document table
-// (spec 30 The history table): a transition appends its history row there, and the
-// history row restricts the delete of its state row.
+// TestDocumentHistory pins a state table whose machine names a history table stored as a document table (spec 50 State
+// columns): an update of the state writes no history row, any state is a value, and a history row restricts the delete
+// of the row its foreign key names as any foreign key does.
 func TestDocumentHistory(t *testing.T) {
 	f := catalogFixture(t, nil).on(t)
-	f.commit(f.want(f.msg("insert", "tickets", map[string]any{"set": sets("id", "state", "title")}, "K1", "open", "First"), `{"affected":1,"keys":["K1"]}`))
-	res := f.ok(f.msg("update", "tickets", map[string]any{"set": sets("state"), "where": where(pred("id", "eq", p(1)))}, "closed", "K1"))
-	f.commit(res)
-	if got := f.file("ticket_history.flowmark.md"); !strings.Contains(got, "| 1 | [K1](tickets.flowmark.md) | open | closed | 2026-10-11 09:00:00.123456 |\n") {
-		t.Fatalf("ticket_history:\n%s", got)
+	f.commit(f.want(f.msg("insert", "tickets", map[string]any{"set": sets("id", "state", "title")}, "K1", "closed", "First"), `{"affected":1,"keys":["K1"]}`))
+	f.commit(f.ok(f.msg("update", "tickets", map[string]any{"set": sets("state"), "where": where(pred("id", "eq", p(1)))}, "open", "K1")))
+	if _, err := os.Stat(filepath.Join(f.root, "ticket_history.flowmark.md")); !os.IsNotExist(err) {
+		t.Fatalf("the update wrote the history: %v", err)
 	}
+	f.commit(f.ok(f.msg("insert", "ticket_history", map[string]any{"set": sets("ticket", "from_state", "to_state", "at")}, "K1", "closed", "open", "2026-10-11 09:00:00.123456")))
 	err := f.failure(f.msg("delete", "tickets", map[string]any{"where": where(pred("id", "eq", p(0)))}, "K1"), "FOREIGN_KEY")
 	wantFaults(t, err, []dupFault{{"tickets", "K1", -1, "", "FOREIGN_KEY", "ticket_history 1"}})
-	f.fails(f.msg("update", "tickets", map[string]any{"set": sets("state"), "where": where(pred("id", "eq", p(1)))}, "open", "K1"), "CONSTRAINT")
 }

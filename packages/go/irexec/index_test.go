@@ -172,7 +172,7 @@ func TestIndexMarks(t *testing.T) {
 			if marked {
 				x = w.own(x)
 			}
-			setValue(x.tb, x.row, "state", cell{text: "doing"})
+			setValue(x.tb, x.row, "owner", cell{text: "P1"})
 		}},
 		{"the key of a placement row, which its block rows name", func(w *writer, marked bool) {
 			x := ownedDoc(w, "notes", "N1")

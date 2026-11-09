@@ -69,8 +69,6 @@ func LoadStatements(root string, added []string) (*Catalog, []Diagnostic) {
 	l.checkForeignKeys()
 	l.resolveLayout()
 	l.checkNames()
-	l.checkHistoryMarks()
-	l.checkHistoryStorage()
 	l.checkViewTable()
 	if len(l.diags) > 0 {
 		return nil, l.diags
@@ -462,9 +460,7 @@ func buildTable(r *tableRef) *Table {
 	for _, m := range s.Marks {
 		out.Markdown = append(out.Markdown, m.Column)
 	}
-	if sm := s.StateMachine; sm != nil {
-		out.StateMachine = stateMachine(sm, s.Checkboxes)
-	}
+	out.Checkbox = checkbox(s.Checkboxes)
 	for _, c := range s.Codecs {
 		if out.Codecs == nil {
 			out.Codecs = map[string][]string{}
@@ -489,46 +485,16 @@ func buildTable(r *tableRef) *Table {
 	return out
 }
 
-// stateMachine converts a state machine setting; its state set is the states
-// its lines name, in the order the lines name them.
-func stateMachine(sm *dbspec.StateMachineSetting, checkboxes []dbspec.CheckboxSetting) *StateMachine {
-	out := &StateMachine{Column: sm.Column}
-	add := func(state string) {
-		for _, s := range out.States {
-			if s == state {
-				return
-			}
-		}
-		out.States = append(out.States, state)
+// checkbox converts the checkbox lines of a table, nil when it has none. orm requires every line to name the column
+// of the table's state machine and the lines to cover its states, each glyph one character and distinct; the machine
+// itself the engine applies none of (spec 50 State columns).
+func checkbox(lines []dbspec.CheckboxSetting) *Checkbox {
+	if len(lines) == 0 {
+		return nil
 	}
-	for _, line := range sm.Lines {
-		switch {
-		case line.Initial:
-			out.Initial = append(out.Initial, line.State)
-			add(line.State)
-		case line.Terminal:
-			out.Terminals = append(out.Terminals, Terminal{State: line.State, Require: line.Requires})
-			add(line.State)
-		default:
-			out.Transitions = append(out.Transitions, Transition{From: line.From, To: line.To, Require: line.Requires})
-			add(line.From)
-			add(line.To)
-		}
-	}
-	if h := sm.History; h != nil {
-		out.History = History{Table: h.Table, Row: h.Row, From: h.From, To: h.To, At: h.At}
-	}
-	for _, l := range sm.Limits {
-		out.Limits = append(out.Limits, Limit{State: l.State, Count: l.Count})
-	}
-	for _, c := range checkboxes {
-		if c.Column != sm.Column {
-			continue
-		}
-		if out.Checkboxes == nil {
-			out.Checkboxes = map[string]string{}
-		}
-		out.Checkboxes[c.State] = c.Glyph
+	out := &Checkbox{Column: lines[0].Column, Glyphs: map[string]string{}}
+	for _, c := range lines {
+		out.Glyphs[c.State] = c.Glyph
 	}
 	return out
 }

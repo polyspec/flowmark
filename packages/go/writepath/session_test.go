@@ -48,11 +48,12 @@ func TestSingleRequest(t *testing.T) {
 		want(t, s, f.msg("restore", "people", map[string]any{"where": corpustest.WhereID(0)}, "P1"), `{"affected":0,"keys":[]}`)
 		f.rec.wantKinds(t, opened...)
 	})
-	t.Run("40#transactions: a history row and an order move commit with their write", func(t *testing.T) {
+	t.Run("40#transactions: a state update and an order move commit with their write", func(t *testing.T) {
 		f := baseFixture(t)
 		s := f.session("cli")
 		want(t, s, f.msg("update", "items", map[string]any{"set": sets(0, "state"), "where": corpustest.WhereID(1)}, "doing", "T3"), `{"affected":1,"keys":[]}`)
-		if !strings.Contains(f.file("items.flowmark.md"), "## items row T3\n\n### item_history\n| id | from_state | to_state | at |\n| --- | --- | --- | --- |\n| 5 | waiting | doing | 2026-10-11 09:00:00.123456 |\n") {
+		// The engine applies no state machine, so the update writes no history row (spec 50 State columns).
+		if !strings.Contains(f.file("items.flowmark.md"), "- [~] T3 Review the design\n") || strings.Contains(f.file("items.flowmark.md"), "## items row T3") {
 			t.Fatalf("items:\n%s", f.file("items.flowmark.md"))
 		}
 		want(t, s, f.msg("update", "notes", map[string]any{"set": sets(0, "position"), "where": corpustest.WhereID(1)}, 1, "N3"), `{"affected":1,"keys":[]}`)
@@ -142,8 +143,6 @@ func TestTransaction(t *testing.T) {
 		}
 		want(t, s, f.countTags(), `{"count":2}`)
 		_, err := s.Exec(context.Background(), f.insertTag("web", "area"))
-		fails(t, err, "READ_ONLY", "read-only")
-		_, err = s.Repair(context.Background(), "items", "T3", "")
 		fails(t, err, "READ_ONLY", "read-only")
 		if err := s.Commit(); err != nil {
 			t.Fatal(err)
@@ -644,57 +643,6 @@ func TestRewrite(t *testing.T) {
 		if !errors.Is(err, boom) {
 			t.Fatalf("Rewrite = %v, want the computation's error", err)
 		}
-		f.rec.wantKinds(t, opened...)
-	})
-}
-
-// TestRepairCommit pins the history repair as a write (spec 50 Repair): a normal transaction that commits its history
-// row, inside a transaction too, refused when it must rewrite a noncanonical file.
-func TestRepairCommit(t *testing.T) {
-	gapped := func() map[string]string {
-		docs := baseDocs()
-		docs["items.flowmark.md"] = strings.Replace(docs["items.flowmark.md"], "- [ ] T3 Review the design", "- [~] T3 Review the design", 1)
-		return docs
-	}
-	t.Run("50#a-state-changed-outside-the-engine: the repair commits its history row", func(t *testing.T) {
-		f := newFixture(t, executorCatalog(t), gapped())
-		s := f.session("cli")
-		a, err := s.Repair(context.Background(), "items", "T3", "")
-		if err != nil {
-			t.Fatal(err)
-		}
-		if got := answerJSON(t, a); got != `{"affected":1,"keys":[5]}` {
-			t.Fatalf("answer %s", got)
-		}
-		f.rec.wantKinds(t, committed...)
-		if !strings.Contains(f.file("items.flowmark.md"), "| 5 | waiting | doing | 2026-10-11 10:00:00.123456 |") {
-			t.Fatalf("items:\n%s", f.file("items.flowmark.md"))
-		}
-		f.clean()
-	})
-	t.Run("50#a-state-changed-outside-the-engine: inside a transaction, then a transition of the repaired row", func(t *testing.T) {
-		f := newFixture(t, executorCatalog(t), gapped())
-		s := f.begun(t, "server")
-		if _, err := s.Repair(context.Background(), "items", "T3", ""); err != nil {
-			t.Fatal(err)
-		}
-		want(t, s, f.msg("update", "items", map[string]any{"set": sets(0, "state", "evidence"), "where": corpustest.WhereID(2)}, "done", "Checked.", "T3"), `{"affected":1,"keys":[]}`)
-		must(t, s.Commit())
-		f.clean()
-	})
-	t.Run("50#a-state-changed-outside-the-engine: a repair that must rewrite a noncanonical file", func(t *testing.T) {
-		docs := gapped()
-		docs["items.flowmark.md"] += "\n"
-		f := newFixture(t, executorCatalog(t), docs)
-		s := f.session("cli")
-		_, err := s.Repair(context.Background(), "items", "T3", "")
-		fails(t, err, "CONSTRAINT", "items.flowmark.md", "flowmark canon")
-	})
-	t.Run("50#a-state-changed-outside-the-engine: a refused repair", func(t *testing.T) {
-		f := baseFixture(t)
-		s := f.session("cli")
-		_, err := s.Repair(context.Background(), "items", "T1", "")
-		fails(t, err, "CONSTRAINT", "no history gap")
 		f.rec.wantKinds(t, opened...)
 	})
 }

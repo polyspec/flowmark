@@ -19,7 +19,7 @@ import (
 // documents. An index key names what a row holds:
 //
 //   - its key, byte for byte (keyIndex), and without regard to case (foldIndex);
-//   - the key each of its foreign keys names (refIndex), the value of its state machine's column (stateIndex), the
+//   - the key each of its foreign keys names (refIndex), the
 //     values of each of its unique keys (uniqueIndex) and its sibling group when its table has an order column
 //     (groupIndex);
 //   - the number of its key and of each identity column, and the decimal suffix of its key after the table's
@@ -49,9 +49,6 @@ func refIndex(table string, i int, key string) string {
 	return "r\x00" + table + "\x00" + strconv.Itoa(i) + "\x00" + key
 }
 
-// stateIndex is the index key of the rows of table whose state machine's column holds state.
-func stateIndex(table, state string) string { return "s\x00" + table + "\x00" + state }
-
 // uniqueIndex is the index key of the rows of table whose unique key u holds the joined values text (uniqueText).
 func uniqueIndex(table string, u []string, text string) string {
 	return "u\x00" + table + "\x00" + strings.Join(u, ",") + "\x00" + text
@@ -60,13 +57,11 @@ func uniqueIndex(table string, u []string, text string) string {
 // groupIndex is the index key of the rows of a table with an order column whose sibling group is group (groupKey).
 func groupIndex(table, group string) string { return "g\x00" + table + "\x00" + group }
 
-// faultIndex is the index key of the rows of table whose value of what fails its evaluation: "ref <i>", "state",
-// "unique <columns>" or "group".
+// faultIndex is the index key of the rows of table whose value of what fails its evaluation: "ref <i>", "unique <columns>"
+// or "group".
 func faultIndex(table, what string) string { return "e\x00" + table + "\x00" + what }
 
 func refFault(table string, i int) string { return faultIndex(table, "ref "+strconv.Itoa(i)) }
-
-func stateFault(table string) string { return faultIndex(table, "state") }
 
 func uniqueFault(table string, u []string) string {
 	return faultIndex(table, "unique "+strings.Join(u, ","))
@@ -109,15 +104,7 @@ func (c *Corpus) indexKeys(x *rec) []string {
 			keys = append(keys, refIndex(tb.Name, i, key))
 		}
 	}
-	if sm := tb.StateMachine; sm != nil {
-		v, err := c.value(x, sm.Column)
-		switch {
-		case err != nil:
-			keys = append(keys, stateFault(tb.Name))
-		case !v.null:
-			keys = append(keys, stateIndex(tb.Name, v.text))
-		}
-	}
+
 	for _, u := range tb.Uniques {
 		if !indexedUnique(tb, u) {
 			continue

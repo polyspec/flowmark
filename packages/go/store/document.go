@@ -30,15 +30,15 @@ type docLayout struct {
 	body      string            // the body column, "" when none
 	order     string            // the order column, "" when none
 	orderType dbspec.Type       // the type of the order column
-	state     string            // the state column of a list, "" when none
+	state     string            // the checkbox column of a list, "" when none
 	parent    string            // "parent" when the table has the self foreign key parent, "" otherwise
 	placement string            // the placement foreign key of a block table, "" for a document table
 	scalars   []dbspec.Column   // the stored scalar columns: every column but the key, body, order, markdown and placement columns
 	fields    []dbspec.Column   // a list's fields: the scalars but its title, state and parent
 	sections  []section         // the markdown columns other than the body, in column order
 	fks       map[string]string // the referenced table of each foreign key
-	glyphs    map[string]string // state -> glyph of a list
-	states    map[string]string // glyph -> state of a list
+	glyphs    map[string]string // value -> glyph of the checkbox column of a list
+	states    map[string]string // glyph -> value of the checkbox column of a list
 	children  []*docLayout      // the block tables stored in the row scope of this table, by table name
 	// inFiles reports that the placement chain of the table reaches a files table, so
 	// that rows of the table lie in several files and a file holds only some of them.
@@ -90,11 +90,11 @@ func layoutOfTable(cat *catalog.Catalog, tb *catalog.Table, placement string, in
 	if lay.fks["parent"] == table {
 		lay.parent = "parent"
 	}
-	if sm := tb.StateMachine; sm != nil && lay.list {
-		lay.state = sm.Column
-		for state, glyph := range sm.Checkboxes {
-			lay.glyphs[state] = glyph
-			lay.states[glyph] = state
+	if cb := tb.Checkbox; cb != nil && lay.list {
+		lay.state = cb.Column
+		for value, glyph := range cb.Glyphs {
+			lay.glyphs[value] = glyph
+			lay.states[glyph] = value
 		}
 	}
 	for _, c := range lay.scalars {

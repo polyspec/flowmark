@@ -20,7 +20,8 @@ type documentTarget struct {
 // documentTargets are the tables the document fuzzer reads, selected by a byte: the
 // fixture's items, people and milestones (a list, a table with a parent link and
 // sections, and a table with an order column), then the entries of the equivalence
-// corpora as a document list (target 3) and as a document table (target 4).
+// corpora as a document list (target 3) and as a document table (target 4), and the fixture's jobs, a list whose state
+// machine declares no checkbox (target 5).
 func documentTargets(f testing.TB) []documentTarget {
 	fixture := loadDocumentFixture(f)
 	return []documentTarget{
@@ -29,6 +30,7 @@ func documentTargets(f testing.TB) []documentTarget {
 		{fixture, "milestones", documentLinker()},
 		{equivCatalog(f, equivDocument), "entries", equivDocLinker("entries.flowmark.md")},
 		{equivCatalog(f, equivDocumentTable), "entries", equivDocLinker("entries.flowmark.md")},
+		{fixture, "jobs", documentLinker()},
 	}
 }
 
@@ -67,6 +69,9 @@ func fuzzDocumentSeeds(f *testing.F) {
 	f.Add(uint8(1), []byte(peopleOf(peopleHeader, peopleDelim, row("P1", "", "Ada", "", "true", "", "", "", "", "", "", "", "", ""), "", "## people row P1", "", "### bio", "", "Notes.")))
 	f.Add(uint8(1), []byte(peopleOf(peopleHeader, peopleDelim, row("P1", "", `"\q"`, "", "true", "", "", "", "", "", "", "", "", ""))))
 	f.Add(uint8(1), []byte(peopleOf(peopleHeader, peopleDelim, row("P1", "", "a \\| b", "", "true", "", "", "", "", "", "", "", "", ""), "", "## people row P1", "", "### bio", "", "x")))
+	f.Add(uint8(5), []byte(jobsOf("- J1 Plan state:open", "- J2 Ship state:closed note:\"\"", "- J3 Park state:parked note:Later.")))
+	f.Add(uint8(5), []byte(jobsOf(`- J1 Plan state:""`)))
+	f.Add(uint8(5), []byte(jobsOf("- [ ] J1 Plan state:open")))
 	f.Add(uint8(2), []byte(milestonesOf("| id | parent | title |", "| --- | --- | --- |", row("M1", "[M2](milestones.flowmark.md)", "A"), row("M2", "[M1](milestones.flowmark.md)", "B"))))
 }
 

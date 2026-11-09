@@ -7,9 +7,10 @@ import (
 	"github.com/polyspec/flowmark/packages/go/catalog"
 )
 
-// TestHistoryDocumentTable requires that a history table stored `document table`
-// reads and writes its rows: a history row with the link to its state row and a
-// required markdown column as its evidence section round-trips (P1, P2).
+// TestHistoryDocumentTable requires that a table stored `document table` that a
+// state machine line names as its history, an ordinary table to the engine,
+// reads and writes its rows: a row with the link to its state row and a markdown
+// column as its evidence section round-trips (P1, P2).
 func TestHistoryDocumentTable(t *testing.T) {
 	cat, diags := catalog.Load("testdata/historydoc")
 	if len(diags) > 0 || cat == nil {
@@ -21,7 +22,7 @@ func TestHistoryDocumentTable(t *testing.T) {
 		"| --- | --- | --- | --- | --- |",
 		"| 1 | [T1](items.flowmark.md#items-row-t1) | waiting | done | 2026-10-01 08:00:00.000000 |",
 		"", "## item_history row 1", "", "### evidence", "", "Checked.")
-	t.Run("30#the-history-table: a history row of a document table round-trips with its link and its evidence section", func(t *testing.T) {
+	t.Run("20#storage: a row of a document table round-trips with its link and its evidence section", func(t *testing.T) {
 		if tb, _ := cat.Table("item_history"); tb.RowScope != 3 {
 			t.Fatalf("history row scope %d; want 3", tb.RowScope)
 		}

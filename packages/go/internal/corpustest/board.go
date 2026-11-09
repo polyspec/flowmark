@@ -1,7 +1,8 @@
 package corpustest
 
-// BoardDBS is the board catalog of the ops and command-line cases: a document list with a hierarchy, an order and a state machine whose history is
-// a block, and a document table with neither.
+// BoardDBS is the board catalog of the ops and command-line cases: a document list with a hierarchy, an order and a
+// checkbox, with the state machine lines of orm 0.0.26 that the engine applies none of, and a history table stored as a
+// block of it; and a document table with neither.
 const BoardDBS = `dbspec 1 board
 
 table items {

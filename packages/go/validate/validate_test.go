@@ -166,20 +166,14 @@ func TestCorpusRules(t *testing.T) {
 			want: []string{"Plans:1 corpus.walk"}},
 		{name: "10#diagnostics: a format diagnostic passes through", dir: "noncanonical",
 			want: []string{"plans/P1.flowmark.md format.noncanonical"}},
-		{name: "50#a-state-changed-outside-the-engine: a non-initial state without history", dir: "history-gap-no-history",
-			want: []string{"items.flowmark.md:2 history.gap"}},
-		{name: "50#a-state-changed-outside-the-engine: a state that differs from the last to", dir: "history-gap-last-to",
-			want: []string{"items.flowmark.md:2 history.gap"}},
-		{name: "50#a-state-changed-outside-the-engine: a first from that is not initial", dir: "history-chain-first",
-			want: []string{"items.flowmark.md:9 history.chain"}},
-		{name: "50#a-state-changed-outside-the-engine: a from that differs from the previous to and a pair not declared are two faults", dir: "history-chain-prev",
-			want: []string{
-				"items.flowmark.md:10 history.chain ~ differs from the to doing",
-				"items.flowmark.md:10 state.transition ~ from waiting to done",
-			}},
-		{name: "50#a-state-changed-outside-the-engine: a pair that is not a declared transition is state.transition", dir: "history-chain-pair",
-			want: []string{"items.flowmark.md:9 state.transition ~ from waiting to done, which is not a declared transition"}},
-		{name: "50#diagnostics: a document with an unreadable row gives no rows to the history rules", dir: "history-under-blocked",
+		// The engine applies no state machine, so a state that no history row records and a history row that no
+		// transition declares are no fault: a database holds no machine, and a history table holds ordinary rows.
+		{name: "50#state-columns: a non-initial state without history is no fault", dir: "history-gap-no-history"},
+		{name: "50#state-columns: a state that differs from the last to is no fault", dir: "history-gap-last-to"},
+		{name: "50#state-columns: a first from that is not initial is no fault", dir: "history-chain-first"},
+		{name: "50#state-columns: a from that differs from the previous to with a pair not declared is no fault", dir: "history-chain-prev"},
+		{name: "50#state-columns: a pair that no transition declares is no fault", dir: "history-chain-pair"},
+		{name: "50#diagnostics: a document with an unreadable row is format.block", dir: "history-under-blocked",
 			want: []string{"items.flowmark.md format.block"}},
 	}
 	for _, tc := range cases {
@@ -292,47 +286,33 @@ func TestValidatorRules(t *testing.T) {
 		files map[string]string
 		want  []string
 	}{
-		// state.limit: the rows past the limit, in corpus order, at their state.
-		{name: "50#the-state-machine: a table at its limit is accepted",
+		// A limit of a state machine counts nothing: a database holds no machine (spec 50 State columns).
+		{name: "50#state-columns: a table at a declared limit is accepted",
 			files: map[string]string{"tickets.flowmark.md": tickets("K1 - doing", "K2 - open")}},
-		{name: "50#the-state-machine: two rows over the limit in a document are each reported at its state cell",
-			files: map[string]string{"tickets.flowmark.md": tickets("K1 - doing", "K2 - doing", "K3 - doing")},
-			want: []string{
-				"tickets.flowmark.md:5:11 state.limit ~ limit 1 of the state doing, which 3 rows",
-				"tickets.flowmark.md:6:11 state.limit ~ limit 1 of the state doing, which 3 rows",
-			}},
-		{name: "50#the-state-machine: a list row over the limit is reported at its glyph",
-			files: map[string]string{"items.flowmark.md": doingItems("T1", "T2", "T3")},
-			want: []string{
-				"items.flowmark.md:3:4 state.limit",
-				"items.flowmark.md:4:4 state.limit",
-			}},
-		{name: "50#the-state-machine: an i64-keyed files table is in corpus order, so 9 follows 10",
+		{name: "50#state-columns: rows over a declared limit in a document are no fault",
+			files: map[string]string{"tickets.flowmark.md": tickets("K1 - doing", "K2 - doing", "K3 - doing")}},
+		{name: "50#state-columns: list rows over a declared limit are no fault",
+			files: map[string]string{"items.flowmark.md": doingItems("T1", "T2", "T3")}},
+		{name: "50#state-columns: files rows over a declared limit are no fault",
 			files: map[string]string{
 				"jobs/9.flowmark.md":  "# Nine\n- state: doing\n",
 				"jobs/10.flowmark.md": "# Ten\n- state: doing\n",
-			},
-			want: []string{"jobs/9.flowmark.md:2:3 state.limit"}},
-		{name: "50#the-state-machine: a files table with an order column is in corpus order, not in sibling order",
+			}},
+		{name: "50#state-columns: files rows of an order column over a declared limit are no fault",
 			files: map[string]string{
 				"cards/A.flowmark.md": "# A\n- state: doing\n- position: 2\n",
 				"cards/B.flowmark.md": "# B\n- state: doing\n- position: 1\n",
-			},
-			want: []string{"cards/B.flowmark.md:2:3 state.limit"}},
-		{name: "50#the-state-machine: a document out of storage order is in corpus order, so the later line is past the limit",
-			files: map[string]string{"tickets.flowmark.md": tickets("K2 - doing", "K1 - doing")},
-			want: []string{
-				"tickets.flowmark.md:5:11 state.limit ~ K1 is past",
-				"tickets.flowmark.md format.noncanonical",
 			}},
-		{name: "50#the-state-machine: a block-table machine across two parent files",
+		{name: "50#state-columns: a document out of storage order over a declared limit is format.noncanonical alone",
+			files: map[string]string{"tickets.flowmark.md": tickets("K2 - doing", "K1 - doing")},
+			want:  []string{"tickets.flowmark.md format.noncanonical"}},
+		{name: "50#state-columns: block rows across two parent files over a declared limit are no fault",
 			files: map[string]string{
 				"plans/P1.flowmark.md":   planOne,
 				"entries/E1.flowmark.md": entry("First", "", "2", steps("S1 - doing")...),
 				"entries/E2.flowmark.md": entry("Second", "", "1", steps("S2 - doing")...),
-			},
-			want: []string{"entries/E2.flowmark.md:10 state.limit"}},
-		{name: "50#diagnostics: no state.limit in an unavailable table",
+			}},
+		{name: "50#diagnostics: an unavailable table over a declared limit is its format.block alone",
 			files: map[string]string{
 				"plans/P1.flowmark.md":     planOne,
 				"entries/E1.flowmark.md":   entry("First", "", "2", steps("S1 - doing")...),
@@ -340,12 +320,9 @@ func TestValidatorRules(t *testing.T) {
 				"entries/_bad.flowmark.md": "# Bad key\n",
 			},
 			want: []string{"entries/_bad.flowmark.md:1 format.block"}},
-		{name: "50#diagnostics: a table unavailable only through byte-equal keys has state.limit",
+		{name: "50#diagnostics: a table unavailable only through byte-equal keys over a declared limit is key.duplicate alone",
 			files: map[string]string{"tickets.flowmark.md": tickets("K1 - doing", "K1 - doing")},
-			want: []string{
-				"tickets.flowmark.md:5:3 key.duplicate",
-				"tickets.flowmark.md:5:11 state.limit",
-			}},
+			want:  []string{"tickets.flowmark.md:5:3 key.duplicate"}},
 
 		// order: a rank orders its siblings; only a shared rank is an order fault, and
 		// a rank not of its type is type alone.
@@ -645,63 +622,49 @@ func TestValidatorRules(t *testing.T) {
 			},
 			want: []string{"entries/E9.flowmark.md:10 check ~ the check ck_steps_entry is false for S9"}},
 
-		// history.chain, state.transition and state.required over the history rows.
-		{name: "50#a-state-changed-outside-the-engine: a history whose pairs record their required columns is accepted",
+		// A history table holds ordinary rows: no rule of a state machine judges them (spec 50 State columns).
+		{name: "50#state-columns: history rows whose pairs record their required columns are accepted",
 			files: map[string]string{"tasks.flowmark.md": tasks("T1", "x", "| 1 | waiting | doing | 2026-10-01 08:00:00.000000 | ann |",
 				"| 2 | doing | done | 2026-10-01 09:00:00.000000 |  |", "", "#### task_history row 2", "", "##### evidence", "", "Proof.")}},
-		{name: "50#a-state-changed-outside-the-engine: a NULL required cell, which holds no element, is state.required at the row",
-			files: map[string]string{"tasks.flowmark.md": tasks("T1", "~", "| 1 | waiting | doing | 2026-10-01 08:00:00.000000 |  |")},
-			want:  []string{"tasks.flowmark.md:9:1 state.required ~ requires owner, and owner holds no value"}},
-		{name: "50#a-state-changed-outside-the-engine: an empty required cell is state.required at the cell",
-			files: map[string]string{"tasks.flowmark.md": tasks("T1", "~", `| 1 | waiting | doing | 2026-10-01 08:00:00.000000 | "" |`)},
-			want:  []string{"tasks.flowmark.md:9:54 state.required ~ owner"}},
-		{name: "50#a-state-changed-outside-the-engine: an absent required section of the terminal is state.required at the row",
+		{name: "50#state-columns: a NULL in a column a transition requires is no fault",
+			files: map[string]string{"tasks.flowmark.md": tasks("T1", "~", "| 1 | waiting | doing | 2026-10-01 08:00:00.000000 |  |")}},
+		{name: "50#state-columns: the empty text in a column a transition requires is no fault",
+			files: map[string]string{"tasks.flowmark.md": tasks("T1", "~", `| 1 | waiting | doing | 2026-10-01 08:00:00.000000 | "" |`)}},
+		{name: "50#state-columns: an absent section of a column a terminal requires is no fault",
 			files: map[string]string{"tasks.flowmark.md": tasks("T1", "x", "| 1 | waiting | doing | 2026-10-01 08:00:00.000000 | ann |",
-				"| 2 | doing | done | 2026-10-01 09:00:00.000000 |  |")},
-			want: []string{"tasks.flowmark.md:10:1 state.required ~ requires evidence"}},
-		{name: "50#a-state-changed-outside-the-engine: a present empty required section is state.required at the section",
+				"| 2 | doing | done | 2026-10-01 09:00:00.000000 |  |")}},
+		{name: "50#state-columns: a present empty section of a column a terminal requires is no fault",
 			files: map[string]string{"tasks.flowmark.md": tasks("T1", "x", "| 1 | waiting | doing | 2026-10-01 08:00:00.000000 | ann |",
-				"| 2 | doing | done | 2026-10-01 09:00:00.000000 |  |", "", "#### task_history row 2", "", "##### evidence")},
-			want: []string{"tasks.flowmark.md:14:7 state.required ~ requires evidence"}},
-		{name: "50#a-state-changed-outside-the-engine: a required value not of its type is type alone",
+				"| 2 | doing | done | 2026-10-01 09:00:00.000000 |  |", "", "#### task_history row 2", "", "##### evidence")}},
+		{name: "50#state-columns: a history value not of its type is type alone",
 			files: map[string]string{"tasks.flowmark.md": tasks("T1", "~", "| 1 | waiting | doing | 2026-10-01 08:00:00.000000 | abcdefghijklmnopqrs |")},
 			want:  []string{"tasks.flowmark.md:9 type"}},
-		{name: "50#a-state-changed-outside-the-engine: an undeclared pair is state.transition, with no state.required",
-			files: map[string]string{"tasks.flowmark.md": tasks("T1", "x", "| 1 | waiting | done | 2026-10-01 08:00:00.000000 |  |")},
-			want:  []string{"tasks.flowmark.md:9 state.transition ~ from waiting to done"}},
-		{name: "50#a-state-changed-outside-the-engine: a to not of its type is type alone",
+		{name: "50#state-columns: a history row of an undeclared pair is no fault",
+			files: map[string]string{"tasks.flowmark.md": tasks("T1", "x", "| 1 | waiting | done | 2026-10-01 08:00:00.000000 |  |")}},
+		{name: "50#state-columns: a to not of its type is type alone",
 			files: map[string]string{"items.flowmark.md": "# items\n- [x] T1 First item\n\n## items row T1\n\n### item_history\n| id | from_state | to_state | at |\n| --- | --- | --- | --- |\n" +
 				"| 1 | waiting | abcdefghijklmnopqrs | 2026-10-01 08:00:00.000000 |\n| 2 | doing | done | 2026-10-01 09:00:00.000000 |\n"},
 			want: []string{"items.flowmark.md:9 type"}},
-		{name: "50#a-state-changed-outside-the-engine: a to not of its type is type alone, and its own from is still judged",
+		{name: "50#state-columns: a to not of its type after a from that is not initial is type alone",
 			files: map[string]string{"items.flowmark.md": "# items\n- [x] T1 First item\n\n## items row T1\n\n### item_history\n| id | from_state | to_state | at |\n| --- | --- | --- | --- |\n" +
 				"| 1 | doing | abcdefghijklmnopqrs | 2026-10-01 08:00:00.000000 |\n"},
-			want: []string{
-				"items.flowmark.md:9 history.chain ~ from doing",
-				"items.flowmark.md:9 type",
-			}},
-		{name: "50#a-state-changed-outside-the-engine: a later row whose to is not of its type still has its from judged against the previous to",
+			want: []string{"items.flowmark.md:9 type"}},
+		{name: "50#state-columns: a later to not of its type after a broken chain is type alone",
 			files: map[string]string{"items.flowmark.md": "# items\n- [x] T1 First item\n\n## items row T1\n\n### item_history\n| id | from_state | to_state | at |\n| --- | --- | --- | --- |\n" +
 				"| 1 | waiting | doing | 2026-10-01 08:00:00.000000 |\n| 2 | waiting | abcdefghijklmnopqrs | 2026-10-01 09:00:00.000000 |\n"},
-			want: []string{
-				"items.flowmark.md:10 history.chain ~ from waiting, which differs from the to doing",
-				"items.flowmark.md:10 type",
-			}},
-		{name: "50#a-state-changed-outside-the-engine: a last to not of its type leaves no gap to judge",
+			want: []string{"items.flowmark.md:10 type"}},
+		{name: "50#state-columns: a last to not of its type is type alone",
 			files: map[string]string{"items.flowmark.md": "# items\n- [x] T1 First item\n\n## items row T1\n\n### item_history\n| id | from_state | to_state | at |\n| --- | --- | --- | --- |\n" +
 				"| 1 | waiting | abcdefghijklmnopqrs | 2026-10-01 08:00:00.000000 |\n"},
 			want: []string{"items.flowmark.md:9 type"}},
-		{name: "50#a-state-changed-outside-the-engine: a from not of its type is type alone",
+		{name: "50#state-columns: a from not of its type is type alone",
 			files: map[string]string{"items.flowmark.md": "# items\n- [x] T1 First item\n\n## items row T1\n\n### item_history\n| id | from_state | to_state | at |\n| --- | --- | --- | --- |\n" +
 				"| 1 | abcdefghijklmnopqrs | done | 2026-10-01 08:00:00.000000 |\n"},
 			want: []string{"items.flowmark.md:9 type"}},
-		{name: "50#a-state-changed-outside-the-engine: a state not of its type is type alone, and its history rows are still judged",
+		{name: "50#state-columns: a state not of its type is type alone, and a history row of an undeclared pair is no fault",
 			files: map[string]string{"jobs/1.flowmark.md": "# One\n- state: abcdefghijklmnopqrs\n\n## job_history\n| id | from_state | to_state | at |\n| --- | --- | --- | --- |\n" +
 				"| 1 | open | open | 2026-10-01 08:00:00.000000 |\n"},
-			want: []string{
-				"jobs/1.flowmark.md:2:3 type",
-				"jobs/1.flowmark.md:7 state.transition ~ from open to open",
-			}},
+			want: []string{"jobs/1.flowmark.md:2:3 type"}},
 	}
 	for _, tc := range cases {
 		checkTreeCase(t, cat, tc.name, tc.files, tc.want)

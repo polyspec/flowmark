@@ -2,7 +2,7 @@
 // and post-image against a corpus, and the portable lock and the journal (store/journal), which serialize the
 // operations and make a commit atomic and recoverable.
 //
-// Every operation — a read, a write, a history repair, a rewrite — takes the corpus lock and recovers an interrupted
+// Every operation — a read, a write, a rewrite — takes the corpus lock and recovers an interrupted
 // commit before it reads. A request outside a transaction is one transaction under the lock; a transaction holds the
 // lock from Begin to Commit or Rollback, and its requests read its post-image. A commit checks that its targets are
 // unchanged since they were read (step 1), runs the constraint checks on the corpus re-read under the lock with the
@@ -122,10 +122,9 @@ type Corpus struct {
 	// operation costs what it touches).
 	live *validate.Live
 	// cost counts the work of the corpus's operations (plan, Ruling: an operation costs what it touches).
-	cost  *cost.Counts
-	root  string
-	wait  time.Duration
-	clock func() time.Time
+	cost *cost.Counts
+	root string
+	wait time.Duration
 	// readHook is the seam of the tests that lands a change between the read and the commit of an operation outside a
 	// transaction; it is called after each read with the attempt's index. It is nil outside the tests.
 	readHook func(attempt int)
@@ -252,7 +251,7 @@ func Open(ctx context.Context, cat *catalog.Catalog, j *journal.Corpus, wait tim
 	if err != nil {
 		return nil, driverError("watching the corpus", err)
 	}
-	c := &Corpus{cat: cat, exec: e, j: j, tree: tree, live: validate.NewLive(cat, k), cost: k, root: j.Root(), wait: wait, clock: engineClock}
+	c := &Corpus{cat: cat, exec: e, j: j, tree: tree, live: validate.NewLive(cat, k), cost: k, root: j.Root(), wait: wait}
 	c.published.Store(cat)
 	l, err := c.acquire(ctx, "open")
 	if err != nil {
@@ -272,10 +271,6 @@ func Open(ctx context.Context, cat *catalog.Catalog, j *journal.Corpus, wait tim
 	}
 	return c, nil
 }
-
-// engineClock is the engine's UTC clock truncated to microseconds (spec 40 The clock): the time of an engine-assigned
-// value outside an orm request, such as a repaired history row's at.
-func engineClock() time.Time { return time.Now().UTC().Truncate(time.Microsecond) }
 
 // acquire takes the corpus lock for session and recovers an interrupted commit before anything reads the corpus
 // (spec 40 Opening a corpus): a stage found under the lock is a commit of a holder that ended.

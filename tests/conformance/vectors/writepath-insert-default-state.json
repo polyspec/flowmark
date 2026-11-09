@@ -1,5 +1,5 @@
 {
-  "name": "writepath-transition-required",
+  "name": "writepath-insert-default-state",
   "storage": "document list",
   "catalog": "workflow",
   "corpus": {
@@ -44,31 +44,51 @@
   },
   "request": {
     "entity": "items",
-    "kind": "update",
+    "kind": "insert",
     "set": [
       {
-        "column": "state",
+        "column": "id",
         "p": 0
+      },
+      {
+        "column": "title",
+        "p": 1
+      },
+      {
+        "column": "body",
+        "p": 2
       }
-    ],
-    "where": {
-      "items": [
-        {
-          "pred": {
-            "column": "id",
-            "op": "eq",
-            "p": 1
-          }
-        }
-      ]
-    }
+    ]
   },
   "params": [
-    "done",
-    "T2"
+    "T4",
+    "Fourth item",
+    ""
   ],
   "now": "2026-10-11 09:00:00.000000",
   "expect": {
-    "error": "CONSTRAINT"
+    "affected": 1,
+    "keys": [
+      "T4"
+    ],
+    "corpus": {
+      "items.flowmark.md": [
+        "# items",
+        "- [ ] T1 First item",
+        "- [~] T2 Second item",
+        "- [ ] T3 Third item",
+        "- [ ] T4 Fourth item",
+        "",
+        "## items row T2",
+        "",
+        "### item_history",
+        "| id | from_state | to_state | at |",
+        "| --- | --- | --- | --- |",
+        "| 1 | waiting | doing | 2026-10-01 08:00:00.000000 |"
+      ]
+    }
+  },
+  "repeat": {
+    "error": "DUPLICATE_KEY"
   }
 }

@@ -1,8 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 212b2fef306783aed6c3f67d8ea39f1c3d80ea9a1dd63334678aed4681b481a7 -->
+<!-- source-sha256: ca5e1e83d7b25e56e85316690373965978b35cc820188c4e9d48a3eb63440dff -->
 # Changelog
 
 ## Unreleased
+
+- T62: 엔진은 흔한 database가 지니는 것만 지닌다: schema의 `state_machine` 줄을 읽되 아무것도 적용하지 않으므로, 선언되지 않은 전이, terminal 상태, initial이 아닌 insert, 필수 column, limit 때문에 쓰기를 더는 거부하지 않고 이력 행도 쓰지 않는다; validator는 `state.transition`, `state.required`, `state.limit`, `history.gap`, `history.chain`을 보고하지 않는다; 상태 column의 값은 그 type과 schema의 foreign key와 check가 허용하는 것이고, list 행은 어느 `checkbox` 줄도 보여 주지 않는 값을 CONSTRAINT로 거부한다. 명령 `flowmark transition`, operation과 MCP tool `transition`, 명령 `flowmark history repair`는 없어지고, schema 답은 각 table의 state machine 대신 `checkbox`(그 column과 각 값의 glyph)를 준다.
 
 ## 0.0.13
 

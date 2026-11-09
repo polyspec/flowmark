@@ -1,5 +1,5 @@
 {
-  "name": "writepath-transition-unlisted",
+  "name": "writepath-state-no-checkbox",
   "storage": "document list",
   "catalog": "workflow",
   "corpus": {
@@ -64,8 +64,8 @@
     }
   },
   "params": [
-    "done",
-    "T3"
+    "lost",
+    "T1"
   ],
   "now": "2026-10-11 09:00:00.000000",
   "expect": {

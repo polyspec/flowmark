@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/polyspec/flowmark/packages/go/catalog"
+	"github.com/polyspec/orm/packages/go/engine/dbspec"
 )
 
 const fixtureRoot = "testdata/app"
@@ -156,7 +157,7 @@ func TestLoadFixtureCatalog(t *testing.T) {
 	for _, tb := range cat.Tables {
 		names = append(names, tb.Name)
 	}
-	if want := []string{"items", "people", "item_links", "item_history", "views"}; !reflect.DeepEqual(names, want) {
+	if want := []string{"items", "people", "item_links", "views"}; !reflect.DeepEqual(names, want) {
 		t.Fatalf("tables = %v, want %v", names, want)
 	}
 
@@ -164,8 +165,8 @@ func TestLoadFixtureCatalog(t *testing.T) {
 	if !ok {
 		t.Fatal("items missing")
 	}
-	// Spec 100 Tables: one file an item, its history and its outgoing links
-	// blocks of that file, so no file grows with the life of the project.
+	// Spec 100 Tables: one file an item, its outgoing links a block of that
+	// file, so no file grows with the life of the project.
 	if items.Storage != (catalog.Storage{Kind: catalog.StorageFiles}) {
 		t.Fatalf("items storage = %+v", items.Storage)
 	}
@@ -178,54 +179,12 @@ func TestLoadFixtureCatalog(t *testing.T) {
 	if items.RowScope != 2 {
 		t.Fatalf("items row scope = %d, want 2", items.RowScope)
 	}
-	sm := items.StateMachine
-	if sm == nil {
-		t.Fatal("items has no state machine")
+	// Spec 100 The states: a check constrains the state, as on every database, and the engine holds no machine.
+	if items.Checkbox != nil {
+		t.Fatalf("items checkbox = %+v, want none: items is stored files", items.Checkbox)
 	}
-	if sm.Column != "state" {
-		t.Fatalf("state column = %q", sm.Column)
-	}
-	if want := []string{"waiting", "doing", "done", "bypassed", "impossible"}; !reflect.DeepEqual(sm.States, want) {
-		t.Fatalf("states = %v, want %v", sm.States, want)
-	}
-	if want := []string{"waiting"}; !reflect.DeepEqual(sm.Initial, want) {
-		t.Fatalf("initial = %v, want %v", sm.Initial, want)
-	}
-	wantTransitions := []catalog.Transition{
-		{From: "waiting", To: "doing"},
-		{From: "doing", To: "done", Require: []string{"evidence"}},
-		{From: "doing", To: "bypassed", Require: []string{"cause", "retry"}},
-		{From: "bypassed", To: "doing"},
-		{From: "waiting", To: "impossible", Require: []string{"cause"}},
-	}
-	if !reflect.DeepEqual(sm.Transitions, wantTransitions) {
-		t.Fatalf("transitions = %+v", sm.Transitions)
-	}
-	wantTerminals := []catalog.Terminal{{State: "done"}, {State: "impossible"}}
-	if !reflect.DeepEqual(sm.Terminals, wantTerminals) {
-		t.Fatalf("terminals = %+v", sm.Terminals)
-	}
-	wantHistory := catalog.History{Table: "item_history", Row: "item", From: "from_state", To: "to_state", At: "at"}
-	if sm.History != wantHistory {
-		t.Fatalf("history = %+v, want %+v", sm.History, wantHistory)
-	}
-	wantGlyphs := map[string]string{"waiting": " ", "doing": "~", "done": "o", "bypassed": "!", "impossible": "-"}
-	if !reflect.DeepEqual(sm.Checkboxes, wantGlyphs) {
-		t.Fatalf("checkboxes = %v, want %v", sm.Checkboxes, wantGlyphs)
-	}
-
-	history, ok := cat.Table("item_history")
-	if !ok {
-		t.Fatal("item_history missing")
-	}
-	if history.Storage != (catalog.Storage{Kind: catalog.StorageBlock, Shape: catalog.ShapeTable, ParentForeignKey: "fk_history_item", Parent: "items"}) {
-		t.Fatalf("item_history storage = %+v", history.Storage)
-	}
-	if history.RowScope != 4 {
-		t.Fatalf("item_history row scope = %d, want 4", history.RowScope)
-	}
-	if want := []string{"evidence", "cause", "retry"}; !reflect.DeepEqual(history.Markdown, want) {
-		t.Fatalf("item_history markdown = %v, want %v", history.Markdown, want)
+	if !slices.ContainsFunc(items.Checks, func(c dbspec.Check) bool { return c.Name == "ck_items_state" }) {
+		t.Fatalf("items checks = %+v, want ck_items_state", items.Checks)
 	}
 
 	people, ok := cat.Table("people")
@@ -239,7 +198,7 @@ func TestLoadFixtureCatalog(t *testing.T) {
 	if !ok {
 		t.Fatal("item_links missing")
 	}
-	if links.Storage != (catalog.Storage{Kind: catalog.StorageBlock, Shape: catalog.ShapeTable, ParentForeignKey: "fk_item_links_from", Parent: "items"}) || links.RowScope != 4 || links.Key != "id" || links.StateMachine != nil {
+	if links.Storage != (catalog.Storage{Kind: catalog.StorageBlock, Shape: catalog.ShapeTable, ParentForeignKey: "fk_item_links_from", Parent: "items"}) || links.RowScope != 4 || links.Key != "id" || links.Checkbox != nil {
 		t.Fatalf("item_links = %+v", links)
 	}
 	views, ok := cat.Table("views")
@@ -602,47 +561,76 @@ func TestLoadRejectsExternalUse(t *testing.T) {
 	t.Fatalf("no located use diagnostic at line 3 in %+v", diags)
 }
 
-func TestLoadRejectsStateMachineWithoutHistory(t *testing.T) {
-	cat, diags, text := loadEdited(t, [2]string{"    state_machine state history item_history row item from from_state to to_state at at\n", ""})
-	expectRejected(t, cat, diags)
-	expectTableDiag(t, diags, text, "items", "no history")
+// machineLines declare a state machine on the state column of the fixture's items in the grammar of orm 0.0.26, with
+// its history in item_trail, and checkboxLines the glyph of each of its states; the engine reads them and applies
+// none of the machine (spec 30 Markdown settings, spec 50 State columns).
+const (
+	machineLines = "    state_machine state initial waiting\n" +
+		"    state_machine state waiting -> doing\n" +
+		"    state_machine state doing -> done require (evidence)\n" +
+		"    state_machine state terminal done\n"
+	historyLine   = "    state_machine state history item_trail row item from from_state to to_state at at\n"
+	checkboxLines = "    checkbox state waiting ' '\n    checkbox state doing '~'\n    checkbox state done 'o'\n"
+	// machineAnchor is the last setting line of items, after which the machine lines are written.
+	machineAnchor = "    markdown retry\n"
+)
+
+// trailTable is the table item_trail that a history line names, stored by store and declaring its evidence with
+// evidenceSettings; extra holds further lines before its primary key.
+func trailTable(store, evidenceSettings, extra string) string {
+	return "table item_trail {\n  id i64 identity\n  item varchar(32)\n  from_state varchar(16)\n  to_state varchar(16)\n  at datetime(6)\n" +
+		"  evidence text null\n" + extra + "  primary key (id)\n  index ix_item_trail_item (item)\n" +
+		"  foreign key fk_item_trail_item (item) references items (id) on delete restrict on update restrict\n" +
+		"  settings {\n" + store + evidenceSettings + "  }\n}\n\ntable views {"
 }
 
-func TestLoadRejectsStateMachineWithoutInitial(t *testing.T) {
-	cat, diags, text := loadEdited(t, [2]string{"    state_machine state initial waiting\n", ""})
-	expectRejected(t, cat, diags)
-	expectTableDiag(t, diags, text, "items", "no initial state")
-}
-
-// checkboxLines are the five checkbox lines of the fixture's items table, a
-// state machine whose glyphs a list storage of items writes.
-const checkboxLines = "    checkbox state waiting ' '\n    checkbox state doing '~'\n    checkbox state done 'o'\n    checkbox state bypassed '!'\n    checkbox state impossible '-'\n"
-
-// TestLoadListStateRules pins that a list storage of a state machine declares
-// at least one checkbox. dbspec then covers every state with a checkbox, but
-// it accepts a state machine with none at all, so the rule is flowmark's.
-func TestLoadListStateRules(t *testing.T) {
+// TestLoadStateMachine pins that the catalog reads the state machine lines of orm 0.0.26 and keeps none of the machine
+// (spec 30 Markdown settings, spec 50 State columns): a machine without a history or an initial state loads, a history
+// table is an ordinary table in any storage, and a list whose machine declares no checkbox writes the state as a field;
+// a list with checkbox lines keeps the glyph of each value.
+func TestLoadStateMachine(t *testing.T) {
+	machine := func(lines string) [2]string { return [2]string{machineAnchor, machineAnchor + lines} }
+	block := "    store block fk_item_trail_item table\n"
 	cases := []struct {
-		name  string
-		edits [][2]string
-		msg   string // the rejection's message; empty for an accepted catalog
+		name     string
+		edits    [][2]string
+		checkbox map[string]string // the glyphs of the items checkbox, nil when it has none
 	}{
-		{name: "accepts a list with checkboxes", edits: [][2]string{itemsList}},
-		{name: "rejects a list without a checkbox", edits: [][2]string{itemsList, {checkboxLines, ""}}, msg: "declares no checkbox"},
-		{name: "accepts a table without a checkbox", edits: [][2]string{{checkboxLines, ""}, {"    store files\n", "    store document table\n"}}},
-		{name: "accepts files without a checkbox", edits: [][2]string{{checkboxLines, ""}}},
+		{name: "30#markdown-settings: a machine without a history loads", edits: [][2]string{machine(machineLines)}},
+		{name: "30#markdown-settings: a machine without an initial state loads",
+			edits: [][2]string{machine(strings.Replace(machineLines, "    state_machine state initial waiting\n", "", 1))}},
+		{name: "30#markdown-settings: a machine with a history stored as a block loads",
+			edits: [][2]string{machine(machineLines + historyLine), {"table views {", trailTable(block, "    markdown evidence\n", "")}}},
+		{name: "30#markdown-settings: a history table stored as a sharded document table is an ordinary table",
+			edits: [][2]string{machine(machineLines + historyLine), {"table views {", trailTable("    store document table shard at month\n", "    markdown evidence\n", "")}}},
+		{name: "30#markdown-settings: a history table placed under another table is an ordinary table",
+			edits: [][2]string{machine(machineLines + historyLine), {"table views {", trailTable("    store block fk_item_trail_person table\n", "    markdown evidence\n",
+				"")}, {"  foreign key fk_item_trail_item (item) references items (id) on delete restrict on update restrict\n",
+				"  foreign key fk_item_trail_item (item) references items (id) on delete restrict on update restrict\n  foreign key fk_item_trail_person (item) references people (id) on delete restrict on update restrict\n"}}},
+		{name: "30#markdown-settings: a required column that only the state table declares markdown loads",
+			edits: [][2]string{machine(machineLines + historyLine), {"table views {", trailTable(block, "", "")}}},
+		{name: "30#markdown-settings: a list whose machine declares no checkbox loads, its state a field",
+			edits: [][2]string{itemsList, machine(machineLines)}},
+		{name: "30#markdown-settings: a list with checkbox lines keeps the glyph of each value",
+			edits:    [][2]string{itemsList, machine(checkboxLines + machineLines)},
+			checkbox: map[string]string{"waiting": " ", "doing": "~", "done": "o"}},
+		{name: "30#markdown-settings: files storage with checkbox lines keeps them, shown nowhere",
+			edits:    [][2]string{machine(checkboxLines + machineLines)},
+			checkbox: map[string]string{"waiting": " ", "doing": "~", "done": "o"}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			cat, diags, text := loadEdited(t, c.edits...)
-			if c.msg == "" {
-				if len(diags) != 0 || cat == nil {
-					t.Fatalf("diagnostics = %+v, want an accepted catalog", diags)
-				}
-				return
+			cat, diags, _ := loadEdited(t, c.edits...)
+			if len(diags) != 0 || cat == nil {
+				t.Fatalf("diagnostics = %+v, want an accepted catalog", diags)
 			}
-			expectRejected(t, cat, diags)
-			expectTableDiag(t, diags, text, "items", c.msg)
+			items, _ := cat.Table("items")
+			switch {
+			case c.checkbox == nil && items.Checkbox != nil:
+				t.Fatalf("items checkbox = %+v, want none", items.Checkbox)
+			case c.checkbox != nil && (items.Checkbox == nil || items.Checkbox.Column != "state" || !reflect.DeepEqual(items.Checkbox.Glyphs, c.checkbox)):
+				t.Fatalf("items checkbox = %+v, want the column state with %v", items.Checkbox, c.checkbox)
+			}
 		})
 	}
 }
@@ -651,7 +639,7 @@ func TestLoadListStateRules(t *testing.T) {
 // machine is non-null. dbspec refuses a nullable one in every storage, so the
 // rejection is its own, located at the state line.
 func TestLoadRejectsNullableStateColumn(t *testing.T) {
-	cat, diags, _ := loadEdited(t, [2]string{"  state varchar(16)\n", "  state varchar(16) null\n"})
+	cat, diags, _ := loadEdited(t, [2]string{machineAnchor, machineAnchor + machineLines}, [2]string{"  state varchar(16)\n", "  state varchar(16) null\n"})
 	expectRejected(t, cat, diags)
 	if !slices.ContainsFunc(diags, func(d catalog.Diagnostic) bool {
 		return d.File == "dbspec/flowmark.dbs" && d.Rule == "catalog" && strings.Contains(d.Message, "needs a non-null")
@@ -687,18 +675,18 @@ table views {`
 }
 
 func TestLoadRejectsHeadingPastH6(t *testing.T) {
-	// items (document list, rows at level 3) > item_history (block, rows at 5)
+	// items (document list, rows at level 3) > item_links (block, rows at 5)
 	// > item_note (block, rows at 7). The markdown column note is a section of
 	// the rows at level 7.
 	note := `table item_note {
   id i64 identity
-  history i64
+  link i64
   note text null
   primary key (id)
-  index ix_item_note_history (history)
-  foreign key fk_note_history (history) references item_history (id) on delete restrict on update restrict
+  index ix_item_note_link (link)
+  foreign key fk_note_link (link) references item_links (id) on delete restrict on update restrict
   settings {
-    store block fk_note_history table
+    store block fk_note_link table
     markdown note
   }
 }
@@ -733,10 +721,10 @@ func TestLoadHeadingPastH6IsNeeded(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			leaf := "table item_leaf {\n  id i64 identity\n  history i64\n" + c.columns +
-				"  primary key (id)\n  index ix_item_leaf_history (history)\n" +
-				"  foreign key fk_leaf_history (history) references item_history (id) on delete restrict on update restrict\n" +
-				"  settings {\n    store block fk_leaf_history table\n" + c.settings + "  }\n}\n\n" + c.child + "table views {"
+			leaf := "table item_leaf {\n  id i64 identity\n  link i64\n" + c.columns +
+				"  primary key (id)\n  index ix_item_leaf_link (link)\n" +
+				"  foreign key fk_leaf_link (link) references item_links (id) on delete restrict on update restrict\n" +
+				"  settings {\n    store block fk_leaf_link table\n" + c.settings + "  }\n}\n\n" + c.child + "table views {"
 			root, text := listCorpus(t, [2]string{"table views {", leaf})
 			cat, diags := catalog.Load(root)
 			if !c.refused {
@@ -815,212 +803,12 @@ table views {`
 	expectTableDiag(t, diags, text, "note_c", "level 7")
 }
 
-// requireSchema is the state table subtasks, whose machine requires column x,
-// and its history table subtask_history; both declare x with the type typ. A
-// block table stands under items, stored a document list (listCorpus), so its row scope is 5 and its history table's
-// is 7; a document table has row scope 3 and its history table scope 5. stateMark
-// and historyMark declare x markdown on the state table and on the history table.
-func requireSchema(block bool, typ string, stateMark, historyMark bool) string {
-	state := "table subtasks {\n  id i64 identity\n"
-	store := "    store document table\n"
-	if block {
-		state += "  item varchar(32)\n"
-		store = "    store block fk_subtasks_item table\n"
-	}
-	state += "  state varchar(16)\n  x " + typ + " null\n  primary key (id)\n"
-	if block {
-		state += "  index ix_subtasks_item (item)\n  foreign key fk_subtasks_item (item) references items (id) on delete restrict on update restrict\n"
-	}
-	state += "  settings {\n" + store +
-		"    state_machine state initial open\n" +
-		"    state_machine state open -> closed require (x)\n" +
-		"    state_machine state history subtask_history row subtask from from_state to to_state at at\n"
-	if stateMark {
-		state += "    markdown x\n"
-	}
-	state += "  }\n}\n\n"
-
-	history := "table subtask_history {\n  id i64 identity\n  subtask i64\n  from_state varchar(16)\n  to_state varchar(16)\n  at datetime(6)\n  x " + typ + " null\n  primary key (id)\n  index ix_subtask_history_subtask (subtask)\n  foreign key fk_subtask_history_subtask (subtask) references subtasks (id) on delete restrict on update restrict\n  settings {\n    store block fk_subtask_history_subtask table\n"
-	if historyMark {
-		history += "    markdown x\n"
-	}
-	history += "  }\n}\n\ntable views {"
-	return state + history
-}
-
-// TestLoadHistoryStorage pins the ruling of spec 30 on the storage of a history
-// table: stored `document table`, the history rows have row scope 3 at any depth
-// of the state table, so a block machine at row scope 5 that requires a markdown
-// column loads; the same history stored as a block under its state table is
-// refused past H6.
-func TestLoadHistoryStorage(t *testing.T) {
-	const blockStore = "    store block fk_subtask_history_subtask table\n"
-	cases := []struct {
-		name     string
-		document bool // the history table is stored document table
-	}{
-		{"30#the-history-table: a history stored document table under a block machine at row scope 5 loads at row scope 3", true},
-		{"30#the-history-table: the same history stored as a block is refused past H6", false},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			schema := requireSchema(true, "text", true, true)
-			if strings.Count(schema, blockStore) != 1 {
-				t.Fatalf("the history store line %q is not in the schema once", blockStore)
-			}
-			if c.document {
-				schema = strings.Replace(schema, blockStore, "    store document table\n", 1)
-			}
-			root, text := listCorpus(t, [2]string{"table views {", schema})
-			cat, diags := catalog.Load(root)
-			if !c.document {
-				expectRejected(t, cat, diags)
-				expectTableDiag(t, diags, text, "subtask_history", "level 7")
-				return
-			}
-			if cat == nil || len(diags) > 0 {
-				t.Fatalf("a history stored document table is refused: %+v", diags)
-			}
-			state, _ := cat.Table("subtasks")
-			history, _ := cat.Table("subtask_history")
-			if state.RowScope != 5 || history.RowScope != 3 || history.Storage.Kind != catalog.StorageDocument {
-				t.Fatalf("state row scope %d, history row scope %d storage %s; want 5, 3 and document", state.RowScope, history.RowScope, history.Storage.Kind)
-			}
-		})
-	}
-}
-
-// TestLoadHistoryStorageKind pins spec 30's storage of a history table: `block <row
-// fk> table` under its state table or `document table`; any other storage is a
-// setting error at the history table's name.
-func TestLoadHistoryStorageKind(t *testing.T) {
-	const blockStore = "    store block fk_history_item table\n"
-	// statesTable is a table keyed by the state column's type, which a history
-	// row's from or to can reference.
-	const statesTable = "table states {\n  id varchar(16)\n  primary key (id)\n  settings {\n    store document table\n  }\n}\n\n"
-	const msg = "a history table is stored `block <row fk> table` under its state table or `document table`"
-	cases := []struct {
-		name    string
-		edits   [][2]string
-		refused bool
-	}{
-		{"30#the-history-table: block of its row foreign key under its state table", nil, false},
-		{"30#the-history-table: document table", [][2]string{{blockStore, "    store document table\n"}}, false},
-		{"30#the-history-table: files", [][2]string{{blockStore, "    store files\n"}}, true},
-		{"30#the-history-table: document table sharded by time", [][2]string{{blockStore, "    store document table shard at month\n"}}, true},
-		{"30#the-history-table: document list", [][2]string{{blockStore, "    store document list\n"}}, true},
-		{"30#the-history-table: block of another table", [][2]string{
-			{"  foreign key fk_history_item (item) references items (id) on delete restrict on update restrict\n",
-				"  foreign key fk_history_item (item) references items (id) on delete restrict on update restrict\n  foreign key fk_history_person (item) references people (id) on delete restrict on update restrict\n"},
-			{blockStore, "    store block fk_history_person table\n"},
-		}, true},
-		// T12.3-5: a non-null placement key other than the row column places a
-		// history row in the scope of a row other than the one whose trail it
-		// records: by from or to under a table keyed by the states, or by the
-		// identity key under a table keyed like it.
-		{"30#the-history-table: block of another table placed by from", [][2]string{
-			{"  foreign key fk_history_item (item) references items (id) on delete restrict on update restrict\n",
-				"  index ix_history_from (from_state)\n  foreign key fk_history_item (item) references items (id) on delete restrict on update restrict\n  foreign key fk_history_from (from_state) references states (id) on delete restrict on update restrict\n"},
-			{blockStore, "    store block fk_history_from table\n"},
-			{"table views {", statesTable + "table views {"},
-		}, true},
-		{"30#the-history-table: block of another table placed by to", [][2]string{
-			{"  foreign key fk_history_item (item) references items (id) on delete restrict on update restrict\n",
-				"  index ix_history_to (to_state)\n  foreign key fk_history_item (item) references items (id) on delete restrict on update restrict\n  foreign key fk_history_to (to_state) references states (id) on delete restrict on update restrict\n"},
-			{blockStore, "    store block fk_history_to table\n"},
-			{"table views {", statesTable + "table views {"},
-		}, true},
-		{"30#the-history-table: block of another table placed by the identity key", [][2]string{
-			{"  foreign key fk_history_item (item) references items (id) on delete restrict on update restrict\n",
-				"  foreign key fk_history_item (item) references items (id) on delete restrict on update restrict\n  foreign key fk_history_link (id) references item_links (id) on delete restrict on update restrict\n"},
-			{blockStore, "    store block fk_history_link table\n"},
-		}, true},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			cat, diags, text := loadEdited(t, c.edits...)
-			if !c.refused {
-				if cat == nil || len(diags) > 0 {
-					t.Fatalf("refused: %+v", diags)
-				}
-				return
-			}
-			expectRejected(t, cat, diags)
-			expectTableDiag(t, diags, text, "item_history", msg)
-			// A block placement breaks no other rule, so the storage error stands
-			// alone; files and a list also lack the title their storage needs.
-			if strings.Contains(c.name, "block") && len(diags) != 1 {
-				t.Fatalf("%d diagnostics, want the storage error alone: %+v", len(diags), diags)
-			}
-		})
-	}
-}
-
-// TestLoadRequireOfMarkdownPastH6 pins the ruling of spec 30 on a required column
-// of a block machine: a required column that the state table and the history
-// table both declare markdown is a section of the history rows, which is refused
-// past H6; a column that the two tables declare alike without markdown is a cell
-// and is accepted at any depth; a required column that only one of the two tables
-// declares markdown is refused at the history table's name, since the history row
-// holds a copy of a value that the two places accept differently.
-func TestLoadRequireOfMarkdownPastH6(t *testing.T) {
-	cases := []struct {
-		name        string
-		block       bool   // the state table is a block under items, else a document table
-		typ         string // the type of column x in both tables
-		stateMark   bool
-		historyMark bool
-		refusedAt   string // the table the one diagnostic names, or empty when accepted
-		msg         string
-	}{
-		{"both markdown under a block at scope 5", true, "text", true, true, "subtask_history", "level 7"},
-		{"both varchar(255) without markdown", true, "varchar(255)", false, false, "", ""},
-		{"markdown on the state table only", true, "text", true, false, "subtask_history", "markdown setting"},
-		{"markdown on the history only, state table a document", false, "text", false, true, "subtask_history", "markdown setting"},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			root, text := listCorpus(t, [2]string{"table views {", requireSchema(c.block, c.typ, c.stateMark, c.historyMark)})
-			cat, diags := catalog.Load(root)
-			if c.refusedAt == "" {
-				if cat == nil || len(diags) > 0 {
-					t.Fatalf("a required column declared alike without markdown is refused: %+v", diags)
-				}
-				return
-			}
-			expectRejected(t, cat, diags)
-			expectTableDiag(t, diags, text, c.refusedAt, c.msg)
-			if len(diags) != 1 {
-				t.Fatalf("%d diagnostics, want exactly one: %+v", len(diags), diags)
-			}
-			for _, d := range diags {
-				if d.Line == tableLine(t, text, "subtasks") {
-					t.Fatalf("diagnostic %+v on table subtasks, want none", d)
-				}
-			}
-		})
-	}
-}
-
 // TestLoadBlockPlacementNonNull pins spec 30's block placement rule: the column
 // of a block table's placement foreign key is non-null, since a block row stands
 // inside the scope of the row that key references and NULL references none; a
-// nullable one is a schema error at the block table's name. A history table is a
-// block table like any other, so the same rule refuses a nullable row column and
-// a placement by a copied column, which the history line requires nullable.
+// nullable one is a schema error at the block table's name.
 func TestLoadBlockPlacementNonNull(t *testing.T) {
 	const msg = "is placed by foreign key"
-	copied := requireSchema(false, "varchar(32)", false, false)
-	copiedEdits := [][2]string{
-		{"  foreign key fk_subtask_history_subtask (subtask)", "  index ix_subtask_history_x (x)\n  foreign key fk_subtask_history_x (x) references items (id) on delete restrict on update restrict\n  foreign key fk_subtask_history_subtask (subtask)"},
-		{"    store block fk_subtask_history_subtask table\n", "    store block fk_subtask_history_x table\n"},
-	}
-	for _, e := range copiedEdits {
-		if strings.Count(copied, e[0]) != 1 {
-			t.Fatalf("edit anchor %q is not in the history schema once", e[0])
-		}
-		copied = strings.Replace(copied, e[0], e[1], 1)
-	}
 	edit := func(text, old, new string) string {
 		t.Helper()
 		if strings.Count(text, old) != 1 {
@@ -1053,10 +841,6 @@ func TestLoadBlockPlacementNonNull(t *testing.T) {
 		{"30#corpus-rules-on-dbspec-constructs: a composite placement key with one nullable column is refused naming that column", [][2]string{{"table views {", composite}}, "slot",
 			"block table slot is placed by foreign key fk_slot_grid, whose column gy is nullable"},
 		{"30#corpus-rules-on-dbspec-constructs: a nullable foreign key that does not place the block loads", [][2]string{{"table views {", otherNullable}}, "", ""},
-		{"30#the-history-table: a nullable row column of a block history is refused", [][2]string{{"  item varchar(32)\n  from_state", "  item varchar(32) null\n  from_state"}}, "item_history",
-			"block table item_history is placed by foreign key fk_history_item, whose column item is nullable"},
-		{"30#the-history-table: a block history placed by a copied column is refused", [][2]string{{"table views {", copied}}, "subtask_history",
-			"block table subtask_history is placed by foreign key fk_subtask_history_x, whose column x is nullable"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -1310,7 +1094,7 @@ func TestLoadAcceptsNameOfSameFileTable(t *testing.T) {
 	}{
 		{
 			name:  "column of items named like a document of another file",
-			edits: [][2]string{{"  retry text null\n  primary key (id)\n  index ix_items_parent", "  retry text null\n  notes text null\n  primary key (id)\n  index ix_items_parent"}, {"    markdown retry\n    checkbox", "    markdown retry\n    markdown notes\n    checkbox"}, {"table views {", notesDoc}},
+			edits: [][2]string{{"  retry text null\n  primary key (id)\n  index ix_items_parent", "  retry text null\n  notes text null\n  primary key (id)\n  index ix_items_parent"}, {"    markdown retry\n", "    markdown retry\n    markdown notes\n"}, {"table views {", notesDoc}},
 		},
 		{
 			name:  "column of a block named like its document",

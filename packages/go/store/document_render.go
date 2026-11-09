@@ -312,7 +312,7 @@ func (w *writer) checkRow(lay *docLayout, byKey map[string]int, r *Row) {
 	if lay.list && lay.state != "" {
 		if st := r.Scalars[lay.state]; st != nil {
 			if _, ok := lay.glyphs[*st]; !ok {
-				w.refuse(lay.state, "the state "+*st+" has no checkbox")
+				w.refuse(lay.state, "the value "+*st+" of "+lay.state+" has no checkbox, so a list row cannot show it")
 			}
 		}
 	}

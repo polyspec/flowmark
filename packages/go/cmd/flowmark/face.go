@@ -28,7 +28,6 @@ var faceCommands = map[string]faceCommand{
 	"row.update": {usage: "<corpus> <table> <key> [assignment…]", fixed: []string{"table", "key"}, assigns: true},
 	"row.move":   {usage: "<corpus> <table> <key> <position> [<parent>]", fixed: []string{"table", "key", "position"}, optional: "parent"},
 	"row.delete": {usage: "<corpus> <table> <key>", fixed: []string{"table", "key"}},
-	"transition": {usage: "<corpus> <table> <key> <state> [assignment…]", fixed: []string{"table", "key", "state"}, assigns: true},
 	"views":      {usage: "<corpus> [<key>]", optional: "key"},
 }
 

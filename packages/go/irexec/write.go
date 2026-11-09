@@ -55,9 +55,6 @@ type given struct {
 	inserted bool
 	assigned map[string]bool
 	before   map[string]cell
-	// entered is the state the write puts the row in, "" when it puts it in none:
-	// the state of an inserted row, or a new state of an updated row.
-	entered string
 }
 
 // write answers a write request with its post-image.
@@ -644,14 +641,6 @@ func (w *writer) insertRow(i int, ps []*int) *Error {
 		return nil
 	}
 	setColumns(tb, g.row, vals)
-	if sm := tb.StateMachine; sm != nil {
-		if s := vals[sm.Column]; !s.null {
-			if !slices.Contains(sm.Initial, s.text) {
-				w.fault(g, tb.Name, sm.Column, codeConstraint, fmt.Sprintf("the state %s of an inserted row is not an initial state of %s", s.text, sm.Column))
-			}
-			g.entered = s.text
-		}
-	}
 	// Place the row: a files row in its own file, a document row in the table's
 	// document, a block row in the scope of the row its placement key names.
 	switch tb.Storage.Kind {
@@ -986,9 +975,6 @@ func (w *writer) updateRows(rows []*rec, set []ir.Assign, stamp bool) *Error {
 		}
 		if stamp && w.ent.Updated != "" && !g.assigned[w.ent.Updated] {
 			vals[w.ent.Updated] = w.clock(fieldType(w.ent.Field(w.ent.Updated)))
-		}
-		if err := w.transition(g, x, vals); err != nil {
-			return err
 		}
 		x = w.own(x)
 		setColumns(tb, x.row, vals)
