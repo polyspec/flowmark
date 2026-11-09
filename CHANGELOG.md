@@ -3,6 +3,8 @@
 
 ## Unreleased
 
+## 0.0.13
+
 - T87: A corpus read again from its files gives every value of a table that a statement made the storage class its session gave it: the stored form follows the SQLite affinity of the column, so an INTEGER of a column without a declared type stays an INTEGER, a `BOOLEAN` column keeps an INTEGER other than 0 or 1 and its texts, a text of a number column stays a text, and a key value that would need a stored literal is refused as CONSTRAINT.
 - T86: The SQL server answers a finite REAL with a fraction or an exponent (2.0 is `2.0`, -0.0 is `-0.0`, 1e21 is `1e+21`), so a client tells it from an INTEGER, and the stored literal of such a REAL (`n'2.0'`) reads back as a REAL.
 
