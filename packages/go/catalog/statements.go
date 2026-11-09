@@ -1,11 +1,13 @@
 package catalog
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -22,41 +24,61 @@ import (
 // texts in order (spec 40 SQL statements). The document set declares what the set owns, and this file what SQL added.
 const StatementsFile = dbspecDir + "/statements.json"
 
-// SequencesFile is the file of the AUTOINCREMENT counters of a corpus, relative to its root: a JSON object of the
-// counter of each AUTOINCREMENT table that holds one, the largest key the table gave or held that no row of it holds
-// now (spec 40 SQL statements). The next key of such a table is one more than the larger of its counter and its largest
-// key, so no key is given twice.
+// SequencesFile is the file of the AUTOINCREMENT sequences of a corpus, relative to its root: a JSON object, by table,
+// of the sequence SQLite keeps in sqlite_sequence for each AUTOINCREMENT table whose sequence is not the one its rows
+// imply, an integer, or null when sqlite_sequence holds no row of a table that holds rows (spec 40 SQL statements). A
+// table the file does not name has the sequence of its largest key, and no row of sqlite_sequence when it holds no row.
+// The next key of such a table is one more than the larger of its sequence and its largest key, so no key is given twice.
 const SequencesFile = dbspecDir + "/sequences.json"
 
-// ParseSequences reads the counters of the bytes of SequencesFile; nil bytes, a corpus without the file, hold none.
-// A counter is a positive integer.
-func ParseSequences(data []byte) (map[string]int64, error) {
+// ParseSequences reads the sequences of the bytes of SequencesFile; nil bytes, a corpus without the file, hold none. A
+// sequence is an integer of int64, nil for null, a table of no row of sqlite_sequence.
+func ParseSequences(data []byte) (map[string]*int64, error) {
 	if data == nil {
 		return nil, nil
 	}
-	var out map[string]int64
-	if err := json.Unmarshal(data, &out); err != nil {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.UseNumber()
+	if tok, err := dec.Token(); err != nil || tok != json.Delim('{') {
+		return nil, fmt.Errorf("%s: not a JSON object of sequences", SequencesFile)
+	}
+	out := map[string]*int64{}
+	for dec.More() {
+		tok, err := dec.Token()
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", SequencesFile, err)
+		}
+		table, named := tok.(string)
+		if !named {
+			return nil, fmt.Errorf("%s: a name of no string", SequencesFile)
+		}
+		if _, twice := out[table]; twice {
+			return nil, fmt.Errorf("%s: the sequence of %s is named twice", SequencesFile, table)
+		}
+		var n *int64
+		if err := dec.Decode(&n); err != nil {
+			return nil, fmt.Errorf("%s: the sequence of %s: %w", SequencesFile, table, err)
+		}
+		out[table] = n
+	}
+	if _, err := dec.Token(); err != nil {
 		return nil, fmt.Errorf("%s: %w", SequencesFile, err)
 	}
-	if out == nil {
-		return nil, fmt.Errorf("%s: not a JSON object of counters", SequencesFile)
-	}
-	for table, n := range out {
-		if n <= 0 {
-			return nil, fmt.Errorf("%s: the counter of %s is %d, not a positive integer", SequencesFile, table, n)
-		}
+	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
+		return nil, fmt.Errorf("%s: data after the object of sequences", SequencesFile)
 	}
 	return out, nil
 }
 
-// RenderSequences writes the counters as the bytes of SequencesFile, by table name; no counter is no file (nil).
-func RenderSequences(counters map[string]int64) []byte {
-	if len(counters) == 0 {
+// RenderSequences writes the sequences as the bytes of SequencesFile, by table name, nil as null; no sequence is no
+// file (nil).
+func RenderSequences(sequences map[string]*int64) []byte {
+	if len(sequences) == 0 {
 		return nil
 	}
-	data, err := json.MarshalIndent(counters, "", "  ")
+	data, err := json.MarshalIndent(sequences, "", "  ")
 	if err != nil {
-		panic("catalog: the counters do not marshal: " + err.Error())
+		panic("catalog: the sequences do not marshal: " + err.Error())
 	}
 	return append(data, '\n')
 }
@@ -343,11 +365,45 @@ func liveTable(ctx context.Context, db *sql.DB, name string) (_ *dbspec.Table, e
 			}
 		}
 	}
+	if err := namedRowid(ctx, db, name, t.Columns, len(key) == 1 && rowAlias); err != nil {
+		return nil, err
+	}
 	if len(key) == 0 {
+		// The corpus holds the rowid of a table keyed by it as its column rowid, so a column of that name, as SQLite matches
+		// a name without regard to ASCII case, would stand in the place of the rowid and the rows it gives would be lost.
+		for _, c := range t.Columns {
+			if strings.EqualFold(c.Name, RowIDColumn) {
+				return nil, fmt.Errorf("the table %s is keyed by its rowid, which the corpus holds as the column %s, and its column %s takes that name: give the table a primary key that holds no NULL, or name the column otherwise", name, RowIDColumn, c.Name)
+			}
+		}
 		t.Columns = append([]dbspec.Column{{Name: RowIDColumn, Type: dbspec.Type{Kind: dbspec.TypeI64}, Identity: true}}, t.Columns...)
 		t.PrimaryKey.Columns = []string{RowIDColumn}
 	}
 	return t, nil
+}
+
+// namedRowid refuses a table with a rowid that no statement can name: SQLite names the rowid by the first of rowid,
+// _rowid_ and oid that names no column, so a table whose columns take all three and whose key, alias says, is no
+// INTEGER PRIMARY KEY has a rowid that neither the engine nor a statement reads.
+func namedRowid(ctx context.Context, db *sql.DB, name string, cols []dbspec.Column, alias bool) error {
+	if alias {
+		return nil
+	}
+	taken := map[string]bool{}
+	for _, c := range cols {
+		taken[strings.ToLower(c.Name)] = true
+	}
+	if !taken["rowid"] || !taken["_rowid_"] || !taken["oid"] {
+		return nil
+	}
+	var without bool
+	if err := db.QueryRowContext(ctx, "SELECT wr FROM pragma_table_list WHERE schema = 'main' AND name = ?", name).Scan(&without); err != nil {
+		return err
+	}
+	if without {
+		return nil
+	}
+	return fmt.Errorf("the table %s has a rowid that no statement names, as its columns take rowid, _rowid_ and oid and its key is no INTEGER PRIMARY KEY: name a column otherwise", name)
 }
 
 var decimalInt = regexp.MustCompile(`^DECIMALINT\((\d+),\s*(\d+)\)$`)

@@ -1,5 +1,5 @@
 <!-- doc-id: spec-ops -->
-<!-- source-sha256: bc37952c538c8f898565d4886937870e70f1161aaf4dec94b40f2309993f7a5a -->
+<!-- source-sha256: 5ffe0aa6400ed8b6e0f08fa0a5e8e95675b2895cc78716fa78b68c73a97fd213 -->
 # Operations
 
 [English](40-ops.md)
@@ -238,7 +238,10 @@ client가 구현할 것은 이 driver뿐이다.
   그다음 행. 문장은 거기서 실행된다. SQLite의 pre-update hook이 문장이 바꾼 행을 하나하나 알린다: 문장 자신의 행과
   REPLACE, foreign key action, trigger의 행이다. 차이는 그런 행마다 첫 변경 전의 image와, 바뀐 rowid에서 database가 지닌
   행으로 만들므로, 쓰기는 모든 행이 아니라 자기가 바꾼 행을 읽는다. SQLite가 rowid를 정의하지 않는 rowid 없는 표의 행은
-  primary key로 알고, 그 행은 바뀐 key에서 그 key의 collation에 따른 순서로 읽는다. corpus가 key를 비교하는 대로
+  primary key로 알고, 그 행은 바뀐 key에서 그 key의 collation에 따른 순서로 읽는다. 이를 위해 엔진이 schema에서 읽는 것,
+  곧 rowid 없는 표마다의 primary key와 rowid 있는 표마다의 rowid 이름은 schema의 text가 그것을 읽은 text와 다를 때마다 다시
+  읽는다. schema version은 schema를 증명하지 못하기 때문이다: schema 변경의 rollback은 다음 변경에 자신이 되돌린 schema의
+  version을 준다(`statement`의 `TestKeysCacheCurrent`). corpus가 key를 비교하는 대로
   대소문자를 가리지 않고 더한 행의 key와 같은 key를 가진 사라진 행은 insert보다 먼저 지우며, SQLite가 이미 판정한
   foreign key로 다시 판정하지 않으므로 대소문자만 바뀐 key도 database가 commit한 대로 쓰인다. image의 text는 길이로 읽으므로 NUL을 품은 text도
   온전히 온다. driver의 release는 text를 첫 NUL까지 읽으므로, 엔진은 text를 길이로 읽는 driver fork를
@@ -261,21 +264,56 @@ client가 구현할 것은 이 driver뿐이다.
   문장은 comment가 없을 때의 문장과 같으므로, comment 뒤의 읽기도 다른 읽기처럼 `query_only` 아래에서 실행된다(`statement`의
   `TestCommentsBeforeAStatement`와 `TestTokens`).
 - **표.** 표는 column, 선언 타입, key를 자기 문장에서 받는다. SQLite가 NULL을 허용하는 primary key는 행을 가리키지
-  못하므로 그런 표는 primary key가 없는 표처럼 rowid를 key로 쓴다.
+  못하므로 그런 표는 primary key가 없는 표처럼 rowid를 key로 쓴다. corpus는 그 rowid를 column `rowid`로 지니므로, 그런 표에
+  SQLite가 이름을 맞추듯 대소문자와 상관없이 `rowid`라는 column을 남기는 schema 문장은 `CONSTRAINT`이며 아무것도 바꾸지
+  않는다. 그 column이 rowid의 자리를 차지하기 때문이다. 다르게 key를 쓰는 표는 SQLite가 허용하듯 column을 `rowid`라 이름
+  댈 수 있고, 엔진은 SQLite처럼 `rowid`, `_rowid_`, `oid` 가운데 column 이름이 아닌 첫 이름으로, 또는 `INTEGER PRIMARY KEY`로
+  표의 rowid를 읽는다. rowid가 있는 표의 column이 세 이름을 모두 차지하고 key가 `INTEGER PRIMARY KEY`가 아니면 그 rowid는
+  어떤 문장도 이름 대지 못하고 엔진은 바뀐 행을 그것으로 읽을 수 없으므로, 그 schema 문장도 `CONSTRAINT`다.
+  `INTEGER PRIMARY KEY`가 없는 표의 column을 rowid의 이름으로 만들 `ALTER TABLE`은 SQLite가 스스로 거부한다. `statement`의
+  `TestRowidColumnName`이 이를 확인한다.
 - **값.** cell은 SQLite가 지닌 값을 답한다. `DATE`, `DATETIME`, `TIMESTAMP`로 선언된 column의 text는 SQLite 연결이
   읽듯이 저장된 text 그대로, byte 단위로 같다. driver의 release는 그런 text를 시각으로 해석해 다른 형태로 다시 쓰므로,
   엔진은 driver의 fork가 저장된 그대로 읽게 한다(`statement`의 `TestTemporalText`).
 - **AUTOINCREMENT counter.** 문장이 key를 `AUTOINCREMENT`로 선언한 표와, set이 그렇게 render하는 `identity` key의 표는
-  SQLite의 `AUTOINCREMENT`처럼 같은 key를 두 번 주지 않는다. 그냥 `INTEGER PRIMARY KEY`는 SQLite처럼 가장 큰 key보다 하나 큰
-  key를 준다. 그런 표의 counter는 corpus의 일부로 `dbspec/sequences.json`에 있으며, 표마다 양의 counter를 가진 JSON 객체다.
-  표의 sequence는 counter와 가장 큰 key 가운데 큰 것이고, 다음에 주는 key는 그보다 하나 크다. 그래서 손으로 쓴 key도
-  셈에 들어간다. sequence를 낮추는 쓰기, 곧 가장 큰 key 행의 delete나 key 변경은 counter를 그 값으로 올리고, database가
-  sequence를 넘어 준 key, 곧 한 문장이 넣었다가 다시 지운 key는 문장 뒤에 counter를 올린다. commit은 행과 함께 이 파일을
-  쓴다. fill과 refresh는 database에 corpus의 sequence를 준다. 이름을 바꾼 표는 counter를 지키고, 지운 표는 SQLite의
-  `sqlite_sequence`처럼 counter를 함께 가져간다. 이 파일은 corpus를 처음부터 읽을 때와, 어느 process든 이 파일을 쓴 commit
-  뒤에 commit generation이 그 경로를 알릴 때 corpus와 함께 읽는다. 손으로 고친 파일은 `dbspec/`을 손으로 고친 것처럼
-  그다음 읽기에서 읽힌다. git을 되감으면 counter도 행과 함께 되감긴다. `statement`의 `TestSequences`, `irexec`의
-  `TestSequenceRaise`와 `TestRaiseSequences`, `catalog`의 `TestAutoincrement`와 `TestSequencesFile`이 이를 확인한다.
+  SQLite가 `sqlite_sequence`에 지키는 대로 sequence를 지킨다(SQLite, autoinc.html): 거기 있는 그 표의 행, 또는 행 없음이다.
+  그냥 `INTEGER PRIMARY KEY`는 SQLite처럼 가장 큰 key보다 하나 큰 key를 준다. insert가 주는 key는 sequence와 가장 큰 key
+  가운데 큰 것보다 하나 크고, insert는 sequence를 자신이 주거나 만나는 key마다 그 key로 올린다: insert가 손으로 준 key와,
+  `ON CONFLICT … DO UPDATE`나 `OR IGNORE`로 unique key에서 행을 만난 insert가 주었을 key다. SQLite는 행을 만나기 전에 그
+  key를 주기 때문이다. 그래서 명시적 쓰기가 sequence를 낮추기 전까지 insert는 손으로 쓴 key를 포함해 앞선 insert가 준 key를
+  다시 주지 않으며, 이는 SQLite의 `AUTOINCREMENT`가 주지 않는 것과 같다. delete와 key 변경은 sequence를 그대로 두는데,
+  SQLite가 rowid의 `UPDATE`를 따라가지 않기 때문이다. `sqlite_sequence`의 명시적 쓰기는 SQLite가 적용하는 대로 그 표의
+  sequence를 정한다: `UPDATE sqlite_sequence SET seq = …`는 더 낮은 값, 0, 음수를 포함해 그 값으로 정하므로, delete 뒤
+  identity의 restart는 SQLite와 server가 주는 key를 준다. `DELETE FROM sqlite_sequence`는 그 표에 행을 남기지 않으며, 그
+  표의 다음 key는 가장 큰 key보다 하나 크다. `INSERT`는 행이 없는 표에 그 행을 준다. corpus는 AUTOINCREMENT 표마다 정수
+  sequence 하나를 가지거나 갖지 않으므로, `sqlite_sequence`에 SQLite가 맞추듯 byte 단위로 AUTOINCREMENT 표가 아닌 이름의 행,
+  한 표의 두 번째 행, 정수가 아닌 sequence(text, real, NULL)를 남기는 문장은 `CONSTRAINT`이고, corpus와 그 transaction을
+  그대로 둔다. int64의 최댓값을 넘으면 AUTOINCREMENT 표는 key를 주지 않는다: SQLite는 그 insert를 `SQLITE_FULL`로,
+  executor는 `DRIVER`로 실패시킨다. sequence는 corpus의 일부로 `dbspec/sequences.json`에 있으며, sequence가 가장 큰 key가
+  아닌 AUTOINCREMENT 표마다 그 sequence를 가진 JSON 객체다: int64 정수, 또는 표가 행을 가진 채 `sqlite_sequence`에 행이
+  없으면 `null`이다. 파일이 이름 대지 않은 표는 가장 큰 key를 sequence로 가지며, 행이 없으면 `sqlite_sequence`에도 행이
+  없다. 엔진은 문장마다 그 뒤에 update hook이 알리지 않는 `sqlite_sequence`를 읽고, sequence가 corpus의 것과 다르면 commit은
+  행과 함께 이 파일을 쓴다. fill과 refresh는 database에 corpus의 sequence를 행 그대로 준다. 이름을 바꾼 표는 sequence를
+  지키고, 지운 표는 SQLite의 `sqlite_sequence`처럼 sequence를 함께 가져간다. 이 파일은 corpus를 처음부터 읽을 때와, 어느
+  process든 이 파일을 쓴 commit 뒤에 commit generation이 그 경로를 알릴 때 corpus와 함께 읽는다. 손으로 고친 파일은
+  `dbspec/`을 손으로 고친 것처럼 그다음 읽기에서 읽힌다. git을 되감으면 sequence도 행과 함께 되감긴다. `statement`의
+  `TestSequences`, `TestExplicitSequences`, `TestExplicitSequenceRefused`, `irexec`의 `TestSequenceWrites`와
+  `TestSetSequences`, `ops`의 `TestAuditRows`, `catalog`의 `TestAutoincrement`, `TestSequencesFile`, `TestSequencesGolden`,
+  `FuzzSequences`가 이를 확인한다.
+- **가장 큰 key.** key가 rowid인 표, 곧 `INTEGER PRIMARY KEY`이거나 primary key가 없는 표로서 AUTOINCREMENT sequence를
+  지키지 않는 표는 SQLite처럼 insert에 가장 큰 key보다 하나 큰 key를 주며, int64의 최댓값도 준다. int64 최댓값을 넘으면
+  SQLite는 쓰이지 않은 rowid를 무작위로 고르는데, 이는 어떤 database도 주지 않는 key다: MySQL과 PostgreSQL은 최댓값을 넘은
+  identity를 거부하고, SQLite도 거기서 AUTOINCREMENT 표를 거부한다. 그래서 가장 큰 key가 int64 최댓값일 때 database가 key를
+  고르는 insert는 AUTOINCREMENT 표처럼 `DRIVER`(`SQLITE_FULL`)로 실패하며, 문장 경로와 face에서 똑같고, corpus와 그
+  transaction을 그대로 둔다. -1을 포함해 insert가 주는 key는 가장 큰 key 곁에 받아들여지고, NULL key는 database가 고르는
+  key이며, conflict가 무시하거나 upsert가 만난 행을 고쳐서 행을 쓰지 않는 insert는 key를 주지 않는다. SQLite가 NULL을
+  허용하는 primary key의 표는 rowid를 key로 쓰므로 이 역시 그런 표다. 문장 경로는 int64 최댓값을 지닌 그런 표마다
+  `BEFORE INSERT` trigger 하나로 이를 지키며, trigger는 SQLite가 거기서 행에 rowid -1을 주는지를 적는다. SQLite는 자신이 고를
+  rowid에 -1을 주고 insert가 준 key -1에는 주지 않는다. pre-update hook은 각 기록을 trigger의 깊이로 그 insert의 행과 짝지으므로,
+  한 단계 깊은 trigger의 insert는 자신을 부른 insert의 기록을 가져가지 않는다. trigger와 그 기록의 표는 문장 앞 savepoint 뒤에
+  만들어지고, 거부와 오류를 포함한 모든 경로에서 문장 뒤에 치워지므로 뒤의 어떤 문장도, schema 읽기도 그것을 보지 않는다. 문장
+  안에서 int64 최댓값을 지니게 되고 그 뒤에 행을 받는 표는 그 savepoint에서 자기 trigger와 함께 문장을 다시 실행한다.
+  `statement`의 `TestPlainIdentityLargest`, `TestPlainIdentityLargestFace`, `TestLargestGuardsLeaveNoSchema`가 이를 확인한다.
 - **할당 column 없음.** text key와 `order` column은 orm이 닿는 database에서처럼 insert가 준다
   ([document model](20-document-model.ko.md#key)): 문장의 schema는 둘 다 `NOT NULL`로 선언하므로, 하나를 빠뜨리거나 NULL을 준
   insert는 SQLite의 `NOT NULL constraint failed`로 실패하고, corpus는 문장이 쓴 값을 가진다. `statement`의

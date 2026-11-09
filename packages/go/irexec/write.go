@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"math"
 	"math/big"
 	"slices"
 	"sort"
@@ -34,6 +35,9 @@ type writer struct {
 	// copies maps each row of the corpus the write read to its copy in the next corpus, for the documents the write made
 	// its own (ownFile).
 	copies map[*store.Row]*store.Row
+	// seqs are the AUTOINCREMENT sequences of the tables the write inserts into while it runs (insertSequence), by
+	// table, each from the first row the write gives or meets in its table.
+	seqs map[string]*sequenceOf
 }
 
 // fault is a fault of a refused write with the position of its row in request
@@ -610,7 +614,11 @@ func (w *writer) insertRow(i int, ps []*int) *Error {
 			}
 			vals[c.Name] = v
 		case f.Identity:
-			vals[c.Name] = w.nextIdentity(tb, c.Name)
+			v, err := w.nextIdentity(tb, c.Name)
+			if err != nil {
+				return err
+			}
+			vals[c.Name] = v
 		default:
 			if v, ok := w.defaultOf(c); ok {
 				vals[c.Name] = v
@@ -634,6 +642,7 @@ func (w *writer) insertRow(i int, ps []*int) *Error {
 		w.fault(g, tb.Name, tb.Key, codeConstraint, "the key has no value")
 		return nil
 	}
+	w.attempted(tb, key)
 	setColumns(tb, g.row, vals)
 	// Place the row: a files row in its own file, a document row in the table's
 	// document, a block row in the scope of the row its placement key names.
@@ -723,15 +732,27 @@ func (w *writer) placementRow(tb *catalog.Table, v cell) (*rec, *Error) {
 }
 
 // nextIdentity allocates max+1 over the identity column of the table's rows: the largest positive integer of the column,
-// which the number index holds (numberColumns).
-func (w *writer) nextIdentity(tb *catalog.Table, col string) cell {
+// which the number index holds (numberColumns). The key of an AUTOINCREMENT table is one more than the larger of its
+// sequence and its largest key, as SQLite's AUTOINCREMENT gives it, and its sequence rises to it. Past the largest
+// int64 no table gives a key: SQLite fails an AUTOINCREMENT table as SQLITE_FULL, and a plain one fails as it so that no
+// random rowid is given (spec 40 SQL statements, The largest key).
+func (w *writer) nextIdentity(tb *catalog.Table, col string) (cell, *Error) {
 	if !slices.Contains(numberColumns(tb), col) {
 		panic("irexec: an identity is allocated over the column " + col + " of " + tb.Name + ", whose numbers the index does not hold")
 	}
-	max := int64(0)
 	if col == tb.Key && tb.Autoincrement {
-		return cell{text: strconv.FormatInt(w.next.Sequence(tb.Name)+1, 10)}
+		s := w.insertSequence(tb)
+		n := w.next.LargestKey(tb.Name)
+		if s.held {
+			n = max(n, s.n)
+		}
+		if n == math.MaxInt64 {
+			return cell{}, errf(codeDriver, "database or disk is full: the AUTOINCREMENT table %s gives no key past %d (SQLITE_FULL)", tb.Name, n)
+		}
+		s.raise(n + 1)
+		return cell{text: strconv.FormatInt(n+1, 10)}, nil
 	}
+	max := int64(0)
 	if n := w.next.maxNumber(tb.Name, col); n != "" {
 		// The index holds the canonical digits of a positive int64 (indexKeys).
 		m, err := strconv.ParseInt(n, 10, 64)
@@ -740,7 +761,11 @@ func (w *writer) nextIdentity(tb *catalog.Table, col string) cell {
 		}
 		max = m
 	}
-	return cell{text: strconv.FormatInt(max+1, 10)}
+	if max == math.MaxInt64 {
+		// SQLite would pick a random unused rowid, which no other database gives: the key past the largest is refused.
+		return cell{}, errf(codeDriver, "database or disk is full: the table %s gives no key past %d (SQLITE_FULL)", tb.Name, max)
+	}
+	return cell{text: strconv.FormatInt(max+1, 10)}, nil
 }
 
 // onDuplicate applies the on_duplicate assignments to the row that the inserted row
@@ -805,6 +830,15 @@ func (w *writer) onDuplicate(ps []*int) (bool, *Error) {
 	}
 	if met == nil {
 		return false, nil
+	}
+	// The insert meets the row by the key it gives, or by the key it would have given, as SQLite gives the key before it
+	// meets a row on a unique key: the sequence rises to it.
+	if k, ok := vals[w.tb.Key]; ok && !k.null {
+		w.attempted(w.tb, k)
+	} else if w.tb.Autoincrement {
+		if _, err := w.nextIdentity(w.tb, w.tb.Key); err != nil {
+			return false, err
+		}
 	}
 	if err := w.updateRows([]*rec{met}, req.OnDuplicate, false); err != nil {
 		return false, err

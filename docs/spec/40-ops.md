@@ -280,7 +280,10 @@ utility of orm's SQLite dialect holds on a corpus, and a client has only this dr
   difference is formed from the image of each such row before its first change and from the rows the database holds at
   the rowids it changed, so a write reads the rows it changed and not every row. A row of a table without a rowid,
   whose rowid SQLite leaves undefined, is known by its primary key, and its rows are read at the keys it changed in the
-  order of that key under its collations. A row gone whose key equals the key of a row added without regard to case,
+  order of that key under its collations. What the engine reads of the schema for this — the primary key of each table
+  without a rowid, and the name of the rowid of each table with one — is read again whenever the text of the schema
+  differs from the one it was read from, since the schema version does not prove the schema: a rollback of a schema
+  change gives the next change the version of the schema it took back (`TestKeysCacheCurrent` of `statement`). A row gone whose key equals the key of a row added without regard to case,
   as the corpus compares keys, is deleted before the inserts, unjudged by the foreign keys SQLite already judged, so a
   key changed only in its case is written as the database committed it. A text of an image is read by its length,
   so a text holding a NUL comes whole; the driver's release reads it up to its first NUL, and the engine pins a
@@ -307,24 +310,64 @@ utility of orm's SQLite dialect holds on a corpus, and a client has only this dr
   it, so a read after a comment runs under `query_only` as any read does (`TestCommentsBeforeAStatement` and
   `TestTokens` of `statement`).
 - **Tables.** A table takes its columns, its declared types and its key from its statement. A primary key that SQLite lets
-  hold NULL names no row, so such a table keys by its rowid, as does a table with no primary key.
+  hold NULL names no row, so such a table keys by its rowid, as does a table with no primary key; the corpus holds that
+  rowid as the column `rowid`, so a schema statement that leaves such a table a column named `rowid`, in any case as
+  SQLite matches a name, is `CONSTRAINT` and changes nothing, since that column would stand in the place of the rowid.
+  A table keyed otherwise names a column `rowid` as SQLite lets it, and the engine reads the rowid of a table by the
+  first of `rowid`, `_rowid_` and `oid` that names no column, as SQLite does, or by its `INTEGER PRIMARY KEY`; a table
+  with a rowid whose columns take all three names and whose key is no `INTEGER PRIMARY KEY` has a rowid no statement
+  names, which the engine cannot read the rows it changed by, so its schema statement is `CONSTRAINT` as well. An
+  `ALTER TABLE` that would name a column after the rowid of a table without an `INTEGER PRIMARY KEY` SQLite refuses
+  itself. `TestRowidColumnName` of `statement` holds it.
 - **Values.** A cell answers the value SQLite holds: the text of a column declared `DATE`, `DATETIME` or `TIMESTAMP`
   is the text stored, byte for byte, as a SQLite connection reads it. The driver's release parses such a text into a
   time, which another form writes back; the engine's fork of the driver reads it as stored (`TestTemporalText` of
   `statement`).
 - **AUTOINCREMENT counters.** A table whose statement declares its key `AUTOINCREMENT`, and a table of an `identity`
-  key, which the set renders so, never gives a key twice, as SQLite's `AUTOINCREMENT` gives none; a plain `INTEGER PRIMARY
-  KEY` gives one more than its largest key, as SQLite does. The counter of such a table is part of the corpus, in
-  `dbspec/sequences.json`, a JSON object of a positive counter by table. The sequence of the table is the larger of its
-  counter and its largest key, and the key it gives next is one more, so a key written by hand counts too. A write that
-  lowers the sequence, a delete or a key change of the row of the largest key, raises the counter to it, and a key the
-  database gave past the sequence, as a key a statement inserted and deleted again, raises it after the statement; the
-  commit writes the file with the rows. A fill and a refresh give the database the sequence of the corpus. A renamed
-  table keeps its counter, and a dropped table takes it away, as SQLite's `sqlite_sequence` does. The file is read with
-  the corpus when it is read from nothing and after each commit that wrote it, of any process, as the commit generation
-  names it; a hand edit of the file is read at the next of these, as a hand edit of `dbspec/` is. A git rewind rewinds
-  the counters with the rows. `TestSequences` of `statement`, `TestSequenceRaise` and `TestRaiseSequences` of `irexec`,
-  and `TestAutoincrement` and `TestSequencesFile` of `catalog` hold it.
+  key, which the set renders so, keeps a sequence as SQLite keeps it in `sqlite_sequence` (SQLite, autoinc.html): a row
+  of the table there, or none; a plain `INTEGER PRIMARY KEY` gives one more than its largest key, as SQLite does. The
+  key an insert gives is one more than the larger of the sequence and the largest key, and the insert raises the
+  sequence to each key it gives or meets: a key the insert gives by hand, and the key an insert that meets a row on a
+  unique key, by `ON CONFLICT … DO UPDATE` or `OR IGNORE`, would have given, which SQLite gives before it meets the
+  row, so an insert never gives a key an insert gave before, a key written by hand included, as SQLite's
+  `AUTOINCREMENT` gives none, until an explicit write lowers the sequence. A delete and a change of a key leave the sequence as it is, as SQLite tracks no `UPDATE`
+  of a rowid. An explicit write of `sqlite_sequence` sets the sequence of its table as SQLite applies it: `UPDATE
+  sqlite_sequence SET seq = …` sets it to the value, a lower one, zero and a negative one included, so a restart of an
+  identity after a delete gives the key SQLite and the servers give; `DELETE FROM sqlite_sequence` leaves its table no
+  row, whose next key is one more than its largest key; an `INSERT` gives a table that has no row its row. The corpus
+  holds one integer sequence of an AUTOINCREMENT table or none, so a statement that leaves `sqlite_sequence` a row whose
+  name is no AUTOINCREMENT table, byte for byte as SQLite matches it, a second row of a table, or a sequence that is no
+  integer — a text, a real, NULL — is `CONSTRAINT`, and it leaves the corpus and its transaction as they were. Past the
+  largest int64 an AUTOINCREMENT table gives no key, as SQLite fails the insert as `SQLITE_FULL` and the executor as
+  `DRIVER`. The sequences are part of the corpus, in `dbspec/sequences.json`, a JSON object by table of the sequence
+  of each AUTOINCREMENT table whose sequence is not its largest key, an integer of int64, or `null` for no row of
+  `sqlite_sequence` while the table holds rows; a table the file does not name has the sequence of its largest key, or
+  no row when it holds none. After each statement the engine reads `sqlite_sequence`, which the update hook does not
+  report, and the commit writes the file with the rows when a sequence differs from the corpus's. A fill and a refresh
+  give the database the sequences of the corpus, row for row. A renamed table keeps its sequence, and a dropped table
+  takes it away, as SQLite's `sqlite_sequence` does. The file is read with the corpus when it is read from nothing and
+  after each commit that wrote it, of any process, as the commit generation names it; a hand edit of the file is read
+  at the next of these, as a hand edit of `dbspec/` is. A git rewind rewinds the sequences with the rows.
+  `TestSequences`, `TestExplicitSequences` and `TestExplicitSequenceRefused` of `statement`, `TestSequenceWrites` and
+  `TestSetSequences` of `irexec`, `TestAuditRows` of `ops`, and `TestAutoincrement`, `TestSequencesFile`,
+  `TestSequencesGolden` and `FuzzSequences` of `catalog` hold it.
+- **The largest key.** A table whose key is its rowid — an `INTEGER PRIMARY KEY`, or a table without a primary key —
+  and that keeps no AUTOINCREMENT sequence gives an insert one more than its largest key, the largest int64 included, as
+  SQLite does. Past the largest int64 SQLite picks a random unused rowid, which is no key a database gives: MySQL and
+  PostgreSQL refuse an identity past its maximum, and SQLite refuses an AUTOINCREMENT table there. So an insert whose
+  key the database chooses while the largest key is the largest int64 fails as `DRIVER` (`SQLITE_FULL`), as an
+  AUTOINCREMENT table fails, on the statement path and on the face alike, and leaves the corpus and its transaction as
+  they were; a key the insert gives, -1 included, is taken beside the largest, a NULL key is one the database chooses,
+  and an insert that writes no row, as a conflict ignores it or an upsert updates the row it meets, gives no key. A
+  table whose primary key SQLite lets hold NULL keys by its rowid, so it is such a table too. The statement path holds
+  it by a `BEFORE INSERT` trigger on each such table that holds the largest int64, which notes whether SQLite gives the
+  row the rowid -1 there, as it does for a rowid it will choose and not for a key -1 the insert gives; the pre-update
+  hook pairs each note with the row of its insert by the depth of the trigger, so an insert of a trigger, a level
+  deeper, never takes the note of the insert that fired it. The triggers and the table of their notes are made after a
+  savepoint before the statement and taken away after it on every path, a refusal and an error included, so no later
+  statement and no read of the schema sees them; a table that comes to hold the largest int64 within the statement,
+  and takes a row after it, runs the statement again from that savepoint with its trigger. `TestPlainIdentityLargest`,
+  `TestPlainIdentityLargestFace` and `TestLargestGuardsLeaveNoSchema` of `statement` hold it.
 - **No assigned columns.** A text key and an `order` column are the insert's to give, as on the databases orm reaches
   ([document model](20-document-model.md#keys)): the schema of the statements declares each `NOT NULL`, so an insert that
   leaves one out, or gives it NULL, fails as SQLite's `NOT NULL constraint failed`, and the corpus holds the values the

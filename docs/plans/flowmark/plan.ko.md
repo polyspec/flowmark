@@ -1,5 +1,5 @@
 <!-- doc-id: plans-design-plan -->
-<!-- source-sha256: 2aa3f92e1e31a5031c3fcc039e3f8dd18806a34837782f63f987796a10b9be89 -->
+<!-- source-sha256: e1f53bc0fdb6dc5915052ea2e3879e95378a7ccdca20998b90c64b82324d502a -->
 # flowmark 설계 계획
 
 Revision 2 — 3개 lane의 적대 감사 결과(engine core, orm 통합, 운영)와 multi-platform 지시를 아래 판정에 접는다. 감사의 blocker는 전부 판정이 되었고, 부수지 못한 주장은 문서 끝에 남긴다.
@@ -84,7 +84,7 @@ flowmark = the markdown database engine (one Go binary)
 
 - **dbspec이 root grammar이자 유일한 authority.** corpus root의 `dbspec/*.dbs` set이 catalog다(Revision 3). 문서는 schema 사본도 stamp도 갖지 않고, 내장 fragment를 가진 단독 문서는 철회한다: schema는 law이고 data는 row이며, 문서마다 law의 사본을 두면 사본의 이탈이 그 자체로 bug class가 된다. orm의 engine, IR, conformance는 dbspec manifest hash에 묶여 있고, dbspec의 parser와 type system은 library로 재사용한다.
 - **Markdown 고유 schema 표면은 manifest-level setting이지 render되는 type이 아니다** (introspection 정합성, `updated`/`soft_delete` 선례): `store`, `title`, `body`, `order`, `task_marker`, `markdown`은 SQL backend가 무시하는 setting이며, 실제 database는 이들을 평범한 column으로 introspect한다. 상태기계의 setting과 `key_prefix`는 철회하고, `order`는 아무것도 할당하지 않는다. 판정: 엔진은 흔한 database가 가진 것만 가진다(T62, T89)가 정한다.
-- **`identity`는 허용한다** — markdown table의 `i64` primary key에만, lock 아래에서 가장 큰 key와 표의 AUTOINCREMENT counter 가운데 큰 것보다 하나 큰 key로 할당한다(Revision 3, counter는 바뀐 행의 refresh(T42); 다른 key type에는 더할 최댓값이 없다). git 되감기에서의 key 재사용은 받아들인다. 되감기가 counter도 되감기 때문이다 — 할당 기록은 git history다.
+- **`identity`는 허용한다** — markdown table의 `i64` primary key에만, lock 아래에서 가장 큰 key와 표의 AUTOINCREMENT sequence 가운데 큰 것보다 하나 큰 key로 할당한다(Revision 3, sequence는 바뀐 행의 refresh(T42, T91); 다른 key type에는 더할 최댓값이 없다). git 되감기에서의 key 재사용은 받아들인다. 되감기가 sequence도 되감기 때문이다 — 할당 기록은 git history다.
 
 ### 5. Ops와 transaction (`40-ops.md`)
 
@@ -184,11 +184,22 @@ flowmark = the markdown database engine (one Go binary)
 7. **바뀐 행의 refresh(T42).** corpus가 다른 database는 자신의 세대 이후 commit들의 경로와 지난 refresh 이후 알림이 이름 댄 경로의
    행을 받고, 표의 availability가 바뀌었으면 그 표 전체를 받는다. 새 catalog는 새 database를 만든다. refresh는 fill처럼 transaction
    밖에서 foreign key를 끄고, 서 있는 trigger를 내리고, check를 무시한 채 실행된다. rowid로 key를 삼는 행은 저장된 rowid를 유지한다.
-   다른 행의 rowid는 database 자신의 것이므로 `ORDER BY` 없는 `SELECT`에는 SQLite처럼 명시된 순서가 없다. AUTOINCREMENT counter는
-   corpus의 일부다: 쓰기 뒤에 문장은 hook이 알리지 않는 `sqlite_sequence`를 AUTOINCREMENT 표마다 한 행씩 읽고, 오른 counter는
-   commit에 들어가 `dbspec/sequences.json`에 쓰인다. fill과 refresh는 저장된 counter와 corpus의 가장 큰 key 중 큰 것을 가져오므로,
-   손으로 쓴 key를 포함해 어떤 key도 두 번 주지 않으며, 이는 SQLite의 AUTOINCREMENT가 주지 않는 것과 같다. refresh한 database는 같은
-   corpus로 처음부터 채운 database와 표마다, key에 따라, `sqlite_sequence`까지 같다.
+   다른 행의 rowid는 database 자신의 것이므로 `ORDER BY` 없는 `SELECT`에는 SQLite처럼 명시된 순서가 없다. 표의
+   AUTOINCREMENT sequence는 SQLite가 `sqlite_sequence`에 지키는 대로 corpus의 일부다: 쓰기 뒤에 문장은 hook이 알리지 않는
+   `sqlite_sequence`를 읽고, corpus의 것과 다른 sequence는 commit에 들어가 `dbspec/sequences.json`에 쓰인다. 이 파일은 sequence가
+   가장 큰 key가 아닌 표, 곧 더 낮거나 높은 정수이거나 행이 없어 `null`인 표를 이름 댄다. insert는 sequence를 자신이 주거나
+   만나는 key마다 올리고, delete와 key 변경은 그대로 두며, `sqlite_sequence`의 명시적 쓰기는 더 낮은 값과 지운 행을 포함해 그것을
+   정하므로 identity의 restart는 SQLite가 주는 key를 준다(T91). corpus가 가질 수 없는 행, 곧 AUTOINCREMENT 표가 아닌 표의 행, 한
+   표의 두 번째 행, 정수가 아닌 sequence는 `CONSTRAINT`다. 다음 key는 sequence와 가장 큰 key 가운데 큰 것보다 하나 크므로,
+   명시적 쓰기가 sequence를 낮추기 전까지 insert는 손으로 쓴 key를 포함해 insert가 준 key를 다시 주지 않으며, 이는 SQLite의
+   AUTOINCREMENT가 주지 않는 것과 같다. key가 rowid이고 sequence를 지키지 않는 표는 int64 최댓값을 넘는 key를 주지 않는다:
+   SQLite가 쓰이지 않은 rowid를 무작위로 고를 자리에서 insert는 AUTOINCREMENT 표처럼, 그리고 MySQL과 PostgreSQL이 최댓값을
+   넘은 identity를 거부하듯 `DRIVER`(`SQLITE_FULL`)로 실패한다(T94). primary key가 NULL을 지니는 표는 rowid를 key로 쓰므로
+   이 역시 그런 표다. 이를 지키는 것은 int64 최댓값을 지닌 표마다 `BEFORE INSERT` trigger 하나이며, trigger의 깊이로 그 insert의
+   행과 짝지어지고 문장마다 만들어졌다 치워지므로 뒤의 어떤 문장도, schema 읽기도 그것을 보지 않는다. corpus는 rowid를 key로 쓰는
+   표의 rowid를 column `rowid`로 지니므로, 그런 표에 그 이름의 column을 남기는 schema 문장과 어떤 문장도 이름 대지 못하는 rowid를
+   지닌 표를 남기는 schema 문장은 `CONSTRAINT`다. fill과 refresh는 database에 corpus의 sequence를 주며, refresh한 database는 같은 corpus로
+   처음부터 채운 database와 표마다, key에 따라, `sqlite_sequence`까지 같다.
 8. **lock 없는 읽기(T43).** 읽기는 reader 연결에서 문장을 실행하고 실행하는 동안 corpus lock을 쥐지 않는다. cursor는 reader 연결을
    쥐고 lock은 쥐지 않는다. database는 읽기 전에 corpus에 맞춰진다: lock이 비어 있으면 읽기는 refresh에만 lock을 잡으므로 lock 기록은
    읽기마다가 아니라 변경마다 한 번 쓰인다. 살아 있는 holder가 lock을 쥐고 있으면 읽기는 lock 없이 refresh하며, 세대가 앞뒤로 같고

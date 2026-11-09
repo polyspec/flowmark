@@ -76,7 +76,7 @@ GFM's own two boxes.
   the format holds, while a later stage encodes it away. A view table is declared by the
   [application schema](100-checklist.md#views), not by a setting.
 - **Allowed**: `identity` only on an `i64` primary key column of a markdown table, allocated one more than the larger of
-  the largest key and the table's counter ([document model](20-document-model.md#keys)) under the lock. dbspec refuses `identity` on any other type (`an identity column has type i64`), so an
+  the largest key and the table's sequence ([document model](20-document-model.md#keys)) under the lock. dbspec refuses `identity` on any other type (`an identity column has type i64`), so an
   `i16` or `i32` key cannot take it either. Grounding: `max+1` is an integer sequence, and a `bool`,
   `varchar`, `uuid` or `date` key has no maximum to add one to.
 - **Required**: a `list` or `files` storage declares `title`.

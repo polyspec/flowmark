@@ -1,5 +1,5 @@
 <!-- doc-id: spec-document-model -->
-<!-- source-sha256: 92aeb907bed79ef58f42c1a24a3fade3797d73533e6d7eef842a65e033b846c8 -->
+<!-- source-sha256: 04c3f2498354090cbb012f2d4ebd961774becdbd34caceb9aa8bea4d380dfe3a -->
 # 문서 모델
 
 [English](20-document-model.md)
@@ -112,8 +112,9 @@ aggregate냐 split이냐는 저장 선언이다. 논리 관계는 모든 저장�
 - key 타입의 정식 텍스트가 아닌 file 이름은 `format.block`이다: 정수 key 7의 정식 file 이름은
   `7.flowmark.md`이고 `007.flowmark.md`는 아니다.
 - `identity`는 `i64` primary key column에만 허용된다([schema](30-schema.md)): key를 생략한 insert는 가장 큰 key와 표의
-  counter([AUTOINCREMENT counter](40-ops.ko.md#sql-statements)) 가운데 큰 것보다 하나 큰 key를 lock 아래에서 받으므로, 같은
-  key를 두 번 받지 않는다. git을 되감으면 counter도 행과 함께 되감기며, 그 뒤의 재사용은 받아들인다 — 할당의 기록은 git
+  sequence([AUTOINCREMENT counter](40-ops.ko.md#sql-statements)) 가운데 큰 것보다 하나 큰 key를 lock 아래에서 받으므로,
+  `sqlite_sequence`의 명시적 쓰기가 sequence를 낮추기 전까지 insert는 insert가 준 key를 다시 주지 않으며, 이는 SQLite의
+  AUTOINCREMENT가 주지 않는 것과 같다. git을 되감으면 sequence도 행과 함께 되감기며, 그 뒤의 재사용은 받아들인다 — 할당의 기록은 git
   history다.
 - text key는 insert가 주며, 이를 빠뜨린 insert는 `IR_INVALID`다: 흔한 database가 그렇듯 엔진은 text
   key를 할당하지 않는다(orm DBS-77은 `key_prefix`를 거둔다). 손으로 쓴 key는 유일하고 column type을

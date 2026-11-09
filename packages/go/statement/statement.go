@@ -165,17 +165,18 @@ func runAlone(ctx context.Context, s *writepath.Session, text string, args []any
 	return answer, nil
 }
 
-// written is what a statement changed in its database: the writes of its difference, and the sequence SQLite keeps after
-// it for each AUTOINCREMENT table that has one.
+// written is what a statement changed in its database: the writes of its difference, and the rows of sqlite_sequence
+// after it, the sequence SQLite keeps for each AUTOINCREMENT table that has a row there.
 type written struct {
 	writes [][]byte
-	given  map[string]int64
+	held   map[string]int64
 }
 
 // applyWrites writes the difference of a statement to the session's transaction, which the writer connection follows:
-// the database holds what the corpus then holds. A key the database gave past the sequence of its table in the corpus,
-// as a key the statement inserted and deleted again, raises the counter of the table, so the corpus never gives it again
-// (spec 40 SQL statements).
+// the database holds what the corpus then holds. The corpus takes the sequences SQLite keeps after the statement when
+// they differ from its own: a key the database gave past the sequence of the corpus, as a key the statement inserted
+// and deleted again, and an explicit write of sqlite_sequence, a lower value and a deleted row included (spec 40 SQL
+// statements).
 func applyWrites(ctx context.Context, s *writepath.Session, w written) error {
 	t := following(s)
 	if t == nil {
@@ -186,15 +187,16 @@ func applyWrites(ctx context.Context, s *writepath.Session, w written) error {
 			return err
 		}
 	}
-	var raise map[string]int64
-	if len(w.given) > 0 {
+	differs := false
+	if w.held != nil {
 		err := s.View(ctx, func(c *irexec.Corpus) error {
-			for table, n := range w.given {
-				if n > c.Sequence(table) {
-					if raise == nil {
-						raise = map[string]int64{}
-					}
-					raise[table] = n
+			for _, tb := range c.Catalog().Tables {
+				if !tb.Autoincrement {
+					continue
+				}
+				n, held := c.Counter(tb.Name)
+				if m, ok := w.held[tb.Name]; ok != held || m != n {
+					differs = true
 				}
 			}
 			return nil
@@ -203,12 +205,12 @@ func applyWrites(ctx context.Context, s *writepath.Session, w written) error {
 			return err
 		}
 	}
-	if len(raise) > 0 {
-		if err := s.RaiseSequences(ctx, raise); err != nil {
+	if differs {
+		if err := s.SetSequences(ctx, w.held); err != nil {
 			return err
 		}
 	}
-	if len(w.writes) == 0 && len(raise) == 0 {
+	if len(w.writes) == 0 && !differs {
 		return nil
 	}
 	return s.View(ctx, func(c *irexec.Corpus) error {
@@ -781,15 +783,14 @@ func fillWith(ctx context.Context, db queryer, c *irexec.Corpus, publish func(co
 	}, publish)
 }
 
-// setSequence gives the AUTOINCREMENT table tb of the database of tx the sequence of the corpus c, which SQLite keeps in
-// sqlite_sequence: the next key it gives is one more (irexec.Corpus.Sequence). A table of no sequence has no row there,
-// as in a database that never gave it a key.
+// setSequence gives the AUTOINCREMENT table tb of the database of tx the sequence of the corpus c, the row SQLite keeps
+// in sqlite_sequence (irexec.Corpus.Counter), or no row there when the corpus holds none.
 func setSequence(ctx context.Context, tx runner, c *irexec.Corpus, tb *catalog.Table) error {
 	if !tb.Autoincrement {
 		return nil
 	}
-	n := c.Sequence(tb.Name)
-	if n == 0 {
+	n, held := c.Counter(tb.Name)
+	if !held {
 		if _, err := tx.ExecContext(ctx, "DELETE FROM sqlite_sequence WHERE name = ?", tb.Name); err != nil {
 			return &Error{codeInternal, err.Error()}
 		}
@@ -812,10 +813,21 @@ func setSequence(ctx context.Context, tx runner, c *irexec.Corpus, tb *catalog.T
 	return nil
 }
 
-// sequencesOf returns the sequence SQLite keeps in db for each AUTOINCREMENT table of cat that has one.
+// sequencesOf returns the rows of sqlite_sequence of db, the sequence SQLite keeps for each AUTOINCREMENT table of cat
+// that has a row there, nil when db has no sqlite_sequence. The corpus holds one integer sequence of an AUTOINCREMENT
+// table or none (irexec.Corpus.Counter), so a row of a name that is no AUTOINCREMENT table of cat, byte for byte as
+// SQLite matches it, a second row of a table and a sequence that is no integer are CONSTRAINT: the statement that left
+// them fails, and its transaction, or its savepoint, leaves the database as it was (spec 40 SQL statements).
 func sequencesOf(ctx context.Context, db runner, cat *catalog.Catalog) (_ map[string]int64, err error) {
 	if !slices.ContainsFunc(cat.Tables, func(tb *catalog.Table) bool { return tb.Autoincrement }) {
-		return nil, nil
+		// A database whose AUTOINCREMENT tables were dropped keeps sqlite_sequence, as SQLite keeps it.
+		var n int
+		if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM sqlite_schema WHERE name = 'sqlite_sequence'").Scan(&n); err != nil {
+			return nil, &Error{codeInternal, err.Error()}
+		}
+		if n == 0 {
+			return nil, nil
+		}
 	}
 	rows, err := db.QueryContext(ctx, "SELECT name, seq FROM sqlite_sequence")
 	if err != nil {
@@ -824,19 +836,48 @@ func sequencesOf(ctx context.Context, db runner, cat *catalog.Catalog) (_ map[st
 	defer closed(&err, rows)
 	out := map[string]int64{}
 	for rows.Next() {
-		var name string
-		var n int64
-		if err := rows.Scan(&name, &n); err != nil {
+		var name, seq any
+		if err := rows.Scan(&name, &seq); err != nil {
 			return nil, &Error{codeInternal, err.Error()}
 		}
-		if tb, ok := cat.Table(name); ok && tb.Autoincrement {
-			out[name] = n
+		table, text := name.(string)
+		if tb, ok := cat.Table(table); !text || !ok || !tb.Autoincrement || tb.Name != table {
+			return nil, &Error{codeConstraint, fmt.Sprintf("sqlite_sequence holds a row of %s, which is no AUTOINCREMENT table: the corpus keeps the sequence of an AUTOINCREMENT table alone", sqlValueText(name))}
 		}
+		n, integer := seq.(int64)
+		if !integer {
+			return nil, &Error{codeConstraint, fmt.Sprintf("the sequence of %s in sqlite_sequence is %s, which is no integer: the corpus keeps an integer sequence", table, sqlValueText(seq))}
+		}
+		if _, twice := out[table]; twice {
+			return nil, &Error{codeConstraint, fmt.Sprintf("sqlite_sequence holds two rows of %s: the corpus keeps one sequence of a table", table)}
+		}
+		out[table] = n
 	}
 	if err := rows.Err(); err != nil {
 		return nil, &Error{codeInternal, err.Error()}
 	}
 	return out, nil
+}
+
+// sqlValueText is the text of a value SQLite gave, as a message names it: a text quoted, NULL, a blob in hex.
+func sqlValueText(v any) string {
+	switch x := v.(type) {
+	case nil:
+		return "NULL"
+	case string:
+		return "'" + strings.ReplaceAll(x, "'", "''") + "'"
+	case []byte:
+		return fmt.Sprintf("X'%X'", x)
+	}
+	return fmt.Sprint(v)
+}
+
+// sameSequence reports whether the corpora a and b hold the same sequence of the AUTOINCREMENT table, the same row of
+// sqlite_sequence or none in both.
+func sameSequence(a, b *irexec.Corpus, table string) bool {
+	n, held := a.Counter(table)
+	m, also := b.Counter(table)
+	return held == also && n == m
 }
 
 // refresh brings the database db of the corpus before to the corpus c, a corpus under the same catalog: the rows of the
@@ -858,7 +899,7 @@ func refreshWith(ctx context.Context, db queryer, before, c *irexec.Corpus, publ
 	var sequenced []*catalog.Table
 	for _, tb := range c.Catalog().Tables {
 		if tb.Autoincrement && (slices.ContainsFunc(changes, func(ch irexec.TableChange) bool { return ch.Table == tb.Name }) ||
-			before.Sequence(tb.Name) != c.Sequence(tb.Name)) {
+			!sameSequence(before, c, tb.Name)) {
 			sequenced = append(sequenced, tb)
 		}
 	}
@@ -1184,7 +1225,7 @@ func execute(ctx context.Context, s *writepath.Session, d *database, c *irexec.C
 	}
 	d.cap.start()
 	defer d.cap.stop()
-	answer, err := query(ctx, db, text, args)
+	answer, err := queryLargest(ctx, db, d.cap, c, text, args)
 	if err != nil {
 		return nil, nil, written{}, err
 	}
@@ -1211,11 +1252,11 @@ func execute(ctx context.Context, s *writepath.Session, d *database, c *irexec.C
 		}
 		check(text, writes, reference)
 	}
-	given, err := sequencesOf(ctx, db, c.Catalog())
+	held, err := sequencesOf(ctx, db, c.Catalog())
 	if err != nil {
 		return nil, nil, written{}, err
 	}
-	return answer, nil, written{writes: writes, given: given}, nil
+	return answer, nil, written{writes: writes, held: held}, nil
 }
 
 // readsOnly reports whether the statement cannot change a row, by its first word; a statement of WITH is known by the
@@ -1410,7 +1451,14 @@ func rowsOf(ctx context.Context, db runner, tb *catalog.Table, k *cost.Counts) (
 		}
 		text += key.order("", quoted(key.names))
 	} else {
-		text += " ORDER BY rowid"
+		name, _, err := rowidName(ctx, db, tb.Name)
+		if err != nil {
+			return nil, err
+		}
+		if name == "" {
+			return nil, unnamedRowid(tb.Name)
+		}
+		text += " ORDER BY " + name
 	}
 	return readRows(ctx, db, tb, text, nil, k)
 }

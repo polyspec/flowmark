@@ -127,9 +127,10 @@ or one folder without end (`files`).
 - A file name that is not the canonical text of its key's type is `format.block`: for the integer
   key 7 the canonical file name is `7.flowmark.md`, and `007.flowmark.md` is not.
 - `identity` is allowed only on an `i64` primary key column ([schema](30-schema.md)): an insert that omits the key gets one
-  more than the larger of the largest key and the table's counter
-  ([AUTOINCREMENT counters](40-ops.md#sql-statements)), allocated under the lock, so no key is given twice. A git rewind
-  rewinds the counter with the rows, and reuse after it is accepted — git history is the allocator of record.
+  more than the larger of the largest key and the table's sequence
+  ([AUTOINCREMENT counters](40-ops.md#sql-statements)), allocated under the lock, so an insert never gives a key an
+  insert gave until an explicit write of `sqlite_sequence` lowers the sequence, as SQLite's AUTOINCREMENT gives none. A git rewind rewinds the sequence with the rows, and reuse after it
+  is accepted — git history is the allocator of record.
 - A text key is given by the insert, and an insert that leaves it out is `IR_INVALID`: the engine
   allocates no text key, as no common database does (orm DBS-77 withdraws `key_prefix`). A
   hand-written key is accepted when it is unique and has the column's type.

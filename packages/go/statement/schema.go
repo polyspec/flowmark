@@ -252,39 +252,32 @@ func apply(ctx context.Context, s *writepath.Session, db runner, c *irexec.Corpu
 	return cat, next, changes, nil
 }
 
-// sequencedUnder gives next, the corpus of the schema statement under the catalog cat, the AUTOINCREMENT counters the
-// statement left in db: a counter of c whose table is still an AUTOINCREMENT table stays, and a sequence SQLite keeps
-// past the table's sequence in next, as the counter of a table the statement renamed, is its counter. A dropped table
-// leaves no counter, as SQLite drops its row of sqlite_sequence.
+// sequencedUnder gives next, the corpus of the schema statement under the catalog cat, the rows of sqlite_sequence the
+// statement left in db, as SQLite keeps them: a renamed table keeps its sequence under its new name, and a dropped
+// table leaves none, as SQLite drops its row. The sequences' file of c keeps no name of a table that is no AUTOINCREMENT
+// table of cat.
 func sequencedUnder(ctx context.Context, db runner, c, next *irexec.Corpus, cat *catalog.Catalog) (*irexec.Corpus, error) {
 	counters, err := catalog.ParseSequences(c.Data(catalog.SequencesFile))
 	if err != nil {
 		return nil, &Error{codeInternal, err.Error()}
 	}
-	maps.DeleteFunc(counters, func(table string, _ int64) bool {
+	maps.DeleteFunc(counters, func(table string, _ *int64) bool {
 		tb, ok := cat.Table(table)
 		return !ok || !tb.Autoincrement
 	})
-	if err := next.SetSequences(catalog.RenderSequences(counters)); err != nil {
+	if err := next.SetSequenceFile(catalog.RenderSequences(counters)); err != nil {
 		return nil, &Error{codeInternal, err.Error()}
 	}
-	given, err := sequencesOf(ctx, db, cat)
+	held, err := sequencesOf(ctx, db, cat)
 	if err != nil {
 		return nil, err
 	}
-	risen := false
-	for table, n := range given {
-		if n > next.Sequence(table) {
-			if counters == nil {
-				counters = map[string]int64{}
-			}
-			counters[table], risen = n, true
-		}
+	res, err := next.SetSequences(held)
+	if err != nil {
+		return nil, &Error{codeInternal, err.Error()}
 	}
-	if risen {
-		if err := next.SetSequences(catalog.RenderSequences(counters)); err != nil {
-			return nil, &Error{codeInternal, err.Error()}
-		}
+	if res.Post != nil {
+		next = res.Post.Next
 	}
 	return next, nil
 }

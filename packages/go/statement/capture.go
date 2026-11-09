@@ -32,9 +32,15 @@ type capture struct {
 	on     bool
 	tables map[string]*changedRows
 	err    error
-	// schema is the main schema_version the keys were read at, and keys the primary key of each table without a rowid.
-	schema int64
+	// schema is the text of the main schema the keys were read from (schemaKey), keys the primary key of each table
+	// without a rowid, names the name a statement gives the rowid of each table with one, and ids the tables keyed by
+	// their rowid.
+	schema string
 	keys   map[string]*primaryKey
+	names  rowids
+	ids    rowids
+	// largest is what the hook follows of the largest rowid while a statement runs (queryLargest), nil outside it.
+	largest *largest
 }
 
 // primaryKey is the primary key of a table without a rowid, in the order of its index: the position of each of its
@@ -46,11 +52,13 @@ type primaryKey struct {
 	desc  []bool
 }
 
-// changedRows are the rows of one table a statement changed: olds holds the image of each row before its first change,
+// changedRows are the rows of one table a statement changed: rowid is the name a statement gives the rowid of a table
+// with one, and key the primary key of one without; olds holds the image of each row before its first change,
 // by its identity, in the order of the table's columns in the database; ids holds the identity values of each row the
 // statement changed, old and new, in the order of their first change: its rowid, or the values of key; and rowids the
 // rowid of each, for a table with a rowid.
 type changedRows struct {
+	rowid  string
 	key    *primaryKey
 	olds   map[string][]any
 	seen   map[string]bool
@@ -105,12 +113,25 @@ func keyOf(k *primaryKey, values []any) []any {
 func (cp *capture) hook(data sqlite.SQLitePreUpdateData) {
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
-	if !cp.on || data.DatabaseName != "main" {
+	if !cp.on {
+		return
+	}
+	if cp.largest != nil {
+		var err error
+		switch {
+		case data.DatabaseName == "temp" && data.TableName == "flowmark_largest" && data.Op == sqlite3.SQLITE_INSERT:
+			err = cp.largest.noted(data)
+		case data.DatabaseName == "main":
+			err = cp.largest.changed(data)
+		}
+		cp.err = errors.Join(cp.err, err)
+	}
+	if data.DatabaseName != "main" {
 		return
 	}
 	t := cp.tables[data.TableName]
 	if t == nil {
-		t = &changedRows{key: cp.keys[data.TableName], olds: map[string][]any{}, seen: map[string]bool{}}
+		t = &changedRows{rowid: cp.names[data.TableName], key: cp.keys[data.TableName], olds: map[string][]any{}, seen: map[string]bool{}}
 		cp.tables[data.TableName] = t
 	}
 	if data.Op != sqlite3.SQLITE_INSERT {
@@ -141,15 +162,23 @@ func (cp *capture) hook(data sqlite.SQLitePreUpdateData) {
 	}
 }
 
+// schemaKey reads the text of the main schema, each entry by its type, name and statement in the order SQLite keeps
+// them: two schemas of the same text have the same tables, columns and keys.
+const schemaKey = "SELECT COALESCE(group_concat(type || char(31) || name || char(31) || COALESCE(sql, ''), char(30)), '')" +
+	" FROM (SELECT type, name, sql FROM main.sqlite_schema ORDER BY rowid)"
+
 // prepare reads, when the schema of the main database changed since it last did, the primary key of each table without
-// a rowid, which the hook takes a row's identity from. It runs on db before a statement, as the hook cannot read.
+// a rowid, which the hook takes a row's identity from, and the tables keyed by their rowid (readRowids). It runs on db
+// before a statement, as the hook cannot read.
 func (cp *capture) prepare(ctx context.Context, db runner) error {
-	var version int64
-	if err := db.QueryRowContext(ctx, "PRAGMA main.schema_version").Scan(&version); err != nil {
+	// The schema_version does not prove the schema: a rollback of a schema change gives the next change the version of
+	// the schema it took back. The text of the schema does.
+	var schema string
+	if err := db.QueryRowContext(ctx, schemaKey).Scan(&schema); err != nil {
 		return &Error{codeInternal, err.Error()}
 	}
 	cp.mu.Lock()
-	known := cp.keys != nil && cp.schema == version
+	known := cp.keys != nil && cp.schema == schema
 	cp.mu.Unlock()
 	if known {
 		return nil
@@ -164,9 +193,37 @@ func (cp *capture) prepare(ctx context.Context, db runner) error {
 			return err
 		}
 	}
+	rowidNames, ids, err := readRowids(ctx, db)
+	if err != nil {
+		return err
+	}
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
-	cp.schema, cp.keys = version, keys
+	cp.schema, cp.keys, cp.names, cp.ids = schema, keys, rowidNames, ids
+	return nil
+}
+
+// rowidTables are the tables keyed by their rowid that prepare read.
+func (cp *capture) rowidTables() rowids {
+	cp.mu.Lock()
+	defer cp.mu.Unlock()
+	return cp.ids
+}
+
+// follow makes l what the hook follows of the largest rowid, nil for none.
+func (cp *capture) follow(l *largest) {
+	cp.mu.Lock()
+	defer cp.mu.Unlock()
+	cp.largest = l
+}
+
+// failed is the fault the hook recorded since start, nil for none.
+func (cp *capture) failed() error {
+	cp.mu.Lock()
+	defer cp.mu.Unlock()
+	if cp.err != nil {
+		return &Error{codeInternal, "reading the rows a statement changed: " + cp.err.Error()}
+	}
 	return nil
 }
 
@@ -282,18 +339,20 @@ func tableColumns(ctx context.Context, db runner, name string) (_ []string, err 
 }
 
 // image is the row of tb from the values of an image of the database, whose columns are cols, at rowid: in the order of
-// the columns of tb, as rowsOf reads a row.
+// the columns of tb, as rowsOf reads a row, with the rowid as the column rowid that the catalog gives a table keyed by
+// it, which the database does not hold.
 func image(tb *catalog.Table, cols []string, rowid int64, values []any) ([]any, error) {
 	if len(values) != len(cols) {
 		return nil, &Error{codeInternal, fmt.Sprintf("an image of %s holds %d values, and the table %d columns", tb.Name, len(values), len(cols))}
 	}
 	row := make([]any, len(tb.Columns))
 	for i, col := range tb.Columns {
-		if col.Name == catalog.RowIDColumn {
+		j := slices.Index(cols, col.Name)
+		// The column rowid the catalog gives a table keyed by its rowid is no column of the database: it is the rowid.
+		if j < 0 && col.Name == catalog.RowIDColumn {
 			row[i] = rowid
 			continue
 		}
-		j := slices.Index(cols, col.Name)
 		if j < 0 {
 			return nil, &Error{codeInternal, fmt.Sprintf("the table %s of the database has no column %s", tb.Name, col.Name)}
 		}
@@ -318,7 +377,10 @@ func rowsAt(ctx context.Context, db runner, tb *catalog.Table, t *changedRows, k
 	text := "SELECT " + readColumns(tb) + " FROM " + quote(tb.Name)
 	var args []any
 	if t.key == nil {
-		text += " WHERE rowid IN (SELECT value FROM json_each(?)) ORDER BY rowid"
+		if t.rowid == "" {
+			return nil, unnamedRowid(tb.Name)
+		}
+		text += " WHERE " + t.rowid + " IN (SELECT value FROM json_each(?)) ORDER BY " + t.rowid
 		args = []any{t.rowidList()}
 	} else {
 		cols := quoted(t.key.names)
@@ -355,13 +417,11 @@ func keyColumnList(n int) string {
 // keysTable fills the temporary table of the identities of t, a table without a rowid, whose rows are i, the position
 // of an identity in ids, and its values k1, ..., kn, and returns its name: the database orders and matches the values
 // of a primary key under its collations, which the engine does not repeat. The hook records nothing of the temporary
-// database, and the table is emptied after the statement's difference is formed.
+// database, and the table is dropped once the rows of t are read, on every path, so no statement and no read of the
+// schema finds it.
 func keysTable(ctx context.Context, db runner, n int, ids [][]any) (_ string, err error) {
 	name := "temp.flowmark_keys_" + strconv.Itoa(n)
-	if _, err := db.ExecContext(ctx, "CREATE TABLE IF NOT EXISTS "+name+" (i INTEGER, "+keyColumnList(n)+")"); err != nil {
-		return "", &Error{codeInternal, err.Error()}
-	}
-	if _, err := db.ExecContext(ctx, "DELETE FROM "+name); err != nil {
+	if _, err := db.ExecContext(ctx, "CREATE TABLE "+name+" (i INTEGER, "+keyColumnList(n)+")"); err != nil {
 		return "", &Error{codeInternal, err.Error()}
 	}
 	insert, err := db.PrepareContext(ctx, "INSERT INTO "+name+" VALUES (?"+strings.Repeat(", ?", n)+")")
@@ -391,41 +451,56 @@ func changedTables(ctx context.Context, db runner, c *irexec.Corpus, changed map
 		if err != nil {
 			return nil, nil, err
 		}
-		keys := ""
-		if t.key != nil {
-			if keys, err = keysTable(ctx, db, len(t.key.at), t.ids); err != nil {
-				return nil, nil, err
-			}
-		}
-		olds, err := oldOrder(ctx, db, t, keys)
-		if err != nil {
+		if err := tableChange(ctx, db, c, tb, t, cols, before, after); err != nil {
 			return nil, nil, err
-		}
-		var rows [][]any
-		for _, i := range olds {
-			var rowid int64
-			if t.key == nil {
-				rowid = t.rowids[i]
-			}
-			row, err := image(tb, cols, rowid, t.olds[identity(t.ids[i])])
-			if err != nil {
-				return nil, nil, err
-			}
-			rows = append(rows, row)
-		}
-		before[tb.Name] = keyed(tb, rows)
-		now, err := rowsAt(ctx, db, tb, t, keys, c.Cost())
-		if err != nil {
-			return nil, nil, err
-		}
-		after[tb.Name] = keyed(tb, now)
-		if keys != "" {
-			if _, err := db.ExecContext(ctx, "DELETE FROM "+keys); err != nil {
-				return nil, nil, &Error{codeInternal, err.Error()}
-			}
 		}
 	}
 	return before, after, nil
+}
+
+// tableChange puts the rows of the table tb that the statement changed, t, before and after it, into before and after.
+func tableChange(ctx context.Context, db runner, c *irexec.Corpus, tb *catalog.Table, t *changedRows, cols []string, before, after map[string]tableRows) (err error) {
+	keys := ""
+	if t.key != nil {
+		// The table of the identities goes with the rows it served, so no statement and no read of the schema finds it.
+		defer func() {
+			err = errors.Join(err, dropKeys(ctx, db, len(t.key.at)))
+		}()
+		if keys, err = keysTable(ctx, db, len(t.key.at), t.ids); err != nil {
+			return err
+		}
+	}
+	olds, err := oldOrder(ctx, db, t, keys)
+	if err != nil {
+		return err
+	}
+	var rows [][]any
+	for _, i := range olds {
+		var rowid int64
+		if t.key == nil {
+			rowid = t.rowids[i]
+		}
+		row, err := image(tb, cols, rowid, t.olds[identity(t.ids[i])])
+		if err != nil {
+			return err
+		}
+		rows = append(rows, row)
+	}
+	before[tb.Name] = keyed(tb, rows)
+	now, err := rowsAt(ctx, db, tb, t, keys, c.Cost())
+	if err != nil {
+		return err
+	}
+	after[tb.Name] = keyed(tb, now)
+	return nil
+}
+
+// dropKeys drops the temporary table of the identities of n values that keysTable made, when it stands.
+func dropKeys(ctx context.Context, db runner, n int) error {
+	if _, err := db.ExecContext(ctx, "DROP TABLE IF EXISTS temp.flowmark_keys_"+strconv.Itoa(n)); err != nil {
+		return &Error{codeInternal, err.Error()}
+	}
+	return nil
 }
 
 // oldOrder returns the positions in t.ids of the rows of t that have an image, in the order of their rowids, or of the
