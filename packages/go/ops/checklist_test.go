@@ -121,7 +121,10 @@ func TestChecklistByState(t *testing.T) {
 			t.Fatalf("the board query of %s: %v", state, err)
 		}
 		for _, row := range a.Rows {
-			id, _ := row[0].(string)
+			id, isText := row[0].(string)
+			if !isText {
+				t.Fatalf("the board query of %s answered the id %v, not a text", state, row[0])
+			}
 			if prior, twice := seen[id]; twice {
 				t.Fatalf("%s is answered by %s and by %s", id, prior, state)
 			}
