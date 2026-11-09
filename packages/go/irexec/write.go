@@ -733,8 +733,9 @@ func (w *writer) placementRow(tb *catalog.Table, v cell) (*rec, *Error) {
 
 // nextIdentity allocates max+1 over the identity column of the table's rows: the largest positive integer of the column,
 // which the number index holds (numberColumns). The key of an AUTOINCREMENT table is one more than the larger of its
-// sequence and its largest key, as SQLite's AUTOINCREMENT gives it, and its sequence rises to it; past the largest
-// int64 the table gives no key, which SQLite fails as SQLITE_FULL.
+// sequence and its largest key, as SQLite's AUTOINCREMENT gives it, and its sequence rises to it. Past the largest
+// int64 no table gives a key: SQLite fails an AUTOINCREMENT table as SQLITE_FULL, and a plain one fails as it so that no
+// random rowid is given (spec 40 SQL statements, The largest key).
 func (w *writer) nextIdentity(tb *catalog.Table, col string) (cell, *Error) {
 	if !slices.Contains(numberColumns(tb), col) {
 		panic("irexec: an identity is allocated over the column " + col + " of " + tb.Name + ", whose numbers the index does not hold")
@@ -746,7 +747,7 @@ func (w *writer) nextIdentity(tb *catalog.Table, col string) (cell, *Error) {
 			n = max(n, s.n)
 		}
 		if n == math.MaxInt64 {
-			return cell{}, errf(codeDriver, "database or disk is full (SQLITE_FULL): the AUTOINCREMENT table %s gives no key past %d", tb.Name, n)
+			return cell{}, errf(codeDriver, "database or disk is full: the AUTOINCREMENT table %s gives no key past %d (SQLITE_FULL)", tb.Name, n)
 		}
 		s.raise(n + 1)
 		return cell{text: strconv.FormatInt(n+1, 10)}, nil
@@ -759,6 +760,10 @@ func (w *writer) nextIdentity(tb *catalog.Table, col string) (cell, *Error) {
 			panic("irexec: the number index holds " + n + ", which is no int64")
 		}
 		max = m
+	}
+	if max == math.MaxInt64 {
+		// SQLite would pick a random unused rowid, which no other database gives: the key past the largest is refused.
+		return cell{}, errf(codeDriver, "database or disk is full: the table %s gives no key past %d (SQLITE_FULL)", tb.Name, max)
 	}
 	return cell{text: strconv.FormatInt(max+1, 10)}, nil
 }

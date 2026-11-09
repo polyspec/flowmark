@@ -1,5 +1,5 @@
 <!-- doc-id: plans-design-plan -->
-<!-- source-sha256: 9434ec2793c8e6d101489c718475017bbe7e0879f09960e4d8cbb697f461156c -->
+<!-- source-sha256: 20119b18a25e5972372b4d4ba7c88038b88a999076fd1c8adfe5a14fcb24a5b6 -->
 # flowmark 설계 계획
 
 Revision 2 — 3개 lane의 적대 감사 결과(engine core, orm 통합, 운영)와 multi-platform 지시를 아래 판정에 접는다. 감사의 blocker는 전부 판정이 되었고, 부수지 못한 주장은 문서 끝에 남긴다.
@@ -192,7 +192,9 @@ flowmark = the markdown database engine (one Go binary)
    정하므로 identity의 restart는 SQLite가 주는 key를 준다(T91). corpus가 가질 수 없는 행, 곧 AUTOINCREMENT 표가 아닌 표의 행, 한
    표의 두 번째 행, 정수가 아닌 sequence는 `CONSTRAINT`다. 다음 key는 sequence와 가장 큰 key 가운데 큰 것보다 하나 크므로,
    명시적 쓰기가 sequence를 낮추기 전까지 insert는 손으로 쓴 key를 포함해 insert가 준 key를 다시 주지 않으며, 이는 SQLite의
-   AUTOINCREMENT가 주지 않는 것과 같다. fill과 refresh는 database에 corpus의 sequence를 주며, refresh한 database는 같은 corpus로
+   AUTOINCREMENT가 주지 않는 것과 같다. key가 rowid이고 sequence를 지키지 않는 표는 int64 최댓값을 넘는 key를 주지 않는다:
+   SQLite가 쓰이지 않은 rowid를 무작위로 고를 자리에서 insert는 AUTOINCREMENT 표처럼, 그리고 MySQL과 PostgreSQL이 최댓값을
+   넘은 identity를 거부하듯 `DRIVER`(`SQLITE_FULL`)로 실패한다(T94). fill과 refresh는 database에 corpus의 sequence를 주며, refresh한 database는 같은 corpus로
    처음부터 채운 database와 표마다, key에 따라, `sqlite_sequence`까지 같다.
 8. **lock 없는 읽기(T43).** 읽기는 reader 연결에서 문장을 실행하고 실행하는 동안 corpus lock을 쥐지 않는다. cursor는 reader 연결을
    쥐고 lock은 쥐지 않는다. database는 읽기 전에 corpus에 맞춰진다: lock이 비어 있으면 읽기는 refresh에만 lock을 잡으므로 lock 기록은

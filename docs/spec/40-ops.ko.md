@@ -1,5 +1,5 @@
 <!-- doc-id: spec-ops -->
-<!-- source-sha256: 1004f4494708520087a6e0159d11a3b828682ee1a965f9eff220e7ca70f450d0 -->
+<!-- source-sha256: 035881c15b8c2f46d04f75d5a11009c1ab3ea4f117110808661e1cdb96499268 -->
 # Operations
 
 [English](40-ops.md)
@@ -290,6 +290,15 @@ client가 구현할 것은 이 driver뿐이다.
   `TestSequences`, `TestExplicitSequences`, `TestExplicitSequenceRefused`, `irexec`의 `TestSequenceWrites`와
   `TestSetSequences`, `ops`의 `TestAuditRows`, `catalog`의 `TestAutoincrement`, `TestSequencesFile`, `TestSequencesGolden`,
   `FuzzSequences`가 이를 확인한다.
+- **가장 큰 key.** key가 rowid인 표, 곧 `INTEGER PRIMARY KEY`이거나 primary key가 없는 표로서 AUTOINCREMENT sequence를
+  지키지 않는 표는 SQLite처럼 insert에 가장 큰 key보다 하나 큰 key를 주며, int64의 최댓값도 준다. int64 최댓값을 넘으면
+  SQLite는 쓰이지 않은 rowid를 무작위로 고르는데, 이는 어떤 database도 주지 않는 key다: MySQL과 PostgreSQL은 최댓값을 넘은
+  identity를 거부하고, SQLite도 거기서 AUTOINCREMENT 표를 거부한다. 그래서 가장 큰 key가 int64 최댓값일 때 database가 key를
+  고르는 insert는 AUTOINCREMENT 표처럼 `DRIVER`(`SQLITE_FULL`)로 실패하며, 문장 경로와 face에서 똑같고, corpus와 그
+  transaction을 그대로 둔다. -1을 포함해 insert가 주는 key는 가장 큰 key 곁에 받아들여지고, NULL key는 database가 고르는
+  key이며, conflict가 무시하거나 upsert가 만난 행을 고쳐서 행을 쓰지 않는 insert는 key를 주지 않는다. 문장 경로는 그런 표마다 두 temporary trigger로 이를
+  지키며, SQLite가 고른 rowid에 `BEFORE INSERT`가 주는 rowid -1을 insert가 준 key -1과 가른다. `statement`의
+  `TestPlainIdentityLargest`와 `TestPlainIdentityLargestFace`가 이를 확인한다.
 - **할당 column 없음.** text key와 `order` column은 orm이 닿는 database에서처럼 insert가 준다
   ([document model](20-document-model.ko.md#key)): 문장의 schema는 둘 다 `NOT NULL`로 선언하므로, 하나를 빠뜨리거나 NULL을 준
   insert는 SQLite의 `NOT NULL constraint failed`로 실패하고, corpus는 문장이 쓴 값을 가진다. `statement`의

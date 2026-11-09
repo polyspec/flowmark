@@ -340,6 +340,16 @@ utility of orm's SQLite dialect holds on a corpus, and a client has only this dr
   `TestSequences`, `TestExplicitSequences` and `TestExplicitSequenceRefused` of `statement`, `TestSequenceWrites` and
   `TestSetSequences` of `irexec`, `TestAuditRows` of `ops`, and `TestAutoincrement`, `TestSequencesFile`,
   `TestSequencesGolden` and `FuzzSequences` of `catalog` hold it.
+- **The largest key.** A table whose key is its rowid — an `INTEGER PRIMARY KEY`, or a table without a primary key —
+  and that keeps no AUTOINCREMENT sequence gives an insert one more than its largest key, the largest int64 included, as
+  SQLite does. Past the largest int64 SQLite picks a random unused rowid, which is no key a database gives: MySQL and
+  PostgreSQL refuse an identity past its maximum, and SQLite refuses an AUTOINCREMENT table there. So an insert whose
+  key the database chooses while the largest key is the largest int64 fails as `DRIVER` (`SQLITE_FULL`), as an
+  AUTOINCREMENT table fails, on the statement path and on the face alike, and leaves the corpus and its transaction as
+  they were; a key the insert gives, -1 included, is taken beside the largest, a NULL key is one the database chooses,
+  and an insert that writes no row, as a conflict ignores it or an upsert updates the row it meets, gives no key. The statement path holds it by
+  two temporary triggers on each such table, which SQLite's `BEFORE INSERT` rowid of -1 for a chosen rowid tells apart
+  from a key -1 the insert gives. `TestPlainIdentityLargest` and `TestPlainIdentityLargestFace` of `statement` hold it.
 - **No assigned columns.** A text key and an `order` column are the insert's to give, as on the databases orm reaches
   ([document model](20-document-model.md#keys)): the schema of the statements declares each `NOT NULL`, so an insert that
   leaves one out, or gives it NULL, fails as SQLite's `NOT NULL constraint failed`, and the corpus holds the values the

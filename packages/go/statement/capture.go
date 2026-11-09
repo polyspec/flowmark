@@ -32,9 +32,11 @@ type capture struct {
 	on     bool
 	tables map[string]*changedRows
 	err    error
-	// schema is the main schema_version the keys were read at, and keys the primary key of each table without a rowid.
-	schema int64
-	keys   map[string]*primaryKey
+	// schema is the main schema_version the keys were read at, and keys the primary key of each table without a rowid;
+	// guarded is the number of the triggers of the guard of the largest rowid made at it (guardLargest).
+	schema  int64
+	keys    map[string]*primaryKey
+	guarded int
 }
 
 // primaryKey is the primary key of a table without a rowid, in the order of its index: the position of each of its
@@ -142,14 +144,21 @@ func (cp *capture) hook(data sqlite.SQLitePreUpdateData) {
 }
 
 // prepare reads, when the schema of the main database changed since it last did, the primary key of each table without
-// a rowid, which the hook takes a row's identity from. It runs on db before a statement, as the hook cannot read.
+// a rowid, which the hook takes a row's identity from, and gives the tables keyed by their rowid the guard of the
+// largest rowid (guardLargest). It runs on db before a statement, as the hook cannot read. The triggers of the guard are
+// counted too, since a rollback takes back those made in its transaction while the schema_version of a later change
+// can be the one they were made at.
 func (cp *capture) prepare(ctx context.Context, db runner) error {
 	var version int64
 	if err := db.QueryRowContext(ctx, "PRAGMA main.schema_version").Scan(&version); err != nil {
 		return &Error{codeInternal, err.Error()}
 	}
+	held, err := guards(ctx, db)
+	if err != nil {
+		return err
+	}
 	cp.mu.Lock()
-	known := cp.keys != nil && cp.schema == version
+	known := cp.keys != nil && cp.schema == version && cp.guarded == held
 	cp.mu.Unlock()
 	if known {
 		return nil
@@ -164,9 +173,13 @@ func (cp *capture) prepare(ctx context.Context, db runner) error {
 			return err
 		}
 	}
+	guarded, err := guardLargest(ctx, db)
+	if err != nil {
+		return err
+	}
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
-	cp.schema, cp.keys = version, keys
+	cp.schema, cp.keys, cp.guarded = version, keys, guarded
 	return nil
 }
 

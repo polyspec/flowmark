@@ -202,7 +202,10 @@ Each layer is a row, in this order, and each row's Red is a count of the cost co
    so a restart of an identity gives the key SQLite gives (T91); a row the corpus cannot hold — of no AUTOINCREMENT
    table, a second one of a table, a sequence of no integer — is `CONSTRAINT`. The next key is one more than the larger
    of the sequence and the largest key, so an insert never gives a key an insert gave, a key written by hand included,
-   until an explicit write lowers the sequence, as SQLite's AUTOINCREMENT gives none. A fill and a refresh give the database the sequences of the corpus, and the
+   until an explicit write lowers the sequence, as SQLite's AUTOINCREMENT gives none. A table whose key is its rowid and
+   that keeps no sequence gives no key past the largest int64: where SQLite would pick a random unused rowid, the insert
+   fails as `DRIVER` (`SQLITE_FULL`), as an AUTOINCREMENT table fails and as MySQL and PostgreSQL refuse an identity
+   past its maximum (T94). A fill and a refresh give the database the sequences of the corpus, and the
    refreshed database equals the database filled from the same corpus from nothing, table for table, by key,
    `sqlite_sequence` included.
 8. **Reads without the lock (T43).** A read runs its statement on a reader connection and holds no corpus lock while it

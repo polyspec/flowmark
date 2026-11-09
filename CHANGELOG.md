@@ -3,6 +3,7 @@
 
 ## Unreleased
 
+- T94: A table whose key is its rowid and that keeps no AUTOINCREMENT sequence gives no key past the largest int64: an insert whose key the database would choose while the largest key is 9223372036854775807 fails as DRIVER (SQLITE_FULL) on the SQL path and on the face, and changes nothing, where SQLite picked a random unused rowid and the face gave an overflowed key. A key the insert gives is still taken beside the largest, and the insert after the key 9223372036854775806 gives 9223372036854775807.
 - T91: The AUTOINCREMENT sequence of a table is the one SQLite keeps in `sqlite_sequence`. An explicit write of `sqlite_sequence` sets it, a lower value, zero, a negative value and a deleted row included, so a restart of an identity after a delete gives the key SQLite, MySQL and PostgreSQL give (3 after the keys 1, 2 and 3 and a delete of 3, where it gave 4); a delete and a change of a key leave the sequence as it is; an insert raises it to each key it gives or meets, an insert that meets a row on a unique key included. `dbspec/sequences.json` names a table whose sequence is not its largest key, as an integer or as `null` for no row of `sqlite_sequence`. A statement that leaves `sqlite_sequence` a row of no AUTOINCREMENT table, a second row of a table or a sequence of no integer is CONSTRAINT and changes nothing, where it was dropped or failed as INTERNAL; an AUTOINCREMENT table past the largest int64 gives no key, as DRIVER.
 
 ## 0.0.14

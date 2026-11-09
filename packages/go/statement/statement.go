@@ -1406,6 +1406,9 @@ func driverError(err error) error {
 		return &Error{codeDuplicateKey, msg}
 	case n == sqlite3.SQLITE_CONSTRAINT_FOREIGNKEY:
 		return &Error{codeForeignKey, msg}
+	case n == sqlite3.SQLITE_CONSTRAINT_TRIGGER && strings.Contains(e.Error(), largestFull):
+		// The guard of the largest rowid fails as SQLite fails an AUTOINCREMENT table past it.
+		return &Error{codeDriver, strings.TrimPrefix(largestFull, "flowmark: ") + " (13)" + resultCodeSuffix(sqlite3.SQLITE_FULL)}
 	case n == sqlite3.SQLITE_CONSTRAINT_TRIGGER && strings.Contains(e.Error(), "FOREIGN KEY constraint failed"):
 		return &Error{codeForeignKey, msg}
 	case n == sqlite3.SQLITE_CONSTRAINT_CHECK:
