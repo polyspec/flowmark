@@ -1,5 +1,5 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: e86e0a4ff251b5be9401c67c0c2b12b8ecef8ebe27437da09f8799959298acd7 -->
+<!-- source-sha256: f95e3b34d3c672b9700b8d48ef78ee0f0fd9b9d782a69ef9f5d0134e93a3a253 -->
 # Changelog
 
 ## Unreleased
@@ -11,6 +11,7 @@
 - T61: checklist는 flowmark corpus이다. `docs/plans/flowmark/checklist/`가 catalog `dbspec/checklist.dbs` 아래에 그 row를 담고, catalog의 check가 cause와 retry를 상태에 묶는다. `checklist.md`와 그 twin은 `make checklist-render`가 corpus에서 쓰는 view이다. 문서 검사의 하나인 `make checklist-check`는 catalog를 그 case로 검사하고, corpus가 render하지 않는 view에서 실패한다.
 - T90: 루트 문서나 plan만 바꾸는 push나 pull request는 CI run을 시작하지 않는다. 새 documents workflow가 모든 push와 pull request에서 문서 검사를 실행하고, GitHub가 path filter를 평가하지 않는 3000개를 넘는 파일의 diff를 실패시킨다.
 - T90: `make release-tag`는 `.github/workflows/ci.yml`의 성공한 push run이나 수동 run만 받으며, documents workflow 같은 다른 workflow의 run, 다른 event의 run이나 성공하지 않은 run, 그리고 run이 시작한 release에서는 다른 commit의 run을 이유와 함께 거부한다.
+- T93: test는 시험 대상 code가 내는 것을 기다리는 각 대기를 runner가 test에 주는 30초보다 짧은 20초로 제한하므로, 끝나지 않는 lock 대기는 holder와 상태를 담고 실패한다; 60초의 patience에서는 runner가 보고 없이 test를 멈췄다.
 
 ## 0.0.13
 

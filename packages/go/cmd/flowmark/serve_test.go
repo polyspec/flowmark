@@ -17,9 +17,10 @@ import (
 	"time"
 )
 
-// patience bounds every wait of a test for something the command must publish; it is a guard against a hung test,
-// never the condition a test checks.
-const patience = 60 * time.Second
+// patience bounds every wait of a test for something the command must publish; it is a guard against a hung test, never
+// the condition a test checks. It is shorter than the 30 s that the runner gives a test (make test-go), so a wait that
+// never ends fails with its own report, the holder of a lock among it, before the runner stops the test with none.
+const patience = 20 * time.Second
 
 const serveDBS = `dbspec 1 board
 

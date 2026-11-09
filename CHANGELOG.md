@@ -10,6 +10,7 @@
 - T61: The checklist is a flowmark corpus: `docs/plans/flowmark/checklist/` holds its rows under the catalog `dbspec/checklist.dbs`, whose checks tie a cause and a retry to the state, and `checklist.md` and its twin are views that `make checklist-render` writes from it; `make checklist-check`, one of the document checks, checks the catalog by its cases and fails on a view that the corpus does not render.
 - T90: A push or a pull request that changes only the root documents or the plans starts no CI run; the new documents workflow runs the document checks on every push and pull request and fails a diff of more than 3000 files, past which GitHub does not evaluate a path filter.
 - T90: `make release-tag` takes a successful push or manual run of `.github/workflows/ci.yml` alone, and refuses with the reason a run of another workflow, such as the documents workflow, a run of another event or without success, and, for a release that the run started, a run on another commit.
+- T93: The tests bound each wait for what the code under test publishes by 20 s, shorter than the 30 s that the runner gives a test, so a lock wait that never ends fails with its holder and state, where a patience of 60 s let the runner stop the test with no report.
 
 ## 0.0.13
 
