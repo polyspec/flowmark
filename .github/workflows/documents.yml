@@ -30,7 +30,7 @@ jobs:
       - name: diff size
         run: make diff-size-check
       # The document checks run after a failed size check too, so the run reports both.
-      - name: install the tool of the document checks
+      - name: install the tools of the document checks
         if: ${{ !cancelled() }}
         run: make documents-setup
       - name: document checks

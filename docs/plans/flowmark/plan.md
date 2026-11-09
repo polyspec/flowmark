@@ -291,6 +291,11 @@ grammars whole, and the drift check makes the corpus the one source.
 - `cause text null`, `retry text null` and their `_ko` columns. A check ties them to the state: `bypassed` requires a
   cause and a retry, `impossible` requires a cause and no retry, and every other state has neither.
 
+**The cells.** A cell of `items` is a single-line text of the engine, so a value with `<` followed by `!`, `/` or a
+letter is refused as raw HTML, inside a code span too ([canonical format](../../spec/10-canonical-format.md#single-line-places)).
+A placeholder in a checklist row is written `{plan}`, never `<plan>`. The import refuses such a row rather than changing
+it.
+
 **The view.** It renders the header of kit's table from `config/checklist.json`, one row per item in order, and the state
 cell as the marker that `config/checklist.json` declares for the state. It adds ` cause: <cause>; retry: <retry>` after
 the bypassed marker, and ` cause: <cause>` after the impossible marker. The Korean view

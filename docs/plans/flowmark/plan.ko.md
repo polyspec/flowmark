@@ -1,5 +1,5 @@
 <!-- doc-id: plans-design-plan -->
-<!-- source-sha256: e2a11f467de1e20911abc310222302c31cb70a06505a65e7414330707d854041 -->
+<!-- source-sha256: 47e6b76579255a125ab5918573dc3a027010bfb2a910a1a5c3f15f6c9d6fc3fd -->
 # flowmark 설계 계획
 
 Revision 2 — 3개 lane의 적대 감사 결과(engine core, orm 통합, 운영)와 multi-platform 지시를 아래 판정에 접는다. 감사의 blocker는 전부 판정이 되었고, 부수지 못한 주장은 문서 끝에 남긴다.
@@ -269,6 +269,10 @@ corpus를 유일한 원천으로 만든다.
   공백은 canonical이 아니다.
 - `cause text null`, `retry text null`과 그 `_ko` column: check가 이 값들을 state에 묶는다. `bypassed`는 cause와
   retry를 요구하고, `impossible`은 cause를 요구하며 retry를 허용하지 않는다. 다른 state에는 둘 다 없다.
+
+**cell.** `items`의 cell은 엔진의 한 줄 text이므로, `<` 뒤에 `!`, `/` 또는 글자가 오는 값은 code span 안에서도 raw HTML로
+거부된다([canonical format](../../spec/10-canonical-format.ko.md#한-줄-자리)). checklist row의 placeholder는 `<plan>`이
+아니라 `{plan}`으로 쓴다. import는 그런 row를 바꾸지 않고 거부한다.
 
 **view.** view는 `config/checklist.json`에서 kit 표의 header를 render한다. item마다 순서대로 row 하나를 쓰고, state
 cell은 `config/checklist.json`이 그 state에 선언한 marker이다. bypassed marker 뒤에는 ` cause: <cause>; retry: <retry>`를,

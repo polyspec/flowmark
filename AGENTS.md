@@ -80,6 +80,11 @@ them holds the rules of this repository.
 - Own: Each repository runs its own checklists: work in another repository is tracked there and referenced here by its ID in a
   code span, so that `make refs-check` reads no other repository's item as one of this repository.
   Enforced by: `make refs-check`
+- Own: The checklist is the corpus `docs/plans/flowmark/checklist/`, and `checklist.md` and its twin are its views: a row
+  and its state are written through flowmark (`build/flowmark row.insert`, `row.update`, `row.move`), and
+  `make checklist-render` writes the views; a hand edit of a view is drift. The engine refuses a state, a cause or a
+  retry that the catalog does not allow, and a cell with `<` followed by a letter.
+  Enforced by: `make checklist-check`
 - Own: Git files name no outside project that is not a dependency of flowmark; the polyspec repositories (kit, orm, hyper, crudui,
   template and others) are internal libraries and may be cited.
   Enforced by: none, a judgement at review.
