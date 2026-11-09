@@ -1,5 +1,5 @@
 {
-  "name": "writepath-state-no-checkbox",
+  "name": "writepath-task-marker-line-break",
   "storage": "document list",
   "catalog": "workflow",
   "corpus": {
@@ -64,7 +64,7 @@
     }
   },
   "params": [
-    "lost",
+    "\n",
     "T1"
   ],
   "now": "2026-10-11 09:00:00.000000",

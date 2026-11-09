@@ -58,7 +58,7 @@ func TestInsert(t *testing.T) {
 			t.Fatalf("items:\n%s", f.file("items.flowmark.md"))
 		}
 		f.want(f.msg("one", "items", map[string]any{"columns": map[string]any{"mode": "none", "add": []string{"position", "state"}}, "where": where(pred("id", "eq", p(0)))}, "T5"),
-			`{"rows":[{"id":"T5","parent":null,"owner":null,"position":4,"state":"waiting"}]}`)
+			`{"rows":[{"id":"T5","parent":null,"owner":null,"position":4,"state":" "}]}`)
 	})
 	t.Run("60#surfaces: a multi-row insert answers each key in insert order", func(t *testing.T) {
 		f := fresh(t)
@@ -248,8 +248,8 @@ func TestInsertRejects(t *testing.T) {
 			[]dupFault{{"people", "P4", -1, "", "CONSTRAINT", "ck_people_age"}}},
 		{"50#checks: an in check made false", f.msg("insert", "tags", map[string]any{"set": sets("label", "kind")}, "web", "other"), "CONSTRAINT",
 			[]dupFault{{"tags", "3", -1, "", "CONSTRAINT", "ck_tags_kind"}}},
-		{"50#state-columns: an inserted value that no checkbox line names", f.msg("insert", "items", map[string]any{"set": sets("id", "title", "body", "state", "position")}, "T5", "X", "", "lost", 4), "CONSTRAINT",
-			[]dupFault{{"items", "T5", -1, "state", "CONSTRAINT", "no checkbox"}}},
+		{"30#markdown-settings: an inserted task marker value of a list cell that would break its line", f.msg("insert", "items", map[string]any{"set": sets("id", "title", "body", "state", "position")}, "T5", "X", "", "\n", 4), "CONSTRAINT",
+			[]dupFault{{"items", "T5", -1, "state", "CONSTRAINT", "line break"}}},
 		{"20#order: an order value not of its column type", f.msg("insert", "items", map[string]any{"set": sets("id", "title", "body", "position")}, "T5", "X", "", int64(1)<<40), "CODEC_ENCODE", nil},
 		{"20#hierarchy: a parent cycle cannot be inserted, a parent outside the block can", f.msg("insert", "steps", map[string]any{"set": sets("id", "note", "title", "done")}, "S1", "N2", "X", false), "DUPLICATE_KEY",
 			[]dupFault{{"steps", "S1", -1, "id", "DUPLICATE_KEY", "notes/N1.flowmark.md"}}},
@@ -406,7 +406,7 @@ func TestUpdate(t *testing.T) {
 	t.Run("50#state-columns: a state update writes no history row", func(t *testing.T) {
 		f := fresh(t)
 		before := f.file("items.flowmark.md")
-		res := f.want(byID(f, "items", sets("state"), "T3", "doing"), `{"affected":1,"keys":[]}`)
+		res := f.want(byID(f, "items", sets("state"), "T3", "~"), `{"affected":1,"keys":[]}`)
 		f.commit(res)
 		got := f.file("items.flowmark.md")
 		if strings.Contains(got, "## items row T3\n") || !strings.Contains(got, "- [~] T3 ") || got == before {
@@ -415,7 +415,7 @@ func TestUpdate(t *testing.T) {
 	})
 	t.Run("50#state-columns: a state update with a column a machine line requires copies nothing", func(t *testing.T) {
 		f := fresh(t)
-		f.commit(f.want(byID(f, "items", sets("state", "evidence"), "T2", "done", "Fuzzed."), `{"affected":1,"keys":[]}`))
+		f.commit(f.want(byID(f, "items", sets("state", "evidence"), "T2", "x", "Fuzzed."), `{"affected":1,"keys":[]}`))
 		f.want(f.msg("one", "item_history", map[string]any{"columns": map[string]any{"mode": "all"}, "where": where(pred("id", "eq", p(0)))}, 5), `{"rows":[]}`)
 	})
 	t.Run("40#the-commit-protocol: a detail section that appears moves the links to its row", func(t *testing.T) {
@@ -492,7 +492,7 @@ func TestUpdate(t *testing.T) {
 		if tg := res.Post.Targets; len(tg) != 1 || !strings.Contains(string(tg[0].After), "- [~] T3 Reviewed position:2\n") {
 			t.Fatalf("targets %+v", tg)
 		}
-		res = f.ok(byID(f, "items", sets("state", "evidence"), "T3", "done", "x"))
+		res = f.ok(byID(f, "items", sets("state", "evidence"), "T3", "x", "x"))
 		if tg := res.Post.Targets; len(tg) != 1 || !strings.Contains(string(tg[0].After), "- [x] T3 Review") {
 			t.Fatalf("targets %+v", tg)
 		}
@@ -503,10 +503,10 @@ func TestUpdate(t *testing.T) {
 			msg  func(f *fixture) []byte
 			want string
 		}{
-			{"no declared transition", func(f *fixture) []byte { return byID(f, "items", sets("state"), "T1", "waiting") }, "- [ ] T1 "},
-			{"without its required column", func(f *fixture) []byte { return byID(f, "items", sets("state"), "T2", "done") }, "- [x] T2 "},
-			{"a required column assigned the empty text", func(f *fixture) []byte { return byID(f, "items", sets("state", "evidence"), "T2", "done", "") }, "- [x] T2 "},
-			{"a terminal entry without its required column", func(f *fixture) []byte { return byID(f, "items", sets("state"), "T3", "dropped") }, "- [-] T3 "},
+			{"no declared transition", func(f *fixture) []byte { return byID(f, "items", sets("state"), "T1", " ") }, "- [ ] T1 "},
+			{"without its required column", func(f *fixture) []byte { return byID(f, "items", sets("state"), "T2", "x") }, "- [x] T2 "},
+			{"a required column assigned the empty text", func(f *fixture) []byte { return byID(f, "items", sets("state", "evidence"), "T2", "x", "") }, "- [x] T2 "},
+			{"a terminal entry without its required column", func(f *fixture) []byte { return byID(f, "items", sets("state"), "T3", "-") }, "- [-] T3 "},
 		} {
 			t.Run(c.name, func(t *testing.T) {
 				f := fresh(t)
@@ -521,7 +521,7 @@ func TestUpdate(t *testing.T) {
 		docs := baseDocs()
 		docs["items.flowmark.md"] = strings.Replace(docs["items.flowmark.md"], "- [ ] T3 Review the design position:2\n", "- [ ] T3 Review the design position:2\n- [ ] T5 Fifth position:2\n", 1)
 		f := catalogFixture(t, docs).on(t)
-		f.want(f.msg("update", "items", map[string]any{"set": sets("state"), "where": where(pred("id", "in", map[string]any{"ps": []int{1, 2}}))}, "doing", "T3", "T5"), `{"affected":2,"keys":[]}`)
+		f.want(f.msg("update", "items", map[string]any{"set": sets("state"), "where": where(pred("id", "in", map[string]any{"ps": []int{1, 2}}))}, "~", "T3", "T5"), `{"affected":2,"keys":[]}`)
 	})
 
 	f := baseFixture(t)
@@ -531,8 +531,8 @@ func TestUpdate(t *testing.T) {
 		code string
 		want []dupFault
 	}{
-		{"50#state-columns: a list value that no checkbox line names", byID(f, "items", sets("state"), "T3", "lost"), "CONSTRAINT",
-			[]dupFault{{"items", "T3", -1, "state", "CONSTRAINT", "no checkbox"}}},
+		{"30#markdown-settings: a task marker value that would break its line", byID(f, "items", sets("state"), "T3", "\n"), "CONSTRAINT",
+			[]dupFault{{"items", "T3", -1, "state", "CONSTRAINT", "line break"}}},
 		{"50#keys-and-references: an update to a reference that names no row", byID(f, "items", sets("owner"), "T3", "P9"), "FOREIGN_KEY",
 			[]dupFault{{"items", "T3", -1, "owner", "FOREIGN_KEY", "P9"}}},
 		{"50#hierarchy-and-order: a parent cycle", byID(f, "notes", sets("parent"), "N1", "N2"), "CONSTRAINT",

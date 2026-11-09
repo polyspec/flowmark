@@ -29,15 +29,15 @@ type docLayout struct {
 	title     string            // the title column, "" when none
 	body      string            // the body column, "" when none
 	order     string            // the order column, "" when none
-	state     string            // the checkbox column of a list, "" when none
+	marker    string            // the task marker column of a list, "" when none
+	markCol   dbspec.Column     // the task marker column of a list
+	markBool  bool              // the task marker column is a bool, written as the GFM checkbox
 	parent    string            // "parent" when the table has the self foreign key parent, "" otherwise
 	placement string            // the placement foreign key of a block table, "" for a document table
 	scalars   []dbspec.Column   // the stored scalar columns: every column but the key, body, markdown and placement columns
 	fields    []dbspec.Column   // a list's fields: the scalars but its title, state and parent
 	sections  []section         // the markdown columns other than the body, in column order
 	fks       map[string]string // the referenced table of each foreign key
-	glyphs    map[string]string // value -> glyph of the checkbox column of a list
-	states    map[string]string // glyph -> value of the checkbox column of a list
 	children  []*docLayout      // the block tables stored in the row scope of this table, by table name
 	// inFiles reports that the placement chain of the table reaches a files table, so
 	// that rows of the table lie in several files and a file holds only some of them.
@@ -68,7 +68,6 @@ func layoutOfTable(cat *catalog.Catalog, tb *catalog.Table, placement string, in
 	lay := &docLayout{
 		table: table, list: tb.Storage.Shape == catalog.ShapeList, scope: tb.RowScope, placement: placement, inFiles: inFiles,
 		title: tb.Title, body: tb.Body, order: tb.Order,
-		glyphs: map[string]string{}, states: map[string]string{},
 	}
 	var err error
 	for _, name := range tb.KeyParts {
@@ -84,15 +83,13 @@ func layoutOfTable(cat *catalog.Catalog, tb *catalog.Table, placement string, in
 	if lay.fks["parent"] == table {
 		lay.parent = "parent"
 	}
-	if cb := tb.Checkbox; cb != nil && lay.list {
-		lay.state = cb.Column
-		for value, glyph := range cb.Glyphs {
-			lay.glyphs[value] = glyph
-			lay.states[glyph] = value
-		}
+	if lay.list && tb.TaskMarker != "" {
+		lay.marker = tb.TaskMarker
+		lay.markCol, _ = tb.ColumnNamed(tb.TaskMarker)
+		lay.markBool = lay.markCol.Type.Kind == dbspec.TypeBool
 	}
 	for _, c := range lay.scalars {
-		if lay.list && (c.Name == lay.title || c.Name == lay.state || c.Name == lay.parent) {
+		if lay.list && (c.Name == lay.title || c.Name == lay.marker || c.Name == lay.parent) {
 			continue
 		}
 		if lay.list {
@@ -173,7 +170,7 @@ func (l *docLayout) requiredColumns() []dbspec.Column {
 	for _, c := range l.scalars {
 		switch {
 		case c.Name == l.title:
-		case l.list && c.Name != l.state && !l.isField(c.Name):
+		case l.list && c.Name != l.marker && !l.isField(c.Name):
 		default:
 			out = append(out, c)
 		}
@@ -438,7 +435,44 @@ func markerGap(line string, indent int) int {
 	return col - (indent + 1)
 }
 
-// listRow reads one list row of line, whose marker is at indent: the state glyph,
+// taskMarker reads the task marker of a list row whose `[` is at off (spec 30 Markdown settings): the value between the
+// brackets and the byte index after the `]`. A varchar(1) column holds the one character between them, or the empty
+// text for `[]`; a bool column is the GFM checkbox, `[ ]` for false and `[x]` for true, and `[X]`, which GFM reads as
+// checked too, is true and format.noncanonical. Anything else is format.block.
+func (p *docParser) taskMarker(lineNo int, line string, off int) (string, int, bool) {
+	lay := p.lay
+	if !lay.markBool && off+1 < len(line) && line[off+1] == ']' && (off+2 == len(line) || line[off+2] == ' ' || line[off+2] == '\t') {
+		return "", off + 2, true
+	}
+	r, size := utf8.DecodeRuneInString(line[off+1:])
+	end := off + 1 + size
+	if size == 0 || end >= len(line) || line[end] != ']' {
+		p.fail(lineNo, colAt(line, off+1), RuleBlock, "the task marker holds one character between brackets")
+		return "", 0, false
+	}
+	v := string(r)
+	if !lay.markBool {
+		// The brackets show the character as quotes do, a space or another invisible one included.
+		if msg := quotedFault(v); msg != "" {
+			p.fail(lineNo, colAt(line, off+1), RuleBlock, "the task marker has "+msg)
+			return "", 0, false
+		}
+		return v, end + 1, true
+	}
+	switch v {
+	case " ":
+		return "false", end + 1, true
+	case "x":
+		return "true", end + 1, true
+	case "X":
+		p.warn(lineNo, colAt(line, off+1), RuleNoncanonical, "a checked task marker is written `[x]`")
+		return "true", end + 1, true
+	}
+	p.fail(lineNo, colAt(line, off+1), RuleBlock, "the task marker of a bool column is `[ ]` or `[x]`")
+	return "", 0, false
+}
+
+// listRow reads one list row of line, whose marker is at indent: the task marker,
 // the key, the title and the fields. It returns nil when the row is refused.
 func (p *docParser) listRow(lineNo int, line string, indent int) *docRec {
 	lay := p.lay
@@ -450,28 +484,17 @@ func (p *docParser) listRow(lineNo int, line string, indent int) *docRec {
 		return nil
 	}
 	off := p.separator(lineNo, line, indent+1)
-	var state string
-	glyphAt := 0 // the byte index of the state glyph
-	if lay.state != "" {
-		if off >= len(line) || line[off] != '[' {
-			p.fail(lineNo, colAt(line, off), RuleBlock, "a row starts with its state glyph `[g]`")
-			return nil
-		}
-		r, size := utf8.DecodeRuneInString(line[off+1:])
-		end := off + 1 + size
-		if size == 0 || end >= len(line) || line[end] != ']' {
-			p.fail(lineNo, colAt(line, off+1), RuleBlock, "the state glyph is one character between brackets")
-			return nil
-		}
-		st, ok := lay.states[string(r)]
+	var marked *string
+	markAt := 0 // the byte index of the value of the task marker
+	if lay.marker != "" && off < len(line) && line[off] == '[' {
+		v, end, ok := p.taskMarker(lineNo, line, off)
 		if !ok {
-			p.fail(lineNo, colAt(line, off+1), RuleBlock, "the glyph "+string(r)+" names no state")
 			return nil
 		}
-		state, glyphAt = st, off+1
-		off = end + 1
+		marked, markAt = &v, off+1
+		off = end
 		if off >= len(line) || (line[off] != ' ' && line[off] != '\t') {
-			p.fail(lineNo, colAt(line, off), RuleBlock, "a space follows the state glyph")
+			p.fail(lineNo, colAt(line, off), RuleBlock, "a space follows the task marker")
 			return nil
 		}
 		off = p.separator(lineNo, line, off)
@@ -518,9 +541,9 @@ func (p *docParser) listRow(lineNo int, line string, indent int) *docRec {
 	if lay.title != "" {
 		rec.row.setAt(lay.title, lineNo, colAt(line, titleStart))
 	}
-	if state != "" {
-		rec.row.Scalars[lay.state] = sp(state)
-		rec.row.setAt(lay.state, lineNo, colAt(line, glyphAt))
+	if marked != nil {
+		rec.row.Scalars[lay.marker] = marked
+		rec.row.setAt(lay.marker, lineNo, colAt(line, markAt))
 	}
 	last := -1
 	for _, tok := range toks {

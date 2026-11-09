@@ -3,7 +3,7 @@ dbspec 1 flowmark
 table items {
   id varchar(32)
   parent varchar(32) null
-  state varchar(16)
+  state varchar(1)
   title varchar(255)
   body text
   position i32 null
@@ -35,14 +35,7 @@ table items {
     markdown evidence
     markdown cause
     markdown retry
-    checkbox state waiting ' '
-    checkbox state doing '~'
-    checkbox state done 'x'
-    state_machine state initial waiting
-    state_machine state waiting -> doing
-    state_machine state doing -> done require (evidence)
-    state_machine state terminal done
-    state_machine state history item_history row item from from_state to to_state at at
+    task_marker state
   }
 }
 
@@ -146,7 +139,7 @@ table item_checks {
   id varchar(16)
   item varchar(32)
   parent varchar(16) null
-  state varchar(16)
+  state varchar(1)
   title varchar(255)
   body text
   position i32 null
@@ -176,14 +169,7 @@ table item_checks {
     body body
     markdown body
     markdown evidence
-    checkbox state open ' '
-    checkbox state doing '~'
-    checkbox state done 'x'
-    state_machine state initial open
-    state_machine state open -> doing
-    state_machine state doing -> done
-    state_machine state terminal done
-    state_machine state history item_check_history row check_id from from_state to to_state at at
+    task_marker state
   }
 }
 
@@ -224,8 +210,29 @@ table jobs {
   settings {
     store document list
     title title
-    state_machine state initial open
-    state_machine state open -> closed
-    state_machine state terminal closed
+  }
+}
+
+table todos {
+  id varchar(16)
+  done bool null
+  title varchar(64)
+  primary key (id)
+  settings {
+    store document list
+    title title
+    task_marker done
+  }
+}
+
+table chores {
+  id varchar(16)
+  mark varchar(1) null
+  title varchar(64)
+  primary key (id)
+  settings {
+    store document list
+    title title
+    task_marker mark
   }
 }

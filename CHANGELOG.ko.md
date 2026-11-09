@@ -1,11 +1,11 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: fc0788deb4ca7d45084c6c330711f758aa6da9db6fcdea48b08a653b21d24b34 -->
+<!-- source-sha256: 01fd9488e7b84efc0f6a362eece0d85dde99ed0daf746513f61150e220c4dfb1 -->
 # Changelog
 
 ## Unreleased
 
 - T89: 엔진은 database가 할당하지 않는 값을 할당하지 않는다. `key_prefix` 설정이 없어졌으므로 insert가 text key를 주며, 이것이 없는 insert는 IR_INVALID다. order column은 모든 저장에서 저장된 값이다 — list 행의 field, table의 cell, `files` 행의 항목 — insert는 다른 non-null column처럼 이를 주고, 읽기는 쓰인 대로 답하며, 아무것도 다시 번호 매기지 않는다: 형제는 값의 오름차순으로, 값을 공유하면 key 순서로 서고, 다른 순서의 문서는 `format.noncanonical`이며, column의 쓰기, parent 변경, delete는 쓴 행의 file만 다시 쓴다. validator는 `order`를 보고하지 않으며, SQL 문장의 schema는 key와 order column을 NOT NULL로 선언한다.
-- T62: 엔진은 흔한 database가 지니는 것만 지닌다: schema의 `state_machine` 줄을 읽되 아무것도 적용하지 않으므로, 선언되지 않은 전이, terminal 상태, initial이 아닌 insert, 필수 column, limit 때문에 쓰기를 더는 거부하지 않고 이력 행도 쓰지 않는다; validator는 `state.transition`, `state.required`, `state.limit`, `history.gap`, `history.chain`을 보고하지 않는다; 상태 column의 값은 그 type과 schema의 foreign key와 check가 허용하는 것이고, list 행은 어느 `checkbox` 줄도 보여 주지 않는 값을 CONSTRAINT로 거부한다. 명령 `flowmark transition`, operation과 MCP tool `transition`, 명령 `flowmark history repair`는 없어지고, schema 답은 각 table의 state machine 대신 `checkbox`(그 column과 각 값의 glyph)를 준다.
+- T62: 엔진은 흔한 database가 지니는 것만 지니며 orm 0.0.28의 문법을 받는다: schema는 상태기계를 선언하지 않으므로(`state_machine`은 알 수 없는 setting으로 거부된다) 전이, terminal 상태, initial 상태, 필수 column, limit 때문에 쓰기를 거부하지 않고 이력 행도 쓰지 않으며, validator는 `state.transition`, `state.required`, `state.limit`, `history.gap`, `history.chain`을 보고하지 않는다; 상태 column은 그 type과 schema의 foreign key와 check가 허용하는 것을 담는다. `task_marker <column>`이 `checkbox`를 대신하며, `checkbox`는 알 수 없는 것으로 거부된다: list 행은 `varchar(1)` 값을 task marker의 괄호 사이에 `[<value>]`로, 빈 텍스트는 `[]`로, `bool`은 `[ ]`와 `[x]`로(`[X]`는 true로 읽고 `format.noncanonical`이다), NULL은 상자 없는 행으로 쓴다. 명령 `flowmark transition`, operation과 MCP tool `transition`, 명령 `flowmark history repair`는 없어지고, schema 답은 각 table의 state machine 대신 `task_marker`를 준다.
 - T61: checklist는 flowmark corpus이다. `docs/plans/flowmark/checklist/`가 catalog `dbspec/checklist.dbs` 아래에 그 row를 담고, catalog의 check가 cause와 retry를 상태에 묶는다. `checklist.md`와 그 twin은 `make checklist-render`가 corpus에서 쓰는 view이다. 문서 검사의 하나인 `make checklist-check`는 catalog를 그 case로 검사하고, corpus가 render하지 않는 view에서 실패한다.
 - T90: 루트 문서나 plan만 바꾸는 push나 pull request는 CI run을 시작하지 않는다. 새 documents workflow가 모든 push와 pull request에서 문서 검사를 실행하고, GitHub가 path filter를 평가하지 않는 3000개를 넘는 파일의 diff를 실패시킨다.
 - T90: `make release-tag`는 `.github/workflows/ci.yml`의 성공한 push run이나 수동 run만 받으며, documents workflow 같은 다른 workflow의 run, 다른 event의 run이나 성공하지 않은 run, 그리고 run이 시작한 release에서는 다른 commit의 run을 이유와 함께 거부한다.

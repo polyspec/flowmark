@@ -45,21 +45,22 @@ behaviour.
 | `title <column>` | the row's title: non-null, never empty |
 | `body <column>` | the row's body: a `markdown` column, never NULL |
 | `order <column>` | the order of the row among its siblings, by the column's value ([document model](20-document-model.md#order)); nothing assigns it, so an insert gives it (orm DBS-79) |
-| `checkbox <column> <state> '<glyph>'` | the list glyph of a value of the column: exactly one character, written between the brackets of a list row (`- [<glyph>] …`); transitional, as stated below |
+| `task_marker <column>` | the column a list row writes between the brackets of its task marker (orm DBS-80): a `varchar(1)` or `bool` column, nullable or not, as stated below |
 | `markdown <column>` | the column holds markdown prose and is stored as a section |
-| `state_machine <column> …` (`initial`, the transitions, `terminal`, `require`, `history`, `limit`) | read and applied by none: the engine holds no state machine ([constraints](50-constraints.md#state-columns)) |
 
-The `checkbox` setting is transitional. orm's grammar (orm v0.0.26, which flowmark builds against) writes it
-`checkbox <column> <state> '<glyph>'`, one line per state, and requires the lines of a table to cover its machine's state
-set with distinct glyphs of one character. In a table stored as a list, the column the lines name is written as the
-glyph of the row's value between the brackets of the list row, `- [<glyph>] <key> <title> …`
-([canonical format](10-canonical-format.md#list-rows)); a list write of a value that no line names is `CONSTRAINT`, since
-the list cannot show it, and a list table whose machine declares no `checkbox` writes the column as a field
-(`state:doing`). In `table` and `files` storage the column is a cell or a field item, as any scalar is. The target form
-is `checkbox <column>`: a column of one character is shown as `[<value>]`, a `bool` as `[ ]` and `[x]`, NULL as a list
-row without a box and the empty text as `[]`. It arrives with the change of orm's grammar that orm tracks by its own
-row; until then the per-state form above holds. Grounding: a GFM task item holds one character between its brackets, so
-a list row shows the column there only through a glyph of each value until the column itself is one character.
+`task_marker <column>` is one line per table, and orm refuses a second as a repeat, a column of another type
+(`task_marker needs a varchar(1) or bool column, not <type>`) and the per-state form `task_marker <column> <state>
+'<glyph>'` as a syntax error. In a table stored as a list, the column is written between the brackets of the list row,
+`- [<value>] <key> <title> …` ([canonical format](10-canonical-format.md#list-rows)): a `varchar(1)` value as itself,
+the empty text as `[]`; a `bool` as the unchecked and the checked task box of GFM, `[ ]` for false and `[x]` for true,
+where `[X]`, which GFM reads as checked too, reads as true and is `format.noncanonical`; and NULL as a list row without a
+box, `- <key> <title> …`. Its values are those its type and the schema's constraints allow, as on every database — a
+check `in (…)` or a foreign key to a table of states — never a list of glyphs. In `table` and `files` storage the column
+is a cell or a field item, as any scalar is. The settings `checkbox`, its former name, and `state_machine` are not
+settings of the grammar, each refused as unknown (`setting "checkbox" is unknown`): the engine holds no state machine
+([constraints](50-constraints.md#state-columns)). Grounding: a GFM task list item holds one character between its
+brackets, its task list item marker, so a column of one character shows its whole value there, and a boolean shows as
+GFM's own two boxes.
 
 ## Corpus rules on dbspec constructs
 

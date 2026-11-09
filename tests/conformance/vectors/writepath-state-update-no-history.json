@@ -68,7 +68,7 @@
     }
   },
   "params": [
-    "done",
+    "x",
     "Tests pass.",
     "T2"
   ],

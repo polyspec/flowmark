@@ -160,23 +160,21 @@ values, so a field without equality — a codec field whose codec is not exactly
 ## State columns
 
 - **No state machine.** A database holds no state machine: the values a column may hold are its type and the
-  constraints of the schema, and no database refuses an update for the value it replaces. The catalog reads the
-  `state_machine` lines of orm's grammar — `initial`, the transitions, `terminal`, `require`, `history` and `limit` — and
-  the engine applies none of them, as orm DBS-73 says a database does and as MySQL, PostgreSQL and SQLite do: no insert is
-  refused for its state, no update for the state it replaces or for leaving a terminal state, no `require` column is
-  enforced, no `limit` is counted, no history row is written, and the validator reports no rule of a machine. A table
-  that a `history` line names is an ordinary table. A state column holds the values of its type that the schema's
+  constraints of the schema, and no database refuses an update for the value it replaces. orm's grammar holds
+  no `state_machine` line (orm DBS-63 refuses it as an unknown setting), and the engine applies no machine, as MySQL,
+  PostgreSQL and SQLite apply none: no insert is refused for its state, no update for the state it replaces, no history
+  row is written, and the validator reports no rule of a machine. A table that keeps the history of a state is an
+  ordinary table. A state column holds the values of its type that the schema's
   constraints allow, as on every database: a check `in (…)` refuses another value as any check does
   ([Checks](#checks)), and a foreign key to a table of states refuses a value that names no row as any foreign key does
   ([Keys and references](#keys-and-references)). Grounding: orm's one rule is the same result on every database, so the
   engine holds only what those databases hold; the transitions of a state and their trail are polyspec fsm's, and a state
   that fsm takes is written to the corpus as any value is.
-- **The checkbox.** In a table stored as a list, the column that the table's `checkbox` lines name is written as the
-  glyph of the row's value between the brackets of the list row ([canonical format](10-canonical-format.md#list-rows)); a
-  list write of a value that no `checkbox` line names is `CONSTRAINT`, since the list cannot show it, and on read a glyph
-  that no line names is `format.block`. A list table that declares no `checkbox` writes the column as a field, and in
-  `table` and `files` storage the column is a cell or a field item as any scalar is. The form of the `checkbox` lines is
-  stated in [schema](30-schema.md#markdown-settings).
+- **The task marker.** A list shows a state of one character, or a boolean, as its task marker: the table's
+  `task_marker` names the column, whose value is written between the brackets of the list row
+  ([canonical format](10-canonical-format.md#list-rows), [schema](30-schema.md#markdown-settings)); its values are those
+  of its type and constraints, as any column's. A list table without a `task_marker` writes the column as a field, and
+  in `table` and `files` storage the column is a cell or a field item as any scalar is.
 
 ## The commit
 

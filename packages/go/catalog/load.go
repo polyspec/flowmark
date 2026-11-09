@@ -460,7 +460,9 @@ func buildTable(r *tableRef) *Table {
 	for _, m := range s.Marks {
 		out.Markdown = append(out.Markdown, m.Column)
 	}
-	out.Checkbox = checkbox(s.Checkboxes)
+	if s.TaskMarker != nil {
+		out.TaskMarker = s.TaskMarker.Column
+	}
 	for _, c := range s.Codecs {
 		if out.Codecs == nil {
 			out.Codecs = map[string][]string{}
@@ -481,20 +483,6 @@ func buildTable(r *tableRef) *Table {
 	if isViewTable(r) {
 		v := viewColumns
 		out.View = &v
-	}
-	return out
-}
-
-// checkbox converts the checkbox lines of a table, nil when it has none. orm requires every line to name the column
-// of the table's state machine and the lines to cover its states, each glyph one character and distinct; the machine
-// itself the engine applies none of (spec 50 State columns).
-func checkbox(lines []dbspec.CheckboxSetting) *Checkbox {
-	if len(lines) == 0 {
-		return nil
-	}
-	out := &Checkbox{Column: lines[0].Column, Glyphs: map[string]string{}}
-	for _, c := range lines {
-		out.Glyphs[c.State] = c.Glyph
 	}
 	return out
 }

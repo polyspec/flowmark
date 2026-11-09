@@ -56,7 +56,7 @@ type Table struct {
 	Body         string
 	Order        string
 	Markdown     []string
-	Checkbox     *Checkbox            // the column a list row writes as its glyph, nil when the table declares no checkbox
+	TaskMarker   string               // the column a list row writes between the brackets of its task marker, "" when none
 	Codecs       map[string][]string  // the codec stages of each column with a codec setting, in write order
 	Audit        *dbspec.AuditSetting // the history the engine writes with every write of the table (spec 50 Audit), nil when none
 	Immutable    bool                 // a write refuses to change or remove a row of the table (spec 50)
@@ -277,14 +277,6 @@ type Storage struct {
 	ParentForeignKey string
 	Parent           string
 	Shard            *Shard
-}
-
-// Checkbox is the column that a list row writes between the brackets of its task marker, and the glyph of each value
-// of it (spec 30 Markdown settings): the `checkbox <column> <state> '<glyph>'` lines of orm's grammar, which cover the
-// states of a state machine that the engine reads and applies none of (spec 50 State columns).
-type Checkbox struct {
-	Column string
-	Glyphs map[string]string // value -> glyph
 }
 
 // Hierarchy returns the hierarchy column of the table — `parent`, when a foreign key of the table references the

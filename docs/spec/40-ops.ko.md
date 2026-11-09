@@ -1,5 +1,5 @@
 <!-- doc-id: spec-ops -->
-<!-- source-sha256: aa14f84674b47c586f34849e7adf32b433f9816ef4b2a15dcca428c1a732a9da -->
+<!-- source-sha256: bc37952c538c8f898565d4886937870e70f1161aaf4dec94b40f2309993f7a5a -->
 # Operations
 
 [English](40-ops.md)
@@ -151,7 +151,7 @@
 
 | Operation | Member | 답 |
 | --- | --- | --- |
-| `schema` | — | `{"manifest_hash", "tables"}`: catalog — 각 table과 그 저장 방식, key, `title`, `body`, `order`, 계층 column, `markdown` column, column, foreign key, unique key, `checkbox`: `null`, 또는 `checkbox` 줄이 column을 이름 붙인 table이면 `{"column": "<column>", "glyphs": {"<value>": "<glyph>", …}}`([schema](30-schema.ko.md#markdown-setting)) |
+| `schema` | — | `{"manifest_hash", "tables"}`: catalog — 각 table과 그 저장 방식, key, `title`, `body`, `order`, 계층 column, `markdown` column, column, foreign key, unique key, 그리고 list 행이 task marker에 쓰는 column인 `task_marker` — table이 선언하지 않으면 없다([schema](30-schema.ko.md#markdown-setting)) |
 | `rows` | `table` | `{"rows"}`: table의 모든 행을 저장 순서로, `columns` 없는 `all` 요청이 답하는 대로 |
 | `row.get` | `table`, `key` | `{"row"}`: key가 `key`인 행 |
 | `rows.load` | `table`, `rows` | `{"affected"}` |
@@ -754,7 +754,7 @@ MySQL과 PostgreSQL은 `datetime(p)` column을 `NOW(6)`와 여섯 자리로 비�
 | `CORPUS_CONFLICT` | `WRITE_CONFLICT` | 읽은 뒤 대상이 바뀌었거나, 읽은 뒤의 변경이 transaction의 쓰기를 다른 쓰기로 만든다. 각 file과 줄을 밝힌다 |
 | `DUPLICATE_KEY` | `DUPLICATE_KEY` | primary나 unique key 값이 이미 있다. 두 행(table과 key)을 밝힌다 |
 | `FOREIGN_KEY` | `FOREIGN_KEY` | 참조가 어떤 행도 가리키지 않거나, 참조된 행을 참조되는 동안 지우려 했다 |
-| `CONSTRAINT` | `CONSTRAINT` | catalog의 다른 규칙이 쓰기를 거절했다 — check, 제목, 순서, 한 줄 자리, list의 어떤 `checkbox` glyph도 보이지 않는 값. 규칙, 그리고 행과 column을 밝힌다([canonical format](10-canonical-format.ko.md#진단)); 비정규이거나 잘못된 문서를 다시 써야 하는 쓰기, 또는 사용할 수 없는 table의 행이 필요한 요청(읽기나 쓰기)은 file과 진단을 밝히며 `CONSTRAINT`다([canonical format](10-canonical-format.ko.md#진단)) |
+| `CONSTRAINT` | `CONSTRAINT` | catalog의 다른 규칙이 쓰기를 거절했다 — check, 제목, 순서, 한 줄 자리, list 행이 보일 수 없는 task marker 값. 규칙, 그리고 행과 column을 밝힌다([canonical format](10-canonical-format.ko.md#진단)); 비정규이거나 잘못된 문서를 다시 써야 하는 쓰기, 또는 사용할 수 없는 table의 행이 필요한 요청(읽기나 쓰기)은 file과 진단을 밝히며 `CONSTRAINT`다([canonical format](10-canonical-format.ko.md#진단)) |
 | `READ_ONLY` | `READ_ONLY` | 읽기 전용 transaction 안의 쓰기 |
 | `CONFIG` | `CONFIG` | session 상태가 허용하지 않는 control message([transaction](#transaction)), corpus 문서를 가리키지 않는 `flowmark canon` 경로([canon 연산](#canon-연산)), 또는 알 수 없거나 member가 빠졌거나 table이 선언하지 않은 setting을 가리키는 face operation([face](#face)) |
 | 복구 거절 | `DRIVER` | 대상, 기록된 두 hash, 그 둘을 담은 stage file을 밝힌다. 해결될 때까지 열기와 lock을 잡는 모든 operation을 거절한다 — SQLite의 `SQLITE_CORRUPT`가 그렇듯 다른 code가 밝히지 않는 database 오류의 orm code인 `DRIVER`다. journal 아래 file system의 실패도 `DRIVER`다 |

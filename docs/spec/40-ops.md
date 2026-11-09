@@ -181,7 +181,7 @@ The order of the commit protocol is normative.
 
 | Operation | Members | Answer |
 | --- | --- | --- |
-| `schema` | — | `{"manifest_hash", "tables"}`: the catalog — each table with its storage, key, `title`, `body`, `order`, hierarchy column, `markdown` columns, columns, foreign keys, unique keys and `checkbox`: `null`, or `{"column": "<column>", "glyphs": {"<value>": "<glyph>", …}}` for a table whose `checkbox` lines name a column ([schema](30-schema.md#markdown-settings)) |
+| `schema` | — | `{"manifest_hash", "tables"}`: the catalog — each table with its storage, key, `title`, `body`, `order`, hierarchy column, `markdown` columns, columns, foreign keys, unique keys and `task_marker`, the column a list row writes in its task marker, absent when the table declares none ([schema](30-schema.md#markdown-settings)) |
 | `rows` | `table` | `{"rows"}`: every row of the table in storage order, as an `all` request without `columns` answers it |
 | `rows.load` | `table`, `rows` | `{"affected"}` |
 | `row.get` | `table`, `key` | `{"row"}`: the row whose key is `key` |
@@ -878,7 +878,7 @@ The engine states the size of a corpus it serves within the latency target above
 | `CORPUS_CONFLICT` | `WRITE_CONFLICT` | a target changed since it was read, or a change since the read makes the transaction's writes other writes; names each file and line |
 | `DUPLICATE_KEY` | `DUPLICATE_KEY` | a primary or unique key value already exists; names both rows (table and key) |
 | `FOREIGN_KEY` | `FOREIGN_KEY` | a reference names no row, or a referenced row is deleted while referenced |
-| `CONSTRAINT` | `CONSTRAINT` | any other rule of the catalog refused the write — a check, a title, an order, a single-line place, a value that no `checkbox` glyph of a list shows; names the rule, and the row and column ([canonical format](10-canonical-format.md#diagnostics)); or a write that must rewrite a non-canonical or malformed document, or a request, read or write, that needs the rows of an unavailable table ([canonical format](10-canonical-format.md#diagnostics)), naming the file and the diagnostic |
+| `CONSTRAINT` | `CONSTRAINT` | any other rule of the catalog refused the write — a check, a title, an order, a single-line place, a task marker value that its list row cannot show; names the rule, and the row and column ([canonical format](10-canonical-format.md#diagnostics)); or a write that must rewrite a non-canonical or malformed document, or a request, read or write, that needs the rows of an unavailable table ([canonical format](10-canonical-format.md#diagnostics)), naming the file and the diagnostic |
 | `READ_ONLY` | `READ_ONLY` | a write in a read-only transaction |
 | `CONFIG` | `CONFIG` | a control message that the session's state does not allow ([transactions](#transactions)), a `flowmark canon` path that names no corpus document ([the canon operation](#the-canon-operation)), or a face operation that is unknown, lacks a member or names a setting its table does not declare ([the faces](#the-faces)) |
 | recovery refusal | `DRIVER` | names the target and both recorded hashes and the stage files that hold them; opening, and every operation that acquires the lock, refuses until resolved — `DRIVER`, orm's code of a database error no other code names, as SQLite's `SQLITE_CORRUPT` is; a failure of the file system under the journal is `DRIVER` too |

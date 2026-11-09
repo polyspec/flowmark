@@ -1,5 +1,5 @@
 <!-- doc-id: spec-constraints -->
-<!-- source-sha256: db2ffd70728faf9f90975ccae9e471fc4115963bf9fe4ad021a3da75a4432c3d -->
+<!-- source-sha256: 466b0056734f31b646113342ef1953e82ee3df96bd1b3be3328ec75e9512d371 -->
 # Constraints
 
 [English](50-constraints.md)
@@ -137,22 +137,19 @@ param은 보이지 않는 데이터다. grouping은 같은 값을 가진 행을 
 ## 상태 column
 
 - **상태기계 없음.** database는 상태기계를 갖지 않는다: column이 담을 수 있는 값은 그 type과 schema의 제약이며,
-  어떤 database도 update를 그것이 대신하는 값 때문에 거절하지 않는다. catalog는 orm 문법의 `state_machine` 줄 —
-  `initial`, 전이, `terminal`, `require`, `history`, `limit` — 을 읽고, 엔진은 그 어느 것도 적용하지 않는다. orm
-  DBS-73이 database가 그렇게 한다고 말하는 대로이며, MySQL, PostgreSQL, SQLite가 하는 대로다: 어떤 insert도 그 상태
-  때문에, 어떤 update도 그것이 대신하는 상태나 종료 상태를 떠나는 것 때문에 거절하지 않고, 어떤 `require` column도
-  강제하지 않으며, 어떤 `limit`도 세지 않고, 어떤 이력 행도 쓰지 않으며, validator는 기계의 어떤 규칙도 보고하지
-  않는다. `history` 줄이 이름 붙인 table은 보통 table이다. 상태 column은 모든 database에서처럼 schema의 제약이 허용하는
+  어떤 database도 update를 그것이 대신하는 값 때문에 거절하지 않는다. orm의 문법은 `state_machine`
+  줄을 갖지 않으며(orm DBS-63은 그것을 알 수 없는 setting으로 거절한다), 엔진은 MySQL, PostgreSQL, SQLite처럼 어떤
+  기계도 적용하지 않는다: 어떤 insert도 그 상태 때문에, 어떤 update도 그것이 대신하는 상태 때문에 거절하지 않고, 어떤
+  이력 행도 쓰지 않으며, validator는 기계의 어떤 규칙도 보고하지 않는다. 상태의 이력을 지니는 table은 보통 table이다. 상태 column은 모든 database에서처럼 schema의 제약이 허용하는
   그 type의 값을 담는다: check `in (…)`은 다른 값을 다른 check처럼 거절하고([Check](#check)), 상태 table로의 foreign
   key는 어떤 행도 가리키지 않는 값을 다른 foreign key처럼 거절한다([Key와 참조](#key와-참조)). 근거: orm의 규칙 하나는
   모든 database에서 같은 결과이므로 엔진은 그 database들이 가진 것만 가진다. 상태의 전이와 그 흔적은 polyspec fsm의
   것이며, fsm이 취한 상태는 다른 값처럼 corpus에 쓰인다.
-- **Checkbox.** list로 저장된 table에서 그 table의 `checkbox` 줄이 이름 붙인 column은 list 행의 괄호 사이에 행 값의
-  glyph로 쓰인다([canonical format](10-canonical-format.ko.md#list-행)). 어떤 `checkbox` 줄도 이름 붙이지 않은 값의
-  list 쓰기는 list가 그것을 보일 수 없으므로 `CONSTRAINT`이고, 읽기에서 어떤 줄도 이름 붙이지 않은 glyph는
-  `format.block`이다. `checkbox`를 선언하지 않은 list table은 그 column을 field로 쓰며, `table`과 `files` 저장에서 그
-  column은 다른 scalar처럼 cell이나 field 항목이다. `checkbox` 줄의 형태는 [schema](30-schema.ko.md#markdown-setting)가
-  정한다.
+- **Task marker.** list는 한 글자의 상태나 boolean을 그 task marker로 보인다: table의 `task_marker`가 column을
+  이름 붙이며, 그 값은 list 행의 괄호 사이에 쓰인다([canonical format](10-canonical-format.ko.md#list-행),
+  [schema](30-schema.ko.md#markdown-setting)). 그 값은 다른 column처럼 그 type과 제약의 값이다. `task_marker`가 없는
+  list table은 그 column을 field로 쓰며, `table`과 `files` 저장에서 그 column은 다른 scalar처럼 cell이나 field
+  항목이다.
 
 ## Commit
 

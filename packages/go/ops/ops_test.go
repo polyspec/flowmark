@@ -73,17 +73,14 @@ func TestOperations(t *testing.T) {
 		var s struct {
 			ManifestHash string `json:"manifest_hash"`
 			Tables       []struct {
-				Name     string `json:"name"`
-				Key      string `json:"key"`
-				Order    string `json:"order"`
-				Parent   string `json:"parent"`
-				Title    string `json:"title"`
-				Storage  struct{ Kind, Shape, Parent string }
-				Columns  []struct{ Name, Type string }
-				Checkbox *struct {
-					Column string            `json:"column"`
-					Glyphs map[string]string `json:"glyphs"`
-				} `json:"checkbox"`
+				Name       string `json:"name"`
+				Key        string `json:"key"`
+				Order      string `json:"order"`
+				Parent     string `json:"parent"`
+				Title      string `json:"title"`
+				Storage    struct{ Kind, Shape, Parent string }
+				Columns    []struct{ Name, Type string }
+				TaskMarker string `json:"task_marker"`
 			} `json:"tables"`
 		}
 		answer := ok(t, c, "schema", `{}`)
@@ -104,13 +101,13 @@ func TestOperations(t *testing.T) {
 		if items.Storage.Kind != "document" || items.Storage.Shape != "list" || items.Columns[4].Type != "text" {
 			t.Fatalf("items storage and columns: %+v", items)
 		}
-		if b := items.Checkbox; b == nil || b.Column != "state" || b.Glyphs["doing"] != "~" || len(b.Glyphs) != 3 {
-			t.Fatalf("items checkbox: %+v", b)
+		if items.TaskMarker != "state" {
+			t.Fatalf("items task marker: %q", items.TaskMarker)
 		}
 		if h := s.Tables[1]; h.Storage.Kind != "block" || h.Storage.Parent != "items" {
 			t.Fatalf("item_history storage: %+v", h)
 		}
-		if s.Tables[2].Checkbox != nil || s.Tables[2].Parent != "" {
+		if s.Tables[2].TaskMarker != "" || s.Tables[2].Parent != "" {
 			t.Fatalf("people: %+v", s.Tables[2])
 		}
 	})
@@ -127,7 +124,7 @@ func TestOperations(t *testing.T) {
 	t.Run("40#the-faces: the writes answer their keys and the table's rows", func(t *testing.T) {
 		c := boardCorpus(t)
 		a := ok(t, c, "row.insert", `{"table":"items","values":{"id":"T1","title":"First","body":"","position":1,"owner":"P1"}}`)
-		if want := `{"affected":1,"keys":["T1"],"rows":[{"id":"T1","parent":null,"state":"waiting","title":"First","body":"","position":1,"owner":"P1","evidence":null}]}`; a != want {
+		if want := `{"affected":1,"keys":["T1"],"rows":[{"id":"T1","parent":null,"state":" ","title":"First","body":"","position":1,"owner":"P1","evidence":null}]}`; a != want {
 			t.Fatalf("row.insert = %s, want %s", a, want)
 		}
 		ok(t, c, "row.insert", `{"table":"items","values":{"id":"T2","title":"Second","body":"","position":2}}`)
@@ -141,10 +138,9 @@ func TestOperations(t *testing.T) {
 			t.Fatalf("row.move with parent = %s", a)
 		}
 		ok(t, c, "row.update", `{"table":"items","key":"T1","values":{"title":"Renamed"}}`)
-		// A state is a value: an update the declared machine would refuse, without the column its transition
-		// requires, is accepted and writes no history row (spec 50 State columns).
-		a = ok(t, c, "row.update", `{"table":"items","key":"T1","values":{"state":"done"}}`)
-		if !strings.Contains(a, `"state":"done","title":"Renamed"`) {
+		// A state is a value: any value its type allows is accepted and writes no history row (spec 50 State columns).
+		a = ok(t, c, "row.update", `{"table":"items","key":"T1","values":{"state":"x"}}`)
+		if !strings.Contains(a, `"state":"x","title":"Renamed"`) {
 			t.Fatalf("row.update of the state = %s", a)
 		}
 		if got := ok(t, c, "rows", `{"table":"item_history"}`); got != `{"rows":[]}` {

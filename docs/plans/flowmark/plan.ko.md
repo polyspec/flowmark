@@ -1,5 +1,5 @@
 <!-- doc-id: plans-design-plan -->
-<!-- source-sha256: 00a86e19a294750e0827f7b977015587ea74feab5deecf123954e207d791773b -->
+<!-- source-sha256: 2aa3f92e1e31a5031c3fcc039e3f8dd18806a34837782f63f987796a10b9be89 -->
 # flowmark 설계 계획
 
 Revision 2 — 3개 lane의 적대 감사 결과(engine core, orm 통합, 운영)와 multi-platform 지시를 아래 판정에 접는다. 감사의 blocker는 전부 판정이 되었고, 부수지 못한 주장은 문서 끝에 남긴다.
@@ -83,7 +83,7 @@ flowmark = the markdown database engine (one Go binary)
 ### 4. Schema (`30-schema.md`) — catalog가 schema다
 
 - **dbspec이 root grammar이자 유일한 authority.** corpus root의 `dbspec/*.dbs` set이 catalog다(Revision 3). 문서는 schema 사본도 stamp도 갖지 않고, 내장 fragment를 가진 단독 문서는 철회한다: schema는 law이고 data는 row이며, 문서마다 law의 사본을 두면 사본의 이탈이 그 자체로 bug class가 된다. orm의 engine, IR, conformance는 dbspec manifest hash에 묶여 있고, dbspec의 parser와 type system은 library로 재사용한다.
-- **Markdown 고유 schema 표면은 manifest-level setting이지 render되는 type이 아니다** (introspection 정합성, `updated`/`soft_delete` 선례): `store`, `key_prefix`, `title`, `body`, `order`, `checkbox`, `markdown`은 SQL backend가 무시하는 setting이며, 실제 database는 이들을 평범한 column으로 introspect한다. 상태기계의 setting은 철회하고, `key_prefix`와 `order`는 판정: 엔진은 흔한 database가 가진 것만 가진다(T62)가 정한다.
+- **Markdown 고유 schema 표면은 manifest-level setting이지 render되는 type이 아니다** (introspection 정합성, `updated`/`soft_delete` 선례): `store`, `title`, `body`, `order`, `task_marker`, `markdown`은 SQL backend가 무시하는 setting이며, 실제 database는 이들을 평범한 column으로 introspect한다. 상태기계의 setting과 `key_prefix`는 철회하고, `order`는 아무것도 할당하지 않는다. 판정: 엔진은 흔한 database가 가진 것만 가진다(T62, T89)가 정한다.
 - **`identity`는 허용한다** — markdown table의 `i64` primary key에만, lock 아래에서 가장 큰 key와 표의 AUTOINCREMENT counter 가운데 큰 것보다 하나 큰 key로 할당한다(Revision 3, counter는 바뀐 행의 refresh(T42); 다른 key type에는 더할 최댓값이 없다). git 되감기에서의 key 재사용은 받아들인다. 되감기가 counter도 되감기 때문이다 — 할당 기록은 git history다.
 
 ### 5. Ops와 transaction (`40-ops.md`)
@@ -251,8 +251,8 @@ database가 가진 값을 보여주기만 한다: database가 하지 않을 값�
   없어지고, `schema` 연산은 기계를 답하지 않는다. 상태의 전이와 그 이력은 polyspec fsm의 것이다: fsm이 취한 상태는 다른 값처럼
   corpus에 쓰이고, 그 기록은 fsm이 간직한다. 이로써 §6의 상태기계 판정과 §9의 이력을 철회한다. 맥락의 불법 상태 전이는 fsm이 막는다.
 - **남는 것은 값을 보여준다**: 행이 쓰이는 곳을 말하는 `store`와 그 `shard`, 행의 어느 자리가 column을 담는지 말하는 `title`,
-  `body`, `markdown`, 그리고 목록 행이 column을 어떻게 보여주는지 말하는 `checkbox`다.
-- **checkbox는 그 column의 값을 보여준다.** `checkbox <column>`은 목록으로 저장된 표의 column 하나를 이름 짓고, 목록 행은 그
+  `body`, `markdown`, 그리고 목록 행이 column을 어떻게 보여주는지 말하는 `task_marker`다.
+- **task marker는 그 column의 값을 보여준다.** `task_marker <column>`은 목록으로 저장된 표의 column 하나를 이름 짓고, 목록 행은 그
   column을 task 표지의 괄호 사이에 쓴다. 다르게 저장된 표는 그 column을 다른 scalar를 쓰는 곳에 쓴다.
   - 한 글자 column `varchar(1)`은 `- [<value>] …`로 쓴다. 그 값은 모든 database가 제약하듯 schema가 허용하는 값 — 상태 표로의
     foreign key나 check `in (…)` — 이고, 제약 밖의 값은 모든 database가 거부하듯 `reference.dangling`이나 `check`로 거부한다.
@@ -262,13 +262,11 @@ database가 가진 값을 보여주기만 한다: database가 하지 않을 값�
   근거: GFM task 항목은 괄호 사이의 한 글자이므로 한 글자 column은 그 값 전체를 거기 보여주고, boolean은 GFM 자신의 두 상자로
   보인다. 상태기계가 상태 이름마다 대응시킨 glyph는 각 값의 두 번째 표기였고, glyph가 없는 값은 쓸 수 없었는데, 그런 값을 거부하는
   database는 없다.
-- **orm 문법.** 위의 checkbox 형태와 `state_machine` 제거는 orm의 문법(orm DBS-73, DBS-80, DBS-81, DBS-82, DBS-83과 DBS-63의
-  반복 규칙)을 바꾸며, orm이 자기 행으로 추적한다. flowmark가 그것을 가진 orm release로 build하기 전까지 엔진은 orm이 내놓은 문법을
-  읽되 기계는 하나도 강제하지 않는다: `state_machine` 줄을 모두 읽고 하나도 적용하지 않으며, 이는 DBS-73 자신이 database가 한다고
-  말하는 것이자 MySQL, PostgreSQL, SQLite가 하는 것이다. orm이 기계의 상태 집합을 덮도록 요구하는 `checkbox <column> <state>
-  '<glyph>'` 줄은 계속 목록 행의 각 값에 glyph를 주고, 어느 줄도 이름 짓지 않은 값의 목록 쓰기는 목록이 보여줄 수 없으므로
-  거부한다. 기계가 checkbox를 선언하지 않은 목록 표는 그 column을 field로 쓴다. 그 orm release가 들어오면 flowmark는 자기 행으로 위의
-  형태를 받고 상태별 형태를 거부한다.
+- **orm 문법.** 위의 형태와 `state_machine` 제거는 orm의 문법(orm DBS-80과 DBS-63의 반복 규칙; DBS-73, DBS-81, DBS-82,
+  DBS-83은 문법을 떠난다)을 바꾸며, orm 0.0.28이 그것을 싣는다. setting은 task list item의 괄호 부분을 부르는 GFM의 이름, task
+  list item marker를 받는다. 체크하거나 하지 않은 상자만이 아니라 한 글자의 어떤 값이든 거기 보여주기 때문이다:
+  `task_marker <column>`이며, 예전 이름 `checkbox`는 `state_machine`처럼 알 수 없는 setting으로 거부한다. flowmark는 T62 자신으로
+  그 형태를 받는다: catalog는 `task_marker` 한 줄의 column을 지니고, 목록은 그 값을 위에서 말한 대로 읽고 쓴다.
 - **`key_prefix`와 `order`는 값을 주므로** 같은 기준이 정한다.
   - `key_prefix '<p>'`는 text key `<p><n + 1>`을 할당한다. 흔한 database 어디도 key를 그렇게 할당하지 않는다: MySQL, PostgreSQL,
     SQLite는 AUTOINCREMENT, sequence, identity로 정수를 할당한다. orm은 그런 key를 뺀 insert를 corpus에서만 계획하므로(planner의

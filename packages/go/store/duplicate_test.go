@@ -41,7 +41,7 @@ func TestDuplicateFaultOnce(t *testing.T) {
 	items := func(keys ...string) []*Row {
 		var rows []*Row
 		for _, k := range keys {
-			rows = append(rows, item(k, "Row "+k, "waiting", done))
+			rows = append(rows, item(k, "Row "+k, " ", done))
 		}
 		return rows
 	}

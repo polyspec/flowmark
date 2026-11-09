@@ -245,10 +245,6 @@ func (dw *docWriter) value(rr rowRef, name, column, v string, level int, body, a
 	w.put(v)
 }
 
-// checkRow refuses the values of row r that the document cannot hold: a row of
-// another table, a key that is not a key, a value or section that is no column of
-// the table, a title, body or non-null value that is missing or unwritable, a
-// state without a checkbox and a parent that names no row.
 // docShapeFault names the rule of the shape of a key in the layout lay.
 func docShapeFault(lay *docLayout, key string) string {
 	if lay.list {
@@ -308,13 +304,6 @@ func (w *writer) checkRow(lay *docLayout, byKey map[string]int, r *Row) {
 			w.refuse(s.name, "the non-null section "+s.name+" has no value")
 		}
 	}
-	if lay.list && lay.state != "" {
-		if st := r.Scalars[lay.state]; st != nil {
-			if _, ok := lay.glyphs[*st]; !ok {
-				w.refuse(lay.state, "the value "+*st+" of "+lay.state+" has no checkbox, so a list row cannot show it")
-			}
-		}
-	}
 	if lay.parent != "" {
 		if v := r.Scalars[lay.parent]; v != nil {
 			if _, ok := byKey[*v]; !ok {
@@ -358,9 +347,11 @@ func (dw *docWriter) writeList(lay *docLayout, rows []*Row, idx, order, depth []
 		// Each column of the line is written under its own column, so a refusal names it.
 		w.enter(rr, "")
 		w.put(strings.Repeat("  ", depth[i]) + "- ")
-		if lay.state != "" {
-			w.enter(rr, lay.state)
-			w.put("[" + lay.glyphs[*r.Scalars[lay.state]] + "] ")
+		if v := r.Scalars[lay.marker]; lay.marker != "" && v != nil {
+			w.enter(rr, lay.marker)
+			if text, ok := dw.markerText(lay, *v); ok {
+				w.put("[" + text + "] ")
+			}
 		}
 		w.enter(rr, lay.key.Name)
 		w.put(r.Key + " ")
@@ -379,6 +370,31 @@ func (dw *docWriter) writeList(lay *docLayout, rows []*Row, idx, order, depth []
 		w.enter(rr, "")
 		w.put("\n")
 	}
+}
+
+// markerText is the text between the brackets of the task marker of a list row whose value is v (spec 30 Markdown
+// settings): the value of a varchar(1) column itself, and for a bool column a space for false and x for true. A value
+// the marker cannot show is refused at the column.
+func (dw *docWriter) markerText(lay *docLayout, v string) (string, bool) {
+	w := dw.w
+	c := lay.markCol
+	canon, ok := readable(c.Type, v)
+	switch {
+	case !utf8.ValidString(v):
+		w.refuse(c.Name, c.Name+" is not UTF-8")
+		return "", false
+	case !ok:
+		w.refuse(c.Name, c.Name+" is not a "+c.Type.String()+" value")
+		return "", false
+	case lay.markBool && canon == "true":
+		return "x", true
+	case lay.markBool:
+		return " ", true
+	case quotedFault(v) != "":
+		w.refuse(c.Name, c.Name+" has "+quotedFault(v))
+		return "", false
+	}
+	return v, true
 }
 
 // writeTable writes the header, the delimiter row and the rows, in storage order.

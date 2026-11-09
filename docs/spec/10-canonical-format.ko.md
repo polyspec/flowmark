@@ -1,5 +1,5 @@
 <!-- doc-id: spec-canonical-format -->
-<!-- source-sha256: 2a9fe8aecd27c31b3ab505af7fc3feba410932f1bd1fb86e04d214c673d71f88 -->
+<!-- source-sha256: 038c41379fa201387c7431cdf5f6d70928bdc18bee9f2adacf6c41d4538bdd49 -->
 # Canonical format
 
 [English](10-canonical-format.md)
@@ -315,9 +315,9 @@ column 섹션 — 은 payload다: renderer는 이를 행과 함께 옮기고 그
 
 ## 저장되는 scalar column
 
-table의 저장되는 scalar column은 column에서 key, `list`나 `files` 저장의 `title`, `body`, `markdown` column, `checkbox`를 선언한 `list`의 checkbox
+table의 저장되는 scalar column은 column에서 key, `list`나 `files` 저장의 `title`, `body`, `markdown` column, `task_marker`를 선언한 `list`의 task marker
 column, 배치 foreign key, `list`의 `parent`를 뺀 것이다. `order` column은 모든 저장에서 저장 scalar다([document model](20-document-model.ko.md#순서)).
-key, 제목, checkbox column, 계층은 각자 자리를 가진다. 저장되는 scalar column은 `files` 행의 field list 항목,
+key, 제목, task marker column, 계층은 각자 자리를 가진다. 저장되는 scalar column은 `files` 행의 field list 항목,
 list 행의 field, table의 cell이다. null이 아닌 저장 scalar column은 모두 쓴다 — 엔진은 insert에서
 default를 명시적으로 쓴다.
 
@@ -346,13 +346,13 @@ scalar 값은 dbspec literal이 아니라 읽을 수 있는 형식으로 쓴다.
 
 ## List 행
 
-- list 행은 `- [<glyph>] <key> <title>[ <field>…]`이고, table이 `checkbox`를 선언하지 않으면
-  `- <key> <title>[ <field>…]`이다. glyph는 checkbox column의 행 값의 `checkbox` glyph이며
-  ([schema](30-schema.ko.md#markdown-setting)) 정확히 한 글자다. 어떤 `checkbox` 줄도 이름 붙이지 않은 값의 list
-  쓰기는 list가 그것을 보일 수 없으므로 `CONSTRAINT`이고, 읽기에서 어떤 줄도 이름 붙이지 않은 glyph는
-  `format.block`이다.
-- list glyph가 ` `와 `x`가 아니면 흔한 viewer에서 대괄호가 든 글자로 그대로 보인다. glyph는 catalog의
-  것이다.
+- list 행은 `- [<value>] <key> <title>[ <field>…]`이고, table이 `task_marker`를 선언하지 않거나 행의 task
+  marker column이 NULL이면 `- <key> <title>[ <field>…]`이다. 괄호 사이에는 task marker column의 행 값이 선다
+  ([schema](30-schema.ko.md#markdown-setting)): `varchar(1)` 값의 한 글자, 그 빈 텍스트면 아무것도 없이, `bool`이면
+  false는 space, true는 `x`이며, `X`는 true로 읽고 `format.noncanonical`이다. 괄호는 인용부호처럼 그 글자를 보이므로
+  space도 된다. 인용된 자리가 거절하는 글자는 쓰기에서 `CONSTRAINT`, 읽기에서 `format.block`이며, 두 글자, 다른 글자의
+  bool marker, 상자 없는 non-null column, 뒤에 space가 없는 상자도 그렇다.
+- `[ ]`, `[x]`, `[X]`가 아닌 task marker는 흔한 viewer에서 대괄호가 든 글자로 그대로 보인다.
 - field는 오른쪽부터 parse한다: token `<선언된 column>:<value>`이고, value는 보이지 않는 문자, `"`, `\`가 없는 bare
   token이거나 `\"`와 `\\`를 escape로 갖는 `"…"`다. 보이지 않는 문자를 가진 값은 따옴표로 쓴다(bare token 안의 보이지 않는 문자는 구분자로 읽히거나 아예 읽히지 않는다). 읽기에서, field의 자리 — field, 또는 제목의 마지막 token — 에 있는 token `<선언된 column>:<value>`가 bare value에 보이지 않는 문자를 가지면 `format.block`이다. 쓰기 규칙이 그 자리에서는 그것을 만들지 않기 때문이다. 제목의 다른 자리에서는 그 token은 이스케이프되지 않은 제목 token이다(아래 참고). field에는 sigil이 없다. 저장되는 scalar column만
   field다.

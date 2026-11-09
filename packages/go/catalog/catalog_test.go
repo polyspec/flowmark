@@ -180,8 +180,8 @@ func TestLoadFixtureCatalog(t *testing.T) {
 		t.Fatalf("items row scope = %d, want 2", items.RowScope)
 	}
 	// Spec 100 The states: a check constrains the state, as on every database, and the engine holds no machine.
-	if items.Checkbox != nil {
-		t.Fatalf("items checkbox = %+v, want none: items is stored files", items.Checkbox)
+	if items.TaskMarker != "" {
+		t.Fatalf("items task marker = %q, want none", items.TaskMarker)
 	}
 	if !slices.ContainsFunc(items.Checks, func(c dbspec.Check) bool { return c.Name == "ck_items_state" }) {
 		t.Fatalf("items checks = %+v, want ck_items_state", items.Checks)
@@ -198,7 +198,7 @@ func TestLoadFixtureCatalog(t *testing.T) {
 	if !ok {
 		t.Fatal("item_links missing")
 	}
-	if links.Storage != (catalog.Storage{Kind: catalog.StorageBlock, Shape: catalog.ShapeTable, ParentForeignKey: "fk_item_links_from", Parent: "items"}) || links.RowScope != 4 || links.Key != "id" || links.Checkbox != nil {
+	if links.Storage != (catalog.Storage{Kind: catalog.StorageBlock, Shape: catalog.ShapeTable, ParentForeignKey: "fk_item_links_from", Parent: "items"}) || links.RowScope != 4 || links.Key != "id" || links.TaskMarker != "" {
 		t.Fatalf("item_links = %+v", links)
 	}
 	views, ok := cat.Table("views")
@@ -560,90 +560,77 @@ func TestLoadRejectsExternalUse(t *testing.T) {
 	t.Fatalf("no located use diagnostic at line 3 in %+v", diags)
 }
 
-// machineLines declare a state machine on the state column of the fixture's items in the grammar of orm 0.0.26, with
-// its history in item_trail, and checkboxLines the glyph of each of its states; the engine reads them and applies
-// none of the machine (spec 30 Markdown settings, spec 50 State columns).
-const (
-	machineLines = "    state_machine state initial waiting\n" +
-		"    state_machine state waiting -> doing\n" +
-		"    state_machine state doing -> done require (evidence)\n" +
-		"    state_machine state terminal done\n"
-	historyLine   = "    state_machine state history item_trail row item from from_state to to_state at at\n"
-	checkboxLines = "    checkbox state waiting ' '\n    checkbox state doing '~'\n    checkbox state done 'o'\n"
-	// machineAnchor is the last setting line of items, after which the machine lines are written.
-	machineAnchor = "    markdown retry\n"
+// markerAnchor is the last setting line of items, after which a task marker line is written; oneChar makes the state
+// of items a varchar(1) whose check allows the glyphs of a task list.
+var (
+	markerAnchor = "    markdown retry\n"
+	oneChar      = [][2]string{
+		{"  state varchar(16)\n", "  state varchar(1)\n"},
+		{"check ck_items_state (state in ('waiting', 'doing', 'done', 'bypassed', 'impossible'))", "check ck_items_state (state in (' ', '~', 'x'))"},
+	}
+	doneColumn = [2]string{"  state varchar(16)\n", "  state varchar(16)\n  done bool null\n"}
 )
 
-// trailTable is the table item_trail that a history line names, stored by store and declaring its evidence with
-// evidenceSettings; extra holds further lines before its primary key.
-func trailTable(store, evidenceSettings, extra string) string {
-	return "table item_trail {\n  id i64 identity\n  item varchar(32)\n  from_state varchar(16)\n  to_state varchar(16)\n  at datetime(6)\n" +
-		"  evidence text null\n" + extra + "  primary key (id)\n  index ix_item_trail_item (item)\n" +
-		"  foreign key fk_item_trail_item (item) references items (id) on delete restrict on update restrict\n" +
-		"  settings {\n" + store + evidenceSettings + "  }\n}\n\ntable views {"
-}
+// marker returns the edit that writes lines after the last setting line of items.
+func marker(lines string) [2]string { return [2]string{markerAnchor, markerAnchor + lines} }
 
-// TestLoadStateMachine pins that the catalog reads the state machine lines of orm 0.0.26 and keeps none of the machine
-// (spec 30 Markdown settings, spec 50 State columns): a machine without a history or an initial state loads, a history
-// table is an ordinary table in any storage, and a list whose machine declares no checkbox writes the state as a field;
-// a list with checkbox lines keeps the glyph of each value.
-func TestLoadStateMachine(t *testing.T) {
-	machine := func(lines string) [2]string { return [2]string{machineAnchor, machineAnchor + lines} }
-	block := "    store block fk_item_trail_item table\n"
-	cases := []struct {
-		name     string
-		edits    [][2]string
-		checkbox map[string]string // the glyphs of the items checkbox, nil when it has none
+// TestLoadTaskMarker pins task_marker (spec 30 Markdown settings, orm DBS-80): one line naming a varchar(1) or bool
+// column, nullable or not, in any storage, which a list writes between the brackets of its task marker; a column of
+// another type, a repeat, the per-state form and the withdrawn checkbox and state_machine lines are refused with orm's
+// texts.
+func TestLoadTaskMarker(t *testing.T) {
+	accepted := []struct {
+		name   string
+		edits  [][2]string
+		column string
 	}{
-		{name: "30#markdown-settings: a machine without a history loads", edits: [][2]string{machine(machineLines)}},
-		{name: "30#markdown-settings: a machine without an initial state loads",
-			edits: [][2]string{machine(strings.Replace(machineLines, "    state_machine state initial waiting\n", "", 1))}},
-		{name: "30#markdown-settings: a machine with a history stored as a block loads",
-			edits: [][2]string{machine(machineLines + historyLine), {"table views {", trailTable(block, "    markdown evidence\n", "")}}},
-		{name: "30#markdown-settings: a history table stored as a sharded document table is an ordinary table",
-			edits: [][2]string{machine(machineLines + historyLine), {"table views {", trailTable("    store document table shard at month\n", "    markdown evidence\n", "")}}},
-		{name: "30#markdown-settings: a history table placed under another table is an ordinary table",
-			edits: [][2]string{machine(machineLines + historyLine), {"table views {", trailTable("    store block fk_item_trail_person table\n", "    markdown evidence\n",
-				"")}, {"  foreign key fk_item_trail_item (item) references items (id) on delete restrict on update restrict\n",
-				"  foreign key fk_item_trail_item (item) references items (id) on delete restrict on update restrict\n  foreign key fk_item_trail_person (item) references people (id) on delete restrict on update restrict\n"}}},
-		{name: "30#markdown-settings: a required column that only the state table declares markdown loads",
-			edits: [][2]string{machine(machineLines + historyLine), {"table views {", trailTable(block, "", "")}}},
-		{name: "30#markdown-settings: a list whose machine declares no checkbox loads, its state a field",
-			edits: [][2]string{itemsList, machine(machineLines)}},
-		{name: "30#markdown-settings: a list with checkbox lines keeps the glyph of each value",
-			edits:    [][2]string{itemsList, machine(checkboxLines + machineLines)},
-			checkbox: map[string]string{"waiting": " ", "doing": "~", "done": "o"}},
-		{name: "30#markdown-settings: files storage with checkbox lines keeps them, shown nowhere",
-			edits:    [][2]string{machine(checkboxLines + machineLines)},
-			checkbox: map[string]string{"waiting": " ", "doing": "~", "done": "o"}},
+		{"30#markdown-settings: a list with a varchar(1) task marker", append([][2]string{itemsList, marker("    task_marker state\n")}, oneChar...), "state"},
+		{"30#markdown-settings: a list with a nullable bool task marker", [][2]string{itemsList, doneColumn, marker("    task_marker done\n")}, "done"},
+		{"30#markdown-settings: a nullable varchar(1) task marker", append(append([][2]string{itemsList, marker("    task_marker state\n")}, oneChar...), [2]string{"  state varchar(1)\n", "  state varchar(1) null\n"}), "state"},
+		{"30#markdown-settings: a files table keeps its task marker, written as a field", append([][2]string{marker("    task_marker state\n")}, oneChar...), "state"},
+		{"30#markdown-settings: a table without a task marker", nil, ""},
 	}
-	for _, c := range cases {
+	for _, c := range accepted {
 		t.Run(c.name, func(t *testing.T) {
 			cat, diags, _ := loadEdited(t, c.edits...)
 			if len(diags) != 0 || cat == nil {
 				t.Fatalf("diagnostics = %+v, want an accepted catalog", diags)
 			}
-			items, _ := cat.Table("items")
-			switch {
-			case c.checkbox == nil && items.Checkbox != nil:
-				t.Fatalf("items checkbox = %+v, want none", items.Checkbox)
-			case c.checkbox != nil && (items.Checkbox == nil || items.Checkbox.Column != "state" || !reflect.DeepEqual(items.Checkbox.Glyphs, c.checkbox)):
-				t.Fatalf("items checkbox = %+v, want the column state with %v", items.Checkbox, c.checkbox)
+			if items, _ := cat.Table("items"); items.TaskMarker != c.column {
+				t.Fatalf("items task marker = %q, want %q", items.TaskMarker, c.column)
 			}
 		})
 	}
-}
-
-// TestLoadRejectsNullableStateColumn pins that the state column of a state
-// machine is non-null. dbspec refuses a nullable one in every storage, so the
-// rejection is its own, located at the state line.
-func TestLoadRejectsNullableStateColumn(t *testing.T) {
-	cat, diags, _ := loadEdited(t, [2]string{machineAnchor, machineAnchor + machineLines}, [2]string{"  state varchar(16)\n", "  state varchar(16) null\n"})
-	expectRejected(t, cat, diags)
-	if !slices.ContainsFunc(diags, func(d catalog.Diagnostic) bool {
-		return d.File == "dbspec/flowmark.dbs" && d.Rule == "catalog" && strings.Contains(d.Message, "needs a non-null")
-	}) {
-		t.Fatalf("diagnostics = %+v, want the non-null state rule", diags)
+	refused := []struct {
+		name  string
+		edits [][2]string
+		want  string
+	}{
+		{"30#markdown-settings: a task marker on a varchar(16) column", [][2]string{itemsList, marker("    task_marker state\n")},
+			"task_marker needs a varchar(1) or bool column, not varchar(16)"},
+		{"30#markdown-settings: a task marker on an i16 column", [][2]string{itemsList, marker("    task_marker priority\n")},
+			"task_marker needs a varchar(1) or bool column, not i16"},
+		{"30#markdown-settings: a second task marker line", append([][2]string{itemsList, doneColumn, marker("    task_marker state\n    task_marker done\n")}, oneChar...),
+			"setting task_marker repeats"},
+		{"30#markdown-settings: the per-state form", append([][2]string{itemsList, marker("    task_marker state waiting ' '\n")}, oneChar...),
+			"unexpected 'waiting', expected the end of the line"},
+		{"30#markdown-settings: the withdrawn checkbox line", [][2]string{itemsList, marker("    checkbox state waiting ' '\n")},
+			`setting "checkbox" is unknown`},
+		{"30#markdown-settings: a state_machine line", [][2]string{marker("    state_machine state initial waiting\n")},
+			`setting "state_machine" is unknown`},
+		{"20#keys: the withdrawn key_prefix line", [][2]string{marker("    key_prefix 'T'\n")},
+			`setting "key_prefix" is unknown`},
+	}
+	for _, c := range refused {
+		t.Run(c.name, func(t *testing.T) {
+			cat, diags, _ := loadEdited(t, c.edits...)
+			expectRejected(t, cat, diags)
+			if !slices.ContainsFunc(diags, func(d catalog.Diagnostic) bool {
+				return d.File == "dbspec/flowmark.dbs" && strings.Contains(d.Message, c.want)
+			}) {
+				t.Fatalf("diagnostics = %+v, want %q", diags, c.want)
+			}
+		})
 	}
 }
 

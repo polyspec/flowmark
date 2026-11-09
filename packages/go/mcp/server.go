@@ -111,7 +111,7 @@ var memberSchemas = map[string]map[string]any{
 
 // descriptions describe the tools.
 var descriptions = map[string]string{
-	"schema":     "Answer the catalog of the corpus: its tables with their storage, keys, settings, columns and checkboxes",
+	"schema":     "Answer the catalog of the corpus: its tables with their storage, keys, settings and columns",
 	"rows":       "Answer every row of a table in storage order",
 	"rows.load":  "Load rows into a table in their stored form, keys included, and answer how many it wrote",
 	"row.get":    "Answer the row of a table whose primary key is key",

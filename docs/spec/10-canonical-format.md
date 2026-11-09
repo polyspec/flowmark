@@ -506,8 +506,8 @@ and the column sections — are payload: the renderer moves them with their row 
 ## Stored scalar columns
 
 The stored scalar columns of a table are its columns minus the key, the `title` of a `list` or `files` storage, the `body`, the
-`markdown` columns, the checkbox column of a `list` that declares `checkbox`, the placement foreign key and the `parent` of a
-`list`; the `order` column is a stored scalar in every storage ([document model](20-document-model.md#order)). The key, the title, the checkbox column
+`markdown` columns, the task marker column of a `list` that declares `task_marker`, the placement foreign key and the `parent` of a
+`list`; the `order` column is a stored scalar in every storage ([document model](20-document-model.md#order)). The key, the title, the task marker column
 and the hierarchy have their own places. A stored scalar column is a field-list item of a `files`
 row, a field of a list row or a cell of a table. Every non-null stored scalar column is written; the
 engine writes a default explicitly on insert.
@@ -548,13 +548,15 @@ catalog.
 
 ## List rows
 
-- A list row is `- [<glyph>] <key> <title>[ <field>…]`, or `- <key> <title>[ <field>…]` when the
-  table declares no `checkbox`. The glyph is the `checkbox` glyph of the row's value of the checkbox
-  column ([schema](30-schema.md#markdown-settings)); it is exactly one character. A list write of a
-  value that no `checkbox` line names is `CONSTRAINT`, since the list cannot show it, and on read a
-  glyph that no line names is `format.block`.
-- A list glyph other than ` ` and `x` renders as literal bracket text in common viewers. The glyphs
-  are the catalog's.
+- A list row is `- [<value>] <key> <title>[ <field>…]`, or `- <key> <title>[ <field>…]` when the
+  table declares no `task_marker` or the row's task marker column is NULL. Between the brackets
+  stands the row's value of the task marker column ([schema](30-schema.md#markdown-settings)): the
+  one character of a `varchar(1)` value, nothing for its empty text, and for a `bool` a space for
+  false and `x` for true, `X` reading as true and `format.noncanonical`. The brackets show the
+  character as quotes do, a space included; a character that a quoted place refuses is `CONSTRAINT`
+  on write and `format.block` on read, as are two characters, a bool marker of another character,
+  a non-null column without its box and a box not followed by a space.
+- A task marker other than `[ ]`, `[x]` and `[X]` renders as literal bracket text in common viewers.
 - Fields are parsed from the right: a token `<declared column>:<value>`, where the value is a bare
   token without any invisible character, `"` or `\`, or `"…"` with `\"` and `\\` as its escapes. A value holding an invisible character is written quoted, since an invisible character inside a bare token reads as a separator or not at all. On read, a token `<declared column>:<value>` at the place of a field — a field, or the last token of the title — whose bare value holds an invisible character is `format.block`, since the write rule never produces it there; elsewhere in the title the token is an unescaped title token (see below). A field carries no
   sigil. Only stored scalar columns are fields.

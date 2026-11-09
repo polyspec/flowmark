@@ -3,25 +3,25 @@ package ops
 import "github.com/polyspec/flowmark/packages/go/catalog"
 
 // The answer of the schema operation: the catalog, each table in declaration order with its storage, key, settings,
-// columns, keys and checkbox (spec 40 The faces). A setting the table does not declare is absent.
+// columns, keys and task marker (spec 40 The faces). A setting the table does not declare is absent.
 type schemaAnswer struct {
 	ManifestHash string        `json:"manifest_hash"`
 	Tables       []schemaTable `json:"tables"`
 }
 
 type schemaTable struct {
-	Name        string          `json:"name"`
-	Storage     schemaStorage   `json:"storage"`
-	Key         string          `json:"key"`
-	Title       string          `json:"title,omitempty"`
-	Body        string          `json:"body,omitempty"`
-	Order       string          `json:"order,omitempty"`
-	Parent      string          `json:"parent,omitempty"`
-	Markdown    []string        `json:"markdown"`
-	Columns     []schemaColumn  `json:"columns"`
-	ForeignKeys []schemaFK      `json:"foreign_keys"`
-	Uniques     [][]string      `json:"uniques"`
-	Checkbox    *schemaCheckbox `json:"checkbox"`
+	Name        string         `json:"name"`
+	Storage     schemaStorage  `json:"storage"`
+	Key         string         `json:"key"`
+	Title       string         `json:"title,omitempty"`
+	Body        string         `json:"body,omitempty"`
+	Order       string         `json:"order,omitempty"`
+	Parent      string         `json:"parent,omitempty"`
+	Markdown    []string       `json:"markdown"`
+	Columns     []schemaColumn `json:"columns"`
+	ForeignKeys []schemaFK     `json:"foreign_keys"`
+	Uniques     [][]string     `json:"uniques"`
+	TaskMarker  string         `json:"task_marker,omitempty"`
 }
 
 type schemaStorage struct {
@@ -44,13 +44,6 @@ type schemaFK struct {
 	Columns    []string `json:"columns"`
 	Table      string   `json:"table"`
 	References []string `json:"references"`
-}
-
-// schemaCheckbox is the checkbox of a table: the column a list row writes as its glyph and the glyph of each value
-// (spec 30 Markdown settings).
-type schemaCheckbox struct {
-	Column string            `json:"column"`
-	Glyphs map[string]string `json:"glyphs"`
 }
 
 // orEmpty returns xs, or an empty slice for nil, so the answer writes [] rather than null.
@@ -92,9 +85,7 @@ func schemaOf(cat *catalog.Catalog) schemaAnswer {
 		for _, fk := range tb.ForeignKeys {
 			t.ForeignKeys = append(t.ForeignKeys, schemaFK{Name: fk.Name, Columns: orEmpty(fk.Columns), Table: fk.Table, References: orEmpty(fk.References)})
 		}
-		if cb := tb.Checkbox; cb != nil {
-			t.Checkbox = &schemaCheckbox{Column: cb.Column, Glyphs: cb.Glyphs}
-		}
+		t.TaskMarker = tb.TaskMarker
 		out.Tables = append(out.Tables, t)
 	}
 	return out

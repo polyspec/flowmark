@@ -1,5 +1,5 @@
 <!-- doc-id: spec-schema -->
-<!-- source-sha256: 11e36e9f33a208783c80d580b7fb11aa2e385cfc0a50b02b39b08dfb8f462cd4 -->
+<!-- source-sha256: d228dd93acfd27f5323d2f5225e4dd16bff60475094379695aefc35c9dec0c86 -->
 # Schema
 
 [English](30-schema.md)
@@ -41,20 +41,21 @@ column을 이름 붙인다 — column 이름이 동작을 고르지 않는다.
 | `title <column>` | 행의 제목: non-null, 비지 않음 |
 | `body <column>` | 행의 body: `markdown` column, NULL이 아님 |
 | `order <column>` | column 값에 따른 형제 사이의 행 순서([document model](20-document-model.ko.md#순서)). 아무것도 할당하지 않으므로 insert가 준다(orm DBS-79) |
-| `checkbox <column> <state> '<glyph>'` | column 값의 list glyph: 정확히 한 글자이며 list 행의 대괄호 사이(`- [<glyph>] …`)에 쓴다. 아래에 말하는 대로 과도기의 것이다 |
+| `task_marker <column>` | list 행이 task marker의 괄호 사이에 쓰는 column(orm DBS-80): null이든 아니든 `varchar(1)`이나 `bool` column이며, 아래에 말하는 대로다 |
 | `markdown <column>` | column이 markdown prose를 담고 섹션으로 저장된다 |
-| `state_machine <column> …` (`initial`, 전이, `terminal`, `require`, `history`, `limit`) | 읽지만 어느 것도 적용하지 않는다: 엔진은 상태기계를 갖지 않는다([constraints](50-constraints.ko.md#상태-column)) |
 
-`checkbox` setting은 과도기의 것이다. orm의 문법(flowmark가 빌드하는 orm v0.0.26)은 그것을 상태마다 한 줄인
-`checkbox <column> <state> '<glyph>'`로 쓰며, table의 줄들이 한 글자의 서로 다른 glyph로 그 기계의 상태 집합을 덮도록
-요구한다. list로 저장된 table에서 그 줄들이 이름 붙인 column은 list 행의 괄호 사이에 행 값의 glyph로,
-`- [<glyph>] <key> <title> …`로 쓰인다([canonical format](10-canonical-format.ko.md#list-행)). 어떤 줄도 이름 붙이지 않은
-값의 list 쓰기는 list가 그것을 보일 수 없으므로 `CONSTRAINT`이고, 기계가 `checkbox`를 선언하지 않은 list table은 그
-column을 field(`state:doing`)로 쓴다. `table`과 `files` 저장에서 그 column은 다른 scalar처럼 cell이나 field 항목이다.
-목표 형태는 `checkbox <column>`이다: 한 글자 column은 `[<value>]`로, `bool`은 `[ ]`와 `[x]`로, NULL은 상자 없는 list
-행으로, 빈 텍스트는 `[]`로 보인다. 그것은 orm이 자기 행으로 추적하는 orm 문법 변경과 함께 오며, 그때까지는 위의 상태별
-형태가 성립한다. 근거: GFM task item은 괄호 사이에 한 글자를 담으므로, column 자체가 한 글자가 될 때까지 list 행은 각
-값의 glyph를 통해서만 거기에 그 column을 보인다.
+`task_marker <column>`은 table마다 한 줄이며, orm은 두 번째 줄을 반복으로, 다른 type의 column을
+(`task_marker needs a varchar(1) or bool column, not <type>`), 상태별 형태 `task_marker <column> <state> '<glyph>'`를
+문법 오류로 거절한다. list로 저장된 table에서 그 column은 list 행의 괄호 사이에 쓰인다,
+`- [<value>] <key> <title> …`([canonical format](10-canonical-format.ko.md#list-행)): `varchar(1)` 값은 그대로, 빈
+텍스트는 `[]`로; `bool`은 GFM의 체크되지 않은 상자와 체크된 상자, false는 `[ ]`, true는 `[x]`로 쓰며, GFM이 역시
+체크된 것으로 읽는 `[X]`는 true로 읽고 `format.noncanonical`이다; NULL은 상자 없는 list 행 `- <key> <title> …`이다. 그
+값은 모든 database에서처럼 그 type과 schema의 제약 — check `in (…)`이나 상태 table로의 foreign key — 이 허용하는
+것이며, glyph의 목록이 아니다. `table`과 `files` 저장에서 그 column은 다른 scalar처럼 cell이나 field 항목이다. 예전
+이름인 `checkbox`와 `state_machine`은 문법의 setting이 아니며 각각 알 수 없는 setting으로 거절된다
+(`setting "checkbox" is unknown`): 엔진은 상태기계를 갖지 않는다([constraints](50-constraints.ko.md#상태-column)). 근거:
+GFM task list item은 괄호 사이, 곧 그 task list item marker에 한 글자를 담으므로, 한 글자 column은 거기에 값 전체를
+보이고, boolean은 GFM 자신의 두 상자로 보인다.
 
 ## dbspec 구성에 대한 corpus 규칙
 

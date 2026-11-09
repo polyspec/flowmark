@@ -1,5 +1,5 @@
 <!-- doc-id: spec-checklist -->
-<!-- source-sha256: 59b67d7f68c36573a0a329299400fceff1e4bd2e013df3b5449d2fa9c75b964c -->
+<!-- source-sha256: 803f5e26353efbce7de70b20893bfff0ec799287116dcfbf6343250b9cf634a4 -->
 # 응용 schema
 
 [English](100-checklist.md)
@@ -65,8 +65,8 @@
 `ck_items_state`가 모든 database가 column을 제약하듯 그것을 그 값들로 제약한다. 다른 값은 다른 check처럼 거절된다
 ([constraints](50-constraints.ko.md#상태-column)).
 
-- 표준 저장은 상태를 item file의 field `- state: doing`으로 쓴다. schema는 `checkbox`를 선언하지 않는다: `items`는
-  `files`로 저장되며, 거기서 checkbox는 아무것도 보이지 않는다.
+- 표준 저장은 상태를 item file의 field `- state: doing`으로 쓴다. schema는 `task_marker`를 선언하지 않는다: `items`는
+  `files`로 저장되며, 거기서 task marker는 아무것도 보이지 않고, 그 상태는 낱말이다.
 - 완료된 항목은 관례로 다시 열지 않는다: 그와 관련된 새 이슈는 kind `supersedes`의 `item_links` 행을 가진 새 항목이다.
   엔진은 그 어느 것도 강제하지 않는다: 상태의 전이와 그 흔적은 polyspec fsm의 것이다.
 - **WIP limit 없음.** 사용자의 규칙 — 시작보다 완료, 독립 항목은 병렬 허용 — 은 어떤 개수로도 표현되지 않는 작업

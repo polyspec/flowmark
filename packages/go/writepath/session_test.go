@@ -51,7 +51,7 @@ func TestSingleRequest(t *testing.T) {
 	t.Run("40#transactions: a state update and an order update commit with their write", func(t *testing.T) {
 		f := baseFixture(t)
 		s := f.session("cli")
-		want(t, s, f.msg("update", "items", map[string]any{"set": sets(0, "state"), "where": corpustest.WhereID(1)}, "doing", "T3"), `{"affected":1,"keys":[]}`)
+		want(t, s, f.msg("update", "items", map[string]any{"set": sets(0, "state"), "where": corpustest.WhereID(1)}, "~", "T3"), `{"affected":1,"keys":[]}`)
 		// The engine applies no state machine, so the update writes no history row (spec 50 State columns).
 		if !strings.Contains(f.file("items.flowmark.md"), "- [~] T3 Review the design position:2\n") || strings.Contains(f.file("items.flowmark.md"), "## items row T3") {
 			t.Fatalf("items:\n%s", f.file("items.flowmark.md"))

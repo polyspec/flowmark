@@ -1,8 +1,8 @@
 package corpustest
 
-// TicketHistoryTable is the dbspec of a table ticket_history stored as a document table, which a state machine line
-// of a table tickets names as its history in the grammar of orm 0.0.26; the engine applies none of the machine, so it
-// is an ordinary table (spec 50 State columns).
+// TicketHistoryTable is the dbspec of a table ticket_history stored as a document table: the history of a table
+// tickets that the application keeps, an ordinary table, since the engine holds no state machine (spec 50 State
+// columns).
 const TicketHistoryTable = `table ticket_history {
   id i64 identity
   ticket varchar(16)

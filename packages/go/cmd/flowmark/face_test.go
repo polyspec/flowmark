@@ -83,7 +83,7 @@ func TestFaceCommands(t *testing.T) {
 			t.Fatalf("row.move to the top printed %s", got)
 		}
 		// A state is a value that row.update writes: the engine applies no state machine (spec 50 State columns).
-		if got := cliOK(t, "row.update", root, "items", "T1", "state=done"); !strings.Contains(got, `"state":"done"`) {
+		if got := cliOK(t, "row.update", root, "items", "T1", "state=x"); !strings.Contains(got, `"state":"x"`) {
 			t.Fatalf("row.update of the state printed %s", got)
 		}
 		cliOK(t, "row.update", root, "people", "P2", "age=40")

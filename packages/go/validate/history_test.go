@@ -7,8 +7,8 @@ import (
 	"github.com/polyspec/flowmark/packages/go/catalog"
 )
 
-// documentHistoryCatalog is a state table whose machine names a history table stored as a document table, in the
-// grammar of orm 0.0.26, which the engine reads and applies none of (spec 50 State columns).
+// documentHistoryCatalog is a state table and a history table of it, both stored as document tables: ordinary tables,
+// since the engine holds no state machine (spec 50 State columns).
 const documentHistoryCatalog = `dbspec 1 flowmark
 
 table tickets {
@@ -19,11 +19,6 @@ table tickets {
   settings {
     store document table
     title title
-    state_machine state initial open
-    state_machine state open -> doing
-    state_machine state doing -> closed
-    state_machine state terminal closed
-    state_machine state history ticket_history row ticket from from_state to to_state at at
   }
 }
 ` + "\n" + corpustest.TicketHistoryTable
@@ -60,8 +55,8 @@ func historyRows(rows ...[4]string) string {
 	return s
 }
 
-// TestDocumentTableHistory pins that a state table and the history table its machine names, stored as document tables,
-// hold ordinary rows (spec 50 State columns): no gap, chain or transition of the machine is judged.
+// TestDocumentTableHistory pins that a state table and its history table, stored as document tables, hold ordinary
+// rows (spec 50 State columns): no gap, chain or transition of the machine is judged.
 func TestDocumentTableHistory(t *testing.T) {
 	cases := []struct {
 		name  string
@@ -88,7 +83,7 @@ func TestDocumentTableHistory(t *testing.T) {
 				"tickets.flowmark.md":        ticketRows([2]string{"K1", "closed"}),
 				"ticket_history.flowmark.md": historyRows([4]string{"1", "K1", "open", "doing"}, [4]string{"2", "K1", "open", "closed"}),
 			}},
-		{name: "50#state-columns: a state outside every machine line is no fault in table storage",
+		{name: "50#state-columns: any state its type allows is no fault in table storage",
 			files: map[string]string{
 				"tickets.flowmark.md": ticketRows([2]string{"K1", "parked"}),
 			}},

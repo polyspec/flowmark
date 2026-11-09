@@ -1,14 +1,13 @@
 package corpustest
 
 // BoardDBS is the board catalog of the ops and command-line cases: a document list with a hierarchy, an order and a
-// checkbox, with the state machine lines of orm 0.0.26 that the engine applies none of, and a history table stored as a
-// block of it; and a document table with neither.
+// task marker, and a history table stored as a block of it; and a document table with neither.
 const BoardDBS = `dbspec 1 board
 
 table items {
   id varchar(32)
   parent varchar(32) null
-  state varchar(16) default 'waiting'
+  state varchar(1) default ' '
   title varchar(255)
   body text
   position i32
@@ -26,14 +25,7 @@ table items {
     order position
     markdown body
     markdown evidence
-    checkbox state waiting ' '
-    checkbox state doing '~'
-    checkbox state done 'x'
-    state_machine state initial waiting
-    state_machine state waiting -> doing
-    state_machine state doing -> done require (evidence)
-    state_machine state terminal done
-    state_machine state history item_history row item from from_state to to_state at at
+    task_marker state
   }
 }
 

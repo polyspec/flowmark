@@ -69,7 +69,7 @@ Every foreign key has its leading index. The checks are
 it ([constraints](50-constraints.md#state-columns)).
 
 - The standard storage writes the state as the field `- state: doing` of the item's file. The schema declares no
-  `checkbox`: `items` is stored `files`, where a checkbox shows nothing.
+  `task_marker`: `items` is stored `files`, where a task marker shows nothing, and its state is a word.
 - A done item is not reopened, by convention: a new issue related to it is a new item with an `item_links` row of kind
   `supersedes`. The engine enforces nothing of it: the transitions of a state and their trail are polyspec fsm's.
 - **No WIP limit.** The owner's rule — completion before starting, with independent items allowed in parallel — is a

@@ -82,7 +82,7 @@ flowmark = the markdown database engine (one Go binary)
 ### 4. Schema (`30-schema.md`) — the catalog is the schema
 
 - **dbspec is the root grammar and the only authority.** The `dbspec/*.dbs` set of a corpus root is the catalog (Revision 3). Documents carry no schema copy and no stamp, and standalone documents with embedded fragments are withdrawn: schema is law and data is rows, and a copy of the law per document makes the drift of the copies a bug class of its own. orm's engine, IR and conformance are bound to the dbspec manifest hash, and dbspec's parser and type system are reused as a library.
-- **Markdown-specific schema surface is manifest-level settings, never rendered types** (introspection coherence, the `updated`/`soft_delete` precedent): `store`, `key_prefix`, `title`, `body`, `order`, `checkbox` and `markdown` are settings that the SQL backends ignore; a real database introspects them back as plain columns. The state machine's settings are withdrawn, and `key_prefix` and `order` are ruled by Ruling: the engine holds only what the common databases hold (T62).
+- **Markdown-specific schema surface is manifest-level settings, never rendered types** (introspection coherence, the `updated`/`soft_delete` precedent): `store`, `title`, `body`, `order`, `task_marker` and `markdown` are settings that the SQL backends ignore; a real database introspects them back as plain columns. The state machine's settings and `key_prefix` are withdrawn, and `order` assigns nothing, by Ruling: the engine holds only what the common databases hold (T62, T89).
 - **`identity` is allowed** only on an `i64` primary key of a markdown table, allocated under the lock one more than the larger of the largest key and the table's AUTOINCREMENT counter (Revision 3, and A refresh of the changed rows (T42) for the counter; the other key types have no maximum to add one to); key reuse under git rewind is accepted, since the rewind rewinds the counter too — git history is the allocator of record.
 
 ### 5. Ops and transactions (`40-ops.md`)
@@ -275,8 +275,8 @@ that a database would not. A feature that no common database has is removed, and
   keep. This withdraws the state machine ruling of §6 and the history of §9; the illegal status transitions of the context
   are fsm's to stop.
 - **What stays shows a value**: `store` and its `shard`, which say where a row is written; `title`, `body` and `markdown`,
-  which say which place of the row holds a column; and `checkbox`, which says how a list row shows a column.
-- **The checkbox shows the value of its column.** `checkbox <column>` names one column of a table stored as a list, and the
+  which say which place of the row holds a column; and `task_marker`, which says how a list row shows a column.
+- **The task marker shows the value of its column.** `task_marker <column>` names one column of a table stored as a list, and the
   list row writes that column between the brackets of its task marker; a table stored otherwise writes the column where it
   writes any scalar.
   - A column of one character, `varchar(1)`, is written `- [<value>] …`. Its values are the ones the schema allows, as every
@@ -289,14 +289,12 @@ that a database would not. A feature that no common database has is removed, and
   Grounding: a GFM task item is one character between brackets, so a column of one character shows its whole value there
   and a boolean shows as GFM's own two boxes. The glyph that a state machine mapped to each state name was a second
   spelling of each value, and a value without a glyph could not be written, which no database refuses.
-- **The orm grammar.** The checkbox form above and the removal of `state_machine` change orm's grammar (orm DBS-73,
-  DBS-80, DBS-81, DBS-82, DBS-83 and the repeat rule of DBS-63), which orm tracks by its own row. Until flowmark builds
-  against an orm release that has them, the engine reads the grammar orm ships, and enforces none of the machine: it reads
-  every `state_machine` line and applies none, as DBS-73 itself says a database does, which is what MySQL, PostgreSQL
-  and SQLite do with it. The `checkbox <column> <state> '<glyph>'` lines, which orm requires to cover the machine's state
-  set, keep giving the glyph of each value of a list row, and a list write of a value that no line names is refused,
-  since the list cannot show it; a list table whose machine declares no checkbox writes the column as a field. When that
-  orm release lands, flowmark takes the form above by a row of its own and refuses the per-state form.
+- **The orm grammar.** The form above and the removal of `state_machine` change orm's grammar (orm DBS-80 and the
+  repeat rule of DBS-63; DBS-73, DBS-81, DBS-82 and DBS-83 leave it), which orm 0.0.28 carries. The setting takes the GFM
+  name of the bracketed part of a task list item, its task list item marker, since it shows any one-character value
+  there and not only a checked or unchecked box: `task_marker <column>`, and `checkbox`, the former name, is refused as
+  an unknown setting, as is `state_machine`. flowmark takes the form by T62 itself: the catalog keeps the column of the
+  one `task_marker` line, and the list reads and writes its value as stated above.
 - **`key_prefix` and `order` give a value**, so the same criterion rules them.
   - `key_prefix '<p>'` allocates a text key `<p><n + 1>`. No common database allocates a key so: MySQL, PostgreSQL and
     SQLite allocate an integer, by AUTOINCREMENT, a sequence or an identity. orm plans an insert that leaves such a key out
