@@ -546,7 +546,7 @@ func refreshIn(ctx context.Context, w runner, before, c *irexec.Corpus) (err err
 		}
 	}
 	for _, tb := range c.Catalog().Tables {
-		if tb.Autoincrement && before.Sequence(tb.Name) != c.Sequence(tb.Name) {
+		if tb.Autoincrement && !sameSequence(before, c, tb.Name) {
 			if err := setSequence(ctx, w, c, tb); err != nil {
 				return err
 			}

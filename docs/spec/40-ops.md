@@ -313,18 +313,33 @@ utility of orm's SQLite dialect holds on a corpus, and a client has only this dr
   time, which another form writes back; the engine's fork of the driver reads it as stored (`TestTemporalText` of
   `statement`).
 - **AUTOINCREMENT counters.** A table whose statement declares its key `AUTOINCREMENT`, and a table of an `identity`
-  key, which the set renders so, never gives a key twice, as SQLite's `AUTOINCREMENT` gives none; a plain `INTEGER PRIMARY
-  KEY` gives one more than its largest key, as SQLite does. The counter of such a table is part of the corpus, in
-  `dbspec/sequences.json`, a JSON object of a positive counter by table. The sequence of the table is the larger of its
-  counter and its largest key, and the key it gives next is one more, so a key written by hand counts too. A write that
-  lowers the sequence, a delete or a key change of the row of the largest key, raises the counter to it, and a key the
-  database gave past the sequence, as a key a statement inserted and deleted again, raises it after the statement; the
-  commit writes the file with the rows. A fill and a refresh give the database the sequence of the corpus. A renamed
-  table keeps its counter, and a dropped table takes it away, as SQLite's `sqlite_sequence` does. The file is read with
-  the corpus when it is read from nothing and after each commit that wrote it, of any process, as the commit generation
-  names it; a hand edit of the file is read at the next of these, as a hand edit of `dbspec/` is. A git rewind rewinds
-  the counters with the rows. `TestSequences` of `statement`, `TestSequenceRaise` and `TestRaiseSequences` of `irexec`,
-  and `TestAutoincrement` and `TestSequencesFile` of `catalog` hold it.
+  key, which the set renders so, keeps a sequence as SQLite keeps it in `sqlite_sequence` (SQLite, autoinc.html): a row
+  of the table there, or none; a plain `INTEGER PRIMARY KEY` gives one more than its largest key, as SQLite does. The
+  key an insert gives is one more than the larger of the sequence and the largest key, and the insert raises the
+  sequence to each key it gives or meets: a key the insert gives by hand, and the key an insert that meets a row on a
+  unique key, by `ON CONFLICT … DO UPDATE` or `OR IGNORE`, would have given, which SQLite gives before it meets the
+  row, so an insert never gives a key an insert gave before, a key written by hand included, as SQLite's
+  `AUTOINCREMENT` gives none, until an explicit write lowers the sequence. A delete and a change of a key leave the sequence as it is, as SQLite tracks no `UPDATE`
+  of a rowid. An explicit write of `sqlite_sequence` sets the sequence of its table as SQLite applies it: `UPDATE
+  sqlite_sequence SET seq = …` sets it to the value, a lower one, zero and a negative one included, so a restart of an
+  identity after a delete gives the key SQLite and the servers give; `DELETE FROM sqlite_sequence` leaves its table no
+  row, whose next key is one more than its largest key; an `INSERT` gives a table that has no row its row. The corpus
+  holds one integer sequence of an AUTOINCREMENT table or none, so a statement that leaves `sqlite_sequence` a row whose
+  name is no AUTOINCREMENT table, byte for byte as SQLite matches it, a second row of a table, or a sequence that is no
+  integer — a text, a real, NULL — is `CONSTRAINT`, and it leaves the corpus and its transaction as they were. Past the
+  largest int64 an AUTOINCREMENT table gives no key, as SQLite fails the insert as `SQLITE_FULL` and the executor as
+  `DRIVER`. The sequences are part of the corpus, in `dbspec/sequences.json`, a JSON object by table of the sequence
+  of each AUTOINCREMENT table whose sequence is not its largest key, an integer of int64, or `null` for no row of
+  `sqlite_sequence` while the table holds rows; a table the file does not name has the sequence of its largest key, or
+  no row when it holds none. After each statement the engine reads `sqlite_sequence`, which the update hook does not
+  report, and the commit writes the file with the rows when a sequence differs from the corpus's. A fill and a refresh
+  give the database the sequences of the corpus, row for row. A renamed table keeps its sequence, and a dropped table
+  takes it away, as SQLite's `sqlite_sequence` does. The file is read with the corpus when it is read from nothing and
+  after each commit that wrote it, of any process, as the commit generation names it; a hand edit of the file is read
+  at the next of these, as a hand edit of `dbspec/` is. A git rewind rewinds the sequences with the rows.
+  `TestSequences`, `TestExplicitSequences` and `TestExplicitSequenceRefused` of `statement`, `TestSequenceWrites` and
+  `TestSetSequences` of `irexec`, `TestAuditRows` of `ops`, and `TestAutoincrement`, `TestSequencesFile`,
+  `TestSequencesGolden` and `FuzzSequences` of `catalog` hold it.
 - **No assigned columns.** A text key and an `order` column are the insert's to give, as on the databases orm reaches
   ([document model](20-document-model.md#keys)): the schema of the statements declares each `NOT NULL`, so an insert that
   leaves one out, or gives it NULL, fails as SQLite's `NOT NULL constraint failed`, and the corpus holds the values the

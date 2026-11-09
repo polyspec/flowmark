@@ -375,7 +375,7 @@ func (c *Corpus) readLocked() (*irexec.Corpus, error) {
 		return nil, driverError("reading the corpus", err)
 	}
 	cur := irexec.FromSnapshot(c.cat, s, prev, c.cost)
-	// The counters' file is read with the corpus from nothing and after a commit that wrote it, whatever process made
+	// The sequences' file is read with the corpus from nothing and after a commit that wrote it, whatever process made
 	// that commit: the generation names it (spec 40 SQL statements).
 	if prev == nil || prev.Catalog() != c.cat || all || !kept || slices.Contains(paths, catalog.SequencesFile) {
 		data, err := os.ReadFile(filepath.Join(c.root, filepath.FromSlash(catalog.SequencesFile)))
@@ -383,11 +383,11 @@ func (c *Corpus) readLocked() (*irexec.Corpus, error) {
 			data, err = nil, nil
 		}
 		if err == nil {
-			err = cur.SetSequences(data)
+			err = cur.SetSequenceFile(data)
 		}
 		if err != nil {
 			c.live.Reset()
-			return nil, driverError("reading the AUTOINCREMENT counters of the corpus", err)
+			return nil, driverError("reading the AUTOINCREMENT sequences of the corpus", err)
 		}
 	}
 	c.last.Store(&readState{cur: cur, gen: g.N, fresh: true})

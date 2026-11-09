@@ -83,7 +83,7 @@ flowmark = the markdown database engine (one Go binary)
 
 - **dbspec is the root grammar and the only authority.** The `dbspec/*.dbs` set of a corpus root is the catalog (Revision 3). Documents carry no schema copy and no stamp, and standalone documents with embedded fragments are withdrawn: schema is law and data is rows, and a copy of the law per document makes the drift of the copies a bug class of its own. orm's engine, IR and conformance are bound to the dbspec manifest hash, and dbspec's parser and type system are reused as a library.
 - **Markdown-specific schema surface is manifest-level settings, never rendered types** (introspection coherence, the `updated`/`soft_delete` precedent): `store`, `title`, `body`, `order`, `task_marker` and `markdown` are settings that the SQL backends ignore; a real database introspects them back as plain columns. The state machine's settings and `key_prefix` are withdrawn, and `order` assigns nothing, by Ruling: the engine holds only what the common databases hold (T62, T89).
-- **`identity` is allowed** only on an `i64` primary key of a markdown table, allocated under the lock one more than the larger of the largest key and the table's AUTOINCREMENT counter (Revision 3, and A refresh of the changed rows (T42) for the counter; the other key types have no maximum to add one to); key reuse under git rewind is accepted, since the rewind rewinds the counter too — git history is the allocator of record.
+- **`identity` is allowed** only on an `i64` primary key of a markdown table, allocated under the lock one more than the larger of the largest key and the table's AUTOINCREMENT sequence (Revision 3, and A refresh of the changed rows (T42, T91) for the sequence; the other key types have no maximum to add one to); key reuse under git rewind is accepted, since the rewind rewinds the sequence too — git history is the allocator of record.
 
 ### 5. Ops and transactions (`40-ops.md`)
 
@@ -193,13 +193,18 @@ Each layer is a row, in this order, and each row's Red is a count of the cost co
    its generation and of the paths the notifications named since its last refresh, and, when a table's availability
    changed, that whole table; a new catalog builds a new database. The refresh runs outside a transaction with foreign
    keys off, the standing triggers dropped and checks ignored, as the fill does. A row keyed by rowid keeps its stored rowid;
-   the rowid of another row is the database's own, so a `SELECT` without `ORDER BY` has no stated order, as in SQLite. An
-   AUTOINCREMENT counter is part of the corpus: after a write the statement reads `sqlite_sequence`, which the hook does not
-   report, one row for each AUTOINCREMENT table, and the counters that rose go into the commit, to `dbspec/sequences.json`;
-   a fill and a refresh take the larger of the stored counter and the largest key in the corpus, so no key is given twice,
-   a key written by hand included, as SQLite's AUTOINCREMENT gives none. The refreshed
-   database equals the database filled from the same corpus from nothing, table for table, by key, `sqlite_sequence`
-   included.
+   the rowid of another row is the database's own, so a `SELECT` without `ORDER BY` has no stated order, as in SQLite. The
+   AUTOINCREMENT sequence of a table is part of the corpus, as SQLite keeps it in `sqlite_sequence`: after a write the
+   statement reads `sqlite_sequence`, which the hook does not report, and a sequence that differs from the corpus's goes
+   into the commit, to `dbspec/sequences.json`, which names a table whose sequence is not its largest key — a lower or
+   higher integer, or `null` for no row. An insert raises the sequence to each key it gives or meets; a delete and a
+   change of a key leave it; an explicit write of `sqlite_sequence` sets it, a lower value and a deleted row included,
+   so a restart of an identity gives the key SQLite gives (T91); a row the corpus cannot hold — of no AUTOINCREMENT
+   table, a second one of a table, a sequence of no integer — is `CONSTRAINT`. The next key is one more than the larger
+   of the sequence and the largest key, so an insert never gives a key an insert gave, a key written by hand included,
+   until an explicit write lowers the sequence, as SQLite's AUTOINCREMENT gives none. A fill and a refresh give the database the sequences of the corpus, and the
+   refreshed database equals the database filled from the same corpus from nothing, table for table, by key,
+   `sqlite_sequence` included.
 8. **Reads without the lock (T43).** A read runs its statement on a reader connection and holds no corpus lock while it
    runs; a cursor holds a reader connection and no lock. The database is brought to the corpus before the read: when the
    lock is free, the read takes it for the refresh alone, so a lock record is written once for each change and not for each

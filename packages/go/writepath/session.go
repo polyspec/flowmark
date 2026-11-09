@@ -148,11 +148,11 @@ func (s *Session) ExecFace(ctx context.Context, msg []byte) (*irexec.Answer, err
 	return s.do(ctx, op{write: irexec.IsWrite(msg), run: func(c *irexec.Corpus) (*irexec.Result, error) { return s.c.exec.ExecuteFace(c, msg) }})
 }
 
-// RaiseSequences raises the AUTOINCREMENT counter of each table of raise to its value where the corpus's sequence of the
-// table is lower, as a write of the session's transaction, or as one transaction under the lock (irexec
-// Corpus.RaiseSequences).
-func (s *Session) RaiseSequences(ctx context.Context, raise map[string]int64) error {
-	_, err := s.do(ctx, op{write: true, run: func(c *irexec.Corpus) (*irexec.Result, error) { return c.RaiseSequences(raise) }})
+// SetSequences gives the corpus the rows held of sqlite_sequence, one AUTOINCREMENT sequence for each table that has a
+// row there, as a write of the session's transaction, or as one transaction under the lock (irexec
+// Corpus.SetSequences).
+func (s *Session) SetSequences(ctx context.Context, held map[string]int64) error {
+	_, err := s.do(ctx, op{write: true, run: func(c *irexec.Corpus) (*irexec.Result, error) { return c.SetSequences(held) }})
 	return err
 }
 

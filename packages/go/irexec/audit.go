@@ -28,7 +28,11 @@ func (w *writer) auditRow(row *store.Row, action string, previous cell) *Error {
 		return err
 	}
 	out := &store.Row{Table: ht.Name, Scalars: map[string]*string{}, Sections: map[string]*string{}}
-	setValue(ht, out, ht.Key, w.nextIdentity(ht, ht.Key))
+	hk, err := w.nextIdentity(ht, ht.Key)
+	if err != nil {
+		return err
+	}
+	setValue(ht, out, ht.Key, hk)
 	setValue(ht, out, a.Action, cell{text: action})
 	setValue(ht, out, a.Previous, previous)
 	for _, c := range w.tb.Columns {

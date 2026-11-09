@@ -46,7 +46,8 @@ table item_history {
 }
 `
 
-// TestAuditRows holds the rows a write of an audited table writes into its history (spec 50 Audit), each with its own key.
+// TestAuditRows holds the rows a write of an audited table writes into its history (spec 50 Audit), each with its own key,
+// which raises the sequence of the history table as SQLite's AUTOINCREMENT does.
 func TestAuditRows(t *testing.T) {
 	root := t.TempDir()
 	corpustest.WriteTree(t, root, map[string]string{"dbspec/audited.dbs": auditSet})
@@ -102,5 +103,10 @@ func TestAuditRows(t *testing.T) {
 		if !strings.Contains(string(got), want) {
 			t.Fatalf("no %s in %s", want, got)
 		}
+	}
+	// Each history row takes the next key of its AUTOINCREMENT table and raises its sequence to it, as an audit trigger's
+	// insert does in SQLite, so every sequence is the largest key of its table and the corpus names none.
+	if data, err := os.ReadFile(filepath.Join(root, "dbspec", "sequences.json")); !os.IsNotExist(err) {
+		t.Fatalf("the corpus names the sequences %q, %v", data, err)
 	}
 }

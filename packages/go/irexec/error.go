@@ -27,6 +27,7 @@ const (
 	codeDuplicateKey    = "DUPLICATE_KEY"
 	codeForeignKey      = "FOREIGN_KEY"
 	codeConstraint      = "CONSTRAINT"
+	codeDriver          = "DRIVER"
 	codeInternal        = "INTERNAL"
 )
 

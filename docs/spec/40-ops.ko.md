@@ -1,5 +1,5 @@
 <!-- doc-id: spec-ops -->
-<!-- source-sha256: bc37952c538c8f898565d4886937870e70f1161aaf4dec94b40f2309993f7a5a -->
+<!-- source-sha256: 1004f4494708520087a6e0159d11a3b828682ee1a965f9eff220e7ca70f450d0 -->
 # Operations
 
 [English](40-ops.md)
@@ -266,16 +266,30 @@ client가 구현할 것은 이 driver뿐이다.
   읽듯이 저장된 text 그대로, byte 단위로 같다. driver의 release는 그런 text를 시각으로 해석해 다른 형태로 다시 쓰므로,
   엔진은 driver의 fork가 저장된 그대로 읽게 한다(`statement`의 `TestTemporalText`).
 - **AUTOINCREMENT counter.** 문장이 key를 `AUTOINCREMENT`로 선언한 표와, set이 그렇게 render하는 `identity` key의 표는
-  SQLite의 `AUTOINCREMENT`처럼 같은 key를 두 번 주지 않는다. 그냥 `INTEGER PRIMARY KEY`는 SQLite처럼 가장 큰 key보다 하나 큰
-  key를 준다. 그런 표의 counter는 corpus의 일부로 `dbspec/sequences.json`에 있으며, 표마다 양의 counter를 가진 JSON 객체다.
-  표의 sequence는 counter와 가장 큰 key 가운데 큰 것이고, 다음에 주는 key는 그보다 하나 크다. 그래서 손으로 쓴 key도
-  셈에 들어간다. sequence를 낮추는 쓰기, 곧 가장 큰 key 행의 delete나 key 변경은 counter를 그 값으로 올리고, database가
-  sequence를 넘어 준 key, 곧 한 문장이 넣었다가 다시 지운 key는 문장 뒤에 counter를 올린다. commit은 행과 함께 이 파일을
-  쓴다. fill과 refresh는 database에 corpus의 sequence를 준다. 이름을 바꾼 표는 counter를 지키고, 지운 표는 SQLite의
-  `sqlite_sequence`처럼 counter를 함께 가져간다. 이 파일은 corpus를 처음부터 읽을 때와, 어느 process든 이 파일을 쓴 commit
-  뒤에 commit generation이 그 경로를 알릴 때 corpus와 함께 읽는다. 손으로 고친 파일은 `dbspec/`을 손으로 고친 것처럼
-  그다음 읽기에서 읽힌다. git을 되감으면 counter도 행과 함께 되감긴다. `statement`의 `TestSequences`, `irexec`의
-  `TestSequenceRaise`와 `TestRaiseSequences`, `catalog`의 `TestAutoincrement`와 `TestSequencesFile`이 이를 확인한다.
+  SQLite가 `sqlite_sequence`에 지키는 대로 sequence를 지킨다(SQLite, autoinc.html): 거기 있는 그 표의 행, 또는 행 없음이다.
+  그냥 `INTEGER PRIMARY KEY`는 SQLite처럼 가장 큰 key보다 하나 큰 key를 준다. insert가 주는 key는 sequence와 가장 큰 key
+  가운데 큰 것보다 하나 크고, insert는 sequence를 자신이 주거나 만나는 key마다 그 key로 올린다: insert가 손으로 준 key와,
+  `ON CONFLICT … DO UPDATE`나 `OR IGNORE`로 unique key에서 행을 만난 insert가 주었을 key다. SQLite는 행을 만나기 전에 그
+  key를 주기 때문이다. 그래서 명시적 쓰기가 sequence를 낮추기 전까지 insert는 손으로 쓴 key를 포함해 앞선 insert가 준 key를
+  다시 주지 않으며, 이는 SQLite의 `AUTOINCREMENT`가 주지 않는 것과 같다. delete와 key 변경은 sequence를 그대로 두는데,
+  SQLite가 rowid의 `UPDATE`를 따라가지 않기 때문이다. `sqlite_sequence`의 명시적 쓰기는 SQLite가 적용하는 대로 그 표의
+  sequence를 정한다: `UPDATE sqlite_sequence SET seq = …`는 더 낮은 값, 0, 음수를 포함해 그 값으로 정하므로, delete 뒤
+  identity의 restart는 SQLite와 server가 주는 key를 준다. `DELETE FROM sqlite_sequence`는 그 표에 행을 남기지 않으며, 그
+  표의 다음 key는 가장 큰 key보다 하나 크다. `INSERT`는 행이 없는 표에 그 행을 준다. corpus는 AUTOINCREMENT 표마다 정수
+  sequence 하나를 가지거나 갖지 않으므로, `sqlite_sequence`에 SQLite가 맞추듯 byte 단위로 AUTOINCREMENT 표가 아닌 이름의 행,
+  한 표의 두 번째 행, 정수가 아닌 sequence(text, real, NULL)를 남기는 문장은 `CONSTRAINT`이고, corpus와 그 transaction을
+  그대로 둔다. int64의 최댓값을 넘으면 AUTOINCREMENT 표는 key를 주지 않는다: SQLite는 그 insert를 `SQLITE_FULL`로,
+  executor는 `DRIVER`로 실패시킨다. sequence는 corpus의 일부로 `dbspec/sequences.json`에 있으며, sequence가 가장 큰 key가
+  아닌 AUTOINCREMENT 표마다 그 sequence를 가진 JSON 객체다: int64 정수, 또는 표가 행을 가진 채 `sqlite_sequence`에 행이
+  없으면 `null`이다. 파일이 이름 대지 않은 표는 가장 큰 key를 sequence로 가지며, 행이 없으면 `sqlite_sequence`에도 행이
+  없다. 엔진은 문장마다 그 뒤에 update hook이 알리지 않는 `sqlite_sequence`를 읽고, sequence가 corpus의 것과 다르면 commit은
+  행과 함께 이 파일을 쓴다. fill과 refresh는 database에 corpus의 sequence를 행 그대로 준다. 이름을 바꾼 표는 sequence를
+  지키고, 지운 표는 SQLite의 `sqlite_sequence`처럼 sequence를 함께 가져간다. 이 파일은 corpus를 처음부터 읽을 때와, 어느
+  process든 이 파일을 쓴 commit 뒤에 commit generation이 그 경로를 알릴 때 corpus와 함께 읽는다. 손으로 고친 파일은
+  `dbspec/`을 손으로 고친 것처럼 그다음 읽기에서 읽힌다. git을 되감으면 sequence도 행과 함께 되감긴다. `statement`의
+  `TestSequences`, `TestExplicitSequences`, `TestExplicitSequenceRefused`, `irexec`의 `TestSequenceWrites`와
+  `TestSetSequences`, `ops`의 `TestAuditRows`, `catalog`의 `TestAutoincrement`, `TestSequencesFile`, `TestSequencesGolden`,
+  `FuzzSequences`가 이를 확인한다.
 - **할당 column 없음.** text key와 `order` column은 orm이 닿는 database에서처럼 insert가 준다
   ([document model](20-document-model.ko.md#key)): 문장의 schema는 둘 다 `NOT NULL`로 선언하므로, 하나를 빠뜨리거나 NULL을 준
   insert는 SQLite의 `NOT NULL constraint failed`로 실패하고, corpus는 문장이 쓴 값을 가진다. `statement`의

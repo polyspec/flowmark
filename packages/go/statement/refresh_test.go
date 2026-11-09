@@ -193,8 +193,8 @@ func closeDB(t testing.TB, db *sql.DB) {
 // TestRefresh pins that a database refreshed from the corpus it held to the next one holds what a fill of the next one
 // from nothing holds, and fails exactly when that fill fails (plan, Ruling: an operation costs what it touches): each
 // document of each source is cut, restored, removed and restored, two documents are exchanged, a document is added
-// outside every place, and the AUTOINCREMENT counters are set past every key and removed; the sequences SQLite keeps are
-// compared too.
+// outside every place, and the AUTOINCREMENT sequences are set past every key, below it, to zero, to a negative value
+// and to no row of sqlite_sequence, and removed; the sequences SQLite keeps are compared too.
 func TestRefresh(t *testing.T) {
 	for name, src := range refreshSources(t) {
 		t.Run(name, func(t *testing.T) {
@@ -241,15 +241,35 @@ func TestRefresh(t *testing.T) {
 			}
 			step("a document outside every place", map[string]*string{"stray.flowmark.md": text("# Stray\n")})
 			step("its removal", map[string]*string{"stray.flowmark.md": nil})
-			counters := map[string]int64{}
-			for i, tb := range r.cat.Tables {
-				if tb.Autoincrement {
-					counters[tb.Name] = int64(1000 + i)
+			// The sequences past every key, below every key, zero, negative and of no row of sqlite_sequence.
+			sequences := func(n func(i int) *int64) map[string]*int64 {
+				out := map[string]*int64{}
+				for i, tb := range r.cat.Tables {
+					if tb.Autoincrement {
+						out[tb.Name] = n(i)
+					}
+				}
+				return out
+			}
+			number := func(v int64) *int64 { return &v }
+			wrote := false
+			for _, set := range []struct {
+				what string
+				seq  map[string]*int64
+			}{
+				{"sequences past every key", sequences(func(i int) *int64 { return number(int64(1000 + i)) })},
+				{"sequences below every key", sequences(func(int) *int64 { return number(1) })},
+				{"zero sequences", sequences(func(int) *int64 { return number(0) })},
+				{"negative sequences", sequences(func(i int) *int64 { return number(int64(-1 - i)) })},
+				{"no row of sqlite_sequence", sequences(func(int) *int64 { return nil })},
+			} {
+				if data := catalog.RenderSequences(set.seq); data != nil {
+					step(set.what, map[string]*string{catalog.SequencesFile: text(string(data))})
+					wrote = true
 				}
 			}
-			if data := catalog.RenderSequences(counters); data != nil {
-				step("counters past every key", map[string]*string{catalog.SequencesFile: text(string(data))})
-				step("the removal of the counters", map[string]*string{catalog.SequencesFile: nil})
+			if wrote {
+				step("the removal of the sequences", map[string]*string{catalog.SequencesFile: nil})
 			}
 		})
 	}

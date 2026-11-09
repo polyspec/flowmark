@@ -50,7 +50,7 @@ type Corpus struct {
 	ordered map[string][]*rec
 	// cost counts the work of the corpus's operations; nil counts nothing.
 	cost *cost.Counts
-	// seq holds the AUTOINCREMENT counters of the corpus (sequences.go), nil when it holds none.
+	// seq holds the AUTOINCREMENT sequences the file of the corpus names (sequences.go), nil when it names none.
 	seq *sequences
 }
 
@@ -90,7 +90,7 @@ func Open(cat *catalog.Catalog, fsys store.FS) (*Corpus, error) {
 		return nil, err
 	}
 	c := FromSnapshot(cat, s, nil, nil)
-	if err := c.SetSequences(data); err != nil {
+	if err := c.SetSequenceFile(data); err != nil {
 		return nil, err
 	}
 	return c, nil
@@ -102,7 +102,7 @@ func Open(cat *catalog.Catalog, fsys store.FS) (*Corpus, error) {
 func FromSnapshot(cat *catalog.Catalog, s *validate.Snapshot, prev *Corpus, k *cost.Counts) *Corpus {
 	c := &Corpus{cat: cat, unavailable: map[string]catalog.Diagnostic{}, cost: k}
 	if prev != nil && prev.cat == cat {
-		// The counters are no document of the read: the reader sets them again when their file changed (SetSequences).
+		// The sequences are no document of the read: the reader sets them again when their file changed (SetSequenceFile).
 		c.seq = prev.seq
 	}
 	changed, full := s.Changed()

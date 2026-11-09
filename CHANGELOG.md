@@ -3,6 +3,8 @@
 
 ## Unreleased
 
+- T91: The AUTOINCREMENT sequence of a table is the one SQLite keeps in `sqlite_sequence`. An explicit write of `sqlite_sequence` sets it, a lower value, zero, a negative value and a deleted row included, so a restart of an identity after a delete gives the key SQLite, MySQL and PostgreSQL give (3 after the keys 1, 2 and 3 and a delete of 3, where it gave 4); a delete and a change of a key leave the sequence as it is; an insert raises it to each key it gives or meets, an insert that meets a row on a unique key included. `dbspec/sequences.json` names a table whose sequence is not its largest key, as an integer or as `null` for no row of `sqlite_sequence`. A statement that leaves `sqlite_sequence` a row of no AUTOINCREMENT table, a second row of a table or a sequence of no integer is CONSTRAINT and changes nothing, where it was dropped or failed as INTERNAL; an AUTOINCREMENT table past the largest int64 gives no key, as DRIVER.
+
 ## 0.0.14
 
 - T89: The engine assigns no value that a database does not assign. The `key_prefix` setting is gone, so an insert gives its text key and one without it is IR_INVALID; the order column is a stored value in every storage — a field of a list row, a cell of a table, the item of a `files` row — that an insert gives as any non-null column, a read answers as written and nothing renumbers: the siblings stand by ascending value, those that share one in key order, a document in another order is `format.noncanonical`, and a write of the column, a parent change or a delete rewrites the written row's file alone. The validator reports no `order`, and a SQL statement's schema declares the key and the order column NOT NULL.

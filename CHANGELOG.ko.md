@@ -1,8 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: f95e3b34d3c672b9700b8d48ef78ee0f0fd9b9d782a69ef9f5d0134e93a3a253 -->
+<!-- source-sha256: 2c109b45c59ece9a657bde009c24a2abef096150676fc2c957b7d38289fe46df -->
 # Changelog
 
 ## Unreleased
+
+- T91: 표의 AUTOINCREMENT sequence는 SQLite가 `sqlite_sequence`에 지키는 것이다. `sqlite_sequence`의 명시적 쓰기는 더 낮은 값, 0, 음수, 지운 행을 포함해 그것을 정하므로, delete 뒤 identity의 restart는 SQLite, MySQL, PostgreSQL이 주는 key를 준다(key 1, 2, 3 뒤에 3을 지우면 3이며, 이전에는 4를 주었다). delete와 key 변경은 sequence를 그대로 두고, insert는 unique key에서 행을 만난 insert를 포함해 자신이 주거나 만나는 key마다 sequence를 올린다. `dbspec/sequences.json`은 sequence가 가장 큰 key가 아닌 표를 정수로, 또는 `sqlite_sequence`에 행이 없으면 `null`로 이름 댄다. `sqlite_sequence`에 AUTOINCREMENT 표가 아닌 표의 행, 한 표의 두 번째 행, 정수가 아닌 sequence를 남기는 문장은 CONSTRAINT이며 아무것도 바꾸지 않는다; 이전에는 버려지거나 INTERNAL로 실패했다. int64 최댓값을 넘은 AUTOINCREMENT 표는 key를 주지 않으며 DRIVER다.
 
 ## 0.0.14
 

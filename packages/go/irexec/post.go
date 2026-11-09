@@ -98,7 +98,7 @@ func (w *writer) finish() (*PostImage, *Error) {
 		sort.SliceStable(fks, func(i, j int) bool { return fks[i].seq < fks[j].seq })
 		return nil, faultError(refusals(fks))
 	}
-	post.Targets = withTarget(post.Targets, w.raiseSequences())
+	post.Targets = withTarget(post.Targets, w.writtenSequences())
 	return post, nil
 }
 
