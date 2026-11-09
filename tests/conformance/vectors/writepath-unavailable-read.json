@@ -17,9 +17,9 @@
     ],
     "items.flowmark.md": [
       "# items",
-      "- [ ] T1 First item",
-      "- [~] T2 Second item",
-      "- [ ] T3 Third item",
+      "- [ ] T1 First item position:1",
+      "- [~] T2 Second item position:2",
+      "- [ ] T3 Third item position:3",
       "",
       "## items row T2",
       "",

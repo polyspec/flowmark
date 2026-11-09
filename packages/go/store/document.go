@@ -29,11 +29,10 @@ type docLayout struct {
 	title     string            // the title column, "" when none
 	body      string            // the body column, "" when none
 	order     string            // the order column, "" when none
-	orderType dbspec.Type       // the type of the order column
 	state     string            // the checkbox column of a list, "" when none
 	parent    string            // "parent" when the table has the self foreign key parent, "" otherwise
 	placement string            // the placement foreign key of a block table, "" for a document table
-	scalars   []dbspec.Column   // the stored scalar columns: every column but the key, body, order, markdown and placement columns
+	scalars   []dbspec.Column   // the stored scalar columns: every column but the key, body, markdown and placement columns
 	fields    []dbspec.Column   // a list's fields: the scalars but its title, state and parent
 	sections  []section         // the markdown columns other than the body, in column order
 	fks       map[string]string // the referenced table of each foreign key
@@ -77,15 +76,10 @@ func layoutOfTable(cat *catalog.Catalog, tb *catalog.Table, placement string, in
 		lay.parts = append(lay.parts, part)
 	}
 	lay.key, lay.sections, lay.scalars, lay.fks, err = layoutColumns(tb, func(name string) bool {
-		return name == tb.Order || name == tb.Body || name == placement
+		return name == tb.Body || name == placement
 	})
 	if err != nil {
 		return nil, err
-	}
-	for _, c := range tb.Columns {
-		if c.Name == tb.Order && c.Name != tb.Key {
-			lay.orderType = c.Type
-		}
 	}
 	if lay.fks["parent"] == table {
 		lay.parent = "parent"
@@ -188,11 +182,8 @@ func (l *docLayout) requiredColumns() []dbspec.Column {
 }
 
 // writable reports whether a row may hold a value of name in Row.Scalars: a stored
-// scalar column other than the title, or the order column, which a write takes.
+// scalar column other than the title.
 func (l *docLayout) writable(name string) bool {
-	if name == l.order && name != "" {
-		return true
-	}
 	for _, c := range l.scalars {
 		if c.Name == name && name != l.title {
 			return true
@@ -659,9 +650,6 @@ func (l *docLayout) columnNames() []string {
 	}
 	if l.body != "" {
 		out = append(out, l.body)
-	}
-	if l.order != "" {
-		out = append(out, l.order)
 	}
 	if l.placement != "" {
 		out = append(out, l.placement)
@@ -1297,14 +1285,6 @@ func (p *docParser) checkScope(recs []*docRec) {
 			p.fail(rec.line, 1, RuleBlock, "the title is missing")
 		}
 	}
-	if lay.order != "" {
-		pos := map[string]int{}
-		for _, rec := range recs {
-			g := parentKey(lay, rec.row)
-			pos[g]++
-			rec.row.Scalars[lay.order] = sp(strconv.Itoa(pos[g]))
-		}
-	}
 	if lay.parent != "" {
 		byKey := recsByKey(recs)
 		for _, rec := range recs {
@@ -1586,11 +1566,18 @@ func storageOrder(lay *docLayout, rows []*Row) (order, depth, unreached []int) {
 	return order, depth, unreached
 }
 
-// siblingLess orders two siblings: by their order values when the table has an
-// order column, else by their keys.
+// siblingLess orders two siblings: by their order values when the table has an order column, the rows that share a
+// value, or whose value is not of its type, in key order; else by their keys (spec 20 Order).
 func siblingLess(lay *docLayout, a, b *Row) bool {
 	if lay.order != "" {
-		return orderValue(a, lay.order) < orderValue(b, lay.order)
+		x, xOK := orderValue(a, lay.order)
+		y, yOK := orderValue(b, lay.order)
+		switch {
+		case xOK != yOK:
+			return xOK
+		case xOK && x != y:
+			return x < y
+		}
 	}
 	if len(lay.parts) > 0 {
 		x, y := catalog.SplitKey(a.Key), catalog.SplitKey(b.Key)
@@ -1607,19 +1594,15 @@ func siblingLess(lay *docLayout, a, b *Row) bool {
 	return keyLess(lay.key.Type, a.Key, b.Key)
 }
 
-// orderValue returns the value of the order column of row r as a number. A missing
-// or unreadable value is 0: a write refuses it, and a read always has the value.
-func orderValue(r *Row, column string) int {
+// orderValue returns the value of the order column of row r as a number; ok is false when the row holds no value of
+// the column's type, which is its type fault (spec 10, diagnostics), and the row then stands after the readable ones.
+func orderValue(r *Row, column string) (int64, bool) {
 	v := r.Scalars[column]
 	if v == nil {
-		return 0
+		return 0, false
 	}
-	n, err := strconv.Atoi(*v)
-	if err != nil {
-		// An unreadable order is its type fault, which the read reports (spec 10, diagnostics); it sorts as 0.
-		return 0
-	}
-	return n
+	n, err := strconv.ParseInt(*v, 10, 64)
+	return n, err == nil
 }
 
 // keyLess orders two canonical keys: numerically for an integer key, else by their

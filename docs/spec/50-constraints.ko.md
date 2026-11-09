@@ -1,5 +1,5 @@
 <!-- doc-id: spec-constraints -->
-<!-- source-sha256: d08db07fdfe5293b83b5b8fdc75283e4f4bc0c307953d74c2e0f92d92dcbab26 -->
+<!-- source-sha256: db2ffd70728faf9f90975ccae9e471fc4115963bf9fe4ad021a3da75a4432c3d -->
 # Constraints
 
 [English](50-constraints.md)
@@ -129,9 +129,10 @@ param은 보이지 않는 데이터다. grouping은 같은 값을 가진 행을 
 
 - `parent` 순환은 쓰기에서 `CONSTRAINT`이고, 한 file의 행 사이의 순환은 읽기에서 `parent.cycle`이며 그 file을 읽을 수 없게 한다([document model](20-document-model.ko.md#계층)); 여러 `files` file의 행에 걸친 순환은 validator의 `parent.cycle`뿐이다. 행의 블록 밖 `parent`는 쓰기에서 `CONSTRAINT`, 읽기에서
   `format.block`이다.
-- 1..n + 1 밖의 순서 값(n은 문서 모델이 정의하는 대로)이나, 둘 이상의 행과 맞는 order column update는
-  `CONSTRAINT`다. block과 document 저장에서 쓰기 뒤의 형제 묶음 순서 값이 정확히 1..m(m은 그 묶음의 쓰기 뒤 크기)이 아니면 `CONSTRAINT`다. `files` 저장에서 order 항목은 rank를 담으며, validator의 `order`는 rank를 형제와 공유하는 각 행에, 그 `order` 항목에 있다 — rank 사이의 빈틈은 위치를 바꾸지 않으므로 결함이 아니다 — 그리고 column의 type이 아닌 rank는 `type`뿐이며 어느 것과도 공유되지 않는다([document model](20-document-model.ko.md#순서)). 근거: 읽을 수 없는 값에는 비교가 없으므로 type 결함이 그것을 대신하며, 그 값이 무엇이든 다른 형제가 가지는 결함은 여전히 보고된다.
-- `parent`가 그 column의 type이 아닌 행은 알려진 형제 묶음에 속하지 않는다: 자신의 `order`는 판정하지 않으며 그 `type`이 대신한다. 묶음 안에서 공유되는 rank는 그런 행이 어느 묶음에 들어가든 보고한다.
+- 순서 값은 column type의 어떤 값이든 된다: 형제와 공유하는 값과 값 사이의 빈틈은 결함이 아니며,
+  column을 빠뜨린 insert는 default 없는 다른 non-null column처럼 `IR_INVALID`다. column의 type이 아닌
+  값은 `type`뿐이며, 그 행은 읽을 수 있는 형제 뒤에 선다([document model](20-document-model.ko.md#순서)).
+  근거: database는 application이 쓴 값을 가지며, 형제 묶음의 순서는 값과 key만의 함수다.
 
 ## 상태 column
 
@@ -157,8 +158,8 @@ param은 보이지 않는 데이터다. grouping은 같은 값을 가진 행을 
 
 - commit은 먼저 그 대상이 읽은 뒤 바뀌지 않았는지 검사한다: 바뀌었으면 `WRITE_CONFLICT`다. constraint 검사는 그 다음
   잠금 아래에서 다시 읽은 corpus 위에서 실행한다.
-- 다른 행의 validator 진단(`type`, `key.duplicate`, `reference.dangling`, `check`, `codec`, `view`, `order`, 여러 `files` file에 걸친 `parent.cycle`)은 commit을 실패시키지 않되, `type` 진단은 commit의 제약 검사가 그 값을 평가해야 할 때 commit을 실패시키고, 바이트 단위로 같은 key를 가진 두 행은 그 table을 사용할 수 없게 한다([canonical format](10-canonical-format.md#diagnostics)); `format.*` 진단은 다시 쓰기 거절과 사용할 수 없는 table 상태([canonical format](10-canonical-format.ko.md#진단))가 정하는 경우에만 commit을 실패시킨다.
-- file을 다시 써야 하는 commit — 행 자신의 file, 유도된 target이 바뀌는 행(상세 섹션이 생기거나 사라지거나, insert가 dangling link에 그 행을 주는 행)으로의 link를 가진 file, `order`의 형제 — 은 그 file이 `format.*` 진단을 가지면 거절한다: `CONSTRAINT`이며 file과 진단을 밝히고, `format.noncanonical`이면 `flowmark canon`을 밝힌다. 세 commit은 면제된다: 대상에 대한 `flowmark canon`([operations](40-ops.ko.md#canon-연산)), 추가된 column이 일으킨 진단에 대한 add-column migration([migration](80-migration.ko.md)) — 그 진단은 그 migration에 대해 table을 사용할 수 없게 하지 않는다 —, `files` 행의 file 전체를 지우는 delete는 rewrite 거절에서만 면제되며, restrict 검사는 그 행을 참조할 수 있는 모든 table의 행을 여전히 필요로 하며(자신의 table을 `parent`로 하는 것, 자식 block, 그 행으로의 foreign key를 가진 모든 table), 그 중 하나라도 사용할 수 없으면 그 delete는 `CONSTRAINT`다.
+- 다른 행의 validator 진단(`type`, `key.duplicate`, `reference.dangling`, `check`, `codec`, `view`, 여러 `files` file에 걸친 `parent.cycle`)은 commit을 실패시키지 않되, `type` 진단은 commit의 제약 검사가 그 값을 평가해야 할 때 commit을 실패시키고, 바이트 단위로 같은 key를 가진 두 행은 그 table을 사용할 수 없게 한다([canonical format](10-canonical-format.md#diagnostics)); `format.*` 진단은 다시 쓰기 거절과 사용할 수 없는 table 상태([canonical format](10-canonical-format.ko.md#진단))가 정하는 경우에만 commit을 실패시킨다.
+- file을 다시 써야 하는 commit — 행 자신의 file, 유도된 target이 바뀌는 행(상세 섹션이 생기거나 사라지거나, insert가 dangling link에 그 행을 주는 행)으로의 link를 가진 file — 은 그 file이 `format.*` 진단을 가지면 거절한다: `CONSTRAINT`이며 file과 진단을 밝히고, `format.noncanonical`이면 `flowmark canon`을 밝힌다. 세 commit은 면제된다: 대상에 대한 `flowmark canon`([operations](40-ops.ko.md#canon-연산)), 추가된 column이 일으킨 진단에 대한 add-column migration([migration](80-migration.ko.md)) — 그 진단은 그 migration에 대해 table을 사용할 수 없게 하지 않는다 —, `files` 행의 file 전체를 지우는 delete는 rewrite 거절에서만 면제되며, restrict 검사는 그 행을 참조할 수 있는 모든 table의 행을 여전히 필요로 하며(자신의 table을 `parent`로 하는 것, 자식 block, 그 행으로의 foreign key를 가진 모든 table), 그 중 하나라도 사용할 수 없으면 그 delete는 `CONSTRAINT`다.
 
 ## Audit
 
@@ -187,7 +188,7 @@ database는 작성자 독점을 강제하지만 corpus에는 그것이 없다. �
 ## 진단
 
 모든 규칙은 `{file, line, column, rule, message}`를 보고하며, column은 [canonical format](10-canonical-format.ko.md#진단)이 정하는 대로다. 규칙 이름은 `catalog`, `type`,
-`key.duplicate`, `reference.dangling`, `check`, `codec`, `view`, `parent.cycle`, `order`, `corpus.walk`
+`key.duplicate`, `reference.dangling`, `check`, `codec`, `view`, `parent.cycle`, `corpus.walk`
 ([document model](20-document-model.md)의 walk 규칙), 그리고 canonical format의 `format.*` 규칙이다: `format.noncanonical`, `format.block`,
 `format.section`, `format.encoding`. 검증은 corpus 전체에 걸친다. 깨진 corpus 안의 깨끗한 file이 corpus를
-유효하게 만들지 않는다. 열기, introspection, `flowmark validate`, `flowmark canon`은 행에 대한 요청이 아니므로 사용할 수 없는 table에서 결코 실패하지 않으며, canon의 링크 유도 거절은 예외다([operations](40-ops.ko.md#canon-연산)). validator는 모든 file의 `format.*`와 `parent.cycle` 진단과, `format.block`, `format.section`, `format.encoding`이나 그 행 사이의 `parent.cycle`이 없는 file 안에서 읽을 수 있는 모든 행의 validator 규칙을 보고한다. `format.block`, `format.section`, `format.encoding`이나 그 행 사이의 `parent.cycle`이 있는 file을 가진 table의 완전한 행을 필요로 하는 규칙 — 그 table로의 `reference.dangling`, `key.duplicate`, 그 안의 `order` — 은 그 table에 대해 보고하지 않으며, file 자신의 진단이 그것을 대신한다. 여러 `files` file에 걸친 validator의 `parent.cycle`은 읽을 수 있는 행 사이에서 보고한다. 순환은 그 행들 자신의 `parent` 값으로 만들어지며 읽지 못한 어떤 행도 그것을 풀 수 없기 때문이다. 바이트 단위로 같은 key 때문에만 사용할 수 없는 table은 모든 규칙이 보고된다.
+유효하게 만들지 않는다. 열기, introspection, `flowmark validate`, `flowmark canon`은 행에 대한 요청이 아니므로 사용할 수 없는 table에서 결코 실패하지 않으며, canon의 링크 유도 거절은 예외다([operations](40-ops.ko.md#canon-연산)). validator는 모든 file의 `format.*`와 `parent.cycle` 진단과, `format.block`, `format.section`, `format.encoding`이나 그 행 사이의 `parent.cycle`이 없는 file 안에서 읽을 수 있는 모든 행의 validator 규칙을 보고한다. `format.block`, `format.section`, `format.encoding`이나 그 행 사이의 `parent.cycle`이 있는 file을 가진 table의 완전한 행을 필요로 하는 규칙 — 그 table로의 `reference.dangling`, 그 안의 `key.duplicate` — 은 그 table에 대해 보고하지 않으며, file 자신의 진단이 그것을 대신한다. 여러 `files` file에 걸친 validator의 `parent.cycle`은 읽을 수 있는 행 사이에서 보고한다. 순환은 그 행들 자신의 `parent` 값으로 만들어지며 읽지 못한 어떤 행도 그것을 풀 수 없기 때문이다. 바이트 단위로 같은 key 때문에만 사용할 수 없는 table은 모든 규칙이 보고된다.

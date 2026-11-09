@@ -236,7 +236,6 @@ table users {
   name varchar(255)
   primary key (id)
   settings {
-    key_prefix 'U'
     store document table
   }
 }
@@ -661,7 +660,6 @@ func TestLoadRejectsFilesWithoutTitle(t *testing.T) {
   body text
   primary key (id)
   settings {
-    key_prefix 'N'
     store files
     body body
     markdown body
@@ -755,7 +753,6 @@ func TestLoadRejectsBodyAtScopeEight(t *testing.T) {
   title varchar(255)
   primary key (id)
   settings {
-    key_prefix 'N'
     store files
     title title
   }
@@ -877,7 +874,6 @@ func TestLoadRejectsBlockCycle(t *testing.T) {
   index ix_node_parent (parent)
   foreign key fk_node_parent (parent) references node (id) on delete restrict on update restrict
   settings {
-    key_prefix 'N'
     store block fk_node_parent table
   }
 }
@@ -1012,7 +1008,6 @@ func noteGroup(column string) string {
   %[1]s text null
   primary key (id)
   settings {
-    key_prefix 'N'
     store files
     title title
     body body
@@ -1075,7 +1070,6 @@ const notesDoc = `table notes {
   title varchar(255)
   primary key (id)
   settings {
-    key_prefix 'M'
     store document table
     title title
   }
@@ -1129,7 +1123,6 @@ func tagTables(refs string) string {
   primary key (id)
   unique uq_tag_code (code)
   settings {
-    key_prefix 'G'
     store document table
     title code
   }
@@ -1158,7 +1151,6 @@ const gridTables = `table grid {
   primary key (id)
   unique uq_grid_xy (x, y)
   settings {
-    key_prefix 'G'
     store document table
     title x
   }
@@ -1412,8 +1404,8 @@ func TestLoadIdentityKeyType(t *testing.T) {
 
 // shardedPeople stores people as a document table sharded by the month of a joined time.
 var shardedPeople = [][2]string{
-	{"  name varchar(255)\n  primary key (id)\n  settings {\n    key_prefix 'P'\n    store document table\n",
-		"  name varchar(255)\n  joined datetime(6)\n  primary key (id)\n  settings {\n    key_prefix 'P'\n    store document table shard joined month\n"},
+	{"  name varchar(255)\n  primary key (id)\n  settings {\n    store document table\n",
+		"  name varchar(255)\n  joined datetime(6)\n  primary key (id)\n  settings {\n    store document table shard joined month\n"},
 }
 
 func TestLoadReadsStoreShard(t *testing.T) {

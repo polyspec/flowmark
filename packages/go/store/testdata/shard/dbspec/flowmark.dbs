@@ -6,7 +6,6 @@ table events {
   at datetime(6)
   primary key (id)
   settings {
-    key_prefix 'E'
     store files shard at month
     title title
   }
@@ -18,7 +17,6 @@ table notes {
   written date
   primary key (id)
   settings {
-    key_prefix 'N'
     store document table shard written year
     title title
   }
@@ -32,7 +30,6 @@ table refs {
   index ix_refs_event (event)
   foreign key fk_refs_event (event) references events (id) on delete restrict on update restrict
   settings {
-    key_prefix 'R'
     store files
     title title
   }

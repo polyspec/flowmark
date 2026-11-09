@@ -339,7 +339,7 @@ func TestAnchorCodecs(t *testing.T) {
 		}
 	}
 	steps := func(title string) *Row {
-		r := taskWithBlocks(map[string][]*Row{"task_steps": {stepRow("S1", "Draft", "1", "true", "Step body.\n", nil)}})
+		r := taskWithBlocks(map[string][]*Row{"task_steps": {stepRow("S1", "Draft", "true", "Step body.\n", nil)}})
 		r.Title = title
 		return r
 	}

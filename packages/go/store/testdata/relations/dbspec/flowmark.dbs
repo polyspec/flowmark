@@ -13,7 +13,6 @@ table tenants {
   name varchar(40)
   primary key (id)
   settings {
-    key_prefix 'T'
     store document table
     title name
   }
@@ -27,7 +26,6 @@ table teams {
   foreign key fk_teams_tenant (tenant) references tenants (id) on delete restrict on update restrict
   index ix_teams_tenant (tenant)
   settings {
-    key_prefix 'G'
     store files
     title name
   }
@@ -44,7 +42,6 @@ table members {
   index ix_members_team (team)
   index ix_members_pinned (pinned_post)
   settings {
-    key_prefix 'M'
     store document list
     title name
   }
@@ -58,7 +55,6 @@ table categories {
   foreign key fk_categories_parent (parent) references categories (id) on delete restrict on update restrict
   index ix_categories_parent (parent)
   settings {
-    key_prefix 'C'
     store files
     title name
   }
@@ -78,7 +74,6 @@ table posts {
   index ix_posts_category (category)
   index ix_posts_team (team)
   settings {
-    key_prefix 'P'
     store document table
     title title
   }
@@ -120,7 +115,6 @@ table reactions {
   foreign key fk_reactions_comment (comment) references comments (id) on delete restrict on update restrict
   index ix_reactions_comment (comment)
   settings {
-    key_prefix 'R'
     store files
     title kind
   }
@@ -134,7 +128,6 @@ table badges {
   foreign key fk_badges_member (member) references members (id) on delete restrict on update restrict
   index ix_badges_member (member)
   settings {
-    key_prefix 'B'
     store files
     title label
   }
@@ -148,7 +141,6 @@ table alerts {
   foreign key fk_alerts_member (member) references members (id) on delete restrict on update restrict
   index ix_alerts_member (member)
   settings {
-    key_prefix 'A'
     store document table
     title note
   }
@@ -162,7 +154,6 @@ table approvals {
   foreign key fk_approvals_member (member) references members (id) on delete restrict on update restrict
   index ix_approvals_member (member)
   settings {
-    key_prefix 'V'
     store document list
     title member
   }

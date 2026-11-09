@@ -6,7 +6,7 @@ table items {
   state varchar(16)
   title varchar(255)
   body text
-  position i32
+  position i32 null
   owner varchar(32) null
   estimate decimal(6,2) null
   done bool
@@ -28,11 +28,9 @@ table items {
   foreign key fk_items_parent (parent) references items (id) on delete restrict on update restrict
   foreign key fk_items_owner (owner) references people (id) on delete restrict on update restrict
   settings {
-    key_prefix 'T'
     store document list
     title title
     body body
-    order position
     markdown body
     markdown evidence
     markdown cause
@@ -69,7 +67,6 @@ table people {
   index ix_people_parent (parent)
   foreign key fk_people_parent (parent) references people (id) on delete restrict on update restrict
   settings {
-    key_prefix 'P'
     store document table
     title name
     markdown bio
@@ -81,14 +78,12 @@ table milestones {
   id varchar(16)
   parent varchar(16) null
   title varchar(255)
-  position i32
   primary key (id)
   index ix_milestones_parent (parent)
   foreign key fk_milestones_parent (parent) references milestones (id) on delete restrict on update restrict
   settings {
     store document table
     title title
-    order position
   }
 }
 
@@ -97,7 +92,7 @@ table notes {
   parent varchar(16) null
   title varchar(255)
   body text
-  position i32
+  position i32 null
   note text null
   primary key (id)
   index ix_notes_parent (parent)
@@ -106,7 +101,6 @@ table notes {
     store document list
     title title
     body body
-    order position
     markdown body
   }
 }
@@ -133,7 +127,7 @@ table item_notes {
   parent varchar(16) null
   title varchar(255)
   body text
-  position i32
+  position i32 null
   tag varchar(16) null
   primary key (id)
   index ix_item_notes_item (item)
@@ -144,7 +138,6 @@ table item_notes {
     store block fk_note_item list
     title title
     body body
-    order position
     markdown body
   }
 }
@@ -156,7 +149,7 @@ table item_checks {
   state varchar(16)
   title varchar(255)
   body text
-  position i32
+  position i32 null
   owner varchar(32) null
   estimate decimal(6,2) null
   done bool
@@ -181,7 +174,6 @@ table item_checks {
     store block fk_check_item list
     title title
     body body
-    order position
     markdown body
     markdown evidence
     checkbox state open ' '

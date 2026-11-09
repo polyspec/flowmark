@@ -1,5 +1,5 @@
 <!-- doc-id: spec-ops -->
-<!-- source-sha256: 410e56e964a2efa5703635812df1319840bbbf2833d8c7ef572decacac30cf2c -->
+<!-- source-sha256: aa14f84674b47c586f34849e7adf32b433f9816ef4b2a15dcca428c1a732a9da -->
 # Operations
 
 [English](40-ops.md)
@@ -276,9 +276,10 @@ client가 구현할 것은 이 driver뿐이다.
   뒤에 commit generation이 그 경로를 알릴 때 corpus와 함께 읽는다. 손으로 고친 파일은 `dbspec/`을 손으로 고친 것처럼
   그다음 읽기에서 읽힌다. git을 되감으면 counter도 행과 함께 되감긴다. `statement`의 `TestSequences`, `irexec`의
   `TestSequenceRaise`와 `TestRaiseSequences`, `catalog`의 `TestAutoincrement`와 `TestSequencesFile`이 이를 확인한다.
-- **할당 column.** `key_prefix` key와 `order` 위치는 corpus가 할당하므로, 문장의 schema는 SQLite의 `INTEGER PRIMARY KEY`처럼
-  둘 다 NULL을 허용한다. 하나를 빠뜨리거나 NULL을 준 insert는 prefix의 다음 key([document model](20-document-model.ko.md#key))나
-  parent 아래 다음 위치를 행이 insert된 순서대로 받고, key의 `RETURNING`은 행이 받은 key를 읽는다. `ON CONFLICT`는 SQLite처럼
+- **할당 column 없음.** text key와 `order` column은 orm이 닿는 database에서처럼 insert가 준다
+  ([document model](20-document-model.ko.md#key)): 문장의 schema는 둘 다 `NOT NULL`로 선언하므로, 하나를 빠뜨리거나 NULL을 준
+  insert는 SQLite의 `NOT NULL constraint failed`로 실패하고, corpus는 문장이 쓴 값을 가진다. `statement`의
+  `TestNoAssignedColumns`가 이를 확인한다. `ON CONFLICT`는 SQLite처럼
   key를 byte 단위로 만나며, 대소문자만 다른 key는 `DUPLICATE_KEY`다: key 규칙이 모든 쓰기를 판정한다.
 - **Transaction.** `BEGIN IMMEDIATE`와 `BEGIN EXCLUSIVE`는 곧바로 lock을 잡는다. 일반 `BEGIN`은 lock을 잡지 않는다: 첫
   읽기가 읽을 corpus를 정하고, 첫 쓰기가 lock을 잡는다. 대기가 끝나면 `(SQLITE_BUSY)`로 끝나는 `CANCELED`이고, 첫 읽기보다
@@ -635,8 +636,7 @@ MySQL과 PostgreSQL은 `datetime(p)` column을 `NOW(6)`와 여섯 자리로 비�
   map은 같은 경로를 따라 비교된다. `TestCost`가 둘을 확인한다: 쓰기는 1,000행과 100,000행에서 같은 행을
   복사하고, 문서 수의 밑 2 로그의 여덟 배 이하를 비교한다.
 - corpus는 행의 index를 유지한다: key로, 대소문자를 가리지 않는 key로, 쓰기가 값으로 읽는 각 column의 값 —
-  foreign key, placement 또는 parent key, unique key, 순서 있는 행의 형제 group —
-  으로, 각 identity column과 `key_prefix` key의 수로 찾는다. index는 문서처럼 persistent하며, 서로에게서
+  foreign key, placement 또는 parent key, unique key — 으로, key와 각 identity column의 수로 찾는다. index는 문서처럼 persistent하며, 서로에게서
   읽거나 쓴 corpus 사이에 공유된다. 읽기나 쓰기는 행을 바꾸는 문서마다 표시하고, 다음에 index에 접근하기 전에
   표시된 문서의 행 가운데 새 행, 바뀐 행, 다른 부모 아래로 간 행, 다시 들어간 부모 아래의 행이 index에서
   빠졌다가 지금 모습으로 다시 들어간다. 그래서 index의 비용은 바뀐 문서의 행이다. corpus를 연 뒤 첫 쓰기가
@@ -648,8 +648,8 @@ MySQL과 PostgreSQL은 `datetime(p)` column을 `NOW(6)`와 여섯 자리로 비�
   만들어지고 그중 한 행의 쓰기가 두 크기에서 같은 항목을 씀을 확인하고, `TestCost`가 모든 연산이 1,000행과 100,000행에서
   같은 항목을 씀을 확인한다.
 - 쓰기와 그 검사는 필요한 행을 table을 걷지 않고 index로 읽는다: 진술된 행, placement 행, parent 행,
-  참조되는 행은 key로, 가장 큰 `key_prefix` 수와 identity는 수 index로, 형제 group은 group으로, 한 행을
-  참조하는 행은 그 foreign key가 가리키는 key로, state의 행은 그 값으로, unique key의 행은 그 값으로 읽는다.
+  참조되는 행은 key로, 가장 큰 key와 identity는 수 index로, 한 행을 참조하는 행은 그 foreign key가
+  가리키는 key로, unique key의 행은 그 값으로 읽는다.
   index는 이 값들 가운데 column type의 값이 아닌 것에 대해, 평가가 실패하는 행도 가진다. 검사는 필요한
   key의 행을 그 행들과 함께 읽고, table의 각 행을 판정하던 대로 corpus 순서로 하나씩 판정한다. 그래서 table을
   걷던 때와 같은 행에서 실패한다. 쓰기가 옮길 수 있는 link target은 쓰기가 바꾼 문서의 행에서 구하고, link
@@ -665,9 +665,9 @@ MySQL과 PostgreSQL은 `datetime(p)` column을 `NOW(6)`와 여섯 자리로 비�
   `TestRefresh`와 `FuzzRefresh`가 각 golden corpus의 문서를 자르고, 지우고, 되돌리고, 맞바꾸며 갱신한 database가
   처음부터 채운 database와 같고, 그 채우기가 실패할 때에만 실패함을 확인한다.
 - 쓰기 문장은 database에서 표가 아니라 자기가 바꾼 행을 읽는다: SQLite의 pre-update hook이 알린 행을 그 rowid에서
-  읽고, 할당하는 key는 corpus의 number index에서 가장 큰 것부터 내려가며 문장이 가져간 key를 건너뛴다. `TestCost`가
-  쓰기와 거부된 쓰기가 1,000행과 100,000행에서 database의 같은 행을 읽음을 확인하고, `statement`의 `TestCapture`,
-  `TestCaptureKeys`, `FuzzCapture`가 그 행으로 만든 차이가 표의 모든 행의 차이와 같음을 REPLACE, foreign key action,
+  읽는다. `TestCost`가
+  쓰기와 거부된 쓰기가 1,000행과 100,000행에서 database의 같은 행을 읽음을 확인하고, `statement`의 `TestCapture`와
+  `FuzzCapture`가 그 행으로 만든 차이가 표의 모든 행의 차이와 같음을 REPLACE, foreign key action,
   trigger, rowid 변경, NUL을 품은 text에 걸쳐 확인한다.
 - 이 경로의 한계는 `TestCost`가 기록하는 비용과 `statement`의 `BenchmarkStatement`가 재는 시간이며, 작은 corpus 옆에
   둔 표 하나의 1,000행, 10,000행, 100,000행에서 잰다. 비교한 문서를 뺀 모든 수치는 세 크기에서 같다: 한 행의 쓰기

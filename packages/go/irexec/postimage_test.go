@@ -19,7 +19,7 @@ func TestPostImage(t *testing.T) {
 		{"an update of a document row", "update", "people", map[string]any{"set": sets("name"), "where": where(pred("id", "eq", p(1)))}, []any{"Renamed", "P2"}},
 		{"an update of a files row", "update", "notes", map[string]any{"set": sets("title"), "where": where(pred("id", "eq", p(1)))}, []any{"Renamed", "N1"}},
 		{"a delete of a files row", "delete", "notes", map[string]any{"where": where(pred("id", "eq", p(0)))}, []any{"N2"}},
-		{"an insert of a files row", "insert", "notes", map[string]any{"set": sets("id", "title", "body")}, []any{"N9", "Ninth", "Body."}},
+		{"an insert of a files row", "insert", "notes", map[string]any{"set": sets("id", "title", "body", "position")}, []any{"N9", "Ninth", "Body.", 3}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := catalogFixture(t, baseDocs()).on(t)

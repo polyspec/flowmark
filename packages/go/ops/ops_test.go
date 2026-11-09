@@ -126,13 +126,14 @@ func TestOperations(t *testing.T) {
 	})
 	t.Run("40#the-faces: the writes answer their keys and the table's rows", func(t *testing.T) {
 		c := boardCorpus(t)
-		a := ok(t, c, "row.insert", `{"table":"items","values":{"title":"First","body":"","owner":"P1"}}`)
+		a := ok(t, c, "row.insert", `{"table":"items","values":{"id":"T1","title":"First","body":"","position":1,"owner":"P1"}}`)
 		if want := `{"affected":1,"keys":["T1"],"rows":[{"id":"T1","parent":null,"state":"waiting","title":"First","body":"","position":1,"owner":"P1","evidence":null}]}`; a != want {
 			t.Fatalf("row.insert = %s, want %s", a, want)
 		}
-		ok(t, c, "row.insert", `{"table":"items","values":{"title":"Second","body":""}}`)
-		a = ok(t, c, "row.move", `{"table":"items","key":"T2","position":1}`)
-		if !strings.Contains(a, `"rows":[{"id":"T2"`) || !strings.Contains(a, `"title":"First","body":"","position":2`) {
+		ok(t, c, "row.insert", `{"table":"items","values":{"id":"T2","title":"Second","body":"","position":2}}`)
+		// A move writes the value it is given and moves no sibling (spec 20 Order).
+		a = ok(t, c, "row.move", `{"table":"items","key":"T2","position":0}`)
+		if !strings.Contains(a, `"rows":[{"id":"T2"`) || !strings.Contains(a, `"title":"Second","body":"","position":0`) || !strings.Contains(a, `"title":"First","body":"","position":1`) {
 			t.Fatalf("row.move = %s", a)
 		}
 		a = ok(t, c, "row.move", `{"table":"items","key":"T1","position":1,"parent":"T2"}`)

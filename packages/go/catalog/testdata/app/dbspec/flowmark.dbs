@@ -25,7 +25,6 @@ table items {
   check ck_items_due (due_on is null or due_at is null)
   check ck_items_state (state in ('waiting', 'doing', 'done', 'bypassed', 'impossible'))
   settings {
-    key_prefix 'T'
     store files
     title title
     body body
@@ -42,7 +41,6 @@ table people {
   name varchar(255)
   primary key (id)
   settings {
-    key_prefix 'P'
     store document table
     title name
   }

@@ -23,14 +23,14 @@ func relationsDBS(t testing.TB) string {
 	return string(b)
 }
 
-// TestRelationsCatalogRules pins what the catalog of complex foreign keys refuses: a composite primary key and a
+// TestRelationsCatalogRules pins what the catalog of complex foreign keys refuses: a composite primary key of a files table and a
 // composite foreign key are schema errors, for a foreign key is a link to a row and a row has a link only through its
 // one-column key.
 func TestRelationsCatalogRules(t *testing.T) {
 	base := relationsDBS(t)
 	compositePK := strings.Replace(base,
-		"  id varchar(8)\n  name varchar(40)\n  primary key (id)\n  settings {\n    key_prefix 'T'",
-		"  id varchar(8)\n  name varchar(40)\n  seat varchar(4)\n  primary key (id, seat)\n  settings {\n    key_prefix 'T'", 1)
+		"  label varchar(24)\n  primary key (id)\n",
+		"  label varchar(24)\n  seat varchar(4)\n  primary key (id, seat)\n", 1)
 	compositeFK := strings.Replace(base,
 		"  foreign key fk_teams_tenant (tenant) references tenants (id) on delete restrict on update restrict",
 		"  foreign key fk_teams_pair (tenant, id) references tenants (id) on delete restrict on update restrict", 1)
@@ -39,7 +39,7 @@ func TestRelationsCatalogRules(t *testing.T) {
 		dbs  string
 		want string
 	}{
-		{"30#corpus-rules-on-dbspec-constructs: a composite primary key", compositePK, "single-column primary key"},
+		{"30#corpus-rules-on-dbspec-constructs: a composite primary key", compositePK, "the primary key is composite"},
 		{"30#corpus-rules-on-dbspec-constructs: a composite foreign key", compositeFK, "2 columns and 1 referenced"},
 	} {
 		t.Run(c.name, func(t *testing.T) {

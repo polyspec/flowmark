@@ -394,7 +394,7 @@ func TestJoins(t *testing.T) {
 // inner join drops the parent row, from all and from count alike.
 func TestJoinSoftDeleted(t *testing.T) {
 	docs := baseDocs()
-	docs["items.flowmark.md"] = strings.Replace(docs["items.flowmark.md"], "- [ ] T3 Review the design", "- [ ] T3 Review the design owner:[P3](people.flowmark.md)", 1)
+	docs["items.flowmark.md"] = strings.Replace(docs["items.flowmark.md"], "- [ ] T3 Review the design position:2", "- [ ] T3 Review the design position:2 owner:[P3](people.flowmark.md)", 1)
 	f := catalogFixture(t, docs)
 	join := func(kind string) map[string]any {
 		return map[string]any{"rel": "who", "kind": kind, "left": "owner", "right": "id", "query": map[string]any{"entity": "people", "columns": map[string]any{"mode": "none", "add": []string{"name"}}}}
@@ -661,7 +661,7 @@ func TestClock(t *testing.T) {
 	})
 	t.Run("40#the-clock: written into datetime(0) and datetime(3) the clock is truncated, never rounded", func(t *testing.T) {
 		f := fresh(t)
-		f.commit(f.ok(f.msgAt(late, "insert", "people", map[string]any{"set": sets("name")}, "Lin")))
+		f.commit(f.ok(f.msgAt(late, "insert", "people", map[string]any{"set": sets("id", "name")}, "P4", "Lin")))
 		f.commit(f.ok(f.msgAt(late, "insert", "stamps", map[string]any{"set": sets("label")}, "one")))
 		f.want(f.msg("all", "people", map[string]any{"columns": map[string]any{"mode": "none", "add": []string{"joined"}}, "where": where(pred("id", "eq", p(0)))}, "P4"),
 			`{"rows":[{"id":"P4","joined":"2026-10-11 10:00:00.000000"}]}`)

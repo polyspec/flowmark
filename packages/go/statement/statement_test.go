@@ -803,7 +803,7 @@ func TestManyRowsOfOneStatement(t *testing.T) {
 	}
 }
 
-// openBoard opens a session on a corpus of the board catalog, whose items take a key_prefix key and an order position.
+// openBoard opens a session on a corpus of the board catalog, whose items have a text key and an order column.
 func openBoard(t *testing.T) (*writepath.Session, string) {
 	t.Helper()
 	root := t.TempDir()
@@ -821,41 +821,21 @@ func openBoard(t *testing.T) (*writepath.Session, string) {
 	return s, root
 }
 
-// TestAssignedColumns pins that an insert may leave out what the corpus assigns: a key_prefix key, allocated <p><n + 1>
-// over the keys of the form <p><n>, and an order position, the next one under the row's parent. A RETURNING of the key
-// reads the key the row was given, and the key column reads as one that may hold NULL, as SQLite's INTEGER PRIMARY KEY
-// does.
-func TestAssignedColumns(t *testing.T) {
+// TestNoAssignedColumns pins that the corpus assigns no value SQLite does not assign (spec 20 Keys and Order): an insert
+// that leaves out a text key or an order column fails as SQLite fails a NOT NULL column without a default, the key
+// column reads as NOT NULL, and an order value is what the statement wrote, in the session and in a new corpus alike.
+func TestNoAssignedColumns(t *testing.T) {
 	s, root := openBoard(t)
-	returned := func(text string) string {
-		t.Helper()
-		return fmt.Sprint(run(t, s, text).Rows)
+	fails(t, s, "INSERT INTO items (title, body, position) VALUES ('a', '', 1)", "DRIVER", "NOT NULL constraint failed: items.id")
+	fails(t, s, "INSERT INTO items (id, title, body) VALUES ('T1', 'a', '')", "DRIVER", "NOT NULL constraint failed: items.position")
+	if got := fmt.Sprint(run(t, s, "INSERT INTO items (id, title, body, position) VALUES ('T2', 'b', '', 20), ('T1', 'a', '', -5) RETURNING id").Rows); got != "[[T2] [T1]]" {
+		t.Fatalf("returned %s, want [[T2] [T1]]", got)
 	}
-	if got := returned("INSERT INTO items (title, body) VALUES ('a', '') RETURNING id"); got != "[[T1]]" {
-		t.Fatalf("returned %s, want [[T1]]", got)
+	run(t, s, "UPDATE items SET position = 7 WHERE id = 'T1'")
+	if got := fmt.Sprint(run(t, s, `SELECT "notnull", pk FROM pragma_table_info('items') WHERE name = 'id'`).Rows[0]); got != "[1 1]" {
+		t.Fatalf("the key column reads %s, want [1 1]", got)
 	}
-	if got := returned("INSERT INTO items (title, body) VALUES ('b', ''), ('c', '') RETURNING id, title"); got != "[[T2 b] [T3 c]]" {
-		t.Fatalf("returned %s, want [[T2 b] [T3 c]]", got)
-	}
-	run(t, s, "INSERT INTO items (id, title, body) VALUES ('T10', 'd', ''), ('T011', 'e', ''), ('Tx', 'f', '')")
-	if got := returned("INSERT INTO items (id, title, body) VALUES (NULL, 'g', '') RETURNING id"); got != "[[T11]]" {
-		t.Fatalf("returned %s, want [[T11]]", got)
-	}
-	// An upsert that meets a row returns that row's key.
-	if got := returned("INSERT INTO items (id, title, body) VALUES ('T10', 'd2', '') ON CONFLICT (id) DO UPDATE SET title = excluded.title RETURNING id"); got != "[[T10]]" {
-		t.Fatalf("returned %s, want [[T10]]", got)
-	}
-	run(t, s, "INSERT INTO items (id, title, body) VALUES ('T20', 'h', '')")
-	run(t, s, "BEGIN")
-	run(t, s, "INSERT INTO items (title, body) VALUES ('i', '')")
-	if got := returned("INSERT INTO items (title, body) VALUES ('j', '') RETURNING id"); got != "[[T22]]" {
-		t.Fatalf("returned %s in a transaction, want [[T22]]", got)
-	}
-	run(t, s, "COMMIT")
-	if got := fmt.Sprint(run(t, s, `SELECT "notnull", pk FROM pragma_table_info('items') WHERE name = 'id'`).Rows[0]); got != "[0 1]" {
-		t.Fatalf("the key column reads %s, want [0 1]", got)
-	}
-	// A new corpus reads the files: the keys and the positions are the corpus's own.
+	// A new corpus reads the files: the values are those the statements wrote.
 	c, err := ops.Open(context.Background(), root, 0)
 	corpustest.Opened(t, c, err)
 	fresh, err := c.Session("statement-board-fresh")
@@ -864,7 +844,7 @@ func TestAssignedColumns(t *testing.T) {
 	}
 	t.Cleanup(func() { closeSession(t, fresh) })
 	const positions = "SELECT id, position, title FROM items ORDER BY position"
-	want := "[[T1 1 a] [T2 2 b] [T3 3 c] [T10 4 d2] [T011 5 e] [Tx 6 f] [T11 7 g] [T20 8 h] [T21 9 i] [T22 10 j]]"
+	want := "[[T1 7 a] [T2 20 b]]"
 	if got := fmt.Sprint(run(t, fresh, positions).Rows); got != want {
 		t.Fatalf("the files hold %s, want %s", got, want)
 	}

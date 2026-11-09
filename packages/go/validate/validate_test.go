@@ -150,12 +150,8 @@ func TestCorpusRules(t *testing.T) {
 				"entries/A.flowmark.md:2:3 parent.cycle",
 				"entries/B.flowmark.md:2:3 parent.cycle",
 			}},
-		{name: "50#hierarchy-and-order: a gap between ranks is no fault", dir: "order-gap"},
-		{name: "50#hierarchy-and-order: a value shared with a sibling", dir: "order-shared-reject",
-			want: []string{
-				"entries/E1.flowmark.md:3:3 order",
-				"entries/E2.flowmark.md:3:3 order",
-			}},
+		{name: "50#hierarchy-and-order: a gap between values is no fault", dir: "order-gap"},
+		{name: "50#hierarchy-and-order: a value shared with a sibling is no fault", dir: "order-shared"},
 		{name: "50#diagnostics: no order in an unavailable table", dir: "order-blocked",
 			want: []string{"entries/_bad.flowmark.md:1 format.block"}},
 		{name: "20#corpus-documents-and-the-walk: a document outside every place", dir: "walk-root-doc",
@@ -324,8 +320,8 @@ func TestValidatorRules(t *testing.T) {
 			files: map[string]string{"tickets.flowmark.md": tickets("K1 - doing", "K1 - doing")},
 			want:  []string{"tickets.flowmark.md:5:3 key.duplicate"}},
 
-		// order: a rank orders its siblings; only a shared rank is an order fault, and
-		// a rank not of its type is type alone.
+		// order: a value orders its siblings, shared or not; a value not of its type
+		// is type alone.
 		{name: "50#hierarchy-and-order: orders 1, 2, 3 are accepted",
 			files: map[string]string{
 				"plans/P1.flowmark.md":   planOne,
@@ -341,19 +337,15 @@ func TestValidatorRules(t *testing.T) {
 				"entries/E3.flowmark.md": entry("Three", "", "x"),
 			},
 			want: []string{"entries/E3.flowmark.md:3:3 type"}},
-		{name: "50#hierarchy-and-order: orders 1, 1, x are order at both 1s and type at x",
+		{name: "50#hierarchy-and-order: orders 1, 1, x are type alone at x",
 			files: map[string]string{
 				"plans/P1.flowmark.md":   planOne,
 				"entries/E1.flowmark.md": entry("One", "", "1"),
 				"entries/E2.flowmark.md": entry("Two", "", "1"),
 				"entries/E3.flowmark.md": entry("Three", "", "x"),
 			},
-			want: []string{
-				"entries/E1.flowmark.md:3:3 order",
-				"entries/E2.flowmark.md:3:3 order",
-				"entries/E3.flowmark.md:3:3 type",
-			}},
-		{name: "50#hierarchy-and-order: ranks -5, 4000, x are type alone at x",
+			want: []string{"entries/E3.flowmark.md:3:3 type"}},
+		{name: "50#hierarchy-and-order: values -5, 4000, x are type alone at x",
 			files: map[string]string{
 				"plans/P1.flowmark.md":   planOne,
 				"entries/E1.flowmark.md": entry("One", "", "-5"),
@@ -361,15 +353,11 @@ func TestValidatorRules(t *testing.T) {
 				"entries/E3.flowmark.md": entry("Three", "", "x"),
 			},
 			want: []string{"entries/E3.flowmark.md:3:3 type"}},
-		{name: "50#hierarchy-and-order: ranks 1000, 1000 are order at both, naming the rank",
+		{name: "50#hierarchy-and-order: values 1000, 1000 are no fault",
 			files: map[string]string{
 				"plans/P1.flowmark.md":   planOne,
 				"entries/E1.flowmark.md": entry("One", "", "1000"),
 				"entries/E2.flowmark.md": entry("Two", "", "1000"),
-			},
-			want: []string{
-				"entries/E1.flowmark.md:3:3 order ~ rank 1000",
-				"entries/E2.flowmark.md:3:3 order ~ rank 1000",
 			}},
 		{name: "50#hierarchy-and-order: an i32 overflow is type alone",
 			files: map[string]string{
@@ -389,7 +377,7 @@ func TestValidatorRules(t *testing.T) {
 				"entries/E3.flowmark.md": entry("Three", longKey, "1"),
 			},
 			want: []string{"entries/E3.flowmark.md:2:3 type"}},
-		{name: "50#hierarchy-and-order: a rank an unreadable parent's row shares is no order fault",
+		{name: "50#hierarchy-and-order: a value an unreadable parent's row shares is no fault",
 			files: map[string]string{
 				"plans/P1.flowmark.md":   planOne,
 				"entries/E1.flowmark.md": entry("One", "", "1"),
@@ -397,18 +385,14 @@ func TestValidatorRules(t *testing.T) {
 				"entries/E3.flowmark.md": entry("Three", longKey, "1"),
 			},
 			want: []string{"entries/E3.flowmark.md:2:3 type"}},
-		{name: "50#hierarchy-and-order: a value shared within the group stands whatever an unreadable parent joins",
+		{name: "50#hierarchy-and-order: a value shared within the group is no fault beside an unreadable parent",
 			files: map[string]string{
 				"plans/P1.flowmark.md":   planOne,
 				"entries/E1.flowmark.md": entry("One", "", "1"),
 				"entries/E2.flowmark.md": entry("Two", "", "1"),
 				"entries/E3.flowmark.md": entry("Three", longKey, "2"),
 			},
-			want: []string{
-				"entries/E1.flowmark.md:3:3 order",
-				"entries/E2.flowmark.md:3:3 order",
-				"entries/E3.flowmark.md:2:3 type",
-			}},
+			want: []string{"entries/E3.flowmark.md:2:3 type"}},
 
 		// parent.cycle across files, in an unavailable table too.
 		{name: "50#diagnostics: a cross-file cycle in an unavailable table is reported among the rows read",
@@ -708,8 +692,8 @@ func TestFilesCaseDuplicate(t *testing.T) {
 // TestCheck pins the comparison helper: a want with a line and a column must
 // match both, and a want with a text must match the message.
 func TestCheck(t *testing.T) {
-	d := catalog.Diagnostic{File: "a.flowmark.md", Line: 2, Column: 3, Rule: "order", Message: "the order of A"}
-	for _, w := range []string{"a.flowmark.md order", "a.flowmark.md:2 order", "a.flowmark.md:2:3 order", "a.flowmark.md:2:3 order ~ of A"} {
+	d := catalog.Diagnostic{File: "a.flowmark.md", Line: 2, Column: 3, Rule: "type", Message: "the type of A"}
+	for _, w := range []string{"a.flowmark.md type", "a.flowmark.md:2 type", "a.flowmark.md:2:3 type", "a.flowmark.md:2:3 type ~ of A"} {
 		if !parseWant(t, w).matches(d) {
 			t.Errorf("%q does not match %+v", w, d)
 		}

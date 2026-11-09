@@ -10,12 +10,12 @@ import (
 func TestShardInsert(t *testing.T) {
 	t.Run("20#time-shards: a files row in the folder of its month", func(t *testing.T) {
 		f := goldenFixture(t, "shard")
-		res := f.want(f.msg("insert", "events", map[string]any{"set": sets("title", "at")}, "First", "2026-10-11 09:30:00.000000"), `{"affected":1,"keys":["E1"]}`)
+		res := f.want(f.msg("insert", "events", map[string]any{"set": sets("id", "title", "at")}, "E1", "First", "2026-10-11 09:30:00.000000"), `{"affected":1,"keys":["E1"]}`)
 		if len(res.Post.Targets) != 1 || res.Post.Targets[0].Path != "events/2026-10/E1.flowmark.md" {
 			t.Fatalf("targets %+v", res.Post.Targets)
 		}
 		f.commit(res)
-		res = f.want(f.msg("insert", "events", map[string]any{"set": sets("title", "at")}, "Second", "2026-11-02 08:00:00.000000"), `{"affected":1,"keys":["E2"]}`)
+		res = f.want(f.msg("insert", "events", map[string]any{"set": sets("id", "title", "at")}, "E2", "Second", "2026-11-02 08:00:00.000000"), `{"affected":1,"keys":["E2"]}`)
 		if len(res.Post.Targets) != 1 || res.Post.Targets[0].Path != "events/2026-11/E2.flowmark.md" {
 			t.Fatalf("targets %+v", res.Post.Targets)
 		}
@@ -23,17 +23,17 @@ func TestShardInsert(t *testing.T) {
 	})
 	t.Run("20#time-shards: a document row in the document of its year, created when the year has none", func(t *testing.T) {
 		f := goldenFixture(t, "shard")
-		res := f.want(f.msg("insert", "notes", map[string]any{"set": sets("title", "written")}, "One", "2026-03-04"), `{"affected":1,"keys":["N1"]}`)
+		res := f.want(f.msg("insert", "notes", map[string]any{"set": sets("id", "title", "written")}, "N1", "One", "2026-03-04"), `{"affected":1,"keys":["N1"]}`)
 		if len(res.Post.Targets) != 1 || res.Post.Targets[0].Path != "notes/2026.flowmark.md" || res.Post.Targets[0].Before != nil {
 			t.Fatalf("targets %+v", res.Post.Targets)
 		}
 		f.commit(res)
-		res = f.want(f.msg("insert", "notes", map[string]any{"set": sets("title", "written")}, "Two", "2026-09-30"), `{"affected":1,"keys":["N2"]}`)
+		res = f.want(f.msg("insert", "notes", map[string]any{"set": sets("id", "title", "written")}, "N2", "Two", "2026-09-30"), `{"affected":1,"keys":["N2"]}`)
 		if len(res.Post.Targets) != 1 || res.Post.Targets[0].Path != "notes/2026.flowmark.md" || res.Post.Targets[0].Before == nil {
 			t.Fatalf("a second note of the year rewrites its document: %+v", res.Post.Targets)
 		}
 		f.commit(res)
-		res = f.want(f.msg("insert", "notes", map[string]any{"set": sets("title", "written")}, "Three", "2027-01-02"), `{"affected":1,"keys":["N3"]}`)
+		res = f.want(f.msg("insert", "notes", map[string]any{"set": sets("id", "title", "written")}, "N3", "Three", "2027-01-02"), `{"affected":1,"keys":["N3"]}`)
 		if len(res.Post.Targets) != 1 || res.Post.Targets[0].Path != "notes/2027.flowmark.md" {
 			t.Fatalf("targets %+v", res.Post.Targets)
 		}
@@ -44,11 +44,11 @@ func TestShardInsert(t *testing.T) {
 	})
 	t.Run("20#time-shards: a value that is no time is refused before the row is placed", func(t *testing.T) {
 		f := goldenFixture(t, "shard")
-		f.fails(f.msg("insert", "events", map[string]any{"set": sets("title", "at")}, "Bad", "soon"), "CODEC_ENCODE")
+		f.fails(f.msg("insert", "events", map[string]any{"set": sets("id", "title", "at")}, "E9", "Bad", "soon"), "CODEC_ENCODE")
 	})
 	t.Run("20#time-shards: a row without its shard column is refused as a required column is", func(t *testing.T) {
 		f := goldenFixture(t, "shard")
-		f.fails(f.msg("insert", "events", map[string]any{"set": sets("title")}, "No time"), "IR_INVALID")
+		f.fails(f.msg("insert", "events", map[string]any{"set": sets("id", "title")}, "E9", "No time"), "IR_INVALID")
 	})
 }
 
@@ -56,9 +56,9 @@ func TestShardInsert(t *testing.T) {
 func shardEvents(t *testing.T) *fixture {
 	t.Helper()
 	f := goldenFixture(t, "shard")
-	f.commit(f.ok(f.msg("insert", "events", map[string]any{"set": sets("title", "at")}, "First", "2026-10-11 09:30:00.000000")))
-	f.commit(f.ok(f.msg("insert", "events", map[string]any{"set": sets("title", "at")}, "Second", "2026-11-02 08:00:00.000000")))
-	f.commit(f.ok(f.msg("insert", "refs", map[string]any{"set": sets("title", "event")}, "Ref one", "E1")))
+	f.commit(f.ok(f.msg("insert", "events", map[string]any{"set": sets("id", "title", "at")}, "E1", "First", "2026-10-11 09:30:00.000000")))
+	f.commit(f.ok(f.msg("insert", "events", map[string]any{"set": sets("id", "title", "at")}, "E2", "Second", "2026-11-02 08:00:00.000000")))
+	f.commit(f.ok(f.msg("insert", "refs", map[string]any{"set": sets("id", "title", "event")}, "R1", "Ref one", "E1")))
 	return f
 }
 
@@ -113,8 +113,8 @@ func TestShardUpdate(t *testing.T) {
 	})
 	t.Run("20#time-shards: an update moves a document row, and the document it empties is removed", func(t *testing.T) {
 		f := goldenFixture(t, "shard")
-		f.commit(f.ok(f.msg("insert", "notes", map[string]any{"set": sets("title", "written")}, "One", "2026-03-04")))
-		f.commit(f.ok(f.msg("insert", "notes", map[string]any{"set": sets("title", "written")}, "Two", "2026-09-30")))
+		f.commit(f.ok(f.msg("insert", "notes", map[string]any{"set": sets("id", "title", "written")}, "N1", "One", "2026-03-04")))
+		f.commit(f.ok(f.msg("insert", "notes", map[string]any{"set": sets("id", "title", "written")}, "N2", "Two", "2026-09-30")))
 		res := update(f, "notes", "N1", "written", "2027-02-01")
 		got := paths(res)
 		if !got["notes/2026.flowmark.md"] || !got["notes/2027.flowmark.md"] {
@@ -138,7 +138,7 @@ func TestShardDelete(t *testing.T) {
 	}
 	t.Run("20#time-shards: a files row's file is removed and its folder stays empty of files", func(t *testing.T) {
 		f := goldenFixture(t, "shard")
-		f.commit(f.ok(f.msg("insert", "events", map[string]any{"set": sets("title", "at")}, "First", "2026-10-11 09:30:00.000000")))
+		f.commit(f.ok(f.msg("insert", "events", map[string]any{"set": sets("id", "title", "at")}, "E1", "First", "2026-10-11 09:30:00.000000")))
 		res := del(f, "events", "E1")
 		if len(res.Post.Targets) != 1 || res.Post.Targets[0].Path != "events/2026-10/E1.flowmark.md" || res.Post.Targets[0].After != nil {
 			t.Fatalf("targets %+v", res.Post.Targets)
@@ -147,8 +147,8 @@ func TestShardDelete(t *testing.T) {
 	})
 	t.Run("20#time-shards: the last row of a sharded document removes the document, an earlier one does not", func(t *testing.T) {
 		f := goldenFixture(t, "shard")
-		f.commit(f.ok(f.msg("insert", "notes", map[string]any{"set": sets("title", "written")}, "One", "2026-03-04")))
-		f.commit(f.ok(f.msg("insert", "notes", map[string]any{"set": sets("title", "written")}, "Two", "2026-09-30")))
+		f.commit(f.ok(f.msg("insert", "notes", map[string]any{"set": sets("id", "title", "written")}, "N1", "One", "2026-03-04")))
+		f.commit(f.ok(f.msg("insert", "notes", map[string]any{"set": sets("id", "title", "written")}, "N2", "Two", "2026-09-30")))
 		res := del(f, "notes", "N1")
 		if len(res.Post.Targets) != 1 || res.Post.Targets[0].After == nil {
 			t.Fatalf("the document keeps its other row: %+v", res.Post.Targets)
@@ -172,8 +172,8 @@ func TestShardOrder(t *testing.T) {
 	t.Run("20#time-shards: a files table reads in key order across periods", func(t *testing.T) {
 		f := goldenFixture(t, "shard")
 		// E1 is in November and E2 in October, so period order would give E2 first.
-		f.commit(f.ok(f.msg("insert", "events", map[string]any{"set": sets("title", "at")}, "First", "2026-11-02 08:00:00.000000")))
-		f.commit(f.ok(f.msg("insert", "events", map[string]any{"set": sets("title", "at")}, "Second", "2026-10-11 09:30:00.000000")))
+		f.commit(f.ok(f.msg("insert", "events", map[string]any{"set": sets("id", "title", "at")}, "E1", "First", "2026-11-02 08:00:00.000000")))
+		f.commit(f.ok(f.msg("insert", "events", map[string]any{"set": sets("id", "title", "at")}, "E2", "Second", "2026-10-11 09:30:00.000000")))
 		if got, want := ids(f, "events"), `{"rows":[{"id":"E1"},{"id":"E2"}]}`; got != want {
 			t.Fatalf("events read %s; want %s", got, want)
 		}
@@ -181,8 +181,8 @@ func TestShardOrder(t *testing.T) {
 	t.Run("20#time-shards: a document table reads its periods ascending", func(t *testing.T) {
 		f := goldenFixture(t, "shard")
 		// N1 is in 2027 and N2 in 2026, so the document of 2026 reads first.
-		f.commit(f.ok(f.msg("insert", "notes", map[string]any{"set": sets("title", "written")}, "One", "2027-01-02")))
-		f.commit(f.ok(f.msg("insert", "notes", map[string]any{"set": sets("title", "written")}, "Two", "2026-03-04")))
+		f.commit(f.ok(f.msg("insert", "notes", map[string]any{"set": sets("id", "title", "written")}, "N1", "One", "2027-01-02")))
+		f.commit(f.ok(f.msg("insert", "notes", map[string]any{"set": sets("id", "title", "written")}, "N2", "Two", "2026-03-04")))
 		if got, want := ids(f, "notes"), `{"rows":[{"id":"N2"},{"id":"N1"}]}`; got != want {
 			t.Fatalf("notes read %s; want %s", got, want)
 		}

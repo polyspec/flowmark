@@ -44,17 +44,17 @@ type dupFault struct {
 	names      string
 }
 
-// TestInsert pins insert (spec 60 Surfaces, spec 20 Keys and Order): executor-
-// assigned keys and order, defaults written explicitly, and the answer's keys.
+// TestInsert pins insert (spec 60 Surfaces, spec 20 Keys and Order): the key and the order
+// value the insert gives, defaults written explicitly, and the answer's keys.
 func TestInsert(t *testing.T) {
-	t.Run("60#surfaces: a key_prefix key, the default state and an appended order", func(t *testing.T) {
+	t.Run("60#surfaces: the given key and order, and the default state", func(t *testing.T) {
 		f := fresh(t)
-		res := f.want(f.msg("insert", "items", map[string]any{"set": sets("title", "body")}, "New item", ""), `{"affected":1,"keys":["T5"]}`)
+		res := f.want(f.msg("insert", "items", map[string]any{"set": sets("id", "title", "body", "position")}, "T5", "New item", "", 4), `{"affected":1,"keys":["T5"]}`)
 		if len(res.Post.Targets) != 1 || res.Post.Targets[0].Path != "items.flowmark.md" {
 			t.Fatalf("targets %+v", res.Post.Targets)
 		}
 		f.commit(res)
-		if !strings.Contains(f.file("items.flowmark.md"), "- [-] T4 Drop the old path\n- [ ] T5 New item\n") {
+		if !strings.Contains(f.file("items.flowmark.md"), "- [-] T4 Drop the old path position:3\n- [ ] T5 New item position:4\n") {
 			t.Fatalf("items:\n%s", f.file("items.flowmark.md"))
 		}
 		f.want(f.msg("one", "items", map[string]any{"columns": map[string]any{"mode": "none", "add": []string{"position", "state"}}, "where": where(pred("id", "eq", p(0)))}, "T5"),
@@ -62,7 +62,7 @@ func TestInsert(t *testing.T) {
 	})
 	t.Run("60#surfaces: a multi-row insert answers each key in insert order", func(t *testing.T) {
 		f := fresh(t)
-		res := f.want(f.msg("insert", "items", map[string]any{"set": sets("title", "body"), "rows": [][]int{{2, 3}}}, "A", "", "B", "Body of B."), `{"affected":2,"keys":["T5","T6"]}`)
+		res := f.want(f.msg("insert", "items", map[string]any{"set": sets("id", "title", "body", "position"), "rows": [][]int{{4, 5, 6, 7}}}, "T5", "A", "", 4, "T6", "B", "Body of B.", 5), `{"affected":2,"keys":["T5","T6"]}`)
 		f.commit(res)
 		if !strings.Contains(f.file("items.flowmark.md"), "## items row T6\n\nBody of B.\n") {
 			t.Fatalf("items:\n%s", f.file("items.flowmark.md"))
@@ -77,11 +77,11 @@ func TestInsert(t *testing.T) {
 			t.Fatalf("N1:\n%s", f.file("notes/N1.flowmark.md"))
 		}
 	})
-	t.Run("20#order: an insert with k places the row at k and the siblings follow", func(t *testing.T) {
+	t.Run("20#order: an inserted row stands among its siblings by its value, which moves no sibling", func(t *testing.T) {
 		f := fresh(t)
-		res := f.want(f.msg("insert", "items", map[string]any{"set": sets("title", "body", "parent", "position")}, "First child", "", "T1", 1), `{"affected":1,"keys":["T5"]}`)
+		res := f.want(f.msg("insert", "items", map[string]any{"set": sets("id", "title", "body", "parent", "position")}, "T5", "First child", "", "T1", 0), `{"affected":1,"keys":["T5"]}`)
 		f.commit(res)
-		if !strings.Contains(f.file("items.flowmark.md"), "- [x] T1 Ship the parser owner:[P1](people.flowmark.md)\n  - [ ] T5 First child\n  - [~] T2 Write the tests") {
+		if !strings.Contains(f.file("items.flowmark.md"), "- [x] T1 Ship the parser position:1 owner:[P1](people.flowmark.md)\n  - [ ] T5 First child position:0\n  - [~] T2 Write the tests position:1") {
 			t.Fatalf("items:\n%s", f.file("items.flowmark.md"))
 		}
 	})
@@ -93,7 +93,7 @@ func TestInsert(t *testing.T) {
 	})
 	t.Run("60#surfaces: defaults are written explicitly and now is the request clock", func(t *testing.T) {
 		f := fresh(t)
-		res := f.want(f.msg("insert", "people", map[string]any{"set": sets("name")}, "Lin"), `{"affected":1,"keys":["P4"]}`)
+		res := f.want(f.msg("insert", "people", map[string]any{"set": sets("id", "name")}, "P4", "Lin"), `{"affected":1,"keys":["P4"]}`)
 		f.commit(res)
 		if !strings.Contains(f.file("people.flowmark.md"), "| P4 | Lin |  |  | true | 0.00 | 2026-10-11 09:00:00 |  |  |\n") {
 			t.Fatalf("people:\n%s", f.file("people.flowmark.md"))
@@ -105,12 +105,12 @@ func TestInsert(t *testing.T) {
 	})
 	t.Run("20#storage: an insert into a files table creates its file", func(t *testing.T) {
 		f := fresh(t)
-		res := f.want(f.msg("insert", "notes", map[string]any{"set": sets("id", "title", "body")}, "N4", "Fourth", "Text."), `{"affected":1,"keys":["N4"]}`)
+		res := f.want(f.msg("insert", "notes", map[string]any{"set": sets("id", "title", "body", "position")}, "N4", "Fourth", "Text.", 3), `{"affected":1,"keys":["N4"]}`)
 		if tg := res.Post.Targets; len(tg) != 1 || tg[0].Path != "notes/N4.flowmark.md" || tg[0].Before != nil {
 			t.Fatalf("targets %+v", tg)
 		}
 		f.commit(res)
-		if got := f.file("notes/N4.flowmark.md"); got != lines("# Fourth", "- position: 1002", "", "Text.") {
+		if got := f.file("notes/N4.flowmark.md"); got != lines("# Fourth", "- position: 3", "", "Text.") {
 			t.Fatalf("N4:\n%s", got)
 		}
 	})
@@ -124,7 +124,7 @@ func TestInsert(t *testing.T) {
 	})
 	t.Run("50#keys-and-references: a reference to a soft-deleted row is satisfied", func(t *testing.T) {
 		f := fresh(t)
-		f.commit(f.want(f.msg("insert", "items", map[string]any{"set": sets("title", "body", "owner")}, "Kept", "", "P3"), `{"affected":1,"keys":["T5"]}`))
+		f.commit(f.want(f.msg("insert", "items", map[string]any{"set": sets("id", "title", "body", "owner", "position")}, "T5", "Kept", "", "P3", 4), `{"affected":1,"keys":["T5"]}`))
 	})
 	t.Run("60#surfaces: on_duplicate updates the row an inserted row meets on a unique key", func(t *testing.T) {
 		f := fresh(t)
@@ -157,7 +157,7 @@ func TestInsert(t *testing.T) {
 		docs["notes/nx.flowmark.md"] = lines("# Lower", "- position: 4")
 		f := newFixtureIn(t, corpustest.CaseSensitiveRoot(t), catalogRoot, docs).on(t)
 		up := func(id string) []byte {
-			return f.msg("insert", "notes", map[string]any{"set": sets("id", "title", "body"), "on_duplicate": []any{set("title", 1)}}, id, "Upserted", "")
+			return f.msg("insert", "notes", map[string]any{"set": sets("id", "title", "body", "position"), "on_duplicate": []any{set("title", 1)}}, id, "Upserted", "", 5)
 		}
 		f.want(up("nx"), `{"affected":1,"keys":["nx"]}`)
 		res := f.want(up("Nx"), `{"affected":1,"keys":["NX"]}`)
@@ -201,7 +201,7 @@ func TestInsert(t *testing.T) {
 	}
 	t.Run("10#foreign-keys-as-links: an insert that gives a dangling link its row rewrites the link", func(t *testing.T) {
 		f := catalogFixture(t, dangling()).on(t)
-		res := f.want(f.msg("insert", "items", map[string]any{"set": sets("id", "title", "body")}, "T9", "Ninth", ""), `{"affected":1,"keys":["T9"]}`)
+		res := f.want(f.msg("insert", "items", map[string]any{"set": sets("id", "title", "body", "position")}, "T9", "Ninth", "", 4), `{"affected":1,"keys":["T9"]}`)
 		if got := targetPaths(res); got != "items.flowmark.md notes/N3.flowmark.md" {
 			t.Fatalf("targets %v", got)
 		}
@@ -214,7 +214,7 @@ func TestInsert(t *testing.T) {
 		docs := dangling()
 		docs["notes/N9.flowmark.md"] = "no heading\n"
 		f := catalogFixture(t, docs).on(t)
-		err := f.failure(f.msg("insert", "items", map[string]any{"set": sets("id", "title", "body")}, "T9", "Ninth", ""), "CONSTRAINT")
+		err := f.failure(f.msg("insert", "items", map[string]any{"set": sets("id", "title", "body", "position")}, "T9", "Ninth", "", 4), "CONSTRAINT")
 		if err.Diagnostic == nil || err.Diagnostic.File != "notes/N9.flowmark.md" {
 			t.Fatalf("diagnostic %+v", err.Diagnostic)
 		}
@@ -234,27 +234,26 @@ func TestInsertRejects(t *testing.T) {
 		code string
 		want []dupFault
 	}{
-		{"50#keys-and-references: a reference that names no row", f.msg("insert", "items", map[string]any{"set": sets("title", "body", "owner")}, "X", "", "P9"), "FOREIGN_KEY",
+		{"50#keys-and-references: a reference that names no row", f.msg("insert", "items", map[string]any{"set": sets("id", "title", "body", "owner", "position")}, "T5", "X", "", "P9", 4), "FOREIGN_KEY",
 			[]dupFault{{"items", "T5", -1, "owner", "FOREIGN_KEY", "P9"}}},
 		{"50#keys-and-references: a block row's placement key that names no row", f.msg("insert", "steps", map[string]any{"set": sets("id", "note", "title", "done")}, "S3", "N9", "X", false), "FOREIGN_KEY",
 			[]dupFault{{"steps", "S3", -1, "note", "FOREIGN_KEY", "N9"}}},
-		{"10#readable-values: a value not of its column type", f.msg("insert", "people", map[string]any{"set": sets("name", "age")}, "X", "old"), "CODEC_ENCODE", nil},
+		{"10#readable-values: a value not of its column type", f.msg("insert", "people", map[string]any{"set": sets("id", "name", "age")}, "P4", "X", "old"), "CODEC_ENCODE", nil},
 		{"10#readable-values: a text longer than its column", f.msg("insert", "tags", map[string]any{"set": sets("label", "kind")}, "a-label-longer-than-16", "topic"), "CODEC_ENCODE", nil},
-		{"50#keys-and-references: a unique key held by another row", f.msg("insert", "people", map[string]any{"set": sets("name", "email")}, "X", "ada@x.io"), "DUPLICATE_KEY",
+		{"50#keys-and-references: a unique key held by another row", f.msg("insert", "people", map[string]any{"set": sets("id", "name", "email")}, "P4", "X", "ada@x.io"), "DUPLICATE_KEY",
 			[]dupFault{{"people", "P4", -1, "email", "DUPLICATE_KEY", "P1"}}},
-		{"50#keys-and-references: a soft-deleted row still holds its unique key", f.msg("insert", "people", map[string]any{"set": sets("name", "email")}, "X", "gone@x.io"), "DUPLICATE_KEY",
+		{"50#keys-and-references: a soft-deleted row still holds its unique key", f.msg("insert", "people", map[string]any{"set": sets("id", "name", "email")}, "P4", "X", "gone@x.io"), "DUPLICATE_KEY",
 			[]dupFault{{"people", "P4", -1, "email", "DUPLICATE_KEY", "P3"}}},
-		{"50#checks: a check made false", f.msg("insert", "people", map[string]any{"set": sets("name", "age")}, "X", -1), "CONSTRAINT",
+		{"50#checks: a check made false", f.msg("insert", "people", map[string]any{"set": sets("id", "name", "age")}, "P4", "X", -1), "CONSTRAINT",
 			[]dupFault{{"people", "P4", -1, "", "CONSTRAINT", "ck_people_age"}}},
 		{"50#checks: an in check made false", f.msg("insert", "tags", map[string]any{"set": sets("label", "kind")}, "web", "other"), "CONSTRAINT",
 			[]dupFault{{"tags", "3", -1, "", "CONSTRAINT", "ck_tags_kind"}}},
-		{"50#state-columns: an inserted value that no checkbox line names", f.msg("insert", "items", map[string]any{"set": sets("title", "body", "state")}, "X", "", "lost"), "CONSTRAINT",
+		{"50#state-columns: an inserted value that no checkbox line names", f.msg("insert", "items", map[string]any{"set": sets("id", "title", "body", "state", "position")}, "T5", "X", "", "lost", 4), "CONSTRAINT",
 			[]dupFault{{"items", "T5", -1, "state", "CONSTRAINT", "no checkbox"}}},
-		{"20#order: an order outside 1..n+1", f.msg("insert", "items", map[string]any{"set": sets("title", "body", "position")}, "X", "", 9), "CONSTRAINT",
-			[]dupFault{{"items", "T5", -1, "position", "CONSTRAINT", "1..4"}}},
+		{"20#order: an order value not of its column type", f.msg("insert", "items", map[string]any{"set": sets("id", "title", "body", "position")}, "T5", "X", "", int64(1)<<40), "CODEC_ENCODE", nil},
 		{"20#hierarchy: a parent cycle cannot be inserted, a parent outside the block can", f.msg("insert", "steps", map[string]any{"set": sets("id", "note", "title", "done")}, "S1", "N2", "X", false), "DUPLICATE_KEY",
 			[]dupFault{{"steps", "S1", -1, "id", "DUPLICATE_KEY", "notes/N1.flowmark.md"}}},
-		{"10#sections-and-their-values: a markdown value ending with a line feed", f.msg("insert", "items", map[string]any{"set": sets("title", "body")}, "X", "Body\n"), "CONSTRAINT",
+		{"10#sections-and-their-values: a markdown value ending with a line feed", f.msg("insert", "items", map[string]any{"set": sets("id", "title", "body", "position")}, "T5", "X", "Body\n", 4), "CONSTRAINT",
 			[]dupFault{{"items", "T5", -1, "body", "CONSTRAINT", "blank line"}}},
 	}
 	for _, c := range cases {
@@ -289,12 +288,12 @@ func TestKeyChecks(t *testing.T) {
 		params := []any{}
 		var rows [][]int
 		for i, id := range ids {
-			params = append(params, id, "Row "+id, "")
+			params = append(params, id, "Row "+id, "", 5+i)
 			if i > 0 {
-				rows = append(rows, []int{3 * i, 3*i + 1, 3*i + 2})
+				rows = append(rows, []int{4 * i, 4*i + 1, 4*i + 2, 4*i + 3})
 			}
 		}
-		body := map[string]any{"set": sets("id", "title", "body")}
+		body := map[string]any{"set": sets("id", "title", "body", "position")}
 		if rows != nil {
 			body["rows"] = rows
 		}
@@ -377,19 +376,19 @@ func TestFaultOrder(t *testing.T) {
 			[]dupFault{{"people", "P1", -1, "name", con, "line break"}, {"people", "P1", -1, "id", dup, "people.flowmark.md"}}},
 		{"10#diagnostics: the rows stand in request order, a key fault first when its row is first", people([]any{"P1", "X", 1}, []any{"P9", "Y", -1}), dup,
 			[]dupFault{{"people", "P1", -1, "id", dup, "people.flowmark.md"}, {"people", "P9", -1, "", con, "ck_people_age"}}},
-		{"10#diagnostics: a FOREIGN_KEY fault is not reported beside another fault", f.msg("insert", "items", map[string]any{"set": sets("id", "title", "body", "owner"), "rows": [][]int{{4, 5, 6, 7}}}, "T8", "A", "", "P9", "T1", "B", "", nil), dup,
+		{"10#diagnostics: a FOREIGN_KEY fault is not reported beside another fault", f.msg("insert", "items", map[string]any{"set": sets("id", "title", "body", "owner", "position"), "rows": [][]int{{5, 6, 7, 8, 9}}}, "T8", "A", "", "P9", 4, "T1", "B", "", nil, 5), dup,
 			[]dupFault{{"items", "T1", -1, "id", dup, "items.flowmark.md"}}},
-		{"10#diagnostics: a FOREIGN_KEY fault alone is the code", f.msg("insert", "items", map[string]any{"set": sets("id", "title", "body", "owner")}, "T8", "A", "", "P9"), fk,
+		{"10#diagnostics: a FOREIGN_KEY fault alone is the code", f.msg("insert", "items", map[string]any{"set": sets("id", "title", "body", "owner", "position")}, "T8", "A", "", "P9", 4), fk,
 			[]dupFault{{"items", "T8", -1, "owner", fk, "P9"}}},
-		{"20#keys: a key outside A-Z, a-z, 0-9, _ and - is a value fault, folded by A-Z alone", f.msg("insert", "items", map[string]any{"set": sets("id", "title", "body", "owner")}, "K1", "A", "", nil), con,
+		{"20#keys: a key outside A-Z, a-z, 0-9, _ and - is a value fault, folded by A-Z alone", f.msg("insert", "items", map[string]any{"set": sets("id", "title", "body", "owner", "position")}, "K1", "A", "", nil, 4), con,
 			[]dupFault{{"items", "K1", -1, "id", con, "the key: "}}},
-		{"20#keys: on_duplicate meets no row for a key that folds to another only beyond A-Z", f.msg("insert", "items", map[string]any{"set": sets("id", "title", "body", "owner"), "on_duplicate": []any{set("title", 1)}}, "K1", "A", "", nil), con,
+		{"20#keys: on_duplicate meets no row for a key that folds to another only beyond A-Z", f.msg("insert", "items", map[string]any{"set": sets("id", "title", "body", "owner", "position"), "on_duplicate": []any{set("title", 1)}}, "K1", "A", "", nil, 4), con,
 			[]dupFault{{"items", "K1", -1, "id", con, "the key: "}}},
 		{"10#diagnostics: a row has at most one duplicate fault, its key's before a unique key's", f.msg("insert", "people", map[string]any{"set": sets("id", "name", "email")}, "P1", "X", "ada@x.io"), dup,
 			[]dupFault{{"people", "P1", -1, "id", dup, "people.flowmark.md"}}},
-		{"10#diagnostics: a files row placed nowhere for its key still has its check judged", f.msg("insert", "notes", map[string]any{"set": sets("id", "title", "body", "weight")}, "N1", "X", "", -1), con,
+		{"10#diagnostics: a files row placed nowhere for its key still has its check judged", f.msg("insert", "notes", map[string]any{"set": sets("id", "title", "body", "weight", "position")}, "N1", "X", "", -1, 4), con,
 			[]dupFault{{"notes", "N1", -1, "", con, "ck_notes_weight"}, {"notes", "N1", -1, "id", dup, "notes/N1.flowmark.md"}}},
-		{"10#diagnostics: a key fault stops the render, so no anchor fault is reported", f.msg("insert", "items", map[string]any{"set": sets("id", "title", "body")}, "T1", "Items row T1", "A body."), dup,
+		{"10#diagnostics: a key fault stops the render, so no anchor fault is reported", f.msg("insert", "items", map[string]any{"set": sets("id", "title", "body", "position")}, "T1", "Items row T1", "A body.", 4), dup,
 			[]dupFault{{"items", "T1", -1, "id", dup, "items.flowmark.md"}}},
 	}
 	for _, c := range cases {
@@ -455,17 +454,28 @@ func TestUpdate(t *testing.T) {
 		f := fresh(t)
 		f.want(f.msg("update", "people", map[string]any{"set": sets("name"), "where": where(pred("id", "eq", p(1))), "optimistic": map[string]any{"column": "score", "p": 2}}, "Ada L", "P1", "1.50"), `{"affected":1,"keys":[]}`)
 	})
-	t.Run("20#order: an update to k moves the row and the siblings follow", func(t *testing.T) {
+	t.Run("20#order: an update of the order moves the row among its siblings and no sibling", func(t *testing.T) {
 		f := fresh(t)
-		f.commit(f.ok(byID(f, "notes", sets("position"), "N3", 1)))
+		f.commit(f.ok(byID(f, "notes", sets("position"), "N3", 0)))
 		f.want(f.msg("all", "notes", map[string]any{"columns": map[string]any{"mode": "none", "remove": []string{"item"}, "add": []string{"position"}}}),
-			`{"rows":[{"id":"N3","parent":null,"position":1},{"id":"N1","parent":null,"position":2},{"id":"N2","parent":"N1","position":1}]}`)
+			`{"rows":[{"id":"N3","parent":null,"position":0},{"id":"N1","parent":null,"position":1},{"id":"N2","parent":"N1","position":1}]}`)
 	})
-	t.Run("20#order: a parent change appends and the old siblings close the gap", func(t *testing.T) {
+	t.Run("20#order: a list update of the order rewrites the list in the order of the values", func(t *testing.T) {
+		f := fresh(t)
+		f.commit(f.ok(byID(f, "items", sets("position"), "T4", 2)))
+		if got := f.file("items.flowmark.md"); !strings.Contains(got, "- [ ] T3 Review the design position:2\n- [-] T4 Drop the old path position:2\n") {
+			t.Fatalf("items:\n%s", got)
+		}
+		f.commit(f.ok(byID(f, "items", sets("position"), "T4", -7)))
+		if got := f.file("items.flowmark.md"); !strings.HasPrefix(got, "# items\n- [-] T4 Drop the old path position:-7\n- [x] T1 ") {
+			t.Fatalf("items:\n%s", got)
+		}
+	})
+	t.Run("20#order: a parent change keeps the order value and moves no sibling", func(t *testing.T) {
 		f := fresh(t)
 		f.commit(f.ok(byID(f, "items", sets("parent"), "T3", "T1")))
 		f.want(f.msg("all", "items", map[string]any{"columns": map[string]any{"mode": "none", "remove": []string{"owner"}, "add": []string{"position"}}}),
-			`{"rows":[{"id":"T1","parent":null,"position":1},{"id":"T2","parent":"T1","position":1},{"id":"T3","parent":"T1","position":2},{"id":"T4","parent":null,"position":2}]}`)
+			`{"rows":[{"id":"T1","parent":null,"position":1},{"id":"T2","parent":"T1","position":1},{"id":"T3","parent":"T1","position":2},{"id":"T4","parent":null,"position":3}]}`)
 	})
 	t.Run("20#storage: an update of a block row rewrites its parent's file", func(t *testing.T) {
 		f := fresh(t)
@@ -479,7 +489,7 @@ func TestUpdate(t *testing.T) {
 		docs["items.flowmark.md"] = strings.Replace(docs["items.flowmark.md"], "- [ ] T3 Review", "- [~] T3 Review", 1)
 		f := catalogFixture(t, docs).on(t)
 		res := f.ok(byID(f, "items", sets("title"), "T3", "Reviewed"))
-		if tg := res.Post.Targets; len(tg) != 1 || !strings.Contains(string(tg[0].After), "- [~] T3 Reviewed\n") {
+		if tg := res.Post.Targets; len(tg) != 1 || !strings.Contains(string(tg[0].After), "- [~] T3 Reviewed position:2\n") {
 			t.Fatalf("targets %+v", tg)
 		}
 		res = f.ok(byID(f, "items", sets("state", "evidence"), "T3", "done", "x"))
@@ -509,7 +519,7 @@ func TestUpdate(t *testing.T) {
 	})
 	t.Run("50#state-columns: an update past a limit is accepted", func(t *testing.T) {
 		docs := baseDocs()
-		docs["items.flowmark.md"] = strings.Replace(docs["items.flowmark.md"], "- [ ] T3 Review the design\n", "- [ ] T3 Review the design\n- [ ] T5 Fifth\n", 1)
+		docs["items.flowmark.md"] = strings.Replace(docs["items.flowmark.md"], "- [ ] T3 Review the design position:2\n", "- [ ] T3 Review the design position:2\n- [ ] T5 Fifth position:2\n", 1)
 		f := catalogFixture(t, docs).on(t)
 		f.want(f.msg("update", "items", map[string]any{"set": sets("state"), "where": where(pred("id", "in", map[string]any{"ps": []int{1, 2}}))}, "doing", "T3", "T5"), `{"affected":2,"keys":[]}`)
 	})
@@ -529,8 +539,6 @@ func TestUpdate(t *testing.T) {
 			[]dupFault{{"notes", "N1", -1, "parent", "CONSTRAINT", "cycle"}}},
 		{"50#hierarchy-and-order: a parent outside the row's block", byID(f, "items", sets("parent"), "T3", "T3"), "CONSTRAINT",
 			[]dupFault{{"items", "T3", -1, "parent", "CONSTRAINT", "cycle"}}},
-		{"20#order: an update to an order outside 1..n+1", byID(f, "notes", sets("position"), "N3", 4), "CONSTRAINT",
-			[]dupFault{{"notes", "N3", -1, "position", "CONSTRAINT", "1..2"}}},
 		{"50#keys-and-references: an update to a unique key another row holds", byID(f, "people", sets("email"), "P2", "ada@x.io"), "DUPLICATE_KEY",
 			[]dupFault{{"people", "P2", -1, "email", "DUPLICATE_KEY", "P1"}}},
 		{"50#checks: an update that makes a check false", byID(f, "people", sets("age"), "P2", -5), "CONSTRAINT",
@@ -549,7 +557,8 @@ func TestUpdate(t *testing.T) {
 		code string
 	}{
 		{"60#surfaces: an optimistic update that matches no row", f, f.msg("update", "people", map[string]any{"set": sets("name"), "where": where(pred("id", "eq", p(1))), "optimistic": map[string]any{"column": "score", "p": 2}}, "Ada L", "P1", "9.99"), "OPTIMISTIC_LOCK"},
-		{"20#order: an update that assigns the order matches exactly one row", f, f.msg("update", "notes", map[string]any{"set": sets("position"), "where": where(pred("parent", "is_null", nil))}, 1), "CONSTRAINT"},
+		{"20#order: an update of the order to a value not of its type", f, byID(f, "notes", sets("position"), "N3", int64(1)<<40), "CODEC_ENCODE"},
+		{"20#order: an update of the order to NULL", f, f.msg("update", "notes", map[string]any{"set": []any{map[string]any{"column": "position", "null": true}}, "where": where(pred("id", "eq", p(0)))}, "N3"), "IR_INVALID"},
 		{"60#surfaces: an update without where", f, f.msg("update", "notes", map[string]any{"set": sets("title")}, "x"), "IR_INVALID"},
 		{"60#surfaces: an upsert that two keys can meet", f, f.msg("insert", "people", map[string]any{"set": sets("id", "name"), "on_duplicate": []any{set("name", 1)}}, "P9", "Nine"), "IR_INVALID"},
 		{"60#surfaces: an upsert that does not assign its unique key", f, f.msg("insert", "people", map[string]any{"set": sets("name"), "on_duplicate": []any{set("name", 0)}}, "Nine"), "IR_INVALID"},
@@ -574,11 +583,11 @@ func TestDelete(t *testing.T) {
 		f.commit(f.want(byID(f, "delete", "tags", 2), `{"affected":1,"keys":[]}`))
 		f.want(f.msg("count", "tags", nil), `{"count":1}`)
 	})
-	t.Run("20#order: a delete closes the gap", func(t *testing.T) {
+	t.Run("20#order: a delete leaves the siblings' order values", func(t *testing.T) {
 		f := fresh(t)
 		f.commit(f.ok(byID(f, "delete", "items", "T3")))
 		f.want(f.msg("all", "items", map[string]any{"columns": map[string]any{"mode": "none", "remove": []string{"owner", "parent"}, "add": []string{"position"}}}),
-			`{"rows":[{"id":"T1","position":1},{"id":"T2","position":1},{"id":"T4","position":2}]}`)
+			`{"rows":[{"id":"T1","position":1},{"id":"T2","position":1},{"id":"T4","position":3}]}`)
 	})
 	t.Run("10#encoding-and-line-structure: a delete of a files row removes its whole file", func(t *testing.T) {
 		f := fresh(t)
@@ -654,7 +663,7 @@ func TestDelete(t *testing.T) {
 		f := fresh(t)
 		f.commit(f.ok(f.msg("update", "notes", map[string]any{"set": sets("item"), "where": where(pred("id", "eq", p(1)))}, "T3", "N3")))
 		f.fails(byID(f, "delete", "items", "T3"), "FOREIGN_KEY")
-		f.commit(f.want(f.msg("insert", "items", map[string]any{"set": sets("id", "title", "body")}, "T9", "Review the design", ""), `{"affected":1,"keys":["T9"]}`))
+		f.commit(f.want(f.msg("insert", "items", map[string]any{"set": sets("id", "title", "body", "position")}, "T9", "Review the design", "", 4), `{"affected":1,"keys":["T9"]}`))
 		f.commit(f.ok(f.msg("update", "notes", map[string]any{"set": sets("item"), "where": where(pred("id", "eq", p(1)))}, "T9", "N3")))
 		f.commit(f.want(byID(f, "delete", "items", "T3"), `{"affected":1,"keys":[]}`))
 		if got := f.file("notes/N3.flowmark.md"); !strings.Contains(got, "- item: [T9](../items.flowmark.md)\n") {

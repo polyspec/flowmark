@@ -37,8 +37,8 @@ func TestShard(t *testing.T) {
 	t.Run("20#time-shards: an insert creates the period folder, a move changes it, and the link follows", func(t *testing.T) {
 		f := newFixture(t, shardDBS(t), nil)
 		s := f.session("shard")
-		want(t, s, ins(f, "events", []string{"title", "at"}, "First", "2026-10-11 09:30:00.000000"), `{"affected":1,"keys":["E1"]}`)
-		want(t, s, ins(f, "refs", []string{"title", "event"}, "Ref one", "E1"), `{"affected":1,"keys":["R1"]}`)
+		want(t, s, ins(f, "events", []string{"id", "title", "at"}, "E1", "First", "2026-10-11 09:30:00.000000"), `{"affected":1,"keys":["E1"]}`)
+		want(t, s, ins(f, "refs", []string{"id", "title", "event"}, "R1", "Ref one", "E1"), `{"affected":1,"keys":["R1"]}`)
 		if f.file("events/2026-10/E1.flowmark.md") == "" {
 			t.Fatal("the event is not in the folder of its month")
 		}
@@ -55,7 +55,7 @@ func TestShard(t *testing.T) {
 	t.Run("20#time-shards: a period folder added by hand is read by the next operation", func(t *testing.T) {
 		f := newFixture(t, shardDBS(t), nil)
 		s := f.session("shard")
-		want(t, s, ins(f, "events", []string{"title", "at"}, "First", "2026-10-11 09:30:00.000000"), `{"affected":1,"keys":["E1"]}`)
+		want(t, s, ins(f, "events", []string{"id", "title", "at"}, "E1", "First", "2026-10-11 09:30:00.000000"), `{"affected":1,"keys":["E1"]}`)
 		f.write("events/2027-01/E7.flowmark.md", "# By hand\n- at: 2027-01-05 10:00:00.000000\n")
 		want(t, s, f.msg("count", "events", nil), `{"count":2}`)
 		f.clean()

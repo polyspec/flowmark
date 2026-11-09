@@ -133,7 +133,7 @@ func (w *writer) values() *Error {
 			if !g.inserted && !g.assigned[col] {
 				continue
 			}
-			if col == tb.Key || tb.KeyPart(col) >= 0 || col == placement || col == tb.Order {
+			if col == tb.Key || tb.KeyPart(col) >= 0 || col == placement {
 				continue
 			}
 			switch {
@@ -289,13 +289,7 @@ func (w *writer) uniques() *Error {
 				continue
 			}
 			seen[k] = g
-			others := scan
-			if indexedUnique(w.tb, u) {
-				others = func(c *Corpus, _ string) []*rec {
-					return c.candidates(uniqueIndex(w.tb.Name, u, k), uniqueFault(w.tb.Name, u))
-				}
-			}
-			for _, x := range others(w.next, w.tb.Name) {
+			for _, x := range w.next.candidates(uniqueIndex(w.tb.Name, u, k), uniqueFault(w.tb.Name, u)) {
 				if x.row == g.row || isGiven(w.given, x.row) {
 					continue
 				}

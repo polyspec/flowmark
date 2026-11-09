@@ -138,7 +138,6 @@ func (dw *docWriter) rows(lay *docLayout, rows []*Row) {
 		w.checkRow(lay, byKey, r)
 	}
 	order, depth, unreached := storageOrder(lay, rows)
-	checkOrder(w, lay, rows, idx)
 	if len(unreached) > 0 {
 		// A row under a parent that names no row, or under a cycle, has no place in the
 		// storage order; only the rows on a cycle are refused for it.
@@ -348,68 +347,6 @@ func titleFault(lay *docLayout, title string) string {
 		}
 	}
 	return ""
-}
-
-// checkOrder refuses the order values of each sibling group unless they are exactly
-// 1..m, m being the size of the group.
-// A sibling-order fault is at each row of its group whose value is missing, outside
-// 1..m or shared with a sibling, m being the size of the group. A value not of the
-// column's type is the type fault alone: it counts toward m and is neither outside
-// 1..m nor shared, so the faults of its siblings are those that stand whatever it is.
-func checkOrder(w *writer, lay *docLayout, rows []*Row, idx []int) {
-	if lay.order == "" {
-		return
-	}
-	groups := map[string][]int{}
-	for i, r := range rows {
-		g := parentKey(lay, r)
-		groups[g] = append(groups[g], i)
-	}
-	keys := make([]string, 0, len(groups))
-	for g := range groups {
-		keys = append(keys, g)
-	}
-	sort.Strings(keys)
-	for _, g := range keys {
-		members := groups[g]
-		who := "the root"
-		if g != "" {
-			who = "the parent " + g
-		}
-		m := int64(len(members))
-		count := map[int64]int{}
-		vals := make([]int64, len(members))
-		faults := make([]string, len(members))
-		for k, i := range members {
-			v := rows[i].Scalars[lay.order]
-			if v == nil {
-				faults[k] = "the order is missing"
-				continue
-			}
-			canon, ok := readable(lay.orderType, *v)
-			n, err := strconv.ParseInt(canon, 10, 64)
-			if !ok || err != nil {
-				faults[k] = lay.order + " is not a " + lay.orderType.String() + " value"
-				continue
-			}
-			vals[k] = n
-			count[n]++
-		}
-		for k, i := range members {
-			if faults[k] == "" {
-				switch n := vals[k]; {
-				case n < 1 || n > m:
-					faults[k] = "the order " + strconv.FormatInt(n, 10) + " is outside 1.." + strconv.FormatInt(m, 10) + " of the siblings under " + who
-				case count[n] > 1:
-					faults[k] = "the order " + strconv.FormatInt(n, 10) + " is shared with a sibling under " + who
-				}
-			}
-			if faults[k] != "" {
-				w.enter(rowRefOf(rows[i], idx[i]), lay.order)
-				w.refuse(lay.order, faults[k])
-			}
-		}
-	}
 }
 
 // writeList writes the list rows in storage order, each indented by two spaces per depth.

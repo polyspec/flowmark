@@ -42,10 +42,9 @@ behaviour.
 | Setting | Meaning |
 | --- | --- |
 | `store files` / `store document list\|table` / `store block <fk> list\|table` | the table's storage ([document model](20-document-model.md)); exactly one per table on a corpus. A `files` or `document` store may end in `shard <column> <year\|month\|day>`, which stores each period apart ([time shards](20-document-model.md#time-shards)); orm checks the clause (a non-null `date` or `datetime` column, no `order`, no block) |
-| `key_prefix <p>` | the `varchar` primary key is allocated `<p><n + 1>`; orm treats the column as executor-assigned — a `varchar`, as dbspec keys no `text` column |
 | `title <column>` | the row's title: non-null, never empty |
 | `body <column>` | the row's body: a `markdown` column, never NULL |
-| `order <column>` | the row's position among its siblings; orm treats the column as executor-assigned |
+| `order <column>` | the order of the row among its siblings, by the column's value ([document model](20-document-model.md#order)); nothing assigns it, so an insert gives it (orm DBS-79) |
 | `checkbox <column> <state> '<glyph>'` | the list glyph of a value of the column: exactly one character, written between the brackets of a list row (`- [<glyph>] …`); transitional, as stated below |
 | `markdown <column>` | the column holds markdown prose and is stored as a section |
 | `state_machine <column> …` (`initial`, the transitions, `terminal`, `require`, `history`, `limit`) | read and applied by none: the engine holds no state machine ([constraints](50-constraints.md#state-columns)) |

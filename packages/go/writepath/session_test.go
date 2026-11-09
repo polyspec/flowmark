@@ -48,17 +48,17 @@ func TestSingleRequest(t *testing.T) {
 		want(t, s, f.msg("restore", "people", map[string]any{"where": corpustest.WhereID(0)}, "P1"), `{"affected":0,"keys":[]}`)
 		f.rec.wantKinds(t, opened...)
 	})
-	t.Run("40#transactions: a state update and an order move commit with their write", func(t *testing.T) {
+	t.Run("40#transactions: a state update and an order update commit with their write", func(t *testing.T) {
 		f := baseFixture(t)
 		s := f.session("cli")
 		want(t, s, f.msg("update", "items", map[string]any{"set": sets(0, "state"), "where": corpustest.WhereID(1)}, "doing", "T3"), `{"affected":1,"keys":[]}`)
 		// The engine applies no state machine, so the update writes no history row (spec 50 State columns).
-		if !strings.Contains(f.file("items.flowmark.md"), "- [~] T3 Review the design\n") || strings.Contains(f.file("items.flowmark.md"), "## items row T3") {
+		if !strings.Contains(f.file("items.flowmark.md"), "- [~] T3 Review the design position:2\n") || strings.Contains(f.file("items.flowmark.md"), "## items row T3") {
 			t.Fatalf("items:\n%s", f.file("items.flowmark.md"))
 		}
 		want(t, s, f.msg("update", "notes", map[string]any{"set": sets(0, "position"), "where": corpustest.WhereID(1)}, 1, "N3"), `{"affected":1,"keys":[]}`)
-		// The ranks 1 and 2 leave no rank before N1's, so the group is renumbered.
-		if !strings.Contains(f.file("notes/N1.flowmark.md"), "- position: 2000\n") || !strings.Contains(f.file("notes/N3.flowmark.md"), "- position: 1000\n") {
+		// The value is written as given and no sibling is renumbered (spec 20 Order).
+		if f.file("notes/N1.flowmark.md") != baseDocs()["notes/N1.flowmark.md"] || !strings.Contains(f.file("notes/N3.flowmark.md"), "- position: 1\n") {
 			t.Fatalf("N1:\n%s\nN3:\n%s", f.file("notes/N1.flowmark.md"), f.file("notes/N3.flowmark.md"))
 		}
 		f.clean()
@@ -70,9 +70,9 @@ func TestSingleRequest(t *testing.T) {
 func TestCreateMissing(t *testing.T) {
 	f := newFixture(t, executorCatalog(t), nil)
 	s := f.session("cli")
-	want(t, s, f.msg("insert", "notes", map[string]any{"set": sets(0, "id", "title", "body")}, "N1", "First", "Text."), `{"affected":1,"keys":["N1"]}`)
+	want(t, s, f.msg("insert", "notes", map[string]any{"set": sets(0, "id", "title", "body", "position")}, "N1", "First", "Text.", 1), `{"affected":1,"keys":["N1"]}`)
 	f.rec.wantKinds(t, committed...)
-	if got := f.file("notes/N1.flowmark.md"); got != lines("# First", "- position: 1000", "", "Text.") {
+	if got := f.file("notes/N1.flowmark.md"); got != lines("# First", "- position: 1", "", "Text.") {
 		t.Fatalf("N1:\n%s", got)
 	}
 	want(t, s, f.insertTag("go", "topic"), `{"affected":1,"keys":[1]}`)
@@ -335,7 +335,7 @@ func TestConflict(t *testing.T) {
 	t.Run("40#the-commit-protocol: a target created by hand", func(t *testing.T) {
 		f := baseFixture(t)
 		s := f.begun(t, "server")
-		want(t, s, f.msg("insert", "notes", map[string]any{"set": sets(0, "id", "title", "body")}, "N4", "Fourth", ""), `{"affected":1,"keys":["N4"]}`)
+		want(t, s, f.msg("insert", "notes", map[string]any{"set": sets(0, "id", "title", "body", "position")}, "N4", "Fourth", "", 3), `{"affected":1,"keys":["N4"]}`)
 		f.write("notes/N4.flowmark.md", lines("# Mine", "- position: 3"))
 		fails(t, s.Commit(), "WRITE_CONFLICT", "notes/N4.flowmark.md:1")
 		if f.file("notes/N4.flowmark.md") != lines("# Mine", "- position: 3") {
@@ -361,7 +361,7 @@ func TestCommitChecks(t *testing.T) {
 	t.Run("40#the-commit-protocol: a referenced row removed by hand fails the commit", func(t *testing.T) {
 		f := baseFixture(t)
 		s := f.begun(t, "server")
-		want(t, s, f.msg("insert", "items", map[string]any{"set": sets(0, "title", "body", "owner")}, "Owned", "", "P2"), `{"affected":1,"keys":["T5"]}`)
+		want(t, s, f.msg("insert", "items", map[string]any{"set": sets(0, "id", "title", "body", "owner", "position")}, "T5", "Owned", "", "P2", 5), `{"affected":1,"keys":["T5"]}`)
 		f.write("people.flowmark.md", strings.Replace(baseDocs()["people.flowmark.md"], "| P2 | Max |  |  | false | 0.00 | 2026-10-02 10:00:00 |  |  |\n", "", 1))
 		fails(t, s.Commit(), "FOREIGN_KEY", "P2")
 		if f.file("items.flowmark.md") != baseDocs()["items.flowmark.md"] {
@@ -394,7 +394,7 @@ func TestCommitChecks(t *testing.T) {
 	t.Run("40#the-commit-protocol: a change the writes do not depend on commits them", func(t *testing.T) {
 		f := baseFixture(t)
 		s := f.begun(t, "server")
-		want(t, s, f.msg("insert", "items", map[string]any{"set": sets(0, "title", "body", "owner")}, "Owned", "", "P2"), `{"affected":1,"keys":["T5"]}`)
+		want(t, s, f.msg("insert", "items", map[string]any{"set": sets(0, "id", "title", "body", "owner", "position")}, "T5", "Owned", "", "P2", 5), `{"affected":1,"keys":["T5"]}`)
 		f.write("people.flowmark.md", baseDocs()["people.flowmark.md"]+"| P4 | Lin |  |  | true | 0.00 | 2026-10-04 10:00:00 |  |  |\n")
 		must(t, s.Commit())
 		f.clean()
@@ -452,10 +452,6 @@ func TestRewriteRefusal(t *testing.T) {
 	}{
 		{"10#encoding-and-line-structure: the row's own file", noncanonical("tags.flowmark.md"),
 			func(f *fixture) []byte { return f.insertTag("web", "area") }, "tags.flowmark.md"},
-		{"10#encoding-and-line-structure: an order sibling", noncanonical("notes/N1.flowmark.md"),
-			func(f *fixture) []byte {
-				return f.msg("update", "notes", map[string]any{"set": sets(0, "position"), "where": corpustest.WhereID(1)}, 1, "N3")
-			}, "notes/N1.flowmark.md"},
 		{"10#encoding-and-line-structure: a file holding a link to a row whose detail section appears", func() map[string]string {
 			docs := baseDocs()
 			docs["notes/N3.flowmark.md"] = lines("# Second root", "- item: [T3](../items.flowmark.md)", "- position: 2") + "\n"
@@ -468,7 +464,7 @@ func TestRewriteRefusal(t *testing.T) {
 			docs["notes/N3.flowmark.md"] = lines("# Second root", "- item: [T9](x.md)", "- position: 2") + "\n"
 			return docs
 		}(), func(f *fixture) []byte {
-			return f.msg("insert", "items", map[string]any{"set": sets(0, "id", "title", "body")}, "T9", "Ninth", "")
+			return f.msg("insert", "items", map[string]any{"set": sets(0, "id", "title", "body", "position")}, "T9", "Ninth", "", 9)
 		}, "notes/N3.flowmark.md"},
 	}
 	for _, c := range cases {

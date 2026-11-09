@@ -74,8 +74,8 @@ func TestFaceCommands(t *testing.T) {
 		if got := cliOK(t, "row.get", root, "people", "P2"); got != `{"row":{"id":"P2","name":"Max & Co","age":null}}`+"\n" {
 			t.Fatalf("row.get printed %s", got)
 		}
-		cliOK(t, "row.insert", root, "items", "title=First", "body=")
-		cliOK(t, "row.insert", root, "items", "title=Second", "body=")
+		cliOK(t, "row.insert", root, "items", "id=T1", "title=First", "body=", "position=1")
+		cliOK(t, "row.insert", root, "items", "id=T2", "title=Second", "body=", "position=2")
 		if got := cliOK(t, "row.move", root, "items", "T2", "1", "T1", "--lock-wait-ms", "0"); !strings.Contains(got, `{"id":"T2","parent":"T1"`) {
 			t.Fatalf("row.move printed %s", got)
 		}

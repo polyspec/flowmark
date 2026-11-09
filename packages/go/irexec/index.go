@@ -19,11 +19,9 @@ import (
 // documents. An index key names what a row holds:
 //
 //   - its key, byte for byte (keyIndex), and without regard to case (foldIndex);
-//   - the key each of its foreign keys names (refIndex), the
-//     values of each of its unique keys (uniqueIndex) and its sibling group when its table has an order column
-//     (groupIndex);
-//   - the number of its key and of each identity column, and the decimal suffix of its key after the table's
-//     key_prefix (numberIndex), in numeric order, so the largest is the last of its range;
+//   - the key each of its foreign keys names (refIndex) and the values of each of its unique keys (uniqueIndex);
+//   - the number of its key and of each identity column (numberIndex), in numeric order, so the largest is the last of
+//     its range;
 //   - for each of the values above that is not a value of its column type, the fault of that value (faultIndex), so a
 //     check that evaluates the values of a table finds the rows whose evaluation fails as the walk of the table did.
 //
@@ -54,11 +52,8 @@ func uniqueIndex(table string, u []string, text string) string {
 	return "u\x00" + table + "\x00" + strings.Join(u, ",") + "\x00" + text
 }
 
-// groupIndex is the index key of the rows of a table with an order column whose sibling group is group (groupKey).
-func groupIndex(table, group string) string { return "g\x00" + table + "\x00" + group }
-
-// faultIndex is the index key of the rows of table whose value of what fails its evaluation: "ref <i>", "unique <columns>"
-// or "group".
+// faultIndex is the index key of the rows of table whose value of what fails its evaluation: "ref <i>" or
+// "unique <columns>".
 func faultIndex(table, what string) string { return "e\x00" + table + "\x00" + what }
 
 func refFault(table string, i int) string { return faultIndex(table, "ref "+strconv.Itoa(i)) }
@@ -67,10 +62,8 @@ func uniqueFault(table string, u []string) string {
 	return faultIndex(table, "unique "+strings.Join(u, ","))
 }
 
-func groupFault(table string) string { return faultIndex(table, "group") }
-
 // numberIndex is the index key of the non-negative decimal digits n of column col of table: the length of the digits
-// before them, so the keys of a column sort in numeric order. col "" is the key's suffix after the key prefix.
+// before them, so the keys of a column sort in numeric order.
 func numberIndex(table, col, n string) string {
 	return fmt.Sprintf("n\x00%s\x00%s\x00%010d%s", table, col, len(n), n)
 }
@@ -79,12 +72,6 @@ func numberIndex(table, col, n string) string {
 func numberRange(table, col string) (string, string) {
 	p := "n\x00" + table + "\x00" + col + "\x00"
 	return p, p[:len(p)-1] + "\x01"
-}
-
-// indexedUnique reports whether the index holds the unique key u of tb: a unique key of a files table that holds its
-// order column is read by its table, since a position is no stored value.
-func indexedUnique(tb *catalog.Table, u []string) bool {
-	return tb.Storage.Kind != catalog.StorageFiles || !slices.Contains(u, tb.Order)
 }
 
 // indexKeys returns the index keys of the record x of c.
@@ -106,27 +93,12 @@ func (c *Corpus) indexKeys(x *rec) []string {
 	}
 
 	for _, u := range tb.Uniques {
-		if !indexedUnique(tb, u) {
-			continue
-		}
 		text, ok, err := c.uniqueText(x, u)
 		switch {
 		case err != nil:
 			keys = append(keys, uniqueFault(tb.Name, u))
 		case ok:
 			keys = append(keys, uniqueIndex(tb.Name, u, text))
-		}
-	}
-	if tb.Order != "" {
-		if g, err := c.groupKey(x); err != nil {
-			keys = append(keys, groupFault(tb.Name))
-		} else {
-			keys = append(keys, groupIndex(tb.Name, g))
-		}
-	}
-	if p := c.keyPrefix(tb.Name); p != "" && strings.HasPrefix(x.row.Key, p) {
-		if s := x.row.Key[len(p):]; decimal(s) {
-			keys = append(keys, numberIndex(tb.Name, "", s))
 		}
 	}
 	for _, col := range numberColumns(tb) {
@@ -139,23 +111,6 @@ func (c *Corpus) indexKeys(x *rec) []string {
 	return keys
 }
 
-// decimal reports whether s is a decimal number without a leading zero.
-func decimal(s string) bool {
-	return s != "" && (len(s) == 1 || s[0] != '0') && strings.Trim(s, "0123456789") == ""
-}
-
-// keyPrefix returns the key_prefix of table, "" when it has none.
-func (c *Corpus) keyPrefix(table string) string {
-	for _, d := range c.cat.Documents {
-		for _, t := range d.Tables {
-			if t.Name == table && t.Settings != nil && t.Settings.KeyPrefix != nil {
-				return t.Settings.KeyPrefix.Prefix
-			}
-		}
-	}
-	return ""
-}
-
 // numberColumns returns the columns of tb whose numbers the index holds: its key and its identity columns, the columns a
 // write allocates max + 1 over.
 func numberColumns(tb *catalog.Table) []string {
@@ -166,26 +121,6 @@ func numberColumns(tb *catalog.Table) []string {
 		}
 	}
 	return out
-}
-
-// groupKey names the sibling group of row x of a table with an order column: its placement parent and its parent.
-func (c *Corpus) groupKey(x *rec) (string, *Error) {
-	k := ""
-	if x.parent != nil {
-		k = fmt.Sprintf("%p", x.parent.row)
-	}
-	if pc := parentColumn(x.tb); pc != "" {
-		v, err := c.value(x, pc)
-		if err != nil {
-			return "", err
-		}
-		if v.null {
-			k += "\x00null"
-		} else {
-			k += "\x00=" + v.text
-		}
-	}
-	return k, nil
 }
 
 // uniqueText returns the values of the unique key u of row x joined, false when one is NULL. A block row placed nowhere

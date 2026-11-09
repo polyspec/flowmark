@@ -97,7 +97,7 @@ var crashPoints = []crashPoint{
 func crashTx(f *fixture) [][]byte {
 	return [][]byte{
 		f.insertTag("web", "area"),
-		f.msg("insert", "people", map[string]any{"set": sets(0, "name")}, "Lin"),
+		f.msg("insert", "people", map[string]any{"set": sets(0, "id", "name")}, "P4", "Lin"),
 		f.msg("delete", "notes", map[string]any{"where": corpustest.WhereID(0)}, "N3"),
 	}
 }
@@ -254,7 +254,7 @@ func TestOpenRecovers(t *testing.T) {
 		s := f.session("cli")
 		// The recovery after the stop finds the folder in place and completes the create.
 		f.j.SetFault(crashAt("folder", 0))
-		want(t, s, f.msg("insert", "notes", map[string]any{"set": sets(0, "id", "title", "body")}, "N1", "First", ""), `{"affected":1,"keys":["N1"]}`)
+		want(t, s, f.msg("insert", "notes", map[string]any{"set": sets(0, "id", "title", "body", "position")}, "N1", "First", "", 1), `{"affected":1,"keys":["N1"]}`)
 		f.j.SetFault(nil)
 		kinds := f.rec.kinds()
 		if kinds[len(kinds)-2] != journal.Replayed {

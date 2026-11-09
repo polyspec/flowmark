@@ -1,5 +1,5 @@
 <!-- doc-id: spec-checklist -->
-<!-- source-sha256: 193d1096778d05169eb1544ad27fa96db4aed82833c94dbaf1df8fdc4eb5e819 -->
+<!-- source-sha256: 59b67d7f68c36573a0a329299400fceff1e4bd2e013df3b5449d2fa9c75b964c -->
 # 응용 schema
 
 [English](100-checklist.md)
@@ -12,8 +12,8 @@
 
 | Table | 저장 | Column과 setting |
 | --- | --- | --- |
-| `items` | `store files`, item 하나에 file `items/<key>.flowmark.md` 하나 | `id varchar(32)`와 `key_prefix 'T'`, `parent varchar(32) null` → items, `state varchar(16)`, `title varchar(255)`와 `title title`, `body text`와 `markdown body`·`body body`, `assignee varchar(32) null` → people, `start_on date null`·`start_at datetime(0) null`·`due_on date null`·`due_at datetime(0) null`, `priority i16 null`, `position i32`와 `order position`, `evidence text null`·`cause text null`·`retry text null`(각각 `markdown`) |
-| `people` | `store document table`, file `people.flowmark.md` | `id varchar(32)`와 `key_prefix 'P'`, `name varchar(255)`와 `title name` |
+| `items` | `store files`, item 하나에 file `items/<key>.flowmark.md` 하나 | `id varchar(32)`, `parent varchar(32) null` → items, `state varchar(16)`, `title varchar(255)`와 `title title`, `body text`와 `markdown body`·`body body`, `assignee varchar(32) null` → people, `start_on date null`·`start_at datetime(0) null`·`due_on date null`·`due_at datetime(0) null`, `priority i16 null`, `position i32`와 `order position`, `evidence text null`·`cause text null`·`retry text null`(각각 `markdown`) |
+| `people` | `store document table`, file `people.flowmark.md` | `id varchar(32)`, `name varchar(255)`와 `title name` |
 | `item_links` | `store block fk_item_links_from table`, 자기 `from_item`의 file 안 | `id i64 identity`, `from_item varchar(32)` → items, `to_item varchar(32)` → items, `kind varchar(16)` |
 | `views` | `store document table`, file `views.flowmark.md` | `id i64 identity`, `title varchar(255)`와 `title title`, `body text`와 `markdown body`·`body body`, `kind varchar(16)`, `entity varchar(63)`, `filter text`와 `sort text`(`codec filter ordered_json`과 `codec sort ordered_json`), `group_by varchar(63) null` |
 
@@ -48,10 +48,9 @@
   시작하는 item에 속하고, `to_item`과 `kind`가 block의 cell이며, block 행의 `from_item`은 그 배치이지
   cell이 아니다. item으로 들어오는 link는 `to_item`이 그 item을 가리키는 행이며, 다른 모든 foreign
   key처럼 table에 대한 query로 읽는다.
-- `position`은 같은 `parent`를 가진 item들 사이에서 item의 위치가 아니라 **rank**를 담는다: 읽기는
-  column을 1부터 세는 위치로 채우고, move는 item에 새 이웃 사이의 rank를 주며, 그런 rank가 있는 한
-  그 file만 쓴다([document model](20-document-model.ko.md#순서)). 형제 사이에 덧붙는 item은 마지막
-  rank보다 1000 큰 rank를 받으므로, 엔진이 쓴 corpus는 `position: 1000`, `position: 2000`, …로 읽힌다.
+- `position`은 같은 `parent`를 가진 item들의 순서다: 값의 오름차순으로 서고, 값을 공유하면 key
+  순서로 선다([document model](20-document-model.ko.md#순서)). application은 이를 어떤 정수로든 쓰며,
+  move는 옮긴 item의 file만 쓴다. insert는 item의 key처럼 이것도 준다.
 - 외래 key는 [canonical format](10-canonical-format.md)이 정한 대로 link다. 담당자가 `P1`인 item의
   field는 `- assignee: [P1](../people.flowmark.md)`로 쓴다: 사람 행은 상세 섹션이 없으므로 target에
   anchor가 없다. link block의 `to_item` cell은 item의 file을 `[T3](T3.flowmark.md)`로 link하며,

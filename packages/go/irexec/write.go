@@ -157,7 +157,7 @@ func (w *writer) statedDelete() *Error {
 		return err
 	}
 	w.answer.Affected = int64(len(rows))
-	if w.tb.Storage.Kind == catalog.StorageDocument && w.tb.Order == "" {
+	if w.tb.Storage.Kind == catalog.StorageDocument {
 		gone := make(map[*store.Row]bool, len(rows))
 		for _, x := range rows {
 			gone[x.row] = true
@@ -409,13 +409,13 @@ func (w *writer) assignValue(a *ir.Assign, f *runtimemodel.Field, old cell, p *i
 	return cell{text: v}, ""
 }
 
-// setColumns sets on row the value of vals of each column of tb, but its placement and order columns, which the place of
-// the row holds.
+// setColumns sets on row the value of vals of each column of tb, but its placement column, which the place of the row
+// holds.
 func setColumns(tb *catalog.Table, row *store.Row, vals map[string]cell) {
 	placement := tb.Placement()
 	for _, c := range tb.Columns {
 		v, ok := vals[c.Name]
-		if !ok || c.Name == placement || c.Name == tb.Order {
+		if !ok || c.Name == placement {
 			continue
 		}
 		setValue(tb, row, c.Name, v)
@@ -559,11 +559,12 @@ func (w *writer) insert() *Error {
 }
 
 // requireAssigned refuses an insert that omits a non-null column with no default
-// that the executor does not assign (orm protocol 1.4): the identity, key_prefix and
-// order columns are executor-assigned.
+// that the executor does not assign (orm protocol 1.4): the identity and the audit
+// columns are executor-assigned, as a database assigns them; a text key and an order
+// column are the insert's to give (spec 20 Keys and Order).
 func (w *writer) requireAssigned(set []ir.Assign) *Error {
 	for _, f := range w.ent.Fields {
-		if f.Null || f.Default || f.Identity || f.Name == w.tb.Order || (f.Name == w.tb.Key && w.keyPrefix() != "") || (w.tb.Audit != nil && f.Name == w.tb.Audit.Column) {
+		if f.Null || f.Default || f.Identity || (w.tb.Audit != nil && f.Name == w.tb.Audit.Column) {
 			continue
 		}
 		if !slices.ContainsFunc(set, func(a ir.Assign) bool { return a.Column == f.Name }) {
@@ -572,9 +573,6 @@ func (w *writer) requireAssigned(set []ir.Assign) *Error {
 	}
 	return nil
 }
-
-// keyPrefix returns the key_prefix of the table, "" when it has none.
-func (w *writer) keyPrefix() string { return w.c.keyPrefix(w.tb.Name) }
 
 // insertRow inserts the i-th row of the request, whose set parameters are ps (nil
 // for the set row itself).
@@ -613,10 +611,6 @@ func (w *writer) insertRow(i int, ps []*int) *Error {
 			vals[c.Name] = v
 		case f.Identity:
 			vals[c.Name] = w.nextIdentity(tb, c.Name)
-		case c.Name == tb.Key && w.keyPrefix() != "":
-			vals[c.Name] = w.nextPrefixed(tb)
-		case c.Name == tb.Order:
-			// assigned once the row is placed
 		default:
 			if v, ok := w.defaultOf(c); ok {
 				vals[c.Name] = v
@@ -696,15 +690,6 @@ func (w *writer) insertRow(i int, ps []*int) *Error {
 		w.next.changed(p.file)
 		w.touched[p.file] = true
 	}
-	if tb.Order != "" {
-		var k *cell
-		if v, ok := vals[tb.Order]; ok && !v.null {
-			k = &v
-		}
-		if err := w.placeInOrder(g, k); err != nil {
-			return err
-		}
-	}
 	if err := w.auditRow(g.row, "insert", cell{null: true}); err != nil {
 		return err
 	}
@@ -756,50 +741,6 @@ func (w *writer) nextIdentity(tb *catalog.Table, col string) cell {
 		max = m
 	}
 	return cell{text: strconv.FormatInt(max+1, 10)}
-}
-
-// nextPrefixed allocates <p><n + 1> under the key_prefix p of tb, n the largest decimal suffix without a leading zero
-// among the keys of the form <p><n> (spec 20 Keys): the last number of the prefix the index holds.
-func (w *writer) nextPrefixed(tb *catalog.Table) cell {
-	p := w.next.keyPrefix(tb.Name)
-	var keys []string
-	if n := w.next.maxNumber(tb.Name, ""); n != "" {
-		keys = []string{p + n}
-	}
-	return cell{text: NextPrefixed(p, keys)}
-}
-
-// NextPrefixed is the key that key_prefix p allocates after keys: <p><n + 1>, where n is the largest decimal suffix
-// without a leading zero among the keys of the form <p><n> (spec 20 "Keys").
-func NextPrefixed(p string, keys []string) string {
-	return NextPrefixedKeys(p, keys, 1)[0]
-}
-
-// NextPrefixedKeys are the count keys that key_prefix p allocates one after another after keys: <p><n + 1> to
-// <p><n + count>, with n as NextPrefixed reads it. The keys are read once, so the keys of a statement that inserts many
-// rows cost the keys it reads and the keys it allocates.
-func NextPrefixedKeys(p string, keys []string, count int) []string {
-	n := new(big.Int)
-	for _, k := range keys {
-		if !strings.HasPrefix(k, p) {
-			continue
-		}
-		s := k[len(p):]
-		if s == "" || (len(s) > 1 && s[0] == '0') || strings.Trim(s, "0123456789") != "" {
-			continue
-		}
-		v, _ := new(big.Int).SetString(s, 10)
-		if v.Cmp(n) > 0 {
-			n = v
-		}
-	}
-	out := make([]string, count)
-	one := big.NewInt(1)
-	for i := range out {
-		n = new(big.Int).Add(n, one)
-		out[i] = p + n.String()
-	}
-	return out
 }
 
 // onDuplicate applies the on_duplicate assignments to the row that the inserted row
@@ -938,9 +879,6 @@ func (w *writer) update() *Error {
 // unless the request assigns it.
 func (w *writer) updateRows(rows []*rec, set []ir.Assign, stamp bool) *Error {
 	tb := w.tb
-	if tb.Order != "" && slices.ContainsFunc(set, func(a ir.Assign) bool { return a.Column == tb.Order }) && len(rows) != 1 {
-		return errf(codeConstraint, "an update that assigns the order column %s matches %d rows; it must match exactly one", tb.Order, len(rows))
-	}
 	for i, x := range rows {
 		x = w.own(w.next.recOf(x.row)) // an earlier row's move may have re-indexed the corpus
 		g := &given{row: x.row, index: i, assigned: map[string]bool{}, before: map[string]cell{}}
@@ -986,36 +924,16 @@ func (w *writer) updateRows(rows []*rec, set []ir.Assign, stamp bool) *Error {
 			}
 			x = w.next.recOf(x.row)
 		}
-		moved := false
-		var oldParent *store.Row
-		if x.parent != nil {
-			oldParent = x.parent.row
-		}
 		if tb.Storage.Kind == catalog.StorageBlock {
 			if v, ok := vals[tb.Placement()]; ok && (v.null || v.text != x.parent.row.Key) {
 				if err := w.movePlacement(g, x, v); err != nil {
 					return err
 				}
-				moved = true
 			}
 		}
-		if tb.Order != "" {
-			k, assignsOrder := vals[tb.Order]
-			parentChanged := false
-			if pc := parentColumn(tb); pc != "" {
-				if v, ok := vals[pc]; ok && v != g.before[pc] {
-					parentChanged = true
-				}
-			}
-			if assignsOrder || parentChanged || moved {
-				var kp *cell
-				if assignsOrder && !k.null {
-					kp = &k
-				}
-				if err := w.move(g, kp, oldParent); err != nil {
-					return err
-				}
-			}
+		if tb.Order != "" && g.assigned[tb.Order] {
+			// The row stands among its siblings by its new value, which the next read of the table orders.
+			w.next.reorder()
 		}
 		if tb.Audit != nil {
 			if err := w.auditRow(x.row, "update", g.before[tb.Audit.Column]); err != nil {
@@ -1308,16 +1226,10 @@ func (w *writer) restrict(x *rec, seq int, gone []*rec) *Error {
 	})
 }
 
-// removeRow removes row x from its file, or the file of a files row; the siblings
-// of an ordered block or document table close the gap, and those of a files table
-// keep their ranks, since a gap changes no position.
+// removeRow removes row x from its file, or the file of a files row; its siblings keep their order values, as a
+// database's rows keep theirs.
 func (w *writer) removeRow(x *rec) *Error {
 	tb := x.tb
-	if tb.Order != "" && tb.Storage.Kind != catalog.StorageFiles {
-		if err := w.closeGap(x); err != nil {
-			return err
-		}
-	}
 	switch tb.Storage.Kind {
 	case catalog.StorageFiles:
 		w.next.dropFile(x.file)
@@ -1395,13 +1307,10 @@ func (w *writer) rowPath(tb *catalog.Table, g *given, vals map[string]cell) (str
 
 // uniqueCandidates returns the rows of the table the on_duplicate judgement of the inserted values vals may meet or fail
 // on, in corpus order: for each unique key, the rows that hold its values and the rows whose values of it fail their
-// evaluation; every row of the table when the index does not hold one of its unique keys (indexedUnique).
+// evaluation.
 func (w *writer) uniqueCandidates(vals map[string]cell) []*rec {
 	var keys []string
 	for _, u := range w.tb.Uniques {
-		if !indexedUnique(w.tb, u) {
-			return scan(w.next, w.tb.Name)
-		}
 		keys = append(keys, uniqueFault(w.tb.Name, u))
 		parts := make([]string, len(u))
 		complete := true

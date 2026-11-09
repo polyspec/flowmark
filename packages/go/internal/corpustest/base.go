@@ -7,10 +7,10 @@ func BaseDocs() map[string]string {
 	return map[string]string{
 		"items.flowmark.md": Lines(
 			"# items",
-			"- [x] T1 Ship the parser owner:[P1](people.flowmark.md)",
-			"  - [~] T2 Write the tests due:2026-10-20",
-			"- [ ] T3 Review the design",
-			"- [-] T4 Drop the old path",
+			"- [x] T1 Ship the parser position:1 owner:[P1](people.flowmark.md)",
+			"  - [~] T2 Write the tests position:1 due:2026-10-20",
+			"- [ ] T3 Review the design position:2",
+			"- [-] T4 Drop the old path position:3",
 			"",
 			"## items row T1",
 			"",

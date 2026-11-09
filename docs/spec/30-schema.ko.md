@@ -1,5 +1,5 @@
 <!-- doc-id: spec-schema -->
-<!-- source-sha256: 1c0a6041d0b9abd165a5f2974faa2b8b186c538d4523ca7db66c68a53438ccf0 -->
+<!-- source-sha256: 11e36e9f33a208783c80d580b7fb11aa2e385cfc0a50b02b39b08dfb8f462cd4 -->
 # Schema
 
 [English](30-schema.md)
@@ -38,10 +38,9 @@ column을 이름 붙인다 — column 이름이 동작을 고르지 않는다.
 | Setting | 뜻 |
 | --- | --- |
 | `store files` / `store document list\|table` / `store block <fk> list\|table` | table의 저장([document model](20-document-model.md)). corpus에서 table마다 정확히 하나. `files`나 `document` 저장은 `shard <column> <year\|month\|day>`로 끝날 수 있으며 기간마다 따로 저장한다([시간 shard](20-document-model.ko.md#시간-shard)). 절은 orm이 검사하고(non-null `date`나 `datetime` column, `order` 없음, block 아님) |
-| `key_prefix <p>` | `varchar` primary key를 `<p><n + 1>`로 할당한다. orm은 이 column을 executor가 할당하는 것으로 다룬다 — `varchar`다. dbspec은 `text` column을 key로 삼지 않기 때문이다 |
 | `title <column>` | 행의 제목: non-null, 비지 않음 |
 | `body <column>` | 행의 body: `markdown` column, NULL이 아님 |
-| `order <column>` | 형제 사이에서 행의 위치. orm은 이 column을 executor가 할당하는 것으로 다룬다 |
+| `order <column>` | column 값에 따른 형제 사이의 행 순서([document model](20-document-model.ko.md#순서)). 아무것도 할당하지 않으므로 insert가 준다(orm DBS-79) |
 | `checkbox <column> <state> '<glyph>'` | column 값의 list glyph: 정확히 한 글자이며 list 행의 대괄호 사이(`- [<glyph>] …`)에 쓴다. 아래에 말하는 대로 과도기의 것이다 |
 | `markdown <column>` | column이 markdown prose를 담고 섹션으로 저장된다 |
 | `state_machine <column> …` (`initial`, 전이, `terminal`, `require`, `history`, `limit`) | 읽지만 어느 것도 적용하지 않는다: 엔진은 상태기계를 갖지 않는다([constraints](50-constraints.ko.md#상태-column)) |

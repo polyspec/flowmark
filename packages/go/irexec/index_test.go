@@ -6,7 +6,6 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/polyspec/flowmark/packages/go/internal/cost"
 	"github.com/polyspec/flowmark/packages/go/store"
 )
 
@@ -240,53 +239,4 @@ func TestIndexMarks(t *testing.T) {
 			})
 		}
 	}
-}
-
-// TestKeyNumbers pins the numbers of the keys of a key_prefix table the index gives a SQL statement (docs.go KeyNumbers,
-// spec 20 Keys): every number of the table's keys, the largest first in numeric and not in text order, none of another
-// table, none for a table without a key_prefix, the number of a key a write added and not of a key it removed, and a
-// read that stops at the first number scans one key.
-func TestKeyNumbers(t *testing.T) {
-	cases := []struct {
-		name  string
-		table string
-		steps func(f *fixture)
-		want  []string
-	}{
-		{"20#keys: the keys of the base corpus, the largest first", "items", func(*fixture) {}, []string{"4", "3", "2", "1"}},
-		{"20#keys: a key of more digits is the larger", "items", func(f *fixture) {
-			f.commit(f.ok(f.msg("insert", "items", map[string]any{"set": sets("id", "title", "body")}, "T10", "Ten", "")))
-		}, []string{"10", "4", "3", "2", "1"}},
-		{"20#keys: a deleted key is not given", "items", func(f *fixture) {
-			f.commit(f.ok(f.msg("delete", "items", map[string]any{"where": where(pred("id", "eq", p(0)))}, "T3")))
-		}, []string{"4", "2", "1"}},
-		{"20#keys: a table without a key_prefix has no numbers", "tags", func(*fixture) {}, nil},
-		{"20#keys: a table that is not in the catalog has no numbers", "missing", func(*fixture) {}, nil},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			f := fresh(t)
-			tc.steps(f)
-			if got := slices.Collect(f.c.KeyNumbers(tc.table)); !slices.Equal(got, tc.want) {
-				t.Fatalf("the numbers of %s are %q, want %q", tc.table, got, tc.want)
-			}
-		})
-	}
-	t.Run("20#keys: a read that stops at the first number scans one key", func(t *testing.T) {
-		f := fresh(t)
-		f.c.cost = &cost.Counts{}
-		if got := slices.Collect(f.c.KeyNumbers("items")); len(got) != 4 { // the index is built before the count
-			t.Fatalf("the numbers of items are %q", got)
-		}
-		before := f.c.Cost().Snapshot()
-		for n := range f.c.KeyNumbers("items") {
-			if n != "4" {
-				t.Fatalf("the first number is %q, want 4", n)
-			}
-			break
-		}
-		if got := f.c.Cost().Snapshot().Since(before).Get(cost.RowsScanned); got != 1 {
-			t.Fatalf("the read scanned %d keys, want 1", got)
-		}
-	})
 }

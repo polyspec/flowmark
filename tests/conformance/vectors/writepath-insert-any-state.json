@@ -17,9 +17,9 @@
     ],
     "items.flowmark.md": [
       "# items",
-      "- [ ] T1 First item",
-      "- [~] T2 Second item",
-      "- [ ] T3 Third item",
+      "- [ ] T1 First item position:1",
+      "- [~] T2 Second item position:2",
+      "- [ ] T3 Third item position:3",
       "",
       "## items row T2",
       "",
@@ -61,6 +61,10 @@
       {
         "column": "state",
         "p": 3
+      },
+      {
+        "column": "position",
+        "p": 4
       }
     ]
   },
@@ -68,7 +72,8 @@
     "T4",
     "Fourth item",
     "",
-    "doing"
+    "doing",
+    4
   ],
   "now": "2026-10-11 09:00:00.000000",
   "expect": {
@@ -79,10 +84,10 @@
     "corpus": {
       "items.flowmark.md": [
         "# items",
-        "- [ ] T1 First item",
-        "- [~] T2 Second item",
-        "- [ ] T3 Third item",
-        "- [~] T4 Fourth item",
+        "- [ ] T1 First item position:1",
+        "- [~] T2 Second item position:2",
+        "- [ ] T3 Third item position:3",
+        "- [~] T4 Fourth item position:4",
         "",
         "## items row T2",
         "",

@@ -38,10 +38,10 @@ func blockParseCases() []parseCase {
 	}
 }
 
-// stepRow is a task_steps row of the tasks fixture with its position, done flag,
-// body and child rows; a nil blocks argument has no child block.
-func stepRow(key, title, position, done, body string, blocks map[string][]*Row) *Row {
-	sc := map[string]*string{"position": sp(position), "done": sp(done)}
+// stepRow is a task_steps row of the tasks fixture with its done flag, body and
+// child rows; a nil blocks argument has no child block.
+func stepRow(key, title, done, body string, blocks map[string][]*Row) *Row {
+	sc := map[string]*string{"done": sp(done)}
 	return &Row{Table: "task_steps", Key: key, Title: title, Body: body, Scalars: sc,
 		Sections: map[string]*string{}, Raw: map[string]string{}, Dangling: map[string]DanglingLink{}, Blocks: blocks}
 }
@@ -62,7 +62,7 @@ func TestRenderFileBlocks(t *testing.T) {
 	lk := fixtureLinker()
 	ref := &Row{Table: "step_refs", Key: "1", Scalars: map[string]*string{"label": sp("spec")},
 		Sections: map[string]*string{"note": sp("Ref note.\n")}, Raw: map[string]string{}, Dangling: map[string]DanglingLink{}}
-	steps := []*Row{stepRow("S1", "Draft", "1", "true", "Step body.\n", map[string][]*Row{"step_refs": {ref}})}
+	steps := []*Row{stepRow("S1", "Draft", "true", "Step body.\n", map[string][]*Row{"step_refs": {ref}})}
 	want := "# Title\n- position: 1\n- done: true\n\n" +
 		"## task_steps\n- S1 Draft done:true\n\n" +
 		"### task_steps row S1\n\nStep body.\n\n" +
@@ -95,9 +95,9 @@ func TestRenderFileBlocks(t *testing.T) {
 	}{
 		{"a block the files table does not declare", taskWithBlocks(map[string][]*Row{"item_history": steps})},
 		{"a placement foreign key assigned to a block row", taskWithBlocks(map[string][]*Row{"task_steps": {
-			withScalar(stepRow("S1", "Draft", "1", "true", "", nil), "task", "T1")}})},
+			withScalar(stepRow("S1", "Draft", "true", "", nil), "task", "T1")}})},
 		{"a row of another table in a block", taskWithBlocks(map[string][]*Row{"task_steps": {
-			stepRow("S1", "Draft", "1", "true", "", map[string][]*Row{"step_refs": {withRowTable(ref, "tasks")}})}})},
+			stepRow("S1", "Draft", "true", "", map[string][]*Row{"step_refs": {withRowTable(ref, "tasks")}})}})},
 	}
 	for _, c := range refused {
 		out, diags := renderFileOf(t, cat, "tasks", c.row, lk)

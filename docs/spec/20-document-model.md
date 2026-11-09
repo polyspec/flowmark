@@ -80,7 +80,7 @@ or one folder without end (`files`).
   logical relations are the same in every storage. A `files` table keeps its order (spec 20 Order, by key
   without a hierarchy or an order column, as orm allows none on a sharded table), whatever the periods are. A
   `document` table reads its periods ascending, and each document in its own order.
-- **Keys.** A key, an `identity` value and a `key_prefix` allocation are unique across all periods: the
+- **Keys.** A key and an `identity` value are unique across all periods: the
   rows of every period are one table, read from the corpus the engine keeps in memory, and no index file
   stands beside the corpus. Grounding: the key check of a table reads the table's rows, and a shard changes
   where they stand, never which rows the table has.
@@ -130,12 +130,9 @@ or one folder without end (`files`).
   more than the larger of the largest key and the table's counter
   ([AUTOINCREMENT counters](40-ops.md#sql-statements)), allocated under the lock, so no key is given twice. A git rewind
   rewinds the counter with the rows, and reuse after it is accepted — git history is the allocator of record.
-- A key with `key_prefix <p>` is allocated `<p><n + 1>`, where n is the largest decimal suffix
-  without a leading zero among the keys of the form `<p><n>`. orm treats such a column as
-  executor-assigned, as with `identity`, so an insert may omit it. A text key without `key_prefix`
-  must be given by the insert.
-- A hand-written key is accepted when it is unique and has the column's type; a key not of the form
-  `<p><n>` does not count toward n.
+- A text key is given by the insert, and an insert that leaves it out is `IR_INVALID`: the engine
+  allocates no text key, as no common database does (orm DBS-77 withdraws `key_prefix`). A
+  hand-written key is accepted when it is unique and has the column's type.
 - Keys are opaque: no ID grammar exists, and no relation is read from a key.
 
 ## Title and body
@@ -169,65 +166,26 @@ or one folder without end (`files`).
 ## Order
 
 - `order <column>` names a non-null `i32` or `i64` column with no default, in no key, index or
-  check. Its value is the row's 1-based position among the rows with the same placement parent
-  and the same `parent`.
-- In block and document storages it is a logical column and is never written: a read fills it with the
-  row's 1-based position among its siblings, a file holding an `order` value there is `format.block`, and
-  a write takes each sibling group's values as exactly 1..m, m being the group's size after the write, anything else being `CONSTRAINT`. Grounding: the
-  line order of the siblings is their order, so the position is the value, and a value written in the file
-  would be a second order.
-- In `files` storage the field-list item holds the row's **rank**, not its position: any value of
-  the column's type. The siblings stand in ascending rank, and a read fills the column with the
-  row's 1-based position in that sibling order, as in the other storages, so a read, an IR `where`
-  or `order` on the column, an answer and the export see positions, never ranks. The item is
-  required as every non-null stored scalar is, so a file without it is `format.block`. The
-  validator's `order` is at each row whose rank is shared with a sibling, since the two ranks do
-  not order the rows; a rank not of the column's type is `type` alone and is shared with none
-  ([constraints](50-constraints.md#hierarchy-and-order)). A row whose `parent` is not of its
-  column's type belongs to no known sibling group: its own `order` is not judged, and its `type`
-  stands for it. A read that evaluates the position of a row whose rank is not of its type fails
-  as `CONSTRAINT` naming that `type` diagnostic, as every read of an unreadable value does
-  ([canonical format](10-canonical-format.md#readable-values)): the position derives from a rank
-  that has no comparison; one whose `parent` is not of its type fails so too, since its sibling
-  group is not known.
-- A `files` write that places a row — an insert, an update of `order`, a parent change — gives
-  it a rank strictly between its new neighbours' and writes no other file while such a rank
-  exists. With a the rank before the row (0 when it stands first) and b the rank after it, a row
-  whose own rank already lies between them keeps it; otherwise it takes the midpoint
-  a + ⌊(b − a) / 2⌋ when b − a ≥ 2, or a + 1000 when it stands last and that does not exceed the
-  type's maximum. When neither holds, the write **renumbers** the group: the i-th row of the
-  group, in its order after the write, takes the rank i·s, s = min(1000, ⌊max / m⌋), max the
-  type's maximum and m the group's size, and only a file whose rank changes is rewritten; a
-  renumber of a group of more than max rows is `CONSTRAINT`, since no spacing parts them. A delete and a parent change leave the ranks of
-  the old siblings as they stand, since a gap changes no position. A write that must read a
-  neighbour's rank, or renumber a group, holding a rank not of its type fails as `CONSTRAINT`
-  naming that `type` diagnostic; a placement between two readable ranks does not read it, and
-  the rows whose rank is not of its type stand after every readable one, so a row placed just
-  before the first of them stands last among the readable ranks and takes its rank as a row
-  that stands last does. A renumber rewrites
-  sibling files, so a sibling with a `format.*` diagnostic refuses it as the
-  [commit refusal](10-canonical-format.md#encoding-and-line-structure) states. Grounding: under
-  a stored position, an insert at k, a move, a delete and a parent change rewrite every following
-  sibling — an insert at position 1 among 1,000 siblings rewrote 1,000 files —, while a rank
-  rewrites the placed row's file alone until its place has no free rank. With the spacing 1000
-  a place takes nine inserts before its gap is exhausted (1000 halves to 500, 250, 125, 62,
-  31, 15, 7, 3, 1), so a move writes one file in the common case and the group's m files once
-  per exhausted gap; a group too large for the spacing 1000 in its type has a smaller s and
-  fewer inserts per gap. A decimal spacing keeps a rank readable and editable by hand: a person
-  moves a row between 2000 and 3000 by writing 2500. A dense group 1..n is a valid set of ranks,
-  so a corpus written as positions reads unchanged and is renumbered by its first placement that
-  finds no free rank.
-- An insert may omit it and the row appends; with k it places the row at k. An update to k moves
-  the row; in block and document storages the siblings follow in the same transaction. k < 1 or
-  k > n + 1 is `CONSTRAINT`, never clamped. n is the number of rows among the destination
-  siblings excluding the row itself, so k lies in 1..n + 1 for an insert, a parent change and an
-  in-place move alike. An update that assigns `order` matches exactly one row, otherwise
-  `CONSTRAINT`. Changing `parent` without `order` appends to the new siblings; in block and
-  document storages the old siblings close the gap. Moving a row moves its subtree.
+  check (orm DBS-79). Its value is the row's place among the rows with the same placement parent and
+  the same `parent`, its siblings: the siblings stand by ascending value, the rows that share a value
+  in key order (numeric for integer keys, codepoint for text), and the rows whose value is not of the
+  column's type after every other, in key order.
+- The column is a stored scalar in every storage, written where any scalar of its storage is: a field
+  of a list row, a cell of a table, a field-list item of a `files` row. It is required as every
+  non-null stored scalar is, so a row without it is `format.block`, and a value not of its type is the
+  validator's `type` ([constraints](50-constraints.md#hierarchy-and-order)). A read answers the value
+  as written, and an IR `where` or `order` on the column compares it so.
+- Nothing assigns it: an insert gives it as it gives any non-null column without a default, and an
+  insert that leaves it out is `IR_INVALID`, as on the databases orm reaches. Any value of the type is
+  accepted; siblings may share a value, and a gap is no fault. A write of the column, a parent change
+  and a delete rewrite the written row's file or its document alone: no sibling is renumbered and no
+  gap is closed. Grounding: no common database assigns a position, so the engine holds only the value
+  the application writes; a stored value lets a move write one row, as an update of any column does.
+- In block and document storages the rows of a sibling group stand in the line order of their values,
+  so a document whose siblings stand in another order is `format.noncanonical`, and a write renders
+  them in that order. Moving a row moves its subtree.
 - Without an `order` column, siblings stand in key order (numeric for integer keys, codepoint for
-  text) and each child follows its parent; any other line order is `format.noncanonical`. With an
-  `order` column, the siblings stand in the order of their values, which a read takes from the line
-  order, so no sibling order is noncanonical.
+  text) and each child follows its parent; any other line order is `format.noncanonical`.
 - **Storage order** is the pre-order of the tree: each row, then its children in sibling order;
   rows of different placement parents follow their parents' storage order. A read without an IR
   `order` returns storage order; an IR `order` on the order column sorts by its value with ties
@@ -237,8 +195,8 @@ or one folder without end (`files`).
   `parent` value in key order — each group in its sibling order, and each root is followed by its
   subtree in pre-order. The rows no root reaches — a row whose `parent` is not of its column's
   type, a row on a cycle of parents across files, and every row under one of them — follow every
-  reached row, in corpus order. Among siblings with an `order` column, rows sharing a rank stand
-  in corpus order, and rows whose rank is not of its type stand after the others in corpus order.
+  reached row, in corpus order. Among siblings with an `order` column, rows sharing a value stand
+  in key order, and rows whose value is not of its type stand after the others in key order.
   Grounding: a read never fails on a validator diagnostic of another row, so the storage order of a
   corpus that has one must be a function of the corpus alone, as corpus order is.
 

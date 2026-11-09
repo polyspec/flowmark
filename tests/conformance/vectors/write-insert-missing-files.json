@@ -22,6 +22,10 @@
       {
         "column": "done",
         "p": 3
+      },
+      {
+        "column": "position",
+        "p": 4
       }
     ]
   },
@@ -29,7 +33,8 @@
     "T5",
     "New task",
     "New body.",
-    false
+    false,
+    1
   ],
   "now": "2026-10-11 09:00:00.000000",
   "expect": {
@@ -40,7 +45,7 @@
     "corpus": {
       "tasks/T5.flowmark.md": [
         "# New task",
-        "- position: 1000",
+        "- position: 1",
         "- done: false",
         "",
         "New body."

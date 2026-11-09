@@ -1,7 +1,6 @@
 package store
 
 import (
-	"strconv"
 	"strings"
 	"testing"
 )
@@ -41,8 +40,8 @@ func TestDuplicateFaultOnce(t *testing.T) {
 	done := map[string]string{"done": "false"}
 	items := func(keys ...string) []*Row {
 		var rows []*Row
-		for i, k := range keys {
-			rows = append(rows, item(k, "Row "+k, "waiting", strconv.Itoa(i+1), done))
+		for _, k := range keys {
+			rows = append(rows, item(k, "Row "+k, "waiting", done))
 		}
 		return rows
 	}
@@ -84,9 +83,9 @@ func TestDuplicateFaultOnceInFilesBlock(t *testing.T) {
 	cat := loadFixture(t)
 	lk := fixtureLinker()
 	steps := []*Row{
-		stepRow("S1", "One", "1", "true", "", nil),
-		stepRow("S1", "Two", "2", "true", "", nil),
-		stepRow("s1", "Three", "3", "true", "", nil),
+		stepRow("S1", "One", "true", "", nil),
+		stepRow("S1", "Two", "true", "", nil),
+		stepRow("s1", "Three", "true", "", nil),
 	}
 	out, rf := renderFileOf(t, cat, "tasks", taskWithBlocks(map[string][]*Row{"task_steps": steps}), lk)
 	t.Run("10#diagnostics: a block of a files row faults the later of a byte-equal pair once", func(t *testing.T) {
@@ -100,7 +99,7 @@ func TestDuplicateFaultOnceInFilesBlock(t *testing.T) {
 func TestUndeclaredBlockNamed(t *testing.T) {
 	cat := loadFixture(t)
 	lk := fixtureLinker()
-	steps := []*Row{stepRow("S1", "Draft", "1", "true", "", nil)}
+	steps := []*Row{stepRow("S1", "Draft", "true", "", nil)}
 	out, rf := renderFileOf(t, cat, "tasks", taskWithBlocks(map[string][]*Row{"item_history": steps}), lk)
 	t.Run("10#diagnostics: a block a files row does not declare is refused at its name", func(t *testing.T) {
 		expectFaults(t, out, rf, []dupFault{{"tasks", "T1", -1, "item_history", RuleConstraint, "item_history"}})

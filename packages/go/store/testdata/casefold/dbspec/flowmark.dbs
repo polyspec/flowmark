@@ -6,7 +6,6 @@ table stems {
   body text
   primary key (id)
   settings {
-    key_prefix 'S'
     store document table
     title title
     body body
@@ -19,7 +18,6 @@ table ktems {
   body text
   primary key (id)
   settings {
-    key_prefix 'K'
     store document table
     title title
     body body

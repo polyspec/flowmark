@@ -17,7 +17,6 @@ table items {
   foreign key fk_items_parent (parent) references items (id) on delete restrict on update restrict
   foreign key fk_items_owner (owner) references people (id) on delete restrict on update restrict
   settings {
-    key_prefix 'T'
     store document list
     title title
     body body
@@ -72,7 +71,6 @@ table people {
   unique uq_people_email (email)
   check ck_people_age (age is null or age >= 0)
   settings {
-    key_prefix 'P'
     store document table
     title name
     soft_delete deleted_at

@@ -1,5 +1,5 @@
 <!-- doc-id: plans-design-plan -->
-<!-- source-sha256: 7eb916947a2d70fd72bbb66d3ed0b55319638b8a223f4c3ba6ba72ec9584d1e0 -->
+<!-- source-sha256: 00a86e19a294750e0827f7b977015587ea74feab5deecf123954e207d791773b -->
 # flowmark 설계 계획
 
 Revision 2 — 3개 lane의 적대 감사 결과(engine core, orm 통합, 운영)와 multi-platform 지시를 아래 판정에 접는다. 감사의 blocker는 전부 판정이 되었고, 부수지 못한 주장은 문서 끝에 남긴다.
@@ -279,7 +279,8 @@ database가 가진 값을 보여주기만 한다: database가 하지 않을 값�
     쓴다. 값을 보여주는 것은 남는다: 형제 묶음의 행은 column의 순서로 쓰이므로 목록은 행의 순서를 보여준다. 자리는 값이 아니라 순위를
     보여주므로 값은 다른 scalar를 쓰는 곳 — 목록 행의 field, cell, 오늘 `files` 저장이 순위를 쓰듯 `files` 행의 항목 — 에 쓰고,
     값의 순서에서 벗어나 선 행은 `format.noncanonical`이며 `flowmark canon`이 다시 정렬한다.
-  각각은 flowmark와 orm에서 자기 행으로 수행한다(orm DBS-77, DBS-79와 planner의 `Assigns`). 그때까지 엔진은 T60이 남긴 대로 둔다.
+  각각은 flowmark와 orm에서 자기 행으로 수행한다(orm DBS-77, DBS-79와 planner의 `Assigns`). flowmark의 행은 T89이며,
+  catalog와 executor에서 `key_prefix`와 order column의 모든 할당을 걷어 낸다.
 
 **T9 conformance 계약 (지금 확정)**: markdown vector는 corpus-before + IR request + 기대 corpus-after / 기대 rows이며 Go executor에 대해 실행한다. SQL/binds 비교는 적용되지 않는다(SQL이 없으므로). 다른 client가 executor를 port할 때 교차 비교가 시작된다. (Revision 3: vector는 flowmark 엔진에 대해 실행하고, orm의 executor conformance는 flowmark build를 고정한다.)
 

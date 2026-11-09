@@ -9,7 +9,6 @@ table items {
   evidence text null
   primary key (id)
   settings {
-    key_prefix 'T'
     store document list
     title title
     body body

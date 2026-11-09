@@ -212,7 +212,6 @@ func documentParseCases() []docCase {
 		docReject("10#list-rows: a title that begins with an invisible character", RuleBlock, 2, itemsOf("- [ ] T1 \u200bPlan done:false")),
 		docReject("10#single-line-places: a title with a comment opener", RuleBlock, 2, itemsOf("- [ ] T1 a <!-- b done:false")),
 		docReject("10#list-rows: a parent field in a list", RuleBlock, 2, itemsOf("- [ ] T1 Plan done:false parent:T1")),
-		docReject("10#list-rows: the order column written as a field", RuleBlock, 2, itemsOf("- [ ] T1 Plan done:false position:1")),
 		docReject("10#list-rows: the state written as a field", RuleBlock, 2, itemsOf("- [ ] T1 Plan done:false state:waiting")),
 		noncanonicalDoc("10#list-rows: two spaces between the key and the title", 2, itemsOf("- [ ] T1  Plan done:false")),
 		noncanonicalDoc("10#list-rows: two spaces between fields", 2, itemsOf(`- [ ] T1 Plan done:false  note:"x"`)),
@@ -220,7 +219,6 @@ func documentParseCases() []docCase {
 		noncanonicalDoc("10#list-rows: a space at the end of the line", 2, itemsOf("- [ ] T1 Plan done:false ")),
 		noncanonicalDoc("10#list-rows: a quoted bare value", 2, itemsOf(`- [ ] T1 Plan done:"false"`)),
 		noncanonicalDoc("10#readable-values: an integer with a leading zero", 2, itemsOf("- [ ] T1 Plan done:false weight:01")),
-		docAccept("10#list-rows: siblings in the line order of their order column", itemsOf("- [ ] T2 Plan done:false", "- [ ] T1 Plan done:false")),
 
 		// Detail sections.
 		docAccept("10#detail-headings-and-anchors: a body and a section", itemsOf("- [x] T1 Plan done:true", "", "## items row T1", "", "Body text.", "", "### evidence", "", "Proof.")),
@@ -488,8 +486,6 @@ func documentParseCases() []docCase {
 		docAccept("10#list-rows: fields after the title in a block", checkedOf("- [ ] C1 Plan done:false weight:2")),
 		noncanonicalDoc("10#list-rows: a declared column name before the title in a block", 7, checkedOf("- [ ] C1 weight:2 Plan done:false")),
 		docAccept("10#list-rows: an escaped title token in a block", checkedOf(`- [ ] C1 Set weight\: review done:false`)),
-		docAccept("20#order: siblings of a block in their line order", checkedOf("- [ ] C2 Two done:false", "- [ ] C1 One done:false")),
-		docReject("20#order: the order column written as a field of a block row", RuleBlock, 7, checkedOf("- [ ] C1 Plan done:false position:1")),
 		docReject("10#list-rows: a placement foreign key written as a field of a block row", RuleBlock, 7, checkedOf("- [ ] C1 Plan item:T1 done:false")),
 		docReject("10#list-rows: a non-null field of a block row missing", RuleBlock, 7, checkedOf("- [ ] C1 Plan")),
 		docAccept("10#detail-headings-and-anchors: a present empty section of a block row", checkedOf("- [x] C1 Plan done:true", "", "#### item_checks row C1", "", "##### evidence")),
@@ -955,9 +951,10 @@ type locus struct {
 	column string
 }
 
-// item is an items row with its state, its done flag and its position.
-func item(key, title, state, position string, extra map[string]string) *Row {
-	sc := map[string]*string{"state": sp(state), "position": sp(position)}
+// item is an items row with its state and the scalars of extra that it names: its done flag, owner, note, weight and
+// seen_on.
+func item(key, title, state string, extra map[string]string) *Row {
+	sc := map[string]*string{"state": sp(state)}
 	for _, k := range []string{"done", "owner", "note", "weight", "seen_on"} {
 		if v, ok := extra[k]; ok {
 			sc[k] = sp(v)
@@ -971,127 +968,113 @@ func writeCases() []writeCase {
 	doneTrue := map[string]string{"done": "true"}
 	withNote := func(note string) map[string]string { return map[string]string{"done": "false", "note": note} }
 	return []writeCase{
-		{name: "10#list-rows: a waiting row", rows: []*Row{item("T1", "Plan", "waiting", "1", done)},
+		{name: "10#list-rows: a waiting row", rows: []*Row{item("T1", "Plan", "waiting", done)},
 			out: "# items\n- [ ] T1 Plan done:false\n"},
 		{name: "10#diagnostics: a key shared byte for byte is refused at each later row, with its index", rows: []*Row{
-			item("T1", "First", "waiting", "1", done), item("T1", "Second", "waiting", "2", done)},
+			item("T1", "First", "waiting", done), item("T1", "Second", "waiting", done)},
 			rule: RuleDuplicateKey, alone: true, at: []locus{{key: "T1", index: 1, column: "id"}}},
 		{name: "10#diagnostics: keys equal only without regard to case are written, the executor's key checks owning that rule", rows: []*Row{
-			item("T1", "First", "waiting", "1", done), item("t1", "Second", "waiting", "2", done)}},
+			item("T1", "First", "waiting", done), item("t1", "Second", "waiting", done)}},
 		{name: "10#diagnostics: a case-insensitive pair is written in either request order", rows: []*Row{
-			item("t1", "Second", "waiting", "2", done), item("T1", "First", "waiting", "1", done)}},
-		{name: "10#diagnostics: a sibling order shared by two rows faults each row at order", rows: []*Row{
-			item("T1", "A", "waiting", "1", done), item("T2", "B", "waiting", "1", done)},
-			rule: RuleConstraint, alone: false, at: []locus{{key: "T1", index: -1, column: "position"}, {key: "T2", index: -1, column: "position"}}},
+			item("t1", "Second", "waiting", done), item("T1", "First", "waiting", done)}},
 		{name: "10#diagnostics: a parent cycle faults each row on it at parent", rows: []*Row{
-			withParent(item("T1", "A", "waiting", "1", done), "T2"), withParent(item("T2", "B", "waiting", "1", done), "T1")},
+			withParent(item("T1", "A", "waiting", done), "T2"), withParent(item("T2", "B", "waiting", done), "T1")},
 			rule: RuleConstraint, at: []locus{{key: "T1", index: -1, column: "parent"}, {key: "T2", index: -1, column: "parent"}}},
 		{name: "10#diagnostics: a parent that names no row faults its row alone", rows: []*Row{
-			withParent(item("T1", "A", "waiting", "1", done), "T9")},
+			withParent(item("T1", "A", "waiting", done), "T9")},
 			rule: RuleConstraint, alone: true, at: []locus{{key: "T1", index: -1, column: "parent"}}},
 		{name: "10#diagnostics: a row under a parent that names no row has no cycle fault", rows: []*Row{
-			withParent(item("T1", "A", "waiting", "1", done), "T9"), withParent(item("T2", "B", "waiting", "1", done), "T1")},
+			withParent(item("T1", "A", "waiting", done), "T9"), withParent(item("T2", "B", "waiting", done), "T1")},
 			rule: RuleConstraint, alone: true, at: []locus{{key: "T1", index: -1, column: "parent"}}},
-		{name: "10#diagnostics: orders 1 and 3 fault only the row whose order is outside 1..2", rows: []*Row{
-			item("T1", "A", "waiting", "1", done), item("T2", "B", "waiting", "3", done)},
-			rule: RuleConstraint, alone: true, at: []locus{{key: "T2", index: -1, column: "position"}}},
 		{name: "10#readable-values: a write of a foreign key whose key is not of its column type is CONSTRAINT alone", rows: []*Row{
-			item("T1", "Plan", "waiting", "1", map[string]string{"done": "false", "owner": strings.Repeat("P", 40)})},
+			item("T1", "Plan", "waiting", map[string]string{"done": "false", "owner": strings.Repeat("P", 40)})},
 			rule: RuleConstraint, alone: true, at: []locus{{key: "T1", index: -1, column: "owner"}},
 			msgs: []string{"owner is not a varchar(32) value"}},
-		{name: "10#diagnostics: orders 1, 2, 3 are accepted", rows: []*Row{
-			item("T1", "A", "waiting", "1", done), item("T2", "B", "waiting", "2", done), item("T3", "C", "waiting", "3", done)},
+		{name: "10#list-rows: rows written in key order", rows: []*Row{
+			item("T1", "A", "waiting", done), item("T2", "B", "waiting", done), item("T3", "C", "waiting", done)},
 			out: "# items\n- [ ] T1 A done:false\n- [ ] T2 B done:false\n- [ ] T3 C done:false\n"},
-		{name: "10#diagnostics: an order not of its type is the type fault alone and counts toward m", rows: []*Row{
-			item("T1", "A", "waiting", "1", done), item("T2", "B", "waiting", "x", done), item("T3", "C", "waiting", "2", done)},
+		{name: "10#readable-values: a value not of its column type is the type fault alone", rows: []*Row{
+			item("T1", "A", "waiting", done), withScalar(item("T2", "B", "waiting", done), "position", "x"), item("T3", "C", "waiting", done)},
 			rule: RuleConstraint, at: []locus{{key: "T2", index: -1, column: "position"}},
 			msgs: []string{"position is not a i32 value"}},
-		{name: "10#diagnostics: an i32 overflow order is the type fault alone", rows: []*Row{
-			item("T1", "A", "waiting", "1", done), item("T2", "B", "waiting", "3000000000", done)},
+		{name: "10#readable-values: an i32 overflow is the type fault alone", rows: []*Row{
+			item("T1", "A", "waiting", done), withScalar(item("T2", "B", "waiting", done), "position", "3000000000")},
 			rule: RuleConstraint, at: []locus{{key: "T2", index: -1, column: "position"}},
 			msgs: []string{"position is not a i32 value"}},
-		{name: "10#diagnostics: an order not of its type leaves a shared value of its siblings faulted", rows: []*Row{
-			item("T1", "A", "waiting", "1", done), item("T2", "B", "waiting", "1", done), item("T3", "C", "waiting", "x", done)},
-			rule: RuleConstraint, at: []locus{{key: "T1", index: -1, column: "position"}, {key: "T2", index: -1, column: "position"}, {key: "T3", index: -1, column: "position"}},
-			msgs: []string{"shared with a sibling", "shared with a sibling", "position is not a i32 value"}},
-		{name: "10#diagnostics: an order not of its type counts toward m, so 4 is outside 1..3", rows: []*Row{
-			item("T1", "A", "waiting", "1", done), item("T2", "B", "waiting", "4", done), item("T3", "C", "waiting", "x", done)},
-			rule: RuleConstraint, at: []locus{{key: "T2", index: -1, column: "position"}, {key: "T3", index: -1, column: "position"}},
-			msgs: []string{"outside 1..3", "position is not a i32 value"}},
 		{name: "10#diagnostics: a cycle of T1 and T2 with T3 under T1 faults T1 and T2 and not T3", rows: []*Row{
-			withParent(item("T1", "A", "waiting", "1", done), "T2"), withParent(item("T2", "B", "waiting", "1", done), "T1"),
-			withParent(item("T3", "C", "waiting", "2", done), "T1")},
+			withParent(item("T1", "A", "waiting", done), "T2"), withParent(item("T2", "B", "waiting", done), "T1"),
+			withParent(item("T3", "C", "waiting", done), "T1")},
 			rule: RuleConstraint, at: []locus{{key: "T1", index: -1, column: "parent"}, {key: "T2", index: -1, column: "parent"}}},
-		{name: "10#diagnostics: a shared key whose rows also fault in order carries index 0 and 1 on every fault", rows: []*Row{
-			item("T1", "First", "waiting", "x", done), item("T1", "Second", "waiting", "x", done)},
+		{name: "10#diagnostics: a shared key whose rows also fault in a value carries index 0 and 1 on every fault", rows: []*Row{
+			withScalar(item("T1", "First", "waiting", done), "position", "x"), withScalar(item("T1", "Second", "waiting", done), "position", "x")},
 			rule: RuleDuplicateKey, at: []locus{{key: "T1", index: 1, column: "id"}, {key: "T1", index: 0, column: "position"}, {key: "T1", index: 1, column: "position"}}},
 		{name: "10#diagnostics: a key that two blocks of one table share is DUPLICATE_KEY", rows: []*Row{
-			withBlock(item("T1", "Plan", "waiting", "1", done), "item_checks", checkOf("C1", "A")),
-			withBlock(item("T2", "Other", "waiting", "2", done), "item_checks", checkOf("C1", "B"))},
+			withBlock(item("T1", "Plan", "waiting", done), "item_checks", checkOf("C1", "A")),
+			withBlock(item("T2", "Other", "waiting", done), "item_checks", checkOf("C1", "B"))},
 			rule: RuleDuplicateKey},
 		{name: "10#diagnostics: keys equal without regard to case in two blocks of one table are written", rows: []*Row{
-			withBlock(item("T1", "Plan", "waiting", "1", done), "item_checks", checkOf("C1", "A")),
-			withBlock(item("T2", "Other", "waiting", "2", done), "item_checks", checkOf("c1", "B"))}},
+			withBlock(item("T1", "Plan", "waiting", done), "item_checks", checkOf("C1", "A")),
+			withBlock(item("T2", "Other", "waiting", done), "item_checks", checkOf("c1", "B"))}},
 		{name: "10#diagnostics: keys equal without regard to case, each with a detail section, are written", rows: []*Row{
-			withBlock(item("T1", "Plan", "waiting", "1", done), "item_checks", withBody(checkOf("C1", "A"), "Body A.\n")),
-			withBlock(item("T2", "Other", "waiting", "2", done), "item_checks", withBody(checkOf("c1", "B"), "Body B.\n"))}},
-		{name: "10#list-rows: a done row has the done glyph", rows: []*Row{item("T1", "Plan", "done", "1", doneTrue)},
+			withBlock(item("T1", "Plan", "waiting", done), "item_checks", withBody(checkOf("C1", "A"), "Body A.\n")),
+			withBlock(item("T2", "Other", "waiting", done), "item_checks", withBody(checkOf("c1", "B"), "Body B.\n"))}},
+		{name: "10#list-rows: a done row has the done glyph", rows: []*Row{item("T1", "Plan", "done", doneTrue)},
 			out: "# items\n- [x] T1 Plan done:true\n"},
 		{name: "10#list-rows: a child row two spaces deeper", rows: []*Row{
-			withParent(item("T1", "Plan", "waiting", "1", done), ""),
-			withParent(item("T2", "Child", "waiting", "1", done), "T1"),
+			withParent(item("T1", "Plan", "waiting", done), ""),
+			withParent(item("T2", "Child", "waiting", done), "T1"),
 		}, out: "# items\n- [ ] T1 Plan done:false\n  - [ ] T2 Child done:false\n"},
 		{name: "10#list-rows: the rows written in sibling order", rows: []*Row{
-			item("T2", "Second", "waiting", "2", done),
-			item("T1", "First", "waiting", "1", done),
+			item("T2", "Second", "waiting", done),
+			item("T1", "First", "waiting", done),
 		}, out: "# items\n- [ ] T1 First done:false\n- [ ] T2 Second done:false\n"},
 		{name: "10#list-rows: a title token that begins with a column is escaped", rows: []*Row{
-			item("T1", "Set owner: review", "waiting", "1", done)},
+			item("T1", "Set owner: review", "waiting", done)},
 			out: "# items\n- [ ] T1 Set owner\\: review done:false\n"},
 		{name: "10#list-rows: a field with a space is quoted", rows: []*Row{
-			item("T1", "Plan", "waiting", "1", withNote("a b"))},
+			item("T1", "Plan", "waiting", withNote("a b"))},
 			out: "# items\n- [ ] T1 Plan done:false note:\"a b\"\n"},
 		{name: "10#list-rows: an empty field is the pair of quotes", rows: []*Row{
-			item("T1", "Plan", "waiting", "1", withNote(""))},
+			item("T1", "Plan", "waiting", withNote(""))},
 			out: "# items\n- [ ] T1 Plan done:false note:\"\"\n"},
 		{name: "10#list-rows: a quote and a backslash are escaped in a field", rows: []*Row{
-			item("T1", "Plan", "waiting", "1", withNote(`say "hi" \ bye`))},
+			item("T1", "Plan", "waiting", withNote(`say "hi" \ bye`))},
 			out: "# items\n- [ ] T1 Plan done:false note:\"say \\\"hi\\\" \\\\ bye\"\n"},
 		{name: "10#list-rows: a title token that begins with a column is escaped", rows: []*Row{
-			item("T1", "Ends with owner:", "waiting", "1", done)},
+			item("T1", "Ends with owner:", "waiting", done)},
 			out: "# items\n- [ ] T1 Ends with owner\\: done:false\n"},
 		{name: "10#list-rows: a title token after a tab is escaped", rows: []*Row{
-			item("T1", "Plan\tnote:x", "waiting", "1", done)},
+			item("T1", "Plan\tnote:x", "waiting", done)},
 			out: "# items\n- [ ] T1 Plan\tnote\\:x done:false\n"},
 		{name: "10#list-rows: a title token after two spaces is escaped", rows: []*Row{
-			item("T1", "a  owner:x", "waiting", "1", done)},
+			item("T1", "a  owner:x", "waiting", done)},
 			out: "# items\n- [ ] T1 a  owner\\:x done:false\n"},
 		{name: "10#list-rows: a title token written with a tab and the escape already", rows: []*Row{
-			item("T1", "Set\towner\\:x", "waiting", "1", done)},
+			item("T1", "Set\towner\\:x", "waiting", done)},
 			rule: RuleConstraint},
 		{name: "10#list-rows: a title token written with the escape already", rows: []*Row{
-			item("T1", `Set owner\: review`, "waiting", "1", done)},
+			item("T1", `Set owner\: review`, "waiting", done)},
 			rule: RuleConstraint},
 		{name: "10#list-rows: a title with a leading space", rows: []*Row{
-			item("T1", " Plan", "waiting", "1", done)}, rule: RuleConstraint},
+			item("T1", " Plan", "waiting", done)}, rule: RuleConstraint},
 		{name: "10#list-rows: a title with a line feed", rows: []*Row{
-			item("T1", "Pl\nan", "waiting", "1", done)}, rule: RuleConstraint},
+			item("T1", "Pl\nan", "waiting", done)}, rule: RuleConstraint},
 		{name: "10#list-rows: a state without a glyph", rows: []*Row{
-			item("T1", "Plan", "nope", "1", done)}, rule: RuleConstraint},
+			item("T1", "Plan", "nope", done)}, rule: RuleConstraint},
 		{name: "10#list-rows: a non-null field missing", rows: []*Row{
-			item("T1", "Plan", "waiting", "1", map[string]string{})}, rule: RuleConstraint},
+			item("T1", "Plan", "waiting", map[string]string{})}, rule: RuleConstraint},
 		{name: "10#foreign-keys-as-links: a foreign key that names no row", rows: []*Row{
-			item("T1", "Plan", "waiting", "1", map[string]string{"done": "false", "owner": "P9"})},
+			item("T1", "Plan", "waiting", map[string]string{"done": "false", "owner": "P9"})},
 			rule: RuleForeignKey},
 		{name: "10#list-rows: a field with a trailing space is quoted", rows: []*Row{
-			item("T1", "Plan", "waiting", "1", withNote("a "))},
+			item("T1", "Plan", "waiting", withNote("a "))},
 			out: "# items\n- [ ] T1 Plan done:false note:\"a \"\n"},
 		{name: "10#list-rows: a field with a line feed", rows: []*Row{
-			item("T1", "Plan", "waiting", "1", withNote("a\nb"))}, rule: RuleConstraint},
+			item("T1", "Plan", "waiting", withNote("a\nb"))}, rule: RuleConstraint},
 		{name: "10#readable-values: a temporal field assigned now is not of its type", rows: []*Row{
-			item("T1", "Plan", "waiting", "1", map[string]string{"done": "false", "seen_on": "now"})}, rule: RuleConstraint},
+			item("T1", "Plan", "waiting", map[string]string{"done": "false", "seen_on": "now"})}, rule: RuleConstraint},
 		{name: "10#readable-values: a text field assigned now is text", rows: []*Row{
-			item("T1", "Plan", "waiting", "1", withNote("now"))},
+			item("T1", "Plan", "waiting", withNote("now"))},
 			out: "# items\n- [ ] T1 Plan done:false note:now\n"},
 		{name: "10#readable-values: a temporal cell assigned now is not of its type", table: "people", rows: []*Row{
 			peopleRow("P1", "Ada", map[string]string{"born": "now"})}, rule: RuleConstraint},
@@ -1101,44 +1084,36 @@ func writeCases() []writeCase {
 				row("P1", "", "Ada", "now", "true", "", "", "", "", "", "", "", "", "") + "\n" +
 				"\n## people row P1\n\n### bio\n\nNotes.\n"},
 		{name: "10#list-rows: a key with a dash before an underscore", rows: []*Row{
-			item("T-_1", "Plan", "waiting", "1", done)}, rule: RuleConstraint},
+			item("T-_1", "Plan", "waiting", done)}, rule: RuleConstraint},
 		{name: "10#list-rows: two rows with keys equal without regard to case are written", rows: []*Row{
-			item("T1", "Plan", "waiting", "1", done), item("t1", "Other", "waiting", "2", done)}},
-		{name: "20#order: siblings with the same value", rows: []*Row{
-			item("T1", "Plan", "waiting", "1", done), item("T2", "Other", "waiting", "1", done)}, rule: RuleConstraint},
-		{name: "20#order: a row without an order value", rows: []*Row{
-			{Table: "items", Key: "T1", Title: "Plan", Scalars: map[string]*string{"state": sp("waiting"), "done": sp("false")},
-				Sections: map[string]*string{}, Raw: map[string]string{}, Dangling: map[string]DanglingLink{}},
-			item("T2", "Other", "waiting", "1", done)}, rule: RuleConstraint},
-		{name: "20#order: siblings with a gap", rows: []*Row{
-			item("T1", "Plan", "waiting", "1", done), item("T2", "Other", "waiting", "3", done)}, rule: RuleConstraint},
+			item("T1", "Plan", "waiting", done), item("t1", "Other", "waiting", done)}},
 		{name: "20#hierarchy: a parent that names no row", rows: []*Row{
-			withParent(item("T1", "Plan", "waiting", "1", done), "T9")}, rule: RuleConstraint, alone: true},
+			withParent(item("T1", "Plan", "waiting", done), "T9")}, rule: RuleConstraint, alone: true},
 		{name: "20#hierarchy: a parent cycle", rows: []*Row{
-			withParent(item("T1", "Plan", "waiting", "1", done), "T2"),
-			withParent(item("T2", "Other", "waiting", "1", done), "T1")}, rule: RuleConstraint},
+			withParent(item("T1", "Plan", "waiting", done), "T2"),
+			withParent(item("T2", "Other", "waiting", done), "T1")}, rule: RuleConstraint},
 		{name: "10#detail-headings-and-anchors: a body without its final line feed", rows: []*Row{
-			withBody(item("T1", "Plan", "waiting", "1", done), "Text.")}, rule: RuleConstraint},
+			withBody(item("T1", "Plan", "waiting", done), "Text.")}, rule: RuleConstraint},
 		{name: "10#detail-headings-and-anchors: a body with a level-2 heading", rows: []*Row{
-			withBody(item("T1", "Plan", "waiting", "1", done), "## x\n")}, rule: RuleConstraint},
+			withBody(item("T1", "Plan", "waiting", done), "## x\n")}, rule: RuleConstraint},
 		{name: "10#detail-headings-and-anchors: a body with a level-3 heading", rows: []*Row{
-			withBody(item("T1", "Plan", "waiting", "1", done), "### x\n")}, rule: RuleConstraint},
+			withBody(item("T1", "Plan", "waiting", done), "### x\n")}, rule: RuleConstraint},
 		{name: "10#detail-headings-and-anchors: a body that begins with a blank line", rows: []*Row{
-			withBody(item("T1", "Plan", "waiting", "1", done), "\nText.\n")}, rule: RuleConstraint},
+			withBody(item("T1", "Plan", "waiting", done), "\nText.\n")}, rule: RuleConstraint},
 		{name: "10#detail-headings-and-anchors: a body with a CR", rows: []*Row{
-			withBody(item("T1", "Plan", "waiting", "1", done), "A\rB\n")}, rule: RuleConstraint},
+			withBody(item("T1", "Plan", "waiting", done), "A\rB\n")}, rule: RuleConstraint},
 		{name: "10#detail-headings-and-anchors: a body of a table without a body column", table: "people", rows: []*Row{
 			withBody(peopleRow("P1", "Ada", map[string]string{}), "Text.\n")}, rule: RuleConstraint},
 		{name: "10#detail-headings-and-anchors: a non-null section missing", table: "people", rows: []*Row{
 			withoutSection(peopleRow("P1", "Ada", map[string]string{}), "bio")}, rule: RuleConstraint},
 		{name: "10#detail-headings-and-anchors: an undeclared section", rows: []*Row{
-			withSection(item("T1", "Plan", "waiting", "1", done), "nope", "x\n")}, rule: RuleConstraint},
+			withSection(item("T1", "Plan", "waiting", done), "nope", "x\n")}, rule: RuleConstraint},
 		{name: "10#single-line-places: a title with an invisible character at its start", rows: []*Row{
-			item("T1", "\u200bPlan", "waiting", "1", done)}, rule: RuleConstraint},
+			item("T1", "\u200bPlan", "waiting", done)}, rule: RuleConstraint},
 		{name: "10#detail-headings-and-anchors: a body whose open fence precedes a section", rows: []*Row{
-			withSection(withBody(item("T1", "Plan", "waiting", "1", done), "```\ncode\n"), "cause", "x")}, rule: RuleConstraint},
+			withSection(withBody(item("T1", "Plan", "waiting", done), "```\ncode\n"), "cause", "x")}, rule: RuleConstraint},
 		{name: "10#detail-headings-and-anchors: a present empty section", rows: []*Row{
-			withSection(item("T1", "Plan", "waiting", "1", done), "cause", "")},
+			withSection(item("T1", "Plan", "waiting", done), "cause", "")},
 			out: "# items\n- [ ] T1 Plan done:false\n\n## items row T1\n\n### cause\n"},
 		{name: "20#hierarchy: a parent that names no row of its block", table: "people", rows: []*Row{
 			peopleRow("P1", "Ada", map[string]string{"parent": "P9"})}, rule: RuleConstraint, alone: true},
@@ -1148,9 +1123,9 @@ func writeCases() []writeCase {
 		{name: "10#document-order: the empty table is the H1 and one LF", table: "milestones", rows: nil,
 			out: "# milestones\n"},
 		{name: "10#document-order: a milestones table in its storage order", table: "milestones", rows: []*Row{
-			milestone("M3", "", "Release", "2"),
-			milestone("M2", "M1", "Parser", "1"),
-			milestone("M1", "", "Foundation", "1"),
+			milestone("M3", "", "Release"),
+			milestone("M2", "M1", "Parser"),
+			milestone("M1", "", "Foundation"),
 		}, out: "# milestones\n| id | parent | title |\n| --- | --- | --- |\n| M1 |  | Foundation |\n| M2 | [M1](milestones.flowmark.md) | Parser |\n| M3 |  | Release |\n"},
 		{name: "10#table-rows: a cell with a pipe, a quote and a NULL", table: "people", rows: []*Row{
 			peopleRow("P1", "Max | Ops", map[string]string{"role": ""})},
@@ -1160,22 +1135,22 @@ func writeCases() []writeCase {
 
 		// Block sections: a block is written in its row's detail section, only when it holds rows.
 		{name: "10#document-order: a table block under a row", rows: []*Row{
-			withBlock(item("T1", "Plan", "waiting", "1", done), "item_history", historyRow("1", "waiting", "doing", "2026-10-01 08:00:00.000000"))},
+			withBlock(item("T1", "Plan", "waiting", done), "item_history", historyRow("1", "waiting", "doing", "2026-10-01 08:00:00.000000"))},
 			out: "# items\n- [ ] T1 Plan done:false\n\n## items row T1\n\n### item_history\n" +
 				"| id | from_state | to_state | at |\n| --- | --- | --- | --- |\n" +
 				"| 1 | waiting | doing | 2026-10-01 08:00:00.000000 |\n"},
 		{name: "10#detail-headings-and-anchors: a block row's section and its detail heading", rows: []*Row{
-			withBlock(item("T1", "Plan", "waiting", "1", done), "item_history",
+			withBlock(item("T1", "Plan", "waiting", done), "item_history",
 				withSection(historyRow("1", "waiting", "doing", "2026-10-01 08:00:00.000000"), "evidence", "Checked.\n"))},
 			out: "# items\n- [ ] T1 Plan done:false\n\n## items row T1\n\n### item_history\n" +
 				"| id | from_state | to_state | at |\n| --- | --- | --- | --- |\n" +
 				"| 1 | waiting | doing | 2026-10-01 08:00:00.000000 |\n\n" +
 				"#### item_history row 1\n\n##### evidence\n\nChecked.\n"},
 		{name: "10#document-order: an empty block is not written", rows: []*Row{
-			withBlock(item("T1", "Plan", "waiting", "1", done), "item_history")},
+			withBlock(item("T1", "Plan", "waiting", done), "item_history")},
 			out: "# items\n- [ ] T1 Plan done:false\n"},
 		{name: "10#document-order: a block of two rows is written in storage order", rows: []*Row{
-			withBlock(item("T1", "Plan", "waiting", "1", done), "item_history",
+			withBlock(item("T1", "Plan", "waiting", done), "item_history",
 				historyRow("2", "doing", "done", "2026-10-01 09:00:00.000000"),
 				historyRow("1", "waiting", "doing", "2026-10-01 08:00:00.000000"))},
 			out: "# items\n- [ ] T1 Plan done:false\n\n## items row T1\n\n### item_history\n" +
@@ -1183,33 +1158,30 @@ func writeCases() []writeCase {
 				"| 1 | waiting | doing | 2026-10-01 08:00:00.000000 |\n" +
 				"| 2 | doing | done | 2026-10-01 09:00:00.000000 |\n"},
 		{name: "10#document-order: a list block of nested rows", rows: []*Row{
-			withBlock(item("T1", "Plan", "waiting", "1", done), "item_notes",
-				noteRow("N1", "", "Spec the codec", "1", map[string]string{"tag": "urgent"}),
-				noteRow("N2", "N1", "Child note", "1", map[string]string{"tag": ""}))},
+			withBlock(item("T1", "Plan", "waiting", done), "item_notes",
+				noteRow("N1", "", "Spec the codec", map[string]string{"tag": "urgent"}),
+				noteRow("N2", "N1", "Child note", map[string]string{"tag": ""}))},
 			out: "# items\n- [ ] T1 Plan done:false\n\n## items row T1\n\n### item_notes\n" +
 				"- N1 Spec the codec tag:urgent\n  - N2 Child note tag:\"\"\n"},
-		{name: "10#list-rows: a block of list rows whose order has a gap", rows: []*Row{
-			withBlock(item("T1", "Plan", "waiting", "1", done), "item_notes",
-				noteRow("N1", "", "A", "1", nil), noteRow("N2", "", "B", "3", nil))}, rule: RuleConstraint},
 		{name: "10#list-rows: two block rows with keys equal without regard to case are written", rows: []*Row{
-			withBlock(item("T1", "Plan", "waiting", "1", done), "item_notes",
-				noteRow("N1", "", "A", "1", nil), noteRow("n1", "", "B", "2", nil))}},
+			withBlock(item("T1", "Plan", "waiting", done), "item_notes",
+				noteRow("N1", "", "A", nil), noteRow("n1", "", "B", nil))}},
 		{name: "20#hierarchy: a block row whose parent names no row of its block", rows: []*Row{
-			withBlock(item("T1", "Plan", "waiting", "1", done), "item_notes",
-				noteRow("N1", "N9", "A", "1", nil))}, rule: RuleConstraint, alone: true},
+			withBlock(item("T1", "Plan", "waiting", done), "item_notes",
+				noteRow("N1", "N9", "A", nil))}, rule: RuleConstraint, alone: true},
 		{name: "20#hierarchy: a block row whose parent names a row of another block", rows: []*Row{
-			withBlock(item("T1", "Plan", "waiting", "1", done), "item_steps", stepOf("S1", "")),
-			withBlock(item("T2", "Other", "waiting", "2", done), "item_steps", stepOf("S2", "S1"))}, rule: RuleConstraint, alone: true},
+			withBlock(item("T1", "Plan", "waiting", done), "item_steps", stepOf("S1", "")),
+			withBlock(item("T2", "Other", "waiting", done), "item_steps", stepOf("S2", "S1"))}, rule: RuleConstraint, alone: true},
 		{name: "10#detail-headings-and-anchors: a block that the table does not declare", rows: []*Row{
-			withBlock(item("T1", "Plan", "waiting", "1", done), "item_links",
+			withBlock(item("T1", "Plan", "waiting", done), "item_links",
 				historyRow("1", "waiting", "doing", "2026-10-01 08:00:00.000000"))}, rule: RuleConstraint},
 		{name: "10#detail-headings-and-anchors: a block row of another table", rows: []*Row{
-			withBlock(item("T1", "Plan", "waiting", "1", done), "item_history", noteRow("N1", "", "A", "1", nil))}, rule: RuleConstraint},
+			withBlock(item("T1", "Plan", "waiting", done), "item_history", noteRow("N1", "", "A", nil))}, rule: RuleConstraint},
 		{name: "10#table-rows: a placement foreign key assigned to a block row", rows: []*Row{
-			withBlock(item("T1", "Plan", "waiting", "1", done), "item_history",
+			withBlock(item("T1", "Plan", "waiting", done), "item_history",
 				withScalar(historyRow("1", "waiting", "doing", "2026-10-01 08:00:00.000000"), "item", "T2"))}, rule: RuleConstraint},
 		{name: "10#detail-headings-and-anchors: a block row missing a non-null cell", rows: []*Row{
-			withBlock(item("T1", "Plan", "waiting", "1", done), "item_history",
+			withBlock(item("T1", "Plan", "waiting", done), "item_history",
 				withoutScalar(historyRow("1", "waiting", "doing", "2026-10-01 08:00:00.000000"), "to_state"))}, rule: RuleConstraint},
 	}
 }
@@ -1250,15 +1222,15 @@ func historyRow(id, from, to, at string) *Row {
 	return &Row{Table: "item_history", Key: id, Scalars: sc, Sections: map[string]*string{}, Raw: map[string]string{}, Dangling: map[string]DanglingLink{}}
 }
 
-// checkOf is an item_checks row, a block of an items row, with its state, title, order and done flag.
+// checkOf is an item_checks row, a block of an items row, with its state, title and done flag.
 func checkOf(key, title string) *Row {
-	sc := map[string]*string{"state": sp("open"), "position": sp("1"), "done": sp("false")}
+	sc := map[string]*string{"state": sp("open"), "done": sp("false")}
 	return &Row{Table: "item_checks", Key: key, Title: title, Scalars: sc, Sections: map[string]*string{}, Raw: map[string]string{}, Dangling: map[string]DanglingLink{}}
 }
 
-// noteRow is a row of the item_notes block of an items row with its parent, its order and the scalars given.
-func noteRow(key, parent, title, position string, scalars map[string]string) *Row {
-	sc := map[string]*string{"position": sp(position)}
+// noteRow is a row of the item_notes block of an items row with its parent and the scalars given.
+func noteRow(key, parent, title string, scalars map[string]string) *Row {
+	sc := map[string]*string{}
 	if parent != "" {
 		sc["parent"] = sp(parent)
 	}
@@ -1296,16 +1268,16 @@ func withSection(r *Row, name, value string) *Row {
 
 // notePlan is a row of the notes table, a list without a state column, with its parent.
 func notePlan(key, parent, title string) *Row {
-	sc := map[string]*string{"position": sp("1")}
+	sc := map[string]*string{}
 	if parent != "" {
 		sc["parent"] = sp(parent)
 	}
 	return &Row{Table: "notes", Key: key, Title: title, Scalars: sc, Sections: map[string]*string{}, Raw: map[string]string{}, Dangling: map[string]DanglingLink{}}
 }
 
-// milestone is a row of the milestones table with its parent and its position.
-func milestone(key, parent, title, position string) *Row {
-	sc := map[string]*string{"position": sp(position)}
+// milestone is a row of the milestones table with its parent.
+func milestone(key, parent, title string) *Row {
+	sc := map[string]*string{}
 	if parent != "" {
 		sc["parent"] = sp(parent)
 	}

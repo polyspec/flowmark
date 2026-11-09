@@ -20,7 +20,6 @@ table items {
   foreign key fk_items_parent (parent) references items (id) on delete restrict on update restrict
   foreign key fk_items_owner (owner) references people (id) on delete restrict on update restrict
   settings {
-    key_prefix 'T'
     store document list
     title title
     body body

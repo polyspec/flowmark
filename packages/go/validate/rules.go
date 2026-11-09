@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"maps"
 	"slices"
-	"strconv"
 	"strings"
 
 	"github.com/polyspec/flowmark/packages/go/catalog"
@@ -21,7 +20,6 @@ const (
 	ruleScaleCorpus = "scale.corpus"
 	ruleDangling    = "reference.dangling"
 	ruleDuplicate   = "key.duplicate"
-	ruleOrder       = "order"
 )
 
 // report appends a diagnostic of rule at the element of column of the row p.
@@ -52,7 +50,6 @@ func (c *corpus) rules() error {
 		if !c.isBlocked(tb.Name) {
 			c.duplicates(tb, rows)
 			c.uniques(tb, rows)
-			c.orders(tb, rows)
 		}
 		c.parentCycles(tb, rows)
 	}
@@ -222,53 +219,6 @@ func (c *corpus) uniques(tb *catalog.Table, rows []placed) {
 	}
 }
 
-// orders reports the sibling order of a files table, whose order item holds a
-// rank (spec 20 Order): within each group of rows with the same parent, a row
-// whose rank is shared with a sibling is reported at its order item, since the
-// rank does not order the two. A rank not of the column's type is its type fault
-// alone and is never shared. A row whose parent is not of its column's type
-// belongs to no known group: its own order is not judged.
-func (c *corpus) orders(tb *catalog.Table, rows []placed) {
-	if tb.Storage.Kind != catalog.StorageFiles || tb.Order == "" {
-		return
-	}
-	parent := parentColumn(tb)
-	groups := map[string][]placed{}
-	var keys []string
-	for _, p := range rows {
-		g := ""
-		if parent != "" {
-			if _, raw := p.row.Raw[parent]; raw {
-				continue
-			}
-			g = text(p.row, parent)
-		}
-		if _, ok := groups[g]; !ok {
-			keys = append(keys, g)
-		}
-		groups[g] = append(groups[g], p)
-	}
-	for _, g := range keys {
-		members := groups[g]
-		counts := map[int64]int{}
-		ranks := map[placed]int64{}
-		for _, m := range members {
-			if _, raw := m.row.Raw[tb.Order]; raw {
-				continue
-			}
-			if v, ok := orderValue(m.row, tb.Order); ok {
-				ranks[m] = v
-				counts[v]++
-			}
-		}
-		for _, m := range members {
-			if v, ok := ranks[m]; ok && counts[v] > 1 {
-				c.report(m, tb.Order, ruleOrder, fmt.Sprintf("the order rank %d of %s is shared with a sibling", v, m.row.Key))
-			}
-		}
-	}
-}
-
 // parentCycles reports each row of a files table on a cycle of parent keys. The
 // chain of a row is followed through the rows of the table, so a cycle may cross
 // files; a parent that names no row ends the chain. A cycle in a block or a
@@ -326,21 +276,6 @@ func (c *corpus) parentCycles(tb *catalog.Table, rows []placed) {
 			state[m] = done
 		}
 	}
-}
-
-// text returns the readable text of the scalar column of row r, "" when it is NULL.
-func text(r *store.Row, column string) string {
-	if v := r.Scalars[column]; v != nil {
-		return *v
-	}
-	return ""
-}
-
-// orderValue returns the order value of row r, false when it is missing or not an
-// integer.
-func orderValue(r *store.Row, column string) (int64, bool) {
-	v, err := strconv.ParseInt(text(r, column), 10, 64)
-	return v, err == nil
 }
 
 // parentColumn returns the self foreign key that holds a row's parent, "" when the

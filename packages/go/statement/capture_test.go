@@ -194,40 +194,6 @@ func TestCapture(t *testing.T) {
 	}
 }
 
-// TestCaptureKeys pins the keys a statement gives the NULL keys of a key_prefix table from the rows it changed (spec 20
-// Keys): past the largest number of the corpus, of the keys the statement wrote and of none it took away, as SQLite would
-// give them over the keys the table then holds.
-func TestCaptureKeys(t *testing.T) {
-	cases := []struct {
-		name  string
-		setup []string
-		text  string
-		want  string
-	}{
-		{"past the largest key of the corpus", nil, "INSERT INTO notes (title, written) VALUES ('a', '2020-01-02'), ('b', '2020-01-02') RETURNING id", "[[N1001] [N1002]]"},
-		{"past a key the statement wrote", nil, "INSERT INTO notes (id, title, written) VALUES ('N5000', 'a', '2020-01-02'), (NULL, 'b', '2020-01-02') RETURNING id", "[[N5000] [N5001]]"},
-		{"past the largest key a statement did not take away", []string{
-			"CREATE TRIGGER notes_take AFTER INSERT ON notes WHEN NEW.title = 'take' BEGIN DELETE FROM notes WHERE id = 'N1000'; END",
-		}, "INSERT INTO notes (title, written) VALUES ('take', '2020-01-02') RETURNING id", "[[N1000]]"},
-		{"past a key a statement moved", []string{
-			"CREATE TRIGGER notes_move AFTER INSERT ON notes WHEN NEW.title = 'move' BEGIN UPDATE notes SET id = 'N7000' WHERE id = 'N1000'; END",
-		}, "INSERT INTO notes (title, written) VALUES ('move', '2020-01-02') RETURNING id", "[[N7001]]"},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			s, _ := openCost(t, 2000)
-			for _, text := range tc.setup {
-				run(t, s, text)
-			}
-			compareDiffs(t, s)
-			if got := fmt.Sprint(run(t, s, tc.text).Rows); got != tc.want {
-				t.Fatalf("%s returns %s, want %s", tc.text, got, tc.want)
-			}
-		})
-	}
-}
-
 // captureTexts are the statements FuzzCapture forms, each with a value of the input in place of %s.
 var captureTexts = []string{
 	"INSERT INTO kv (k, v) VALUES (%s, %s)",

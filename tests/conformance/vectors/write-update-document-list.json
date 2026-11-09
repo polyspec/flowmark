@@ -5,10 +5,10 @@
   "corpus": {
     "tasks.flowmark.md": [
       "# tasks",
-      "- T1 Root task done:false due:2026-10-01 label:first",
-      "  - T2 Child task done:true",
-      "  - T3 Second child done:false due:2026-10-11 label:\"\"",
-      "- T4 Top two done:false",
+      "- T1 Root task position:1 done:false due:2026-10-01 label:first",
+      "  - T2 Child task position:1 done:true",
+      "  - T3 Second child position:2 done:false due:2026-10-11 label:\"\"",
+      "- T4 Top two position:2 done:false",
       "",
       "## tasks row T1",
       "",
@@ -56,10 +56,10 @@
     "corpus": {
       "tasks.flowmark.md": [
         "# tasks",
-        "- T1 Root task done:false due:2026-10-01 label:first",
-        "  - T2 Child task done:true",
-        "  - T3 Renamed done:false due:2026-10-11",
-        "- T4 Top two done:false",
+        "- T1 Root task position:1 done:false due:2026-10-01 label:first",
+        "  - T2 Child task position:1 done:true",
+        "  - T3 Renamed position:2 done:false due:2026-10-11",
+        "- T4 Top two position:2 done:false",
         "",
         "## tasks row T1",
         "",

@@ -309,8 +309,9 @@ that a database would not. A feature that no common database has is removed, and
     a value, so the value is written where any scalar is — a field of a list row, a cell, the item of a `files` row, as
     `files` storage writes its rank today — and a row that stands out of the order of its values is
     `format.noncanonical`, which `flowmark canon` reorders.
-  Each is carried out by a row of its own in flowmark and in orm (orm DBS-77, DBS-79 and the planner's `Assigns`); until
-  then the engine keeps them as T60 left them.
+  Each is carried out by a row of its own in flowmark and in orm (orm DBS-77, DBS-79 and the planner's `Assigns`);
+  flowmark's is T89, which removes `key_prefix` and every assignment of the order column from the catalog and the
+  executor.
 
 **T9 conformance contract (stated now)**: markdown vectors are corpus-before + IR request + expected corpus-after / expected rows, run against the Go executor; SQL/binds comparison does not apply (there is no SQL). Cross-client comparison begins when other clients port the executor. (Revision 3: vectors run against the flowmark engine; orm's executor conformance pins a flowmark build.)
 

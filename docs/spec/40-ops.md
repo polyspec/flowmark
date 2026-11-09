@@ -325,10 +325,10 @@ utility of orm's SQLite dialect holds on a corpus, and a client has only this dr
   names it; a hand edit of the file is read at the next of these, as a hand edit of `dbspec/` is. A git rewind rewinds
   the counters with the rows. `TestSequences` of `statement`, `TestSequenceRaise` and `TestRaiseSequences` of `irexec`,
   and `TestAutoincrement` and `TestSequencesFile` of `catalog` hold it.
-- **Assigned columns.** A `key_prefix` key and an `order` position are the corpus's to assign, so the schema of the
-  statements lets each hold NULL, as SQLite's `INTEGER PRIMARY KEY` does. An insert that leaves one out, or gives it NULL,
-  is given the next key of the prefix ([document model](20-document-model.md#keys)) or the next position under its parent,
-  in the order its rows were inserted, and a `RETURNING` of the key reads the key the row was given. An `ON CONFLICT` meets
+- **No assigned columns.** A text key and an `order` column are the insert's to give, as on the databases orm reaches
+  ([document model](20-document-model.md#keys)): the schema of the statements declares each `NOT NULL`, so an insert that
+  leaves one out, or gives it NULL, fails as SQLite's `NOT NULL constraint failed`, and the corpus holds the values the
+  statements wrote. `TestNoAssignedColumns` of `statement` holds it. An `ON CONFLICT` meets
   a key byte for byte, as SQLite's does, and a key equal to another only without regard to case is `DUPLICATE_KEY`: the
   rule of keys judges every write.
 - **Transactions.** `BEGIN IMMEDIATE` and `BEGIN EXCLUSIVE` take the lock at once. A plain `BEGIN` takes no lock: its first
@@ -741,10 +741,9 @@ and MySQL and PostgreSQL compare a `datetime(p)` column with `NOW(6)` at six dig
   holds both: a write copies the same rows at 1,000 and at 100,000 rows, and compares at most eight
   times the base-2 logarithm of the documents.
 - The corpus keeps an index of its rows: by key, by key without regard to case, by the value of each
-  column a write reads by value (a foreign key, a placement or parent key, a unique key and the
-  sibling group of an ordered row) and by the number of each identity column
-  and `key_prefix` key. The index is persistent like the documents and shared between the corpora
-  read or written one from the other. A read or a write marks each document whose rows it changes,
+  column a write reads by value (a foreign key, a placement or parent key and a unique key) and
+  by the number of its key and of each identity column. The index is persistent like the documents and shared between
+  the corpora read or written one from the other. A read or a write marks each document whose rows it changes,
   and before the next access of the index the rows of the marked documents leave it and enter it again
   as they stand: a row that is new, changed, under another parent or under a parent that entered
   again, so the index costs the rows of the documents that changed. The first write after a corpus is
@@ -757,9 +756,9 @@ and MySQL and PostgreSQL compare a `datetime(p)` column with `NOW(6)` at six dig
   at 200 and at 2,000 rows that share a key and that a write of one of them writes the same entries at both sizes, and
   `TestCost` that every operation writes the same entries at 1,000 and at 100,000 rows.
 - A write and its checks read the rows they need through the index, not by walking a table: a
-  stated, placement, parent or referenced row by its key, the largest `key_prefix` number and
-  identity by the number index, a sibling group by its group, the rows that reference a row by the
-  key their foreign key names, a state's rows by its value and a unique key's rows by its values.
+  stated, placement, parent or referenced row by its key, the largest key and
+  identity by the number index, the rows that reference a row by the key their foreign key names
+  and a unique key's rows by its values.
   The index also holds, for each of these values that is not a value of its column type, the row
   whose evaluation fails; a check reads the rows of the keys it needs with those rows and judges each
   in corpus order as it judged each row of the table, so it fails on the same row as the walk did.
@@ -780,9 +779,8 @@ and MySQL and PostgreSQL compare a `datetime(p)` column with `NOW(6)` at six dig
   restoration and an exchange of documents of each golden corpus equals the database filled from
   nothing, and fails exactly when that fill fails.
 - A write statement reads from its database the rows it changed, not its tables: the rows SQLite's pre-update hook
-  reports, read at their rowids, and the keys it allocates by the number index of the corpus from the largest down,
-  skipping a key the statement took. `TestCost` holds that a write and a refused write read the same rows of the database
-  at 1,000 and at 100,000 rows, and `TestCapture`, `TestCaptureKeys` and `FuzzCapture` of `statement` that the difference
+  reports, read at their rowids. `TestCost` holds that a write and a refused write read the same rows of the database
+  at 1,000 and at 100,000 rows, and `TestCapture` and `FuzzCapture` of `statement` that the difference
   formed from those rows equals the difference of every row of the tables, through REPLACE, foreign key actions,
   triggers, rowid changes and texts holding a NUL.
 - The limits of the path are the costs that `TestCost` counts and the times that `BenchmarkStatement` of `statement`

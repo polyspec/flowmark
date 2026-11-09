@@ -11,8 +11,8 @@ A corpus extends it by adding columns. This specification pins its tables and it
 
 | Table | Storage | Columns and settings |
 | --- | --- | --- |
-| `items` | `store files`, one file `items/<key>.flowmark.md` an item | `id varchar(32)` with `key_prefix 'T'`; `parent varchar(32) null` → items; `state varchar(16)`; `title varchar(255)` with `title title`; `body text` with `markdown body` and `body body`; `assignee varchar(32) null` → people; `start_on date null`, `start_at datetime(0) null`, `due_on date null`, `due_at datetime(0) null`; `priority i16 null`; `position i32` with `order position`; `evidence text null`, `cause text null`, `retry text null`, each `markdown` |
-| `people` | `store document table`, file `people.flowmark.md` | `id varchar(32)` with `key_prefix 'P'`; `name varchar(255)` with `title name` |
+| `items` | `store files`, one file `items/<key>.flowmark.md` an item | `id varchar(32)`; `parent varchar(32) null` → items; `state varchar(16)`; `title varchar(255)` with `title title`; `body text` with `markdown body` and `body body`; `assignee varchar(32) null` → people; `start_on date null`, `start_at datetime(0) null`, `due_on date null`, `due_at datetime(0) null`; `priority i16 null`; `position i32` with `order position`; `evidence text null`, `cause text null`, `retry text null`, each `markdown` |
+| `people` | `store document table`, file `people.flowmark.md` | `id varchar(32)`; `name varchar(255)` with `title name` |
 | `item_links` | `store block fk_item_links_from table`, in the file of its `from_item` | `id i64 identity`; `from_item varchar(32)` → items; `to_item varchar(32)` → items; `kind varchar(16)` |
 | `views` | `store document table`, file `views.flowmark.md` | `id i64 identity`; `title varchar(255)` with `title title`; `body text` with `markdown body` and `body body`; `kind varchar(16)`; `entity varchar(63)`; `filter text` and `sort text` with `codec filter ordered_json` and `codec sort ordered_json`; `group_by varchar(63) null` |
 
@@ -49,11 +49,10 @@ Every foreign key has its leading index. The checks are
   the item it starts from, its `to_item` and `kind` are the cells of the block, and the
   `from_item` of a block row is its placement, never a cell. The incoming links of an item are
   the rows whose `to_item` names it, read by a query over the table as any foreign key is.
-- `position` holds the item's **rank** among the items with the same `parent`, not its position:
-  a read fills the column with the 1-based position, and a move gives the item a rank between its
-  new neighbours, writing its file alone while such a rank exists
-  ([document model](20-document-model.md#order)). An item appended among siblings takes a rank
-  1000 past the last, so a corpus the engine wrote reads `position: 1000`, `position: 2000`, ….
+- `position` orders the items with the same `parent`: they stand by ascending value, those that
+  share one in key order ([document model](20-document-model.md#order)). The application writes it
+  as any integer, and a move writes the moved item's file alone; an insert gives it, as it gives
+  the item's key.
 - A foreign key is a link, as the [canonical format](10-canonical-format.md) states. The field
   of an item with the assignee `P1` is written `- assignee: [P1](../people.flowmark.md)`: the
   person row has no detail section, so the target has no anchor. A `to_item` cell of a link block

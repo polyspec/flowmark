@@ -5,12 +5,12 @@
   "corpus": {
     "tasks.flowmark.md": [
       "# tasks",
-      "| id | parent | title | done | due | label |",
-      "| --- | --- | --- | --- | --- | --- |",
-      "| T1 |  | Root task | false | 2026-10-01 | first |",
-      "| T2 | [T1](#tasks-row-t1) | Child task | true |  |  |",
-      "| T3 | [T1](#tasks-row-t1) | Second child | false | 2026-10-11 | \"\" |",
-      "| T4 |  | Top two | false |  |  |",
+      "| id | parent | title | position | done | due | label |",
+      "| --- | --- | --- | --- | --- | --- | --- |",
+      "| T1 |  | Root task | 1 | false | 2026-10-01 | first |",
+      "| T2 | [T1](#tasks-row-t1) | Child task | 1 | true |  |  |",
+      "| T3 | [T1](#tasks-row-t1) | Second child | 2 | false | 2026-10-11 | \"\" |",
+      "| T4 |  | Top two | 2 | false |  |  |",
       "",
       "## tasks row T1",
       "",
@@ -40,6 +40,10 @@
       {
         "column": "done",
         "p": 3
+      },
+      {
+        "column": "position",
+        "p": 4
       }
     ]
   },
@@ -47,7 +51,8 @@
     "T5",
     "New task",
     "New body.",
-    false
+    false,
+    3
   ],
   "now": "2026-10-11 09:00:00.000000",
   "expect": {
@@ -58,13 +63,13 @@
     "corpus": {
       "tasks.flowmark.md": [
         "# tasks",
-        "| id | parent | title | done | due | label |",
-        "| --- | --- | --- | --- | --- | --- |",
-        "| T1 |  | Root task | false | 2026-10-01 | first |",
-        "| T2 | [T1](#tasks-row-t1) | Child task | true |  |  |",
-        "| T3 | [T1](#tasks-row-t1) | Second child | false | 2026-10-11 | \"\" |",
-        "| T4 |  | Top two | false |  |  |",
-        "| T5 |  | New task | false |  |  |",
+        "| id | parent | title | position | done | due | label |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
+        "| T1 |  | Root task | 1 | false | 2026-10-01 | first |",
+        "| T2 | [T1](#tasks-row-t1) | Child task | 1 | true |  |  |",
+        "| T3 | [T1](#tasks-row-t1) | Second child | 2 | false | 2026-10-11 | \"\" |",
+        "| T4 |  | Top two | 2 | false |  |  |",
+        "| T5 |  | New task | 3 | false |  |  |",
         "",
         "## tasks row T1",
         "",
