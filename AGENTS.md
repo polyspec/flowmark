@@ -58,8 +58,16 @@ them holds the rules of this repository.
   `gh workflow run release.yml -f run=<id>`. Its version X.Y.Z is the newest section `## X.Y.Z` of CHANGELOG.md at the
   commit of that run, and the release is refused while `## Unreleased` holds an entry. `make release-tag` creates the
   annotated tags `vX.Y.Z` and `packages/go/vX.Y.Z` at that commit; no one creates, moves or pushes a tag by hand, and a
-  pushed tag starts no release.
-  Enforced by: `make release-tag`
+  pushed tag starts no release. Before it tags, `scripts/check-release-run.mts` refuses a run of any other workflow, of
+  another event, without success or, for a release that the run started, on another commit.
+  Enforced by: `make release-tag`, `make test-infrastructure`, which runs tests/check-release-run.test.mts
+- Own: A push or a pull request whose every changed path is a root document or a plan, the `paths-ignore` of
+  `.github/workflows/ci.yml` (`*.md`, `docs/plans/**`), starts no CI run; `.github/workflows/documents.yml` runs the
+  checks of `DOCUMENT_CHECKS` of the Makefile on every push and pull request with no path filter, and fails a diff of more
+  than 3000 files, past which GitHub does not evaluate a path filter. No path that a check outside `DOCUMENT_CHECKS` reads
+  is ignored, the specs among them, and a version commit changes package.json, so it runs every job and its run is the one
+  that a release takes. `[skip ci]` is not used, since it reads the head commit of a push alone.
+  Enforced by: `make test-infrastructure`, which runs tests/release-config.test.mts
 - Own: The engine is a database, so its unit tests are dense: every grammar and constraint rule has at least one accepting and one
   rejecting case, table-driven, with its edge cases; every storage has P1/P2 golden fixtures covering every column type and
   both the NULL and the empty forms; parse and emit are fuzzed (`go test -fuzz`) with the golden fixtures as seeds, and a

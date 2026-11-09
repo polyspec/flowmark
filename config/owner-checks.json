@@ -65,6 +65,14 @@
     },
     {
       "paths": [
+        "docs/spec/**"
+      ],
+      "targets": [
+        "test-go"
+      ]
+    },
+    {
+      "paths": [
         "scripts/check-internal-paths.mts"
       ],
       "targets": [
