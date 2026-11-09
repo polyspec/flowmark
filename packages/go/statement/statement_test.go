@@ -2,6 +2,7 @@ package statement_test
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,8 +10,11 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/polyspec/flowmark/packages/go/internal/corpustest"
 	"github.com/polyspec/flowmark/packages/go/ops"
@@ -360,34 +364,211 @@ func freshSession(t *testing.T, root string) *writepath.Session {
 	return fresh
 }
 
-// TestStoredLiterals pins that a value SQLite holds comes back the same from the corpus, whatever its column declares and
-// whether or not a cell can hold it as text.
+// TestStoredLiterals pins that a value SQLite holds comes back the same from the corpus, its storage class included,
+// whatever its column declares and whether or not a cell can hold it as text.
 func TestStoredLiterals(t *testing.T) {
 	s, root := open(t)
 	run(t, s, "CREATE TABLE mix (id INTEGER PRIMARY KEY, note TEXT, data BLOB, wide)")
-	values := []struct{ name, insert, note, data, wide string }{
-		{"a blob in a text column", "X'6162', NULL, NULL", `map[bytes:YWI=]`, `<nil>`, `<nil>`},
-		{"a text in a blob column", "NULL, 'abcd', NULL", `<nil>`, `abcd`, `<nil>`},
-		{"a text that is not UTF-8", "CAST(X'FF' AS TEXT), NULL, NULL", `map[text:/w==]`, `<nil>`, `<nil>`},
-		{"a text of two lines", "'a' || char(10) || 'b', NULL, NULL", "a\nb", `<nil>`, `<nil>`},
-		{"a text of raw HTML", "'<b>hi</b>', NULL, NULL", `<b>hi</b>`, `<nil>`, `<nil>`},
-		{"a text that looks like a literal", "'x''6162''', NULL, NULL", `x'6162'`, `<nil>`, `<nil>`},
-		{"a number with no affinity", "NULL, NULL, 7", `<nil>`, `<nil>`, `7`},
-		{"a fraction with no affinity", "NULL, NULL, 1.5", `<nil>`, `<nil>`, `1.5`},
-		{"an infinity", "NULL, NULL, 9e999", `<nil>`, `<nil>`, `map[float:+Inf]`},
+	values := []struct{ name, insert, want string }{
+		{"a blob in a text column", "X'6162', NULL, NULL", `[{"bytes":"YWI="},"blob",null,"null",null,"null"]`},
+		{"a text in a blob column", "NULL, 'abcd', NULL", `[null,"null","abcd","text",null,"null"]`},
+		{"a text that is not UTF-8", "CAST(X'FF' AS TEXT), NULL, NULL", `[{"text":"/w=="},"text",null,"null",null,"null"]`},
+		{"a text of two lines", "'a' || char(10) || 'b', NULL, NULL", `["a\nb","text",null,"null",null,"null"]`},
+		{"a text of raw HTML", "'<b>hi</b>', NULL, NULL", `["\u003cb\u003ehi\u003c/b\u003e","text",null,"null",null,"null"]`},
+		{"a text that looks like a literal", "'x''6162''', NULL, NULL", `["x'6162'","text",null,"null",null,"null"]`},
+		{"a number with no affinity", "NULL, NULL, 7", `[null,"null",null,"null",7,"integer"]`},
+		{"a number in a blob column", "NULL, 7, NULL", `[null,"null",7,"integer",null,"null"]`},
+		{"a fraction with no affinity", "NULL, NULL, 1.5", `[null,"null",null,"null",1.5,"real"]`},
+		{"a text of digits with no affinity", "NULL, NULL, '7'", `[null,"null",null,"null","7","text"]`},
+		{"an infinity", "NULL, NULL, 9e999", `[null,"null",null,"null",{"float":"+Inf"},"real"]`},
+	}
+	read := func(s *writepath.Session, id int) string {
+		a := run(t, s, "SELECT note, typeof(note), data, typeof(data), wide, typeof(wide) FROM mix WHERE id = ?", fmt.Sprint(id))
+		return strings.TrimSuffix(strings.TrimPrefix(cells(a), "["), "]")
 	}
 	for i, v := range values {
 		run(t, s, fmt.Sprintf("INSERT INTO mix (id, note, data, wide) VALUES (%d, %s)", i+1, v.insert))
+		if got := read(s, i+1); got != v.want {
+			t.Errorf("%s: read %s, want %s", v.name, got, v.want)
+		}
 	}
 	// A new corpus reads the files: nothing of the session's database stands.
 	fresh := freshSession(t, root)
 	for i, v := range values {
-		a := run(t, fresh, fmt.Sprintf("SELECT note, data, wide FROM mix WHERE id = %d", i+1))
-		got := fmt.Sprint(a.Rows[0][0]) + "|" + fmt.Sprint(a.Rows[0][1]) + "|" + fmt.Sprint(a.Rows[0][2])
-		if want := v.note + "|" + v.data + "|" + v.wide; got != want {
-			t.Errorf("%s: read %q, want %q", v.name, got, want)
+		if got := read(fresh, i+1); got != v.want {
+			t.Errorf("%s: read %s from the files, want %s", v.name, got, v.want)
 		}
 	}
+}
+
+// affinityValues are the values TestAffinityRoundTrip inserts into a column of each affinity.
+var affinityValues = []string{"2", "2.5", "'abc'", "'2'", "X'00'", "NULL", "1e300", "5", "'true'", "'x''6162'''", "9223372036854775807"}
+
+// The answers of affinityValues in a column of each affinity, as SQLite gives them.
+var (
+	integerAffinity = []string{`[2,"integer"]`, `[2.5,"real"]`, `["abc","text"]`, `[2,"integer"]`, `[{"bytes":"AA=="},"blob"]`, `[null,"null"]`, `[1e+300,"real"]`, `[5,"integer"]`, `["true","text"]`, `["x'6162'","text"]`, `[9223372036854775807,"integer"]`}
+	realAffinity    = []string{`[2.0,"real"]`, `[2.5,"real"]`, `["abc","text"]`, `[2.0,"real"]`, `[{"bytes":"AA=="},"blob"]`, `[null,"null"]`, `[1e+300,"real"]`, `[5.0,"real"]`, `["true","text"]`, `["x'6162'","text"]`, `[9223372036854776000.0,"real"]`}
+	textAffinity    = []string{`["2","text"]`, `["2.5","text"]`, `["abc","text"]`, `["2","text"]`, `[{"bytes":"AA=="},"blob"]`, `[null,"null"]`, `["1.0e+300","text"]`, `["5","text"]`, `["true","text"]`, `["x'6162'","text"]`, `["9223372036854775807","text"]`}
+	blobAffinity    = []string{`[2,"integer"]`, `[2.5,"real"]`, `["abc","text"]`, `["2","text"]`, `[{"bytes":"AA=="},"blob"]`, `[null,"null"]`, `[1e+300,"real"]`, `[5,"integer"]`, `["true","text"]`, `["x'6162'","text"]`, `[9223372036854775807,"integer"]`}
+)
+
+// TestAffinityRoundTrip pins that a corpus read again from its files gives each value of a table that a statement made the
+// storage class and the value its session gave it, for a column of each affinity SQLite assigns a declared type: the
+// session answers what SQLite's affinity gives, and a fresh corpus answers the same. Its rejecting cases are the answers
+// the column's type made of a value its affinity kept, before the stored form followed the affinity.
+func TestAffinityRoundTrip(t *testing.T) {
+	columns := []struct {
+		declared string
+		want     []string
+		wrong    []string
+	}{
+		{"INTEGER", integerAffinity, []string{`[{"bytes":"YWI="},"blob"]`}},
+		{"BIGINT", integerAffinity, nil},
+		{"DECIMALINT(5,2)", integerAffinity, []string{`[{"bytes":"YWI="},"blob"]`}},
+		{"REAL", realAffinity, []string{`[{"bytes":"YWI="},"blob"]`}},
+		{"DOUBLE", realAffinity, nil},
+		{"NUMERIC", integerAffinity, nil},
+		{"DATETIME", integerAffinity, nil},
+		{"BOOLEAN", integerAffinity, []string{`[1,"integer"]`, `[0,"integer"]`, `[{"bytes":"YWI="},"blob"]`}},
+		{"TEXT", textAffinity, nil},
+		{"VARCHAR(8)", textAffinity, nil},
+		{"CHAR BLOB", textAffinity, nil},
+		{"BLOB", blobAffinity, nil},
+		{"", blobAffinity, []string{`["5","text"]`, `["9223372036854775807","text"]`}},
+	}
+	for _, col := range columns {
+		t.Run(fmt.Sprintf("%q", col.declared), func(t *testing.T) {
+			s, root := open(t)
+			run(t, s, "CREATE TABLE kept (id INTEGER PRIMARY KEY, c "+col.declared+")")
+			read := func(s *writepath.Session, id int) string {
+				a := run(t, s, "SELECT c, typeof(c) FROM kept WHERE id = ?", fmt.Sprint(id))
+				return strings.TrimSuffix(strings.TrimPrefix(cells(a), "["), "]")
+			}
+			for i, v := range affinityValues {
+				run(t, s, fmt.Sprintf("INSERT INTO kept (id, c) VALUES (%d, %s)", i+1, v))
+				if got := read(s, i+1); got != col.want[i] {
+					t.Errorf("%s: the session read %s, want %s", v, got, col.want[i])
+				}
+			}
+			fresh := freshSession(t, root)
+			for i, v := range affinityValues {
+				got := read(fresh, i+1)
+				if got != col.want[i] {
+					t.Errorf("%s: read %s from the files, want %s", v, got, col.want[i])
+				}
+				if slices.Contains(col.wrong, got) && got != col.want[i] {
+					t.Errorf("%s: read %s from the files, a form its affinity did not give", v, got)
+				}
+			}
+			// A text of a column of TEXT affinity is its cell's text, not a literal, whatever else its type names.
+			if col.declared == "CHAR BLOB" {
+				if got := file(t, root, "kept.flowmark.md"); !strings.Contains(got, "| abc ") || strings.Contains(got, "t'616263'") {
+					t.Errorf("the text abc is not written as its text:\n%s", got)
+				}
+			}
+		})
+	}
+}
+
+// TestAffinityKeys pins the keys of a table that a statement made: a key cell has no stored literal, so a key value whose
+// storage class its column's text does not give back is CONSTRAINT, and the statement leaves no row; every other key
+// value reads back from the files with the storage class its session gave it.
+func TestAffinityKeys(t *testing.T) {
+	accepted := []struct{ declared, value, want string }{
+		{"NUMERIC", "5", `[[5,"integer"]]`},
+		{"DATETIME", "5", `[[5,"integer"]]`},
+		{"NUMERIC", "'abc'", `[["abc","text"]]`},
+		{"TEXT", "5", `[["5","text"]]`},
+		{"", "'abc'", `[["abc","text"]]`},
+		{"", "'5'", `[["5","text"]]`},
+		{"INTEGER", "5", `[[5,"integer"]]`},
+		{"REAL", "5", `[[5.0,"real"]]`},
+		{"REAL", "2.5", `[[2.5,"real"]]`},
+		{"BOOLEAN", "1", `[[1,"integer"]]`},
+	}
+	for _, c := range accepted {
+		s, root := open(t)
+		run(t, s, "CREATE TABLE k (id "+c.declared+" NOT NULL PRIMARY KEY, v) WITHOUT ROWID")
+		run(t, s, "INSERT INTO k (id, v) VALUES ("+c.value+", 1)")
+		run(t, s, "UPDATE k SET v = 2 WHERE v = 1")
+		for _, session := range []*writepath.Session{s, freshSession(t, root)} {
+			if got := cells(run(t, session, "SELECT id, typeof(id) FROM k WHERE v = 2")); got != c.want {
+				t.Errorf("%q key %s: read %s, want %s", c.declared, c.value, got, c.want)
+			}
+		}
+	}
+	needsLiteral := []struct{ declared, value string }{
+		{"", "5"},
+		{"", "2.5"},
+		{"", "X'00'"},
+		{"BLOB", "5"},
+		{"BOOLEAN", "5"},
+		{"BOOLEAN", "'true'"},
+		{"INTEGER", "'abc'"},
+		{"REAL", "'abc'"},
+		{"TEXT", "X'00'"},
+	}
+	for _, c := range needsLiteral {
+		s, _ := open(t)
+		run(t, s, "CREATE TABLE k (id "+c.declared+" NOT NULL PRIMARY KEY, v) WITHOUT ROWID")
+		refused(t, s, "INSERT INTO k (id, v) VALUES ("+c.value+", 1)", "CONSTRAINT")
+		if got := cells(run(t, s, "SELECT COUNT(*) FROM k")); got != "[[0]]" {
+			t.Errorf("%q key %s: the refused insert left %s rows", c.declared, c.value, got)
+		}
+	}
+}
+
+// affinityDeclared are the declared types FuzzAffinityRoundTrip makes a column of: one or more of each affinity.
+var affinityDeclared = []string{"INTEGER", "DECIMALINT(5,2)", "REAL", "NUMERIC", "BOOLEAN", "DATETIME", "TEXT", "CHAR BLOB", "BLOB", ""}
+
+// FuzzAffinityRoundTrip pins TestAffinityRoundTrip's equality for any value bound into a column of any affinity: an
+// INTEGER, a REAL, a text or a blob, which a fresh corpus reads back as the session answered it.
+func FuzzAffinityRoundTrip(f *testing.F) {
+	f.Add(uint8(9), uint8(0), int64(2), 0.0, "")
+	f.Add(uint8(4), uint8(0), int64(5), 0.0, "")
+	f.Add(uint8(4), uint8(2), int64(0), 0.0, "true")
+	f.Add(uint8(1), uint8(2), int64(0), 0.0, "abc")
+	f.Add(uint8(0), uint8(2), int64(0), 0.0, "x'6162'")
+	f.Add(uint8(9), uint8(1), int64(0), 2.0, "")
+	f.Add(uint8(2), uint8(1), int64(0), math.Copysign(0, -1), "")
+	f.Add(uint8(3), uint8(3), int64(0), 0.0, "ab")
+	f.Add(uint8(3), uint8(0), int64(5), 0.0, "")
+	f.Add(uint8(7), uint8(2), int64(0), 0.0, "abc")
+	f.Fuzz(func(t *testing.T, declared, kind uint8, n int64, x float64, text string) {
+		var param string
+		switch kind % 4 {
+		case 0:
+			param = strconv.FormatInt(n, 10)
+		case 1:
+			if math.IsNaN(x) {
+				return
+			}
+			b, err := statement.AnswerJSON(x)
+			if err != nil {
+				t.Fatal(err)
+			}
+			param = string(b)
+		case 2:
+			b, err := json.Marshal(text)
+			if err != nil {
+				t.Fatal(err)
+			}
+			param = string(b)
+			if !utf8.ValidString(text) {
+				param = `{"text":"` + base64.StdEncoding.EncodeToString([]byte(text)) + `"}`
+			}
+		default:
+			param = `{"bytes":"` + base64.StdEncoding.EncodeToString([]byte(text)) + `"}`
+		}
+		s, root := open(t)
+		run(t, s, "CREATE TABLE kept (id INTEGER PRIMARY KEY, c "+affinityDeclared[int(declared)%len(affinityDeclared)]+")")
+		run(t, s, "INSERT INTO kept (id, c) VALUES (1, ?)", param)
+		const read = "SELECT c, typeof(c) FROM kept"
+		live := cells(run(t, s, read))
+		if got := cells(run(t, freshSession(t, root), read)); got != live {
+			t.Fatalf("%s in %q: read %s from the files, the session read %s", param, affinityDeclared[int(declared)%len(affinityDeclared)], got, live)
+		}
+	})
 }
 
 // TestParameterForms holds the bound values that a statement takes: each value form that an answer writes binds the
@@ -467,14 +648,10 @@ func TestRealForm(t *testing.T) {
 			t.Errorf("%s: %s binds back as %s", v.name, row[0], got)
 		}
 	}
-	// A new corpus reads the files: nothing of the session's database stands. A REAL that a cell cannot hold as its
-	// column's type is a stored literal, which reads back as a REAL. An INTEGER of a column without a declared type reads
-	// back as a text, the defect of T87, so the INTEGER rows are left out here.
+	// A new corpus reads the files: nothing of the session's database stands. A REAL or an INTEGER that a cell cannot hold
+	// as its column's type is a stored literal, which reads back as itself.
 	fresh := freshSession(t, root)
 	for i, v := range values {
-		if strings.HasSuffix(v.want, `"integer"]`) {
-			continue
-		}
 		for _, column := range []string{"v", "w"} {
 			if got := read(t, fresh, column, i+1); got != v.want {
 				t.Errorf("%s: read %s of %s from the files, want %s", v.name, got, column, v.want)

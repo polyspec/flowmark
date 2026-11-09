@@ -658,6 +658,27 @@ same value back. A text that reads like a literal is written quoted, and a quote
 files row has no quoted form, so such a text is `CONSTRAINT` there. A write of a model or a face never makes a literal: the
 rules of [Single-line places](#single-line-places) hold for it. A primary key has no literal form.
 
+Which values are literals follows the affinity SQLite gives the declared type of the column, by its rules in their order:
+`INT` gives INTEGER; then `CHAR`, `CLOB` or `TEXT` give TEXT; then `BLOB`, or no declared type, gives BLOB; then `REAL`,
+`FLOA` or `DOUB` give REAL; any other type gives NUMERIC. A column of a table that a statement makes takes the type of its
+affinity: `i64` for INTEGER (`decimal` for `DECIMALINT(p,s)`), `text` for TEXT and for NUMERIC (`bool` for `BOOLEAN`),
+`bytes` for `BLOB` and `text` for no declared type, and `f64` for REAL. A cell holds a value as its column's type only in
+the storage class of that type, as the session's affinity gave it:
+
+- an INTEGER is a cell of an integer or `decimal` type, of a `bool` when it is 0 or 1, and of a `text` column of NUMERIC or
+  TEXT affinity, whose digits that affinity reads back as the INTEGER; any other INTEGER is `n'…'`, the INTEGER of a column
+  of no declared type included;
+- a REAL is a cell of an `f64` and `n'…'` elsewhere; a BLOB is a cell of `bytes` and `x'…'` elsewhere;
+- a TEXT is a cell of a text, date, time or uuid type, and `t'…'` in a column of a number, `decimal`, `bool` or `bytes` type,
+  where its affinity kept it as a TEXT, such as `'abc'` in an `INTEGER` column.
+
+So a corpus read again from its files gives each value the storage class and the value its session gave it
+(`TestAffinityRoundTrip` and `FuzzAffinityRoundTrip` of `statement`). A key value that would need a literal is
+`CONSTRAINT`, and its statement leaves no row (`TestAffinityKeys`). Grounding: SQLite's affinity converts a value on each
+write by the same rules, so a value the session holds reads back unchanged when its stored form is the one the affinity
+keeps; a digit text in a column of no declared type is a TEXT, and an INTEGER 5 of a `BOOLEAN` column is not the boolean
+true.
+
 ## Foreign keys as links
 
 - A foreign key value is a link `[<key>](<target>)` in every place a scalar is written: a field of

@@ -67,6 +67,62 @@ type Table struct {
 	// rendered statement of an identity key, or a schema statement of SQL. Its counter is part of the corpus
 	// (SequencesFile).
 	Autoincrement bool
+	// Affinities holds the type affinity SQLite gives each column by its declared type, as the schema statements left it;
+	// nil when the corpus took no statement, and each column has the affinity of its type as the set renders it.
+	Affinities map[string]Affinity
+}
+
+// Affinity is the type affinity SQLite gives a column by its declared type: the storage class it converts a value to,
+// when it can, on a write (SQLite's datatype page, "Determination Of Column Affinity").
+type Affinity string
+
+// The five affinities of SQLite.
+const (
+	AffinityInteger Affinity = "INTEGER"
+	AffinityText    Affinity = "TEXT"
+	AffinityBlob    Affinity = "BLOB"
+	AffinityReal    Affinity = "REAL"
+	AffinityNumeric Affinity = "NUMERIC"
+)
+
+// DeclaredAffinity is the affinity SQLite gives a column of the declared type decl, by its rules in their order: INT gives
+// INTEGER; then CHAR, CLOB or TEXT give TEXT; then BLOB, or no type, gives BLOB; then REAL, FLOA or DOUB give REAL; any
+// other type gives NUMERIC.
+func DeclaredAffinity(decl string) Affinity {
+	upper := strings.ToUpper(decl)
+	has := func(parts ...string) bool {
+		return slices.ContainsFunc(parts, func(p string) bool { return strings.Contains(upper, p) })
+	}
+	switch {
+	case has("INT"):
+		return AffinityInteger
+	case has("CHAR", "CLOB", "TEXT"):
+		return AffinityText
+	case has("BLOB") || strings.TrimSpace(decl) == "":
+		return AffinityBlob
+	case has("REAL", "FLOA", "DOUB"):
+		return AffinityReal
+	}
+	return AffinityNumeric
+}
+
+// AffinityOf is the affinity of the column col: the one its declared type gives, or, when the corpus took no statement,
+// that of its type as the set renders it, whose checks hold each value to the type.
+func (t *Table) AffinityOf(col dbspec.Column) Affinity {
+	if a, ok := t.Affinities[col.Name]; ok {
+		return a
+	}
+	switch col.Type.Kind {
+	case dbspec.TypeI16, dbspec.TypeI32, dbspec.TypeI64, dbspec.TypeDecimal:
+		return AffinityInteger
+	case dbspec.TypeF64:
+		return AffinityReal
+	case dbspec.TypeBool, dbspec.TypeDate, dbspec.TypeDatetime, dbspec.TypeTime:
+		return AffinityNumeric
+	case dbspec.TypeBytes:
+		return AffinityBlob
+	}
+	return AffinityText
 }
 
 // KeySeparator joins the values of a composite key in its key cell, and the names of its columns in its heading. No value

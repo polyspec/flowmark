@@ -1,5 +1,5 @@
 <!-- doc-id: spec-canonical-format -->
-<!-- source-sha256: 05e91876450966c0abdbe9c37f01fcd7f6814b98a5da8f593ea3502c9bfc193e -->
+<!-- source-sha256: 40f0bedb4ddb7cd4a73afba6c9cab9d9fbee6802133fb17f1ce58fa31b922d5e -->
 # Canonical format
 
 [English](10-canonical-format.md)
@@ -397,6 +397,23 @@ REAL로 다시 읽힌다. SQLite는 값을 column 타입에 묶지 않고 text�
 있으므로, corpus는 문장이 저장한 것을 유지해 같은 값을 다시 읽는다. literal처럼 읽히는 text는 따옴표로 쓰며, 따옴표 cell은
 literal이 아니다. files 행의 field에는 따옴표 형식이 없으므로 그런 text는 그곳에서 `CONSTRAINT`다. model이나 face의 쓰기는
 literal을 만들지 않고 [한 줄 자리](#한-줄-자리)의 규칙을 따른다. primary key에는 literal 형식이 없다.
+
+어떤 값이 literal인지는 SQLite가 column의 선언 타입에 주는 affinity를 따르며, 그 규칙은 이 순서다: `INT`는 INTEGER, 다음으로
+`CHAR`, `CLOB`, `TEXT`는 TEXT, 다음으로 `BLOB`이나 선언 타입이 없으면 BLOB, 다음으로 `REAL`, `FLOA`, `DOUB`는 REAL, 그 밖의
+타입은 NUMERIC이다. 문장이 만든 table의 column은 affinity의 타입을 받는다: INTEGER는 `i64`(`DECIMALINT(p,s)`는 `decimal`),
+TEXT와 NUMERIC은 `text`(`BOOLEAN`은 `bool`), `BLOB`은 `bytes`, 선언 타입이 없으면 `text`, REAL은 `f64`다. cell은 session의
+affinity가 준 storage class가 그 타입의 것일 때만 값을 column 타입으로 담는다:
+
+- INTEGER는 정수 타입이나 `decimal`, 0이나 1일 때의 `bool`, 그리고 숫자를 다시 INTEGER로 읽는 NUMERIC이나 TEXT affinity의
+  `text` column의 cell이다. 그 밖의 INTEGER는 `n'…'`이며, 선언 타입이 없는 column의 INTEGER도 그렇다.
+- REAL은 `f64`의 cell이고 그 밖에서는 `n'…'`다. BLOB은 `bytes`의 cell이고 그 밖에서는 `x'…'`다.
+- TEXT는 text, date, time, uuid 타입의 cell이고, affinity가 TEXT로 남긴 수, `decimal`, `bool`, `bytes` 타입의 column에서는
+  `t'…'`다. `INTEGER` column의 `'abc'`가 그 예다.
+
+그러므로 파일에서 다시 읽은 corpus는 각 값에 session이 준 storage class와 값을 준다(`statement`의 `TestAffinityRoundTrip`과
+`FuzzAffinityRoundTrip`). literal이 필요한 key 값은 `CONSTRAINT`이고 그 문장은 행을 남기지 않는다(`TestAffinityKeys`). 근거:
+SQLite의 affinity는 쓰기마다 같은 규칙으로 값을 바꾸므로, 저장 형식이 affinity가 유지하는 것이면 session이 담은 값이 그대로
+다시 읽힌다. 선언 타입이 없는 column의 숫자 text는 TEXT이고, `BOOLEAN` column의 INTEGER 5는 boolean true가 아니다.
 
 ## 외래 key의 link
 

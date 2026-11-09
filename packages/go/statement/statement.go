@@ -1619,17 +1619,17 @@ type message struct {
 	params  []json.RawMessage
 }
 
-func (m *message) param(t dbspec.Type, v any) (map[string]any, error) {
-	i, err := m.index(t, v)
+func (m *message) param(tb *catalog.Table, col dbspec.Column, v any) (map[string]any, error) {
+	i, err := m.index(tb, col, v)
 	if err != nil {
 		return nil, err
 	}
 	return map[string]any{"p": i}, nil
 }
 
-// index adds the value v of a column of type t to the parameters of m and returns its index.
-func (m *message) index(t dbspec.Type, v any) (int, error) {
-	raw, err := wire(t, v)
+// index adds the value v of the column col of tb to the parameters of m and returns its index.
+func (m *message) index(tb *catalog.Table, col dbspec.Column, v any) (int, error) {
+	raw, err := wire(tb, col, v)
 	if err != nil {
 		return 0, err
 	}
@@ -1637,11 +1637,11 @@ func (m *message) index(t dbspec.Type, v any) (int, error) {
 	return len(m.params) - 1, nil
 }
 
-func (m *message) assign(col dbspec.Column, v any) (map[string]any, error) {
+func (m *message) assign(tb *catalog.Table, col dbspec.Column, v any) (map[string]any, error) {
 	if v == nil {
 		return map[string]any{"column": col.Name, "null": true}, nil
 	}
-	a, err := m.param(col.Type, v)
+	a, err := m.param(tb, col, v)
 	if err != nil {
 		return nil, err
 	}
@@ -1653,7 +1653,7 @@ func (m *message) where(tb *catalog.Table, row []any) (map[string]any, error) {
 	var items []any
 	for _, name := range keyColumns(tb) {
 		i := slices.IndexFunc(tb.Columns, func(col dbspec.Column) bool { return col.Name == name })
-		pred, err := m.param(tb.Columns[i].Type, row[i])
+		pred, err := m.param(tb, tb.Columns[i], row[i])
 		if err != nil {
 			return nil, err
 		}
@@ -1697,7 +1697,7 @@ func insertMessage(cat *catalog.Catalog, tb *catalog.Table, rows [][]any, foreig
 				// The corpus places the row: a position left out is the next one under its parent.
 				continue
 			}
-			p, err := m.index(col.Type, row[i])
+			p, err := m.index(tb, col, row[i])
 			if err != nil {
 				return nil, err
 			}
@@ -1728,7 +1728,7 @@ func (m *message) keyParams(tb *catalog.Table, row []any) ([]int, error) {
 	var out []int
 	for _, name := range keyColumns(tb) {
 		i := slices.IndexFunc(tb.Columns, func(col dbspec.Column) bool { return col.Name == name })
-		p, err := m.index(tb.Columns[i].Type, row[i])
+		p, err := m.index(tb, tb.Columns[i], row[i])
 		if err != nil {
 			return nil, err
 		}
@@ -1749,7 +1749,7 @@ func updateMessage(cat *catalog.Catalog, tb *catalog.Table, changed [][2][]any, 
 			if same(pair[0][i], pair[1][i]) {
 				continue
 			}
-			a, err := m.assign(col, pair[1][i])
+			a, err := m.assign(tb, col, pair[1][i])
 			if err != nil {
 				return nil, err
 			}
@@ -1834,22 +1834,40 @@ func literalValue(text string) (any, error) {
 	}
 }
 
-// wire is the runtime value model JSON of a SQLite value in a column of type t, as a request parameter. A value that its
-// column's type or a cell cannot hold is a stored literal; a text that is not of the type stays as SQLite holds it, for
-// the column's rule to refuse.
-func wire(typ dbspec.Type, v any) (json.RawMessage, error) {
+// wire is the runtime value model JSON of a SQLite value in the column col of tb, as a request parameter. A value that the
+// column's type or a cell cannot hold is a stored literal, so the corpus read again gives each value the storage class
+// SQLite gave it (spec 10 "Stored literals"): the column's affinity decides whether the text of an INTEGER reads back as
+// that INTEGER. A key has no literal, so a key value that needs one is CONSTRAINT. A text of a text, date or time type
+// stays as SQLite holds it, for the column's rule to refuse one that is not of the type.
+func wire(tb *catalog.Table, col dbspec.Column, v any) (json.RawMessage, error) {
+	typ := col.Type
+	stored := func(text string) (json.RawMessage, error) {
+		if slices.Contains(keyColumns(tb), col.Name) {
+			return nil, &Error{codeConstraint, fmt.Sprintf("the key %s of %s holds %s, a value no key cell holds: a key has no stored literal", col.Name, tb.Name, text)}
+		}
+		return literal(text)
+	}
 	out := v
 	switch x := v.(type) {
 	case int64:
 		switch typ.Kind {
 		case dbspec.TypeBool:
+			// SQLite's boolean is the INTEGER 0 or 1; another INTEGER of the column is kept as itself.
+			if x != 0 && x != 1 {
+				return stored("n'" + strconv.FormatInt(x, 10) + "'")
+			}
 			out = x != 0
 		case dbspec.TypeDecimal:
 			out = decimalText(x, typ.Scale)
 		case dbspec.TypeText, dbspec.TypeVarchar:
+			// A column of NUMERIC affinity reads the text of the INTEGER's digits back as the INTEGER; one of BLOB
+			// affinity keeps it a TEXT, so there it is a literal.
+			if tb.AffinityOf(col) == catalog.AffinityBlob {
+				return stored("n'" + strconv.FormatInt(x, 10) + "'")
+			}
 			out = strconv.FormatInt(x, 10)
 		case dbspec.TypeBytes:
-			return literal("n'" + strconv.FormatInt(x, 10) + "'")
+			return stored("n'" + strconv.FormatInt(x, 10) + "'")
 		}
 	case float64:
 		if typ.Kind != dbspec.TypeF64 || math.IsInf(x, 0) {
@@ -1858,18 +1876,18 @@ func wire(typ dbspec.Type, v any) (json.RawMessage, error) {
 				// A literal of a whole REAL without a fraction would read back as an INTEGER (literalValue).
 				text = realForm(text)
 			}
-			return literal("n'" + string(text) + "'")
+			return stored("n'" + string(text) + "'")
 		}
 	case []byte:
 		if typ.Kind != dbspec.TypeBytes {
-			return literal("x'" + hex.EncodeToString(x) + "'")
+			return stored("x'" + hex.EncodeToString(x) + "'")
 		}
 		out = base64.StdEncoding.EncodeToString(x)
 	case time.Time:
 		out = x.UTC().Format("2006-01-02 15:04:05.000000")
 	case string:
-		if typ.Kind == dbspec.TypeBytes || !utf8.ValidString(x) || store.QuotedFault(x) != "" {
-			return literal("t'" + hex.EncodeToString([]byte(x)) + "'")
+		if !textCell(typ) || !utf8.ValidString(x) || store.QuotedFault(x) != "" {
+			return stored("t'" + hex.EncodeToString([]byte(x)) + "'")
 		}
 		out = temporalWire(typ, x)
 	}
@@ -1878,6 +1896,18 @@ func wire(typ dbspec.Type, v any) (json.RawMessage, error) {
 		return nil, &Error{codeInternal, err.Error()}
 	}
 	return b, nil
+}
+
+// textCell reports whether a cell of type t holds a TEXT as its text: a column of a text, date, time or uuid type, whose
+// values SQLite stores as TEXT. A TEXT of a column of a number, boolean or bytes type is one its affinity kept, such as
+// 'abc' in an INTEGER column, and is a stored literal: as the column's value it would be read back as a number or bytes, or
+// not at all.
+func textCell(t dbspec.Type) bool {
+	switch t.Kind {
+	case dbspec.TypeI16, dbspec.TypeI32, dbspec.TypeI64, dbspec.TypeF64, dbspec.TypeDecimal, dbspec.TypeBool, dbspec.TypeBytes:
+		return false
+	}
+	return true
 }
 
 // assignable is documents with the columns that the corpus assigns open to NULL: a key_prefix key and an order position,

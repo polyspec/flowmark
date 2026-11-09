@@ -1,9 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: fbcf115dd994a0bc6445fac64c0e0af57bfda260777c9b7046c7c9c2e0b35e7c -->
+<!-- source-sha256: 85a4b6793bcd8c456e754f6191c4b099df8c12a8208fa0bcfb48a11ab46f51c5 -->
 # Changelog
 
 ## Unreleased
 
+- T87: 파일에서 다시 읽은 corpus는 문장이 만든 table의 모든 값에 session이 준 storage class를 준다: 저장 형식이 column의 SQLite affinity를 따르므로 선언 타입 없는 column의 INTEGER는 INTEGER로 남고, `BOOLEAN` column은 0이나 1이 아닌 INTEGER와 text를 지키며, 수 column의 text는 text로 남고, stored literal이 필요한 key 값은 CONSTRAINT로 거부된다.
 - T86: SQL server는 유한한 REAL을 소수부나 지수와 함께 답하므로(2.0은 `2.0`, -0.0은 `-0.0`, 1e21은 `1e+21`) client가 INTEGER와 가를 수 있고, 그런 REAL의 stored literal(`n'2.0'`)은 REAL로 다시 읽힌다.
 
 ## 0.0.12

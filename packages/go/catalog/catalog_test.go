@@ -1694,3 +1694,45 @@ func TestRowPath(t *testing.T) {
 func sharded(kind catalog.StorageKind, period catalog.Period) catalog.Storage {
 	return catalog.Storage{Kind: kind, Shard: &catalog.Shard{Column: "at", Period: period}}
 }
+
+// TestDeclaredAffinity pins the affinity SQLite gives a declared type, by its rules in their order: each declared type
+// has its affinity and none of the others, a type that names two rules taking the first.
+func TestDeclaredAffinity(t *testing.T) {
+	cases := []struct {
+		declared string
+		want     catalog.Affinity
+	}{
+		{"INTEGER", catalog.AffinityInteger},
+		{"bigint", catalog.AffinityInteger},
+		{"DECIMALINT(5,2)", catalog.AffinityInteger},
+		{"FLOATING POINT", catalog.AffinityInteger},
+		{"TEXT", catalog.AffinityText},
+		{"VARCHAR(8)", catalog.AffinityText},
+		{"CLOB", catalog.AffinityText},
+		{"CHAR BLOB", catalog.AffinityText},
+		{"TEXT REAL", catalog.AffinityText},
+		{"BLOB", catalog.AffinityBlob},
+		{"", catalog.AffinityBlob},
+		{"  ", catalog.AffinityBlob},
+		{"REAL", catalog.AffinityReal},
+		{"DOUBLE PRECISION", catalog.AffinityReal},
+		{"FLOAT", catalog.AffinityReal},
+		{"NUMERIC", catalog.AffinityNumeric},
+		{"DECIMAL(10,2)", catalog.AffinityNumeric},
+		{"BOOLEAN", catalog.AffinityNumeric},
+		{"DATETIME", catalog.AffinityNumeric},
+		{"STRING", catalog.AffinityNumeric},
+	}
+	all := []catalog.Affinity{catalog.AffinityInteger, catalog.AffinityText, catalog.AffinityBlob, catalog.AffinityReal, catalog.AffinityNumeric}
+	for _, c := range cases {
+		got := catalog.DeclaredAffinity(c.declared)
+		if got != c.want {
+			t.Errorf("%q: %s, want %s", c.declared, got, c.want)
+		}
+		for _, other := range all {
+			if other != c.want && got == other {
+				t.Errorf("%q: %s, which its rules do not give", c.declared, other)
+			}
+		}
+	}
+}

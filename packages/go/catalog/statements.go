@@ -145,6 +145,17 @@ func (l *loader) applyStatements(docs []*document, added []string) (_ *dbspec.Do
 	if l.autoincrement, err = autoincrementTables(ctx, db, names); err != nil {
 		return nil, err
 	}
+	l.affinities = map[string]map[string]Affinity{}
+	for _, name := range names {
+		decls, err := liveDeclarations(ctx, db, name)
+		if err != nil {
+			return nil, err
+		}
+		l.affinities[name] = map[string]Affinity{}
+		for col, decl := range decls {
+			l.affinities[name][col] = DeclaredAffinity(decl)
+		}
+	}
 	out := &dbspec.Document{Name: AddedDocument}
 	held := map[string]bool{}
 	for _, d := range docs {
@@ -356,15 +367,20 @@ func liveType(decl string) (dbspec.Type, error) {
 		}
 		return dbspec.Type{Kind: dbspec.TypeDecimal, Precision: p, Scale: s}, nil
 	}
-	switch {
-	case upper == "BOOLEAN":
+	if upper == "BOOLEAN" {
 		return dbspec.Type{Kind: dbspec.TypeBool}, nil
-	case strings.Contains(upper, "INT"):
+	}
+	switch DeclaredAffinity(decl) {
+	case AffinityInteger:
 		return dbspec.Type{Kind: dbspec.TypeI64}, nil
-	case strings.Contains(upper, "BLOB"):
-		return dbspec.Type{Kind: dbspec.TypeBytes}, nil
-	case strings.Contains(upper, "REAL"), strings.Contains(upper, "FLOA"), strings.Contains(upper, "DOUB"):
+	case AffinityReal:
 		return dbspec.Type{Kind: dbspec.TypeF64}, nil
+	case AffinityBlob:
+		// A column of no declared type holds any value, most often a text: a value of another storage class is a stored
+		// literal there (spec 10 Stored literals).
+		if upper != "" {
+			return dbspec.Type{Kind: dbspec.TypeBytes}, nil
+		}
 	}
 	return dbspec.Type{Kind: dbspec.TypeText}, nil
 }

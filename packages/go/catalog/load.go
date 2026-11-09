@@ -89,6 +89,7 @@ func LoadStatements(root string, added []string) (*Catalog, []Diagnostic) {
 		tb := buildTable(r)
 		if l.autoincrement != nil {
 			tb.Autoincrement = l.autoincrement[tb.Name]
+			tb.Affinities = l.affinities[tb.Name]
 		} else {
 			tb.Autoincrement = tb.Key != "" && slices.ContainsFunc(tb.Columns, func(c dbspec.Column) bool { return c.Name == tb.Key && c.Identity })
 		}
@@ -134,6 +135,9 @@ type loader struct {
 	// autoincrement holds the tables whose schema statement declares AUTOINCREMENT, as the statements left them; nil
 	// when the corpus took no statement, and each identity key is AUTOINCREMENT as the set renders it.
 	autoincrement map[string]bool
+	// affinities holds the affinity of each column of each table, as the statements left them; nil when the corpus took
+	// no statement.
+	affinities map[string]map[string]Affinity
 }
 
 func (l *loader) add(d Diagnostic) {
