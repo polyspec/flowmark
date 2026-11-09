@@ -10,6 +10,10 @@
       "kind": "policy",
       "reason": "flowmark's rule (K1002) that no tracked file names a dependency's source or build output by its path; no ecosystem tool judges the paths that a repository writes in its own text"
     },
+    "scripts/checklist.mts": {
+      "kind": "policy",
+      "reason": "flowmark's rule (T61) that the checklist is a corpus whose views are the tables that kit reads; the flowmark executable reads, writes and checks the rows, and no ecosystem tool renders them in kit's table form"
+    },
     "scripts/check-refs.mts": {
       "kind": "policy",
       "reason": "flowmark's rule that every task ID a document names resolves to an item of a checklist; no ecosystem tool reads the IDs of these checklists"
