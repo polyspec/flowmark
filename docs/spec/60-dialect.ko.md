@@ -1,5 +1,5 @@
 <!-- doc-id: spec-dialect -->
-<!-- source-sha256: dc42edd7c7f1c396f801ba43f83d799d1474b80d4b11937640f62e309e33ee64 -->
+<!-- source-sha256: d6706d6b1fa79ffe26d43b22f8051f02de584d057e3763b3514f38d72b112887 -->
 # Capability table
 
 [English](60-dialect.md)
@@ -72,16 +72,16 @@ surface는 `CAPABILITY_UNSUPPORTED`, 그리고 orm의 규칙이 모든 backend�
 | `contains_binary`(`Lb` 연산자) | 지원: column의 텍스트가 parameter의 텍스트를 substring으로 담으면 참이며, code point로 비교한다. NULL column이나 parameter는 unknown이며, parameter의 `%`, `_`, `\`는 문자 그대로다. 근거: `utf8mb4_0900_bin` 아래 MySQL `LIKE`, `COLLATE "C"` 아래 PostgreSQL `LIKE`, SQLite `instr`가 일치한다 |
 | `now`, `default now`, `updated`, `soft_delete` | 요청마다 값 하나인 요청의 `now`: `datetime(p)`에 쓸 때는 p자리로 자르고, 비교할 때는 여섯 자리다([operations](40-ops.ko.md#시계)). 결과가 0001-01-01부터 9999-12-31 23:59:59.999999 밖에 있거나 간격을 표현할 수 없는 상대 시각 함수는 NULL이다(orm의 규칙). 근거: MySQL과 SQLite는 범위를 넘으면 NULL을 주며, NULL은 다른 dialect를 guard로 맞출 수 있는 유일한 결과다 |
 | `soft_delete` | 모든 읽기는 soft delete된 행을 제외한다 — root, 각 join 자식(join 조건에서 제외하므로 left join은 null을 묶는다), 각 relation과 각 subquery. `restore`만이 그런 행에 일치한다. 근거: 읽기는 늘 soft delete된 행을 제외한다는 orm의 규칙 |
-| codec columns | orm 요청에서는 client가 적용한다. 엔진이 시작하는 쓰기(CLI, MCP, sidecar, 이력)는 orm의 Go codec package로 codec을 적용하며, 검증은 같은 package로 decode한다. 저장 값은 encode된 값이며, byte를 만드는 단계는 base64다 |
+| codec columns | orm 요청에서는 client가 적용한다. 엔진이 시작하는 쓰기(CLI, MCP, sidecar)는 orm의 Go codec package로 codec을 적용하며, 검증은 같은 package로 decode한다. 저장 값은 encode된 값이며, byte를 만드는 단계는 base64다 |
 | indexes | 허용되며 메모리에서 파생된다 |
 | `select explicit`, `entity`, `navigation` | client 쪽이며 저장에 효과가 없다 |
 | `aes`, `aes_version`, `blind_index` | 지원. orm 요청에서는 client가 암호화·hash하고, 엔진은 주입으로 key를 받는다([schema](30-schema.md#keys)) |
 | `immutable` setting | 행의 update와 delete는 `CONSTRAINT`([constraints](50-constraints.ko.md#사람이-쓴-편집에-대한-판정)) |
-| `audit` setting | corpus에서 schema 오류. 대신 `state_machine … history` |
+| `audit` setting | 지원한다: 엔진을 통한 insert, update, soft delete는 database의 audit trigger가 쓰는 행을 쓰며, audited table 행의 그 밖의 delete는 `CONSTRAINT`다([constraints](50-constraints.ko.md#audit)) |
 | transaction | session 위의 `begin`부터 `commit`/`rollback`까지. `readOnly`는 지키며 lock을 잡는다 |
 | savepoint | 중첩 stage |
 | `orderByRandom` | 지원. 순서에 seed를 쓰지 않는다 |
-| audit 값을 가진 transaction | `CAPABILITY_UNSUPPORTED` |
+| audit 값을 가진 transaction | 지원한다: 요청 message가 transaction의 audit 기록을 그 `audit` member로 나르며, 그것이 없는 audited table의 쓰기는 `CONFIG`다([constraints](50-constraints.ko.md#audit)) |
 | `isolation` option | 모든 level을 받아들인다: transaction은 `begin`부터 끝까지 corpus lock을 쥐고 행의 사본 위에서 실행되므로 혼자 실행되는 것과 같고, 이는 어떤 option이 요구하는 level 이상이다 |
 | `timeoutMs` option | `CAPABILITY_UNSUPPORTED`, PostgreSQL 외 모든 데이터베이스에 대한 orm의 규칙 |
 | `getQuery()`, statement event, `subscribe()` | `CAPABILITY_UNSUPPORTED` — SQL 텍스트가 없다 |

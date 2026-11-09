@@ -30,8 +30,8 @@ The failure codes are those of [operations](40-ops.md).
   set_null clears the referencing column, all in the one commit; the affected count is the rows the
   request matched, as in SQL. A human deleting a parent file applies no action, and validate reports
   the dangling references.
-  A foreign key with `restrict` refuses: Deleting a referenced row —
-  including a row that has history rows — is `FOREIGN_KEY`. Restrict holds against the rows before
+  A foreign key with `restrict` refuses: Deleting a referenced row is
+  `FOREIGN_KEY`. Restrict holds against the rows before
   the write: a delete is `FOREIGN_KEY` when a row it removes is referenced, also by a row the same
   request removes; the referencing rows are deleted by an earlier request. Grounding: orm renders
   `RESTRICT`, checked immediately; MySQL and SQLite then refuse or accept such a delete by their row
@@ -154,77 +154,46 @@ values, so a field without equality — a codec field whose codec is not exactly
   column that matches more than one row, is `CONSTRAINT`; a write that leaves the order values of a block or document sibling group other than exactly 1..m, m being the group's size after the write, is `CONSTRAINT`; in `files` storage the order item holds a rank, and the validator's `order` is at each row whose rank is shared with a sibling, at its `order` item — a gap between ranks is no fault, since it changes no position — and a rank not of the column's type is `type` alone and is shared with none ([document model](20-document-model.md#order)). Grounding: a value that cannot be read has no comparison, so the type fault stands for it, and a fault the other siblings have whatever that value is remains reported.
 - A row whose `parent` is not of its column's type belongs to no known sibling group: its own `order` is not judged, and its `type` stands for it; a rank shared within a group is reported whichever group such a row joins.
 
-## The state machine
+## State columns
 
-- **Insert.** A row's state on insert is an initial state; a state outside the machine's state set
-  is `CONSTRAINT`.
-- **Transition.** An update of the state column follows a declared transition; any other change is
-  `CONSTRAINT` naming the row, the current state and the refused target. A terminal state is never
-  left (dbspec's terminal semantics) — the application decides what to do instead (the application schema inserts a new item
-  with a `supersedes` link rather than reopening a terminal one).
-- **Required columns.** A transition, or an entry into a terminal state, whose line has
-  `require (c1, …)` assigns every listed column in the same update; an unassigned column, `null`
-  or the empty text is `CONSTRAINT` naming the column. The state table keeps the values.
-- **History.** Every transition the engine executes inserts one history row in the same
-  transaction, with the row's foreign key, the from and to states, `at`, and a copy of the
-  required columns. An insert writes no history.
-- **Limit.** `limit <state> <n>` counts the table's rows in the state; a transition, insert or
-  update that would exceed it is `CONSTRAINT` naming the limit. The count includes soft-deleted
-  rows: a soft-deleted row is a stored row in its state, as it still holds its unique keys, so a
-  soft delete frees no place and a restore never exceeds the limit. A corpus already over the limit
-  after a human edit is the validator's `state.limit`, which blocks no other write: when m readable rows of the table, in every block and file that holds it, are in the state and m > n, each row after the n-th in [corpus order](10-canonical-format.md#diagnostics) is reported, at its state (the glyph of a list row, the state cell, the state item of a `files` field list), naming the state, the limit and m. Grounding: the limit admits n rows in the state, so m − n rows stand beyond it, each one fault, as `key.duplicate` is reported at each occurrence after the first ([Keys](#keys-and-references)); which rows they are is not decided by their content — a human edit leaves no record of which row entered the state last, which is what `history.gap` reports — so they are chosen by an order that is a function of the corpus alone.
+- **No state machine.** A database holds no state machine: the values a column may hold are its type and the
+  constraints of the schema, and no database refuses an update for the value it replaces. The catalog reads the
+  `state_machine` lines of orm's grammar — `initial`, the transitions, `terminal`, `require`, `history` and `limit` — and
+  the engine applies none of them, as orm DBS-73 says a database does and as MySQL, PostgreSQL and SQLite do: no insert is
+  refused for its state, no update for the state it replaces or for leaving a terminal state, no `require` column is
+  enforced, no `limit` is counted, no history row is written, and the validator reports no rule of a machine. A table
+  that a `history` line names is an ordinary table. A state column holds the values of its type that the schema's
+  constraints allow, as on every database: a check `in (…)` refuses another value as any check does
+  ([Checks](#checks)), and a foreign key to a table of states refuses a value that names no row as any foreign key does
+  ([Keys and references](#keys-and-references)). Grounding: orm's one rule is the same result on every database, so the
+  engine holds only what those databases hold; the transitions of a state and their trail are polyspec fsm's, and a state
+  that fsm takes is written to the corpus as any value is.
+- **The checkbox.** In a table stored as a list, the column that the table's `checkbox` lines name is written as the
+  glyph of the row's value between the brackets of the list row ([canonical format](10-canonical-format.md#list-rows)); a
+  list write of a value that no `checkbox` line names is `CONSTRAINT`, since the list cannot show it, and on read a glyph
+  that no line names is `format.block`. A list table that declares no `checkbox` writes the column as a field, and in
+  `table` and `files` storage the column is a cell or a field item as any scalar is. The form of the `checkbox` lines is
+  stated in [schema](30-schema.md#markdown-settings).
 
-## A state changed outside the engine
+## The commit
 
-- **Gap.** A row has a history gap when its state differs from the `to` of its last history row,
-  or, without history rows, when its state is not an initial state. Validate reports
-  `history.gap` at the row's line. An engine transition of a gapped row is `CONSTRAINT` until the
-  gap is closed; updates of its other columns are allowed.
-- **Chain.** Validate reports `history.chain` at a history row whose `from` differs from the
-  previous row's `to` — on the first row, when it is not an initial state. Grounding: the history
-  rows are a chain of the row's states, so a break in it is a state change that no history row
-  records.
-- **Transition.** Validate reports `state.transition` at a history row whose pair is not a declared
-  transition; a row may carry both `history.chain` and `state.transition`, one report for each
-  fault. Grounding: the engine executes only declared transitions, so an undeclared pair is a step
-  it never took, and whether a row follows the one before it and whether its pair is declared are
-  two facts about the row.
-- **Required.** Validate reports `state.required` at a history row whose pair is declared and which
-  holds NULL or the empty text in a column that the transition's `require` list, or the `require`
-  list of its `to` when that is a terminal state, names — at that column's element, or at the row's
-  first line when the row has no element of it (an absent section, an empty cell); a row whose pair
-  is not declared is `state.transition` alone. Grounding: every transition the engine executes
-  copies the required columns into its history row, and refuses NULL and the empty text there
-  ([Required columns](#the-state-machine)), so such a row was not written by the engine; which
-  columns are required is known only for a declared pair.
-- **Type alone.** A state, `from` or `to` not of its column type is `type` alone: no
-  `history.gap`, `history.chain`, `state.transition` or `state.required` is judged on it — not
-  the gap of the row whose state or last `to` it is, nor the chain of the history row after it.
-  Grounding: one fault, one report, as for `order` and foreign keys
-  ([Hierarchy and order](#hierarchy-and-order)); a value that cannot be read has no comparison.
-- None of these diagnostics blocks another write. A state change outside the engine is therefore
-  reported, unless a human forges a consistent history.
-- **Commit.** A commit first checks that its targets are unchanged since they were read, else
-  `WRITE_CONFLICT`. The constraint checks, `history.gap` included, then run on the corpus re-read
-  under the lock. A validator diagnostic on another row (`type`, `key.duplicate`, `reference.dangling`, `check`, `codec`, `view`, `order`, `state.transition`, `state.required`, `state.limit`, `history.gap`, `history.chain`, and the validator's `parent.cycle` across several `files` files) never fails the commit, except that a `type` diagnostic fails it when a constraint check of the commit must evaluate that value ([canonical format](10-canonical-format.md#readable-values)), and two rows with byte-for-byte equal keys make their table unavailable ([canonical format](10-canonical-format.md#diagnostics)); a `format.*` diagnostic fails it only as the rewrite refusal and the unavailable table state ([canonical format](10-canonical-format.md#diagnostics)). A commit that must rewrite a file — the row's own file, a file holding a link to a row whose derived target changes (its detail section appears or disappears, or an insert gives a dangling link its row), an `order` sibling — is refused when that file has a `format.*` diagnostic: `CONSTRAINT`, naming the file and the diagnostic, and naming `flowmark canon` when it is `format.noncanonical`. Three commits are exempt: `flowmark canon` for its targets ([operations](40-ops.md#the-canon-operation)); the add-column migration, for the diagnostics the added column causes, which do not make its table unavailable to that migration ([migration](80-migration.md)); and a delete that removes a `files` row's whole file from the rewrite refusal only — its restrict check still needs the rows of every table that may reference the row (its own table through `parent`, its child blocks and its history rows, and every table with a foreign key to it), so such a delete is `CONSTRAINT` when any of them is unavailable.
-- **Repair.** `flowmark history repair <corpus> <table> <key> [--from <initial state>]` inserts one history
-  row from the last `to` — for a row without history, the one initial state, or `--from`, required
-  when the machine has several — to the current state, with `at` from the engine clock and the
-  required columns copied from the row. It refuses when the pair is not a declared transition,
-  when a column the transition requires is null or empty on the row, or when the current state's
-  limit is exceeded counting this row; the human then restores a legal state or fills the columns
-  by editing. The repair is a normal transaction that the human commits.
-  The repair also refuses, as `CONSTRAINT` at the state column, a row without a gap — its state is the
-  `to` of its last history row, or, without history rows, an initial state, or its state is NULL —
-  since inserting a history row for a transition that never happened would forge the trail; as
-  `CONFIG`, a `--from` given for a row that has history rows (the repair goes from the last `to`), a
-  `--from` that is not an initial state, a missing `--from` where the machine has several initial
-  states, and a table without a state machine with a history; as `ENTITY_UNKNOWN` a table the catalog
-  does not declare, orm's code of a name the schema does not hold; and as `NO_ROWS` a key that names no
-  row byte for byte, orm's code of a one-row read that matched none. It runs outside a transaction as one
-  transaction under the lock, or inside an open one as any write; its `at` is the engine clock read
-  once for the repair, so the commit's re-run of it writes the same row
-  ([operations](40-ops.md#the-commit-protocol)).
+- A commit first checks that its targets are unchanged since they were read, else `WRITE_CONFLICT`. The constraint
+  checks then run on the corpus re-read under the lock.
+- A validator diagnostic on another row (`type`, `key.duplicate`, `reference.dangling`, `check`, `codec`, `view`, `order`, and the validator's `parent.cycle` across several `files` files) never fails the commit, except that a `type` diagnostic fails it when a constraint check of the commit must evaluate that value ([canonical format](10-canonical-format.md#readable-values)), and two rows with byte-for-byte equal keys make their table unavailable ([canonical format](10-canonical-format.md#diagnostics)); a `format.*` diagnostic fails it only as the rewrite refusal and the unavailable table state ([canonical format](10-canonical-format.md#diagnostics)).
+- A commit that must rewrite a file — the row's own file, a file holding a link to a row whose derived target changes (its detail section appears or disappears, or an insert gives a dangling link its row), an `order` sibling — is refused when that file has a `format.*` diagnostic: `CONSTRAINT`, naming the file and the diagnostic, and naming `flowmark canon` when it is `format.noncanonical`. Three commits are exempt: `flowmark canon` for its targets ([operations](40-ops.md#the-canon-operation)); the add-column migration, for the diagnostics the added column causes, which do not make its table unavailable to that migration ([migration](80-migration.md)); and a delete that removes a `files` row's whole file from the rewrite refusal only — its restrict check still needs the rows of every table that may reference the row (its own table through `parent`, its child blocks, and every table with a foreign key to it), so such a delete is `CONSTRAINT` when any of them is unavailable.
+
+## Audit
+
+A table with an `audit` setting is audited as a database's audit triggers audit it (orm dbspec DBS-93). Every insert,
+update and soft delete that the engine runs on a row of the table writes one row of the setting's history table, with
+the action (`insert`, or `update` for an update and a soft delete), the previous audit record and each recorded column
+of the row, and, when the setting names its `tables` table, one row of that table naming the table for the audit
+record, unless that row already stands. The written row's audit column holds the audit record of the request, which the
+request message carries in its `audit` member; a write of an audited table without one is `CONFIG`. A row of an audited
+table is deleted through its soft delete column, and any other delete of one is `CONSTRAINT`. `rows.load` writes rows in
+their stored form and records nothing, and the difference of a SQL statement already holds the rows that its
+database's triggers wrote ([operations](40-ops.md#sql-statements)), so the engine adds none. Grounding: an audit is rows
+that a database writes with each write it runs, so the engine writes them for the writes it runs, as a database does.
 
 ## Human-write rulings
 
@@ -235,17 +204,15 @@ A database enforces a writer monopoly; a corpus does not have one. Per feature:
 - **`immutable`**: an update or a delete through the engine of a row of the table is `CONSTRAINT`
   (`table <name> is immutable`), an insert is accepted, and a human edit of the file is what a file
   system lets through.
-- **`audit`** is a schema error on a corpus. The history
-  of a state machine is the recorded trail, and its gap, chain, transition and required rules report
-  what a human edit bypassed.
+- **`audit`**: the engine writes the audit of the writes it runs ([Audit](#audit)); a human edit of the file
+  writes no audit row and is what a file system lets through.
 - **Defaults** are written explicitly by the engine on insert; a human-authored row missing a
   non-null column is a format diagnostic.
 
 ## Diagnostics
 
 Every rule reports `{file, line, column, rule, message}`, with the column as the [canonical format](10-canonical-format.md#diagnostics) states; the rule names are `catalog`, `type`,
-`key.duplicate`, `reference.dangling`, `check`, `codec`, `view`, `parent.cycle`, `order`, `state.transition`,
-`state.required`, `state.limit`, `history.gap`, `history.chain`, `corpus.walk` (the walk of the
+`key.duplicate`, `reference.dangling`, `check`, `codec`, `view`, `parent.cycle`, `order`, `corpus.walk` (the walk of the
 [document model](20-document-model.md)) and the `format.*` rules of the canonical format:
 `format.noncanonical`, `format.block`, `format.section` and `format.encoding`. Validation is
-corpus-global; a clean file in a broken corpus does not make the corpus valid. Opening a corpus, introspection, `flowmark validate` and `flowmark canon` are not requests over rows: they never fail on an unavailable table, apart from canon's link-derivation refusal ([operations](40-ops.md#the-canon-operation)). The validator reports every file's `format.*` and `parent.cycle` diagnostics, and the validator rules of every row it can read in a file without `format.block`, `format.section`, `format.encoding` or a `parent.cycle` among its rows; a rule that needs the complete rows of a table that holds such a file — `reference.dangling` into it, `key.duplicate`, `order` and `state.limit` within it — is not reported for that table, and the file's own diagnostic stands for it; the validator's `parent.cycle` across several `files` files is reported among the rows it can read, since a cycle is made by its own rows' `parent` values and no unread row can undo it; a table unavailable only through byte-for-byte equal keys has every rule reported.
+corpus-global; a clean file in a broken corpus does not make the corpus valid. Opening a corpus, introspection, `flowmark validate` and `flowmark canon` are not requests over rows: they never fail on an unavailable table, apart from canon's link-derivation refusal ([operations](40-ops.md#the-canon-operation)). The validator reports every file's `format.*` and `parent.cycle` diagnostics, and the validator rules of every row it can read in a file without `format.block`, `format.section`, `format.encoding` or a `parent.cycle` among its rows; a rule that needs the complete rows of a table that holds such a file — `reference.dangling` into it, `key.duplicate` and `order` within it — is not reported for that table, and the file's own diagnostic stands for it; the validator's `parent.cycle` across several `files` files is reported among the rows it can read, since a cycle is made by its own rows' `parent` values and no unread row can undo it; a table unavailable only through byte-for-byte equal keys has every rule reported.

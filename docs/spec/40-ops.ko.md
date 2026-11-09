@@ -1,5 +1,5 @@
 <!-- doc-id: spec-ops -->
-<!-- source-sha256: c215098f758e578861ae03d3ac8c2cf887c66ea0e0f487c1bc73c5b292ca6059 -->
+<!-- source-sha256: 410e56e964a2efa5703635812df1319840bbbf2833d8c7ef572decacac30cf2c -->
 # Operations
 
 [English](40-ops.md)
@@ -140,7 +140,7 @@
 ## Face
 
 - CLI, MCP server, soksak sidecar는 write path의 얇은 face다. face의 각 operation은 session의
-  operation 하나 — IR-executor protocol의 요청, 이력 repair, rewrite, install — 이며, transaction 밖의
+  operation 하나 — IR-executor protocol의 요청, rewrite, install — 이며, transaction 밖의
   요청([transaction](#transaction))으로 face의 `--lock-wait-ms`를 가지고 lock 아래에서 실행한다. 요청
   시계는 engine 시계다([시계](#시계)). 어떤 face도 corpus file을 직접 읽거나 쓰지 않는다. 근거: write
   path 하나가 모든 규칙을 쥐므로, 어떤 face도 규칙을 달리 적용하거나 건너뛸 수 없다.
@@ -151,7 +151,7 @@
 
 | Operation | Member | 답 |
 | --- | --- | --- |
-| `schema` | — | `{"manifest_hash", "tables"}`: catalog — 각 table과 그 저장 방식, key, `title`, `body`, `order`, 계층 column, `markdown` column, column, foreign key, unique key, 상태기계 |
+| `schema` | — | `{"manifest_hash", "tables"}`: catalog — 각 table과 그 저장 방식, key, `title`, `body`, `order`, 계층 column, `markdown` column, column, foreign key, unique key, `checkbox`: `null`, 또는 `checkbox` 줄이 column을 이름 붙인 table이면 `{"column": "<column>", "glyphs": {"<value>": "<glyph>", …}}`([schema](30-schema.ko.md#markdown-setting)) |
 | `rows` | `table` | `{"rows"}`: table의 모든 행을 저장 순서로, `columns` 없는 `all` 요청이 답하는 대로 |
 | `row.get` | `table`, `key` | `{"row"}`: key가 `key`인 행 |
 | `rows.load` | `table`, `rows` | `{"affected"}` |
@@ -159,7 +159,6 @@
 | `row.update` | `table`, `key`, `values` | `{"affected", "keys", "rows"}` |
 | `row.move` | `table`, `key`, `position`, 선택 `parent` | `{"affected", "keys", "rows"}` |
 | `row.delete` | `table`, `key` | `{"affected", "keys", "rows"}` |
-| `transition` | `table`, `key`, `state`, 선택 `values` | `{"affected", "keys", "rows"}` |
 | `views` | 선택 `key` | view table의 `{"rows"}`, 또는 view `key`의 `{"view", "rows"}` |
 
 - `rows.load`는 데이터베이스의 bulk load처럼 행을 저장 형태 그대로, key까지 포함해 쓴다: 같은 column을 대입하는 연속된 행은 하나의
@@ -169,9 +168,7 @@
   `values`를 대입하며, `row.delete`는 그 행의 `delete`다. `row.move`는 그 행의 `update`로 `position`을
   table의 `order` column에, `parent`가 주어지면 `parent`를 계층 column `parent`에 대입한다
   ([document model](20-document-model.ko.md#순서)). `order`가 없는 table, 또는 계층이 없는 table의
-  `parent`는 `CONFIG`다. `transition`은 그 행의 `update`로 `state`를 table 상태기계의 column에, 함께
-  `values`를 대입하며 `values`는 전이가 요구하는 column을 담는다([constraints](50-constraints.ko.md#상태기계)).
-  상태기계가 없는 table은 `CONFIG`다. 각각은 그 종류의 요청과 똑같이 검사되고 commit된다. 어떤
+  `parent`는 `CONFIG`다. 각각은 그 종류의 요청과 똑같이 검사되고 commit된다. 어떤
   face도 규칙을 더하거나 빼지 않는다.
 - 쓰기는 요청의 `{affected, keys}`와 함께, `rows`로 commit 직후 `rows`가 답하는 대로의 table 행을
   답한다. 근거: view는 operation이 돌려준 행에서 다시 그리며, 결코 자기 추측에서 그리지 않는다
@@ -179,8 +176,8 @@
 - `key`가 가리키는 행에 대한 operation이 어떤 행에도 맞지 않으면 — `row.get`, 또는 아무 행에도 영향이
   없는 쓰기 — table과 key를 밝히며 한 행 읽기가 아무것도 맞추지 못했을 때의 orm code인 `NO_ROWS`다.
   근거: 이름을 준 행에 대한 쓰기가 아무것도 바꾸지 않으면 조용한 누락이다.
-- 알 수 없는 `operation`, 빠진 member, operation이 받지 않는 member, object가 아닌 `values`, 그리고
-  `state`가 주는 상태 column을 대입하는 `transition`의 `values`는 그것을 밝히며 `CONFIG`다. catalog가 선언하지 않은 table이나 column은 요청의 `ENTITY_UNKNOWN`이나
+- 알 수 없는 `operation`, 빠진 member, operation이 받지 않는 member, object가 아닌 `values`는
+  그것을 밝히며 `CONFIG`다. catalog가 선언하지 않은 table이나 column은 요청의 `ENTITY_UNKNOWN`이나
   `COLUMN_UNKNOWN`이다.
 - `views`는 face가 이름을 준 table이 아니라 catalog의 view table([application schema](100-checklist.ko.md#view))을
   읽는다: `key` 없이는 `rows`처럼 view table의 행을 답하고, `key`가 있으면 `{"view", "rows"}` — view
@@ -196,16 +193,13 @@
 - **CLI.** 각 operation은 명령이다: `flowmark schema <corpus>`, `rows <corpus> <table>`,
   표준 입력의 JSON 배열 하나로 행을 받는 `rows.load <corpus> <table>`, `row.get <corpus> <table> <key>`, `row.insert <corpus> <table> [assignment…]`,
   `row.update <corpus> <table> <key> [assignment…]`, `row.move <corpus> <table> <key> <position> [<parent>]`,
-  `row.delete <corpus> <table> <key>`, `transition <corpus> <table> <key> <state> [assignment…]`,
-  `views <corpus> [<key>]`.
+  `row.delete <corpus> <table> <key>`, `views <corpus> [<key>]`.
   assignment는 `<column>=<text>`나 `<column>:=<json>`이고, 위치 값은 `<text>`나 `:=<json>`이다. text는
   값의 읽을 수 있는 텍스트이며 column type의 wire 값으로 보낸다 — 정수와 float는 JSON number, `bool`은
   JSON bool, 그 밖에는 JSON string. `:=`는 wire 값 자체를 받으며 `null`도 받는다. 모든 명령은
   `--lock-wait-ms <n>`(기본값 5000, 0이면 곧바로 거절)을 받고, flag는 위치 인자의 앞에도 뒤에도 올 수
   있다. 답은 표준 출력에 JSON 한 줄로 쓴다. 그 밖의 명령은 `flowmark canon`([canon 연산](#canon-연산)),
-  `flowmark install <corpus>`([schema](30-schema.ko.md#install)),
-  `flowmark history repair <corpus> <table> <key> [--from <state>]`
-  ([constraints](50-constraints.ko.md#엔진-밖에서-바뀐-상태)), `flowmark unlock <corpus>
+  `flowmark install <corpus>`([schema](30-schema.ko.md#install)), `flowmark unlock <corpus>
   [--holder <holder>]`([stale lock](#stale-lock))이다. 모든 명령은 실행되면 0으로, 거절되거나
   실패하면 표준 오류에 `flowmark <command>: <code>: <message>`를 쓰고 1로, 명령줄이 잘못되면 2로
   끝난다. 거절된 unlock은 `CONFIG`이고, 그 아래 file system의 실패는 `DRIVER`다.
@@ -476,7 +470,7 @@ client가 구현할 것은 이 driver뿐이다.
   `REPEATABLE READ`도 같다(PostgreSQL 문서 Transaction Isolation; `SERIALIZABLE`만 감지한다). 근거: 바깥
   편집은 lock을 잡지 않으므로 lock 기반 격리는 그것을 포함할 수 없고, 모든 읽기를 검증하려면 모든 요청의
   read set이 필요한데 orm client는 그것을 보내지 않는다.
-- transaction 밖의 요청 — 읽기, 쓰기, 이력 repair — 은 lock 아래 transaction 하나다: lock을 잡고 corpus를
+- transaction 밖의 요청 — 읽기, 쓰기 — 은 lock 아래 transaction 하나다: lock을 잡고 corpus를
   읽으며, 쓰기는 lock을 풀기 전에 commit한다.
 - transaction 안에서 실패한 요청은 아무것도 바꾸지 않으며, transaction은 그 요청 전 상태로 열린 채
   남는다. 근거: SQL 문장 원자성 — 실패한 문장은 효과가 없고 MySQL과 SQLite는 transaction을 열어 둔다.
@@ -502,7 +496,7 @@ client가 구현할 것은 이 driver뿐이다.
   prepare record는 write-ahead log의 지속된 commit record처럼 journal의 commit 시점이므로, 그 뒤의 실패를
   복구가 적용할 commit인데도 일어나지 않은 commit으로 답하지 않는다. lock은 panic을 포함해 operation의
   모든 출구에서 풀린다.
-- write path는 단일 operation 쓰기 — transaction 밖의 쓰기, 이력 repair, rewrite, 모든 face에서, transaction
+- write path는 단일 operation 쓰기 — transaction 밖의 쓰기, rewrite, 모든 face에서, transaction
   밖의 server 요청을 포함해 — 를 그 commit이 `CORPUS_CONFLICT`를 만나면 한 번 재시도한다: 같은 lock 아래에서
   corpus를 다시 읽고 operation을 다시 실행한다. server transaction은 server가 재시도하지 않으며 orm client는
   `WRITE_CONFLICT`를 받고 이를 재시도하지 않는다. 근거: 한 곳이 모든 face를 위해 재시도하며, 재시도는 읽기와
@@ -525,7 +519,7 @@ client가 구현할 것은 이 driver뿐이다.
    40001)에 해당하는 것이며, client가 재시도하지 않으므로 orm은 이를 `DEADLOCK`이 아닌 `WRITE_CONFLICT`로
    보고한다(orm은 40001을 `DEADLOCK`으로 대응시킨다). 다시 읽은 corpus가 읽은 corpus와 같으면 쓰기는 실행될 때 이미 그 위에서 검사되었다.
    아래의 다시 쓰기 거절도 SQL이 deferred가 아닌 제약을 검사하듯 각 요청이 실행될 때 검사하므로, 그런
-   file을 다시 써야 하는 요청은 곧바로 실패한다. 다른 행의 validator 진단(`type`, `key.duplicate`, `reference.dangling`, `check`, `codec`, `view`, `order`, `state.transition`, `state.required`, `state.limit`, `history.gap`, `history.chain`, 여러 `files` file에 걸친 `parent.cycle`)은 commit을 실패시키지 않되, `type` 진단은 commit의 제약 검사가 그 값을 평가해야 할 때 commit을 실패시키고, 바이트 단위로 같은 key를 가진 두 행은 그 table을 사용할 수 없게 한다([canonical format](10-canonical-format.ko.md#진단)); `format.*` 진단은 다시 쓰기 거절과 사용할 수 없는 table 상태([canonical format](10-canonical-format.ko.md#진단))가 정하는 경우에만 commit을 실패시킨다. file을 다시 써야 하는 commit — 행 자신의 file, 유도된 target이 바뀌는 행(상세 섹션이 생기거나 사라지거나, insert가 dangling link에 그 행을 주는 행)으로의 link를 가진 file, `order`의 형제 — 은 그 file이 `format.*` 진단을 가지면 거절한다: `CONSTRAINT`이며 file과 진단을 밝히고, `format.noncanonical`이면 `flowmark canon`을 밝힌다. 세 commit은 면제된다: 대상에 대한 `flowmark canon`([operations](#canon-연산)), 추가된 column이 일으킨 진단에 대한 add-column migration([migration](80-migration.ko.md)) — 그 진단은 그 migration에 대해 table을 사용할 수 없게 하지 않는다 —, `files` 행의 file 전체를 지우는 delete는 rewrite 거절에서만 면제되며, restrict 검사는 그 행을 참조할 수 있는 모든 table의 행을 여전히 필요로 하며(자신의 table을 `parent`로 하는 것, 자식 block과 이력 행, 그 행으로의 foreign key를 가진 모든 table), 그 중 하나라도 사용할 수 없으면 그 delete는 `CONSTRAINT`다.
+   file을 다시 써야 하는 요청은 곧바로 실패한다. 다른 행의 validator 진단(`type`, `key.duplicate`, `reference.dangling`, `check`, `codec`, `view`, `order`, 여러 `files` file에 걸친 `parent.cycle`)은 commit을 실패시키지 않되, `type` 진단은 commit의 제약 검사가 그 값을 평가해야 할 때 commit을 실패시키고, 바이트 단위로 같은 key를 가진 두 행은 그 table을 사용할 수 없게 한다([canonical format](10-canonical-format.ko.md#진단)); `format.*` 진단은 다시 쓰기 거절과 사용할 수 없는 table 상태([canonical format](10-canonical-format.ko.md#진단))가 정하는 경우에만 commit을 실패시킨다. file을 다시 써야 하는 commit — 행 자신의 file, 유도된 target이 바뀌는 행(상세 섹션이 생기거나 사라지거나, insert가 dangling link에 그 행을 주는 행)으로의 link를 가진 file, `order`의 형제 — 은 그 file이 `format.*` 진단을 가지면 거절한다: `CONSTRAINT`이며 file과 진단을 밝히고, `format.noncanonical`이면 `flowmark canon`을 밝힌다. 세 commit은 면제된다: 대상에 대한 `flowmark canon`([operations](#canon-연산)), 추가된 column이 일으킨 진단에 대한 add-column migration([migration](80-migration.ko.md)) — 그 진단은 그 migration에 대해 table을 사용할 수 없게 하지 않는다 —, `files` 행의 file 전체를 지우는 delete는 rewrite 거절에서만 면제되며, restrict 검사는 그 행을 참조할 수 있는 모든 table의 행을 여전히 필요로 하며(자신의 table을 `parent`로 하는 것, 자식 block, 그 행으로의 foreign key를 가진 모든 table), 그 중 하나라도 사용할 수 없으면 그 delete는 `CONSTRAINT`다.
 3. rename n의 source로 그 post-image의 사본 `.flowmark/tx/<id>.<n>.<hash>`를 쓰고 sync한다. stage
    `<id>`(소문자 hex 32자리)의 모든 file은 `.flowmark/tx/` 안에서 `<id>.<name>`으로 이름 짓는다. 이 단계
    전에 모든 대상의 folder와 만들 모든 folder가 `.flowmark/tx/`의 device(`st_dev`, Windows에서는
@@ -603,7 +597,7 @@ link 실패(`EPERM`, `ENOTSUP`, `ERROR_INVALID_FUNCTION`, `ERROR_NOT_SUPPORTED`)
 
 ## 시계
 
-엔진이 할당하는 모든 시각 — `updated`, `soft_delete`, `default now`, 이력 행의 `at` — 은 orm 요청이면
+엔진이 할당하는 모든 시각 — `updated`, `soft_delete`, `default now` — 은 orm 요청이면
 요청의 `now`, 아니면 microsecond로 자른 엔진의 UTC 시계다. 요청 하나는 시계 값 하나를 가진다.
 `datetime(p)` column에 쓰일 때는 p자리 소수로 자르며 반올림하지 않고, column과 비교할 때 `now`와 상대
 시각 함수는 여섯 자리를 유지한다. 근거: orm의 시계 규칙 — ORM이 쓰거나 비교하는 시계는
@@ -641,7 +635,7 @@ MySQL과 PostgreSQL은 `datetime(p)` column을 `NOW(6)`와 여섯 자리로 비�
   map은 같은 경로를 따라 비교된다. `TestCost`가 둘을 확인한다: 쓰기는 1,000행과 100,000행에서 같은 행을
   복사하고, 문서 수의 밑 2 로그의 여덟 배 이하를 비교한다.
 - corpus는 행의 index를 유지한다: key로, 대소문자를 가리지 않는 key로, 쓰기가 값으로 읽는 각 column의 값 —
-  foreign key, placement 또는 parent key, unique key, state machine의 column, 순서 있는 행의 형제 group —
+  foreign key, placement 또는 parent key, unique key, 순서 있는 행의 형제 group —
   으로, 각 identity column과 `key_prefix` key의 수로 찾는다. index는 문서처럼 persistent하며, 서로에게서
   읽거나 쓴 corpus 사이에 공유된다. 읽기나 쓰기는 행을 바꾸는 문서마다 표시하고, 다음에 index에 접근하기 전에
   표시된 문서의 행 가운데 새 행, 바뀐 행, 다른 부모 아래로 간 행, 다시 들어간 부모 아래의 행이 index에서
@@ -706,7 +700,7 @@ MySQL과 PostgreSQL은 `datetime(p)` column을 `NOW(6)`와 여섯 자리로 비�
   latency 목표의 수백 millisecond 안에 둔다. 할당이 test가 지키는 예산인 것은, 기계의 부하가 시간은
   바꾸지만 byte는 바꾸지 않기 때문이다.
 - commit은 transaction이 결과를 바꿀 수 있는
-  모든 제약을 검사한다: 대상 행의 key, 참조, check, 순서, limit, 전이, `history.gap`과, 그 행들이 참조하거나
+  모든 제약을 검사한다: 대상 행의 key, 참조, check, 순서와, 그 행들이 참조하거나
   참조되는 행들이며 — lock 아래 다시 읽은 corpus에서 평가한다. 전체 `flowmark validate`는 요청할 때와
   catalog가 바뀔 때 실행한다.
 - 오래 사는 face(sidecar, server)는 corpus를 지켜보다 host에 변경 event를 push할 수 있다. 쓰기는 여전히
@@ -760,7 +754,7 @@ MySQL과 PostgreSQL은 `datetime(p)` column을 `NOW(6)`와 여섯 자리로 비�
 | `CORPUS_CONFLICT` | `WRITE_CONFLICT` | 읽은 뒤 대상이 바뀌었거나, 읽은 뒤의 변경이 transaction의 쓰기를 다른 쓰기로 만든다. 각 file과 줄을 밝힌다 |
 | `DUPLICATE_KEY` | `DUPLICATE_KEY` | primary나 unique key 값이 이미 있다. 두 행(table과 key)을 밝힌다 |
 | `FOREIGN_KEY` | `FOREIGN_KEY` | 참조가 어떤 행도 가리키지 않거나, 참조된 행을 참조되는 동안 지우려 했다 |
-| `CONSTRAINT` | `CONSTRAINT` | catalog의 다른 규칙이 쓰기를 거절했다 — check, 제목, 전이, 필수 column, limit, 순서, 한 줄 자리. 규칙, 그리고 행과 column을 밝힌다([canonical format](10-canonical-format.ko.md#진단)); 비정규이거나 잘못된 문서를 다시 써야 하는 쓰기, 또는 사용할 수 없는 table의 행이 필요한 요청(읽기나 쓰기)은 file과 진단을 밝히며 `CONSTRAINT`다([canonical format](10-canonical-format.ko.md#진단)) |
+| `CONSTRAINT` | `CONSTRAINT` | catalog의 다른 규칙이 쓰기를 거절했다 — check, 제목, 순서, 한 줄 자리, list의 어떤 `checkbox` glyph도 보이지 않는 값. 규칙, 그리고 행과 column을 밝힌다([canonical format](10-canonical-format.ko.md#진단)); 비정규이거나 잘못된 문서를 다시 써야 하는 쓰기, 또는 사용할 수 없는 table의 행이 필요한 요청(읽기나 쓰기)은 file과 진단을 밝히며 `CONSTRAINT`다([canonical format](10-canonical-format.ko.md#진단)) |
 | `READ_ONLY` | `READ_ONLY` | 읽기 전용 transaction 안의 쓰기 |
 | `CONFIG` | `CONFIG` | session 상태가 허용하지 않는 control message([transaction](#transaction)), corpus 문서를 가리키지 않는 `flowmark canon` 경로([canon 연산](#canon-연산)), 또는 알 수 없거나 member가 빠졌거나 table이 선언하지 않은 setting을 가리키는 face operation([face](#face)) |
 | 복구 거절 | `DRIVER` | 대상, 기록된 두 hash, 그 둘을 담은 stage file을 밝힌다. 해결될 때까지 열기와 lock을 잡는 모든 operation을 거절한다 — SQLite의 `SQLITE_CORRUPT`가 그렇듯 다른 code가 밝히지 않는 database 오류의 orm code인 `DRIVER`다. journal 아래 file system의 실패도 `DRIVER`다 |

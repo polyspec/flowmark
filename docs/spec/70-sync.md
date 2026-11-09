@@ -77,7 +77,7 @@ specification is written when an adapter beyond the database export starts.
 - **Merge conflicts on adapter-owned paths** are resolved by discarding both sides and
   re-materializing; a hand merge there is a diagnostic.
 - **Sync runs as one-shot commands**; the server is a face of the engine, not a sync daemon.
-- **Projections rebuild from on-file data**: a changelog derives from the history rows, never from
+- **Projections rebuild from on-file data**: a changelog derives from rows on file, never from
   the ignored `.flowmark/` journal.
 
 ## Open for the adapters

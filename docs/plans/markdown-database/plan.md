@@ -424,7 +424,7 @@ reimplements them.
   `block <fk> table` under its state table, or `document table`, and declares no `title` or
   `body`: the history rules are stated over its rows and their foreign key, never over their
   place, so neither storage is mandated (a block keeps a row's trail beside the row, a document
-  table has no depth limit; see [schema](../../spec/30-schema.md#the-history-table)).
+  table has no depth limit; see [schema](../../spec/30-schema.md#markdown-settings)).
   Only transitions write history; an insert writes none. A row that has history rows is refused
   delete with `FOREIGN_KEY` (restrict-only).
 - On a corpus a table with `state_machine` declares its `history`; without it the schema is an
@@ -440,7 +440,7 @@ reimplements them.
   its `from` differs from the previous row's `to` (on the first row, is not an initial state),
   `state.transition` when its pair is not a declared transition, and `state.required` when a
   declared pair holds NULL or the empty text in a column its `require` lists name; a state, `from`
-  or `to` not of its type is `type` alone ([constraints](../../spec/50-constraints.md#a-state-changed-outside-the-engine)). None blocks another write; an engine transition of a
+  or `to` not of its type is `type` alone ([constraints](../../spec/50-constraints.md#state-columns)). None blocks another write; an engine transition of a
   gapped row is `CONSTRAINT` until the gap is closed, while updates of its other columns are
   allowed. A state change outside the engine is therefore reported, unless a human forges a
   consistent history.

@@ -38,7 +38,7 @@ This document states the conformance contract of the engine and the format of it
   request and the same expected answer.
 - **Idempotency of operations**: repeating a read vector yields the same answer; repeating a refused
   write is refused the same way, since it changed nothing. Repeating a write that succeeded has the
-  outcome its vector states: refused (a duplicate key, a transition from the new state), the same
+  outcome its vector states: refused (a duplicate key), the same
   state (an update that sets the values the row already holds), or another change where the request
   is not idempotent by nature and no rule refuses it (an insert whose key the engine assigns). The
   earlier wording — refused, or the same state for an upsert — missed that third case, which no rule

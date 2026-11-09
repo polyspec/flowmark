@@ -1,5 +1,5 @@
 <!-- doc-id: spec-schema -->
-<!-- source-sha256: 44dd4444c810bf9345a366b8c5a07a2a9aef88cf4de66b0afebd6a90d53d65bc -->
+<!-- source-sha256: 1c0a6041d0b9abd165a5f2974faa2b8b186c538d4523ca7db66c68a53438ccf0 -->
 # Schema
 
 [English](30-schema.md)
@@ -37,17 +37,25 @@ column을 이름 붙인다 — column 이름이 동작을 고르지 않는다.
 
 | Setting | 뜻 |
 | --- | --- |
-| `store files` / `store document list\|table` / `store block <fk> list\|table` | table의 저장([document model](20-document-model.md)). corpus에서 table마다 정확히 하나. `files`나 `document` 저장은 `shard <column> <year\|month\|day>`로 끝날 수 있으며 기간마다 따로 저장한다([시간 shard](20-document-model.ko.md#시간-shard)). 절은 orm이 검사하고(non-null `date`나 `datetime` column, `order` 없음, block 아님) 이력 table은 샤드하지 않는다 |
+| `store files` / `store document list\|table` / `store block <fk> list\|table` | table의 저장([document model](20-document-model.md)). corpus에서 table마다 정확히 하나. `files`나 `document` 저장은 `shard <column> <year\|month\|day>`로 끝날 수 있으며 기간마다 따로 저장한다([시간 shard](20-document-model.ko.md#시간-shard)). 절은 orm이 검사하고(non-null `date`나 `datetime` column, `order` 없음, block 아님) |
 | `key_prefix <p>` | `varchar` primary key를 `<p><n + 1>`로 할당한다. orm은 이 column을 executor가 할당하는 것으로 다룬다 — `varchar`다. dbspec은 `text` column을 key로 삼지 않기 때문이다 |
 | `title <column>` | 행의 제목: non-null, 비지 않음 |
 | `body <column>` | 행의 body: `markdown` column, NULL이 아님 |
 | `order <column>` | 형제 사이에서 행의 위치. orm은 이 column을 executor가 할당하는 것으로 다룬다 |
-| `checkbox <column> <state> '<glyph>'` | 상태의 list glyph: 정확히 한 글자이며 list 행의 대괄호 사이(`- [<glyph>] …`)에 쓴다 |
+| `checkbox <column> <state> '<glyph>'` | column 값의 list glyph: 정확히 한 글자이며 list 행의 대괄호 사이(`- [<glyph>] …`)에 쓴다. 아래에 말하는 대로 과도기의 것이다 |
 | `markdown <column>` | column이 markdown prose를 담고 섹션으로 저장된다 |
-| `state_machine <column> initial <state>` | 초기 상태. 반복할 수 있다 |
-| `state_machine <column> <from> -> <to> [require (…)]`, `state_machine <column> terminal <state> [require (…)]` | dbspec이 정의하는 전이와 종료 상태 |
-| `state_machine <column> history <table> row <fk column> from <column> to <column> at <column>` | 이력 table과 이름 붙인 그 column |
-| `state_machine <column> limit <state> <n>` | 그 상태의 행은 최대 n개 |
+| `state_machine <column> …` (`initial`, 전이, `terminal`, `require`, `history`, `limit`) | 읽지만 어느 것도 적용하지 않는다: 엔진은 상태기계를 갖지 않는다([constraints](50-constraints.ko.md#상태-column)) |
+
+`checkbox` setting은 과도기의 것이다. orm의 문법(flowmark가 빌드하는 orm v0.0.26)은 그것을 상태마다 한 줄인
+`checkbox <column> <state> '<glyph>'`로 쓰며, table의 줄들이 한 글자의 서로 다른 glyph로 그 기계의 상태 집합을 덮도록
+요구한다. list로 저장된 table에서 그 줄들이 이름 붙인 column은 list 행의 괄호 사이에 행 값의 glyph로,
+`- [<glyph>] <key> <title> …`로 쓰인다([canonical format](10-canonical-format.ko.md#list-행)). 어떤 줄도 이름 붙이지 않은
+값의 list 쓰기는 list가 그것을 보일 수 없으므로 `CONSTRAINT`이고, 기계가 `checkbox`를 선언하지 않은 list table은 그
+column을 field(`state:doing`)로 쓴다. `table`과 `files` 저장에서 그 column은 다른 scalar처럼 cell이나 field 항목이다.
+목표 형태는 `checkbox <column>`이다: 한 글자 column은 `[<value>]`로, `bool`은 `[ ]`와 `[x]`로, NULL은 상자 없는 list
+행으로, 빈 텍스트는 `[]`로 보인다. 그것은 orm이 자기 행으로 추적하는 orm 문법 변경과 함께 오며, 그때까지는 위의 상태별
+형태가 성립한다. 근거: GFM task item은 괄호 사이에 한 글자를 담으므로, column 자체가 한 글자가 될 때까지 list 행은 각
+값의 glyph를 통해서만 거기에 그 column을 보인다.
 
 ## dbspec 구성에 대한 corpus 규칙
 
@@ -58,13 +66,12 @@ column을 이름 붙인다 — column 이름이 동작을 고르지 않는다.
   값도 `/`를 담지 않으므로 cell의 읽기는 하나다. 각 값은 그 column type의 key 규칙을 따르고, 읽기와 쓰기는 그 column을
   column으로 본다. composite 외래 key는 link가 아니라 평범한 값을 담고 그 table의 key 전체를 가리키며, validator의
   `reference.dangling`이 적용된다.
-- **거절**: corpus에서 각각 schema 오류다 — `files` 저장 table의 composite primary key(파일 이름은 key column 하나로 정한다), `audit`(대신 `state_machine … history`가 전이를 기록한다), 외부 `use` 문서,
+- **거절**: corpus에서 각각 schema 오류다 — `files` 저장 table의 composite primary key(파일 이름은 key column 하나로 정한다), 외부 `use` 문서,
   마지막 stage가 `yaml`인 `codec` — orm의 encoder(go-yaml의 `Marshal`)는 모든 값을
   line feed로 끝내며 형식의 어떤 자리도 그것을 담지 못한다. 그 뒤의 stage는 그것을 encode해 없앤다.
   view table은 setting이 아니라 [응용 schema](100-checklist.ko.md#view)가 선언한다.
 - **허용**: markdown table의 `i64` primary key column에만 `identity`를 쓴다. lock 아래에서 가장 큰 key와 표의 counter 가운데 큰 것보다 하나 큰 key로 할당한다([document model](20-document-model.ko.md#key)). dbspec은 그 밖의 type에 대한 `identity`를 거절하므로(`an identity column has type i64`), `i16`이나 `i32` key도 쓸 수 없다. 근거: `max+1`은 정수 순열이며, `bool`, `varchar`, `uuid`, `date` key에는 더할 최댓값이 없다.
-- **요구**: `state_machine`을 가진 table은 `history`와 적어도 하나의 `initial` 상태를 선언한다. `list`나
-  `files` 저장은 `title`을 선언한다. state machine을 가진 `list` 저장은 `checkbox`를 적어도 하나 선언하며, dbspec이 그 뒤로 모든 상태를 덮도록 요구한다. dbspec은 checkbox가 하나도 없는 state machine을 받아들이므로 이 규칙은 flowmark의 것이다.
+- **요구**: `list`나 `files` 저장은 `title`을 선언한다.
 - **key 타입.** markdown table의 단일 column primary key는 integer type(`i16`, `i32`, `i64`), `bool`, `varchar`,
   `uuid`, `date` 중 하나다. 다른 type은 schema 오류이며 table 이름에 위치한다. 근거: key는 file 이름이자 anchor이므로
   그 텍스트는 key 모양의 문자만 가져야 한다([document model](20-document-model.md#keys)). `date`는 연도가 0001부터
@@ -77,8 +84,8 @@ column을 이름 붙인다 — column 이름이 동작을 고르지 않는다.
   column은 non-null이다. nullable이면 block table 이름에 위치한 schema 오류다. 근거: block 행은 그 배치
   외래 key가 참조하는 행의 scope 안에 서며([document model](20-document-model.md#storage)) NULL은 어떤 행도
   참조하지 않으므로, 그 자리에 NULL을 가진 행은 쓰일 자리가 없다. SQL 행은 자리가 필요 없으므로 dbspec은 nullable
-  외래 key column을 받아들인다. 이 catalog 규칙은 여기서 정한다. 이 규칙은 이력 table을 포함한 모든 block
-  table에 성립한다([이력 table](#이력-table)).
+  외래 key column을 받아들인다. 이 catalog 규칙은 여기서 정한다. 이 규칙은 모든 block
+  table에 성립한다.
 
 ## Key
 
@@ -107,25 +114,7 @@ corpus는 `aes`, `aes_version`, `blind_index`를 선언하고 orm이 저장하�
 - **예약된 table 이름.** 대소문자를 무시하고 `CON`, `PRN`, `AUX`, `NUL`, `COM0`–`COM9`, `LPT0`–`LPT9`와
   같은 table 이름은 schema 오류다: Windows의 예약된 file 이름이기 때문이다.
 - **부모의 markdown column과 같은 이름을 가진 자식 table**은 schema 오류다.
-- **heading 깊이.** layout이 H6를 넘는 heading을 필요로 하면 schema 오류이며, catalog를 읽을 때 정해진다. table의 행은 body가 아닌 markdown column이나 child block을 가질 수 있으면 자기 row scope 수준에 section을 쓰고, body를 가질 수 있으면 그 한 단계 위에 detail heading을 쓴다. 둘 중 어느 것도 가질 수 없는 table은 block heading 아래에 heading을 쓰지 않으므로, row scope가 H6를 넘어도 된다. 근거: layout이 쓰지 않는 heading은 layout이 필요로 하는 heading이 아니다. markdown column이 없는 state machine의 history table은, 기계가 어떤 column도 require하지 않거나 두 table 어느 쪽도 `markdown`으로 선언하지 않은 column만 require할 때처럼, detail section이 없으므로 block row 아래 level 7에 선다.
-
-## 상태 집합
-
-- 기계의 상태는 `initial`, 전이, `terminal` 줄이 이름 붙인 상태들이다. table이 `checkbox`를 선언하면 `checkbox`는 서로 다른 glyph로 그
-  집합을 정확히 덮는다. 다른 상태를 이름 붙인 `checkbox`, `limit`, `initial`은 setting 오류다.
-- 상태 column의 `default`는 초기 상태여야 하며 아니면 setting 오류다. 종료 상태이기도 한 초기 상태는
-  setting 오류다.
-- table의 상태 column은 `state_machine` setting이 이름 붙이는 column이다. 모든 storage에서 non-null이며, dbspec이 state machine의 nullable 상태 column을 거절한다. 근거: 행의 상태는 기계 안의 자리이며 NULL은 자리를 가리키지 않는다.
-
-## 이력 table
-
-history setting은 이력 table의 column을 이름 붙인다: `<fk column>`은 선행 index를 가진 상태 table로의
-foreign key를 갖고, `from`과 `to`는 상태 column의 type, `at`은 `datetime(6)`이며, `require` 목록이 이름
-붙인 column마다 그 이름과 type을 가진 nullable column 하나가 있다. table은 `identity` key 외에 다른
-column이 없고 `title`이나 `body`를 선언하지 않는다. 어긋나면 이력 table 이름에서 setting 오류다.
-상태 table 아래의 `block <fk> table`로, 또는 `document table`로 저장된다. 이력 table의 다른 저장은 이력 table 이름에서 setting 오류다. 근거: 이력 규칙 — 전이마다 행 하나, gap과 chain 진단, 복구, restrict delete([constraints](50-constraints.md#the-state-machine)) — 은 행과 그 foreign key 위에서 정해지며 그 자리 위에서 정해지지 않으므로, 저장은 다른 모든 table과 같이 schema가 고른다. 다른 저장은 배제된다: `files`와 `list`는 `title`을 선언하는데 이력 table은 선언하지 않는다. 그리고 block 행은 그 배치 외래 key가 이름 붙이는 행의 scope 안에 서므로([document model](20-document-model.md#storage)), 이력 block은 그 key가 row column일 때에만 자기 상태 행 아래에 선다. 다른 column으로 배치한 block — 상태를 key로 가진 table 아래의 `from`이나 `to`, 같은 type의 key를 가진 table 아래의 identity key, 복사된 column, 상태 table 아래든 다른 table 아래든 — 은 자신이 기록하는 이력의 행이 아닌 다른 행의 scope 안에 서며, 그 행은 전이의 행이 아니라 상태, insert가 할당하는 key, 복사된 값이 고른다. 그런 block은 block의 깊이를 치르면서 그 지역성을 잃는다: executor는 전이의 이력 행을 그 상태 행의 block에 쓰고 validator는 행의 이력 — gap, chain, transition, required 규칙 — 을 그 block에서 읽으며([constraints](50-constraints.md#a-state-changed-outside-the-engine)), 다른 행들의 scope에 흩어진 이력은 그 어느 행과도 함께 읽히지 않는다. 이력을 행과 떨어진 한 자리에 두는 것은 이미 `document table` 저장이 한다. 그래서 다른 배치는 그 key의 nullability와 상관없이 방금 말한 setting 오류다. 복사된 column은 nullable이며 그 줄이 require하지 않는 모든 전이에서 NULL이므로 block 배치 규칙도 이를 거절하고([block 배치](#dbspec-구성에-대한-corpus-규칙)), row column이 nullable인, 상태 table 아래의 block도 그렇다. 두 저장은 지역성과 깊이를 맞바꾼다. block은 행의 이력을 그 행의 상세 섹션 — `files` table이면 그 행 자신의 file — 에 두므로, 행과 그 이력을 함께 읽고 서로 다른 행의 전이는 서로 다른 자리를 건드린다. 그러나 이력을 가진 모든 행이 상세 섹션을 가지며, block은 상태 행보다 두 단계 아래에 선다. document table은 table의 이력을 `<history>.flowmark.md`에 두며, 그 행은 상태 table의 깊이와 상관없이 row scope 3을 가지므로 require된 `markdown` column은 언제나 section을 가진다. 그러나 table의 모든 전이가 그 한 file에 덧붙는다. 어느 비용도 모든 corpus에 성립하지 않으므로 어느 저장도 강제하지 않는다.
-
-`require` 목록이 이름 붙인 column은 상태 table에서 `markdown`으로 선언될 때에만 이력 table에서도 `markdown`으로 선언되며, 그 밖의 경우에는 이력 table에서 `markdown`으로 선언되지 않는다. 어긋나면 이력 table 이름에서 schema 오류다. 근거: 이력 행은 require된 column의 사본을 담고([constraints](50-constraints.md#the-state-machine)), section과 한 줄 자리는 서로 다른 값을 받는다 — 여러 줄 값이나 raw HTML은 section의 본문이지만 cell에서는 거절되고, `# x` 줄은 cell의 본문이지만 section에서는 거절된다([canonical format](10-canonical-format.md#single-line-places)) — 그래서 어긋나면 상태 table이 담은 값 때문에 선언된 전이를 거절하게 된다. dbspec은 SQL backend가 `markdown`을 무시하므로 그 어긋남을 받아들이며, catalog 규칙은 여기서 정한다. 이력 table이 block으로 저장되면 그 행은 상태 table의 행보다 두 단계 아래에 서므로, 그 row scope는 상태 table의 row scope에 2를 더한 값이다. require된 `markdown` column은 그 scope의 이력 행에 있는 section이며, 상태 table의 row scope가 5 이상이면 그 section은 H6를 넘어 서므로 layout은 이력 table 이름에서 schema 오류다([heading 깊이](30-schema.md#name-rules)). `document table`로 저장되면 이력 행은 상태 table의 깊이와 상관없이 row scope 3을 가지므로 그런 상태기계는 load된다. 두 table 어느 쪽도 `markdown`으로 선언하지 않은 require된 column은 cell이며 heading이 필요 없고 어떤 깊이에서도 허용된다. 근거: `markdown` 값은 모든 저장에서 section이며([canonical format](10-canonical-format.md#sections-and-their-values)), CommonMark에는 H6 너머의 heading이 없어서 그런 값을 쓸 자리가 없다. 값을 cell로 쓰면 table의 깊이에 따라 column의 형태가 바뀌고, cell은 line feed를 담을 수 없다. section을 H6에 쓰면 이력 행의 상세 heading과 같은 수준에 서게 되는데, 그 수준에서 `<table> row <key>`가 아닌 heading은 row scope를 끝내며 그 내용은 어느 행에도 속하지 않는다([canonical format](10-canonical-format.md#detail-headings-and-anchors)).
+- **heading 깊이.** layout이 H6를 넘는 heading을 필요로 하면 schema 오류이며, catalog를 읽을 때 정해진다. table의 행은 body가 아닌 markdown column이나 child block을 가질 수 있으면 자기 row scope 수준에 section을 쓰고, body를 가질 수 있으면 그 한 단계 위에 detail heading을 쓴다. 둘 중 어느 것도 가질 수 없는 table은 block heading 아래에 heading을 쓰지 않으므로, row scope가 H6를 넘어도 된다. 근거: layout이 쓰지 않는 heading은 layout이 필요로 하는 heading이 아니다. `markdown` column도 child block도 없는 block table은 detail section이 없으므로 block row 아래 level 7에 설 수 있다.
 
 ## Install
 

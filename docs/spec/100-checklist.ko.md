@@ -1,11 +1,11 @@
 <!-- doc-id: spec-checklist -->
-<!-- source-sha256: 9e010325bbfba5a07e7beba72724982589047ce7e816e77ae713238c27e605de -->
+<!-- source-sha256: 193d1096778d05169eb1544ad27fa96db4aed82833c94dbaf1df8fdc4eb5e819 -->
 # 응용 schema
 
 [English](100-checklist.md)
 
 응용 schema는 flowmark가 issue 추적을 위해 제공하는 표준 catalog 문서 `flowmark.dbs`다: 보드가 읽는
-항목, 사람, link, 이력, view. corpus는 column을 추가해 이를 확장한다. 이 spec은 그 table과 상태기계를
+항목, 사람, link, view. corpus는 column을 추가해 이를 확장한다. 이 spec은 그 table과 상태를
 고정한다.
 
 ## Table
@@ -15,10 +15,11 @@
 | `items` | `store files`, item 하나에 file `items/<key>.flowmark.md` 하나 | `id varchar(32)`와 `key_prefix 'T'`, `parent varchar(32) null` → items, `state varchar(16)`, `title varchar(255)`와 `title title`, `body text`와 `markdown body`·`body body`, `assignee varchar(32) null` → people, `start_on date null`·`start_at datetime(0) null`·`due_on date null`·`due_at datetime(0) null`, `priority i16 null`, `position i32`와 `order position`, `evidence text null`·`cause text null`·`retry text null`(각각 `markdown`) |
 | `people` | `store document table`, file `people.flowmark.md` | `id varchar(32)`와 `key_prefix 'P'`, `name varchar(255)`와 `title name` |
 | `item_links` | `store block fk_item_links_from table`, 자기 `from_item`의 file 안 | `id i64 identity`, `from_item varchar(32)` → items, `to_item varchar(32)` → items, `kind varchar(16)` |
-| `item_history` | `store block fk_history_item table`, 자기 item의 file 안 | `id i64 identity`, `fk_history_item`으로 items를 가리키는 `item varchar(32)`, `state`와 같은 type의 `from_state`·`to_state`, `at datetime(6)`, items와 같은 `evidence`·`cause`·`retry`(각각 `markdown`) |
 | `views` | `store document table`, file `views.flowmark.md` | `id i64 identity`, `title varchar(255)`와 `title title`, `body text`와 `markdown body`·`body body`, `kind varchar(16)`, `entity varchar(63)`, `filter text`와 `sort text`(`codec filter ordered_json`과 `codec sort ordered_json`), `group_by varchar(63) null` |
 
-모든 foreign key는 선행 index를 갖는다. check는 `start_on is null or start_at is null`,
+모든 foreign key는 선행 index를 갖는다. check는
+`ck_items_state (state in ('waiting', 'doing', 'done', 'bypassed', 'impossible'))`,
+`start_on is null or start_at is null`,
 `due_on is null or due_at is null`,
 `ck_item_links_kind (kind in ('blocks', 'relates', 'duplicates', 'supersedes'))`,
 `ck_views_kind (kind in ('kanban', 'list', 'gantt'))`다.
@@ -32,19 +33,16 @@
 ## 파일과 link
 
 - item은 자기 file `items/<key>.flowmark.md`다: H1인 title, field, body, `markdown` column, 그다음
-  transition들의 block `## item_history`와 그 item이 시작하는 link들의 block `## item_links`.
+  그 item이 시작하는 link들의 block `## item_links`.
   [document model](20-document-model.ko.md#저장)이 `files` 행과 그 child block을 저장하는 그대로다.
   `people`과 `views`의 행은 각각 document file 하나, `people.flowmark.md`와 `views.flowmark.md`의
   행이다. key는 document model의 key 규칙을 따른다: `T1`과 `P1`은 각각 `items`와 `people` table의
   key다.
-- **어떤 file도 project의 수명과 함께 자라지 않는다.** item에 대한 쓰기, transition — 그 이력 행을
-  item의 block에 쓴다 —, item이 시작하는 link, item의 move는 그 item의 file만 쓰므로, 서로 다른
-  item의 transition과 link는 서로 다른 file을 건드리고, item의 이력과 나가는 link는 item과 함께
-  읽힌다. 두 document file은 팀과 그 저장된 view로 한정되며, 이는 한 일의 양과 함께 자라지 않는다.
-  근거: 모든 item과 그 이력과 link를 담는 document file은 쓰기마다 통째로 parse되고 다시 쓰이므로
-  ([비용 모델](40-ops.ko.md#비용-모델)) 그 비용과 git merge 충돌이 project와 함께 자란다. 이력을
-  `document table`로 저장하면 table의 모든 transition이 한 file에 쌓이며, 이력 table의 저장은 그것을
-  block의 깊이와 맞바꾼다([schema](30-schema.ko.md#이력-table)). 각 file의 크기는 가정하지 않고
+- **어떤 file도 project의 수명과 함께 자라지 않는다.** item에 대한 쓰기, item이 시작하는 link, item의
+  move는 그 item의 file만 쓰므로, 서로 다른 item의 link는 서로 다른 file을 건드리고, item의 나가는
+  link는 item과 함께 읽힌다. 두 document file은 팀과 그 저장된 view로 한정되며, 이는 한 일의 양과 함께
+  자라지 않는다. 근거: 모든 item과 그 link를 담는 document file은 쓰기마다 통째로 parse되고 다시
+  쓰이므로([비용 모델](40-ops.ko.md#비용-모델)) 그 비용과 git merge 충돌이 project와 함께 자란다. 각 file의 크기는 가정하지 않고
   관측한다: file을 재는 envelope와 그것을 넘은 진단은 `T12.5-3`의 몫이다.
 - `item_links`는 `from_item`으로 놓인다(`store block fk_item_links_from table`): link는 자기가
   시작하는 item에 속하고, `to_item`과 `kind`가 block의 cell이며, block 행의 `from_item`은 그 배치이지
@@ -59,37 +57,21 @@
   anchor가 없다. link block의 `to_item` cell은 item의 file을 `[T3](T3.flowmark.md)`로 link하며,
   `parent` field도 부모의 file을 같은 방식으로 link한다.
 - 여러 줄 evidence는 section이다: item의 title을 H1으로 가진 `items/T1.flowmark.md`, `## evidence`.
-  이력 행 안의 그 사본은 `## item_history`, `### item_history row <id>`, `#### evidence` — H6 안에
-  든다. `require` 목록이 이름 붙인 column `evidence`·`cause`·`retry`는 `items`와 `item_history` 양쪽의
-  `markdown` column이므로, 값이 있는 이력 행은 상세 section을 갖는다. `items`는 `files`로 저장되며 그
-  행은 row scope 2에 서고, 이력 section은 H4에 선다. 블록 table에서 row scope 5 이상으로 같은 기계를
-  두면 H7이 필요하며, 그 이력 table이 `document table`로 저장되지 않는 한 schema 오류다
-  ([schema](30-schema.ko.md#이력-table)). column을 더하는 것은 `items`의 저장을 결코 바꾸지 않는다.
+  `evidence`·`cause`·`retry`는 `items`의 `markdown` column이며 item file의 section으로 저장된다. column을
+  더하는 것은 `items`의 저장을 결코 바꾸지 않는다.
 
-## 상태기계
+## 상태
 
-| 줄 | Setting |
-| --- | --- |
-| 초기 | `state_machine state initial waiting` |
-| waiting → doing | — |
-| doing → done | `require (evidence)` |
-| doing → bypassed | `require (cause, retry)` |
-| bypassed → doing | — (재시도 조건이 성립하면 재개. 승인 대기 없음) |
-| waiting → impossible | `require (cause)` |
-| 종료 | `done`, `impossible` |
-| checkbox | `waiting ' '`, `doing '~'`, `done 'o'`, `bypassed '!'`, `impossible '-'` |
-| history | `history item_history row item from from_state to to_state at at` |
+`state`는 다섯 값 — `waiting`, `doing`, `done`, `bypassed`, `impossible` — 중 하나를 담으며, check
+`ck_items_state`가 모든 database가 column을 제약하듯 그것을 그 값들로 제약한다. 다른 값은 다른 check처럼 거절된다
+([constraints](50-constraints.ko.md#상태-column)).
 
-- checkbox glyph는 정확히 한 글자이며 list 행의 대괄호 사이에 쓴다: list 행은 대괄호 사이에 glyph를 쓰므로
-  `waiting`은 `- [ ] T1 …`, `doing`은 `- [~] T1 …`, `done`은 `- [o] T1 …`로 읽힌다. 표준 저장은
-  상태를 item file의 field `- state: doing`으로 쓴다. glyph는 `items`를 list로 저장하는 corpus를 위해
-  기계를 온전히 유지하며, 그런 corpus는 glyph가 필요하다
-  ([schema](30-schema.ko.md#dbspec-구성에-대한-corpus-규칙)). `schema` operation은 glyph를 답한다.
-- 완료된 항목은 다시 열지 않는다: 그와 관련된 새 이슈는 kind `supersedes`의 `item_links` 행을 가진 새
-  항목이다.
-- **WIP limit는 선언하지 않는다.** 사용자의 규칙 — 시작보다 완료, 독립 항목은 병렬 허용 — 은 어떤 개수로도
-  표현되지 않는 작업 규칙이라 숫자는 지어낸 것이 된다. 엔진은 WIP 규칙을 강제하지 않는다. 개수를 원하는
-  corpus는 `state_machine state limit doing <n>`을 선언한다.
+- 표준 저장은 상태를 item file의 field `- state: doing`으로 쓴다. schema는 `checkbox`를 선언하지 않는다: `items`는
+  `files`로 저장되며, 거기서 checkbox는 아무것도 보이지 않는다.
+- 완료된 항목은 관례로 다시 열지 않는다: 그와 관련된 새 이슈는 kind `supersedes`의 `item_links` 행을 가진 새 항목이다.
+  엔진은 그 어느 것도 강제하지 않는다: 상태의 전이와 그 흔적은 polyspec fsm의 것이다.
+- **WIP limit 없음.** 사용자의 규칙 — 시작보다 완료, 독립 항목은 병렬 허용 — 은 어떤 개수로도 표현되지 않는 작업
+  규칙이다. 엔진은 WIP 규칙을 강제하지 않는다.
 
 ## View
 

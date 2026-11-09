@@ -1,5 +1,5 @@
 <!-- doc-id: spec-sync -->
-<!-- source-sha256: f857176908386a9edae4c6f341e9258d2bae168aae97357352fa8394f56507fa -->
+<!-- source-sha256: 14032d2ddc2beb1c93979c517f5c4de9bcf20e608c80a3445307d148b4c8aada -->
 # Sync (범위를 정한 뼈대)
 
 [English](70-sync.md)
@@ -70,7 +70,7 @@
 - **adapter가 소유한 경로의 merge 충돌**은 양쪽을 버리고 다시 materialize해서 해결한다. 그곳의 손 merge는
   진단이다.
 - **sync는 일회성 command로 실행한다.** server는 엔진의 face이지 sync daemon이 아니다.
-- **projection은 file 위의 데이터에서 다시 만든다**: changelog는 이력 행에서 유도하며, ignore된
+- **projection은 file 위의 데이터에서 다시 만든다**: changelog는 file 위의 행에서 유도하며, ignore된
   `.flowmark/` journal에서 유도하지 않는다.
 
 ## adapter를 위해 열어 둔 것

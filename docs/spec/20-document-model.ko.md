@@ -1,5 +1,5 @@
 <!-- doc-id: spec-document-model -->
-<!-- source-sha256: 48963d73d7aba2b7465c87d8722175e55ed9080a75fc0e1639295b9ef9285885 -->
+<!-- source-sha256: 596954067d595a0b938acf5fe84ca4154f3414b6c8c9d287c210f2398d507813 -->
 # 문서 모델
 
 [English](20-document-model.md)
@@ -87,7 +87,7 @@ aggregate냐 split이냐는 저장 선언이다. 논리 관계는 모든 저장�
   SQLite)는 orm이 정한 대로 이 절을 무시하므로(orm `docs/dbspec.md`, `T119`) database export(spec 70)는
   샤드된 table에 table 하나를 만들고 모든 기간의 행을 table이 읽히는 순서로 insert한다. 절은 `files`와
   `document` 저장에 적용되며, orm은 `block` table, 자기 참조 외래 key가 있는 table, `order`가 있는
-  table에서 거절하고 catalog는 이력 table에서 거절한다. key 범위, hash, 목록에 의한 shard와 column
+  table에서 거절한다. key 범위, hash, 목록에 의한 shard와 column
   둘 이상의 shard는 정의하지 않는다.
 
 ## Key

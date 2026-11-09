@@ -1,11 +1,11 @@
 <!-- doc-id: readme -->
-<!-- source-sha256: ea078c8e2e382709b34c930937ca1ecbcefb75faedd41a1c43f374161e809aa2 -->
+<!-- source-sha256: 96b8812b470bb6edca9d942212697091595bc2da06ff87224703669e4ccd27cc -->
 # flowmark
 
 [English](README.md)
 
 markdown 문법을 가진 텍스트 DB. 파일 자체가 database다 — markdown 문서 folder 위에서 strict parsing,
-canonical rendering, corpus-global 제약(type, key, foreign key, state machine)과 transaction을 제공하며
+canonical rendering, corpus-global 제약(type, key, foreign key, check)과 transaction을 제공하며
 외부 database는 필요 없다.
 
 - **flowmark가 엔진이다**: Go binary 하나가 markdown database 엔진과 그 얇은 face — server, CLI, MCP

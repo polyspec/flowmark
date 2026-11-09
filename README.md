@@ -4,7 +4,7 @@
 [한국어](README.ko.md)
 
 A text database whose grammar is markdown. The files are the database: strict parsing,
-canonical rendering, corpus-global constraints (types, keys, foreign keys, state machines)
+canonical rendering, corpus-global constraints (types, keys, foreign keys, checks)
 and transactions over a folder of markdown documents — with no external database required.
 
 - **flowmark is the engine**: one Go binary holds the markdown database engine and its thin

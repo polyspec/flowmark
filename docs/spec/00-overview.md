@@ -10,7 +10,7 @@ git keeps the audit trail, the branches and the rollback.
 ## Scope
 
 - **flowmark is the engine.** One Go binary holds the markdown database engine — the codec, the
-  validator, the IR executor, the write path with its lock and journal, the history — and its
+  validator, the IR executor, the write path with its lock and journal — and its
   thin faces: the server, the CLI, the MCP server and the soksak sidecar (protocol v1 of the
   soksak core specification). Every face runs the same engine; none has a write path of its own.
 - **orm reaches flowmark as an IR executor.** [polyspec/orm](https://github.com/polyspec/orm) is
@@ -35,7 +35,7 @@ git keeps the audit trail, the branches and the rollback.
 ## The enforcement promise
 
 A document format with database-level force: a value outside its type, a dangling reference, a
-broken key, an illegal state transition or a state change that bypassed the engine is a located
+value that a check refuses or a broken key is a located
 diagnostic `{file, line, column, rule, message}` — for the engine's own writes and for a human's
 edits alike. Idempotency is a stated proposition, not a convention: emitting a parsed canonical
 document reproduces it, and repeating an operation with the same input yields the same result

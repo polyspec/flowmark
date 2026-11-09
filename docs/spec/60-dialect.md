@@ -78,16 +78,16 @@ Go client implements it first and every other client is its own orm item.
 | `contains_binary` (the `Lb` operator) | Supported: true when the column's text holds the parameter's text as a substring, compared by code point; a NULL column or parameter is unknown, and `%`, `_` and `\` in the parameter are literal. Grounding: MySQL `LIKE` under `utf8mb4_0900_bin`, PostgreSQL `LIKE` under `COLLATE "C"` and SQLite `instr` agree |
 | `now`, `default now`, `updated`, `soft_delete` | The request's `now`, one value per request: truncated to p digits when written into `datetime(p)`, six digits when compared ([operations](40-ops.md#the-clock)); a relative time function whose result lies outside 0001-01-01 to 9999-12-31 23:59:59.999999, or whose interval cannot be represented, is NULL (orm's rule). Grounding: MySQL and SQLite give NULL past the range, and NULL is the one result the other dialect can be guarded to |
 | `soft_delete` | Every read excludes soft-deleted rows — the root, each join child (in its join condition, so a left join binds null), each relation and each subquery; `restore` alone matches one. Grounding: orm's rule that reads always exclude soft-deleted rows |
-| codec columns | Applied by the client on an orm request; a write the engine originates (CLI, MCP, sidecar, history) applies the codec through orm's Go codec package, and validation decodes with the same package; the stored value is the encoded one, a byte-producing stage as base64 |
+| codec columns | Applied by the client on an orm request; a write the engine originates (CLI, MCP, sidecar) applies the codec through orm's Go codec package, and validation decodes with the same package; the stored value is the encoded one, a byte-producing stage as base64 |
 | indexes | Accepted; derived in memory |
 | `select explicit`, `entity`, `navigation` | Client-side; no storage effect |
 | `aes`, `aes_version`, `blind_index` | Supported; the client encrypts and hashes on an orm request, and the engine takes its keys by injection ([schema](30-schema.md#keys)) |
 | `immutable` setting | An update or a delete of a row is `CONSTRAINT` ([constraints](50-constraints.md#human-write-rulings)) |
-| `audit` setting | Schema error on a corpus; `state_machine … history` instead |
+| `audit` setting | Supported: an insert, an update and a soft delete through the engine write the rows a database's audit triggers write, and any other delete of a row of an audited table is `CONSTRAINT` ([constraints](50-constraints.md#audit)) |
 | transactions | `begin` to `commit`/`rollback` over the session; `readOnly` honoured and takes the lock |
 | savepoints | Nested stages |
 | `orderByRandom` | Supported; the order is not seeded |
-| a transaction with audit values | `CAPABILITY_UNSUPPORTED` |
+| a transaction with audit values | Supported: the request message carries the audit record of the transaction in its `audit` member, and a write of an audited table without one is `CONFIG` ([constraints](50-constraints.md#audit)) |
 | `isolation` option | Every level is accepted: a transaction holds the corpus lock from `begin` to its end and runs on its own copy of the rows, so it runs as if alone, which is at least the level any option asks for |
 | `timeoutMs` option | `CAPABILITY_UNSUPPORTED`, orm's rule for every database but PostgreSQL |
 | `getQuery()`, statement events, `subscribe()` | `CAPABILITY_UNSUPPORTED` — there is no SQL text |

@@ -97,7 +97,7 @@ or one folder without end (`files`).
   `docs/dbspec.md`, `T119`), so a database export (spec 70) creates one table for a sharded table and inserts
   its rows of every period in the order the table reads in. The clause applies to `files` and `document`
   storage; orm rejects it on a `block` table, on a table with a self foreign key and on a table with
-  `order`, and the catalog rejects it on a history table. Shard by key range, by hash or by list, and a
+  `order`. Shard by key range, by hash or by list, and a
   shard of more than one column, are not defined.
 
 ## Keys
