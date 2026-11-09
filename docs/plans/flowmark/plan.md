@@ -205,7 +205,11 @@ Each layer is a row, in this order, and each row's Red is a count of the cost co
    until an explicit write lowers the sequence, as SQLite's AUTOINCREMENT gives none. A table whose key is its rowid and
    that keeps no sequence gives no key past the largest int64: where SQLite would pick a random unused rowid, the insert
    fails as `DRIVER` (`SQLITE_FULL`), as an AUTOINCREMENT table fails and as MySQL and PostgreSQL refuse an identity
-   past its maximum (T94). A fill and a refresh give the database the sequences of the corpus, and the
+   past its maximum (T94); a table whose primary key holds NULL keys by its rowid and is such a table too. The guard is
+   one `BEFORE INSERT` trigger per table that holds the largest int64, paired with the row of its insert by the depth of
+   the trigger and made and taken away within each statement, so no later statement or read of the schema sees it. The
+   corpus holds the rowid of a table keyed by it as the column `rowid`, so a schema statement that leaves such a table a
+   column of that name, and one that leaves a table with a rowid no statement names, is `CONSTRAINT`. A fill and a refresh give the database the sequences of the corpus, and the
    refreshed database equals the database filled from the same corpus from nothing, table for table, by key,
    `sqlite_sequence` included.
 8. **Reads without the lock (T43).** A read runs its statement on a reader connection and holds no corpus lock while it

@@ -365,11 +365,45 @@ func liveTable(ctx context.Context, db *sql.DB, name string) (_ *dbspec.Table, e
 			}
 		}
 	}
+	if err := namedRowid(ctx, db, name, t.Columns, len(key) == 1 && rowAlias); err != nil {
+		return nil, err
+	}
 	if len(key) == 0 {
+		// The corpus holds the rowid of a table keyed by it as its column rowid, so a column of that name, as SQLite matches
+		// a name without regard to ASCII case, would stand in the place of the rowid and the rows it gives would be lost.
+		for _, c := range t.Columns {
+			if strings.EqualFold(c.Name, RowIDColumn) {
+				return nil, fmt.Errorf("the table %s is keyed by its rowid, which the corpus holds as the column %s, and its column %s takes that name: give the table a primary key that holds no NULL, or name the column otherwise", name, RowIDColumn, c.Name)
+			}
+		}
 		t.Columns = append([]dbspec.Column{{Name: RowIDColumn, Type: dbspec.Type{Kind: dbspec.TypeI64}, Identity: true}}, t.Columns...)
 		t.PrimaryKey.Columns = []string{RowIDColumn}
 	}
 	return t, nil
+}
+
+// namedRowid refuses a table with a rowid that no statement can name: SQLite names the rowid by the first of rowid,
+// _rowid_ and oid that names no column, so a table whose columns take all three and whose key, alias says, is no
+// INTEGER PRIMARY KEY has a rowid that neither the engine nor a statement reads.
+func namedRowid(ctx context.Context, db *sql.DB, name string, cols []dbspec.Column, alias bool) error {
+	if alias {
+		return nil
+	}
+	taken := map[string]bool{}
+	for _, c := range cols {
+		taken[strings.ToLower(c.Name)] = true
+	}
+	if !taken["rowid"] || !taken["_rowid_"] || !taken["oid"] {
+		return nil
+	}
+	var without bool
+	if err := db.QueryRowContext(ctx, "SELECT wr FROM pragma_table_list WHERE schema = 'main' AND name = ?", name).Scan(&without); err != nil {
+		return err
+	}
+	if without {
+		return nil
+	}
+	return fmt.Errorf("the table %s has a rowid that no statement names, as its columns take rowid, _rowid_ and oid and its key is no INTEGER PRIMARY KEY: name a column otherwise", name)
 }
 
 var decimalInt = regexp.MustCompile(`^DECIMALINT\((\d+),\s*(\d+)\)$`)

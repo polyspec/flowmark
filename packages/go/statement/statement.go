@@ -1225,7 +1225,7 @@ func execute(ctx context.Context, s *writepath.Session, d *database, c *irexec.C
 	}
 	d.cap.start()
 	defer d.cap.stop()
-	answer, err := query(ctx, db, text, args)
+	answer, err := queryLargest(ctx, db, d.cap, c, text, args)
 	if err != nil {
 		return nil, nil, written{}, err
 	}
@@ -1406,9 +1406,6 @@ func driverError(err error) error {
 		return &Error{codeDuplicateKey, msg}
 	case n == sqlite3.SQLITE_CONSTRAINT_FOREIGNKEY:
 		return &Error{codeForeignKey, msg}
-	case n == sqlite3.SQLITE_CONSTRAINT_TRIGGER && strings.Contains(e.Error(), largestFull):
-		// The guard of the largest rowid fails as SQLite fails an AUTOINCREMENT table past it.
-		return &Error{codeDriver, strings.TrimPrefix(largestFull, "flowmark: ") + " (13)" + resultCodeSuffix(sqlite3.SQLITE_FULL)}
 	case n == sqlite3.SQLITE_CONSTRAINT_TRIGGER && strings.Contains(e.Error(), "FOREIGN KEY constraint failed"):
 		return &Error{codeForeignKey, msg}
 	case n == sqlite3.SQLITE_CONSTRAINT_CHECK:
@@ -1454,7 +1451,14 @@ func rowsOf(ctx context.Context, db runner, tb *catalog.Table, k *cost.Counts) (
 		}
 		text += key.order("", quoted(key.names))
 	} else {
-		text += " ORDER BY rowid"
+		name, _, err := rowidName(ctx, db, tb.Name)
+		if err != nil {
+			return nil, err
+		}
+		if name == "" {
+			return nil, unnamedRowid(tb.Name)
+		}
+		text += " ORDER BY " + name
 	}
 	return readRows(ctx, db, tb, text, nil, k)
 }

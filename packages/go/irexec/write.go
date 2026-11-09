@@ -742,7 +742,7 @@ func (w *writer) nextIdentity(tb *catalog.Table, col string) (cell, *Error) {
 	}
 	if col == tb.Key && tb.Autoincrement {
 		s := w.insertSequence(tb)
-		n := w.next.largestKey(tb.Name)
+		n := w.next.LargestKey(tb.Name)
 		if s.held {
 			n = max(n, s.n)
 		}

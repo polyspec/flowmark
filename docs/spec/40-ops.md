@@ -307,7 +307,15 @@ utility of orm's SQLite dialect holds on a corpus, and a client has only this dr
   it, so a read after a comment runs under `query_only` as any read does (`TestCommentsBeforeAStatement` and
   `TestTokens` of `statement`).
 - **Tables.** A table takes its columns, its declared types and its key from its statement. A primary key that SQLite lets
-  hold NULL names no row, so such a table keys by its rowid, as does a table with no primary key.
+  hold NULL names no row, so such a table keys by its rowid, as does a table with no primary key; the corpus holds that
+  rowid as the column `rowid`, so a schema statement that leaves such a table a column named `rowid`, in any case as
+  SQLite matches a name, is `CONSTRAINT` and changes nothing, since that column would stand in the place of the rowid.
+  A table keyed otherwise names a column `rowid` as SQLite lets it, and the engine reads the rowid of a table by the
+  first of `rowid`, `_rowid_` and `oid` that names no column, as SQLite does, or by its `INTEGER PRIMARY KEY`; a table
+  with a rowid whose columns take all three names and whose key is no `INTEGER PRIMARY KEY` has a rowid no statement
+  names, which the engine cannot read the rows it changed by, so its schema statement is `CONSTRAINT` as well. An
+  `ALTER TABLE` that would name a column after the rowid of a table without an `INTEGER PRIMARY KEY` SQLite refuses
+  itself. `TestRowidColumnName` of `statement` holds it.
 - **Values.** A cell answers the value SQLite holds: the text of a column declared `DATE`, `DATETIME` or `TIMESTAMP`
   is the text stored, byte for byte, as a SQLite connection reads it. The driver's release parses such a text into a
   time, which another form writes back; the engine's fork of the driver reads it as stored (`TestTemporalText` of
@@ -347,9 +355,16 @@ utility of orm's SQLite dialect holds on a corpus, and a client has only this dr
   key the database chooses while the largest key is the largest int64 fails as `DRIVER` (`SQLITE_FULL`), as an
   AUTOINCREMENT table fails, on the statement path and on the face alike, and leaves the corpus and its transaction as
   they were; a key the insert gives, -1 included, is taken beside the largest, a NULL key is one the database chooses,
-  and an insert that writes no row, as a conflict ignores it or an upsert updates the row it meets, gives no key. The statement path holds it by
-  two temporary triggers on each such table, which SQLite's `BEFORE INSERT` rowid of -1 for a chosen rowid tells apart
-  from a key -1 the insert gives. `TestPlainIdentityLargest` and `TestPlainIdentityLargestFace` of `statement` hold it.
+  and an insert that writes no row, as a conflict ignores it or an upsert updates the row it meets, gives no key. A
+  table whose primary key SQLite lets hold NULL keys by its rowid, so it is such a table too. The statement path holds
+  it by a `BEFORE INSERT` trigger on each such table that holds the largest int64, which notes whether SQLite gives the
+  row the rowid -1 there, as it does for a rowid it will choose and not for a key -1 the insert gives; the pre-update
+  hook pairs each note with the row of its insert by the depth of the trigger, so an insert of a trigger, a level
+  deeper, never takes the note of the insert that fired it. The triggers and the table of their notes are made after a
+  savepoint before the statement and taken away after it on every path, a refusal and an error included, so no later
+  statement and no read of the schema sees them; a table that comes to hold the largest int64 within the statement,
+  and takes a row after it, runs the statement again from that savepoint with its trigger. `TestPlainIdentityLargest`,
+  `TestPlainIdentityLargestFace` and `TestLargestGuardsLeaveNoSchema` of `statement` hold it.
 - **No assigned columns.** A text key and an `order` column are the insert's to give, as on the databases orm reaches
   ([document model](20-document-model.md#keys)): the schema of the statements declares each `NOT NULL`, so an insert that
   leaves one out, or gives it NULL, fails as SQLite's `NOT NULL constraint failed`, and the corpus holds the values the

@@ -1,5 +1,5 @@
 <!-- doc-id: spec-ops -->
-<!-- source-sha256: 035881c15b8c2f46d04f75d5a11009c1ab3ea4f117110808661e1cdb96499268 -->
+<!-- source-sha256: 0053130a96b88c6b8d7e12ebd2cf54faba2dd834c957e20d14b6ccb93b4546da -->
 # Operations
 
 [English](40-ops.md)
@@ -261,7 +261,14 @@ client가 구현할 것은 이 driver뿐이다.
   문장은 comment가 없을 때의 문장과 같으므로, comment 뒤의 읽기도 다른 읽기처럼 `query_only` 아래에서 실행된다(`statement`의
   `TestCommentsBeforeAStatement`와 `TestTokens`).
 - **표.** 표는 column, 선언 타입, key를 자기 문장에서 받는다. SQLite가 NULL을 허용하는 primary key는 행을 가리키지
-  못하므로 그런 표는 primary key가 없는 표처럼 rowid를 key로 쓴다.
+  못하므로 그런 표는 primary key가 없는 표처럼 rowid를 key로 쓴다. corpus는 그 rowid를 column `rowid`로 지니므로, 그런 표에
+  SQLite가 이름을 맞추듯 대소문자와 상관없이 `rowid`라는 column을 남기는 schema 문장은 `CONSTRAINT`이며 아무것도 바꾸지
+  않는다. 그 column이 rowid의 자리를 차지하기 때문이다. 다르게 key를 쓰는 표는 SQLite가 허용하듯 column을 `rowid`라 이름
+  댈 수 있고, 엔진은 SQLite처럼 `rowid`, `_rowid_`, `oid` 가운데 column 이름이 아닌 첫 이름으로, 또는 `INTEGER PRIMARY KEY`로
+  표의 rowid를 읽는다. rowid가 있는 표의 column이 세 이름을 모두 차지하고 key가 `INTEGER PRIMARY KEY`가 아니면 그 rowid는
+  어떤 문장도 이름 대지 못하고 엔진은 바뀐 행을 그것으로 읽을 수 없으므로, 그 schema 문장도 `CONSTRAINT`다.
+  `INTEGER PRIMARY KEY`가 없는 표의 column을 rowid의 이름으로 만들 `ALTER TABLE`은 SQLite가 스스로 거부한다. `statement`의
+  `TestRowidColumnName`이 이를 확인한다.
 - **값.** cell은 SQLite가 지닌 값을 답한다. `DATE`, `DATETIME`, `TIMESTAMP`로 선언된 column의 text는 SQLite 연결이
   읽듯이 저장된 text 그대로, byte 단위로 같다. driver의 release는 그런 text를 시각으로 해석해 다른 형태로 다시 쓰므로,
   엔진은 driver의 fork가 저장된 그대로 읽게 한다(`statement`의 `TestTemporalText`).
@@ -296,9 +303,14 @@ client가 구현할 것은 이 driver뿐이다.
   identity를 거부하고, SQLite도 거기서 AUTOINCREMENT 표를 거부한다. 그래서 가장 큰 key가 int64 최댓값일 때 database가 key를
   고르는 insert는 AUTOINCREMENT 표처럼 `DRIVER`(`SQLITE_FULL`)로 실패하며, 문장 경로와 face에서 똑같고, corpus와 그
   transaction을 그대로 둔다. -1을 포함해 insert가 주는 key는 가장 큰 key 곁에 받아들여지고, NULL key는 database가 고르는
-  key이며, conflict가 무시하거나 upsert가 만난 행을 고쳐서 행을 쓰지 않는 insert는 key를 주지 않는다. 문장 경로는 그런 표마다 두 temporary trigger로 이를
-  지키며, SQLite가 고른 rowid에 `BEFORE INSERT`가 주는 rowid -1을 insert가 준 key -1과 가른다. `statement`의
-  `TestPlainIdentityLargest`와 `TestPlainIdentityLargestFace`가 이를 확인한다.
+  key이며, conflict가 무시하거나 upsert가 만난 행을 고쳐서 행을 쓰지 않는 insert는 key를 주지 않는다. SQLite가 NULL을
+  허용하는 primary key의 표는 rowid를 key로 쓰므로 이 역시 그런 표다. 문장 경로는 int64 최댓값을 지닌 그런 표마다
+  `BEFORE INSERT` trigger 하나로 이를 지키며, trigger는 SQLite가 거기서 행에 rowid -1을 주는지를 적는다. SQLite는 자신이 고를
+  rowid에 -1을 주고 insert가 준 key -1에는 주지 않는다. pre-update hook은 각 기록을 trigger의 깊이로 그 insert의 행과 짝지으므로,
+  한 단계 깊은 trigger의 insert는 자신을 부른 insert의 기록을 가져가지 않는다. trigger와 그 기록의 표는 문장 앞 savepoint 뒤에
+  만들어지고, 거부와 오류를 포함한 모든 경로에서 문장 뒤에 치워지므로 뒤의 어떤 문장도, schema 읽기도 그것을 보지 않는다. 문장
+  안에서 int64 최댓값을 지니게 되고 그 뒤에 행을 받는 표는 그 savepoint에서 자기 trigger와 함께 문장을 다시 실행한다.
+  `statement`의 `TestPlainIdentityLargest`, `TestPlainIdentityLargestFace`, `TestLargestGuardsLeaveNoSchema`가 이를 확인한다.
 - **할당 column 없음.** text key와 `order` column은 orm이 닿는 database에서처럼 insert가 준다
   ([document model](20-document-model.ko.md#key)): 문장의 schema는 둘 다 `NOT NULL`로 선언하므로, 하나를 빠뜨리거나 NULL을 준
   insert는 SQLite의 `NOT NULL constraint failed`로 실패하고, corpus는 문장이 쓴 값을 가진다. `statement`의

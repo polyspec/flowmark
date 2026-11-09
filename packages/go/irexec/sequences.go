@@ -46,8 +46,8 @@ func (c *Corpus) sequenceData() []byte {
 	return c.seq.data
 }
 
-// largestKey returns the largest positive key of the table, 0 when it holds none.
-func (c *Corpus) largestKey(table string) int64 {
+// LargestKey returns the largest positive key of the table, 0 when it holds none.
+func (c *Corpus) LargestKey(table string) int64 {
 	tb, ok := c.cat.Table(table)
 	if !ok || tb.Key == "" {
 		return 0
@@ -76,7 +76,7 @@ func (c *Corpus) Counter(table string) (int64, bool) {
 			return *n, true
 		}
 	}
-	m := c.largestKey(table)
+	m := c.LargestKey(table)
 	return m, m > 0
 }
 
@@ -84,7 +84,7 @@ func (c *Corpus) Counter(table string) (int64, bool) {
 // key, 0 when both are below 1. The key the table gives next is one more, as SQLite's AUTOINCREMENT gives it.
 func (c *Corpus) Sequence(table string) int64 {
 	n, _ := c.Counter(table)
-	return max(n, c.largestKey(table), 0)
+	return max(n, c.LargestKey(table), 0)
 }
 
 // sequenceOf is the sequence of one table, as Corpus.Counter returns it.
@@ -167,7 +167,7 @@ func (c *Corpus) setSequences(before *Corpus, held map[string]int64) *Target {
 		if !tb.Autoincrement {
 			continue
 		}
-		m := c.largestKey(tb.Name)
+		m := c.LargestKey(tb.Name)
 		n, ok := held[tb.Name]
 		switch {
 		case ok && m > 0 && n == m, !ok && m == 0:
