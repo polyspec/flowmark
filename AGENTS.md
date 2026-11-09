@@ -58,8 +58,9 @@ them holds the rules of this repository.
   `gh workflow run release.yml -f run=<id>`. Its version X.Y.Z is the newest section `## X.Y.Z` of CHANGELOG.md at the
   commit of that run, and the release is refused while `## Unreleased` holds an entry. `make release-tag` creates the
   annotated tags `vX.Y.Z` and `packages/go/vX.Y.Z` at that commit; no one creates, moves or pushes a tag by hand, and a
-  pushed tag starts no release.
-  Enforced by: `make release-tag`
+  pushed tag starts no release. Before it tags, `scripts/check-release-run.mts` refuses a run of any other workflow, of
+  another event, without success or, for a release that the run started, on another commit.
+  Enforced by: `make release-tag`, `make test-infrastructure`, which runs tests/check-release-run.test.mts
 - Own: A push or a pull request whose every changed path is a root document or a plan, the `paths-ignore` of
   `.github/workflows/ci.yml` (`*.md`, `docs/plans/**`), starts no CI run; `.github/workflows/documents.yml` runs the
   checks of `DOCUMENT_CHECKS` of the Makefile on every push and pull request with no path filter, and fails a diff of more

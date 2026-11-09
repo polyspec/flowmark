@@ -263,8 +263,11 @@ land: ## Land the branch BRANCH of its worktree on main by a fast-forward merge,
 release-tag release-tools release-publish release-undraft: export GOWORK := off
 release-assets: export GOWORK = $(CURDIR)/go.work
 
-release-tag: ## Tag vX.Y.Z of the change log and packages/go/vX.Y.Z at the commit of the successful CI run RUN of main; AUTO releases only a version commit
+# The run check (scripts/check-release-run.mts, T90) comes first: kit's release-run takes a successful run of any workflow, and
+# a release takes a run of ci.yml alone. With AUTO the workflow checked out the head commit of the run, which the check compares.
+release-tag: ## Tag vX.Y.Z of the change log and packages/go/vX.Y.Z at the commit of the successful ci.yml run RUN of main; AUTO releases only a version commit
 	@test -n "$$RUN" || { echo "release-tag: RUN is required, for example make release-tag RUN=123"; exit 1; }
+	$(NODE) scripts/check-release-run.mts "$$RUN"$(if $(AUTO), --commit "$$(git rev-parse HEAD)")
 	RELEASE_MAIN=origin/main $(NODE) $(KIT)/release-run.mjs tag "$$RUN"$(if $(AUTO), --auto)
 
 release-tools: ## Install the tools that config/release.json needs for the release; ONLINE

@@ -14,6 +14,10 @@
       "kind": "policy",
       "reason": "flowmark's rule that every task ID a document names resolves to an item of a checklist; no ecosystem tool reads the IDs of these checklists"
     },
+    "scripts/check-release-run.mts": {
+      "kind": "policy",
+      "reason": "flowmark's rule that a release takes a successful push or manual run of ci.yml alone; gh api reads the run, and no ecosystem tool judges which workflow a release may take"
+    },
     "scripts/record-slugs.mts": {
       "kind": "ecosystem",
       "tool": "gh api asks GitHub's renderer, VS Code's own slugify.ts runs on markdown-it, and cargo builds gitlab-glfm-markdown, whose heading ids are recorded"

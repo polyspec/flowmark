@@ -5,6 +5,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { matchesAny } from '@polyspec/kit/glob';
 import { trackedFiles } from '@polyspec/kit/tracked-files';
+import { member } from '../scripts/check-release-run.mts';
 
 const ROOT = path.join(import.meta.dirname, '..');
 
@@ -40,8 +41,6 @@ function ciStarts(event: string, paths: readonly string[]): boolean {
 /** The JSON value of the repository file `file`. */
 const json = (file: string): unknown => JSON.parse(readFileSync(path.join(ROOT, file), 'utf8'));
 const isStrings = (v: unknown): v is string[] => Array.isArray(v) && v.every(x => typeof x === 'string');
-/** The value of `key` of the object `v`, or undefined. */
-const member = (v: unknown, key: string): unknown => (typeof v === 'object' && v !== null ? Object.entries(v).find(([name]) => name === key)?.[1] : undefined);
 /** The strings of `key` of the object `v`; any other shape fails the test. */
 function strings(v: unknown, key: string): string[] {
   const value = member(v, key);
@@ -101,4 +100,14 @@ test('the documents workflow runs on every push and pull request that ci.yml fil
   assert.match(text, /^\s+run: make diff-size-check$/m);
   assert.match(text, /^\s+run: make documents$/m);
   assert.deepEqual(pathsIgnore('pull_request'), pathsIgnore('push'));
+});
+
+test('make release-tag refuses a run of any workflow but ci.yml before kit tags its commit', () => {
+  const makefile = readFileSync(path.join(ROOT, 'Makefile'), 'utf8');
+  const recipe = makefile.split(/^release-tag:.*\n/m)[1]?.split(/^\S/m)[0] ?? '';
+  const check = recipe.indexOf('scripts/check-release-run.mts "$$RUN"');
+  const tag = recipe.indexOf('release-run.mjs tag "$$RUN"');
+  assert.ok(check >= 0, `the recipe of release-tag runs scripts/check-release-run.mts on RUN:\n${recipe}`);
+  assert.ok(tag > check, 'the run check comes before the tag step of kit');
+  assert.match(recipe, /check-release-run\.mts "\$\$RUN"\$\(if \$\(AUTO\), --commit "\$\$\(git rev-parse HEAD\)"\)/);
 });

@@ -4,6 +4,7 @@
 ## Unreleased
 
 - T90: A push or a pull request that changes only the root documents or the plans starts no CI run; the new documents workflow runs the document checks on every push and pull request and fails a diff of more than 3000 files, past which GitHub does not evaluate a path filter.
+- T90: `make release-tag` takes a successful push or manual run of `.github/workflows/ci.yml` alone, and refuses with the reason a run of another workflow, such as the documents workflow, a run of another event or without success, and, for a release that the run started, a run on another commit.
 
 ## 0.0.13
 
