@@ -38,11 +38,11 @@ func TestReadKinds(t *testing.T) {
 	f := baseFixture(t)
 	f.sub(t, "60#surfaces: all answers the matching rows in storage order", func(f *fixture) {
 		f.want(f.msg("all", "items", map[string]any{"columns": map[string]any{"mode": "none", "add": []string{"state"}}}),
-			`{"rows":[{"id":"T1","parent":null,"owner":"P1","state":"done"},{"id":"T2","parent":"T1","owner":null,"state":"doing"},{"id":"T3","parent":null,"owner":null,"state":"waiting"},{"id":"T4","parent":null,"owner":null,"state":"dropped"}]}`)
+			`{"rows":[{"id":"T1","parent":null,"owner":"P1","state":"x"},{"id":"T2","parent":"T1","owner":null,"state":"~"},{"id":"T3","parent":null,"owner":null,"state":" "},{"id":"T4","parent":null,"owner":null,"state":"-"}]}`)
 	})
 	f.sub(t, "60#surfaces: all answers every default column in field order", func(f *fixture) {
 		f.want(f.msg("all", "items", map[string]any{"where": where(pred("id", "eq", p(0)))}, "T1"),
-			`{"rows":[{"id":"T1","parent":null,"state":"done","title":"Ship the parser","body":"Parser body.","position":1,"owner":"P1","due":null,"evidence":"Golden tests pass.","cause":null}]}`)
+			`{"rows":[{"id":"T1","parent":null,"state":"x","title":"Ship the parser","body":"Parser body.","position":1,"owner":"P1","due":null,"evidence":"Golden tests pass.","cause":null}]}`)
 	})
 	f.sub(t, "60#surfaces: one answers the first row by the order", func(f *fixture) {
 		f.want(f.msg("one", "items", map[string]any{"columns": none, "order": []any{map[string]any{"column": "title", "desc": true}}}),
@@ -52,7 +52,7 @@ func TestReadKinds(t *testing.T) {
 		f.want(f.msg("one", "items", map[string]any{"columns": none, "where": where(pred("id", "eq", p(0)))}, "T9"), `{"rows":[]}`)
 	})
 	f.sub(t, "60#surfaces: count counts the matching rows", func(f *fixture) {
-		f.want(f.msg("count", "items", map[string]any{"where": where(pred("state", "in", map[string]any{"ps": []int{0, 1}}))}, "doing", "done"), `{"count":2}`)
+		f.want(f.msg("count", "items", map[string]any{"where": where(pred("state", "in", map[string]any{"ps": []int{0, 1}}))}, "~", "x"), `{"count":2}`)
 	})
 	f.sub(t, "60#surfaces: count with group_by counts the groups", func(f *fixture) {
 		f.want(f.msg("count", "items", map[string]any{"group_by": []string{"owner"}}), `{"count":2}`)
@@ -165,22 +165,22 @@ func TestWhere(t *testing.T) {
 		return map[string]any{"ref": map[string]any{"path": path, "column": col}}
 	}
 	cases := []pc{
-		{"60#surfaces: eq", "items", where(pred("state", "eq", p(0))), []any{"doing"}, []string{"T2"}},
-		{"60#surfaces: not_eq", "items", where(pred("state", "not_eq", p(0))), []any{"doing"}, []string{"T1", "T3", "T4"}},
+		{"60#surfaces: eq", "items", where(pred("state", "eq", p(0))), []any{"~"}, []string{"T2"}},
+		{"60#surfaces: not_eq", "items", where(pred("state", "not_eq", p(0))), []any{"~"}, []string{"T1", "T3", "T4"}},
 		{"60#surfaces: gt compares text by code point", "items", where(pred("title", "gt", p(0))), []any{"S"}, []string{"T1", "T2"}},
 		{"60#surfaces: gte on a date", "items", where(pred("due", "gte", p(0))), []any{"2026-10-20"}, []string{"T2"}},
 		{"60#surfaces: lt with NULLs unknown", "items", where(pred("due", "lt", p(0))), []any{"2026-10-21"}, []string{"T2"}},
 		{"60#surfaces: lte", "items", where(pred("due", "lte", p(0))), []any{"2026-10-19"}, nil},
-		{"60#surfaces: in", "items", where(pred("state", "in", map[string]any{"ps": []int{0, 1}})), []any{"waiting", "dropped"}, []string{"T3", "T4"}},
-		{"60#surfaces: not_in", "items", where(pred("state", "not_in", map[string]any{"ps": []int{0, 1}})), []any{"waiting", "dropped"}, []string{"T1", "T2"}},
+		{"60#surfaces: in", "items", where(pred("state", "in", map[string]any{"ps": []int{0, 1}})), []any{" ", "-"}, []string{"T3", "T4"}},
+		{"60#surfaces: not_in", "items", where(pred("state", "not_in", map[string]any{"ps": []int{0, 1}})), []any{" ", "-"}, []string{"T1", "T2"}},
 		{"60#surfaces: not_in with a NULL is never true", "items", where(pred("owner", "not_in", map[string]any{"ps": []int{0, 1}})), []any{"P2", nil}, nil},
 		{"60#surfaces: between", "items", where(pred("due", "between", map[string]any{"ps": []int{0, 1}})), []any{"2026-10-01", "2026-10-31"}, []string{"T2"}},
 		{"60#surfaces: is_null", "items", where(pred("owner", "is_null", nil)), nil, []string{"T2", "T3", "T4"}},
 		{"60#surfaces: is_not_null", "items", where(pred("owner", "is_not_null", nil)), nil, []string{"T1"}},
 		{"60#surfaces: not_eq_col", "items", where(pred("id", "not_eq_col", ref("", "parent"))), nil, []string{"T2"}},
 		{"60#surfaces: eq_col with a NULL is unknown", "items", where(pred("id", "eq_col", ref("", "parent"))), nil, nil},
-		{"60#surfaces: tuple_in", "items", where(map[string]any{"pred": map[string]any{"op": "tuple_in", "cols": []string{"state", "title"}, "ps": []int{0, 1, 2, 3}}}), []any{"doing", "Write the tests", "done", "nope"}, []string{"T2"}},
-		{"60#surfaces: tuple_not_in", "items", where(map[string]any{"pred": map[string]any{"op": "tuple_not_in", "cols": []string{"state", "title"}, "ps": []int{0, 1}}}), []any{"doing", "Write the tests"}, []string{"T1", "T3", "T4"}},
+		{"60#surfaces: tuple_in", "items", where(map[string]any{"pred": map[string]any{"op": "tuple_in", "cols": []string{"state", "title"}, "ps": []int{0, 1, 2, 3}}}), []any{"~", "Write the tests", "x", "nope"}, []string{"T2"}},
+		{"60#surfaces: tuple_not_in", "items", where(map[string]any{"pred": map[string]any{"op": "tuple_not_in", "cols": []string{"state", "title"}, "ps": []int{0, 1}}}), []any{"~", "Write the tests"}, []string{"T1", "T3", "T4"}},
 		{"60#surfaces: year of a date", "items", where(pred("due", "eq", map[string]any{"p": 0, "fn": map[string]any{"name": "year"}})), []any{2026}, []string{"T2"}},
 		{"60#surfaces: month in a list", "items", where(pred("due", "in", map[string]any{"ps": []int{0, 1}, "fn": map[string]any{"name": "month"}})), []any{9, 10}, []string{"T2"}},
 		{"60#surfaces: day_of_week counts from Sunday as 1", "items", where(pred("due", "eq", map[string]any{"p": 0, "fn": map[string]any{"name": "day_of_week"}})), []any{3}, []string{"T2"}},
@@ -190,8 +190,8 @@ func TestWhere(t *testing.T) {
 		{"60#surfaces: days_ago against a datetime", "people", where(pred("joined", "gt", map[string]any{"value": map[string]any{"name": "days_ago", "ps": []int{0}}})), []any{10}, []string{"P2"}},
 		{"60#surfaces: now", "people", where(pred("joined", "lt", map[string]any{"value": map[string]any{"name": "now"}})), nil, []string{"P1", "P2"}},
 		{"60#surfaces: months_ago", "people", where(pred("joined", "gte", map[string]any{"value": map[string]any{"name": "months_ago", "ps": []int{0}}})), []any{0}, nil},
-		{"60#surfaces: AND binds tighter than OR", "items", where(pred("state", "eq", p(0)), map[string]any{"pred": map[string]any{"conn": "or", "column": "state", "op": "eq", "p": 1}}, map[string]any{"pred": map[string]any{"conn": "and", "column": "owner", "op": "eq", "p": 2}}), []any{"waiting", "doing", "P1"}, []string{"T3"}},
-		{"60#surfaces: a nested group negated", "items", where(map[string]any{"group": map[string]any{"not": true, "items": []any{pred("state", "eq", p(0))}}}), []any{"done"}, []string{"T2", "T3", "T4"}},
+		{"60#surfaces: AND binds tighter than OR", "items", where(pred("state", "eq", p(0)), map[string]any{"pred": map[string]any{"conn": "or", "column": "state", "op": "eq", "p": 1}}, map[string]any{"pred": map[string]any{"conn": "and", "column": "owner", "op": "eq", "p": 2}}), []any{" ", "~", "P1"}, []string{"T3"}},
+		{"60#surfaces: a nested group negated", "items", where(map[string]any{"group": map[string]any{"not": true, "items": []any{pred("state", "eq", p(0))}}}), []any{"x"}, []string{"T2", "T3", "T4"}},
 		{"60#surfaces: in a subquery", "items", where(pred("owner", "in", map[string]any{"sub": map[string]any{"query": map[string]any{"entity": "people", "where": where(pred("active", "eq", p(0)))}, "column": "id"}})), []any{true}, []string{"T1"}},
 		{"60#surfaces: not_in a subquery", "people", where(pred("id", "not_in", map[string]any{"sub": map[string]any{"query": map[string]any{"entity": "items", "where": where(pred("owner", "is_not_null", nil))}, "column": "owner"}})), nil, []string{"P2"}},
 		{"60#surfaces: a subquery refers to its owner by ^", "people", where(pred("id", "in", map[string]any{"sub": map[string]any{"query": map[string]any{"entity": "items", "where": where(pred("owner", "eq_col", ref("^", "id")))}, "column": "owner"}})), nil, []string{"P1"}},
@@ -335,24 +335,24 @@ func TestJoins(t *testing.T) {
 	}
 	f.sub(t, "60#surfaces: an inner join keeps the rows with a child", func(f *fixture) {
 		f.want(f.msg("all", "notes", map[string]any{"columns": none, "joins": []any{join("inner", map[string]any{})}}),
-			`{"rows":[{"id":"N1","parent":null,"item":"T1","it":{"id":"T1","parent":null,"owner":"P1","state":"done"}}]}`)
+			`{"rows":[{"id":"N1","parent":null,"item":"T1","it":{"id":"T1","parent":null,"owner":"P1","state":"x"}}]}`)
 	})
 	f.sub(t, "60#surfaces: a left join keeps every row, its child NULL", func(f *fixture) {
 		f.want(f.msg("all", "notes", map[string]any{"columns": none, "joins": []any{join("left", map[string]any{})}}),
-			`{"rows":[{"id":"N1","parent":null,"item":"T1","it":{"id":"T1","parent":null,"owner":"P1","state":"done"}},{"id":"N2","parent":"N1","item":null,"it":null},{"id":"N3","parent":null,"item":null,"it":null}]}`)
+			`{"rows":[{"id":"N1","parent":null,"item":"T1","it":{"id":"T1","parent":null,"owner":"P1","state":"x"}},{"id":"N2","parent":"N1","item":null,"it":null},{"id":"N3","parent":null,"item":null,"it":null}]}`)
 	})
 	f.sub(t, "60#surfaces: an on group restricts the child of a left join", func(f *fixture) {
-		f.want(f.msg("all", "notes", map[string]any{"columns": none, "joins": []any{join("left", map[string]any{"on": where(pred("state", "eq", p(0)))})}}, "doing"),
+		f.want(f.msg("all", "notes", map[string]any{"columns": none, "joins": []any{join("left", map[string]any{"on": where(pred("state", "eq", p(0)))})}}, "~"),
 			`{"rows":[{"id":"N1","parent":null,"item":"T1","it":null},{"id":"N2","parent":"N1","item":null,"it":null},{"id":"N3","parent":null,"item":null,"it":null}]}`)
 	})
 	f.sub(t, "60#surfaces: a join's where is appended with AND", func(f *fixture) {
-		f.want(f.msg("all", "notes", map[string]any{"columns": none, "joins": []any{join("left", map[string]any{"where": where(pred("state", "eq", p(0)))})}}, "done"),
-			`{"rows":[{"id":"N1","parent":null,"item":"T1","it":{"id":"T1","parent":null,"owner":"P1","state":"done"}}]}`)
+		f.want(f.msg("all", "notes", map[string]any{"columns": none, "joins": []any{join("left", map[string]any{"where": where(pred("state", "eq", p(0)))})}}, "x"),
+			`{"rows":[{"id":"N1","parent":null,"item":"T1","it":{"id":"T1","parent":null,"owner":"P1","state":"x"}}]}`)
 	})
 	f.sub(t, "60#surfaces: a joined item places a join's where", func(f *fixture) {
 		res := f.ok(f.msg("all", "notes", map[string]any{"columns": none,
 			"where": where(pred("id", "eq", p(0)), map[string]any{"joined": map[string]any{"conn": "or", "join": "it"}}),
-			"joins": []any{join("left", map[string]any{"where": where(pred("state", "eq", p(1)))})}}, "N3", "done"))
+			"joins": []any{join("left", map[string]any{"where": where(pred("state", "eq", p(1)))})}}, "N3", "x"))
 		ids := rowIDs(t, res)
 		if !slices.Equal(ids, []string{"N1", "N3"}) {
 			f.t.Fatalf("ids %v", ids)
@@ -394,7 +394,7 @@ func TestJoins(t *testing.T) {
 // inner join drops the parent row, from all and from count alike.
 func TestJoinSoftDeleted(t *testing.T) {
 	docs := baseDocs()
-	docs["items.flowmark.md"] = strings.Replace(docs["items.flowmark.md"], "- [ ] T3 Review the design", "- [ ] T3 Review the design owner:[P3](people.flowmark.md)", 1)
+	docs["items.flowmark.md"] = strings.Replace(docs["items.flowmark.md"], "- [ ] T3 Review the design position:2", "- [ ] T3 Review the design position:2 owner:[P3](people.flowmark.md)", 1)
 	f := catalogFixture(t, docs)
 	join := func(kind string) map[string]any {
 		return map[string]any{"rel": "who", "kind": kind, "left": "owner", "right": "id", "query": map[string]any{"entity": "people", "columns": map[string]any{"mode": "none", "add": []string{"name"}}}}
@@ -454,8 +454,8 @@ func TestRelations(t *testing.T) {
 	})
 	f.sub(t, "60#surfaces: if_parent loads the relation only for the matching parents", func(f *fixture) {
 		rel := hist(map[string]any{"if_parent": map[string]any{"column": "state", "p": 0}})
-		f.want(f.msg("all", "items", map[string]any{"columns": map[string]any{"mode": "none", "remove": []string{"parent", "owner"}}, "relations": []any{rel}}, "doing"),
-			`{"rows":[{"id":"T1","state":"done","history":[]},{"id":"T2","state":"doing","history":[{"id":3,"item":"T2","to_state":"doing"}]},{"id":"T3","state":"waiting","history":[]},{"id":"T4","state":"dropped","history":[]}]}`)
+		f.want(f.msg("all", "items", map[string]any{"columns": map[string]any{"mode": "none", "remove": []string{"parent", "owner"}}, "relations": []any{rel}}, "~"),
+			`{"rows":[{"id":"T1","state":"x","history":[]},{"id":"T2","state":"~","history":[{"id":3,"item":"T2","to_state":"doing"}]},{"id":"T3","state":" ","history":[]},{"id":"T4","state":"-","history":[]}]}`)
 	})
 	f.sub(t, "60#surfaces: a one relation without a child attaches NULL", func(f *fixture) {
 		rel := map[string]any{"rel": "who", "kind": "one", "keys": []any{map[string]any{"left": "owner", "right": "id"}}, "query": map[string]any{"entity": "people", "columns": map[string]any{"mode": "none", "add": []string{"name"}}}}
@@ -661,7 +661,7 @@ func TestClock(t *testing.T) {
 	})
 	t.Run("40#the-clock: written into datetime(0) and datetime(3) the clock is truncated, never rounded", func(t *testing.T) {
 		f := fresh(t)
-		f.commit(f.ok(f.msgAt(late, "insert", "people", map[string]any{"set": sets("name")}, "Lin")))
+		f.commit(f.ok(f.msgAt(late, "insert", "people", map[string]any{"set": sets("id", "name")}, "P4", "Lin")))
 		f.commit(f.ok(f.msgAt(late, "insert", "stamps", map[string]any{"set": sets("label")}, "one")))
 		f.want(f.msg("all", "people", map[string]any{"columns": map[string]any{"mode": "none", "add": []string{"joined"}}, "where": where(pred("id", "eq", p(0)))}, "P4"),
 			`{"rows":[{"id":"P4","joined":"2026-10-11 10:00:00.000000"}]}`)

@@ -169,7 +169,7 @@ The order of the commit protocol is normative.
 ## The faces
 
 - The CLI, the MCP server and the soksak sidecar are thin faces of the write path. Each operation of
-  a face is one operation of a session — a request of the IR-executor protocol, a history repair, a
+  a face is one operation of a session — a request of the IR-executor protocol, a
   rewrite or an install — run as a request outside a transaction ([transactions](#transactions)),
   under the lock with the face's `--lock-wait-ms`; its request clock is the engine clock
   ([the clock](#the-clock)). No face reads or writes a corpus file itself. Grounding: one write path
@@ -181,7 +181,7 @@ The order of the commit protocol is normative.
 
 | Operation | Members | Answer |
 | --- | --- | --- |
-| `schema` | — | `{"manifest_hash", "tables"}`: the catalog — each table with its storage, key, `title`, `body`, `order`, hierarchy column, `markdown` columns, columns, foreign keys, unique keys and state machine |
+| `schema` | — | `{"manifest_hash", "tables"}`: the catalog — each table with its storage, key, `title`, `body`, `order`, hierarchy column, `markdown` columns, columns, foreign keys, unique keys and `task_marker`, the column a list row writes in its task marker, absent when the table declares none ([schema](30-schema.md#markdown-settings)) |
 | `rows` | `table` | `{"rows"}`: every row of the table in storage order, as an `all` request without `columns` answers it |
 | `rows.load` | `table`, `rows` | `{"affected"}` |
 | `row.get` | `table`, `key` | `{"row"}`: the row whose key is `key` |
@@ -189,7 +189,6 @@ The order of the commit protocol is normative.
 | `row.update` | `table`, `key`, `values` | `{"affected", "keys", "rows"}` |
 | `row.move` | `table`, `key`, `position`, optional `parent` | `{"affected", "keys", "rows"}` |
 | `row.delete` | `table`, `key` | `{"affected", "keys", "rows"}` |
-| `transition` | `table`, `key`, `state`, optional `values` | `{"affected", "keys", "rows"}` |
 | `views` | optional `key` | `{"rows"}` of the view table, or `{"view", "rows"}` of the view `key` |
 
 - `rows.load` writes rows in their stored form, keys included, as a database's bulk load does: a run of rows that assign the
@@ -200,10 +199,7 @@ The order of the commit protocol is normative.
   `key` assigning `values`; `row.delete` a `delete` of that row. `row.move` is an `update` of that row
   assigning `position` to the table's `order` column and, when `parent` is given, `parent` to its
   hierarchy column `parent` ([document model](20-document-model.md#order)); a table without `order`,
-  or a `parent` for a table without the hierarchy, is `CONFIG`. `transition` is an `update` of that
-  row assigning `state` to the column of the table's state machine together with `values`, which
-  carry the columns its transition requires ([constraints](50-constraints.md#the-state-machine)); a
-  table without a state machine is `CONFIG`. Each is checked and committed as any request of its
+  or a `parent` for a table without the hierarchy, is `CONFIG`. Each is checked and committed as any request of its
   kind; no face adds or drops a rule.
 - A write answers `{affected, keys}` of its request and, as `rows`, the table's rows as `rows`
   answers them right after the commit. Grounding: a view redraws from the rows an operation returns,
@@ -211,9 +207,8 @@ The order of the commit protocol is normative.
 - An operation on the row named by `key` that matches no row — `row.get`, or a write that affects
   none — is `NO_ROWS`, naming the table and the key, orm's code of a one-row read that matched none.
   Grounding: a write to a named row that changes nothing would be a silent drop.
-- An unknown `operation`, a missing member, a member the operation does not take, `values` that is
-  not an object, and `values` of `transition` that assign the state column, which `state` gives, are
-  `CONFIG`, naming it; a table or column the catalog does not declare is the
+- An unknown `operation`, a missing member, a member the operation does not take, and `values` that is
+  not an object are `CONFIG`, naming it; a table or column the catalog does not declare is the
   request's `ENTITY_UNKNOWN` or `COLUMN_UNKNOWN`.
 - `views` reads the view table of the catalog ([application schema](100-checklist.md#views)), never
   a table the face names: without `key` it answers the view table's rows as `rows` does; with `key`
@@ -230,8 +225,7 @@ The order of the commit protocol is normative.
 - **The CLI.** Each operation is a command: `flowmark schema <corpus>`, `rows <corpus> <table>`,
   `rows.load <corpus> <table>` with the rows as one JSON array on standard input, `row.get <corpus> <table> <key>`, `row.insert <corpus> <table> [assignment…]`,
   `row.update <corpus> <table> <key> [assignment…]`, `row.move <corpus> <table> <key> <position> [<parent>]`,
-  `row.delete <corpus> <table> <key>`, `transition <corpus> <table> <key> <state> [assignment…]` and
-  `views <corpus> [<key>]`.
+  `row.delete <corpus> <table> <key>` and `views <corpus> [<key>]`.
   An assignment is `<column>=<text>` or `<column>:=<json>`; a positional value is `<text>` or
   `:=<json>`. A text is a value's readable text, sent as the wire value of its column's type — a
   JSON number for an integer or a float, a JSON bool for `bool`, a JSON string otherwise — and
@@ -239,8 +233,7 @@ The order of the commit protocol is normative.
   by default, 0 refuses at once), and a flag may stand before or after the positional arguments.
   The answer is written to standard output as one line of JSON. The other commands are
   `flowmark canon` ([the canon operation](#the-canon-operation)), `flowmark install <corpus>`
-  ([schema](30-schema.md#install)), `flowmark history repair <corpus> <table> <key> [--from <state>]`
-  ([constraints](50-constraints.md#a-state-changed-outside-the-engine)) and `flowmark unlock <corpus>
+  ([schema](30-schema.md#install)) and `flowmark unlock <corpus>
   [--holder <holder>]` ([a stale lock](#a-stale-lock)). Every command exits 0 when it ran, 1 when it
   was refused or failed, with `flowmark <command>: <code>: <message>` on standard error, and 2 for a
   wrong command line. A refused unlock is `CONFIG`, and a failure of the file system under it
@@ -332,10 +325,10 @@ utility of orm's SQLite dialect holds on a corpus, and a client has only this dr
   names it; a hand edit of the file is read at the next of these, as a hand edit of `dbspec/` is. A git rewind rewinds
   the counters with the rows. `TestSequences` of `statement`, `TestSequenceRaise` and `TestRaiseSequences` of `irexec`,
   and `TestAutoincrement` and `TestSequencesFile` of `catalog` hold it.
-- **Assigned columns.** A `key_prefix` key and an `order` position are the corpus's to assign, so the schema of the
-  statements lets each hold NULL, as SQLite's `INTEGER PRIMARY KEY` does. An insert that leaves one out, or gives it NULL,
-  is given the next key of the prefix ([document model](20-document-model.md#keys)) or the next position under its parent,
-  in the order its rows were inserted, and a `RETURNING` of the key reads the key the row was given. An `ON CONFLICT` meets
+- **No assigned columns.** A text key and an `order` column are the insert's to give, as on the databases orm reaches
+  ([document model](20-document-model.md#keys)): the schema of the statements declares each `NOT NULL`, so an insert that
+  leaves one out, or gives it NULL, fails as SQLite's `NOT NULL constraint failed`, and the corpus holds the values the
+  statements wrote. `TestNoAssignedColumns` of `statement` holds it. An `ON CONFLICT` meets
   a key byte for byte, as SQLite's does, and a key equal to another only without regard to case is `DUPLICATE_KEY`: the
   rule of keys judges every write.
 - **Transactions.** `BEGIN IMMEDIATE` and `BEGIN EXCLUSIVE` take the lock at once. A plain `BEGIN` takes no lock: its first
@@ -555,7 +548,7 @@ the writer of the difference.
   and `REPEATABLE READ` (PostgreSQL documentation, Transaction Isolation; only `SERIALIZABLE` detects
   it). Grounding: an outside edit takes no lock, so no lock-based isolation can include it; validating
   every read would need the read set of every request, which no orm client sends.
-- A request outside a transaction — a read, a write, a history repair — is one transaction under the
+- A request outside a transaction — a read or a write — is one transaction under the
   lock: it takes the lock, reads the corpus, and a write commits before the lock is released.
 - A request that fails inside a transaction changes nothing, and the transaction stays open at its
   state before the request. Grounding: SQL statement atomicity — a failed statement has no effect, and
@@ -586,7 +579,7 @@ the writer of the difference.
   of the journal, as a durable commit record is in a write-ahead log, so a failure after it is never
   answered as a commit that did not happen while recovery would apply it. The lock is released on
   every way out of an operation, a panic included.
-- The write path retries a single-operation write — a write, a history repair or a rewrite outside a
+- The write path retries a single-operation write — a write or a rewrite outside a
   transaction, on every face, a server request outside a transaction included — once when its commit
   meets `CORPUS_CONFLICT`: under the same lock, it reads the corpus again and runs the operation again.
   A server transaction is never retried by the server; the orm client receives `WRITE_CONFLICT` and
@@ -613,7 +606,7 @@ the writer of the difference.
    serialization failure (SQLSTATE 40001), which orm reports as `WRITE_CONFLICT`, not `DEADLOCK` (orm
    maps 40001 to `DEADLOCK`), since the client never retries it. When the re-read corpus is the one read, the writes were checked on it as
    they ran. The rewrite refusal below is checked as each request runs too, as SQL checks a constraint
-   that is not deferred, so the request that must rewrite such a file fails at once. A validator diagnostic on another row (`type`, `key.duplicate`, `reference.dangling`, `check`, `codec`, `view`, `order`, `state.transition`, `state.required`, `state.limit`, `history.gap`, `history.chain`, and the validator's `parent.cycle` across several `files` files) never fails the commit, except that a `type` diagnostic fails it when a constraint check of the commit must evaluate that value ([canonical format](10-canonical-format.md#readable-values)), and two rows with byte-for-byte equal keys make their table unavailable ([canonical format](10-canonical-format.md#diagnostics)); a `format.*` diagnostic fails it only as the rewrite refusal and the unavailable table state ([canonical format](10-canonical-format.md#diagnostics)). A commit that must rewrite a file — the row's own file, a file holding a link to a row whose derived target changes (its detail section appears or disappears, or an insert gives a dangling link its row), an `order` sibling — is refused when that file has a `format.*` diagnostic: `CONSTRAINT`, naming the file and the diagnostic, and naming `flowmark canon` when it is `format.noncanonical`. Three commits are exempt: `flowmark canon` for its targets ([operations](#the-canon-operation)); the add-column migration, for the diagnostics the added column causes, which do not make its table unavailable to that migration ([migration](80-migration.md)); and a delete that removes a `files` row's whole file from the rewrite refusal only — its restrict check still needs the rows of every table that may reference the row (its own table through `parent`, its child blocks and its history rows, and every table with a foreign key to it), so such a delete is `CONSTRAINT` when any of them is unavailable.
+   that is not deferred, so the request that must rewrite such a file fails at once. A validator diagnostic on another row (`type`, `key.duplicate`, `reference.dangling`, `check`, `codec`, `view`, `order`, and the validator's `parent.cycle` across several `files` files) never fails the commit, except that a `type` diagnostic fails it when a constraint check of the commit must evaluate that value ([canonical format](10-canonical-format.md#readable-values)), and two rows with byte-for-byte equal keys make their table unavailable ([canonical format](10-canonical-format.md#diagnostics)); a `format.*` diagnostic fails it only as the rewrite refusal and the unavailable table state ([canonical format](10-canonical-format.md#diagnostics)). A commit that must rewrite a file — the row's own file, a file holding a link to a row whose derived target changes (its detail section appears or disappears, or an insert gives a dangling link its row), an `order` sibling — is refused when that file has a `format.*` diagnostic: `CONSTRAINT`, naming the file and the diagnostic, and naming `flowmark canon` when it is `format.noncanonical`. Three commits are exempt: `flowmark canon` for its targets ([operations](#the-canon-operation)); the add-column migration, for the diagnostics the added column causes, which do not make its table unavailable to that migration ([migration](80-migration.md)); and a delete that removes a `files` row's whole file from the rewrite refusal only — its restrict check still needs the rows of every table that may reference the row (its own table through `parent`, its child blocks, and every table with a foreign key to it), so such a delete is `CONSTRAINT` when any of them is unavailable.
 3. Write, as the source of rename n, a copy of its post-image `.flowmark/tx/<id>.<n>.<hash>`, and
    sync it; every file of the stage `<id>` (32 lowercase hex digits) is named `<id>.<name>` in
    `.flowmark/tx/`. Before this step, the folder of every target and every folder to create is
@@ -703,7 +696,7 @@ system's mount point is not supported, and a commit that would write there is re
 
 ## The clock
 
-Every engine-assigned time — `updated`, `soft_delete`, `default now`, a history row's `at` — is
+Every engine-assigned time — `updated`, `soft_delete`, `default now` — is
 the request's `now` for an orm request, and otherwise the engine's UTC clock truncated to
 microseconds; one request has one clock value. Written into a `datetime(p)` column, it is
 truncated to p fraction digits, never rounded; compared with a column, `now` and the relative time
@@ -748,10 +741,9 @@ and MySQL and PostgreSQL compare a `datetime(p)` column with `NOW(6)` at six dig
   holds both: a write copies the same rows at 1,000 and at 100,000 rows, and compares at most eight
   times the base-2 logarithm of the documents.
 - The corpus keeps an index of its rows: by key, by key without regard to case, by the value of each
-  column a write reads by value (a foreign key, a placement or parent key, a unique key, a state
-  machine's column and the sibling group of an ordered row) and by the number of each identity column
-  and `key_prefix` key. The index is persistent like the documents and shared between the corpora
-  read or written one from the other. A read or a write marks each document whose rows it changes,
+  column a write reads by value (a foreign key, a placement or parent key and a unique key) and
+  by the number of its key and of each identity column. The index is persistent like the documents and shared between
+  the corpora read or written one from the other. A read or a write marks each document whose rows it changes,
   and before the next access of the index the rows of the marked documents leave it and enter it again
   as they stand: a row that is new, changed, under another parent or under a parent that entered
   again, so the index costs the rows of the documents that changed. The first write after a corpus is
@@ -764,9 +756,9 @@ and MySQL and PostgreSQL compare a `datetime(p)` column with `NOW(6)` at six dig
   at 200 and at 2,000 rows that share a key and that a write of one of them writes the same entries at both sizes, and
   `TestCost` that every operation writes the same entries at 1,000 and at 100,000 rows.
 - A write and its checks read the rows they need through the index, not by walking a table: a
-  stated, placement, parent or referenced row by its key, the largest `key_prefix` number and
-  identity by the number index, a sibling group by its group, the rows that reference a row by the
-  key their foreign key names, a state's rows by its value and a unique key's rows by its values.
+  stated, placement, parent or referenced row by its key, the largest key and
+  identity by the number index, the rows that reference a row by the key their foreign key names
+  and a unique key's rows by its values.
   The index also holds, for each of these values that is not a value of its column type, the row
   whose evaluation fails; a check reads the rows of the keys it needs with those rows and judges each
   in corpus order as it judged each row of the table, so it fails on the same row as the walk did.
@@ -787,9 +779,8 @@ and MySQL and PostgreSQL compare a `datetime(p)` column with `NOW(6)` at six dig
   restoration and an exchange of documents of each golden corpus equals the database filled from
   nothing, and fails exactly when that fill fails.
 - A write statement reads from its database the rows it changed, not its tables: the rows SQLite's pre-update hook
-  reports, read at their rowids, and the keys it allocates by the number index of the corpus from the largest down,
-  skipping a key the statement took. `TestCost` holds that a write and a refused write read the same rows of the database
-  at 1,000 and at 100,000 rows, and `TestCapture`, `TestCaptureKeys` and `FuzzCapture` of `statement` that the difference
+  reports, read at their rowids. `TestCost` holds that a write and a refused write read the same rows of the database
+  at 1,000 and at 100,000 rows, and `TestCapture` and `FuzzCapture` of `statement` that the difference
   formed from those rows equals the difference of every row of the tables, through REPLACE, foreign key actions,
   triggers, rowid changes and texts holding a NUL.
 - The limits of the path are the costs that `TestCost` counts and the times that `BenchmarkStatement` of `statement`
@@ -830,8 +821,7 @@ and MySQL and PostgreSQL compare a `datetime(p)` column with `NOW(6)` at six dig
   within the hundreds of milliseconds of the latency target; allocation is the budget a test holds,
   since a machine's load changes the time and not the bytes.
 - The commit checks every constraint whose
-  outcome the transaction can change: the keys, references, checks, order, limits, transitions and
-  `history.gap` of the target rows, and the rows they reference or that reference them, evaluated
+  outcome the transaction can change: the keys, references, checks and order of the target rows, and the rows they reference or that reference them, evaluated
   on the corpus re-read under the lock. Full `flowmark validate` runs on demand and on catalog
   change.
 - A long-lived face (the sidecar, the server) may watch the corpus and push change events to its
@@ -888,7 +878,7 @@ The engine states the size of a corpus it serves within the latency target above
 | `CORPUS_CONFLICT` | `WRITE_CONFLICT` | a target changed since it was read, or a change since the read makes the transaction's writes other writes; names each file and line |
 | `DUPLICATE_KEY` | `DUPLICATE_KEY` | a primary or unique key value already exists; names both rows (table and key) |
 | `FOREIGN_KEY` | `FOREIGN_KEY` | a reference names no row, or a referenced row is deleted while referenced |
-| `CONSTRAINT` | `CONSTRAINT` | any other rule of the catalog refused the write — a check, a title, a transition, a required column, a limit, an order, a single-line place; names the rule, and the row and column ([canonical format](10-canonical-format.md#diagnostics)); or a write that must rewrite a non-canonical or malformed document, or a request, read or write, that needs the rows of an unavailable table ([canonical format](10-canonical-format.md#diagnostics)), naming the file and the diagnostic |
+| `CONSTRAINT` | `CONSTRAINT` | any other rule of the catalog refused the write — a check, a title, an order, a single-line place, a task marker value that its list row cannot show; names the rule, and the row and column ([canonical format](10-canonical-format.md#diagnostics)); or a write that must rewrite a non-canonical or malformed document, or a request, read or write, that needs the rows of an unavailable table ([canonical format](10-canonical-format.md#diagnostics)), naming the file and the diagnostic |
 | `READ_ONLY` | `READ_ONLY` | a write in a read-only transaction |
 | `CONFIG` | `CONFIG` | a control message that the session's state does not allow ([transactions](#transactions)), a `flowmark canon` path that names no corpus document ([the canon operation](#the-canon-operation)), or a face operation that is unknown, lacks a member or names a setting its table does not declare ([the faces](#the-faces)) |
 | recovery refusal | `DRIVER` | names the target and both recorded hashes and the stage files that hold them; opening, and every operation that acquires the lock, refuses until resolved — `DRIVER`, orm's code of a database error no other code names, as SQLite's `SQLITE_CORRUPT` is; a failure of the file system under the journal is `DRIVER` too |

@@ -4,7 +4,7 @@ go 1.27.3
 
 require (
 	github.com/min-0-max/sqlite v1.61.0-polyspec.5
-	github.com/polyspec/orm/packages/go v0.0.26
+	github.com/polyspec/orm/packages/go v0.0.28
 	golang.org/x/sys v0.49.0
 	golang.org/x/text v0.42.0
 	modernc.org/sqlite v1.61.0
@@ -14,7 +14,6 @@ require (
 	filippo.io/edwards25519 v1.2.0 // indirect
 	github.com/dustin/go-humanize v1.1.0 // indirect
 	github.com/go-sql-driver/mysql v1.10.1 // indirect
-	github.com/goccy/go-yaml v1.19.2 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/ncruces/go-strftime v1.1.0 // indirect

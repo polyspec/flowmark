@@ -74,17 +74,17 @@ func TestFaceCommands(t *testing.T) {
 		if got := cliOK(t, "row.get", root, "people", "P2"); got != `{"row":{"id":"P2","name":"Max & Co","age":null}}`+"\n" {
 			t.Fatalf("row.get printed %s", got)
 		}
-		cliOK(t, "row.insert", root, "items", "title=First", "body=")
-		cliOK(t, "row.insert", root, "items", "title=Second", "body=")
+		cliOK(t, "row.insert", root, "items", "id=T1", "title=First", "body=", "position=1")
+		cliOK(t, "row.insert", root, "items", "id=T2", "title=Second", "body=", "position=2")
 		if got := cliOK(t, "row.move", root, "items", "T2", "1", "T1", "--lock-wait-ms", "0"); !strings.Contains(got, `{"id":"T2","parent":"T1"`) {
 			t.Fatalf("row.move printed %s", got)
 		}
 		if got := cliOK(t, "row.move", root, "items", "T2", "2", ":=null"); !strings.Contains(got, `{"id":"T2","parent":null`) {
 			t.Fatalf("row.move to the top printed %s", got)
 		}
-		cliOK(t, "transition", root, "items", "T1", "doing")
-		if got := cliOK(t, "transition", root, "items", "T1", "done", "evidence=Tests pass."); !strings.Contains(got, `"state":"done"`) {
-			t.Fatalf("transition printed %s", got)
+		// A state is a value that row.update writes: the engine applies no state machine (spec 50 State columns).
+		if got := cliOK(t, "row.update", root, "items", "T1", "state=x"); !strings.Contains(got, `"state":"x"`) {
+			t.Fatalf("row.update of the state printed %s", got)
 		}
 		cliOK(t, "row.update", root, "people", "P2", "age=40")
 		if got := cliOK(t, "rows", root, "people"); got != `{"rows":[{"id":"P1","name":"Ada","age":36},{"id":"P2","name":"Max & Co","age":40}]}`+"\n" {
@@ -147,10 +147,6 @@ table views {
 		if code != 1 || !strings.HasPrefix(errOut, "flowmark unlock: CONFIG: ") {
 			t.Fatalf("code %d, err %q", code, errOut)
 		}
-		code, _, errOut = cli(t, "history", "repair", root, "items", "T9")
-		if code != 1 || !strings.HasPrefix(errOut, "flowmark history repair: NO_ROWS: ") {
-			t.Fatalf("code %d, err %q", code, errOut)
-		}
 	})
 	t.Run("40#the-faces: a wrong command line exits 2", func(t *testing.T) {
 		root := boardRoot(t)
@@ -165,7 +161,8 @@ table views {
 			{"row.insert", root, "people", "age=1", "age=2"},
 			{"row.move", root, "items", "T1"},
 			{"rows", "--lock-wait-ms", "x", root, "people"},
-			{"history", "mend", root, "items", "T1"},
+			{"transition", root, "items", "T1", "doing"},
+			{"history", "repair", root, "items", "T1"},
 			{"install"},
 			{"unlock"},
 		} {

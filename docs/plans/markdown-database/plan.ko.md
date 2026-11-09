@@ -1,5 +1,5 @@
 <!-- doc-id: plans-markdown-database -->
-<!-- source-sha256: d038508d9e82e47259912bf0f34771deef246f8ada82cab30e36351ac68e33dc -->
+<!-- source-sha256: a815f3b5fe673ecae7914185670bf220b9649b65f7473acaa0c71f2b22970640 -->
 # markdown database 계획
 
 [English](plan.md)
@@ -342,7 +342,7 @@ markdown 전용 선언은 모두 dbspec **manifest setting**이며 `markdown <co
   `block <fk> table`로, 또는 `document table`로 저장되며 `title`이나 `body`를 선언하지 않는다:
   이력 규칙은 그 행과 foreign key 위에서 정해지며 그 자리 위에서 정해지지 않으므로 어느 저장도
   강제하지 않는다(block은 행의 이력을 행 곁에 두고, document table은 깊이 제한이 없다.
-  [schema](../../spec/30-schema.ko.md#이력-table) 참고). 이력은 전이만 쓰고 insert는 쓰지 않는다. 이력 행을 가진 행의
+  [schema](../../spec/30-schema.ko.md#markdown-setting) 참고). 이력은 전이만 쓰고 insert는 쓰지 않는다. 이력 행을 가진 행의
   삭제는 `FOREIGN_KEY`로 거절한다(restrict-only).
 - corpus에서 `state_machine`을 가진 table은 `history`를 선언한다. 없으면 schema 오류다.
 - `state_machine <column> initial <state>`는 반복할 수 있고, corpus에서 기계는 적어도 하나를 갖는다.
@@ -354,7 +354,7 @@ markdown 전용 선언은 모두 dbspec **manifest setting**이며 `markdown <co
   빈틈이다 — 사람의 편집이 엔진을 우회했다. validate는 행의 줄에서 `history.gap`을 보고하고, 이력
   행에서 `from`이 이전 행의 `to`와 다르면(첫 행이면 초기 상태가 아니면) `history.chain`을, 그 쌍이
   선언된 전이가 아니면 `state.transition`을, 선언된 쌍이 `require` 목록이 밝히는 column에 NULL이나 빈
-  텍스트를 가지면 `state.required`를 보고한다. type이 아닌 상태, `from`, `to`는 `type`만이다([constraints](../../spec/50-constraints.ko.md#엔진-밖에서-바뀐-상태)). 어느 것도 다른 쓰기를 막지 않는다. 빈틈 있는 행의 엔진 전이는 빈틈이 닫힐
+  텍스트를 가지면 `state.required`를 보고한다. type이 아닌 상태, `from`, `to`는 `type`만이다([constraints](../../spec/50-constraints.ko.md#상태-column)). 어느 것도 다른 쓰기를 막지 않는다. 빈틈 있는 행의 엔진 전이는 빈틈이 닫힐
   때까지 `CONSTRAINT`이고, 그 행의 다른 column update는 허용한다. 그러므로 엔진 밖의 상태 변경은
   사람이 일관된 이력을 위조하지 않는 한 보고된다.
 - `flowmark canon <corpus> [file…]`는 지정한 file을(없으면 corpus의 모든 문서를) 한 transaction에서 canonical 형식으로 다시 쓰며, 이름을 준 file에 `format.block`, `format.section`, `format.encoding`이나 그 행 사이의 `parent.cycle`이 있으면 거절하고, file을 주지 않으면 그 행 사이에 `parent.cycle`이 없고 `format.*` 진단이 `format.noncanonical`뿐인 문서만 다시 쓰고 나머지는 보고한다. canon은 논리 값을 바꾸지 않으므로 key, 참조, 제약 검사가 그것을 거절하지 않는다. 링크 유도에 사용할 수 없는 table이 필요한 대상은 이름을 준 canon을 `CONSTRAINT`로 거절하며 두 file을 밝히고, file을 주지 않으면 보고만 하고 다시 쓰지 않는다. validator 진단이 있는 값은 쓴 텍스트를 유지한다. 문서 바이트를 정규화하는 유일한 연산이며, 논리적 쓰기는 결코 정규화하지 않는다.

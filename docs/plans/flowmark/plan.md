@@ -50,7 +50,7 @@ application code ── orm client (Go/PHP/Python/Rust/TS) ── IR executor �
                                                                                           ▼
 flowmark = the markdown database engine (one Go binary)
    ├─ codec: strict parser + canonical renderer of the storages (two-clause idempotency, §2)
-   ├─ validator: catalog constraints (type/PK/UNIQUE/FK/CHECK/state machine and history)
+   ├─ validator: catalog constraints (type/PK/UNIQUE/FK/CHECK)
    ├─ IR executor over in-memory indexes derived from the parsed corpus
    ├─ write path: lock → conflict check → validate → stage → prepare record → renames → commit
    ├─ .flowmark/: lock, tx journal, server token
@@ -82,7 +82,7 @@ flowmark = the markdown database engine (one Go binary)
 ### 4. Schema (`30-schema.md`) — the catalog is the schema
 
 - **dbspec is the root grammar and the only authority.** The `dbspec/*.dbs` set of a corpus root is the catalog (Revision 3). Documents carry no schema copy and no stamp, and standalone documents with embedded fragments are withdrawn: schema is law and data is rows, and a copy of the law per document makes the drift of the copies a bug class of its own. orm's engine, IR and conformance are bound to the dbspec manifest hash, and dbspec's parser and type system are reused as a library.
-- **Markdown-specific schema surface is manifest-level settings, never rendered types** (introspection coherence, the `updated`/`soft_delete` precedent): `store`, `key_prefix`, `title`, `body`, `order`, `checkbox`, `markdown` and the state machine's `initial`, `history` and `limit` are settings that the SQL backends ignore; a real database introspects them back as plain columns.
+- **Markdown-specific schema surface is manifest-level settings, never rendered types** (introspection coherence, the `updated`/`soft_delete` precedent): `store`, `title`, `body`, `order`, `task_marker` and `markdown` are settings that the SQL backends ignore; a real database introspects them back as plain columns. The state machine's settings and `key_prefix` are withdrawn, and `order` assigns nothing, by Ruling: the engine holds only what the common databases hold (T62, T89).
 - **`identity` is allowed** only on an `i64` primary key of a markdown table, allocated under the lock one more than the larger of the largest key and the table's AUTOINCREMENT counter (Revision 3, and A refresh of the changed rows (T42) for the counter; the other key types have no maximum to add one to); key reuse under git rewind is accepted, since the rewind rewinds the counter too — git history is the allocator of record.
 
 ### 5. Ops and transactions (`40-ops.md`)
@@ -98,8 +98,8 @@ flowmark = the markdown database engine (one Go binary)
 ### 6. Constraints and the capability table (`50-constraints.md`, `60-dialect.md`)
 
 - Strict parse, type/PK/UNIQUE/FK (exact byte match; keys unique without regard to case), CHECK. Soft-deleted rows still occupy unique keys and still satisfy FKs (SQL parity — stated so a soft delete never trips a spurious ruling). `aes`, `aes_version` and `blind_index` are declared on a corpus: the client encrypts as on SQL, and the engine takes its keys by injection (spec 30 Keys).
-- The **state machine is a dbspec-level manifest setting** (transitions, terminals, required columns, and — Revision 3 — `initial`, `history` and `limit`). Every engine transition writes a history row; a state changed outside the engine is reported as a history gap or a broken chain, with a repair command. The application schema supersedes a done item with a `supersedes` link; the engine enforces no WIP rule — the relative gate is removed, and the owner's rule stays a working rule.
-- **Human writes void the database's writer-monopoly premise; each feature rules on it**: FK actions are **restrict-only** (`cascade`/`set_null` are rejected at catalog load — they are unimplementable for a writer that bypasses the engine); `audit` and `immutable` are schema errors on a corpus, replaced by the state history (Revision 3); every non-null column is written, the engine writing defaults on insert.
+- The engine holds **no state machine** (T62, Ruling: the engine holds only what the common databases hold): it enforces no transition, terminal, initial state, required column or limit, writes no history row and reports no history gap or chain; the transitions of a state and their history are polyspec fsm's. This withdraws the ruling that the state machine is a dbspec-level manifest setting the engine enforces (Revision 2 and 3). The engine enforces no WIP rule; the owner's rule stays a working rule.
+- **Human writes void the database's writer-monopoly premise; each feature rules on it**: FK actions are **restrict-only** (`cascade`/`set_null` are rejected at catalog load — they are unimplementable for a writer that bypasses the engine); `audit` and `immutable` were schema errors on a corpus, replaced by the state history (Revision 3); the statement path takes both as a database does (T31: an engine write of an `immutable` table's row is refused, and an audited write writes the rows that a database's audit triggers write), and the state history is withdrawn with the state machine (T62); every non-null column is written, the engine writing defaults on insert.
 - **The capability table** (`60-dialect.md`) is the integration contract under the IR-executor wire: `update|share` locks and their `*_nowait` forms are documented no-ops; every `isolation` level is accepted, since a transaction holds the corpus lock; `timeoutMs` is `CAPABILITY_UNSUPPORTED` and `fulltext` `OPERATOR_NOT_ALLOWED`; an `on_duplicate` insert has exactly one conflict key (orm's rule); a changed target fails `WRITE_CONFLICT`; `getQuery`, statement events, `subscribe` and `force_index` are `CAPABILITY_UNSUPPORTED`; savepoints are nested stages.
 - The markdown plan lifecycle (orm's dbplan/apply/recover machinery) is **scoped out of v1**: v1 supports corpus creation and additive column addition; dbplan chains on markdown corpora are rejected (80-migration states the scope and the reason).
 
@@ -116,7 +116,7 @@ flowmark = the markdown database engine (one Go binary)
 
 ### 9. The application schema (`100-checklist.md`)
 
-- `flowmark.dbs` (Revision 3): `items` (parent, the five-state machine with its history, title, body, assignee, start and due as date/datetime pairs, priority, position), `people`, `item_links` (blocks, relates, duplicates, supersedes), `item_history` and `views`.
+- `flowmark.dbs` (Revision 3, T62): `items` (parent, a state of five values that a check constrains, title, body, assignee, start and due as date/datetime pairs, priority, position), `people`, `item_links` (blocks, relates, duplicates, supersedes) and `views`; the five-state machine and `item_history` are withdrawn with the state machine (T62), since the transitions and their history are polyspec fsm's.
 - **Views are data and thin consumers**: a kanban, list or gantt view is a row of `views`; a board reads through the engine and writes through the same operations — an illegal drag fails exactly like an illegal CLI write. No view-specific write path exists, and no WIP limit is invented.
 - This repository is not a corpus (Revision 3): its checklists stay kit documents managed by hand, so the cutover is withdrawn; `make validate` and the prose ID checker are removed with the old engine; `make refs-check` keeps checking the kit-tracked checklists.
 
@@ -258,6 +258,58 @@ below is counted by the cost counter of flushes, in TestCost, and its Red is tha
    is refused, naming the engine that completes it.
 
 A row is done when its count in TestCost is the stated one and the crash tests at every step of the protocol pass.
+
+**Ruling: the engine holds only what the common databases hold.** flowmark is a database that orm reaches beside MySQL,
+PostgreSQL and SQLite, and orm's one rule is the same result on every database. So a feature of the engine is one that those
+databases hold, and markdown's own grammar only shows a value a database holds: it never gives, checks or records a value
+that a database would not. A feature that no common database has is removed, and the state machine is the first (T62).
+
+- **The state machine goes.** No common database holds a state machine: the values a column may hold are its type and the
+  constraints of the schema, and no database refuses an update for the value it replaces. The engine enforces no
+  transition, terminal, initial state, required column or limit of a state column and writes no history row; the validator
+  reports no `history.gap`, `history.chain`, `state.transition`, `state.required` or `state.limit`; the catalog keeps no
+  machine and requires no `history` and no `initial`, and a history table is an ordinary table with no storage or
+  `markdown` rule of its own; `flowmark transition` (the `transition` operation of the CLI, MCP and sidecar faces) and
+  `flowmark history repair` go, and the `schema` operation answers no machine. The transitions of a state and their
+  history are polyspec fsm's: a state that fsm takes is written to the corpus as any value is, and the trail is fsm's to
+  keep. This withdraws the state machine ruling of §6 and the history of §9; the illegal status transitions of the context
+  are fsm's to stop.
+- **What stays shows a value**: `store` and its `shard`, which say where a row is written; `title`, `body` and `markdown`,
+  which say which place of the row holds a column; and `task_marker`, which says how a list row shows a column.
+- **The task marker shows the value of its column.** `task_marker <column>` names one column of a table stored as a list, and the
+  list row writes that column between the brackets of its task marker; a table stored otherwise writes the column where it
+  writes any scalar.
+  - A column of one character, `varchar(1)`, is written `- [<value>] …`. Its values are the ones the schema allows, as every
+    database constrains them — a foreign key to a table of states, or a check `in (…)` — and a value outside the constraint
+    is refused as every database refuses it, `reference.dangling` or `check`. A NULL is a list row without a box,
+    `- <key> …`, and the empty text is `- [] …`; a character that a single-line place refuses is refused here.
+  - A `bool` column, whose values are 0 and 1, is written `- [ ] …` for 0 and `- [x] …` for 1, the unchecked and the
+    checked task item of GFM. `[X]`, which GFM reads as checked too, reads as 1 and is `format.noncanonical`; a NULL is a
+    list row without a box.
+  Grounding: a GFM task item is one character between brackets, so a column of one character shows its whole value there
+  and a boolean shows as GFM's own two boxes. The glyph that a state machine mapped to each state name was a second
+  spelling of each value, and a value without a glyph could not be written, which no database refuses.
+- **The orm grammar.** The form above and the removal of `state_machine` change orm's grammar (orm DBS-80 and the
+  repeat rule of DBS-63; DBS-73, DBS-81, DBS-82 and DBS-83 leave it), which orm 0.0.28 carries. The setting takes the GFM
+  name of the bracketed part of a task list item, its task list item marker, since it shows any one-character value
+  there and not only a checked or unchecked box: `task_marker <column>`, and `checkbox`, the former name, is refused as
+  an unknown setting, as is `state_machine`. flowmark takes the form by T62 itself: the catalog keeps the column of the
+  one `task_marker` line, and the list reads and writes its value as stated above.
+- **`key_prefix` and `order` give a value**, so the same criterion rules them.
+  - `key_prefix '<p>'` allocates a text key `<p><n + 1>`. No common database allocates a key so: MySQL, PostgreSQL and
+    SQLite allocate an integer, by AUTOINCREMENT, a sequence or an identity. orm plans an insert that leaves such a key out
+    only on a corpus (its planner's `Assigns`), so the same insert is `IR_INVALID` on every other database. It is removed:
+    the application gives its key, or the table declares `identity`, which every database holds.
+  - `order <column>` places a row among its siblings, and the engine assigns the column on an insert and renumbers the
+    siblings of a move, which no database does; orm plans it, again, only on a corpus. The assignment and the renumbering
+    are removed, and the application writes the column as any integer. What shows a value stays: the rows of a sibling
+    group are written in the order of the column, so a list shows the order of its rows. A position shows a rank and not
+    a value, so the value is written where any scalar is — a field of a list row, a cell, the item of a `files` row, as
+    `files` storage writes its rank today — and a row that stands out of the order of its values is
+    `format.noncanonical`, which `flowmark canon` reorders.
+  Each is carried out by a row of its own in flowmark and in orm (orm DBS-77, DBS-79 and the planner's `Assigns`);
+  flowmark's is T89, which removes `key_prefix` and every assignment of the order column from the catalog and the
+  executor.
 
 **T9 conformance contract (stated now)**: markdown vectors are corpus-before + IR request + expected corpus-after / expected rows, run against the Go executor; SQL/binds comparison does not apply (there is no SQL). Cross-client comparison begins when other clients port the executor. (Revision 3: vectors run against the flowmark engine; orm's executor conformance pins a flowmark build.)
 

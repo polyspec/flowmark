@@ -41,17 +41,26 @@ behaviour.
 
 | Setting | Meaning |
 | --- | --- |
-| `store files` / `store document list\|table` / `store block <fk> list\|table` | the table's storage ([document model](20-document-model.md)); exactly one per table on a corpus. A `files` or `document` store may end in `shard <column> <year\|month\|day>`, which stores each period apart ([time shards](20-document-model.md#time-shards)); orm checks the clause (a non-null `date` or `datetime` column, no `order`, no block), and a history table is never sharded |
-| `key_prefix <p>` | the `varchar` primary key is allocated `<p><n + 1>`; orm treats the column as executor-assigned — a `varchar`, as dbspec keys no `text` column |
+| `store files` / `store document list\|table` / `store block <fk> list\|table` | the table's storage ([document model](20-document-model.md)); exactly one per table on a corpus. A `files` or `document` store may end in `shard <column> <year\|month\|day>`, which stores each period apart ([time shards](20-document-model.md#time-shards)); orm checks the clause (a non-null `date` or `datetime` column, no `order`, no block) |
 | `title <column>` | the row's title: non-null, never empty |
 | `body <column>` | the row's body: a `markdown` column, never NULL |
-| `order <column>` | the row's position among its siblings; orm treats the column as executor-assigned |
-| `checkbox <column> <state> '<glyph>'` | the list glyph of a state: exactly one character, written between the brackets of a list row (`- [<glyph>] …`) |
+| `order <column>` | the order of the row among its siblings, by the column's value ([document model](20-document-model.md#order)); nothing assigns it, so an insert gives it (orm DBS-79) |
+| `task_marker <column>` | the column a list row writes between the brackets of its task marker (orm DBS-80): a `varchar(1)` or `bool` column, nullable or not, as stated below |
 | `markdown <column>` | the column holds markdown prose and is stored as a section |
-| `state_machine <column> initial <state>` | an initial state; may repeat |
-| `state_machine <column> <from> -> <to> [require (…)]`, `state_machine <column> terminal <state> [require (…)]` | the transitions and terminals, as dbspec defines them |
-| `state_machine <column> history <table> row <fk column> from <column> to <column> at <column>` | the history table and its named columns |
-| `state_machine <column> limit <state> <n>` | at most n rows in the state |
+
+`task_marker <column>` is one line per table, and orm refuses a second as a repeat, a column of another type
+(`task_marker needs a varchar(1) or bool column, not <type>`) and the per-state form `task_marker <column> <state>
+'<glyph>'` as a syntax error. In a table stored as a list, the column is written between the brackets of the list row,
+`- [<value>] <key> <title> …` ([canonical format](10-canonical-format.md#list-rows)): a `varchar(1)` value as itself,
+the empty text as `[]`; a `bool` as the unchecked and the checked task box of GFM, `[ ]` for false and `[x]` for true,
+where `[X]`, which GFM reads as checked too, reads as true and is `format.noncanonical`; and NULL as a list row without a
+box, `- <key> <title> …`. Its values are those its type and the schema's constraints allow, as on every database — a
+check `in (…)` or a foreign key to a table of states — never a list of glyphs. In `table` and `files` storage the column
+is a cell or a field item, as any scalar is. The settings `checkbox`, its former name, and `state_machine` are not
+settings of the grammar, each refused as unknown (`setting "checkbox" is unknown`): the engine holds no state machine
+([constraints](50-constraints.md#state-columns)). Grounding: a GFM task list item holds one character between its
+brackets, its task list item marker, so a column of one character shows its whole value there, and a boolean shows as
+GFM's own two boxes.
 
 ## Corpus rules on dbspec constructs
 
@@ -62,8 +71,7 @@ behaviour.
   `reference.dangling` applies to it.
 - **Default storage**: a table without a `store` setting is stored `document table`, in one document of
   its own, so a dbspec document written for a SQL database installs on a corpus as it is.
-- **Rejected** on a corpus, each a schema error: a composite primary key of a table in `files` storage, which names a file by one key column; `audit` (`state_machine … history` records
-  transitions instead); an external `use` document; a `codec` whose last stage
+- **Rejected** on a corpus, each a schema error: a composite primary key of a table in `files` storage, which names a file by one key column; an external `use` document; a `codec` whose last stage
   is `yaml` — orm's encoder (go-yaml's `Marshal`) ends every value with a line feed, which no place of
   the format holds, while a later stage encodes it away. A view table is declared by the
   [application schema](100-checklist.md#views), not by a setting.
@@ -71,10 +79,7 @@ behaviour.
   the largest key and the table's counter ([document model](20-document-model.md#keys)) under the lock. dbspec refuses `identity` on any other type (`an identity column has type i64`), so an
   `i16` or `i32` key cannot take it either. Grounding: `max+1` is an integer sequence, and a `bool`,
   `varchar`, `uuid` or `date` key has no maximum to add one to.
-- **Required**: a table with a `state_machine` declares its `history` and at least one `initial`
-  state; a `list` or `files` storage declares `title`; a `list` storage of a state machine
-  declares at least one `checkbox`, and dbspec then requires one for every state; the catalog rule is
-  stated here because dbspec accepts a state machine with no checkbox at all.
+- **Required**: a `list` or `files` storage declares `title`.
 - **Key types.** The one-column primary key of a markdown table is an integer type (`i16`, `i32`,
   `i64`), `bool`, `varchar`, `uuid` or `date`; any other type is a schema error, located at the table
   name. Grounding: a key is a file name and an anchor, so its text must hold only the key shape
@@ -89,7 +94,7 @@ behaviour.
   foreign key references ([document model](20-document-model.md#storage)), and NULL references
   none, so a row holding NULL there would have no place to be written. dbspec accepts a nullable
   foreign key column, since an SQL row needs no place; the catalog rule is stated here. It holds for
-  every block table, history tables included ([The history table](#the-history-table)).
+  every block table.
 
 ## Keys
 
@@ -127,30 +132,8 @@ readable by a client with the same key, so the engine holds orm's rules and reim
   have a markdown column other than the body or a child block, and their detail heading one level
   above that scope when it can have a body; a table with neither writes no heading below its block
   heading, so its row scope may lie past H6. Grounding: a heading the layout never writes is not one
-  the layout needs; a state machine's history table without a markdown column, as when its machine
-  requires no column or only columns that neither table declares `markdown`, has no detail section, and it stands at level 7 under a block row.
-
-## The state set
-
-- A machine's states are the states its `initial`, transition and `terminal` lines name.
-  When a table declares a `checkbox`, `checkbox` covers that set exactly with distinct glyphs; `checkbox`, `limit` or `initial` naming
-  another state is a setting error.
-- A `default` of the state column is an initial state, otherwise a setting error. An initial state
-  that is also terminal is a setting error.
-- The state column of a table is the column its `state_machine` setting names. It is non-null, in every
-  storage: dbspec refuses a nullable state column of a state machine. Grounding: a row's state is its place in
-  the machine, and NULL names no place; dbspec refuses it.
-
-## The history table
-
-The history setting names the history table's columns: the `<fk column>` has a foreign key to the
-state table with its leading index; `from` and `to` have the state column's type; `at` is
-`datetime(6)`; and one nullable column per column that a `require` list names has that column's
-name and type. The table has no other column besides its `identity` key and declares no `title`
-or `body`; any mismatch is a setting error at the history table's name. It is stored
-`block <fk> table` under its state table, or `document table`; another storage of a history table is a setting error at the history table's name. Grounding: the history rules — one row per transition, the gap and chain diagnostics, the repair and the restrict delete ([constraints](50-constraints.md#the-state-machine)) — are stated over the rows and their foreign key, never over their place, so the storage is the schema's choice as for any table; the other storages are excluded: `files` and a `list` declare a `title`, which the history table does not; and a block row stands in the scope of the row its placement foreign key names ([document model](20-document-model.md#storage)), so a history block stands under its own state row only when that key is its row column. A block placed by any other column — `from` or `to` under a table keyed by the states, the identity key under a table keyed like it, a copied column, under the state table or under another — stands in the scope of a row other than the one whose trail it records, a row chosen by a state, by a key the insert allocates or by a copied value, never by the transition's row. Such a block pays the depth of a block and loses its locality: the executor writes a transition's history row into its state row's block and the validator reads a row's trail — its gap, chain, transition and required rules — from that block ([constraints](50-constraints.md#a-state-changed-outside-the-engine)), and a trail spread over the scopes of other rows is read with none of them; the `document table` storage already keeps a trail apart from its rows, in one place. So any other placement is the setting error just stated, whatever the nullability of its key; a copied column, nullable and NULL on every transition whose line does not require it, is refused by the block placement rule too ([Block placement](#corpus-rules-on-dbspec-constructs)), and so is a block under the state table whose row column is nullable. The two trade locality against depth. A block keeps a row's trail in the row's detail section — in the row's own file for a `files` table — so the row and its trail are read together and transitions of different rows touch different places; but every row with history has a detail section, and the block stands two levels below the state rows. A document table keeps the table's trail in `<history>.flowmark.md`, whose rows have row scope 3 at any depth of the state table, so a required `markdown` column always has a section; but every transition of the table appends to that one file. Neither cost holds for every corpus, so neither storage is mandated.
-
-A column that a `require` list names is declared `markdown` on the history table exactly when it is declared `markdown` on the state table; a mismatch is a schema error at the history table's name. Grounding: a history row holds a copy of the required columns ([constraints](50-constraints.md#the-state-machine)), and a section and a single-line place accept different values — a multi-line value or raw HTML is a section's text but is refused in a cell, and a line `# x` is a cell's text but is refused in a section ([canonical format](10-canonical-format.md#single-line-places)) — so a mismatch would refuse a declared transition for a value the state table holds. dbspec accepts the mismatch, since the SQL backends ignore `markdown`; the catalog rule is stated here. When the history table is stored as a block, its rows stand two levels below the state table's rows, so its row scope is the state table's row scope plus two. A required `markdown` column is a section of the history rows at that scope; when the state table's row scope is 5 or deeper, that section would stand past H6, so the layout is a schema error at the history table's name ([Heading depth](#name-rules)); stored `document table`, the history rows have row scope 3 at any depth of the state table, so such a machine loads; a required column that neither table declares `markdown` is a cell, needs no heading, and is allowed at any depth. Grounding: a `markdown` value is a section in every storage ([canonical format](10-canonical-format.md#sections-and-their-values)), and CommonMark has no heading past H6, so such a value has no place to be written; writing it as a cell would change the column's form with its table's depth, and a cell cannot hold a line feed; writing its section at H6 would put it at the level of the history rows' detail headings, where a heading other than `<table> row <key>` ends the row scope and its content belongs to no row ([canonical format](10-canonical-format.md#detail-headings-and-anchors)).
+  the layout needs; a block table with no `markdown` column and no child block has no detail section, and it may
+  stand at level 7 under a block row.
 
 ## Install
 

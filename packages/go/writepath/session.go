@@ -455,13 +455,6 @@ func (s *Session) Executor() *irexec.Executor { return s.c.exec }
 // Root returns the root of the corpus.
 func (s *Session) Root() string { return s.c.root }
 
-// Repair runs the history repair of the row of table whose key is key (spec 50 Repair), from the initial state from
-// when it is given, at the engine clock: a write, inside or outside a transaction.
-func (s *Session) Repair(ctx context.Context, table, key, from string) (*irexec.Answer, error) {
-	now := s.c.clock()
-	return s.do(ctx, op{write: true, run: func(c *irexec.Corpus) (*irexec.Result, error) { return s.c.exec.Repair(c, table, key, from, now) }})
-}
-
 // Rewrite commits the files that compute derives from the corpus outside the executor — flowmark canon, the
 // add-column migration — as its own transaction under the lock, and returns the number of files it changed. exempt
 // passes the format diagnostics of its targets that the operation is exempt for (spec 40 The commit protocol, step 2);

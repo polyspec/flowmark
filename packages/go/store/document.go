@@ -29,16 +29,15 @@ type docLayout struct {
 	title     string            // the title column, "" when none
 	body      string            // the body column, "" when none
 	order     string            // the order column, "" when none
-	orderType dbspec.Type       // the type of the order column
-	state     string            // the state column of a list, "" when none
+	marker    string            // the task marker column of a list, "" when none
+	markCol   dbspec.Column     // the task marker column of a list
+	markBool  bool              // the task marker column is a bool, written as the GFM checkbox
 	parent    string            // "parent" when the table has the self foreign key parent, "" otherwise
 	placement string            // the placement foreign key of a block table, "" for a document table
-	scalars   []dbspec.Column   // the stored scalar columns: every column but the key, body, order, markdown and placement columns
+	scalars   []dbspec.Column   // the stored scalar columns: every column but the key, body, markdown and placement columns
 	fields    []dbspec.Column   // a list's fields: the scalars but its title, state and parent
 	sections  []section         // the markdown columns other than the body, in column order
 	fks       map[string]string // the referenced table of each foreign key
-	glyphs    map[string]string // state -> glyph of a list
-	states    map[string]string // glyph -> state of a list
 	children  []*docLayout      // the block tables stored in the row scope of this table, by table name
 	// inFiles reports that the placement chain of the table reaches a files table, so
 	// that rows of the table lie in several files and a file holds only some of them.
@@ -69,7 +68,6 @@ func layoutOfTable(cat *catalog.Catalog, tb *catalog.Table, placement string, in
 	lay := &docLayout{
 		table: table, list: tb.Storage.Shape == catalog.ShapeList, scope: tb.RowScope, placement: placement, inFiles: inFiles,
 		title: tb.Title, body: tb.Body, order: tb.Order,
-		glyphs: map[string]string{}, states: map[string]string{},
 	}
 	var err error
 	for _, name := range tb.KeyParts {
@@ -77,28 +75,21 @@ func layoutOfTable(cat *catalog.Catalog, tb *catalog.Table, placement string, in
 		lay.parts = append(lay.parts, part)
 	}
 	lay.key, lay.sections, lay.scalars, lay.fks, err = layoutColumns(tb, func(name string) bool {
-		return name == tb.Order || name == tb.Body || name == placement
+		return name == tb.Body || name == placement
 	})
 	if err != nil {
 		return nil, err
 	}
-	for _, c := range tb.Columns {
-		if c.Name == tb.Order && c.Name != tb.Key {
-			lay.orderType = c.Type
-		}
-	}
 	if lay.fks["parent"] == table {
 		lay.parent = "parent"
 	}
-	if sm := tb.StateMachine; sm != nil && lay.list {
-		lay.state = sm.Column
-		for state, glyph := range sm.Checkboxes {
-			lay.glyphs[state] = glyph
-			lay.states[glyph] = state
-		}
+	if lay.list && tb.TaskMarker != "" {
+		lay.marker = tb.TaskMarker
+		lay.markCol, _ = tb.ColumnNamed(tb.TaskMarker)
+		lay.markBool = lay.markCol.Type.Kind == dbspec.TypeBool
 	}
 	for _, c := range lay.scalars {
-		if lay.list && (c.Name == lay.title || c.Name == lay.state || c.Name == lay.parent) {
+		if lay.list && (c.Name == lay.title || c.Name == lay.marker || c.Name == lay.parent) {
 			continue
 		}
 		if lay.list {
@@ -179,7 +170,7 @@ func (l *docLayout) requiredColumns() []dbspec.Column {
 	for _, c := range l.scalars {
 		switch {
 		case c.Name == l.title:
-		case l.list && c.Name != l.state && !l.isField(c.Name):
+		case l.list && c.Name != l.marker && !l.isField(c.Name):
 		default:
 			out = append(out, c)
 		}
@@ -188,11 +179,8 @@ func (l *docLayout) requiredColumns() []dbspec.Column {
 }
 
 // writable reports whether a row may hold a value of name in Row.Scalars: a stored
-// scalar column other than the title, or the order column, which a write takes.
+// scalar column other than the title.
 func (l *docLayout) writable(name string) bool {
-	if name == l.order && name != "" {
-		return true
-	}
 	for _, c := range l.scalars {
 		if c.Name == name && name != l.title {
 			return true
@@ -447,7 +435,44 @@ func markerGap(line string, indent int) int {
 	return col - (indent + 1)
 }
 
-// listRow reads one list row of line, whose marker is at indent: the state glyph,
+// taskMarker reads the task marker of a list row whose `[` is at off (spec 30 Markdown settings): the value between the
+// brackets and the byte index after the `]`. A varchar(1) column holds the one character between them, or the empty
+// text for `[]`; a bool column is the GFM checkbox, `[ ]` for false and `[x]` for true, and `[X]`, which GFM reads as
+// checked too, is true and format.noncanonical. Anything else is format.block.
+func (p *docParser) taskMarker(lineNo int, line string, off int) (string, int, bool) {
+	lay := p.lay
+	if !lay.markBool && off+1 < len(line) && line[off+1] == ']' && (off+2 == len(line) || line[off+2] == ' ' || line[off+2] == '\t') {
+		return "", off + 2, true
+	}
+	r, size := utf8.DecodeRuneInString(line[off+1:])
+	end := off + 1 + size
+	if size == 0 || end >= len(line) || line[end] != ']' {
+		p.fail(lineNo, colAt(line, off+1), RuleBlock, "the task marker holds one character between brackets")
+		return "", 0, false
+	}
+	v := string(r)
+	if !lay.markBool {
+		// The brackets show the character as quotes do, a space or another invisible one included.
+		if msg := quotedFault(v); msg != "" {
+			p.fail(lineNo, colAt(line, off+1), RuleBlock, "the task marker has "+msg)
+			return "", 0, false
+		}
+		return v, end + 1, true
+	}
+	switch v {
+	case " ":
+		return "false", end + 1, true
+	case "x":
+		return "true", end + 1, true
+	case "X":
+		p.warn(lineNo, colAt(line, off+1), RuleNoncanonical, "a checked task marker is written `[x]`")
+		return "true", end + 1, true
+	}
+	p.fail(lineNo, colAt(line, off+1), RuleBlock, "the task marker of a bool column is `[ ]` or `[x]`")
+	return "", 0, false
+}
+
+// listRow reads one list row of line, whose marker is at indent: the task marker,
 // the key, the title and the fields. It returns nil when the row is refused.
 func (p *docParser) listRow(lineNo int, line string, indent int) *docRec {
 	lay := p.lay
@@ -459,28 +484,17 @@ func (p *docParser) listRow(lineNo int, line string, indent int) *docRec {
 		return nil
 	}
 	off := p.separator(lineNo, line, indent+1)
-	var state string
-	glyphAt := 0 // the byte index of the state glyph
-	if lay.state != "" {
-		if off >= len(line) || line[off] != '[' {
-			p.fail(lineNo, colAt(line, off), RuleBlock, "a row starts with its state glyph `[g]`")
-			return nil
-		}
-		r, size := utf8.DecodeRuneInString(line[off+1:])
-		end := off + 1 + size
-		if size == 0 || end >= len(line) || line[end] != ']' {
-			p.fail(lineNo, colAt(line, off+1), RuleBlock, "the state glyph is one character between brackets")
-			return nil
-		}
-		st, ok := lay.states[string(r)]
+	var marked *string
+	markAt := 0 // the byte index of the value of the task marker
+	if lay.marker != "" && off < len(line) && line[off] == '[' {
+		v, end, ok := p.taskMarker(lineNo, line, off)
 		if !ok {
-			p.fail(lineNo, colAt(line, off+1), RuleBlock, "the glyph "+string(r)+" names no state")
 			return nil
 		}
-		state, glyphAt = st, off+1
-		off = end + 1
+		marked, markAt = &v, off+1
+		off = end
 		if off >= len(line) || (line[off] != ' ' && line[off] != '\t') {
-			p.fail(lineNo, colAt(line, off), RuleBlock, "a space follows the state glyph")
+			p.fail(lineNo, colAt(line, off), RuleBlock, "a space follows the task marker")
 			return nil
 		}
 		off = p.separator(lineNo, line, off)
@@ -527,9 +541,9 @@ func (p *docParser) listRow(lineNo int, line string, indent int) *docRec {
 	if lay.title != "" {
 		rec.row.setAt(lay.title, lineNo, colAt(line, titleStart))
 	}
-	if state != "" {
-		rec.row.Scalars[lay.state] = sp(state)
-		rec.row.setAt(lay.state, lineNo, colAt(line, glyphAt))
+	if marked != nil {
+		rec.row.Scalars[lay.marker] = marked
+		rec.row.setAt(lay.marker, lineNo, colAt(line, markAt))
 	}
 	last := -1
 	for _, tok := range toks {
@@ -659,9 +673,6 @@ func (l *docLayout) columnNames() []string {
 	}
 	if l.body != "" {
 		out = append(out, l.body)
-	}
-	if l.order != "" {
-		out = append(out, l.order)
 	}
 	if l.placement != "" {
 		out = append(out, l.placement)
@@ -1297,14 +1308,6 @@ func (p *docParser) checkScope(recs []*docRec) {
 			p.fail(rec.line, 1, RuleBlock, "the title is missing")
 		}
 	}
-	if lay.order != "" {
-		pos := map[string]int{}
-		for _, rec := range recs {
-			g := parentKey(lay, rec.row)
-			pos[g]++
-			rec.row.Scalars[lay.order] = sp(strconv.Itoa(pos[g]))
-		}
-	}
 	if lay.parent != "" {
 		byKey := recsByKey(recs)
 		for _, rec := range recs {
@@ -1586,11 +1589,18 @@ func storageOrder(lay *docLayout, rows []*Row) (order, depth, unreached []int) {
 	return order, depth, unreached
 }
 
-// siblingLess orders two siblings: by their order values when the table has an
-// order column, else by their keys.
+// siblingLess orders two siblings: by their order values when the table has an order column, the rows that share a
+// value, or whose value is not of its type, in key order; else by their keys (spec 20 Order).
 func siblingLess(lay *docLayout, a, b *Row) bool {
 	if lay.order != "" {
-		return orderValue(a, lay.order) < orderValue(b, lay.order)
+		x, xOK := orderValue(a, lay.order)
+		y, yOK := orderValue(b, lay.order)
+		switch {
+		case xOK != yOK:
+			return xOK
+		case xOK && x != y:
+			return x < y
+		}
 	}
 	if len(lay.parts) > 0 {
 		x, y := catalog.SplitKey(a.Key), catalog.SplitKey(b.Key)
@@ -1607,19 +1617,15 @@ func siblingLess(lay *docLayout, a, b *Row) bool {
 	return keyLess(lay.key.Type, a.Key, b.Key)
 }
 
-// orderValue returns the value of the order column of row r as a number. A missing
-// or unreadable value is 0: a write refuses it, and a read always has the value.
-func orderValue(r *Row, column string) int {
+// orderValue returns the value of the order column of row r as a number; ok is false when the row holds no value of
+// the column's type, which is its type fault (spec 10, diagnostics), and the row then stands after the readable ones.
+func orderValue(r *Row, column string) (int64, bool) {
 	v := r.Scalars[column]
 	if v == nil {
-		return 0
+		return 0, false
 	}
-	n, err := strconv.Atoi(*v)
-	if err != nil {
-		// An unreadable order is its type fault, which the read reports (spec 10, diagnostics); it sorts as 0.
-		return 0
-	}
-	return n
+	n, err := strconv.ParseInt(*v, 10, 64)
+	return n, err == nil
 }
 
 // keyLess orders two canonical keys: numerically for an integer key, else by their

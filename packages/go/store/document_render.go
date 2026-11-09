@@ -138,7 +138,6 @@ func (dw *docWriter) rows(lay *docLayout, rows []*Row) {
 		w.checkRow(lay, byKey, r)
 	}
 	order, depth, unreached := storageOrder(lay, rows)
-	checkOrder(w, lay, rows, idx)
 	if len(unreached) > 0 {
 		// A row under a parent that names no row, or under a cycle, has no place in the
 		// storage order; only the rows on a cycle are refused for it.
@@ -246,10 +245,6 @@ func (dw *docWriter) value(rr rowRef, name, column, v string, level int, body, a
 	w.put(v)
 }
 
-// checkRow refuses the values of row r that the document cannot hold: a row of
-// another table, a key that is not a key, a value or section that is no column of
-// the table, a title, body or non-null value that is missing or unwritable, a
-// state without a checkbox and a parent that names no row.
 // docShapeFault names the rule of the shape of a key in the layout lay.
 func docShapeFault(lay *docLayout, key string) string {
 	if lay.list {
@@ -309,13 +304,6 @@ func (w *writer) checkRow(lay *docLayout, byKey map[string]int, r *Row) {
 			w.refuse(s.name, "the non-null section "+s.name+" has no value")
 		}
 	}
-	if lay.list && lay.state != "" {
-		if st := r.Scalars[lay.state]; st != nil {
-			if _, ok := lay.glyphs[*st]; !ok {
-				w.refuse(lay.state, "the state "+*st+" has no checkbox")
-			}
-		}
-	}
 	if lay.parent != "" {
 		if v := r.Scalars[lay.parent]; v != nil {
 			if _, ok := byKey[*v]; !ok {
@@ -350,68 +338,6 @@ func titleFault(lay *docLayout, title string) string {
 	return ""
 }
 
-// checkOrder refuses the order values of each sibling group unless they are exactly
-// 1..m, m being the size of the group.
-// A sibling-order fault is at each row of its group whose value is missing, outside
-// 1..m or shared with a sibling, m being the size of the group. A value not of the
-// column's type is the type fault alone: it counts toward m and is neither outside
-// 1..m nor shared, so the faults of its siblings are those that stand whatever it is.
-func checkOrder(w *writer, lay *docLayout, rows []*Row, idx []int) {
-	if lay.order == "" {
-		return
-	}
-	groups := map[string][]int{}
-	for i, r := range rows {
-		g := parentKey(lay, r)
-		groups[g] = append(groups[g], i)
-	}
-	keys := make([]string, 0, len(groups))
-	for g := range groups {
-		keys = append(keys, g)
-	}
-	sort.Strings(keys)
-	for _, g := range keys {
-		members := groups[g]
-		who := "the root"
-		if g != "" {
-			who = "the parent " + g
-		}
-		m := int64(len(members))
-		count := map[int64]int{}
-		vals := make([]int64, len(members))
-		faults := make([]string, len(members))
-		for k, i := range members {
-			v := rows[i].Scalars[lay.order]
-			if v == nil {
-				faults[k] = "the order is missing"
-				continue
-			}
-			canon, ok := readable(lay.orderType, *v)
-			n, err := strconv.ParseInt(canon, 10, 64)
-			if !ok || err != nil {
-				faults[k] = lay.order + " is not a " + lay.orderType.String() + " value"
-				continue
-			}
-			vals[k] = n
-			count[n]++
-		}
-		for k, i := range members {
-			if faults[k] == "" {
-				switch n := vals[k]; {
-				case n < 1 || n > m:
-					faults[k] = "the order " + strconv.FormatInt(n, 10) + " is outside 1.." + strconv.FormatInt(m, 10) + " of the siblings under " + who
-				case count[n] > 1:
-					faults[k] = "the order " + strconv.FormatInt(n, 10) + " is shared with a sibling under " + who
-				}
-			}
-			if faults[k] != "" {
-				w.enter(rowRefOf(rows[i], idx[i]), lay.order)
-				w.refuse(lay.order, faults[k])
-			}
-		}
-	}
-}
-
 // writeList writes the list rows in storage order, each indented by two spaces per depth.
 func (dw *docWriter) writeList(lay *docLayout, rows []*Row, idx, order, depth []int) {
 	w := dw.w
@@ -421,9 +347,11 @@ func (dw *docWriter) writeList(lay *docLayout, rows []*Row, idx, order, depth []
 		// Each column of the line is written under its own column, so a refusal names it.
 		w.enter(rr, "")
 		w.put(strings.Repeat("  ", depth[i]) + "- ")
-		if lay.state != "" {
-			w.enter(rr, lay.state)
-			w.put("[" + lay.glyphs[*r.Scalars[lay.state]] + "] ")
+		if v := r.Scalars[lay.marker]; lay.marker != "" && v != nil {
+			w.enter(rr, lay.marker)
+			if text, ok := dw.markerText(lay, *v); ok {
+				w.put("[" + text + "] ")
+			}
 		}
 		w.enter(rr, lay.key.Name)
 		w.put(r.Key + " ")
@@ -442,6 +370,31 @@ func (dw *docWriter) writeList(lay *docLayout, rows []*Row, idx, order, depth []
 		w.enter(rr, "")
 		w.put("\n")
 	}
+}
+
+// markerText is the text between the brackets of the task marker of a list row whose value is v (spec 30 Markdown
+// settings): the value of a varchar(1) column itself, and for a bool column a space for false and x for true. A value
+// the marker cannot show is refused at the column.
+func (dw *docWriter) markerText(lay *docLayout, v string) (string, bool) {
+	w := dw.w
+	c := lay.markCol
+	canon, ok := readable(c.Type, v)
+	switch {
+	case !utf8.ValidString(v):
+		w.refuse(c.Name, c.Name+" is not UTF-8")
+		return "", false
+	case !ok:
+		w.refuse(c.Name, c.Name+" is not a "+c.Type.String()+" value")
+		return "", false
+	case lay.markBool && canon == "true":
+		return "x", true
+	case lay.markBool:
+		return " ", true
+	case quotedFault(v) != "":
+		w.refuse(c.Name, c.Name+" has "+quotedFault(v))
+		return "", false
+	}
+	return v, true
 }
 
 // writeTable writes the header, the delimiter row and the rows, in storage order.

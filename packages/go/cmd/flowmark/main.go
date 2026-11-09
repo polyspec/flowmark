@@ -1,5 +1,5 @@
 // Command flowmark is the one binary of the markdown database engine and its faces (spec 40 The faces): the
-// operations over any table, canon, install, introspect, history repair, unlock, the server, the MCP server and the
+// operations over any table, canon, install, introspect, unlock, the server, the MCP server and the
 // soksak sidecar. Every command exits 0 when it ran, 1 when it was refused or failed, with the failure on standard
 // error, and 2 for a wrong command line.
 package main
@@ -32,8 +32,6 @@ func run(args []string, in io.Reader, out, errOut io.Writer) int {
 		return install(out, errOut, rest)
 	case "introspect":
 		return introspectTo(out, errOut, rest)
-	case "history":
-		return history(out, errOut, rest)
 	case "unlock":
 		return unlock(out, errOut, rest)
 	case "serve":
@@ -65,7 +63,6 @@ func usage(errOut io.Writer, why string) int {
 		"  flowmark canon [--lock-wait-ms <n>] <corpus> [file…]",
 		"  flowmark install [--lock-wait-ms <n>] <corpus>",
 		"  flowmark introspect <corpus>",
-		"  flowmark history repair [--lock-wait-ms <n>] <corpus> <table> <key> [--from <state>]",
 		"  flowmark unlock <corpus> [--holder <pid>@<host>/<session>]",
 		"  flowmark serve <corpus> --port <port> [--new-token] [--lock-wait-ms <n>] [--tx-idle-ms <n>]",
 		"  flowmark mcp [--lock-wait-ms <n>] <corpus>",

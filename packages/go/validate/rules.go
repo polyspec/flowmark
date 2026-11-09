@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"maps"
 	"slices"
-	"strconv"
 	"strings"
 
 	"github.com/polyspec/flowmark/packages/go/catalog"
@@ -14,19 +13,13 @@ import (
 // The rule names the validator reports. The format rules and parent.cycle are
 // the store's; the others are the validator's own (spec 50 Diagnostics).
 const (
-	ruleType         = "type"
-	ruleShardPeriod  = "shard.period"
-	ruleScaleFile    = "scale.file"
-	ruleScaleFolder  = "scale.folder"
-	ruleScaleCorpus  = "scale.corpus"
-	ruleDangling     = "reference.dangling"
-	ruleDuplicate    = "key.duplicate"
-	ruleOrder        = "order"
-	ruleLimit        = "state.limit"
-	ruleHistoryGap   = "history.gap"
-	ruleHistoryChain = "history.chain"
-	ruleTransition   = "state.transition"
-	ruleRequired     = "state.required"
+	ruleType        = "type"
+	ruleShardPeriod = "shard.period"
+	ruleScaleFile   = "scale.file"
+	ruleScaleFolder = "scale.folder"
+	ruleScaleCorpus = "scale.corpus"
+	ruleDangling    = "reference.dangling"
+	ruleDuplicate   = "key.duplicate"
 )
 
 // report appends a diagnostic of rule at the element of column of the row p.
@@ -38,7 +31,7 @@ func (c *corpus) report(p placed, column, rule, msg string) {
 
 // rules reports the validator rules over the rows of every table. A rule that
 // needs the complete rows of a table is not reported for an unavailable table:
-// reference.dangling into it, key.duplicate, order and state.limit within it.
+// reference.dangling into it, key.duplicate and order within it.
 // The validator's parent.cycle across files is reported among the rows read, since
 // no unread row can undo a cycle that the rows' own parent values make.
 func (c *corpus) rules() error {
@@ -57,11 +50,8 @@ func (c *corpus) rules() error {
 		if !c.isBlocked(tb.Name) {
 			c.duplicates(tb, rows)
 			c.uniques(tb, rows)
-			c.orders(tb, rows)
-			c.limits(tb, rows)
 		}
 		c.parentCycles(tb, rows)
-		c.history(tb, rows)
 	}
 	return nil
 }
@@ -229,82 +219,6 @@ func (c *corpus) uniques(tb *catalog.Table, rows []placed) {
 	}
 }
 
-// orders reports the sibling order of a files table, whose order item holds a
-// rank (spec 20 Order): within each group of rows with the same parent, a row
-// whose rank is shared with a sibling is reported at its order item, since the
-// rank does not order the two. A rank not of the column's type is its type fault
-// alone and is never shared. A row whose parent is not of its column's type
-// belongs to no known group: its own order is not judged.
-func (c *corpus) orders(tb *catalog.Table, rows []placed) {
-	if tb.Storage.Kind != catalog.StorageFiles || tb.Order == "" {
-		return
-	}
-	parent := parentColumn(tb)
-	groups := map[string][]placed{}
-	var keys []string
-	for _, p := range rows {
-		g := ""
-		if parent != "" {
-			if _, raw := p.row.Raw[parent]; raw {
-				continue
-			}
-			g = text(p.row, parent)
-		}
-		if _, ok := groups[g]; !ok {
-			keys = append(keys, g)
-		}
-		groups[g] = append(groups[g], p)
-	}
-	for _, g := range keys {
-		members := groups[g]
-		counts := map[int64]int{}
-		ranks := map[placed]int64{}
-		for _, m := range members {
-			if _, raw := m.row.Raw[tb.Order]; raw {
-				continue
-			}
-			if v, ok := orderValue(m.row, tb.Order); ok {
-				ranks[m] = v
-				counts[v]++
-			}
-		}
-		for _, m := range members {
-			if v, ok := ranks[m]; ok && counts[v] > 1 {
-				c.report(m, tb.Order, ruleOrder, fmt.Sprintf("the order rank %d of %s is shared with a sibling", v, m.row.Key))
-			}
-		}
-	}
-}
-
-// limits reports the rows of a state table past each limit of its machine: when
-// m readable rows, in every block and file that holds the table, are in the state
-// and m > n, each row after the n-th in corpus order (rows is in corpus order) is
-// reported at its state element, naming the state, the limit and m.
-func (c *corpus) limits(tb *catalog.Table, rows []placed) {
-	sm := tb.StateMachine
-	if sm == nil {
-		return
-	}
-	for _, l := range sm.Limits {
-		var in []placed
-		for _, p := range rows {
-			if _, raw := p.row.Raw[sm.Column]; raw {
-				continue
-			}
-			if s := p.row.Scalars[sm.Column]; s != nil && *s == l.State {
-				in = append(in, p)
-			}
-		}
-		m := int64(len(in))
-		if m <= l.Count {
-			continue
-		}
-		for _, p := range in[l.Count:] {
-			c.report(p, sm.Column, ruleLimit, fmt.Sprintf("%s is past the limit %d of the state %s, which %d rows of %s are in", p.row.Key, l.Count, l.State, m, tb.Name))
-		}
-	}
-}
-
 // parentCycles reports each row of a files table on a cycle of parent keys. The
 // chain of a row is followed through the rows of the table, so a cycle may cross
 // files; a parent that names no row ends the chain. A cycle in a block or a
@@ -362,167 +276,6 @@ func (c *corpus) parentCycles(tb *catalog.Table, rows []placed) {
 			state[m] = done
 		}
 	}
-}
-
-// history reports the history gap of each row of a state table, and over each of
-// its history rows the chain (the first from is an initial state, each other from
-// is the to before it), the transition (its pair is declared) and the required
-// columns (a declared pair records a value in each column that the transition's
-// require list or the to-terminal's names). A state, from or to not of its column
-// type is its type fault alone: no rule is judged on it.
-func (c *corpus) history(tb *catalog.Table, rows []placed) {
-	sm := tb.StateMachine
-	if sm == nil || sm.History.Table == "" {
-		return
-	}
-	ht, found := c.cat.Table(sm.History.Table)
-	of, ok := c.historyOf(tb, sm)
-	if !found || !ok {
-		return
-	}
-	for _, p := range rows {
-		hist := of(p)
-		c.gap(sm, p, hist)
-		for i, hp := range hist {
-			h := hp.row
-			from, okFrom := readable(h, sm.History.From)
-			to, okTo := readable(h, sm.History.To)
-			// The chain of a row reads its own from and the previous row's to, so
-			// a raw to of the row itself leaves its chain judged.
-			if okFrom {
-				if i == 0 {
-					if !slices.Contains(sm.Initial, from) {
-						c.report(hp, "", ruleHistoryChain, fmt.Sprintf("the history row %s goes from %s, which is not an initial state", h.Key, from))
-					}
-				} else if prev, ok := readable(hist[i-1].row, sm.History.To); ok && from != prev {
-					c.report(hp, "", ruleHistoryChain, fmt.Sprintf("the history row %s goes from %s, which differs from the to %s of the row before it", h.Key, from, prev))
-				}
-			}
-			if !okFrom || !okTo {
-				continue
-			}
-			t, ok := transition(sm, from, to)
-			if !ok {
-				c.report(hp, "", ruleTransition, fmt.Sprintf("the history row %s goes from %s to %s, which is not a declared transition", h.Key, from, to))
-				continue
-			}
-			values := RowOperands(ht, h, hp.parent)
-			for _, col := range required(sm, t) {
-				if v := values(col); v.Null || (!v.Raw && v.Text == "") {
-					c.report(hp, col, ruleRequired, fmt.Sprintf("the history row %s goes from %s to %s, which requires %s, and %s holds no value", h.Key, from, to, col, col))
-				}
-			}
-		}
-	}
-}
-
-// historyOf returns the function that gives the history rows of a state row of tb,
-// in corpus order: the rows of the history table whose foreign key names it. A
-// history table stored as a block of the state table through that key holds them in
-// the row's block, whose order in its file is corpus order; any other history table
-// holds them among its rows, whose key is matched byte for byte. ok is false when
-// such a history table is unavailable, since the history rules then need its
-// complete rows (spec 50 Diagnostics), and the file's own diagnostic stands for them.
-func (c *corpus) historyOf(tb *catalog.Table, sm *catalog.StateMachine) (func(placed) []placed, bool) {
-	ht, found := c.cat.Table(sm.History.Table)
-	if !found {
-		return nil, false
-	}
-	if ht.Storage.Kind == catalog.StorageBlock && ht.Storage.Parent == tb.Name && ht.Placement() == sm.History.Row {
-		// A readable row's block is read whole with the row's own file.
-		return func(p placed) []placed {
-			var out []placed
-			for _, h := range p.row.Blocks[ht.Name] {
-				out = append(out, placed{row: h, file: p.file, parent: p.row})
-			}
-			return out
-		}, true
-	}
-	if c.isBlocked(ht.Name) {
-		return nil, false
-	}
-	byKey := map[string][]placed{}
-	for _, h := range corpusOrder(c.rows[ht.Name]) {
-		if _, raw := h.row.Raw[sm.History.Row]; raw {
-			continue
-		}
-		if v := h.row.Scalars[sm.History.Row]; v != nil {
-			byKey[*v] = append(byKey[*v], h)
-		}
-	}
-	return func(p placed) []placed { return byKey[p.row.Key] }, true
-}
-
-// gap reports the history gap of the row p of a state table, whose history rows
-// are hist: its state differs from the to of its last history row, or, without
-// history rows, is not an initial state. A state or a last to not of its column
-// type, or a NULL state, leaves no gap to judge.
-func (c *corpus) gap(sm *catalog.StateMachine, p placed, hist []placed) {
-	state, ok := readable(p.row, sm.Column)
-	if !ok || p.row.Scalars[sm.Column] == nil {
-		return
-	}
-	if len(hist) == 0 {
-		if !slices.Contains(sm.Initial, state) {
-			c.report(p, "", ruleHistoryGap, fmt.Sprintf("the state %s of %s has no history row and is not an initial state", state, p.row.Key))
-		}
-		return
-	}
-	last, ok := readable(hist[len(hist)-1].row, sm.History.To)
-	if ok && last != state {
-		c.report(p, "", ruleHistoryGap, fmt.Sprintf("the state %s of %s differs from the to %s of its last history row", state, p.row.Key, last))
-	}
-}
-
-// readable returns the readable text of the scalar column of row r, "" when it is
-// NULL, and false when it is not a value of its column type.
-func readable(r *store.Row, column string) (string, bool) {
-	if _, raw := r.Raw[column]; raw {
-		return "", false
-	}
-	return text(r, column), true
-}
-
-// transition returns the declared transition from -> to of the machine.
-func transition(sm *catalog.StateMachine, from, to string) (catalog.Transition, bool) {
-	for _, t := range sm.Transitions {
-		if t.From == from && t.To == to {
-			return t, true
-		}
-	}
-	return catalog.Transition{}, false
-}
-
-// required returns the columns that the transition t records: its require list,
-// then the require list of its to when that is a terminal state, each once.
-func required(sm *catalog.StateMachine, t catalog.Transition) []string {
-	out := slices.Clone(t.Require)
-	for _, term := range sm.Terminals {
-		if term.State != t.To {
-			continue
-		}
-		for _, col := range term.Require {
-			if !slices.Contains(out, col) {
-				out = append(out, col)
-			}
-		}
-	}
-	return out
-}
-
-// text returns the readable text of the scalar column of row r, "" when it is NULL.
-func text(r *store.Row, column string) string {
-	if v := r.Scalars[column]; v != nil {
-		return *v
-	}
-	return ""
-}
-
-// orderValue returns the order value of row r, false when it is missing or not an
-// integer.
-func orderValue(r *store.Row, column string) (int64, bool) {
-	v, err := strconv.ParseInt(text(r, column), 10, 64)
-	return v, err == nil
 }
 
 // parentColumn returns the self foreign key that holds a row's parent, "" when the

@@ -111,7 +111,7 @@ var memberSchemas = map[string]map[string]any{
 
 // descriptions describe the tools.
 var descriptions = map[string]string{
-	"schema":     "Answer the catalog of the corpus: its tables with their storage, keys, settings, columns and state machines",
+	"schema":     "Answer the catalog of the corpus: its tables with their storage, keys, settings and columns",
 	"rows":       "Answer every row of a table in storage order",
 	"rows.load":  "Load rows into a table in their stored form, keys included, and answer how many it wrote",
 	"row.get":    "Answer the row of a table whose primary key is key",
@@ -119,7 +119,6 @@ var descriptions = map[string]string{
 	"row.update": "Assign column values to the row whose key is key, and answer the table's rows",
 	"row.move":   "Move the row whose key is key to a position among its siblings, optionally under a new parent",
 	"row.delete": "Delete the row whose key is key, and answer the table's rows",
-	"transition": "Move the row whose key is key to a state of its state machine, with the columns the transition requires",
 	"views":      "Answer the rows of the view table, or, with key, that view and the rows of its entity through its stored filter and sort",
 }
 

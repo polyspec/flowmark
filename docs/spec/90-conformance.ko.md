@@ -1,5 +1,5 @@
 <!-- doc-id: spec-conformance -->
-<!-- source-sha256: 6def4369adee09ee0fb7824e57fc2aaec680cac257828981308ad3fcd4ecba3a -->
+<!-- source-sha256: dfca12c200ddd2eea163b7989274d377517746e2890175993197e1b27edb2bf8 -->
 # Conformance
 
 [English](90-conformance.md)
@@ -35,7 +35,7 @@
   같은 기대 답을 가진 `files`, `document`, `block` vector를 하나씩 담을 것을 요구한다.
 - **operation의 idempotency**: 읽기 vector를 반복하면 같은 답을 낸다. 거절된 쓰기를 반복하면 아무것도
   바꾸지 않았으므로 같은 방식으로 거절된다. 성공한 쓰기를 반복한 결과는 그 vector가 밝힌다: 거절(중복
-  key, 새 상태에서의 전이), 같은 상태(행이 이미 가진 값을 set하는 update), 또는 요청이 본래 idempotent
+  key), 같은 상태(행이 이미 가진 값을 set하는 update), 또는 요청이 본래 idempotent
   하지 않고 어떤 규칙도 거절하지 않는 곳의 또 다른 변경(엔진이 key를 정하는 insert). 이전 문구 — 거절,
   또는 upsert의 같은 상태 — 는 세 번째 경우를 빠뜨렸다. [constraints](50-constraints.md)의 어떤 규칙도
   그것을 거절하지 않으며, 어떤 SQL database도 identity key로의 두 번째 insert를 거절하지 않는다.

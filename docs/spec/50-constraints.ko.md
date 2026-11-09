@@ -1,5 +1,5 @@
 <!-- doc-id: spec-constraints -->
-<!-- source-sha256: 1fe69ffec27f8d37dcc760a39dfedb3df3e9af411db25310aa15f1eb3d7d5d81 -->
+<!-- source-sha256: 466b0056734f31b646113342ef1953e82ee3df96bd1b3be3328ec75e9512d371 -->
 # Constraints
 
 [English](50-constraints.md)
@@ -27,7 +27,7 @@
   cascade는 참조하는 행을 단계마다 함께 지우고, set_null은 참조하는 column을 비우며, 모두 한 commit이다.
   affected 수는 SQL처럼 요청이 맞춘 행의 수다. 사람이 부모 파일을 지우면 action은 적용되지 않고 validate가
   끊어진 참조를 보고한다.
-  `restrict` foreign key는 거절한다: 참조되는 행 — 이력 행을 가진 행 포함 — 의 삭제는
+  `restrict` foreign key는 거절한다: 참조되는 행의 삭제는
   `FOREIGN_KEY`다. restrict는 쓰기 전의 행에 대해 성립한다: delete가 지우는 행이 참조되면, 같은 요청이
   지우는 행이 참조하더라도 `FOREIGN_KEY`이며, 참조하는 행은 앞선 요청이 지운다. 근거: orm은 즉시
   검사하는 `RESTRICT`를 render한다. 그러면 MySQL과 SQLite는 그런 delete를 자기 행 순서에 따라 거절하거나
@@ -129,68 +129,46 @@ param은 보이지 않는 데이터다. grouping은 같은 값을 가진 행을 
 
 - `parent` 순환은 쓰기에서 `CONSTRAINT`이고, 한 file의 행 사이의 순환은 읽기에서 `parent.cycle`이며 그 file을 읽을 수 없게 한다([document model](20-document-model.ko.md#계층)); 여러 `files` file의 행에 걸친 순환은 validator의 `parent.cycle`뿐이다. 행의 블록 밖 `parent`는 쓰기에서 `CONSTRAINT`, 읽기에서
   `format.block`이다.
-- 1..n + 1 밖의 순서 값(n은 문서 모델이 정의하는 대로)이나, 둘 이상의 행과 맞는 order column update는
-  `CONSTRAINT`다. block과 document 저장에서 쓰기 뒤의 형제 묶음 순서 값이 정확히 1..m(m은 그 묶음의 쓰기 뒤 크기)이 아니면 `CONSTRAINT`다. `files` 저장에서 order 항목은 rank를 담으며, validator의 `order`는 rank를 형제와 공유하는 각 행에, 그 `order` 항목에 있다 — rank 사이의 빈틈은 위치를 바꾸지 않으므로 결함이 아니다 — 그리고 column의 type이 아닌 rank는 `type`뿐이며 어느 것과도 공유되지 않는다([document model](20-document-model.ko.md#순서)). 근거: 읽을 수 없는 값에는 비교가 없으므로 type 결함이 그것을 대신하며, 그 값이 무엇이든 다른 형제가 가지는 결함은 여전히 보고된다.
-- `parent`가 그 column의 type이 아닌 행은 알려진 형제 묶음에 속하지 않는다: 자신의 `order`는 판정하지 않으며 그 `type`이 대신한다. 묶음 안에서 공유되는 rank는 그런 행이 어느 묶음에 들어가든 보고한다.
+- 순서 값은 column type의 어떤 값이든 된다: 형제와 공유하는 값과 값 사이의 빈틈은 결함이 아니며,
+  column을 빠뜨린 insert는 default 없는 다른 non-null column처럼 `IR_INVALID`다. column의 type이 아닌
+  값은 `type`뿐이며, 그 행은 읽을 수 있는 형제 뒤에 선다([document model](20-document-model.ko.md#순서)).
+  근거: database는 application이 쓴 값을 가지며, 형제 묶음의 순서는 값과 key만의 함수다.
 
-## 상태기계
+## 상태 column
 
-- **Insert.** insert에서 행의 상태는 초기 상태다. 기계의 상태 집합 밖의 상태는 `CONSTRAINT`다.
-- **전이.** 상태 column의 update는 선언된 전이를 따른다. 다른 변경은 행, 현재 상태, 거절된 목표를
-  밝히는 `CONSTRAINT`다. 종료 상태는 떠나지 않는다(dbspec의 terminal 의미) — 대신 할 일은 응용이 정한다(응용 schema는 종료된
-  항목을 다시 여는 대신 `supersedes` link와 함께 새 항목을 insert한다).
-- **필수 column.** 줄에 `require (c1, …)`를 가진 전이나 종료 상태 진입은 같은 update에서 나열된 모든
-  column을 할당한다. 할당되지 않은 column, `null`, 빈 텍스트는 그 column을 밝히는 `CONSTRAINT`다.
-  상태 table은 그 값을 유지한다.
-- **이력.** 엔진이 실행하는 모든 전이는 같은 transaction에서 이력 행 하나를 insert한다: 행의 foreign
-  key, from과 to 상태, `at`, 필수 column의 사본. insert는 이력을 쓰지 않는다.
-- **Limit.** `limit <state> <n>`은 그 상태의 table 행을 센다. 이를 넘게 할 전이, insert, update는
-  limit를 밝히는 `CONSTRAINT`다. 이 수는 soft delete된 행을 포함한다: soft delete된 행은 여전히 unique
-  key를 차지하듯 그 상태에 있는 저장된 행이므로, soft delete는 자리를 비우지 않고 restore는 limit를
-  넘지 않는다. 사람의 편집 뒤 이미 넘은 corpus는 다른 쓰기를 막지 않는 validator의 `state.limit`다: table을 가진 모든 block과 file에서 읽을 수 있는 table 행 m개가 그 상태에 있고 m > n이면, [corpus 순서](10-canonical-format.ko.md#진단)에서 n번째 다음의 각 행을 그 상태 자리(list 행의 glyph, 상태 cell, `files` field list의 상태 항목)에 보고하며, 상태와 limit와 m을 밝힌다. 근거: limit는 그 상태에 n개 행을 허용하므로 m − n개 행이 그 너머에 있고 각각이 결함 하나다. `key.duplicate`가 첫 자리 다음의 각 자리에 보고되는 것과 같다([Key](#key와-참조)). 그것이 어느 행인지는 내용으로 정해지지 않는다 — 사람의 편집은 어느 행이 마지막으로 그 상태에 들어왔는지 기록을 남기지 않으며, 그것은 `history.gap`이 보고하는 것이다 — 그래서 corpus만의 함수인 순서로 고른다.
+- **상태기계 없음.** database는 상태기계를 갖지 않는다: column이 담을 수 있는 값은 그 type과 schema의 제약이며,
+  어떤 database도 update를 그것이 대신하는 값 때문에 거절하지 않는다. orm의 문법은 `state_machine`
+  줄을 갖지 않으며(orm DBS-63은 그것을 알 수 없는 setting으로 거절한다), 엔진은 MySQL, PostgreSQL, SQLite처럼 어떤
+  기계도 적용하지 않는다: 어떤 insert도 그 상태 때문에, 어떤 update도 그것이 대신하는 상태 때문에 거절하지 않고, 어떤
+  이력 행도 쓰지 않으며, validator는 기계의 어떤 규칙도 보고하지 않는다. 상태의 이력을 지니는 table은 보통 table이다. 상태 column은 모든 database에서처럼 schema의 제약이 허용하는
+  그 type의 값을 담는다: check `in (…)`은 다른 값을 다른 check처럼 거절하고([Check](#check)), 상태 table로의 foreign
+  key는 어떤 행도 가리키지 않는 값을 다른 foreign key처럼 거절한다([Key와 참조](#key와-참조)). 근거: orm의 규칙 하나는
+  모든 database에서 같은 결과이므로 엔진은 그 database들이 가진 것만 가진다. 상태의 전이와 그 흔적은 polyspec fsm의
+  것이며, fsm이 취한 상태는 다른 값처럼 corpus에 쓰인다.
+- **Task marker.** list는 한 글자의 상태나 boolean을 그 task marker로 보인다: table의 `task_marker`가 column을
+  이름 붙이며, 그 값은 list 행의 괄호 사이에 쓰인다([canonical format](10-canonical-format.ko.md#list-행),
+  [schema](30-schema.ko.md#markdown-setting)). 그 값은 다른 column처럼 그 type과 제약의 값이다. `task_marker`가 없는
+  list table은 그 column을 field로 쓰며, `table`과 `files` 저장에서 그 column은 다른 scalar처럼 cell이나 field
+  항목이다.
 
-## 엔진 밖에서 바뀐 상태
+## Commit
 
-- **빈틈.** 행의 상태가 마지막 이력 행의 `to`와 다르거나, 이력 행이 없을 때 상태가 초기 상태가 아니면
-  이력 빈틈이다. validate는 행의 줄에서 `history.gap`을 보고한다. 빈틈 있는 행의 엔진 전이는 빈틈이
-  닫힐 때까지 `CONSTRAINT`이고, 그 행의 다른 column update는 허용한다.
-- **사슬.** validate는 `from`이 이전 행의 `to`와 다른 — 첫 행이면 초기 상태가 아닌 — 이력 행에
-  `history.chain`을 보고한다. 근거: 이력 행은 행 상태의 사슬이므로, 그 끊김은 어떤 이력 행도 기록하지
-  않은 상태 변경이다.
-- **전이.** validate는 쌍이 선언된 전이가 아닌 이력 행에 `state.transition`을 보고한다. 한 행이
-  `history.chain`과 `state.transition`을 함께 가질 수 있으며, 결함마다 보고 하나다. 근거: 엔진은 선언된
-  전이만 실행하므로 선언되지 않은 쌍은 엔진이 밟지 않은 단계이고, 행이 앞 행을 잇는지와 그 쌍이
-  선언되었는지는 행에 대한 별개의 두 사실이다.
-- **필수.** validate는 쌍이 선언되었고, 그 전이의 `require` 목록이나 — `to`가 종료 상태이면 — 그 종료
-  상태의 `require` 목록이 밝히는 column에 NULL이나 빈 텍스트를 가진 이력 행에 `state.required`를
-  보고한다 — 그 column의 요소에, 행에 그 요소가 없으면(없는 섹션, 빈 cell) 행의 첫 줄에. 쌍이 선언되지
-  않은 행은 `state.transition`만이다. 근거: 엔진이 실행하는 모든 전이는 필수 column을 그 이력 행에
-  복사하고 거기서 NULL과 빈 텍스트를 거절하므로([필수 column](#상태기계)) 그런 행은 엔진이 쓴 것이
-  아니다. 어떤 column이 필수인지는 선언된 쌍에서만 알 수 있다.
-- **type만.** column의 type이 아닌 상태, `from`, `to`는 `type`만이다: 그 값 위에서는 `history.gap`,
-  `history.chain`, `state.transition`, `state.required`를 판정하지 않는다 — 그 값이 상태나 마지막 `to`인
-  행의 빈틈도, 그 다음 이력 행의 사슬도. 근거: `order`와 foreign key처럼 결함 하나에 보고 하나다
-  ([계층과 순서](#계층과-순서)). 읽을 수 없는 값에는 비교가 없다.
-- 이 진단들은 어느 것도 다른 쓰기를 막지 않는다. 그러므로 엔진 밖의 상태 변경은 사람이 일관된 이력을 위조하지
-  않는 한 보고된다.
-- **Commit.** commit은 먼저 그 대상이 읽은 뒤 바뀌지 않았는지 검사한다: 바뀌었으면 `WRITE_CONFLICT`다.
-  이력 빈틈(`history.gap`)을 포함한 constraint 검사는 잠금 아래에서 다시 읽은 corpus 위에서 실행한다.
-  다른 행의 validator 진단(`type`, `key.duplicate`, `reference.dangling`, `check`, `codec`, `view`, `order`, `state.transition`, `state.required`, `state.limit`, `history.gap`, `history.chain`, 여러 `files` file에 걸친 `parent.cycle`)은 commit을 실패시키지 않되, `type` 진단은 commit의 제약 검사가 그 값을 평가해야 할 때 commit을 실패시키고, 바이트 단위로 같은 key를 가진 두 행은 그 table을 사용할 수 없게 한다([canonical format](10-canonical-format.md#diagnostics)); `format.*` 진단은 다시 쓰기 거절과 사용할 수 없는 table 상태([canonical format](10-canonical-format.ko.md#진단))가 정하는 경우에만 commit을 실패시킨다. file을 다시 써야 하는 commit — 행 자신의 file, 유도된 target이 바뀌는 행(상세 섹션이 생기거나 사라지거나, insert가 dangling link에 그 행을 주는 행)으로의 link를 가진 file, `order`의 형제 — 은 그 file이 `format.*` 진단을 가지면 거절한다: `CONSTRAINT`이며 file과 진단을 밝히고, `format.noncanonical`이면 `flowmark canon`을 밝힌다. 세 commit은 면제된다: 대상에 대한 `flowmark canon`([operations](40-ops.ko.md#canon-연산)), 추가된 column이 일으킨 진단에 대한 add-column migration([migration](80-migration.ko.md)) — 그 진단은 그 migration에 대해 table을 사용할 수 없게 하지 않는다 —, `files` 행의 file 전체를 지우는 delete는 rewrite 거절에서만 면제되며, restrict 검사는 그 행을 참조할 수 있는 모든 table의 행을 여전히 필요로 하며(자신의 table을 `parent`로 하는 것, 자식 block과 이력 행, 그 행으로의 foreign key를 가진 모든 table), 그 중 하나라도 사용할 수 없으면 그 delete는 `CONSTRAINT`다.
-- **Repair.** `flowmark history repair <corpus> <table> <key> [--from <initial state>]`는 마지막 `to`에서 — 이력
-  없는 행은 하나뿐인 초기 상태, 또는 초기 상태가 여럿이면 필수인 `--from`에서 — 현재 상태로 가는 이력
-  행 하나를 insert한다. `at`은 엔진 시계이고 필수 column은 행에서 복사한다. 그 쌍이 선언된 전이가
-  아니거나, 전이가 요구하는 column이 행에서 null이거나 비었거나, 이 행을 세어 현재 상태의 limit를 넘으면
-  거절하며, 그때 사람이 편집으로 합법 상태를 되돌리거나 column을 채운다. repair는 사람이 commit하는 보통
-  transaction이다.
-  repair는 또한 빈틈이 없는 행 — 상태가 마지막 이력 행의 `to`이거나, 이력 행이 없으면 초기 상태이거나,
-  상태가 NULL인 행 — 을 상태 column에서 `CONSTRAINT`로 거절한다. 일어나지 않은 전이의 이력 행을
-  insert하면 흔적을 위조하기 때문이다. 이력 행이 있는 행에 준 `--from`(repair는 마지막 `to`에서 간다),
-  초기 상태가 아닌 `--from`, 초기 상태가 여럿인 기계에서 빠진 `--from`, 이력을 가진 상태기계가 없는
-  table은 `CONFIG`로 거절한다. catalog가 선언하지 않은 table은 schema에 없는 이름의 orm code인
-  `ENTITY_UNKNOWN`으로 거절한다. 어떤 행도 바이트 단위로 가리키지 않는 key는 한 행 읽기가 아무 행도
-  맞추지 못했을 때의 orm code인 `NO_ROWS`로 거절한다. transaction 밖에서는 lock 아래 transaction 하나로,
-  열린 transaction 안에서는 다른 쓰기처럼 실행한다. 그 `at`은 repair마다 한 번 읽은 엔진 시계이므로,
-  commit이 그것을 다시 실행해도 같은 행을 쓴다([operations](40-ops.ko.md#commit-protocol)).
+- commit은 먼저 그 대상이 읽은 뒤 바뀌지 않았는지 검사한다: 바뀌었으면 `WRITE_CONFLICT`다. constraint 검사는 그 다음
+  잠금 아래에서 다시 읽은 corpus 위에서 실행한다.
+- 다른 행의 validator 진단(`type`, `key.duplicate`, `reference.dangling`, `check`, `codec`, `view`, 여러 `files` file에 걸친 `parent.cycle`)은 commit을 실패시키지 않되, `type` 진단은 commit의 제약 검사가 그 값을 평가해야 할 때 commit을 실패시키고, 바이트 단위로 같은 key를 가진 두 행은 그 table을 사용할 수 없게 한다([canonical format](10-canonical-format.md#diagnostics)); `format.*` 진단은 다시 쓰기 거절과 사용할 수 없는 table 상태([canonical format](10-canonical-format.ko.md#진단))가 정하는 경우에만 commit을 실패시킨다.
+- file을 다시 써야 하는 commit — 행 자신의 file, 유도된 target이 바뀌는 행(상세 섹션이 생기거나 사라지거나, insert가 dangling link에 그 행을 주는 행)으로의 link를 가진 file — 은 그 file이 `format.*` 진단을 가지면 거절한다: `CONSTRAINT`이며 file과 진단을 밝히고, `format.noncanonical`이면 `flowmark canon`을 밝힌다. 세 commit은 면제된다: 대상에 대한 `flowmark canon`([operations](40-ops.ko.md#canon-연산)), 추가된 column이 일으킨 진단에 대한 add-column migration([migration](80-migration.ko.md)) — 그 진단은 그 migration에 대해 table을 사용할 수 없게 하지 않는다 —, `files` 행의 file 전체를 지우는 delete는 rewrite 거절에서만 면제되며, restrict 검사는 그 행을 참조할 수 있는 모든 table의 행을 여전히 필요로 하며(자신의 table을 `parent`로 하는 것, 자식 block, 그 행으로의 foreign key를 가진 모든 table), 그 중 하나라도 사용할 수 없으면 그 delete는 `CONSTRAINT`다.
+
+## Audit
+
+`audit` setting을 가진 table은 database의 audit trigger가 감사하듯 감사된다(orm dbspec DBS-93). 엔진이 그 table의
+행에 실행하는 모든 insert, update, soft delete는 setting의 이력 table에 행 하나를 쓴다: action(`insert`, 또는 update와
+soft delete에는 `update`), 이전 audit 기록, 행의 기록되는 각 column을 담는다. setting이 `tables` table을 이름 붙이면,
+audit 기록에 대해 그 table을 이름 붙이는 그 table의 행 하나도 쓰며, 그 행이 이미 있으면 쓰지 않는다. 쓰인 행의 audit
+column은 요청의 audit 기록을 담으며, 요청 message가 그것을 `audit` member로 나른다. 그것이 없는 audited table의 쓰기는
+`CONFIG`다. audited table의 행은 그 soft delete column으로 지우며, 그 밖의 delete는 `CONSTRAINT`다. `rows.load`는 행을
+저장된 형태로 쓰고 아무것도 기록하지 않으며, SQL statement의 차이는 그 database의 trigger가 쓴 행을 이미 담고
+있으므로([operations](40-ops.ko.md#sql-statements)) 엔진은 아무것도 더하지 않는다. 근거: audit은 database가 자기가
+실행하는 쓰기마다 쓰는 행이므로, 엔진은 database처럼 자기가 실행하는 쓰기에 대해 그것을 쓴다.
 
 ## 사람이 쓴 편집에 대한 판정
 
@@ -200,15 +178,14 @@ database는 작성자 독점을 강제하지만 corpus에는 그것이 없다. �
   validate가 보고한다.
 - **`immutable`**: 엔진을 통한 그 table 행의 update와 delete는 `CONSTRAINT`(`table <name> is immutable`)이고,
   insert는 받아들이며, 사람이 파일을 고치는 것은 파일 시스템이 허용하는 일이다.
-- **`audit`**는 corpus에서 schema 오류다. 상태기계의 이력이
-  기록된 흔적이고, 그 빈틈, 사슬, 전이, 필수 규칙이 사람의 편집이 우회한 것을 보고한다.
+- **`audit`**: 엔진은 자기가 실행하는 쓰기의 audit을 쓴다([Audit](#audit)). 사람이 file을 고치는 것은 audit 행을
+  쓰지 않으며 파일 시스템이 허용하는 일이다.
 - **Default**는 엔진이 insert에서 명시적으로 쓴다. non-null column이 빠진 사람이 쓴 행은 format 진단이다.
 
 ## 진단
 
 모든 규칙은 `{file, line, column, rule, message}`를 보고하며, column은 [canonical format](10-canonical-format.ko.md#진단)이 정하는 대로다. 규칙 이름은 `catalog`, `type`,
-`key.duplicate`, `reference.dangling`, `check`, `codec`, `view`, `parent.cycle`, `order`, `state.transition`,
-`state.required`, `state.limit`, `history.gap`, `history.chain`, `corpus.walk`
+`key.duplicate`, `reference.dangling`, `check`, `codec`, `view`, `parent.cycle`, `corpus.walk`
 ([document model](20-document-model.md)의 walk 규칙), 그리고 canonical format의 `format.*` 규칙이다: `format.noncanonical`, `format.block`,
 `format.section`, `format.encoding`. 검증은 corpus 전체에 걸친다. 깨진 corpus 안의 깨끗한 file이 corpus를
-유효하게 만들지 않는다. 열기, introspection, `flowmark validate`, `flowmark canon`은 행에 대한 요청이 아니므로 사용할 수 없는 table에서 결코 실패하지 않으며, canon의 링크 유도 거절은 예외다([operations](40-ops.ko.md#canon-연산)). validator는 모든 file의 `format.*`와 `parent.cycle` 진단과, `format.block`, `format.section`, `format.encoding`이나 그 행 사이의 `parent.cycle`이 없는 file 안에서 읽을 수 있는 모든 행의 validator 규칙을 보고한다. `format.block`, `format.section`, `format.encoding`이나 그 행 사이의 `parent.cycle`이 있는 file을 가진 table의 완전한 행을 필요로 하는 규칙 — 그 table로의 `reference.dangling`, `key.duplicate`, 그 안의 `order`와 `state.limit` — 은 그 table에 대해 보고하지 않으며, file 자신의 진단이 그것을 대신한다. 여러 `files` file에 걸친 validator의 `parent.cycle`은 읽을 수 있는 행 사이에서 보고한다. 순환은 그 행들 자신의 `parent` 값으로 만들어지며 읽지 못한 어떤 행도 그것을 풀 수 없기 때문이다. 바이트 단위로 같은 key 때문에만 사용할 수 없는 table은 모든 규칙이 보고된다.
+유효하게 만들지 않는다. 열기, introspection, `flowmark validate`, `flowmark canon`은 행에 대한 요청이 아니므로 사용할 수 없는 table에서 결코 실패하지 않으며, canon의 링크 유도 거절은 예외다([operations](40-ops.ko.md#canon-연산)). validator는 모든 file의 `format.*`와 `parent.cycle` 진단과, `format.block`, `format.section`, `format.encoding`이나 그 행 사이의 `parent.cycle`이 없는 file 안에서 읽을 수 있는 모든 행의 validator 규칙을 보고한다. `format.block`, `format.section`, `format.encoding`이나 그 행 사이의 `parent.cycle`이 있는 file을 가진 table의 완전한 행을 필요로 하는 규칙 — 그 table로의 `reference.dangling`, 그 안의 `key.duplicate` — 은 그 table에 대해 보고하지 않으며, file 자신의 진단이 그것을 대신한다. 여러 `files` file에 걸친 validator의 `parent.cycle`은 읽을 수 있는 행 사이에서 보고한다. 순환은 그 행들 자신의 `parent` 값으로 만들어지며 읽지 못한 어떤 행도 그것을 풀 수 없기 때문이다. 바이트 단위로 같은 key 때문에만 사용할 수 없는 table은 모든 규칙이 보고된다.

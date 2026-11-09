@@ -72,7 +72,7 @@ func benchRows(mb int) []*Row {
 			Title: fmt.Sprintf("Benchmark item %d of the codec", i),
 			Body:  body.String(),
 			Scalars: map[string]*string{
-				"state":    sp("waiting"),
+				"state":    sp(" "),
 				"position": sp(fmt.Sprint(i)),
 				"done":     sp("false"),
 				"estimate": sp("12.50"),

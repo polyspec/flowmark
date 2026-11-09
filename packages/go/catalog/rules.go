@@ -35,14 +35,6 @@ func (l *loader) checkTable(d *document, t *dbspec.Table) (Storage, bool) {
 			report("column " + c.Column + " ends its codec with the stage yaml, whose encoder ends every value with a line feed")
 		}
 	}
-	if sm := s.StateMachine; sm != nil {
-		if sm.History == nil {
-			report("state machine on column " + sm.Column + " has no history")
-		}
-		if !slices.ContainsFunc(sm.Lines, func(line dbspec.StateLineSetting) bool { return line.Initial }) {
-			report("state machine on column " + sm.Column + " has no initial state")
-		}
-	}
 	if len(t.PrimaryKey.Columns) > 1 && s.Store != nil && s.Store.Kind == "files" {
 		report("table " + t.Name + ": files storage names a file by one key column, and the primary key is composite (" + strings.Join(t.PrimaryKey.Columns, ", ") + ")")
 	}
@@ -76,11 +68,6 @@ func (l *loader) checkTable(d *document, t *dbspec.Table) (Storage, bool) {
 		case storage.Shape == ShapeList:
 			report("table " + t.Name + ": list storage needs a title")
 		}
-	}
-	// A list row carries its state as its glyph, so a list storage of a state
-	// machine declares a checkbox; dbspec covers every state once one exists.
-	if sm := s.StateMachine; sm != nil && storage.Shape == ShapeList && len(s.Checkboxes) == 0 {
-		report("table " + t.Name + ": list storage of the state machine on column " + sm.Column + " declares no checkbox")
 	}
 	return storage, true
 }
@@ -186,67 +173,6 @@ func (l *loader) checkNames() {
 			if strings.EqualFold(m, r.table.Name) {
 				l.add(l.tableDiag(r.doc, r.table.Name, "block table "+r.table.Name+" is named like markdown column "+m+" of its parent "+parent.table.Name))
 			}
-		}
-	}
-}
-
-// checkHistoryMarks reports, at the history table's name, a column that a
-// require list names and that the state table and the history table do not
-// both declare markdown or both declare without it: the history row holds a
-// copy of the value, and a section and a single-line place accept different
-// values.
-func (l *loader) checkHistoryMarks() {
-	for _, r := range l.order {
-		s := r.table.Settings
-		if s == nil || s.StateMachine == nil || s.StateMachine.History == nil {
-			continue
-		}
-		h := l.refs[s.StateMachine.History.Table]
-		if h == nil {
-			continue
-		}
-		seen := map[string]bool{}
-		for _, line := range s.StateMachine.Lines {
-			for _, c := range line.Requires {
-				if seen[c] {
-					continue
-				}
-				seen[c] = true
-				if slices.Contains(markdownOf(r.table), c) != slices.Contains(markdownOf(h.table), c) {
-					l.add(l.tableDiag(h.doc, h.table.Name, "history column "+c+" of table "+h.table.Name+" and required column "+c+" of table "+r.table.Name+" differ in their markdown setting"))
-				}
-			}
-		}
-	}
-}
-
-// checkHistoryStorage reports, at the history table's name, a history table that
-// is stored neither `block <row fk> table` under its state table — a block whose
-// placement foreign key is the history's row column and references the state table
-// — nor `document table` (spec 30 The history table): the executor and the
-// validator place a history row only there.
-func (l *loader) checkHistoryStorage() {
-	for _, r := range l.order {
-		s := r.table.Settings
-		if s == nil || s.StateMachine == nil || s.StateMachine.History == nil {
-			continue
-		}
-		hist := s.StateMachine.History
-		h := l.refs[hist.Table]
-		if h == nil {
-			continue
-		}
-		st := h.storage
-		ok := st.Kind == StorageDocument && st.Shape == ShapeTable && st.Shard == nil
-		if st.Kind == StorageBlock && st.Shape == ShapeTable && st.Parent == r.table.Name {
-			for _, fk := range h.table.ForeignKeys {
-				if fk.Name == st.ParentForeignKey && len(fk.Columns) == 1 && fk.Columns[0] == hist.Row {
-					ok = true
-				}
-			}
-		}
-		if !ok {
-			l.add(l.tableDiag(h.doc, h.table.Name, "table "+h.table.Name+": a history table is stored `block <row fk> table` under its state table or `document table`"))
 		}
 	}
 }

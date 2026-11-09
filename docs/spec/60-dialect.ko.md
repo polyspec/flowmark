@@ -1,5 +1,5 @@
 <!-- doc-id: spec-dialect -->
-<!-- source-sha256: dc42edd7c7f1c396f801ba43f83d799d1474b80d4b11937640f62e309e33ee64 -->
+<!-- source-sha256: c6455b479e1d9c9a4d4f3eac1781fe917e1f94e1d17a6acf53e180de81aaaea5 -->
 # Capability table
 
 [English](60-dialect.md)
@@ -57,11 +57,11 @@ surface는 `CAPABILITY_UNSUPPORTED`, 그리고 orm의 규칙이 모든 backend�
 | 정렬 | IR `order`는 column의 type으로 정렬하며, NULL은 오름차순에서 모든 값 앞에, 내림차순에서 모든 값 뒤에 오고, 동률은 저장 순서다 — `group_count`의 group과 `limit_per_parent`의 순위에도 같다. 없는 읽기는 저장 순서를 돌려준다([document model](20-document-model.ko.md#순서)). 근거: MySQL과 SQLite는 오름차순에서 NULL을 처음에, PostgreSQL은 마지막에 둔다. MySQL에는 `NULLS FIRST`가 없으므로, NULL을 가장 작게 두는 것이 세 database가 모방 없이 render하는 유일한 규칙이다 |
 | `group_by` | `count`와 `group_count`의 root에서만 유효하며, 그 밖에서는 `IR_INVALID`다. 그것이 있으면 `order` 항목은 group column, 그 column 함수, 또는 `random`이어야 한다(아니면 `IR_INVALID`) — orm의 규칙. 근거: 모든 행 읽기는 primary key를 고르므로, group된 행 읽기는 MySQL 1055, PostgreSQL 42803, SQLite에서는 임의의 행이며, group되지 않은 column으로의 정렬도 같다 |
 | `paginate` | 지원. 요청 하나가 일관된 corpus 하나를 읽는다. canonical root page limit은 ORM의 `offset_p`, `count_p` i64 parameter를 사용하며 page 행에 적용하고 `count`는 여전히 모든 일치 행을 센다. 잘못된 parameter 값은 corpus를 읽기 전에 실패한다 |
-| `insert`(단일, 다중 행) | 지원. `identity`, `key_prefix`, `order` column은 executor가 할당하며 생략할 수 있다. default는 명시적으로 쓴다. insert는 값이나 NULL로 배정한다 — `plus_p`와 `minus_p`는 거기서 `IR_INVALID`이고 `on_duplicate`에서는 유효하다(orm의 규칙). 근거: MySQL은 그런 배정을 default에서 계산하고, PostgreSQL과 SQLite는 거절한다 |
+| `insert`(단일, 다중 행) | 지원. `identity` column은 executor가 할당하며 생략할 수 있고, text key와 `order` column은 insert가 주며 없으면 `IR_INVALID`다(orm DBS-77, DBS-79). default는 명시적으로 쓴다. insert는 값이나 NULL로 배정한다 — `plus_p`와 `minus_p`는 거기서 `IR_INVALID`이고 `on_duplicate`에서는 유효하다(orm의 규칙). 근거: MySQL은 그런 배정을 default에서 계산하고, PostgreSQL과 SQLite는 거절한다 |
 | `update` | 지원. 읽은 뒤 바뀐 대상은 덮어쓰지 않고 `WRITE_CONFLICT`로 실패한다. primary key나 identity column의 배정은 `IR_INVALID`다([document model](20-document-model.ko.md#key)) |
 | `delete`, `restore` | 지원. `restore`는 SQL 형태를 지키며(soft delete column을 비우고, 지운 동안 unique key를 유지), 그 key는 request hook 뒤에 orm의 `ir.RestoreKey`(orm protocol 1.5)가 set 값과 `and`로 이은 `eq` 조건에서 고르므로, hook의 조건은 update를 좁히듯 restore를 좁힌다. 참조되는 행의 delete는 같은 delete가 참조하는 행을 지우더라도 `FOREIGN_KEY`([constraints](50-constraints.ko.md#key와-참조)). primary key, identity, soft delete column을 배정하는 `restore`는 `IR_INVALID`다 |
 | `optimistic` | 지원. 일치가 없으면 `OPTIMISTIC_LOCK` |
-| `on_duplicate` | insert된 행과 만날 수 있는 key — insert가 `identity`나 `key_prefix`에 맡기지 않는 한 primary key, 그리고 각 unique key — 가 정확히 하나이고 insert가 그 모든 column을 배정할 때 지원한다. 그 key가 충돌 대상이며, 그 밖의 `on_duplicate`는 `IR_INVALID`다(MySQL의 아무 key 규칙과 PostgreSQL과 SQLite의 충돌 대상을 같은 key로 만드는 orm의 규칙). primary key는 아래 비교가 정하는 대로 행과 만난다. 근거: MySQL은 자신의 key 순서로 아무 unique key에서나 행과 만나는 반면, PostgreSQL과 SQLite는 충돌 대상 하나를 지정하고 다른 key에서의 만남은 `DUPLICATE_KEY`다. 행과 만날 수 있는 key가 하나이면 셋은 구성상 같다 |
+| `on_duplicate` | insert된 행과 만날 수 있는 key — insert가 `identity`에 맡기지 않는 한 primary key, 그리고 각 unique key — 가 정확히 하나이고 insert가 그 모든 column을 배정할 때 지원한다. 그 key가 충돌 대상이며, 그 밖의 `on_duplicate`는 `IR_INVALID`다(MySQL의 아무 key 규칙과 PostgreSQL과 SQLite의 충돌 대상을 같은 key로 만드는 orm의 규칙). primary key는 아래 비교가 정하는 대로 행과 만난다. 근거: MySQL은 자신의 key 순서로 아무 unique key에서나 행과 만나는 반면, PostgreSQL과 SQLite는 충돌 대상 하나를 지정하고 다른 key에서의 만남은 `DUPLICATE_KEY`다. 행과 만날 수 있는 key가 하나이면 셋은 구성상 같다 |
 | primary key 비교 | A–Z의 대소문자를 가리지 않는다. SQL에서 orm의 binary collation과 다른데, key는 file 이름이자 anchor이기 때문이다([document model](20-document-model.ko.md#key)): key가 다른 key와 대소문자를 무시하고 같은 insert는 `DUPLICATE_KEY`이며, 충돌 key가 primary key인 `on_duplicate` insert는 그 행 — 바이트 단위로 같은 key가 먼저, 아니면 byte 순서에서 가장 작은 것 — 과 만나고, 그 행은 자기 key를 유지한다. 근거: `ON DUPLICATE KEY UPDATE`와 `ON CONFLICT`는 충돌 key의 index가 그 index의 비교로 보고하는 중복에서 작동한다 |
 | `lock` `update`, `share`, `update_nowait`, `share_nowait` | 문서화된 no-op으로 받아들인다: server transaction이 이미 corpus lock을 쥐고 있어 어떤 행도 기다리지 않는다 |
 | relation(`limit_per_parent`, `if_parent`, `flatten`, `key_by`, `no_cascade_delete`) | 지원. executor가 조립하며, `flatten` relation은 `one` relation으로 답하고 client model이 그것을 부모의 array와 JSON 형태에 병합한다(orm의 규칙). `key_by`는 non-null column이어야 한다(아니면 `IR_INVALID`). 근거: orm은 병합을 client model의 array와 JSON 형태에 두며, 부모가 가진 이름은 부모의 값을 유지한다. 병합된 답은 client에게 부모 자신의 column과 구별할 수 없는 행을 넘긴다. NULL collection key는 client 언어마다 다르게 답하므로, nullable `key_by`는 형태로 거절한다 |
@@ -72,16 +72,16 @@ surface는 `CAPABILITY_UNSUPPORTED`, 그리고 orm의 규칙이 모든 backend�
 | `contains_binary`(`Lb` 연산자) | 지원: column의 텍스트가 parameter의 텍스트를 substring으로 담으면 참이며, code point로 비교한다. NULL column이나 parameter는 unknown이며, parameter의 `%`, `_`, `\`는 문자 그대로다. 근거: `utf8mb4_0900_bin` 아래 MySQL `LIKE`, `COLLATE "C"` 아래 PostgreSQL `LIKE`, SQLite `instr`가 일치한다 |
 | `now`, `default now`, `updated`, `soft_delete` | 요청마다 값 하나인 요청의 `now`: `datetime(p)`에 쓸 때는 p자리로 자르고, 비교할 때는 여섯 자리다([operations](40-ops.ko.md#시계)). 결과가 0001-01-01부터 9999-12-31 23:59:59.999999 밖에 있거나 간격을 표현할 수 없는 상대 시각 함수는 NULL이다(orm의 규칙). 근거: MySQL과 SQLite는 범위를 넘으면 NULL을 주며, NULL은 다른 dialect를 guard로 맞출 수 있는 유일한 결과다 |
 | `soft_delete` | 모든 읽기는 soft delete된 행을 제외한다 — root, 각 join 자식(join 조건에서 제외하므로 left join은 null을 묶는다), 각 relation과 각 subquery. `restore`만이 그런 행에 일치한다. 근거: 읽기는 늘 soft delete된 행을 제외한다는 orm의 규칙 |
-| codec columns | orm 요청에서는 client가 적용한다. 엔진이 시작하는 쓰기(CLI, MCP, sidecar, 이력)는 orm의 Go codec package로 codec을 적용하며, 검증은 같은 package로 decode한다. 저장 값은 encode된 값이며, byte를 만드는 단계는 base64다 |
+| codec columns | orm 요청에서는 client가 적용한다. 엔진이 시작하는 쓰기(CLI, MCP, sidecar)는 orm의 Go codec package로 codec을 적용하며, 검증은 같은 package로 decode한다. 저장 값은 encode된 값이며, byte를 만드는 단계는 base64다 |
 | indexes | 허용되며 메모리에서 파생된다 |
 | `select explicit`, `entity`, `navigation` | client 쪽이며 저장에 효과가 없다 |
 | `aes`, `aes_version`, `blind_index` | 지원. orm 요청에서는 client가 암호화·hash하고, 엔진은 주입으로 key를 받는다([schema](30-schema.md#keys)) |
 | `immutable` setting | 행의 update와 delete는 `CONSTRAINT`([constraints](50-constraints.ko.md#사람이-쓴-편집에-대한-판정)) |
-| `audit` setting | corpus에서 schema 오류. 대신 `state_machine … history` |
+| `audit` setting | 지원한다: 엔진을 통한 insert, update, soft delete는 database의 audit trigger가 쓰는 행을 쓰며, audited table 행의 그 밖의 delete는 `CONSTRAINT`다([constraints](50-constraints.ko.md#audit)) |
 | transaction | session 위의 `begin`부터 `commit`/`rollback`까지. `readOnly`는 지키며 lock을 잡는다 |
 | savepoint | 중첩 stage |
 | `orderByRandom` | 지원. 순서에 seed를 쓰지 않는다 |
-| audit 값을 가진 transaction | `CAPABILITY_UNSUPPORTED` |
+| audit 값을 가진 transaction | 지원한다: 요청 message가 transaction의 audit 기록을 그 `audit` member로 나르며, 그것이 없는 audited table의 쓰기는 `CONFIG`다([constraints](50-constraints.ko.md#audit)) |
 | `isolation` option | 모든 level을 받아들인다: transaction은 `begin`부터 끝까지 corpus lock을 쥐고 행의 사본 위에서 실행되므로 혼자 실행되는 것과 같고, 이는 어떤 option이 요구하는 level 이상이다 |
 | `timeoutMs` option | `CAPABILITY_UNSUPPORTED`, PostgreSQL 외 모든 데이터베이스에 대한 orm의 규칙 |
 | `getQuery()`, statement event, `subscribe()` | `CAPABILITY_UNSUPPORTED` — SQL 텍스트가 없다 |

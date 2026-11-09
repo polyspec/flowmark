@@ -20,7 +20,9 @@ type documentTarget struct {
 // documentTargets are the tables the document fuzzer reads, selected by a byte: the
 // fixture's items, people and milestones (a list, a table with a parent link and
 // sections, and a table with an order column), then the entries of the equivalence
-// corpora as a document list (target 3) and as a document table (target 4).
+// corpora as a document list (target 3) and as a document table (target 4), the fixture's jobs, a list without a task
+// marker (target 5), and its todos and chores, lists whose task marker is a nullable bool (target 6) and a nullable
+// varchar(1) (target 7).
 func documentTargets(f testing.TB) []documentTarget {
 	fixture := loadDocumentFixture(f)
 	return []documentTarget{
@@ -29,6 +31,9 @@ func documentTargets(f testing.TB) []documentTarget {
 		{fixture, "milestones", documentLinker()},
 		{equivCatalog(f, equivDocument), "entries", equivDocLinker("entries.flowmark.md")},
 		{equivCatalog(f, equivDocumentTable), "entries", equivDocLinker("entries.flowmark.md")},
+		{fixture, "jobs", documentLinker()},
+		{fixture, "todos", documentLinker()},
+		{fixture, "chores", documentLinker()},
 	}
 }
 
@@ -45,6 +50,8 @@ func fuzzDocumentSeeds(f *testing.F) {
 	seed(3, readEquiv(f, equivDocument, "entries.flowmark.md"))
 	seed(4, readEquiv(f, equivDocumentTable, "entries.flowmark.md"))
 	f.Add(uint8(0), []byte(itemsOf()))
+	f.Add(uint8(6), []byte(raw("# todos", "- [ ] D1 Open", "- [x] D2 Closed", "- [X] D3 Upper", "- D4 None")))
+	f.Add(uint8(7), []byte(raw("# chores", "- [?] C1 Ask", "- [] C2 Empty", "- [ ] C3 Space", "- C4 None", "- [\t] C5 Tab")))
 	f.Add(uint8(0), []byte(itemsOf("- [ ] T1 Plan done:false note:\"a b\"", "  - [~] T2 Child done:false", "", "## items row T2", "", "Body.")))
 	f.Add(uint8(0), []byte(itemsOf("- [ ] T1 Set owner\\: review done:false", "- [x] T2 Plan done:true", "", "## items row T2", "", "### evidence", "", "a|b")))
 	f.Add(uint8(0), []byte(itemsOf(`- [ ] T1 Plan done:false note:"a\"b" weight:-3`)))
@@ -67,6 +74,9 @@ func fuzzDocumentSeeds(f *testing.F) {
 	f.Add(uint8(1), []byte(peopleOf(peopleHeader, peopleDelim, row("P1", "", "Ada", "", "true", "", "", "", "", "", "", "", "", ""), "", "## people row P1", "", "### bio", "", "Notes.")))
 	f.Add(uint8(1), []byte(peopleOf(peopleHeader, peopleDelim, row("P1", "", `"\q"`, "", "true", "", "", "", "", "", "", "", "", ""))))
 	f.Add(uint8(1), []byte(peopleOf(peopleHeader, peopleDelim, row("P1", "", "a \\| b", "", "true", "", "", "", "", "", "", "", "", ""), "", "## people row P1", "", "### bio", "", "x")))
+	f.Add(uint8(5), []byte(jobsOf("- J1 Plan state:open", "- J2 Ship state:closed note:\"\"", "- J3 Park state:parked note:Later.")))
+	f.Add(uint8(5), []byte(jobsOf(`- J1 Plan state:""`)))
+	f.Add(uint8(5), []byte(jobsOf("- [ ] J1 Plan state:open")))
 	f.Add(uint8(2), []byte(milestonesOf("| id | parent | title |", "| --- | --- | --- |", row("M1", "[M2](milestones.flowmark.md)", "A"), row("M2", "[M1](milestones.flowmark.md)", "B"))))
 }
 
@@ -134,7 +144,7 @@ func FuzzRenderDocument(f *testing.F) {
 		if doneText != "true" && doneText != "false" {
 			return
 		}
-		sc := map[string]*string{"state": sp("waiting"), "position": &position, "done": &doneText, "note": &note}
+		sc := map[string]*string{"state": sp(" "), "position": &position, "done": &doneText, "note": &note}
 		if owner != "" {
 			sc["owner"] = &owner
 		}

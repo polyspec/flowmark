@@ -72,7 +72,6 @@ var operations = map[string]struct{ required, optional []string }{
 	"row.update": {required: []string{"table", "key", "values"}},
 	"row.move":   {required: []string{"table", "key", "position"}, optional: []string{"parent"}},
 	"row.delete": {required: []string{"table", "key"}},
-	"transition": {required: []string{"table", "key", "state"}, optional: []string{"values"}},
 	"views":      {optional: []string{"key"}},
 }
 
@@ -103,11 +102,10 @@ type Request struct {
 	// Parent is the value given for the hierarchy column, nil when the member is absent; JSON null moves the row to
 	// the top.
 	Parent json.RawMessage
-	State  string
 }
 
 // Parse forms the operation op from its members. An unknown operation, a missing member, a member the operation does
-// not take, a table or state that is not a string and values that are not an object are CONFIG.
+// not take, a table that is not a string and values that are not an object are CONFIG.
 func Parse(op string, members map[string]json.RawMessage) (*Request, error) {
 	spec, ok := operations[op]
 	if !ok {
@@ -132,11 +130,6 @@ func Parse(op string, members map[string]json.RawMessage) (*Request, error) {
 	if raw, ok := members["table"]; ok {
 		if json.Unmarshal(raw, &r.Table) != nil {
 			return nil, errf(codeConfig, "the member table of %s is not a string: %s", op, raw)
-		}
-	}
-	if raw, ok := members["state"]; ok {
-		if json.Unmarshal(raw, &r.State) != nil {
-			return nil, errf(codeConfig, "the member state of %s is not a string: %s", op, raw)
 		}
 	}
 	if raw, ok := members["values"]; ok {
@@ -224,7 +217,7 @@ func (c *Corpus) Catalog() *catalog.Catalog { return c.wp.Catalog() }
 func (c *Corpus) Close() error { return c.wp.Close() }
 
 // Session returns a new session of the write path named name, for the operations the faces run outside this package:
-// canon, install, history repair.
+// canon and install.
 func (c *Corpus) Session(name string) (*writepath.Session, error) { return c.wp.Session(name) }
 
 // RunJSON forms the operation op from its members (Parse), runs it in a new session named session and returns the JSON
@@ -358,27 +351,6 @@ func (c *Corpus) run(ctx context.Context, s *writepath.Session, tb *catalog.Tabl
 			set = append(set, m.assign(h, r.Parent))
 		}
 		return c.update(ctx, s, &m, tb, r.Key, set)
-	case "transition":
-		if tb.StateMachine == nil {
-			return nil, errf(codeConfig, "transition: the table %s declares no state machine", tb.Name)
-		}
-		state, err := json.Marshal(r.State)
-		if err != nil {
-			return nil, err
-		}
-		values := map[string]json.RawMessage{}
-		for k, v := range r.Values {
-			values[k] = v
-		}
-		if _, ok := values[tb.StateMachine.Column]; ok {
-			return nil, errf(codeConfig, "transition: values assigns the state column %s, which the member state gives", tb.StateMachine.Column)
-		}
-		values[tb.StateMachine.Column] = state
-		values, err = c.sealed(tb, false, values)
-		if err != nil {
-			return nil, err
-		}
-		return c.update(ctx, s, &m, tb, r.Key, m.sets(tb, values))
 	}
 	return nil, errf(codeInternal, "the operation %s has no runner", r.Operation)
 }

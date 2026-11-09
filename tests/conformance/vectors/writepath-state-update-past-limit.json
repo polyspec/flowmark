@@ -1,0 +1,95 @@
+{
+  "name": "writepath-state-update-past-limit",
+  "storage": "document list",
+  "catalog": "workflow",
+  "corpus": {
+    "cards/C1.flowmark.md": [
+      "# One"
+    ],
+    "cards/C2.flowmark.md": [
+      "# Two"
+    ],
+    "events.flowmark.md": [
+      "# events",
+      "| id | label |",
+      "| --- | --- |",
+      "| 1 | opened |"
+    ],
+    "items.flowmark.md": [
+      "# items",
+      "- [ ] T1 First item position:1",
+      "- [~] T2 Second item position:2",
+      "- [ ] T3 Third item position:3",
+      "",
+      "## items row T2",
+      "",
+      "### item_history",
+      "| id | from_state | to_state | at |",
+      "| --- | --- | --- | --- |",
+      "| 1 | waiting | doing | 2026-10-01 08:00:00.000000 |"
+    ],
+    "pins.flowmark.md": [
+      "# pins",
+      "| id | card |",
+      "| --- | --- |",
+      "| X1 | [C1](cards/C1.flowmark.md) |"
+    ],
+    "tags.flowmark.md": [
+      "# tags",
+      "| id | label | kind |",
+      "| --- | --- | --- |",
+      "| 1 | go | topic |",
+      "| 2 | ops | area |"
+    ]
+  },
+  "request": {
+    "entity": "items",
+    "kind": "update",
+    "set": [
+      {
+        "column": "state",
+        "p": 0
+      }
+    ],
+    "where": {
+      "items": [
+        {
+          "pred": {
+            "column": "id",
+            "op": "eq",
+            "p": 1
+          }
+        }
+      ]
+    }
+  },
+  "params": [
+    "~",
+    "T1"
+  ],
+  "now": "2026-10-11 09:00:00.000000",
+  "expect": {
+    "affected": 1,
+    "keys": [],
+    "corpus": {
+      "items.flowmark.md": [
+        "# items",
+        "- [~] T1 First item position:1",
+        "- [~] T2 Second item position:2",
+        "- [ ] T3 Third item position:3",
+        "",
+        "## items row T2",
+        "",
+        "### item_history",
+        "| id | from_state | to_state | at |",
+        "| --- | --- | --- | --- |",
+        "| 1 | waiting | doing | 2026-10-01 08:00:00.000000 |"
+      ]
+    }
+  },
+  "repeat": {
+    "affected": 1,
+    "keys": [],
+    "corpus": {}
+  }
+}

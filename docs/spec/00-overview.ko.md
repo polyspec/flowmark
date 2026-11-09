@@ -1,5 +1,5 @@
 <!-- doc-id: spec-overview -->
-<!-- source-sha256: 18c2478b158cfdf15c312cd902d95031eaa2138e16826d7f7c92565a488d46fb -->
+<!-- source-sha256: d6adfc90180930924e1d866873e9c67319412433f98b14474b310ef9794d473a -->
 # 개요
 
 [English](00-overview.md)
@@ -11,7 +11,7 @@ flowmark는 markdown 문법을 가진 텍스트 DB다. 파일이 database이고,
 ## 범위
 
 - **flowmark가 엔진이다.** Go binary 하나가 markdown database 엔진 — codec, validator, IR executor,
-  lock과 journal을 갖는 write path, 이력 — 과 그 얇은 face를 담는다: server, CLI, MCP server, soksak
+  lock과 journal을 갖는 write path — 과 그 얇은 face를 담는다: server, CLI, MCP server, soksak
   sidecar(soksak core specification의 protocol v1). 모든 face는 같은 엔진을 돌리며 어느 것도 자기
   write path를 갖지 않는다.
 - **orm은 flowmark에 IR executor로 접속한다.** [polyspec/orm](https://github.com/polyspec/orm)은
@@ -31,8 +31,8 @@ flowmark는 markdown 문법을 가진 텍스트 DB다. 파일이 database이고,
 
 ## 강제력의 약속
 
-database 수준의 강제력을 가진 문서 형식: type을 벗어난 값, dangling 참조, 깨진 key, 불법 상태 전이,
-엔진을 우회한 상태 변경은 위치가 있는 진단 `{file, line, column, rule, message}`이다 — 엔진 자신의
+database 수준의 강제력을 가진 문서 형식: type을 벗어난 값, dangling 참조, check가 거절하는 값,
+깨진 key는 위치가 있는 진단 `{file, line, column, rule, message}`이다 — 엔진 자신의
 쓰기에도 사람의 편집에도 똑같이. idempotency는 관례가 아니라 명시한 명제다: parse한 canonical 문서를
 emit하면 그대로 재현되고, 같은 입력으로 operation을 반복하면 같은 결과와 상태를 낸다.
 

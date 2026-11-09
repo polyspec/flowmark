@@ -7,9 +7,8 @@ import (
 	"github.com/polyspec/flowmark/packages/go/catalog"
 )
 
-// documentHistoryCatalog is a state table whose history table is stored as a
-// document table (spec 30 The history table): its rows are found through the
-// history foreign key, not in a block of the state row.
+// documentHistoryCatalog is a state table and a history table of it, both stored as document tables: ordinary tables,
+// since the engine holds no state machine (spec 50 State columns).
 const documentHistoryCatalog = `dbspec 1 flowmark
 
 table tickets {
@@ -20,28 +19,9 @@ table tickets {
   settings {
     store document table
     title title
-    state_machine state initial open
-    state_machine state open -> doing
-    state_machine state doing -> closed
-    state_machine state terminal closed
-    state_machine state history ticket_history row ticket from from_state to to_state at at
   }
 }
-
-table ticket_history {
-  id i64 identity
-  ticket varchar(16)
-  from_state varchar(16)
-  to_state varchar(16)
-  at datetime(6)
-  primary key (id)
-  index ix_ticket_history_ticket (ticket)
-  foreign key fk_ticket_history (ticket) references tickets (id) on delete restrict on update restrict
-  settings {
-    store document table
-  }
-}
-`
+` + "\n" + corpustest.TicketHistoryTable
 
 // historyCorpus writes a corpus of the document-history catalog holding files, and
 // returns its catalog and root.
@@ -75,40 +55,37 @@ func historyRows(rows ...[4]string) string {
 	return s
 }
 
-// TestDocumentTableHistory pins history.gap, history.chain and state.transition for a history table
-// stored as a document table: a state row's history rows are the rows of the
-// history table whose foreign key names it, in corpus order.
+// TestDocumentTableHistory pins that a state table and its history table, stored as document tables, hold ordinary
+// rows (spec 50 State columns): no gap, chain or transition of the machine is judged.
 func TestDocumentTableHistory(t *testing.T) {
 	cases := []struct {
 		name  string
 		files map[string]string
 		want  []string
 	}{
-		{name: "50#a-state-changed-outside-the-engine: a state where its document-table history ends has no gap",
+		{name: "50#state-columns: a state where its document-table history ends is no fault",
 			files: map[string]string{
 				"tickets.flowmark.md":        ticketRows([2]string{"K1", "closed"}, [2]string{"K2", "open"}),
 				"ticket_history.flowmark.md": historyRows([4]string{"1", "K1", "open", "doing"}, [4]string{"2", "K1", "doing", "closed"}),
 			}},
-		{name: "50#a-state-changed-outside-the-engine: a state that differs from the last to of its document-table history",
+		{name: "50#state-columns: a state that differs from the last to of its document-table history is no fault",
 			files: map[string]string{
 				"tickets.flowmark.md":        ticketRows([2]string{"K1", "closed"}),
 				"ticket_history.flowmark.md": historyRows([4]string{"1", "K1", "open", "doing"}),
-			},
-			want: []string{"tickets.flowmark.md:4 history.gap"}},
-		{name: "50#a-state-changed-outside-the-engine: a non-initial state without document-table history rows",
+			}},
+		{name: "50#state-columns: a non-initial state without document-table history rows is no fault",
 			files: map[string]string{
 				"tickets.flowmark.md":        ticketRows([2]string{"K1", "doing"}, [2]string{"K2", "doing"}),
 				"ticket_history.flowmark.md": historyRows([4]string{"1", "K2", "open", "doing"}),
-			},
-			want: []string{"tickets.flowmark.md:4 history.gap"}},
-		{name: "50#a-state-changed-outside-the-engine: a document-table history row whose from differs from the previous to",
+			}},
+		{name: "50#state-columns: a document-table history row whose from differs from the previous to is no fault",
 			files: map[string]string{
 				"tickets.flowmark.md":        ticketRows([2]string{"K1", "closed"}),
 				"ticket_history.flowmark.md": historyRows([4]string{"1", "K1", "open", "doing"}, [4]string{"2", "K1", "open", "closed"}),
-			},
-			want: []string{
-				"ticket_history.flowmark.md:5 history.chain",
-				"ticket_history.flowmark.md:5 state.transition ~ from open to closed",
+			}},
+		{name: "50#state-columns: any state its type allows is no fault in table storage",
+			files: map[string]string{
+				"tickets.flowmark.md": ticketRows([2]string{"K1", "parked"}),
 			}},
 	}
 	for _, tc := range cases {

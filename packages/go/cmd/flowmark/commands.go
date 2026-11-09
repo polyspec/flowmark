@@ -48,47 +48,6 @@ func install(out, errOut io.Writer, args []string) (code int) {
 	return pr.status(errOut, "install")
 }
 
-// history runs `flowmark history repair [--lock-wait-ms <n>] <corpus> <table> <key> [--from <state>]` (spec 50 A state
-// changed outside the engine): it prints the answer of the repair as one line of JSON.
-func history(out, errOut io.Writer, args []string) (code int) {
-	if len(args) == 0 || args[0] != "repair" {
-		return usage(errOut, "history: the only history command is history repair")
-	}
-	cmd := newCommand("history repair", errOut, true)
-	from := cmd.fs.String("from", "", "the initial state a row without history rows is repaired from, when the machine has several")
-	pos, ok := cmd.parse(args[1:])
-	if !ok {
-		return 2
-	}
-	if len(pos) != 3 {
-		return usage(errOut, "history repair: the command line takes the corpus, the table and the key")
-	}
-	ctx := context.Background()
-	c, err := ops.Open(ctx, pos[0], cmd.lockWait())
-	if err != nil {
-		return fail(errOut, "history repair", err)
-	}
-	defer closeCorpus(errOut, "history repair", c, &code)
-	s, err := c.Session("cli")
-	if err != nil {
-		return fail(errOut, "history repair", err)
-	}
-	a, err := s.Repair(ctx, pos[1], pos[2], *from)
-	if cerr := s.Close(); err == nil {
-		err = cerr
-	}
-	if err != nil {
-		return fail(errOut, "history repair", err)
-	}
-	b, err := ops.JSON(a)
-	if err != nil {
-		return fail(errOut, "history repair", err)
-	}
-	pr := &printer{w: out}
-	pr.printf("%s\n", b)
-	return pr.status(errOut, "history repair")
-}
-
 // unlock runs `flowmark unlock <corpus> [--holder <pid>@<host>/<session>]` (spec 40 A stale lock): it removes the lock
 // of a holder that has ended and prints the holder. A refused unlock is CONFIG; a failure of the file system under it
 // is DRIVER.

@@ -2,7 +2,7 @@ dbspec 1 flowmark
 
 table items {
   id varchar(32)
-  state varchar(16)
+  state varchar(1)
   title varchar(255)
   body text
   position i32
@@ -15,12 +15,7 @@ table items {
     order position
     markdown body
     markdown evidence
-    checkbox state waiting ' '
-    checkbox state done 'x'
-    state_machine state initial waiting
-    state_machine state waiting -> done require (evidence)
-    state_machine state terminal done
-    state_machine state history item_history row item from from_state to to_state at at
+    task_marker state
   }
 }
 

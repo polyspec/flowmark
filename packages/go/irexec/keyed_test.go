@@ -26,8 +26,8 @@ func TestKeyedRows(t *testing.T) {
 		{"40#cost-model: the key of a text type", "items", []map[string]any{eq("id", 0)}, []any{"T2"}, true},
 		{"40#cost-model: a key of another case meets no key", "items", []map[string]any{eq("id", 0)}, []any{"t2"}, true},
 		{"40#cost-model: a key no row holds", "items", []map[string]any{eq("id", 0)}, []any{"T9"}, true},
-		{"40#cost-model: the key and another condition", "items", []map[string]any{eq("id", 0), eq("state", 1)}, []any{"T1", "done"}, true},
-		{"40#cost-model: the key after another condition", "items", []map[string]any{eq("state", 1), eq("id", 0)}, []any{"T1", "waiting"}, true},
+		{"40#cost-model: the key and another condition", "items", []map[string]any{eq("id", 0), eq("state", 1)}, []any{"T1", "x"}, true},
+		{"40#cost-model: the key after another condition", "items", []map[string]any{eq("state", 1), eq("id", 0)}, []any{"T1", " "}, true},
 		{"40#cost-model: a NULL key meets no row", "items", []map[string]any{eq("id", 0)}, []any{nil}, true},
 		{"40#cost-model: the key of a table with a soft delete", "people", []map[string]any{eq("id", 0)}, []any{"P1"}, true},
 		{"40#cost-model: an integer key", "tags", []map[string]any{eq("id", 0)}, []any{2}, true},
@@ -35,7 +35,7 @@ func TestKeyedRows(t *testing.T) {
 		{"40#cost-model: an integer key no row holds", "tags", []map[string]any{eq("id", 0)}, []any{1.0e1 + 1}, true},
 		{"40#cost-model: an OR reads the table", "items", []map[string]any{eq("id", 0), {"pred": map[string]any{"column": "id", "op": "eq", "p": 1, "conn": "or"}}}, []any{"T1", "T3"}, false},
 		{"40#cost-model: a key in a nested group reads the table", "items", []map[string]any{{"group": map[string]any{"items": []any{eq("id", 0)}}}}, []any{"T1"}, false},
-		{"40#cost-model: a condition of another column reads the table", "items", []map[string]any{eq("state", 0)}, []any{"done"}, false},
+		{"40#cost-model: a condition of another column reads the table", "items", []map[string]any{eq("state", 0)}, []any{"x"}, false},
 		{"40#cost-model: a comparison of the key other than equality reads the table", "items", []map[string]any{pred("id", "gt", p(0))}, []any{"T2"}, false},
 	}
 	for _, tc := range cases {

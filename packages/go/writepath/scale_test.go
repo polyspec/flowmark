@@ -28,7 +28,7 @@ func TestScaleEvent(t *testing.T) {
 	}
 	t.Run("40#the-scale-envelope: a write within the envelope publishes nothing", func(t *testing.T) {
 		f := newFixture(t, shardDBS(t), nil)
-		want(t, f.session("scale"), f.msg("insert", "events", map[string]any{"set": sets(0, "title", "at")}, "Small", "2026-10-11 09:30:00.000000"), `{"affected":1,"keys":["E1"]}`)
+		want(t, f.session("scale"), f.msg("insert", "events", map[string]any{"set": sets(0, "id", "title", "at")}, "E1", "Small", "2026-10-11 09:30:00.000000"), `{"affected":1,"keys":["E1"]}`)
 		if got := scaleEvents(f); len(got) != 0 {
 			t.Fatalf("events %+v", got)
 		}
@@ -37,7 +37,7 @@ func TestScaleEvent(t *testing.T) {
 		f := newFixture(t, shardDBS(t), nil)
 		s := f.session("scale")
 		for i := 0; i < 12; i++ {
-			want(t, s, f.msg("insert", "notes", map[string]any{"set": sets(0, "title", "written")}, strings.Repeat("N", 20), "2026-03-04"), fmt.Sprintf(`{"affected":1,"keys":["N%d"]}`, i+1))
+			want(t, s, f.msg("insert", "notes", map[string]any{"set": sets(0, "id", "title", "written")}, fmt.Sprintf("N%d", i+1), strings.Repeat("N", 20), "2026-03-04"), fmt.Sprintf(`{"affected":1,"keys":["N%d"]}`, i+1))
 		}
 		got := scaleEvents(f)
 		if len(got) == 0 {

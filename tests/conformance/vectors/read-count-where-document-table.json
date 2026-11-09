@@ -5,12 +5,12 @@
   "corpus": {
     "tasks.flowmark.md": [
       "# tasks",
-      "| id | parent | title | done | due | label |",
-      "| --- | --- | --- | --- | --- | --- |",
-      "| T1 |  | Root task | false | 2026-10-01 | first |",
-      "| T2 | [T1](#tasks-row-t1) | Child task | true |  |  |",
-      "| T3 | [T1](#tasks-row-t1) | Second child | false | 2026-10-11 | \"\" |",
-      "| T4 |  | Top two | false |  |  |",
+      "| id | parent | title | position | done | due | label |",
+      "| --- | --- | --- | --- | --- | --- | --- |",
+      "| T1 |  | Root task | 1 | false | 2026-10-01 | first |",
+      "| T2 | [T1](#tasks-row-t1) | Child task | 1 | true |  |  |",
+      "| T3 | [T1](#tasks-row-t1) | Second child | 2 | false | 2026-10-11 | \"\" |",
+      "| T4 |  | Top two | 2 | false |  |  |",
       "",
       "## tasks row T1",
       "",

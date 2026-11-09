@@ -1,5 +1,5 @@
 {
-  "name": "writepath-insert-initial-state",
+  "name": "writepath-task-marker-line-break",
   "storage": "document list",
   "catalog": "workflow",
   "corpus": {
@@ -17,9 +17,9 @@
     ],
     "items.flowmark.md": [
       "# items",
-      "- [ ] T1 First item",
-      "- [~] T2 Second item",
-      "- [ ] T3 Third item",
+      "- [ ] T1 First item position:1",
+      "- [~] T2 Second item position:2",
+      "- [ ] T3 Third item position:3",
       "",
       "## items row T2",
       "",
@@ -44,51 +44,31 @@
   },
   "request": {
     "entity": "items",
-    "kind": "insert",
+    "kind": "update",
     "set": [
       {
-        "column": "id",
+        "column": "state",
         "p": 0
-      },
-      {
-        "column": "title",
-        "p": 1
-      },
-      {
-        "column": "body",
-        "p": 2
       }
-    ]
-  },
-  "params": [
-    "T4",
-    "Fourth item",
-    ""
-  ],
-  "now": "2026-10-11 09:00:00.000000",
-  "expect": {
-    "affected": 1,
-    "keys": [
-      "T4"
     ],
-    "corpus": {
-      "items.flowmark.md": [
-        "# items",
-        "- [ ] T1 First item",
-        "- [~] T2 Second item",
-        "- [ ] T3 Third item",
-        "- [ ] T4 Fourth item",
-        "",
-        "## items row T2",
-        "",
-        "### item_history",
-        "| id | from_state | to_state | at |",
-        "| --- | --- | --- | --- |",
-        "| 1 | waiting | doing | 2026-10-01 08:00:00.000000 |"
+    "where": {
+      "items": [
+        {
+          "pred": {
+            "column": "id",
+            "op": "eq",
+            "p": 1
+          }
+        }
       ]
     }
   },
-  "repeat": {
-    "error": "DUPLICATE_KEY"
+  "params": [
+    "\n",
+    "T1"
+  ],
+  "now": "2026-10-11 09:00:00.000000",
+  "expect": {
+    "error": "CONSTRAINT"
   }
 }

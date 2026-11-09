@@ -13,13 +13,13 @@ const baseVector = `{
   "corpus": {
     "tasks.flowmark.md": [
       "# tasks",
-      "| id | parent | title | done | due | label |",
-      "| --- | --- | --- | --- | --- | --- |",
-      "| T1 |  | One | false |  |  |"
+      "| id | parent | title | position | done | due | label |",
+      "| --- | --- | --- | --- | --- | --- | --- |",
+      "| T1 |  | One | 1 | false |  |  |"
     ]
   },
-  "request": { "kind": "insert", "entity": "tasks", "set": [ { "column": "id", "p": 0 }, { "column": "title", "p": 1 }, { "column": "body", "p": 2 }, { "column": "done", "p": 3 } ] },
-  "params": [ "T2", "Two", "", false ],
+  "request": { "kind": "insert", "entity": "tasks", "set": [ { "column": "id", "p": 0 }, { "column": "title", "p": 1 }, { "column": "body", "p": 2 }, { "column": "done", "p": 3 }, { "column": "position", "p": 4 } ] },
+  "params": [ "T2", "Two", "", false, 2 ],
   "now": "2026-10-11 09:00:00.000000",
   "expect": {
     "affected": 1,
@@ -27,10 +27,10 @@ const baseVector = `{
     "corpus": {
       "tasks.flowmark.md": [
         "# tasks",
-        "| id | parent | title | done | due | label |",
-        "| --- | --- | --- | --- | --- | --- |",
-        "| T1 |  | One | false |  |  |",
-        "| T2 |  | Two | false |  |  |"
+        "| id | parent | title | position | done | due | label |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
+        "| T1 |  | One | 1 | false |  |  |",
+        "| T2 |  | Two | 2 | false |  |  |"
       ]
     }
   },
@@ -81,21 +81,21 @@ func TestRunner(t *testing.T) {
 		name, text, want string
 	}{
 		{"90#the-vector-shape: the storage is the entity's", mutate(t, `"storage": "document table"`, `"storage": "files"`), "storage"},
-		{"90#required-properties: an undeclared diagnostic of the corpus before", mutate(t, `"| T1 |  | One | false |  |  |"
-    ]`, `"| T1 |  | One | false |  |  |",
+		{"90#required-properties: an undeclared diagnostic of the corpus before", mutate(t, `"| T1 |  | One | 1 | false |  |  |"
+    ]`, `"| T1 |  | One | 1 | false |  |  |",
       ""
     ]`), "diagnostics of the corpus before"},
 		{"90#required-properties: a declared diagnostic the corpus before lacks", mutate(t, `"request":`, `"diagnostics": { "tasks.flowmark.md": [ "format.noncanonical" ] }, "request":`), "diagnostics of the corpus before"},
 		{"90#the-vector-shape: an answer member the answer does not hold", mutate(t, `"affected": 1,`, `"affected": 1, "count": 1,`), "members"},
 		{"90#the-vector-shape: a member compared whole", mutate(t, `"keys": [ "T2" ]`, `"keys": [ "T3" ]`), "keys"},
-		{"90#the-vector-shape: a file of the corpus after", mutate(t, `"| T2 |  | Two | false |  |  |"`, `"| T2 |  | 2 | false |  |  |"`), "corpus after"},
+		{"90#the-vector-shape: a file of the corpus after", mutate(t, `"| T2 |  | Two | 2 | false |  |  |"`, `"| T2 |  | 2 | 2 | false |  |  |"`), "corpus after"},
 		{"90#the-vector-shape: a changed file the expectation does not name", mutate(t, `"corpus": {
       "tasks.flowmark.md": [
         "# tasks",
-        "| id | parent | title | done | due | label |",
-        "| --- | --- | --- | --- | --- | --- |",
-        "| T1 |  | One | false |  |  |",
-        "| T2 |  | Two | false |  |  |"
+        "| id | parent | title | position | done | due | label |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
+        "| T1 |  | One | 1 | false |  |  |",
+        "| T2 |  | Two | 2 | false |  |  |"
       ]
     }`, `"corpus": {}`), "corpus after"},
 		{"90#the-vector-shape: a successful write without its repeat", mutate(t, `,

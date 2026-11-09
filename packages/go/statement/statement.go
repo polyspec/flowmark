@@ -181,7 +181,6 @@ func applyWrites(ctx context.Context, s *writepath.Session, w written) error {
 	if t == nil {
 		return &Error{codeInternal, "no transaction of the writer connection follows the session"}
 	}
-	before := t.d.corpus
 	for _, msg := range w.writes {
 		if _, err := s.ExecFace(ctx, msg); err != nil {
 			return err
@@ -212,71 +211,10 @@ func applyWrites(ctx context.Context, s *writepath.Session, w written) error {
 	if len(w.writes) == 0 && len(raise) == 0 {
 		return nil
 	}
-	writes := w.writes
 	return s.View(ctx, func(c *irexec.Corpus) error {
 		t.d.corpus = c
-		return placeBack(ctx, t.d.w, before, c, writes)
+		return nil
 	})
-}
-
-// placeBack gives the database the positions that the corpus c gave the rows of the order tables that writes wrote: a row
-// it placed, and the rows that a placed row moved, which are the rows that differ from the corpus before the writes
-// (irexec.Corpus.Changed).
-func placeBack(ctx context.Context, db runner, before, c *irexec.Corpus, writes [][]byte) error {
-	written := map[string]bool{}
-	for _, msg := range writes {
-		var w struct {
-			Request struct {
-				Entity string `json:"entity"`
-			} `json:"request"`
-		}
-		if err := json.Unmarshal(msg, &w); err != nil {
-			return &Error{codeInternal, err.Error()}
-		}
-		written[w.Request.Entity] = true
-	}
-	changes, err := c.Changed(before)
-	if err != nil {
-		return err
-	}
-	for _, ch := range changes {
-		tb, _ := c.Catalog().Table(ch.Table)
-		if tb.Order == "" || !written[tb.Name] {
-			continue
-		}
-		keys := keyColumns(tb)
-		where := make([]string, len(keys))
-		for i, k := range keys {
-			where[i] = quote(k) + " = ?"
-		}
-		at := slices.IndexFunc(tb.Columns, func(col dbspec.Column) bool { return col.Name == tb.Order })
-		text := "UPDATE " + quote(tb.Name) + " SET " + quote(tb.Order) + " = ? WHERE " + strings.Join(where, " AND ") + " AND " + quote(tb.Order) + " IS NOT ?"
-		rows := ch.Rows
-		if ch.Whole {
-			if rows, err = c.StoredRows(tb.Name); err != nil {
-				return err
-			}
-		}
-		for _, row := range rows {
-			position, err := stored(tb.Columns[at].Type, row[at])
-			if err != nil {
-				return err
-			}
-			args := []any{position}
-			for _, k := range keys {
-				i := slices.IndexFunc(tb.Columns, func(col dbspec.Column) bool { return col.Name == k })
-				v, err := stored(tb.Columns[i].Type, row[i])
-				if err != nil {
-					return err
-				}
-				args = append(args, v)
-			}
-			if _, err := db.ExecContext(ctx, text, append(args, position)...); err != nil {
-				return driverError(err)
-			}
-		}
-	}
-	return nil
 }
 
 // runInTransaction runs a statement in the open transaction of the session, under a savepoint that the writer
@@ -824,7 +762,7 @@ func fill(ctx context.Context, db queryer, c *irexec.Corpus) error { return fill
 // fillWith is fill whose commit publish runs, nil for a plain commit.
 func fillWith(ctx context.Context, db queryer, c *irexec.Corpus, publish func(commit func() error) error) error {
 	cat := c.Catalog()
-	schema, err := catalog.SchemaStatements(assignable(cat.Documents), cat.Statements)
+	schema, err := catalog.SchemaStatements(cat.Documents, cat.Statements)
 	if err != nil {
 		return &Error{codeInternal, err.Error()}
 	}
@@ -1254,12 +1192,6 @@ func execute(ctx context.Context, s *writepath.Session, d *database, c *irexec.C
 	if err != nil {
 		return nil, nil, written{}, err
 	}
-	if err := allocate(ctx, db, c, answer, changed); err != nil {
-		return nil, nil, written{}, err
-	}
-	if changed, err = d.cap.changes(); err != nil {
-		return nil, nil, written{}, err
-	}
 	before, after, err := changedTables(ctx, db, c, changed)
 	if err != nil {
 		return nil, nil, written{}, err
@@ -1555,8 +1487,8 @@ func diff(c *irexec.Corpus, before, after map[string]tableRows, foreignKeysOff b
 			}
 			changes = append(changes, msg)
 		}
-		for _, group := range placed(tb, added) {
-			msg, err := insertMessage(cat, tb, group, foreignKeysOff)
+		if len(added) > 0 {
+			msg, err := insertMessage(cat, tb, added, foreignKeysOff)
 			if err != nil {
 				return nil, err
 			}
@@ -1693,10 +1625,6 @@ func insertMessage(cat *catalog.Catalog, tb *catalog.Table, rows [][]any, foreig
 	for r, row := range rows {
 		var params []int
 		for i, col := range tb.Columns {
-			if col.Name == tb.Order && row[i] == nil {
-				// The corpus places the row: a position left out is the next one under its parent.
-				continue
-			}
 			p, err := m.index(tb, col, row[i])
 			if err != nil {
 				return nil, err
@@ -1910,121 +1838,6 @@ func textCell(t dbspec.Type) bool {
 	return true
 }
 
-// assignable is documents with the columns that the corpus assigns open to NULL: a key_prefix key and an order position,
-// which an insert may leave out (spec 20 "Keys"). A NULL there asks the corpus for the value, as a NULL in SQLite's
-// INTEGER PRIMARY KEY asks for a rowid.
-func assignable(documents []*dbspec.Document) []*dbspec.Document {
-	out := make([]*dbspec.Document, len(documents))
-	for i, d := range documents {
-		c := *d
-		c.Tables = slices.Clone(d.Tables)
-		for t := range c.Tables {
-			tb := &c.Tables[t]
-			if tb.Settings == nil {
-				continue
-			}
-			open := map[string]bool{}
-			if tb.Settings.KeyPrefix != nil && len(tb.PrimaryKey.Columns) == 1 {
-				open[tb.PrimaryKey.Columns[0]] = true
-			}
-			if tb.Settings.Order != nil {
-				open[tb.Settings.Order.Column] = true
-			}
-			if len(open) == 0 {
-				continue
-			}
-			tb.Columns = slices.Clone(tb.Columns)
-			for k := range tb.Columns {
-				if open[tb.Columns[k].Name] {
-					tb.Columns[k].Null = true
-				}
-			}
-		}
-		out[i] = &c
-	}
-	return out
-}
-
-// allocate gives each row of a key_prefix table whose key is NULL the next key of the prefix, in the order the rows were
-// inserted: past the largest number of the keys the statement left in the rows it changed and of the keys of the corpus
-// that it did not take away, which the corpus's index holds, so it reads the rows the statement changed and not the
-// table (spec 20 Keys). The rows that the statement returns read the keys it gave: a NULL in a column of the key's name
-// is the next of them, as a RETURNING of the key reads the value the row was given.
-func allocate(ctx context.Context, db runner, c *irexec.Corpus, answer *Answer, changed map[string]*changedRows) error {
-	given := map[string][]string{}
-	for _, d := range c.Catalog().Documents {
-		for _, t := range d.Tables {
-			if t.Settings == nil || t.Settings.KeyPrefix == nil || len(t.PrimaryKey.Columns) != 1 {
-				continue
-			}
-			ch := changed[t.Name]
-			if ch == nil || ch.key != nil {
-				// A table without a rowid holds no NULL in its primary key.
-				continue
-			}
-			table, name, ids := quote(t.Name), t.PrimaryKey.Columns[0], ch.rowidList()
-			open, err := column[int64](ctx, db, "SELECT rowid FROM "+table+" WHERE rowid IN (SELECT value FROM json_each(?)) AND "+quote(name)+" IS NULL ORDER BY rowid", c.Cost(), ids)
-			if err != nil {
-				return err
-			}
-			if len(open) == 0 {
-				continue
-			}
-			keys, err := column[string](ctx, db, "SELECT "+quote(name)+" FROM "+table+" WHERE rowid IN (SELECT value FROM json_each(?)) AND "+quote(name)+" IS NOT NULL", c.Cost(), ids)
-			if err != nil {
-				return err
-			}
-			gone, err := takenKeys(ctx, db, t.Name, name, ch, keys)
-			if err != nil {
-				return err
-			}
-			p := t.Settings.KeyPrefix.Prefix
-			for n := range c.KeyNumbers(t.Name) {
-				if !gone[p+n] {
-					keys = append(keys, p+n)
-					break
-				}
-			}
-			for i, key := range irexec.NextPrefixedKeys(p, keys, len(open)) {
-				rowid := open[i]
-				given[name] = append(given[name], key)
-				if _, err := db.ExecContext(ctx, "UPDATE "+table+" SET "+quote(name)+" = ? WHERE rowid = ?", key, rowid); err != nil {
-					return driverError(err)
-				}
-			}
-		}
-	}
-	for i, col := range answer.Columns {
-		keys := given[col.Name]
-		for _, row := range answer.Rows {
-			if row[i] == nil && len(keys) > 0 {
-				row[i], keys = keys[0], keys[1:]
-			}
-		}
-	}
-	return nil
-}
-
-// takenKeys returns the keys, in the column name of the table, of the rows the statement changed that it left in none
-// of them: keys holds the keys the changed rows hold now.
-func takenKeys(ctx context.Context, db runner, table, name string, ch *changedRows, keys []string) (map[string]bool, error) {
-	cols, err := tableColumns(ctx, db, table)
-	if err != nil {
-		return nil, err
-	}
-	i := slices.Index(cols, name)
-	if i < 0 {
-		return nil, &Error{codeInternal, fmt.Sprintf("the table %s of the database has no column %s", table, name)}
-	}
-	gone := map[string]bool{}
-	for _, old := range ch.olds {
-		if key, ok := old[i].(string); ok && !slices.Contains(keys, key) {
-			gone[key] = true
-		}
-	}
-	return gone, nil
-}
-
 // column reads the one column of the rows of text.
 func column[T any](ctx context.Context, db runner, text string, k *cost.Counts, args ...any) ([]T, error) {
 	return queryRows(ctx, db, text, args, k, func(rows *sql.Rows) (T, error) {
@@ -2055,23 +1868,4 @@ func queryRows[T any](ctx context.Context, db runner, text string, args []any, k
 		return nil, &Error{codeInternal, err.Error()}
 	}
 	return out, nil
-}
-
-// placed divides the inserted rows of tb by whether the corpus places them: one insert gives every row the same columns.
-func placed(tb *catalog.Table, rows [][]any) [][][]any {
-	if len(rows) == 0 {
-		return nil
-	}
-	i := slices.IndexFunc(tb.Columns, func(col dbspec.Column) bool { return col.Name == tb.Order })
-	if i < 0 {
-		return [][][]any{rows}
-	}
-	var groups [][][]any
-	for k, row := range rows {
-		if k == 0 || (row[i] == nil) != (rows[k-1][i] == nil) {
-			groups = append(groups, nil)
-		}
-		groups[len(groups)-1] = append(groups[len(groups)-1], row)
-	}
-	return groups
 }

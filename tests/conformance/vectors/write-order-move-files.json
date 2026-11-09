@@ -56,7 +56,7 @@
     }
   },
   "params": [
-    1,
+    0,
     "T3"
   ],
   "now": "2026-10-11 09:00:00.000000",
@@ -64,16 +64,10 @@
     "affected": 1,
     "keys": [],
     "corpus": {
-      "tasks/T2.flowmark.md": [
-        "# Child task",
-        "- parent: [T1](T1.flowmark.md)",
-        "- position: 2000",
-        "- done: true"
-      ],
       "tasks/T3.flowmark.md": [
         "# Second child",
         "- parent: [T1](T1.flowmark.md)",
-        "- position: 1000",
+        "- position: 0",
         "- done: false",
         "- due: 2026-10-11",
         "- label:",

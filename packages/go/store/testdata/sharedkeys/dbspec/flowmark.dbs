@@ -4,13 +4,12 @@ table items {
   id varchar(32)
   title varchar(255)
   body text
-  position i32
+  position i32 null
   primary key (id)
   settings {
     store document list
     title title
     body body
-    order position
     markdown body
   }
 }

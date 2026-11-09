@@ -104,7 +104,7 @@ func benchShardInsert(b *testing.B, f *fixture) {
 	ctx := context.Background()
 	f.rec.reset()
 	benchtest.Loop(b, func(i int) {
-		m := f.msg("insert", "events", map[string]any{"set": sets(0, "title", "at")}, fmt.Sprintf("Bench %d", i), "2026-10-20 10:00:00.000000")
+		m := f.msg("insert", "events", map[string]any{"set": sets(0, "id", "title", "at")}, fmt.Sprintf("B%d", i), fmt.Sprintf("Bench %d", i), "2026-10-20 10:00:00.000000")
 		if _, err := s.Exec(ctx, m); err != nil {
 			b.Fatal(err)
 		}

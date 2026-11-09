@@ -93,7 +93,7 @@ func TestTimeWire(t *testing.T) {
 func TestParams(t *testing.T) {
 	t.Run("60#the-wire: a datetime of six digits into datetime(0) with zeros past the precision", func(t *testing.T) {
 		f := fresh(t)
-		f.commit(f.ok(f.msg("insert", "people", map[string]any{"set": sets("name", "joined")}, "Lin", "2026-10-09 07:30:00.000000")))
+		f.commit(f.ok(f.msg("insert", "people", map[string]any{"set": sets("id", "name", "joined")}, "P4", "Lin", "2026-10-09 07:30:00.000000")))
 		f.want(f.msg("all", "people", map[string]any{"columns": map[string]any{"mode": "none", "add": []string{"joined"}}, "where": where(pred("id", "eq", p(0)))}, "P4"),
 			`{"rows":[{"id":"P4","joined":"2026-10-09 07:30:00.000000"}]}`)
 	})

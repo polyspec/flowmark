@@ -20,8 +20,8 @@ import (
 )
 
 // costDBS is the catalog of the cost cases (plan, Ruling: an operation costs what it touches): tasks is an order table
-// with a key_prefix key, whose sibling groups are the block lists of the projects, of costGroup rows each; notes is a
-// document table with a key_prefix key and no order, sharded by day into documents of costGroup rows.
+// with a text key, whose sibling groups are the block lists of the projects, of costGroup rows each; notes is a document
+// table with a text key and no order, sharded by day into documents of costGroup rows.
 const costDBS = `dbspec 1 cost
 
 table projects {
@@ -29,7 +29,6 @@ table projects {
   name varchar(64)
   primary key (id)
   settings {
-    key_prefix 'P'
     store files
     title name
   }
@@ -44,7 +43,6 @@ table tasks {
   index ix_tasks_project (project)
   foreign key fk_tasks_project (project) references projects (id) on delete restrict on update restrict
   settings {
-    key_prefix 'T'
     store block fk_tasks_project list
     title title
     order position
@@ -57,7 +55,6 @@ table notes {
   written date
   primary key (id)
   settings {
-    key_prefix 'N'
     store document table shard written day
     title title
   }
@@ -149,11 +146,11 @@ var costOps = []costOp{
 	{"read note", func(t testing.TB, s *writepath.Session, _ string, _ int) {
 		run(t, s, "SELECT title FROM notes WHERE id = 'N7'")
 	}},
-	{"insert task", func(t testing.TB, s *writepath.Session, _ string, _ int) {
-		run(t, s, "INSERT INTO tasks (project, title) VALUES ('P2', 'added')")
+	{"insert task", func(t testing.TB, s *writepath.Session, _ string, i int) {
+		run(t, s, fmt.Sprintf("INSERT INTO tasks (id, project, title, position) VALUES ('A%d', 'P2', 'added', %d)", i, costGroup+1+i))
 	}},
-	{"insert note", func(t testing.TB, s *writepath.Session, _ string, _ int) {
-		run(t, s, "INSERT INTO notes (title, written) VALUES ('added', '2020-01-02')")
+	{"insert note", func(t testing.TB, s *writepath.Session, _ string, i int) {
+		run(t, s, fmt.Sprintf("INSERT INTO notes (id, title, written) VALUES ('A%d', 'added', '2020-01-02')", i))
 	}},
 	{"update task", func(t testing.TB, s *writepath.Session, _ string, i int) {
 		run(t, s, fmt.Sprintf("UPDATE tasks SET title = 'renamed %d' WHERE id = 'T150'", i))
@@ -171,8 +168,8 @@ var costOps = []costOp{
 		face(t, s, "one", "notes", map[string]any{"columns": map[string]any{"mode": "none", "add": []string{"title"}}, "where": corpustest.WhereID(0)}, "N7")
 	}},
 	{"face insert note", func(t testing.TB, s *writepath.Session, _ string, i int) {
-		face(t, s, "insert", "notes", map[string]any{"set": []any{map[string]any{"column": "title", "p": 0}, map[string]any{"column": "written", "p": 1}}},
-			fmt.Sprintf("face %d", i), "2020-01-02")
+		face(t, s, "insert", "notes", map[string]any{"set": []any{map[string]any{"column": "id", "p": 0}, map[string]any{"column": "title", "p": 1}, map[string]any{"column": "written", "p": 2}}},
+			fmt.Sprintf("F%d", i), fmt.Sprintf("face %d", i), "2020-01-02")
 	}},
 	{"face update note", func(t testing.TB, s *writepath.Session, _ string, i int) {
 		face(t, s, "update", "notes", map[string]any{"set": []any{map[string]any{"column": "title", "p": 0}}, "where": corpustest.WhereID(1)},
@@ -183,7 +180,7 @@ var costOps = []costOp{
 	}},
 	{"refused write", func(t testing.TB, s *writepath.Session, _ string, _ int) {
 		// SQLite takes the key; the rule of keys refuses it, as equal to T7 without regard to case.
-		if _, err := statement.Run(s, "INSERT INTO tasks (id, project, title) VALUES ('t7', 'P2', 'folded')", nil); err == nil {
+		if _, err := statement.Run(s, "INSERT INTO tasks (id, project, title, position) VALUES ('t7', 'P2', 'folded', 1)", nil); err == nil {
 			t.Fatal("a key equal to another without regard to case is taken")
 		}
 		if got := cells(run(t, s, "SELECT title FROM tasks WHERE id = 'T7'")); got != `[["Task 7"]]` {

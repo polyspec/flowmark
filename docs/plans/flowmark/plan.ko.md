@@ -1,5 +1,5 @@
 <!-- doc-id: plans-design-plan -->
-<!-- source-sha256: 47e6b76579255a125ab5918573dc3a027010bfb2a910a1a5c3f15f6c9d6fc3fd -->
+<!-- source-sha256: 2aa3f92e1e31a5031c3fcc039e3f8dd18806a34837782f63f987796a10b9be89 -->
 # flowmark 설계 계획
 
 Revision 2 — 3개 lane의 적대 감사 결과(engine core, orm 통합, 운영)와 multi-platform 지시를 아래 판정에 접는다. 감사의 blocker는 전부 판정이 되었고, 부수지 못한 주장은 문서 끝에 남긴다.
@@ -51,7 +51,7 @@ application code ── orm client (Go/PHP/Python/Rust/TS) ── IR executor �
                                                                                           ▼
 flowmark = the markdown database engine (one Go binary)
    ├─ codec: strict parser + canonical renderer of the storages (two-clause idempotency, §2)
-   ├─ validator: catalog constraints (type/PK/UNIQUE/FK/CHECK/state machine and history)
+   ├─ validator: catalog constraints (type/PK/UNIQUE/FK/CHECK)
    ├─ IR executor over in-memory indexes derived from the parsed corpus
    ├─ write path: lock → conflict check → validate → stage → prepare record → renames → commit
    ├─ .flowmark/: lock, tx journal, server token
@@ -83,7 +83,7 @@ flowmark = the markdown database engine (one Go binary)
 ### 4. Schema (`30-schema.md`) — catalog가 schema다
 
 - **dbspec이 root grammar이자 유일한 authority.** corpus root의 `dbspec/*.dbs` set이 catalog다(Revision 3). 문서는 schema 사본도 stamp도 갖지 않고, 내장 fragment를 가진 단독 문서는 철회한다: schema는 law이고 data는 row이며, 문서마다 law의 사본을 두면 사본의 이탈이 그 자체로 bug class가 된다. orm의 engine, IR, conformance는 dbspec manifest hash에 묶여 있고, dbspec의 parser와 type system은 library로 재사용한다.
-- **Markdown 고유 schema 표면은 manifest-level setting이지 render되는 type이 아니다** (introspection 정합성, `updated`/`soft_delete` 선례): `store`, `key_prefix`, `title`, `body`, `order`, `checkbox`, `markdown`, 그리고 state machine의 `initial`, `history`, `limit`은 SQL backend가 무시하는 setting이며, 실제 database는 이들을 평범한 column으로 introspect한다.
+- **Markdown 고유 schema 표면은 manifest-level setting이지 render되는 type이 아니다** (introspection 정합성, `updated`/`soft_delete` 선례): `store`, `title`, `body`, `order`, `task_marker`, `markdown`은 SQL backend가 무시하는 setting이며, 실제 database는 이들을 평범한 column으로 introspect한다. 상태기계의 setting과 `key_prefix`는 철회하고, `order`는 아무것도 할당하지 않는다. 판정: 엔진은 흔한 database가 가진 것만 가진다(T62, T89)가 정한다.
 - **`identity`는 허용한다** — markdown table의 `i64` primary key에만, lock 아래에서 가장 큰 key와 표의 AUTOINCREMENT counter 가운데 큰 것보다 하나 큰 key로 할당한다(Revision 3, counter는 바뀐 행의 refresh(T42); 다른 key type에는 더할 최댓값이 없다). git 되감기에서의 key 재사용은 받아들인다. 되감기가 counter도 되감기 때문이다 — 할당 기록은 git history다.
 
 ### 5. Ops와 transaction (`40-ops.md`)
@@ -99,8 +99,8 @@ flowmark = the markdown database engine (one Go binary)
 ### 6. Constraints와 capability table (`50-constraints.md`, `60-dialect.md`)
 
 - Strict parse, type/PK/UNIQUE/FK(exact byte match; 대소문자 무시 시 key 유일), CHECK. soft-delete된 row는 unique key를 계속 차지하고 FK를 계속 만족한다(SQL 동등성 — soft delete가 가짜 판정을 일으키지 않게 명시). `aes`, `aes_version`, `blind_index`는 corpus에 선언한다: client가 SQL과 같이 암호화하고, 엔진은 주입으로 key를 받는다(spec 30 Key).
-- **state machine은 dbspec-level manifest setting**(전이, terminal, 필수 column, 그리고 — Revision 3 — `initial`, `history`, `limit`)이다. 모든 엔진 전이는 이력 행을 쓰고, 엔진 밖에서 바뀐 상태는 이력 빈틈이나 끊긴 사슬로 보고하며 repair command가 있다. 응용 schema는 완료된 항목을 `supersedes` link로 대체한다. 엔진은 WIP 규칙을 강제하지 않는다 — 상대 gate는 제거하고 사용자의 규칙은 작업 규칙으로 남는다.
-- **사람의 write는 DB의 writer 독점 전제를 무효화한다; 각 기능은 그에 대한 판정을 갖는다**: FK action은 **restrict만 허용**(`cascade`/`set_null`은 catalog를 읽을 때 거부 — 엔진을 우회하는 writer에게 구현 불가능하므로); `audit`와 `immutable`은 corpus에서 schema 오류이며 상태 이력이 대신한다(Revision 3); 모든 non-null column은 쓰며 엔진이 insert에서 기본값을 쓴다.
+- 엔진은 **상태기계를 갖지 않는다**(T62, 판정: 엔진은 흔한 database가 가진 것만 가진다): 전이, terminal, 초기 상태, 필수 column, limit을 강제하지 않고, 이력 행을 쓰지 않으며, 이력 빈틈이나 사슬을 보고하지 않는다. 상태의 전이와 그 이력은 polyspec fsm의 것이다. 이로써 상태기계가 엔진이 강제하는 dbspec-level manifest setting이라는 판정(Revision 2와 3)을 철회한다. 엔진은 WIP 규칙을 강제하지 않으며 사용자의 규칙은 작업 규칙으로 남는다.
+- **사람의 write는 DB의 writer 독점 전제를 무효화한다; 각 기능은 그에 대한 판정을 갖는다**: FK action은 **restrict만 허용**(`cascade`/`set_null`은 catalog를 읽을 때 거부 — 엔진을 우회하는 writer에게 구현 불가능하므로); `audit`와 `immutable`은 corpus에서 schema 오류였고 상태 이력이 대신했다(Revision 3). 문장 경로는 둘을 database처럼 받으며(T31: `immutable` 표의 행에 대한 엔진 쓰기는 거부하고, audit되는 쓰기는 database의 audit trigger가 쓰는 행을 쓴다), 상태 이력은 상태기계와 함께 철회한다(T62); 모든 non-null column은 쓰며 엔진이 insert에서 기본값을 쓴다.
 - **Capability table**(`60-dialect.md`)은 IR executor wire 아래의 통합 계약이다: `update|share` lock과 `*_nowait`는 문서화된 no-op; `isolation`은 모든 level을 받아들이고(transaction이 corpus lock을 쥔다); `timeoutMs`는 `CAPABILITY_UNSUPPORTED`, `fulltext`는 `OPERATOR_NOT_ALLOWED`; `on_duplicate` insert는 충돌 key를 정확히 하나 가진다(orm의 규칙); 바뀐 대상은 `WRITE_CONFLICT`로 실패; `getQuery`, statement event, `subscribe`, `force_index`는 `CAPABILITY_UNSUPPORTED`; savepoint는 중첩 stage.
 - markdown plan lifecycle(orm의 dbplan/apply/recover 장치)은 **v1 범위 밖**: v1은 corpus 생성과 additive column 추가를 지원하고, markdown corpus의 dbplan chain은 거부한다(80-migration이 범위와 이유를 서술).
 
@@ -117,7 +117,7 @@ flowmark = the markdown database engine (one Go binary)
 
 ### 9. 응용 schema (`100-checklist.md`)
 
-- `flowmark.dbs`(Revision 3): `items`(parent, 이력을 갖는 5상태 기계, 제목, body, 담당자, date/datetime 쌍인 시작과 마감, priority, position), `people`, `item_links`(blocks, relates, duplicates, supersedes), `item_history`, `views`.
+- `flowmark.dbs`(Revision 3, T62): `items`(parent, check가 제약하는 다섯 값의 상태, 제목, body, 담당자, date/datetime 쌍인 시작과 마감, priority, position), `people`, `item_links`(blocks, relates, duplicates, supersedes), `views`. 전이와 그 이력은 polyspec fsm의 것이므로 5상태 기계와 `item_history`는 상태기계와 함께 철회한다(T62).
 - **View는 데이터이자 thin consumer다**: 칸반, 목록, 간트 view는 `views`의 행이다. 보드는 엔진으로 읽고 같은 operation으로 쓴다 — 불법 drag는 불법 CLI 쓰기와 똑같이 실패한다. view 전용 write path는 없고, WIP limit을 지어내지 않는다.
 - 이 repository는 corpus가 아니다(Revision 3): 그 checklist는 손으로 관리하는 kit 문서로 남으므로 cutover는 철회한다. `make validate`와 prose ID checker는 옛 엔진과 함께 제거되며, `make refs-check`는 계속 kit이 추적하는 checklist를 검사한다.
 
@@ -237,6 +237,48 @@ flush cost counter로 재며, 그 수가 Red이다:
    폴더. 이전 엔진의 stage 폴더는 그것을 완료할 엔진을 밝혀 거부한다.
 
 행은 TestCost의 수가 명시한 수가 되고 protocol의 모든 단계에서 crash 시험이 통과할 때 끝난다.
+
+**판정: 엔진은 흔한 database가 가진 것만 가진다.** flowmark는 orm이 MySQL, PostgreSQL, SQLite 옆에서 닿는 database이고,
+orm의 단 하나의 규칙은 모든 database에서 같은 결과다. 그러므로 엔진의 기능은 그 database들이 가진 기능이고, markdown 고유의 문법은
+database가 가진 값을 보여주기만 한다: database가 하지 않을 값을 주거나 검사하거나 기록하지 않는다. 흔한 database 어디에도 없는 기능은
+제거하며, 상태기계가 처음이다(T62).
+
+- **상태기계는 제거한다.** 흔한 database 어디에도 상태기계가 없다: column이 가질 수 있는 값은 그 type과 schema의 제약이고, 어떤
+  database도 바뀌기 전 값 때문에 update를 거부하지 않는다. 엔진은 상태 column의 전이, terminal, 초기 상태, 필수 column, limit을
+  강제하지 않고 이력 행을 쓰지 않는다. validator는 `history.gap`, `history.chain`, `state.transition`, `state.required`,
+  `state.limit`을 보고하지 않는다. catalog는 기계를 두지 않고 `history`와 `initial`을 요구하지 않으며, 이력 표는 고유한 저장이나
+  `markdown` 규칙이 없는 평범한 표다. `flowmark transition`(CLI, MCP, sidecar face의 `transition` 연산)과 `flowmark history repair`는
+  없어지고, `schema` 연산은 기계를 답하지 않는다. 상태의 전이와 그 이력은 polyspec fsm의 것이다: fsm이 취한 상태는 다른 값처럼
+  corpus에 쓰이고, 그 기록은 fsm이 간직한다. 이로써 §6의 상태기계 판정과 §9의 이력을 철회한다. 맥락의 불법 상태 전이는 fsm이 막는다.
+- **남는 것은 값을 보여준다**: 행이 쓰이는 곳을 말하는 `store`와 그 `shard`, 행의 어느 자리가 column을 담는지 말하는 `title`,
+  `body`, `markdown`, 그리고 목록 행이 column을 어떻게 보여주는지 말하는 `task_marker`다.
+- **task marker는 그 column의 값을 보여준다.** `task_marker <column>`은 목록으로 저장된 표의 column 하나를 이름 짓고, 목록 행은 그
+  column을 task 표지의 괄호 사이에 쓴다. 다르게 저장된 표는 그 column을 다른 scalar를 쓰는 곳에 쓴다.
+  - 한 글자 column `varchar(1)`은 `- [<value>] …`로 쓴다. 그 값은 모든 database가 제약하듯 schema가 허용하는 값 — 상태 표로의
+    foreign key나 check `in (…)` — 이고, 제약 밖의 값은 모든 database가 거부하듯 `reference.dangling`이나 `check`로 거부한다.
+    NULL은 상자 없는 목록 행 `- <key> …`이고, 빈 text는 `- [] …`이다. 한 줄 자리가 거부하는 글자는 여기서도 거부한다.
+  - 값이 0과 1인 `bool` column은 0을 `- [ ] …`, 1을 `- [x] …`로 쓰며, GFM의 체크하지 않은 task 항목과 체크한 task 항목이다.
+    GFM이 역시 체크로 읽는 `[X]`는 1로 읽고 `format.noncanonical`이다. NULL은 상자 없는 목록 행이다.
+  근거: GFM task 항목은 괄호 사이의 한 글자이므로 한 글자 column은 그 값 전체를 거기 보여주고, boolean은 GFM 자신의 두 상자로
+  보인다. 상태기계가 상태 이름마다 대응시킨 glyph는 각 값의 두 번째 표기였고, glyph가 없는 값은 쓸 수 없었는데, 그런 값을 거부하는
+  database는 없다.
+- **orm 문법.** 위의 형태와 `state_machine` 제거는 orm의 문법(orm DBS-80과 DBS-63의 반복 규칙; DBS-73, DBS-81, DBS-82,
+  DBS-83은 문법을 떠난다)을 바꾸며, orm 0.0.28이 그것을 싣는다. setting은 task list item의 괄호 부분을 부르는 GFM의 이름, task
+  list item marker를 받는다. 체크하거나 하지 않은 상자만이 아니라 한 글자의 어떤 값이든 거기 보여주기 때문이다:
+  `task_marker <column>`이며, 예전 이름 `checkbox`는 `state_machine`처럼 알 수 없는 setting으로 거부한다. flowmark는 T62 자신으로
+  그 형태를 받는다: catalog는 `task_marker` 한 줄의 column을 지니고, 목록은 그 값을 위에서 말한 대로 읽고 쓴다.
+- **`key_prefix`와 `order`는 값을 주므로** 같은 기준이 정한다.
+  - `key_prefix '<p>'`는 text key `<p><n + 1>`을 할당한다. 흔한 database 어디도 key를 그렇게 할당하지 않는다: MySQL, PostgreSQL,
+    SQLite는 AUTOINCREMENT, sequence, identity로 정수를 할당한다. orm은 그런 key를 뺀 insert를 corpus에서만 계획하므로(planner의
+    `Assigns`) 같은 insert가 다른 모든 database에서는 `IR_INVALID`다. 제거한다: application이 key를 주거나, 표가 모든 database가
+    가진 `identity`를 선언한다.
+  - `order <column>`은 행을 형제 사이에 두고, 엔진은 insert에서 그 column을 할당하고 이동의 형제 번호를 다시 매기는데, 어떤
+    database도 그러지 않으며 orm은 이것도 corpus에서만 계획한다. 할당과 재번호는 제거하고 application이 그 column을 다른 정수처럼
+    쓴다. 값을 보여주는 것은 남는다: 형제 묶음의 행은 column의 순서로 쓰이므로 목록은 행의 순서를 보여준다. 자리는 값이 아니라 순위를
+    보여주므로 값은 다른 scalar를 쓰는 곳 — 목록 행의 field, cell, 오늘 `files` 저장이 순위를 쓰듯 `files` 행의 항목 — 에 쓰고,
+    값의 순서에서 벗어나 선 행은 `format.noncanonical`이며 `flowmark canon`이 다시 정렬한다.
+  각각은 flowmark와 orm에서 자기 행으로 수행한다(orm DBS-77, DBS-79와 planner의 `Assigns`). flowmark의 행은 T89이며,
+  catalog와 executor에서 `key_prefix`와 order column의 모든 할당을 걷어 낸다.
 
 **T9 conformance 계약 (지금 확정)**: markdown vector는 corpus-before + IR request + 기대 corpus-after / 기대 rows이며 Go executor에 대해 실행한다. SQL/binds 비교는 적용되지 않는다(SQL이 없으므로). 다른 client가 executor를 port할 때 교차 비교가 시작된다. (Revision 3: vector는 flowmark 엔진에 대해 실행하고, orm의 executor conformance는 flowmark build를 고정한다.)
 

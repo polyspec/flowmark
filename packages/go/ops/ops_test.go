@@ -73,26 +73,23 @@ func TestOperations(t *testing.T) {
 		var s struct {
 			ManifestHash string `json:"manifest_hash"`
 			Tables       []struct {
-				Name    string `json:"name"`
-				Key     string `json:"key"`
-				Order   string `json:"order"`
-				Parent  string `json:"parent"`
-				Title   string `json:"title"`
-				Storage struct{ Kind, Shape, Parent string }
-				Columns []struct{ Name, Type string }
-				Machine *struct {
-					Column      string            `json:"column"`
-					States      []string          `json:"states"`
-					Checkboxes  map[string]string `json:"checkboxes"`
-					Transitions []struct {
-						From, To string
-						Require  []string
-					} `json:"transitions"`
-				} `json:"state_machine"`
+				Name       string `json:"name"`
+				Key        string `json:"key"`
+				Order      string `json:"order"`
+				Parent     string `json:"parent"`
+				Title      string `json:"title"`
+				Storage    struct{ Kind, Shape, Parent string }
+				Columns    []struct{ Name, Type string }
+				TaskMarker string `json:"task_marker"`
 			} `json:"tables"`
 		}
-		if err := json.Unmarshal([]byte(ok(t, c, "schema", `{}`)), &s); err != nil {
+		answer := ok(t, c, "schema", `{}`)
+		if err := json.Unmarshal([]byte(answer), &s); err != nil {
 			t.Fatal(err)
+		}
+		// The engine holds no state machine (spec 50 State columns), so the answer names none.
+		if strings.Contains(answer, "state_machine") || strings.Contains(answer, "transitions") {
+			t.Fatalf("schema answers a state machine: %s", answer)
 		}
 		if s.ManifestHash == "" || len(s.Tables) != 3 {
 			t.Fatalf("schema: %+v", s)
@@ -104,13 +101,13 @@ func TestOperations(t *testing.T) {
 		if items.Storage.Kind != "document" || items.Storage.Shape != "list" || items.Columns[4].Type != "text" {
 			t.Fatalf("items storage and columns: %+v", items)
 		}
-		if m := items.Machine; m == nil || m.Column != "state" || m.Checkboxes["doing"] != "~" || m.Transitions[1].Require[0] != "evidence" {
-			t.Fatalf("items state machine: %+v", m)
+		if items.TaskMarker != "state" {
+			t.Fatalf("items task marker: %q", items.TaskMarker)
 		}
 		if h := s.Tables[1]; h.Storage.Kind != "block" || h.Storage.Parent != "items" {
 			t.Fatalf("item_history storage: %+v", h)
 		}
-		if s.Tables[2].Machine != nil || s.Tables[2].Parent != "" {
+		if s.Tables[2].TaskMarker != "" || s.Tables[2].Parent != "" {
 			t.Fatalf("people: %+v", s.Tables[2])
 		}
 	})
@@ -126,13 +123,14 @@ func TestOperations(t *testing.T) {
 	})
 	t.Run("40#the-faces: the writes answer their keys and the table's rows", func(t *testing.T) {
 		c := boardCorpus(t)
-		a := ok(t, c, "row.insert", `{"table":"items","values":{"title":"First","body":"","owner":"P1"}}`)
-		if want := `{"affected":1,"keys":["T1"],"rows":[{"id":"T1","parent":null,"state":"waiting","title":"First","body":"","position":1,"owner":"P1","evidence":null}]}`; a != want {
+		a := ok(t, c, "row.insert", `{"table":"items","values":{"id":"T1","title":"First","body":"","position":1,"owner":"P1"}}`)
+		if want := `{"affected":1,"keys":["T1"],"rows":[{"id":"T1","parent":null,"state":" ","title":"First","body":"","position":1,"owner":"P1","evidence":null}]}`; a != want {
 			t.Fatalf("row.insert = %s, want %s", a, want)
 		}
-		ok(t, c, "row.insert", `{"table":"items","values":{"title":"Second","body":""}}`)
-		a = ok(t, c, "row.move", `{"table":"items","key":"T2","position":1}`)
-		if !strings.Contains(a, `"rows":[{"id":"T2"`) || !strings.Contains(a, `"title":"First","body":"","position":2`) {
+		ok(t, c, "row.insert", `{"table":"items","values":{"id":"T2","title":"Second","body":"","position":2}}`)
+		// A move writes the value it is given and moves no sibling (spec 20 Order).
+		a = ok(t, c, "row.move", `{"table":"items","key":"T2","position":0}`)
+		if !strings.Contains(a, `"rows":[{"id":"T2"`) || !strings.Contains(a, `"title":"Second","body":"","position":0`) || !strings.Contains(a, `"title":"First","body":"","position":1`) {
 			t.Fatalf("row.move = %s", a)
 		}
 		a = ok(t, c, "row.move", `{"table":"items","key":"T1","position":1,"parent":"T2"}`)
@@ -140,11 +138,13 @@ func TestOperations(t *testing.T) {
 			t.Fatalf("row.move with parent = %s", a)
 		}
 		ok(t, c, "row.update", `{"table":"items","key":"T1","values":{"title":"Renamed"}}`)
-		ok(t, c, "transition", `{"table":"items","key":"T1","state":"doing"}`)
-		fails(t, c, "transition", `{"table":"items","key":"T1","state":"done"}`, "CONSTRAINT", "evidence")
-		a = ok(t, c, "transition", `{"table":"items","key":"T1","state":"done","values":{"evidence":"Tests pass."}}`)
-		if !strings.Contains(a, `"state":"done","title":"Renamed"`) {
-			t.Fatalf("transition = %s", a)
+		// A state is a value: any value its type allows is accepted and writes no history row (spec 50 State columns).
+		a = ok(t, c, "row.update", `{"table":"items","key":"T1","values":{"state":"x"}}`)
+		if !strings.Contains(a, `"state":"x","title":"Renamed"`) {
+			t.Fatalf("row.update of the state = %s", a)
+		}
+		if got := ok(t, c, "rows", `{"table":"item_history"}`); got != `{"rows":[]}` {
+			t.Fatalf("item_history = %s, want no row", got)
 		}
 		fails(t, c, "row.delete", `{"table":"items","key":"T2"}`, "FOREIGN_KEY")
 		fails(t, c, "row.update", `{"table":"people","key":"P9","values":{"name":"X"}}`, "NO_ROWS", "people", "P9")
@@ -161,9 +161,7 @@ func TestOperations(t *testing.T) {
 		fails(t, c, "row.insert", `{"table":"people","values":["P3"]}`, "CONFIG", "values")
 		fails(t, c, "row.move", `{"table":"people","key":"P1","position":1}`, "CONFIG", "people", "order")
 		fails(t, c, "row.move", `{"table":"item_history","key":1,"position":1,"parent":null}`, "CONFIG", "item_history")
-		fails(t, c, "transition", `{"table":"people","key":"P1","state":"done"}`, "CONFIG", "people", "state machine")
-		fails(t, c, "transition", `{"table":"items","key":"T1","state":7}`, "CONFIG", "state")
-		fails(t, c, "transition", `{"table":"items","key":"T1","state":"doing","values":{"state":"done"}}`, "CONFIG", "state column")
+		fails(t, c, "transition", `{"table":"items","key":"T1","state":"doing"}`, "CONFIG", "transition", "unknown")
 	})
 	t.Run("40#the-faces: a table or column the catalog does not declare is the request's code", func(t *testing.T) {
 		c := boardCorpus(t)

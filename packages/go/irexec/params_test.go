@@ -7,7 +7,7 @@ import "testing"
 func TestParamSlots(t *testing.T) {
 	f := baseFixture(t)
 	insertItem := func(title, due any) []byte {
-		return f.msg("insert", "items", map[string]any{"set": sets("title", "body", "due")}, title, "", due)
+		return f.msg("insert", "items", map[string]any{"set": sets("id", "title", "body", "due", "position")}, "T5", title, "", due, 4)
 	}
 	cases := []struct {
 		name string
@@ -32,11 +32,11 @@ func TestParamSlots(t *testing.T) {
 		})
 	}
 	f.sub(t, "60#the-wire: NULL is a value of a nullable column and of a comparison", func(f *fixture) {
-		f.ok(f.msg("insert", "people", map[string]any{"set": sets("name", "age")}, "Lin", nil))
+		f.ok(f.msg("insert", "people", map[string]any{"set": sets("id", "name", "age")}, "P4", "Lin", nil))
 		f.ok(f.msg("all", "people", map[string]any{"where": where(pred("age", "eq", p(0)))}, nil))
 	})
 	f.sub(t, "60#the-wire: NULL assigned to a non-null column", func(f *fixture) {
-		f.fails(f.msg("insert", "people", map[string]any{"set": sets("name")}, nil), "CODEC_ENCODE")
+		f.fails(f.msg("insert", "people", map[string]any{"set": sets("id", "name")}, "P4", nil), "CODEC_ENCODE")
 		f.fails(f.msg("update", "people", map[string]any{"set": sets("name"), "where": where(pred("id", "eq", p(1)))}, nil, "P2"), "CODEC_ENCODE")
 		f.fails(f.msg("insert", "tickets", map[string]any{"set": sets("id", "state", "title"), "on_duplicate": []any{set("title", 3)}}, "K9", "open", "x", nil), "CODEC_ENCODE")
 	})

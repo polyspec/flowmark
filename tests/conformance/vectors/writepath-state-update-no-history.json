@@ -1,5 +1,5 @@
 {
-  "name": "writepath-transition-unlisted",
+  "name": "writepath-state-update-no-history",
   "storage": "document list",
   "catalog": "workflow",
   "corpus": {
@@ -17,9 +17,9 @@
     ],
     "items.flowmark.md": [
       "# items",
-      "- [ ] T1 First item",
-      "- [~] T2 Second item",
-      "- [ ] T3 Third item",
+      "- [ ] T1 First item position:1",
+      "- [~] T2 Second item position:2",
+      "- [ ] T3 Third item position:3",
       "",
       "## items row T2",
       "",
@@ -49,6 +49,10 @@
       {
         "column": "state",
         "p": 0
+      },
+      {
+        "column": "evidence",
+        "p": 1
       }
     ],
     "where": {
@@ -57,18 +61,44 @@
           "pred": {
             "column": "id",
             "op": "eq",
-            "p": 1
+            "p": 2
           }
         }
       ]
     }
   },
   "params": [
-    "done",
-    "T3"
+    "x",
+    "Tests pass.",
+    "T2"
   ],
   "now": "2026-10-11 09:00:00.000000",
   "expect": {
-    "error": "CONSTRAINT"
+    "affected": 1,
+    "keys": [],
+    "corpus": {
+      "items.flowmark.md": [
+        "# items",
+        "- [ ] T1 First item position:1",
+        "- [x] T2 Second item position:2",
+        "- [ ] T3 Third item position:3",
+        "",
+        "## items row T2",
+        "",
+        "### evidence",
+        "",
+        "Tests pass.",
+        "",
+        "### item_history",
+        "| id | from_state | to_state | at |",
+        "| --- | --- | --- | --- |",
+        "| 1 | waiting | doing | 2026-10-01 08:00:00.000000 |"
+      ]
+    }
+  },
+  "repeat": {
+    "affected": 1,
+    "keys": [],
+    "corpus": {}
   }
 }

@@ -48,9 +48,6 @@ type Corpus struct {
 	docsMu  sync.Mutex
 	// ordered caches the storage order of each table.
 	ordered map[string][]*rec
-	// positions caches the 1-based sibling position of each row of a files table
-	// with an order column, which its stored rank gives (spec 20 Order).
-	positions map[string]map[*rec]int64
 	// cost counts the work of the corpus's operations; nil counts nothing.
 	cost *cost.Counts
 	// seq holds the AUTOINCREMENT counters of the corpus (sequences.go), nil when it holds none.
@@ -183,11 +180,10 @@ func (c *Corpus) Rebased(cat *catalog.Catalog, drop []string) *Corpus {
 	return n
 }
 
-// reorder drops the cached storage orders and positions, which a changed rank or
-// a changed set of rows invalidates.
+// reorder drops the cached storage orders, which a changed order value or a changed
+// set of rows invalidates.
 func (c *Corpus) reorder() {
 	c.ordered = map[string][]*rec{}
-	c.positions = map[string]map[*rec]int64{}
 }
 
 // file returns the corpus document at path, nil when the corpus holds none.
@@ -396,8 +392,6 @@ func (c *Corpus) value(x *rec, col string) (cell, *Error) {
 		return cell{text: strings.TrimSuffix(*v, "\n")}, nil
 	case tb.Storage.Kind == catalog.StorageBlock && col == tb.Placement():
 		return cell{text: x.parent.row.Key}, nil
-	case tb.Storage.Kind == catalog.StorageFiles && col == tb.Order:
-		return c.position(x)
 	}
 	if _, raw := r.Raw[col]; raw {
 		return cell{}, c.typeFault(x, col)
@@ -534,7 +528,7 @@ func (c *Corpus) filesOrder(tb *catalog.Table) ([]*rec, *Error) {
 			sort.SliceStable(group, func(i, j int) bool { return keyLess(keyInt, group[i].row.Key, group[j].row.Key) })
 			return
 		}
-		c.sortSiblings(tb, group)
+		c.sortSiblings(tb, keyInt, group)
 	}
 	for _, g := range children {
 		siblings(g)
@@ -566,10 +560,10 @@ func (c *Corpus) filesOrder(tb *catalog.Table) ([]*rec, *Error) {
 }
 
 // sortSiblings sorts a sibling group of a files table with an order column into its
-// sibling order (spec 20 Order): by ascending rank, rows sharing a rank in corpus
-// order, and the rows whose rank is not of its type after the others in corpus
-// order.
-func (c *Corpus) sortSiblings(tb *catalog.Table, group []*rec) {
+// sibling order (spec 20 Order): by ascending value, the rows whose value is not of
+// its type after the others, and the rows that share a value, or whose value is not
+// of its type, in key order; keyInt reports an integer key.
+func (c *Corpus) sortSiblings(tb *catalog.Table, keyInt bool, group []*rec) {
 	type rank struct {
 		n  int64
 		ok bool
@@ -587,70 +581,8 @@ func (c *Corpus) sortSiblings(tb *catalog.Table, group []*rec) {
 		case a.ok && a.n != b.n:
 			return a.n < b.n
 		}
-		return group[i].file < group[j].file
+		return keyLess(keyInt, group[i].row.Key, group[j].row.Key)
 	})
-}
-
-// filesGroup names the sibling group of a row of a files table by its parent
-// value; ok is false when the parent is not a value of its type, and the row then
-// belongs to no known group.
-func filesGroup(x *rec) (string, bool) {
-	pc := parentColumn(x.tb)
-	if pc == "" {
-		return "", true
-	}
-	if _, raw := x.row.Raw[pc]; raw {
-		return "", false
-	}
-	if v := x.row.Scalars[pc]; v != nil {
-		return "=" + *v, true
-	}
-	return "null", true
-}
-
-// position returns the order value a read fills for row x of a files table: its
-// 1-based position in its sibling order, which its stored rank gives (spec 20
-// Order). A row whose rank, or whose parent, is not a value of its type fails as
-// CONSTRAINT naming that type diagnostic: the rank has no comparison, and without
-// its parent the row's sibling group is not known.
-func (c *Corpus) position(x *rec) (cell, *Error) {
-	tb := x.tb
-	if _, raw := x.row.Raw[tb.Order]; raw {
-		return cell{}, c.typeFault(x, tb.Order)
-	}
-	g, ok := filesGroup(x)
-	if !ok {
-		return cell{}, c.typeFault(x, parentColumn(tb))
-	}
-	at := c.positions[tb.Name]
-	if at == nil {
-		at = map[*rec]int64{}
-		c.positions[tb.Name] = at
-	}
-	if _, placed := at[x]; !placed {
-		// The siblings of a files row are the rows of its group in the index (groupKey: a files row has no placement
-		// parent), in corpus order.
-		key := g
-		if g != "" {
-			key = "\x00" + g
-		}
-		members := c.lookup(groupIndex(tb.Name, key))
-		c.sortSiblings(tb, members)
-		for i, y := range members {
-			at[y] = int64(i + 1)
-		}
-	}
-	return cell{text: strconv.FormatInt(at[x], 10)}, nil
-}
-
-// orderOf returns the stored order value of row x: its rank in files storage, its
-// position in the others.
-func (c *Corpus) orderOf(x *rec, col string) (int64, *Error) {
-	n, ok := c.orderValue(x, col)
-	if !ok {
-		return 0, c.typeFault(x, col)
-	}
-	return n, nil
 }
 
 // orderValue returns the stored order value of row x; ok is false when it is not a
