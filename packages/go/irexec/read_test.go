@@ -497,7 +497,7 @@ func TestColumns(t *testing.T) {
 		f.want(f.msg("all", "people", map[string]any{"columns": map[string]any{"mode": "none", "fn": map[string]any{"joined_year": map[string]any{"column": "joined", "fn": map[string]any{"name": "year"}}}}}),
 			`{"rows":[{"id":"P1","joined_year":2026},{"id":"P2","joined_year":2026}]}`)
 	})
-	f.sub(t, "60#surfaces: scalar subqueries count, sum and avg", func(f *fixture) {
+	f.sub(t, "60#surfaces: scalar subqueries count and sum", func(f *fixture) {
 		sub := func(agg, col string) map[string]any {
 			m := map[string]any{"query": map[string]any{"entity": "items", "where": where(pred("owner", "eq_col", map[string]any{"ref": map[string]any{"path": "^", "column": "id"}}))}, "agg": agg}
 			if col != "" {
@@ -505,8 +505,10 @@ func TestColumns(t *testing.T) {
 			}
 			return m
 		}
-		f.want(f.msg("all", "people", map[string]any{"columns": map[string]any{"mode": "none", "sub": map[string]any{"n": sub("count", ""), "s": sub("sum", "position"), "a": sub("avg", "position")}}}),
-			`{"rows":[{"id":"P1","a":1,"n":1,"s":1},{"id":"P2","a":null,"n":0,"s":0}]}`)
+		f.want(f.msg("all", "people", map[string]any{"columns": map[string]any{"mode": "none", "sub": map[string]any{"n": sub("count", ""), "s": sub("sum", "position")}}}),
+			`{"rows":[{"id":"P1","n":1,"s":1},{"id":"P2","n":0,"s":0}]}`)
+		// An average is no one value on every database, so orm refuses it (orm PRT-83).
+		f.fails(f.msg("all", "people", map[string]any{"columns": map[string]any{"mode": "none", "sub": map[string]any{"a": sub("avg", "position")}}}), "IR_INVALID")
 	})
 	f.sub(t, "60#surfaces: a scalar column subquery is the column of the first row of its order, within its limit", func(f *fixture) {
 		top := func(offset int) map[string]any {
