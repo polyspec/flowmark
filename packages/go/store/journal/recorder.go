@@ -1,9 +1,6 @@
 package journal
 
-import (
-	"sync"
-	"time"
-)
+import "sync"
 
 // Recorder is an Observer that keeps every event in order and wakes the callers that wait for one: the observer of a
 // host that reads the events of a corpus as they are published, such as a test of the code that publishes them.
@@ -38,10 +35,10 @@ func (r *Recorder) Reset() {
 	r.events = nil
 }
 
-// Wait blocks until n of the events recorded since the last Reset satisfy match, and returns them with true; when
-// timeout passes first, it returns those found with false.
-func (r *Recorder) Wait(n int, match func(Event) bool, timeout time.Duration) ([]Event, bool) {
-	deadline := time.After(timeout)
+// Wait blocks until n of the events recorded since the last Reset satisfy match, and returns them with true; when end
+// is closed first, it returns those found with false. end is the event that ends the wait without them, such as the
+// end of the publisher; a nil end waits for them alone.
+func (r *Recorder) Wait(n int, match func(Event) bool, end <-chan struct{}) ([]Event, bool) {
 	for {
 		r.mu.Lock()
 		var found []Event
@@ -61,7 +58,7 @@ func (r *Recorder) Wait(n int, match func(Event) bool, timeout time.Duration) ([
 		r.mu.Unlock()
 		select {
 		case <-ch:
-		case <-deadline:
+		case <-end:
 			return found, false
 		}
 	}

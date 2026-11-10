@@ -4,7 +4,6 @@ import (
 	"os"
 	"strings"
 	"testing"
-	"time"
 )
 
 func judge(t *testing.T, c *Corpus, h Holder) HolderState {
@@ -74,13 +73,8 @@ func TestZombieHolderReadsEnded(t *testing.T) {
 	if err := stdin.Close(); err != nil {
 		t.Fatal(err)
 	}
-	select {
-	case wk := <-w.wakes():
-		if wk.kind != wakeHolderExit {
-			t.Fatalf("wake = %+v, want the holder's exit", wk)
-		}
-	case <-time.After(patience):
-		t.Fatal("no exit event")
+	if wk := <-w.wakes(); wk.kind != wakeHolderExit {
+		t.Fatalf("wake = %+v, want the holder's exit", wk)
 	}
 	// The child is a zombie until it is reaped below.
 	if got := judge(t, c, h); got != HolderEnded {

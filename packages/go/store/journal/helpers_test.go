@@ -13,11 +13,10 @@ import (
 	"time"
 )
 
-// patience bounds every wait of a test for something the code under test must publish; it is a guard against a hung
-// test, never the condition a test checks. It is shorter than the 30 s that the runner gives a test (make test-go), so
-// a wait that never ends fails with its own report, the holder of a lock among it, before the runner stops the test
-// with none.
-const patience = 20 * time.Second
+// unbounded is the lock-wait bound of a case whose wait an event ends, a release or the exit of a holder: no case
+// reaches it. A test waits for what the code under test publishes, never for a time; a wait that never ends is stopped
+// by the deadline of the runner (make test-go), which writes the stack of every goroutine into the test's output.
+const unbounded = time.Hour
 
 // recorder is the observer of a test: it keeps every event in order.
 type recorder struct{ Recorder }
@@ -35,10 +34,7 @@ func (r *recorder) reset() { r.Reset() }
 // waitFor blocks until n published events satisfy match and returns them.
 func (r *recorder) waitFor(t *testing.T, n int, match func(Event) bool) []Event {
 	t.Helper()
-	found, ok := r.Wait(n, match, patience)
-	if !ok {
-		t.Fatalf("waited %s for %d events; got %v", patience, n, r.kinds())
-	}
+	found, _ := r.Wait(n, match, nil)
 	return found
 }
 

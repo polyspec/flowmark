@@ -14,13 +14,7 @@ import (
 	"sync"
 	"syscall"
 	"testing"
-	"time"
 )
-
-// patience bounds every wait of a test for something the command must publish; it is a guard against a hung test, never
-// the condition a test checks. It is shorter than the 30 s that the runner gives a test (make test-go), so a wait that
-// never ends fails with its own report, the holder of a lock among it, before the runner stops the test with none.
-const patience = 20 * time.Second
 
 const serveDBS = `dbspec 1 board
 
@@ -132,14 +126,10 @@ func TestServe(t *testing.T) {
 			copied <- err
 		}()
 		return "127.0.0.1:" + m[1], func() (int, string) {
+			// The command's exit ends the wait; a command that never stops is stopped by the deadline of the runner
+			// (make test-go), which writes the stack of every goroutine into the test's output.
 			stop <- syscall.SIGTERM
-			select {
-			case code := <-done:
-				return code, errOut.String()
-			case <-time.After(patience):
-				t.Fatalf("serve did not stop on SIGTERM")
-			}
-			return 0, ""
+			return <-done, errOut.String()
 		}
 	}
 	token := func(t *testing.T) string {
@@ -165,9 +155,6 @@ func TestServe(t *testing.T) {
 				t.Error(err)
 			}
 		}()
-		if err := conn.SetDeadline(time.Now().Add(patience)); err != nil {
-			t.Fatal(err)
-		}
 		r := bufio.NewReader(conn)
 		var out []string
 		for _, l := range lines {

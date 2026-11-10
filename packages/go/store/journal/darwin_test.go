@@ -10,7 +10,6 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-	"time"
 )
 
 // mountImage creates a disk image of the file system fsType and attaches it at mountpoint, detaching it at the end of
@@ -55,19 +54,14 @@ func TestLockWaitPendingUnlinkStartsNoAttempt(t *testing.T) {
 		}
 		return nil
 	}
-	ch := acquireAsync(c, "w", patience)
+	ch := acquireAsync(c, "w", unbounded)
 	rec.waitFor(t, 1, kindIs(LockWaiting))
 	before := n.Load()
 	if err := os.Remove(alias); err != nil {
 		t.Fatal(err)
 	}
-	select {
-	case woke := <-events:
-		if woke != 0 {
-			t.Fatal("the unlink of the pending name woke the waiter")
-		}
-	case <-time.After(patience):
-		t.Fatal("no vnode event for the unlink of another name")
+	if woke := <-events; woke != 0 {
+		t.Fatal("the unlink of the pending name woke the waiter")
 	}
 	if got := n.Load(); got != before {
 		t.Fatalf("attempts = %d, want %d", got, before)

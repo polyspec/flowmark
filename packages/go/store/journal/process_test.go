@@ -326,7 +326,7 @@ func TestHolderReleasedBeforeWaitJudgement(t *testing.T) {
 	end := heldByChild(t, root)
 	c, _ := newCorpus(t, root)
 	endAtJudge(c, 2, end)
-	l, err := c.Acquire(context.Background(), "parent", patience)
+	l, err := c.Acquire(context.Background(), "parent", unbounded)
 	if err != nil {
 		t.Fatalf("Acquire = %v, want the lock released by its holder", err)
 	}

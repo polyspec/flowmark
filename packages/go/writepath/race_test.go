@@ -13,7 +13,7 @@ import (
 // from another goroutine — as a server closes an idle or disconnected session — rolls back. Run under go test -race.
 func TestConcurrentSessions(t *testing.T) {
 	f := baseFixture(t)
-	f.c.wait = patience
+	f.c.wait = unbounded
 	const writers, each, txs = 4, 5, 3
 	ctx := context.Background()
 	var wg sync.WaitGroup

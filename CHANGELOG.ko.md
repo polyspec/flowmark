@@ -1,9 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 1a4421558610d03ba4fb89bb4869dbb664a02ba99330666bc2fe83c97a443194 -->
+<!-- source-sha256: 8c9b1f15ab03bbd706023a2f1e76bb3d1971dd2088b4dae86ae7a4aa0cf3d8eb -->
 # Changelog
 
 ## Unreleased
 
+- T98: test는 시험 대상 code가 내는 것을 기다리며 시간을 기다리지 않는다: 각 대기는 기다리는 사건이나 session 연결의 끝처럼 대기를 끝내는 사건에서 끝나고, 끝나지 않는 대기의 유일한 한도는 kit 0.0.103부터 모든 goroutine의 stack을 남기는 runner의 기한이다. T93의 20초 한도는 없어졌고, transaction 없는 session이 idle이 아님은 test가 idle 한도 네 배를 잠드는 대신 server가 다음 message를 기다릴 때마다 알리는 것으로 보인다.
 - T95: SQL 경로가 schema에서 읽는 것, 곧 rowid 없는 표마다의 primary key와 rowid 있는 표마다의 rowid 이름은 schema의 text가 그것을 읽은 text와 다를 때마다 다시 읽는다; 이전에는 schema version이 그대로인 동안 유지했다. schema 변경의 rollback은 다음 변경에 자신이 되돌린 schema의 version을 주므로, 그 version으로 다시 만든 표를 rollback이 되돌린 표의 key로 읽었다.
 - T94: key가 rowid이고 AUTOINCREMENT sequence를 지키지 않는 표는 int64 최댓값을 넘는 key를 주지 않는다: 가장 큰 key가 9223372036854775807일 때 database가 key를 고를 insert는 SQL 경로와 face에서 DRIVER(SQLITE_FULL)로 실패하고 아무것도 바꾸지 않는다; 이전에는 SQLite가 쓰이지 않은 rowid를 무작위로 골랐고 face는 넘친 key를 주었다. insert가 주는 key는 여전히 가장 큰 key 곁에 받아들여지며, key 9223372036854775806 뒤의 insert는 9223372036854775807을 준다. primary key가 NULL을 지니는 표도 그런 표다. 이를 지키는 장치는 자기 문장 안에서만 있으므로 뒤의 어떤 문장도, `sqlite_temp_master` 읽기도 그것을 보지 않으며, trigger의 insert는 자신을 부른 insert의 기록을 가져가지 않는다. rowid를 key로 쓰는 표에 `rowid`라는 column을 남기거나, 어떤 문장도 이름 대지 못하는 rowid를 지닌 표를 남기는 schema 문장은 CONSTRAINT다; 이전에는 그런 표의 행이 조용히 사라졌다. 다르게 key를 쓰는 표의 `rowid` column은 SQLite가 지닌 대로 읽고 쓰이며, 이전에는 NULL로 읽혔다.
 - T91: 표의 AUTOINCREMENT sequence는 SQLite가 `sqlite_sequence`에 지키는 것이다. `sqlite_sequence`의 명시적 쓰기는 더 낮은 값, 0, 음수, 지운 행을 포함해 그것을 정하므로, delete 뒤 identity의 restart는 SQLite, MySQL, PostgreSQL이 주는 key를 준다(key 1, 2, 3 뒤에 3을 지우면 3이며, 이전에는 4를 주었다). delete와 key 변경은 sequence를 그대로 두고, insert는 unique key에서 행을 만난 insert를 포함해 자신이 주거나 만나는 key마다 sequence를 올린다. `dbspec/sequences.json`은 sequence가 가장 큰 key가 아닌 표를 정수로, 또는 `sqlite_sequence`에 행이 없으면 `null`로 이름 댄다. `sqlite_sequence`에 AUTOINCREMENT 표가 아닌 표의 행, 한 표의 두 번째 행, 정수가 아닌 sequence를 남기는 문장은 CONSTRAINT이며 아무것도 바꾸지 않는다; 이전에는 버려지거나 INTERNAL로 실패했다. int64 최댓값을 넘은 AUTOINCREMENT 표는 key를 주지 않으며 DRIVER다.
