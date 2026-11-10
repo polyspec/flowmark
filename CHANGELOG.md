@@ -3,6 +3,8 @@
 
 ## Unreleased
 
+- T100: kit 0.0.105 is adopted, which sets no time limit on a test run (K1175): no recipe passes `--timeout` to run-tests or `--test-timeout` to the Node suite, and a run ends when its tool exits.
+
 ## 0.0.15
 
 - T98: A test waits for what the code under test publishes, never for a time: each wait ends on the event it waits for or on an event that ends it, such as the end of a session's connection, and the deadline of the runner, which writes the stack of every goroutine since kit 0.0.103, is the one bound of a wait that never ends. The 20 s bound of T93 is gone, and a session without a transaction is shown not idle by the server's account of each wait for the next message, where the test slept four idle bounds.

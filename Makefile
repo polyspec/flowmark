@@ -116,17 +116,17 @@ test-go: ## Run the unit tests of every module of go.work, with the name filter 
 	CASE_SENSITIVE_ENV=FLOWMARK_CASE_SENSITIVE_DIR $(NODE) $(KIT)/runtime-targets.mjs test --runner go --roots packages/go tests/conformance/go -- -count=1 -timeout=0
 
 test-infrastructure: ## Run every tracked root Node test through the runner of kit; offline
-	CASE_SENSITIVE_ENV=FLOWMARK_CASE_SENSITIVE_DIR $(NODE) $(KIT)/runtime-targets.mjs infrastructure tests -- --test-timeout=30000 --test-concurrency=1
+	CASE_SENSITIVE_ENV=FLOWMARK_CASE_SENSITIVE_DIR $(NODE) $(KIT)/runtime-targets.mjs infrastructure tests -- --test-concurrency=1
 
 flowmark-node-check: test-infrastructure ## Run the Node suite of the root infrastructure; offline
 flowmark-go-check: build-go test-go ## Build and test the complete Go workspace; offline
 flowmark-test: flowmark-node-check flowmark-go-check ## Run the Node and the Go suites; offline
 
-# A parent benchmark runs through all of its sub-benchmarks: BenchmarkShardOpen took 31.9 s on an Apple M3 Pro, past the
-# runner's 30 s default, so each test is given 120 s, about four times the slowest measured one.
+# A parent benchmark runs through all of its sub-benchmarks, and the run ends when go exits: kit sets no time limit (K1175),
+# and -timeout=0 turns off the deadline of go test, so a benchmark ends on its own end.
 flowmark-benchmarks: ## Run the writepath tests and benchmarks and the statement benchmark through the runner of kit; offline
-	$(NODE) $(KIT)/run-tests.mjs go --timeout 120 --cwd packages/go -- -count=1 -timeout=0 -bench . -benchmem ./writepath
-	$(NODE) $(KIT)/run-tests.mjs go --timeout 600 --cwd packages/go -- -count=1 -timeout=0 -run '^$$' -bench BenchmarkStatement -benchtime 20x ./statement
+	$(NODE) $(KIT)/run-tests.mjs go --cwd packages/go -- -count=1 -timeout=0 -bench . -benchmem ./writepath
+	$(NODE) $(KIT)/run-tests.mjs go --cwd packages/go -- -count=1 -timeout=0 -run '^$$' -bench BenchmarkStatement -benchtime 20x ./statement
 
 .PHONY: slug-vectors
 slug-vectors: ## Record the heading ids GitHub, VS Code and GitLab render into store/testdata/slug; needs the network, gh, npm and cargo

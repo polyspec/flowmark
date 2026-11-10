@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- T100: test run에 시간 한도를 두지 않는 kit 0.0.105를 채택한다(K1175): 어떤 recipe도 run-tests에 `--timeout`을, Node suite에 `--test-timeout`을 넘기지 않으며, run은 그 도구가 끝날 때 끝난다.
+
 ## 0.0.15
 
 - T98: test는 시험 대상 code가 내는 것을 기다리며 시간을 기다리지 않는다: 각 대기는 기다리는 사건이나 session 연결의 끝처럼 대기를 끝내는 사건에서 끝나고, 끝나지 않는 대기의 유일한 한도는 kit 0.0.103부터 모든 goroutine의 stack을 남기는 runner의 기한이다. T93의 20초 한도는 없어졌고, transaction 없는 session이 idle이 아님은 test가 idle 한도 네 배를 잠드는 대신 server가 다음 message를 기다릴 때마다 알리는 것으로 보인다.
