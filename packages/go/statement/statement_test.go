@@ -284,20 +284,22 @@ func fails(t *testing.T, s *writepath.Session, text, code, part string) {
 	}
 }
 
+// notesCount is the number of rows of notes that s reads.
+func notesCount(t *testing.T, s *writepath.Session) string {
+	t.Helper()
+	return fmt.Sprint(run(t, s, "SELECT COUNT(*) FROM notes").Rows[0][0])
+}
+
 // TestDeferredTransaction pins a plain BEGIN: it takes the lock at its first write, reads the corpus its first read
 // fixes, and a write after a newer commit is refused as SQLite refuses it.
 func TestDeferredTransaction(t *testing.T) {
 	a, b, _ := openTwo(t)
-	count := func(s *writepath.Session) string {
-		t.Helper()
-		return fmt.Sprint(run(t, s, "SELECT COUNT(*) FROM notes").Rows[0][0])
-	}
 	run(t, b, "PRAGMA busy_timeout = 0")
 	t.Run("a read inside it does not wait for a writer", func(t *testing.T) {
 		run(t, a, "BEGIN IMMEDIATE")
 		run(t, a, "INSERT INTO notes (title) VALUES ('pending')")
 		run(t, b, "BEGIN")
-		if got := count(b); got != "0" {
+		if got := notesCount(t, b); got != "0" {
 			t.Fatalf("read %s rows of a writer's open transaction", got)
 		}
 		fails(t, b, "INSERT INTO notes (title) VALUES ('other')", "CANCELED", "(SQLITE_BUSY)")
@@ -306,26 +308,26 @@ func TestDeferredTransaction(t *testing.T) {
 	})
 	t.Run("its snapshot holds across a commit", func(t *testing.T) {
 		run(t, b, "BEGIN")
-		before := count(b)
+		before := notesCount(t, b)
 		run(t, a, "INSERT INTO notes (title) VALUES ('committed')")
-		if got := count(b); got != before {
+		if got := notesCount(t, b); got != before {
 			t.Fatalf("read %s rows, its snapshot held %s", got, before)
 		}
 		fails(t, b, "INSERT INTO notes (title) VALUES ('stale')", "CANCELED", "(SQLITE_BUSY_SNAPSHOT)")
 		run(t, b, "ROLLBACK")
-		if got := count(b); got == before {
+		if got := notesCount(t, b); got == before {
 			t.Fatalf("a new read still reads %s rows", got)
 		}
 	})
 	t.Run("its first write takes the lock, with its savepoints", func(t *testing.T) {
-		before := count(a)
+		before := notesCount(t, a)
 		run(t, a, "BEGIN")
 		run(t, a, "SAVEPOINT s")
 		run(t, a, "INSERT INTO notes (title) VALUES ('kept')")
 		fails(t, b, "INSERT INTO notes (title) VALUES ('waits')", "CANCELED", "(SQLITE_BUSY)")
 		run(t, a, "ROLLBACK TO s")
 		run(t, a, "COMMIT")
-		if got := count(a); got != before {
+		if got := notesCount(t, a); got != before {
 			t.Fatalf("%s rows after the rollback to a savepoint, want %s", got, before)
 		}
 	})
@@ -335,6 +337,132 @@ func TestDeferredTransaction(t *testing.T) {
 		fails(t, a, "BEGIN", "DRIVER", "within a transaction")
 		run(t, a, "COMMIT")
 	})
+}
+
+// TestSavepointBeginsATransaction pins a SAVEPOINT with no transaction open: it begins one as a plain BEGIN does, and
+// the RELEASE of that savepoint, the outermost, commits it, as on SQLite; inside a BEGIN the release keeps the
+// transaction open.
+func TestSavepointBeginsATransaction(t *testing.T) {
+	a, b, _ := openTwo(t)
+	run(t, b, "PRAGMA busy_timeout = 0")
+	t.Run("the release of the outermost savepoint commits", func(t *testing.T) {
+		before := notesCount(t, a)
+		run(t, a, "SAVEPOINT outer")
+		run(t, a, "INSERT INTO notes (title) VALUES ('first')")
+		fails(t, b, "INSERT INTO notes (title) VALUES ('waits')", "CANCELED", "(SQLITE_BUSY)")
+		run(t, a, "SAVEPOINT inner")
+		run(t, a, "INSERT INTO notes (title) VALUES ('second')")
+		run(t, a, "RELEASE inner")
+		fails(t, b, "INSERT INTO notes (title) VALUES ('waits')", "CANCELED", "(SQLITE_BUSY)")
+		run(t, a, "RELEASE outer")
+		if got, want := notesCount(t, b), fmt.Sprint(atoi(t, before)+2); got != want {
+			t.Fatalf("another session reads %s rows after the release, want %s", got, want)
+		}
+		run(t, b, "INSERT INTO notes (title) VALUES ('after')")
+		run(t, a, "BEGIN")
+		run(t, a, "COMMIT")
+	})
+	t.Run("a rollback to it keeps the transaction open", func(t *testing.T) {
+		before := notesCount(t, a)
+		run(t, a, "SAVEPOINT s")
+		run(t, a, "INSERT INTO notes (title) VALUES ('undone')")
+		run(t, a, "ROLLBACK TO s")
+		fails(t, b, "INSERT INTO notes (title) VALUES ('waits')", "CANCELED", "(SQLITE_BUSY)")
+		run(t, a, "RELEASE s")
+		if got := notesCount(t, b); got != before {
+			t.Fatalf("%s rows after a rollback to the savepoint and its release, want %s", got, before)
+		}
+		run(t, b, "INSERT INTO notes (title) VALUES ('after')")
+	})
+	t.Run("a savepoint with no write ends at its release", func(t *testing.T) {
+		run(t, a, "SAVEPOINT r")
+		notesCount(t, a)
+		run(t, a, "RELEASE r")
+		run(t, a, "BEGIN")
+		run(t, a, "COMMIT")
+	})
+	t.Run("inside a BEGIN its release keeps the transaction", func(t *testing.T) {
+		before := notesCount(t, a)
+		run(t, a, "BEGIN")
+		run(t, a, "SAVEPOINT s")
+		run(t, a, "INSERT INTO notes (title) VALUES ('kept open')")
+		run(t, a, "RELEASE s")
+		fails(t, b, "INSERT INTO notes (title) VALUES ('waits')", "CANCELED", "(SQLITE_BUSY)")
+		run(t, a, "ROLLBACK")
+		if got := notesCount(t, a); got != before {
+			t.Fatalf("%s rows after the rollback, want %s", got, before)
+		}
+	})
+}
+
+// TestSchemaInATransaction pins a schema statement inside a transaction, as on SQLite: it is a write of the
+// transaction, which another session does not see before the commit, a rollback or a rollback to a savepoint set
+// before it undoes, and the commit writes with the rows; the rebuild of a table under a savepoint (orm PLN-110) keeps
+// its rows.
+func TestSchemaInATransaction(t *testing.T) {
+	a, b, root := openTwo(t)
+	missing := func(s *writepath.Session, table string) {
+		t.Helper()
+		fails(t, s, "SELECT COUNT(*) FROM "+table, "DRIVER", "no such table: "+table)
+	}
+	t.Run("a rollback undoes it", func(t *testing.T) {
+		run(t, a, "BEGIN")
+		run(t, a, "CREATE TABLE gone (id INTEGER PRIMARY KEY, v TEXT)")
+		run(t, a, "INSERT INTO gone (v) VALUES ('x')")
+		missing(b, "gone")
+		run(t, a, "ROLLBACK")
+		missing(a, "gone")
+		missing(freshSession(t, root), "gone")
+	})
+	t.Run("a rollback to a savepoint before it undoes it", func(t *testing.T) {
+		run(t, a, "BEGIN")
+		run(t, a, "SAVEPOINT s")
+		run(t, a, "CREATE TABLE undone (id INTEGER PRIMARY KEY)")
+		run(t, a, "ROLLBACK TO s")
+		run(t, a, "RELEASE s")
+		run(t, a, "COMMIT")
+		missing(a, "undone")
+		missing(freshSession(t, root), "undone")
+	})
+	t.Run("the commit writes it with its rows", func(t *testing.T) {
+		run(t, a, "SAVEPOINT made")
+		run(t, a, "CREATE TABLE kept (id INTEGER PRIMARY KEY, v TEXT)")
+		run(t, a, "INSERT INTO kept (v) VALUES ('one')")
+		missing(b, "kept")
+		run(t, a, "RELEASE made")
+		if got := cells(run(t, freshSession(t, root), "SELECT id, v FROM kept")); got != `[[1,"one"]]` {
+			t.Fatalf("the files hold %s", got)
+		}
+		if got := cells(run(t, b, "SELECT id, v FROM kept")); got != `[[1,"one"]]` {
+			t.Fatalf("another session reads %s", got)
+		}
+	})
+	t.Run("a table rebuilt under a savepoint keeps its rows", func(t *testing.T) {
+		run(t, a, "CREATE TABLE owner (id TEXT NOT NULL PRIMARY KEY)")
+		run(t, a, "INSERT INTO owner (id) VALUES ('0a'), ('ff')")
+		run(t, a, "SAVEPOINT convert")
+		run(t, a, "CREATE TABLE rebuild (id BLOB NOT NULL PRIMARY KEY)")
+		run(t, a, "INSERT INTO rebuild (id) SELECT unhex(id) FROM owner")
+		run(t, a, "DROP TABLE owner")
+		run(t, a, "ALTER TABLE rebuild RENAME TO owner")
+		run(t, a, "RELEASE convert")
+		want := `[["0a","blob"],["ff","blob"]]`
+		read := "SELECT lower(hex(id)), typeof(id) FROM owner ORDER BY id"
+		if got := cells(run(t, freshSession(t, root), read)); got != want {
+			t.Fatalf("the files hold %s, want %s", got, want)
+		}
+		missing(b, "rebuild")
+	})
+}
+
+// atoi is the integer of the count text s.
+func atoi(t *testing.T, s string) int {
+	t.Helper()
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return n
 }
 
 // TestExclusiveLockingMode pins locking_mode: the lock outlives the transaction until the mode is normal again.

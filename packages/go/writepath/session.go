@@ -67,14 +67,19 @@ func (s *Session) bind(ctx context.Context) (context.Context, func()) {
 }
 
 // tx is an open transaction: the lock it holds, the corpus read at its begin, its post-image, the writes that made
-// it, and its savepoints.
+// it, and its savepoints; atSavepoint is a transaction that a SAVEPOINT of a SQL connection began (Deferred).
 type tx struct {
-	lock     *journal.Lock
-	readOnly bool
-	base     *irexec.Corpus
-	cur      *irexec.Corpus
-	writes   []*write
-	marks    []mark
+	lock        *journal.Lock
+	readOnly    bool
+	base        *irexec.Corpus
+	cur         *irexec.Corpus
+	writes      []*write
+	marks       []mark
+	atSavepoint bool
+	// exec is the executor of the catalog execCat of cur when a schema statement of the transaction changed it
+	// (Restructure).
+	exec    *irexec.Executor
+	execCat *catalog.Catalog
 }
 
 // write is a write of a transaction: how to run it again on a corpus (the commit's step 2), the exemptions of its
@@ -84,6 +89,9 @@ type write struct {
 	exempt  Exempt
 	answer  *irexec.Answer
 	targets []irexec.Target
+	// schema is a schema statement of the transaction (Restructure), which runs on its SQL database and so cannot run
+	// again on another corpus.
+	schema bool
 }
 
 // mark is a savepoint: its name, and the post-image and the number of writes when it was set.
@@ -138,14 +146,45 @@ func (s *Session) InTransaction() bool {
 // nothing, and the transaction stays open.
 func (s *Session) Exec(ctx context.Context, msg []byte) (*irexec.Answer, error) {
 	msg = bytes.Clone(msg)
-	return s.do(ctx, op{write: irexec.IsWrite(msg), run: func(c *irexec.Corpus) (*irexec.Result, error) { return s.c.exec.Execute(c, msg) }})
+	return s.do(ctx, op{write: irexec.IsWrite(msg), run: s.runner(msg, (*irexec.Executor).Execute)})
 }
 
 // ExecFace runs one request message that a face operation formed, as Exec runs one of an orm client; the values
 // are the engine's own write, so their parameters are not checked as an orm client's are.
 func (s *Session) ExecFace(ctx context.Context, msg []byte) (*irexec.Answer, error) {
 	msg = bytes.Clone(msg)
-	return s.do(ctx, op{write: irexec.IsWrite(msg), run: func(c *irexec.Corpus) (*irexec.Result, error) { return s.c.exec.ExecuteFace(c, msg) }})
+	return s.do(ctx, op{write: irexec.IsWrite(msg), run: s.runner(msg, (*irexec.Executor).ExecuteFace)})
+}
+
+// runner runs msg on a corpus with execute, by the executor of the corpus's catalog.
+func (s *Session) runner(msg []byte, execute func(*irexec.Executor, *irexec.Corpus, []byte) (*irexec.Result, error)) func(*irexec.Corpus) (*irexec.Result, error) {
+	return func(c *irexec.Corpus) (*irexec.Result, error) {
+		e, err := s.executor(c)
+		if err != nil {
+			return nil, err
+		}
+		return execute(e, c, msg)
+	}
+}
+
+// executor returns the executor of the catalog of c, under the session's operation: the corpus's own, or, after a
+// schema statement of the open transaction changed the catalog, the transaction's.
+func (s *Session) executor(c *irexec.Corpus) (*irexec.Executor, error) {
+	if c.Catalog() == s.c.cat {
+		return s.c.exec, nil
+	}
+	t := s.tx
+	if t != nil && t.exec != nil && t.execCat == c.Catalog() {
+		return t.exec, nil
+	}
+	e, err := irexec.New(c.Catalog())
+	if err != nil {
+		return nil, err
+	}
+	if t != nil {
+		t.exec, t.execCat = e, c.Catalog()
+	}
+	return e, nil
 }
 
 // SetSequences gives the corpus the rows held of sqlite_sequence, one AUTOINCREMENT sequence for each table that has a
@@ -195,11 +234,13 @@ func (s *Session) SetExclusive(on bool) error {
 
 // Deferred is the transaction of a plain BEGIN of a SQL connection before its first write: it holds no lock, and what it
 // reads is the corpus Pinned, which its first read fixes, on the connection Reader, which the session's end closes.
-// Savepoints are those it has set.
+// Savepoints are those it has set. AtSavepoint tells a transaction that a SAVEPOINT began with no transaction open, as
+// SQLite begins one, so that the release of that outermost savepoint commits it.
 type Deferred struct {
-	Pinned     *irexec.Corpus
-	Reader     io.Closer
-	Savepoints []string
+	Pinned      *irexec.Corpus
+	Reader      io.Closer
+	Savepoints  []string
+	AtSavepoint bool
 }
 
 // Follower follows the transaction of a session, as package statement's SQLite transaction follows it: it sets, releases
@@ -706,6 +747,61 @@ func (s *Session) Release(name string) error {
 	}
 	s.tx.marks = s.tx.marks[:i]
 	return nil
+}
+
+// Restructure runs a schema statement of a SQL connection in the open transaction (spec 40 Schema statements): compute
+// runs it on the transaction's corpus and returns the corpus under its catalog and the files that make it stand. It is
+// a write of the transaction, so a rollback to a savepoint set before it undoes it, and the commit writes its files
+// with the rows and takes its catalog. It runs on the SQL database, not on a corpus, so a commit that finds the corpus
+// changed since the transaction read it cannot run it again and is WRITE_CONFLICT.
+func (s *Session) Restructure(ctx context.Context, compute func(cur *irexec.Corpus) (*irexec.Corpus, []journal.Change, error)) error {
+	_, leave, err := s.enter(ctx)
+	if err != nil {
+		return err
+	}
+	defer leave()
+	t := s.tx
+	switch {
+	case t == nil:
+		return s.noTx("a schema statement")
+	case t.readOnly:
+		return newError(codeReadOnly, "a schema statement in a read-only transaction; begin a transaction that is not read-only to change the schema")
+	}
+	next, changes, err := compute(t.cur)
+	if err != nil {
+		return err
+	}
+	if len(changes) == 0 {
+		return nil
+	}
+	targets := make([]irexec.Target, len(changes))
+	for i, ch := range changes {
+		targets[i] = irexec.Target{Path: ch.Path, Before: t.cur.Data(ch.Path)}
+		if !ch.Delete {
+			targets[i].After = ch.Data
+		}
+	}
+	t.writes = append(t.writes, &write{schema: true, targets: targets})
+	t.cur = next
+	return nil
+}
+
+// BeganAtSavepoint records that a SAVEPOINT of a SQL connection began the open transaction, whose first savepoint is
+// that one (Deferred).
+func (s *Session) BeganAtSavepoint() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.tx != nil {
+		s.tx.atSavepoint = true
+	}
+}
+
+// SavepointsReleased reports whether a SAVEPOINT began the open transaction and the release of its outermost
+// savepoint left it none, so that the release commits it, as on SQLite.
+func (s *Session) SavepointsReleased() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.tx != nil && s.tx.atSavepoint && len(s.tx.marks) == 0
 }
 
 // RollbackTo discards the writes since the savepoint name and the savepoints set after it; the savepoint stays.

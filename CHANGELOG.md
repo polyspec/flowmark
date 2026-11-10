@@ -3,6 +3,7 @@
 
 ## Unreleased
 
+- T101: A SAVEPOINT with no transaction open begins one as a plain BEGIN does, and the RELEASE of that savepoint commits it, as on SQLite; a schema statement inside a transaction is a write of the transaction, which a ROLLBACK or a ROLLBACK TO a savepoint before it undoes and the commit writes with the rows, where it committed the open transaction first and lost its savepoints, so the orm uuid storage conversion rebuilds a table on flowmark as on SQLite.
 - T100: kit 0.0.105 is adopted, which sets no time limit on a test run (K1175): no recipe passes `--timeout` to run-tests or `--test-timeout` to the Node suite, and a run ends when its tool exits.
 
 ## 0.0.15

@@ -96,18 +96,13 @@ func alreadySo(ctx context.Context, s *writepath.Session, text string) (bool, er
 	return (len(found.Rows) > 0) == not, nil
 }
 
-// runSchema runs a schema statement. It is its own transaction: an open transaction commits first and goes on after it,
-// as a MySQL connection commits before a schema statement, since the catalog of the transaction's corpus is the one it
-// began with. The statement runs in the corpus's SQLite database, and it stands when the commit writes it after the
-// corpus's schema statements, with the rows of the tables it changed written again under the new columns.
+// runSchema runs a schema statement. Outside a transaction it is its own transaction; inside one it is a write of the
+// transaction, as on SQLite (schemaInTransaction). The statement runs in the corpus's SQLite database, and it stands
+// when the commit writes it after the corpus's schema statements, with the rows of the tables it changed written again
+// under the new columns.
 func runSchema(ctx context.Context, s *writepath.Session, text string, args []any) (_ *Answer, err error) {
 	if s.InTransaction() {
-		if err := s.Commit(); err != nil {
-			return nil, err
-		}
-		defer func() {
-			err = errors.Join(err, begin(ctx, s))
-		}()
+		return schemaInTransaction(ctx, s, text, args)
 	}
 	if s.QueryOnly() {
 		return nil, &Error{codeReadOnly, "a schema statement on a read-only connection"}
@@ -131,6 +126,35 @@ func runSchema(ctx context.Context, s *writepath.Session, text string, args []an
 		return cat, changes, nil
 	})
 	if err != nil {
+		return nil, err
+	}
+	return answer, nil
+}
+
+// schemaInTransaction runs a schema statement in the open transaction of the session, under a savepoint that the writer
+// connection follows, as runInTransaction runs a statement: the writer's SQLite transaction holds the statement, and the
+// session's transaction holds the catalog and the files it gives (writepath Restructure), so a rollback to a savepoint
+// undoes it and the commit writes it.
+func schemaInTransaction(ctx context.Context, s *writepath.Session, text string, args []any) (_ *Answer, err error) {
+	if s.QueryOnly() {
+		return nil, &Error{codeReadOnly, "a schema statement on a read-only connection"}
+	}
+	d, err := transactionWriter(ctx, s)
+	if err != nil {
+		return nil, err
+	}
+	var answer *Answer
+	if err := underSavepoint(s, func() error {
+		return s.Restructure(ctx, func(c *irexec.Corpus) (*irexec.Corpus, []journal.Change, error) {
+			_, next, changes, err := apply(ctx, s, d.w, c, text, args, &answer)
+			if err != nil {
+				return nil, nil, err
+			}
+			// The database holds what the transaction's corpus then holds, its AUTOINCREMENT counters included.
+			d.corpus = next
+			return next, changes, nil
+		})
+	}); err != nil {
 		return nil, err
 	}
 	return answer, nil

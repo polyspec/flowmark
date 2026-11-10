@@ -73,7 +73,12 @@ func (c *Corpus) commit(t *tx) (bool, error) {
 	for i, tg := range net {
 		changes[i] = journal.Change{Path: tg.Path, Data: tg.After, Delete: tg.After == nil}
 	}
-	return c.journalCommit(t.lock, changes)
+	written, err := c.journalCommit(t.lock, changes)
+	// A schema statement of the transaction gave its corpus another catalog, which the corpus takes once it is written.
+	if written && t.cur != nil && t.cur.Catalog() != t.base.Catalog() {
+		err = errors.Join(err, c.useCatalog(t.cur.Catalog()))
+	}
+	return written, err
 }
 
 // journalCommit writes changes through the journal under the held lock l (steps 3 to 8) and reports whether the
@@ -112,6 +117,10 @@ func (c *Corpus) recheck(t *tx, now *irexec.Corpus) (bool, error) {
 	cur := now
 	again := make([]*write, len(t.writes))
 	for i, w := range t.writes {
+		if w.schema {
+			// A schema statement ran on the SQL database of the corpus the transaction read, and runs on no other.
+			return true, nil
+		}
 		if cur == nil {
 			return false, newError(codeInternal, "the write %d of the transaction follows a rewrite, which is its own transaction", i)
 		}

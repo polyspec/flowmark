@@ -293,8 +293,11 @@ utility of orm's SQLite dialect holds on a corpus, and a client has only this dr
   stores. The database stands between statements under the lock while the corpus does not differ from it; when the
   corpus differs under the same catalog, a database no transaction holds is refreshed to it
   ([cost model](#cost-model)), and otherwise it is filled again.
-- **Schema statements.** A schema statement is its own transaction: an open transaction commits first and a new one goes
-  on after it. A statement that changes the schema is appended to `dbspec/statements.json`, and the tables it changed
+- **Schema statements.** Outside a transaction a schema statement is its own transaction. Inside one it is a write of
+  the transaction, as on SQLite: another session reads the schema before it until the commit, a `ROLLBACK` or a
+  `ROLLBACK TO` a savepoint set before it undoes it, and the commit writes it with the rows; it runs on the SQL database
+  and on no other corpus, so a commit that finds the corpus changed since the transaction read it is `WRITE_CONFLICT`
+  (`TestSchemaInATransaction` of `statement`). A statement that changes the schema is appended to `dbspec/statements.json`, and the tables it changed
   are written again under their new columns; a document keeps its text. `CREATE ... IF NOT EXISTS` and `DROP ... IF
   EXISTS` that find what they state change nothing and take no lock. The schema statements are read with the corpus
   when it is read from nothing and after each commit that wrote them, of any process, as the commit generation names
@@ -378,7 +381,9 @@ utility of orm's SQLite dialect holds on a corpus, and a client has only this dr
   read fixes the corpus it reads, and its first write takes the lock. A wait that ends is `CANCELED` ending in
   `(SQLITE_BUSY)`, and a write after a commit newer than its first read is `CANCELED` ending in `(SQLITE_BUSY_SNAPSHOT)`;
   both leave the transaction open for its `ROLLBACK`. A deferred failure of a foreign key fails at `COMMIT` and leaves the
-  transaction open, as on SQLite.
+  transaction open, as on SQLite. A `SAVEPOINT` with no transaction open begins one as a plain `BEGIN` does, and the
+  `RELEASE` of that savepoint commits it; inside a `BEGIN` a `RELEASE` keeps the transaction open, as on SQLite
+  (`TestSavepointBeginsATransaction` of `statement`).
 - **The database of an opening.** The database of an opening's statements is a file of `.flowmark/sql/`, a folder
   the engine makes with access for its owner alone: a protected access list that grants the process's user alone on
   Windows, mode `0700` elsewhere; an existing folder that grants more, a link, a reparse point and a file in its place

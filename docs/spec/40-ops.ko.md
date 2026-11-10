@@ -1,5 +1,5 @@
 <!-- doc-id: spec-ops -->
-<!-- source-sha256: 5ffe0aa6400ed8b6e0f08fa0a5e8e95675b2895cc78716fa78b68c73a97fd213 -->
+<!-- source-sha256: 6e3badb1b21f42ca6ac03f1d75bcf2e9273e0279f385d2d1b770eafae5e0d9f4 -->
 # Operations
 
 [English](40-ops.md)
@@ -250,8 +250,11 @@ client가 구현할 것은 이 driver뿐이다.
   값을 판정하지 않는다. database는 corpus와 다르지 않은 동안 lock 아래에서 문장 사이에 유지된다. 같은 catalog
   아래에서 corpus가 다르면, 어떤 transaction도 잡지 않은 database는 그 corpus로 갱신되고([비용 모델](#비용-모델)),
   그렇지 않으면 다시 채워진다.
-- **Schema 문장.** schema 문장은 자기만의 transaction이다: 열린 transaction은 먼저 commit하고 그 뒤에 새 transaction이
-  이어진다. schema를 바꾼 문장은 `dbspec/statements.json`에 덧붙고, 바뀐 표는 새 column으로 다시 쓰이며, document의 글은
+- **Schema 문장.** transaction 밖의 schema 문장은 자기만의 transaction이다. transaction 안에서는 SQLite처럼 그
+  transaction의 쓰기다: 다른 session은 commit까지 그 앞의 schema를 읽고, `ROLLBACK`이나 그 앞에 둔 savepoint로의
+  `ROLLBACK TO`는 그것을 되돌리며, commit은 그것을 행과 함께 쓴다. 그것은 SQL database에서 실행되고 다른 corpus에서는
+  실행되지 않으므로, transaction이 읽은 뒤 corpus가 바뀐 것을 commit이 찾으면 `WRITE_CONFLICT`이다(`statement`의
+  `TestSchemaInATransaction`). schema를 바꾼 문장은 `dbspec/statements.json`에 덧붙고, 바뀐 표는 새 column으로 다시 쓰이며, document의 글은
   그대로다. 이미 그 상태인 `CREATE ... IF NOT EXISTS`와 `DROP ... IF EXISTS`는 아무것도 바꾸지 않고 lock을 잡지 않는다.
   schema 문장은 corpus를 처음부터 읽을 때와, 어느 process든 그것을 쓴 commit 뒤에 commit generation이 그 경로를 알릴 때
   corpus와 함께 읽히고, process는 SQLite connection이 다른 connection이 바꾼 schema를 받듯 그 문장이 주는 catalog를 받는다.
@@ -322,7 +325,9 @@ client가 구현할 것은 이 driver뿐이다.
 - **Transaction.** `BEGIN IMMEDIATE`와 `BEGIN EXCLUSIVE`는 곧바로 lock을 잡는다. 일반 `BEGIN`은 lock을 잡지 않는다: 첫
   읽기가 읽을 corpus를 정하고, 첫 쓰기가 lock을 잡는다. 대기가 끝나면 `(SQLITE_BUSY)`로 끝나는 `CANCELED`이고, 첫 읽기보다
   새로운 commit 뒤의 쓰기는 `(SQLITE_BUSY_SNAPSHOT)`으로 끝나는 `CANCELED`이며, 둘 다 `ROLLBACK`을 위해 transaction을 열어
-  둔다. 지연된 foreign key 실패는 SQLite처럼 `COMMIT`에서 실패하고 transaction을 열어 둔다.
+  둔다. 지연된 foreign key 실패는 SQLite처럼 `COMMIT`에서 실패하고 transaction을 열어 둔다. 열린 transaction이 없을 때의
+  `SAVEPOINT`는 일반 `BEGIN`처럼 transaction을 시작하고, 그 savepoint의 `RELEASE`가 transaction을 commit한다. `BEGIN`
+  안의 `RELEASE`는 SQLite처럼 transaction을 열어 둔다(`statement`의 `TestSavepointBeginsATransaction`).
 - **열기의 database.** 열기의 문장이 쓰는 database는 `.flowmark/sql/`의 file이며, 이 folder는 engine이 소유자만 접근하도록
   만든다: Windows에서는 process의 사용자에게만 허용하는 보호된 access list, 그 밖에서는 mode `0700`이다. 그보다 넓게 허용하는
   기존 folder, link, reparse point, folder 대신 있는 file은 거절한다. database마다 `<token>.db`와 SQLite가 그 옆에 만드는

@@ -240,41 +240,60 @@ func runInTransaction(ctx context.Context, s *writepath.Session, text string, ar
 		return answer, err
 	}
 	// The writer follows the transaction before the savepoint, so it takes the savepoint too.
-	var d *database
-	if err := s.View(ctx, func(c *irexec.Corpus) (err error) {
-		d, _, err = writerFor(ctx, s, c)
-		return err
+	d, err := transactionWriter(ctx, s)
+	if err != nil {
+		return nil, err
+	}
+	var answer *Answer
+	if err := underSavepoint(s, func() error {
+		var writes written
+		err := s.View(ctx, func(c *irexec.Corpus) error {
+			var err error
+			answer, _, writes, err = execute(ctx, s, d, c, text, args)
+			return err
+		})
+		if err != nil {
+			return err
+		}
+		return applyWrites(ctx, s, writes)
 	}); err != nil {
 		return nil, err
 	}
-	if err := s.Savepoint(savepoint); err != nil {
-		return nil, err
-	}
-	var writes written
-	var answer *Answer
-	err = s.View(ctx, func(c *irexec.Corpus) error {
-		var err error
-		answer, _, writes, err = execute(ctx, s, d, c, text, args)
+	return answer, nil
+}
+
+// transactionWriter returns the database of the open transaction of s, whose writer connection follows it.
+func transactionWriter(ctx context.Context, s *writepath.Session) (d *database, err error) {
+	err = s.View(ctx, func(c *irexec.Corpus) (err error) {
+		d, _, err = writerFor(ctx, s, c)
 		return err
 	})
-	if err == nil {
-		err = applyWrites(ctx, s, writes)
+	return d, err
+}
+
+// underSavepoint runs work in the open transaction of the session under the statement's savepoint, which the writer
+// connection follows: work that fails leaves the transaction as it was. When the statement ended the SQLite transaction
+// itself, as RAISE(ROLLBACK) does, the session's transaction ends with it.
+func underSavepoint(s *writepath.Session, work func() error) error {
+	if err := s.Savepoint(savepoint); err != nil {
+		return err
 	}
+	err := work()
 	if err == nil {
 		if err := s.Release(savepoint); err != nil {
-			return nil, errors.Join(err, s.Rollback())
+			return errors.Join(err, s.Rollback())
 		}
-		return answer, nil
+		return nil
 	}
 	if undo := s.RollbackTo(savepoint); undo != nil {
 		// The statement ended the SQLite transaction, and the session's goes with it.
 		s.SetEnded(true)
-		return nil, errors.Join(err, s.Rollback())
+		return errors.Join(err, s.Rollback())
 	}
 	if undo := s.Release(savepoint); undo != nil {
-		return nil, errors.Join(err, undo, s.Rollback())
+		return errors.Join(err, undo, s.Rollback())
 	}
-	return nil, err
+	return err
 }
 
 // readCommitted answers a read outside a transaction on a reader connection, from the corpus Committed returns: it takes
@@ -383,6 +402,9 @@ func upgrade(ctx context.Context, s *writepath.Session) error {
 		if err := s.Savepoint(name); err != nil {
 			return errors.Join(err, s.Rollback())
 		}
+	}
+	if d.AtSavepoint {
+		s.BeganAtSavepoint()
 	}
 	return endDeferred(s)
 }
@@ -625,6 +647,13 @@ func control(ctx context.Context, s *writepath.Session, text string) (bool, erro
 			d.Savepoints = append(d.Savepoints, name(1))
 			return true, nil
 		}
+		// With no transaction open a SAVEPOINT begins one as a plain BEGIN does, and the release of this savepoint
+		// commits it, as on SQLite.
+		if !s.InTransaction() {
+			s.SetEnded(false)
+			s.SetDeferred(&writepath.Deferred{Savepoints: []string{name(1)}, AtSavepoint: true})
+			return true, nil
+		}
 		return true, s.Savepoint(name(1))
 	case "RELEASE":
 		if s.Ended() {
@@ -635,10 +664,19 @@ func control(ctx context.Context, s *writepath.Session, text string) (bool, erro
 			if i < 0 {
 				return true, &Error{codeDriver, "no such savepoint: " + name(len(fields)-1)}
 			}
+			if i == 0 && d.AtSavepoint {
+				return true, endDeferred(s)
+			}
 			d.Savepoints = d.Savepoints[:i]
 			return true, nil
 		}
-		return true, s.Release(name(len(fields) - 1))
+		if err := s.Release(name(len(fields) - 1)); err != nil {
+			return true, err
+		}
+		if s.SavepointsReleased() {
+			return true, s.Commit()
+		}
+		return true, nil
 	case "PRAGMA":
 		switch strings.ReplaceAll(strings.Join(fields[1:], ""), " ", "") {
 		case "QUERY_ONLY=ON", "QUERY_ONLY=1":

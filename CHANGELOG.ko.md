@@ -1,9 +1,10 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: 9ddba45e4e8f14fbcdb3ed95bf51a210aec7080117281cfd12ada3d2eb9cdb97 -->
+<!-- source-sha256: fe1b37712cffb0607847605054a127c34c8d520febed6a9e88e2cb2f86084736 -->
 # Changelog
 
 ## Unreleased
 
+- T101: 열린 transaction이 없을 때의 SAVEPOINT는 일반 BEGIN처럼 transaction을 시작하고, 그 savepoint의 RELEASE가 SQLite처럼 transaction을 commit한다. transaction 안의 schema 문장은 그 transaction의 쓰기다: ROLLBACK이나 그 앞의 savepoint로의 ROLLBACK TO가 그것을 되돌리고, commit이 그것을 행과 함께 쓴다. 전에는 열린 transaction을 먼저 commit하면서 그 savepoint를 잃었다. 그래서 orm의 uuid 저장 변환이 flowmark에서도 SQLite처럼 표를 다시 짓는다.
 - T100: test run에 시간 한도를 두지 않는 kit 0.0.105를 채택한다(K1175): 어떤 recipe도 run-tests에 `--timeout`을, Node suite에 `--test-timeout`을 넘기지 않으며, run은 그 도구가 끝날 때 끝난다.
 
 ## 0.0.15
