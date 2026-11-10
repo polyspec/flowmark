@@ -26,6 +26,12 @@ const sequenceRows = "SELECT group_concat(name || '=' || seq, ',') FROM (SELECT 
 // it open.
 func sqliteRun(t *testing.T, steps []string) *sql.DB {
 	t.Helper()
+	return sqliteWith(t, sequenceTables, steps)
+}
+
+// sqliteWith runs the tables and then the steps on a database of the pinned SQLite of its own, and returns it open.
+func sqliteWith(t *testing.T, tables, steps []string) *sql.DB {
+	t.Helper()
 	db, err := sql.Open(sqlite.DriverName, ":memory:")
 	if err != nil {
 		t.Fatal(err)
@@ -36,7 +42,7 @@ func sqliteRun(t *testing.T, steps []string) *sql.DB {
 			t.Error(err)
 		}
 	})
-	for _, text := range append(append([]string{}, sequenceTables...), steps...) {
+	for _, text := range append(append([]string{}, tables...), steps...) {
 		if _, err := db.ExecContext(context.Background(), text); err != nil {
 			t.Fatalf("SQLite: %s: %v", text, err)
 		}
@@ -60,6 +66,14 @@ func sqliteCells(t *testing.T, db *sql.DB, text string) string {
 // sequenceSession opens the corpus root in a session of a process of its own, which has read its rows.
 func sequenceSession(t *testing.T, root, name string) *writepath.Session {
 	t.Helper()
+	s := openSession(t, root, name)
+	run(t, s, "SELECT COUNT(*) FROM notes")
+	return s
+}
+
+// openSession opens the corpus root in a session of a process of its own, closed at the end of the test.
+func openSession(t *testing.T, root, name string) *writepath.Session {
+	t.Helper()
 	c, err := ops.Open(context.Background(), root, 0)
 	corpustest.Opened(t, c, err)
 	s, err := c.Session(name)
@@ -67,7 +81,6 @@ func sequenceSession(t *testing.T, root, name string) *writepath.Session {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { closeSession(t, s) })
-	run(t, s, "SELECT COUNT(*) FROM notes")
 	return s
 }
 

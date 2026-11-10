@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/min-0-max/sqlite"
 	"github.com/polyspec/flowmark/packages/go/internal/corpustest"
 	"github.com/polyspec/flowmark/packages/go/irexec"
 	"github.com/polyspec/flowmark/packages/go/writepath"
@@ -219,22 +218,7 @@ func TestPlainIdentityLargestFace(t *testing.T) {
 // plainSQLite runs the steps on a database of the pinned SQLite of its own with the tables of the cases.
 func plainSQLite(t *testing.T, steps []string) *sql.DB {
 	t.Helper()
-	db, err := sql.Open(sqlite.DriverName, ":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	db.SetMaxOpenConns(1)
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Error(err)
-		}
-	})
-	for _, text := range append(append([]string{}, plainTables...), steps...) {
-		if _, err := db.ExecContext(context.Background(), text); err != nil {
-			t.Fatalf("SQLite: %s: %v", text, err)
-		}
-	}
-	return db
+	return sqliteWith(t, plainTables, steps)
 }
 
 // plainCells is the answer of plainRows on db in the form of cells.

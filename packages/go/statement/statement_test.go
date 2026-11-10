@@ -925,17 +925,7 @@ func TestSequences(t *testing.T) {
 			"DELETE FROM plain WHERE id = 2",
 		}, "plain", 0, 2},
 	}
-	session := func(t *testing.T, root, name string) *writepath.Session {
-		t.Helper()
-		c, err := ops.Open(context.Background(), root, 0)
-		corpustest.Opened(t, c, err)
-		s, err := c.Session(name)
-		if err != nil {
-			t.Fatal(err)
-		}
-		t.Cleanup(func() { closeSession(t, s) })
-		return s
-	}
+	session := openSession
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			s, root := open(t)
