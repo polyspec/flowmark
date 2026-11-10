@@ -20,11 +20,10 @@ import (
 	"github.com/polyspec/flowmark/packages/go/validate"
 )
 
-// patience bounds every wait of a test for something the code under test must publish; it is a guard against a hung
-// test, never the condition a test checks. It is shorter than the 30 s that the runner gives a test (make test-go), so
-// a wait that never ends fails with its own report, the holder of a lock among it, before the runner stops the test
-// with none.
-const patience = 20 * time.Second
+// unbounded is the lock-wait bound of a case whose wait an event ends, a release, a commit or a Close: no case reaches
+// it. A test waits for what the code under test publishes, never for a time; a wait that never ends is stopped by the
+// deadline of the runner (make test-go), which writes the stack of every goroutine into the test's output.
+const unbounded = time.Hour
 
 // testNow is the request clock of every request of the tests.
 const testNow = "2026-10-11 09:00:00.123456"
@@ -35,9 +34,7 @@ type recorder struct{ journal.Recorder }
 // waitFor blocks until an event of kind has been published since the last reset.
 func (r *recorder) waitFor(t testing.TB, kind journal.Kind) {
 	t.Helper()
-	if _, ok := r.Wait(1, func(e journal.Event) bool { return e.Kind == kind }, patience); !ok {
-		t.Fatalf("waited %s for %s; got %v", patience, kind, r.kinds())
-	}
+	r.Wait(1, func(e journal.Event) bool { return e.Kind == kind }, nil)
 }
 
 // kinds returns the kinds of the lock and journal events since the last reset; the events of the corpus tree are

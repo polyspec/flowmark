@@ -184,7 +184,7 @@ func TestAcquireAfterPendingRelease(t *testing.T) {
 			}
 		}
 	}})
-	l, err := c.Acquire(context.Background(), "s2", patience)
+	l, err := c.Acquire(context.Background(), "s2", unbounded)
 	if err != nil {
 		t.Fatalf("Acquire during a pending release = %v after %d attempts", err, attempts.Load())
 	}

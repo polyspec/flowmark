@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -23,12 +24,6 @@ import (
 	"github.com/polyspec/flowmark/packages/go/store/journal"
 	"github.com/polyspec/flowmark/packages/go/writepath"
 )
-
-// patience bounds every wait of a test for something the code under test must publish; it is a guard against a hung
-// test, never the condition a test checks. It is shorter than the 30 s that the runner gives a test (make test-go), so
-// a wait that never ends fails with its own report, the holder of a lock among it, before the runner stops the test
-// with none.
-const patience = 20 * time.Second
 
 // testNow is the request clock of every request of the tests.
 const testNow = "2026-10-11 09:00:00.123456"
@@ -57,10 +52,9 @@ type recorder struct{ journal.Recorder }
 // waitFor blocks until an event that match accepts has been published, and returns it.
 func (r *recorder) waitFor(t testing.TB, what string, match func(journal.Event) bool) journal.Event {
 	t.Helper()
-	found, ok := r.Wait(1, match, patience)
-	if !ok {
-		t.Fatalf("waited %s for %s", patience, what)
-	}
+	// A test waits for what the server publishes, never for a time: a wait that never ends is stopped by the deadline of
+	// the runner (make test-go), which writes the stack of every goroutine into the test's output.
+	found, _ := r.Wait(1, match, nil)
 	return found[0]
 }
 
@@ -94,6 +88,10 @@ type fixture struct {
 	mu     sync.Mutex
 	ended  map[string]chan struct{}
 	logs   []string
+	// waits holds, for each session, whether each of its waits for the next message was bounded by the idle timer;
+	// waited is closed and replaced when one is added.
+	waits  map[string][]bool
+	waited chan struct{}
 }
 
 // start writes the tags corpus into a temporary root and serves it with the idle bound idle and the lock wait wait.
@@ -129,7 +127,7 @@ func start(t testing.TB, idle, wait time.Duration) *fixture {
 		t.Fatal(err)
 	}
 	f := &fixture{t: t, root: root, name: filepath.Base(root), token: token, hash: e.Model().ManifestHash, rec: rec,
-		served: make(chan error, 1), ended: map[string]chan struct{}{}}
+		served: make(chan error, 1), ended: map[string]chan struct{}{}, waits: map[string][]bool{}, waited: make(chan struct{})}
 	srv, err := New(c, f.name, token, idle, func(format string, a ...any) {
 		f.mu.Lock()
 		defer f.mu.Unlock()
@@ -139,6 +137,13 @@ func start(t testing.TB, idle, wait time.Duration) *fixture {
 		t.Fatal(err)
 	}
 	srv.ended = func(session string) { close(f.endedCh(session)) }
+	srv.waiting = func(session string, bounded bool) {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		f.waits[session] = append(f.waits[session], bounded)
+		close(f.waited)
+		f.waited = make(chan struct{})
+	}
 	f.srv = srv
 	ln, err := Listen(0)
 	if err != nil {
@@ -150,13 +155,8 @@ func start(t testing.TB, idle, wait time.Duration) *fixture {
 		if err := srv.Close(); err != nil {
 			t.Errorf("Close: %v", err)
 		}
-		select {
-		case err := <-f.served:
-			if err != nil {
-				t.Errorf("Serve: %v", err)
-			}
-		case <-time.After(patience):
-			t.Errorf("Serve did not return after Close")
+		if err := <-f.served; err != nil {
+			t.Errorf("Serve: %v", err)
 		}
 		f.mu.Lock()
 		defer f.mu.Unlock()
@@ -179,14 +179,30 @@ func (f *fixture) endedCh(session string) chan struct{} {
 	return ch
 }
 
+// waitsOf blocks until session has begun n waits for its next message, and returns whether each was bounded by the idle
+// timer, as the server publishes them; the end of the session's connection, also published, ends the wait as a failure.
+func (f *fixture) waitsOf(session string, n int) []bool {
+	f.t.Helper()
+	ended := f.endedCh(session)
+	for {
+		f.mu.Lock()
+		got, waited := append([]bool(nil), f.waits[session]...), f.waited
+		f.mu.Unlock()
+		if len(got) >= n {
+			return got
+		}
+		select {
+		case <-waited:
+		case <-ended:
+			f.t.Fatalf("the connection of %s ended after %d of %d waits: %v", session, len(got), n, got)
+		}
+	}
+}
+
 // waitEnded blocks until the connection of session has ended.
 func (f *fixture) waitEnded(session string) {
 	f.t.Helper()
-	select {
-	case <-f.endedCh(session):
-	case <-time.After(patience):
-		f.t.Fatalf("waited %s for the end of %s", patience, session)
-	}
+	<-f.endedCh(session)
 }
 
 func write(t testing.TB, root, rel, text string) {
@@ -241,12 +257,9 @@ func (c *client) send(line string) {
 	}
 }
 
-// read reads up to the next line feed, waiting at most patience.
+// read reads up to the next line feed; the end of the connection, which the server closes, ends it with an error.
 func (c *client) read() (string, error) {
 	c.t.Helper()
-	if err := c.conn.SetReadDeadline(time.Now().Add(patience)); err != nil {
-		c.t.Fatal(err)
-	}
 	return c.r.ReadString('\n')
 }
 
@@ -349,13 +362,15 @@ func (f *fixture) tags() string {
 }
 
 const (
-	ok           = `{"ok":true}`
-	begin        = `{"op":"begin"}`
-	beginRO      = `{"op":"begin","read_only":true}`
-	commit       = `{"op":"commit"}`
-	rollback     = `{"op":"rollback"}`
+	ok       = `{"ok":true}`
+	begin    = `{"op":"begin"}`
+	beginRO  = `{"op":"begin","read_only":true}`
+	commit   = `{"op":"commit"}`
+	rollback = `{"op":"rollback"}`
+	// noIdle and waitLong are the idle bound and the lock-wait bound of a case whose waits events end, an answer, a
+	// release or the end of a connection: no case reaches them.
 	noIdle       = time.Hour
-	waitLong     = patience
+	waitLong     = time.Hour
 	count2       = `{"count":2}`
 	count3       = `{"count":3}`
 	insertedWeb3 = `{"affected":1,"keys":[3]}`
@@ -689,7 +704,11 @@ func TestIdle(t *testing.T) {
 		a := f.connect()
 		a.want(begin, ok)
 		a.want(rollback, ok)
-		<-time.After(4 * idle)
+		// The server publishes each wait for the next message: the one after the rollback has no idle timer, so the
+		// session cannot be idle however long its client is silent.
+		if got := f.waitsOf("serve-1", 3); !slices.Equal(got, []bool{false, true, false}) {
+			t.Fatalf("the waits of the session bounded by the idle timer: %v, want [false true false]", got)
+		}
 		a.want(f.countTags(), count2)
 	})
 }

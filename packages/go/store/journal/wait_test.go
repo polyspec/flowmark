@@ -35,13 +35,7 @@ func acquireCtx(ctx context.Context, c *Corpus, session string, wait time.Durati
 
 func await(t *testing.T, ch chan result) result {
 	t.Helper()
-	select {
-	case r := <-ch:
-		return r
-	case <-time.After(patience):
-		t.Fatal("the acquisition did not return")
-	}
-	return result{}
+	return <-ch
 }
 
 // noWatch fails a test that arms a watch where none may be armed.
@@ -103,14 +97,11 @@ func TestLockWaitEndedHolderRefusesAtOnce(t *testing.T) {
 	gone.PID = endedPID(t)
 	plantRecord(t, root, LockPath, gone)
 	c.newWatch = noWatch(t)
-	start := time.Now()
-	_, err := c.Acquire(context.Background(), "s1", time.Hour)
+	// noWatch fails the case if the wait arms a watch, so the refusal comes before any wait.
+	_, err := c.Acquire(context.Background(), "s1", unbounded)
 	var timeout *LockTimeout
 	if !errors.As(err, &timeout) || timeout.State != HolderEnded {
 		t.Fatalf("Acquire = %v, want an ended holder", err)
-	}
-	if elapsed := time.Since(start); elapsed > patience {
-		t.Fatalf("took %s", elapsed)
 	}
 }
 
@@ -146,16 +137,12 @@ func TestLockWaitArmFailureRefuses(t *testing.T) {
 	}
 }
 
-// attemptStarted waits for the attempt numbered want to start, bounded by patience.
+// attemptStarted waits for the start of the next attempt, which the waiter publishes, and requires it to be numbered
+// want.
 func attemptStarted(t *testing.T, started <-chan int64, want int64) {
 	t.Helper()
-	select {
-	case k := <-started:
-		if k != want {
-			t.Fatalf("attempt %d started, want attempt %d", k, want)
-		}
-	case <-time.After(patience):
-		t.Fatalf("attempt %d did not start", want)
+	if k := <-started; k != want {
+		t.Fatalf("attempt %d started, want attempt %d", k, want)
 	}
 }
 
@@ -217,7 +204,7 @@ func TestLockWaitNoLostWakeup(t *testing.T) {
 			t.Error(err)
 		}
 	}})
-	l, err := c.Acquire(context.Background(), "s2", patience)
+	l, err := c.Acquire(context.Background(), "s2", unbounded)
 	if err != nil {
 		t.Fatalf("Acquire = %v, want the lock released before the arming", err)
 	}
@@ -237,7 +224,7 @@ func TestWaitersCauseNoEventStorm(t *testing.T) {
 	results := make(chan result, waiters)
 	for i := range waiters {
 		go func() {
-			l, err := c.Acquire(context.Background(), fmt.Sprintf("w%d", i), patience)
+			l, err := c.Acquire(context.Background(), fmt.Sprintf("w%d", i), unbounded)
 			results <- result{l, err}
 		}()
 	}
@@ -336,7 +323,7 @@ func TestLockWaitAcquiresOnRelease(t *testing.T) {
 	root := t.TempDir()
 	c, rec := newCorpus(t, root)
 	child, h := startHolder(t, root)
-	ch := acquireAsync(c, "parent", patience)
+	ch := acquireAsync(c, "parent", unbounded)
 	if got := rec.waitFor(t, 1, kindIs(LockWaiting)); got[0].Holder != h.String() {
 		t.Fatalf("waiting for %q, want %q", got[0].Holder, h)
 	}
@@ -361,9 +348,8 @@ func TestLockWaitHolderExitWakes(t *testing.T) {
 	root := t.TempDir()
 	c, rec := newCorpus(t, root)
 	child, h := startHolder(t, root)
-	ch := acquireAsync(c, "parent", patience)
+	ch := acquireAsync(c, "parent", unbounded)
 	rec.waitFor(t, 1, kindIs(LockWaiting))
-	start := time.Now()
 	if err := child.kill(); err != nil {
 		t.Fatal(err)
 	}
@@ -371,9 +357,6 @@ func TestLockWaitHolderExitWakes(t *testing.T) {
 	var timeout *LockTimeout
 	if !errors.As(r.err, &timeout) || timeout.State != HolderEnded || timeout.Holder != h {
 		t.Fatalf("Acquire = %v, want the ended holder %v", r.err, h)
-	}
-	if elapsed := time.Since(start); elapsed >= patience/2 {
-		t.Fatalf("the exit was learned after %s", elapsed)
 	}
 	// The holder was killed above, so its wait reports the kill.
 	var exit *exec.ExitError

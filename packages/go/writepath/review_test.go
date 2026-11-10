@@ -5,7 +5,6 @@ import (
 	"github.com/polyspec/flowmark/packages/go/internal/corpustest"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/polyspec/flowmark/packages/go/store/journal"
 )
@@ -61,7 +60,7 @@ func TestRecheckDivergence(t *testing.T) {
 // the holder.
 func TestCloseEndsLockWait(t *testing.T) {
 	f := baseFixture(t)
-	f.c.wait = patience
+	f.c.wait = unbounded
 	holder := f.session("server")
 	must(t, holder.Begin(context.Background(), false))
 	waiter, err := f.c.Session("cli")
@@ -77,14 +76,9 @@ func TestCloseEndsLockWait(t *testing.T) {
 	f.rec.waitFor(t, journal.LockWaiting)
 	closed := make(chan error, 1)
 	go func() { closed <- waiter.Close() }()
-	// The holder keeps the lock; a Close that waited for it would not return before this guard.
-	select {
-	case err := <-closed:
-		if err != nil {
-			t.Fatal(err)
-		}
-	case <-time.After(10 * time.Second):
-		t.Fatal("Close waited for the holder of the lock")
+	// The holder keeps the lock until after Close returns, so a Close that waited for it would never return.
+	if err := <-closed; err != nil {
+		t.Fatal(err)
 	}
 	fails(t, <-done, "CANCELED", "closed")
 	must(t, holder.Rollback())

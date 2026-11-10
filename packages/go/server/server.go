@@ -40,6 +40,9 @@ type Server struct {
 	logf   func(format string, a ...any)
 	// ended is the seam of the tests that learns that the connection of a session has ended; nil outside the tests.
 	ended func(session string)
+	// waiting is the seam of the tests that learns, before each wait of a connected session for its next message,
+	// whether that wait is bounded by the idle timer; nil outside the tests.
+	waiting func(session string, bounded bool)
 
 	mu     sync.Mutex
 	ln     net.Listener
@@ -201,6 +204,9 @@ func (s *Server) handle(conn net.Conn, name string) {
 		if connected && sess.InTransaction() {
 			timer = time.NewTimer(s.idle)
 			idle = timer.C
+		}
+		if connected && s.waiting != nil {
+			s.waiting(name, timer != nil)
 		}
 		line, state := in.next(idle)
 		if timer != nil {

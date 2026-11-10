@@ -161,7 +161,7 @@ func TestConcurrentProcesses(t *testing.T) {
 	cmds := make([]*exec.Cmd, n)
 	outs := make([]io.Reader, n)
 	for i := range cmds {
-		cmds[i] = childCommand(t, "write", f.root, patience, [][]byte{f.insertTag(fmt.Sprintf("t%d", i), "area")})
+		cmds[i] = childCommand(t, "write", f.root, unbounded, [][]byte{f.insertTag(fmt.Sprintf("t%d", i), "area")})
 		out, err := cmds[i].StdoutPipe()
 		if err != nil {
 			t.Fatal(err)
@@ -218,7 +218,7 @@ func TestTransactionHoldsProcesses(t *testing.T) {
 	if line := string(out); !strings.HasPrefix(line, "error CANCELED LOCK_TIMEOUT ") || !strings.Contains(line, s.Name()) {
 		t.Fatalf("child = %q, want LOCK_TIMEOUT naming %s", line, s.Name())
 	}
-	cmd := childCommand(t, "write", f.root, patience, [][]byte{f.insertTag("db", "area")})
+	cmd := childCommand(t, "write", f.root, unbounded, [][]byte{f.insertTag("db", "area")})
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		t.Fatal(err)

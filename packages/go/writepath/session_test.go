@@ -171,7 +171,7 @@ func TestTransaction(t *testing.T) {
 	})
 	t.Run("40#the-lock: a closed connection ends the wait", func(t *testing.T) {
 		f := baseFixture(t)
-		f.c.wait = patience
+		f.c.wait = unbounded
 		holder := f.session("server")
 		if err := holder.Begin(context.Background(), false); err != nil {
 			t.Fatal(err)

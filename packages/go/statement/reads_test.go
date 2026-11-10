@@ -3,7 +3,6 @@ package statement_test
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/polyspec/flowmark/packages/go/internal/corpustest"
 	"github.com/polyspec/flowmark/packages/go/ops"
@@ -11,32 +10,17 @@ import (
 	"github.com/polyspec/flowmark/packages/go/writepath"
 )
 
-// readWait bounds the wait of a read the case requires not to wait: a read that waits for another's cursor or lock waits
-// until that one ends, which the case never does before it.
-const readWait = 30 * time.Second
-
-// answers runs text in s on its own goroutine and requires its answer within readWait.
+// answers runs text in s and requires the answer want. A read that waited for another's cursor or lock would wait until
+// that one ends, which the case never lets happen before it, so it would never answer: the deadline of the runner
+// (make test-go) stops it and writes the stack of every goroutine into the test's output.
 func answers(t *testing.T, s *writepath.Session, text, want string) {
 	t.Helper()
-	type result struct {
-		a   *statement.Answer
-		err error
+	a, err := statement.Run(s, text, nil)
+	if err != nil {
+		t.Fatalf("%s: %v", text, err)
 	}
-	done := make(chan result, 1)
-	go func() {
-		a, err := statement.Run(s, text, nil)
-		done <- result{a, err}
-	}()
-	select {
-	case r := <-done:
-		if r.err != nil {
-			t.Fatalf("%s: %v", text, r.err)
-		}
-		if got := cells(r.a); got != want {
-			t.Fatalf("%s answers %s, want %s", text, got, want)
-		}
-	case <-time.After(readWait):
-		t.Fatalf("%s waits: it has no answer after %s", text, readWait)
+	if got := cells(a); got != want {
+		t.Fatalf("%s answers %s, want %s", text, got, want)
 	}
 }
 
