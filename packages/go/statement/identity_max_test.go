@@ -101,6 +101,8 @@ func TestPlainIdentityLargest(t *testing.T) {
 	}
 	for _, tc := range accepted {
 		t.Run(tc.name, func(t *testing.T) {
+			// Each case has its own corpus and database.
+			t.Parallel()
 			db := plainSQLite(t, tc.steps)
 			if got := plainCells(t, db); got != fmt.Sprintf("[[%q]]", tc.rows) {
 				t.Fatalf("SQLite holds %s, the case says %q", got, tc.rows)
@@ -149,6 +151,8 @@ func TestPlainIdentityLargest(t *testing.T) {
 	for _, tc := range refused {
 		for _, inTx := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s, in a transaction %v", tc.name, inTx), func(t *testing.T) {
+				// Each case has its own corpus and database.
+				t.Parallel()
 				s, root := plainSession(t)
 				for _, text := range tc.setup {
 					run(t, s, text)
