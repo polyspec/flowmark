@@ -671,9 +671,17 @@ the storage class of that type, as the session's affinity gave it:
 - an INTEGER is a cell of an integer or `decimal` type, of a `bool` when it is 0 or 1, and of a `text` column of NUMERIC or
   TEXT affinity, whose digits that affinity reads back as the INTEGER; any other INTEGER is `n'…'`, the INTEGER of a column
   of no declared type included;
-- a REAL is a cell of an `f64` and `n'…'` elsewhere; a BLOB is a cell of `bytes` and `x'…'` elsewhere;
-- a TEXT is a cell of a text, date, time or uuid type, and `t'…'` in a column of a number, `decimal`, `bool` or `bytes` type,
-  where its affinity kept it as a TEXT, such as `'abc'` in an `INTEGER` column.
+- a REAL is a cell of an `f64` and `n'…'` elsewhere; a BLOB is a cell of `bytes`, a BLOB of 16 bytes is a cell of `uuid`,
+  written as the lower-case canonical text whose 32 digits are its bytes in their order, and any other BLOB is `x'…'`;
+- a TEXT is a cell of a text, date or time type, and `t'…'` in a column of a number, `decimal`, `bool`, `bytes` or `uuid`
+  type, where its affinity kept it as a TEXT, such as `'abc'` in an `INTEGER` column.
+
+A `uuid` column is a 16-byte BLOB in SQL, as orm renders it for SQLite and flowmark with the CHECK
+`typeof(c) IN ('blob', 'null') AND length(c) = 16` ([orm DIA-27](https://github.com/polyspec/orm/blob/main/docs/spec/dialects.md)):
+a statement binds and answers a uuid as its 16 bytes, the document holds its canonical text, and a corpus read again gives
+SQL the same 16 bytes (`TestUUIDColumn` of `statement`). A text or a BLOB of another length is refused by that CHECK as
+`CONSTRAINT`. Grounding: one storage on SQLite and flowmark, so a client reads a uuid cell of flowmark as it reads one of
+SQLite.
 
 So a corpus read again from its files gives each value the storage class and the value its session gave it
 (`TestAffinityRoundTrip` and `FuzzAffinityRoundTrip` of `statement`). A key value that would need a literal is

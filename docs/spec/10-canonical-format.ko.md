@@ -1,5 +1,5 @@
 <!-- doc-id: spec-canonical-format -->
-<!-- source-sha256: 038c41379fa201387c7431cdf5f6d70928bdc18bee9f2adacf6c41d4538bdd49 -->
+<!-- source-sha256: 24f847aca431321c4f537957519ff13c30df37dd4856274a5bb834504c404ada -->
 # Canonical format
 
 [English](10-canonical-format.md)
@@ -409,9 +409,16 @@ affinity가 준 storage class가 그 타입의 것일 때만 값을 column 타�
 
 - INTEGER는 정수 타입이나 `decimal`, 0이나 1일 때의 `bool`, 그리고 숫자를 다시 INTEGER로 읽는 NUMERIC이나 TEXT affinity의
   `text` column의 cell이다. 그 밖의 INTEGER는 `n'…'`이며, 선언 타입이 없는 column의 INTEGER도 그렇다.
-- REAL은 `f64`의 cell이고 그 밖에서는 `n'…'`다. BLOB은 `bytes`의 cell이고 그 밖에서는 `x'…'`다.
-- TEXT는 text, date, time, uuid 타입의 cell이고, affinity가 TEXT로 남긴 수, `decimal`, `bool`, `bytes` 타입의 column에서는
+- REAL은 `f64`의 cell이고 그 밖에서는 `n'…'`다. BLOB은 `bytes`의 cell이고, 16 byte의 BLOB은 `uuid`의 cell이며 그 byte를
+  순서대로 32자리로 쓴 소문자 canonical text로 쓰고, 그 밖의 BLOB은 `x'…'`다.
+- TEXT는 text, date, time 타입의 cell이고, affinity가 TEXT로 남긴 수, `decimal`, `bool`, `bytes`, `uuid` 타입의 column에서는
   `t'…'`다. `INTEGER` column의 `'abc'`가 그 예다.
+
+`uuid` column은 SQL에서 16 byte BLOB이며, orm이 SQLite와 flowmark에 CHECK
+`typeof(c) IN ('blob', 'null') AND length(c) = 16`와 함께 그렇게 그린다([orm DIA-27](https://github.com/polyspec/orm/blob/main/docs/spec/dialects.ko.md)).
+문장은 uuid를 16 byte로 bind하고 답하며, 문서는 canonical text를 담고, 파일에서 다시 읽은 corpus는 SQL에 같은 16 byte를
+준다(`statement`의 `TestUUIDColumn`). text나 다른 길이의 BLOB은 그 CHECK가 `CONSTRAINT`로 거부한다. 근거: SQLite와 flowmark의
+저장이 하나이므로 client는 flowmark의 uuid cell을 SQLite의 것과 같이 읽는다.
 
 그러므로 파일에서 다시 읽은 corpus는 각 값에 session이 준 storage class와 값을 준다(`statement`의 `TestAffinityRoundTrip`과
 `FuzzAffinityRoundTrip`). literal이 필요한 key 값은 `CONSTRAINT`이고 그 문장은 행을 남기지 않는다(`TestAffinityKeys`). 근거:

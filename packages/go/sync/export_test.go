@@ -302,6 +302,14 @@ func wire(t *testing.T, typ dbspec.Type, v any) any {
 		return s
 	case dbspec.TypeBytes:
 		return base64.StdEncoding.EncodeToString(as[[]byte](t, v))
+	case dbspec.TypeUUID:
+		// SQLite holds a uuid as the 16 bytes of its canonical text, in their order (orm DIA-27).
+		b := as[[]byte](t, v)
+		if len(b) != 16 {
+			t.Fatalf("a uuid cell of %d bytes: %x", len(b), b)
+		}
+		h := hex.EncodeToString(b)
+		return h[0:8] + "-" + h[8:12] + "-" + h[12:16] + "-" + h[16:20] + "-" + h[20:32]
 	case dbspec.TypeDatetime:
 		s := as[string](t, v)
 		if len(s) == 19 {

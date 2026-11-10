@@ -1149,6 +1149,8 @@ func stored(t dbspec.Type, v any) (any, error) {
 				return nil, &Error{codeInternal, err.Error()}
 			}
 			return b, nil
+		case dbspec.TypeUUID:
+			return uuidBytes(x)
 		case dbspec.TypeDecimal:
 			return scaled(x, t.Scale)
 		}
@@ -1855,10 +1857,14 @@ func wire(tb *catalog.Table, col dbspec.Column, v any) (json.RawMessage, error) 
 			return stored("n'" + string(text) + "'")
 		}
 	case []byte:
-		if typ.Kind != dbspec.TypeBytes {
+		switch {
+		case typ.Kind == dbspec.TypeUUID && len(x) == 16:
+			out = uuidText(x)
+		case typ.Kind != dbspec.TypeBytes:
 			return stored("x'" + hex.EncodeToString(x) + "'")
+		default:
+			out = base64.StdEncoding.EncodeToString(x)
 		}
-		out = base64.StdEncoding.EncodeToString(x)
 	case time.Time:
 		out = x.UTC().Format("2006-01-02 15:04:05.000000")
 	case string:
@@ -1874,16 +1880,33 @@ func wire(tb *catalog.Table, col dbspec.Column, v any) (json.RawMessage, error) 
 	return b, nil
 }
 
-// textCell reports whether a cell of type t holds a TEXT as its text: a column of a text, date, time or uuid type, whose
-// values SQLite stores as TEXT. A TEXT of a column of a number, boolean or bytes type is one its affinity kept, such as
-// 'abc' in an INTEGER column, and is a stored literal: as the column's value it would be read back as a number or bytes, or
-// not at all.
+// textCell reports whether a cell of type t holds a TEXT as its text: a column of a text, date or time type, whose values
+// SQLite stores as TEXT. A TEXT of a column of a number, boolean, bytes or uuid type is one its affinity kept, such as
+// 'abc' in an INTEGER column, and is a stored literal: as the column's value it would be read back as a number, bytes or
+// the 16 bytes of a uuid, or not at all.
 func textCell(t dbspec.Type) bool {
 	switch t.Kind {
-	case dbspec.TypeI16, dbspec.TypeI32, dbspec.TypeI64, dbspec.TypeF64, dbspec.TypeDecimal, dbspec.TypeBool, dbspec.TypeBytes:
+	case dbspec.TypeI16, dbspec.TypeI32, dbspec.TypeI64, dbspec.TypeF64, dbspec.TypeDecimal, dbspec.TypeBool, dbspec.TypeBytes, dbspec.TypeUUID:
 		return false
 	}
 	return true
+}
+
+// uuidText is the lower-case canonical text of the 16 bytes b of a uuid, in their order (orm DIA-27): the cell of a uuid
+// column in its document.
+func uuidText(b []byte) string {
+	h := hex.EncodeToString(b)
+	return h[0:8] + "-" + h[8:12] + "-" + h[12:16] + "-" + h[16:20] + "-" + h[20:32]
+}
+
+// uuidBytes is the 16 bytes of the canonical text u of a uuid cell, which SQLite holds in a uuid column (orm DIA-27). The
+// corpus refuses a uuid cell that is not canonical text, so another text is INTERNAL.
+func uuidBytes(u string) ([]byte, error) {
+	b, err := hex.DecodeString(strings.ReplaceAll(u, "-", ""))
+	if err != nil || len(b) != 16 || uuidText(b) != u {
+		return nil, &Error{codeInternal, fmt.Sprintf("the uuid cell %q is no canonical uuid text", u)}
+	}
+	return b, nil
 }
 
 // column reads the one column of the rows of text.
