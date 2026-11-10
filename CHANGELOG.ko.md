@@ -1,15 +1,14 @@
 <!-- doc-id: changelog -->
-<!-- source-sha256: bcf7e9277c8b4ac99107403e351695ac2c105f47e711bab48eb75728dc7a120b -->
+<!-- source-sha256: 2e6e8956de3889b6806f7f3ddf7e13d1aba133ff1b42a71d2d9ef48fe83425fd -->
 # Changelog
 
 ## Unreleased
 
+## 0.0.15
+
 - T102: flowmark이 16-byte uuid의 orm commit(orm T421)을 받는다. 그래서 set은 `uuid` column을 GLOB CHECK의 TEXT 대신, SQL path가 bind하는 형태(T96)인 CHECK `typeof(c) IN ('blob', 'null') AND length(c) = 16`의 16-byte BLOB으로 render한다. avg scalar column subquery는 orm PRT-83대로 IR_INVALID이다.
 - T101: 열린 transaction이 없을 때의 SAVEPOINT는 일반 BEGIN처럼 transaction을 시작하고, 그 savepoint의 RELEASE가 SQLite처럼 transaction을 commit한다. transaction 안의 schema 문장은 그 transaction의 쓰기다: ROLLBACK이나 그 앞의 savepoint로의 ROLLBACK TO가 그것을 되돌리고, commit이 그것을 행과 함께 쓴다. 전에는 열린 transaction을 먼저 commit하면서 그 savepoint를 잃었다. 그래서 orm의 uuid 저장 변환이 flowmark에서도 SQLite처럼 표를 다시 짓는다.
 - T100: test run에 시간 한도를 두지 않는 kit 0.0.105를 채택한다(K1175): 어떤 recipe도 run-tests에 `--timeout`을, Node suite에 `--test-timeout`을 넘기지 않으며, run은 그 도구가 끝날 때 끝난다.
-
-## 0.0.15
-
 - T98: test는 시험 대상 code가 내는 것을 기다리며 시간을 기다리지 않는다: 각 대기는 기다리는 사건이나 session 연결의 끝처럼 대기를 끝내는 사건에서 끝나고, 끝나지 않는 대기의 유일한 한도는 kit 0.0.103부터 모든 goroutine의 stack을 남기는 runner의 기한이다. T93의 20초 한도는 없어졌고, transaction 없는 session이 idle이 아님은 test가 idle 한도 네 배를 잠드는 대신 server가 다음 message를 기다릴 때마다 알리는 것으로 보인다.
 - T95: SQL 경로가 schema에서 읽는 것, 곧 rowid 없는 표마다의 primary key와 rowid 있는 표마다의 rowid 이름은 schema의 text가 그것을 읽은 text와 다를 때마다 다시 읽는다; 이전에는 schema version이 그대로인 동안 유지했다. schema 변경의 rollback은 다음 변경에 자신이 되돌린 schema의 version을 주므로, 그 version으로 다시 만든 표를 rollback이 되돌린 표의 key로 읽었다.
 - T94: key가 rowid이고 AUTOINCREMENT sequence를 지키지 않는 표는 int64 최댓값을 넘는 key를 주지 않는다: 가장 큰 key가 9223372036854775807일 때 database가 key를 고를 insert는 SQL 경로와 face에서 DRIVER(SQLITE_FULL)로 실패하고 아무것도 바꾸지 않는다; 이전에는 SQLite가 쓰이지 않은 rowid를 무작위로 골랐고 face는 넘친 key를 주었다. insert가 주는 key는 여전히 가장 큰 key 곁에 받아들여지며, key 9223372036854775806 뒤의 insert는 9223372036854775807을 준다. primary key가 NULL을 지니는 표도 그런 표다. 이를 지키는 장치는 자기 문장 안에서만 있으므로 뒤의 어떤 문장도, `sqlite_temp_master` 읽기도 그것을 보지 않으며, trigger의 insert는 자신을 부른 insert의 기록을 가져가지 않는다. rowid를 key로 쓰는 표에 `rowid`라는 column을 남기거나, 어떤 문장도 이름 대지 못하는 rowid를 지닌 표를 남기는 schema 문장은 CONSTRAINT다; 이전에는 그런 표의 행이 조용히 사라졌다. 다르게 key를 쓰는 표의 `rowid` column은 SQLite가 지닌 대로 읽고 쓰이며, 이전에는 NULL로 읽혔다.
